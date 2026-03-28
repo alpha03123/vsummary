@@ -1,0 +1,29 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Logs / Temp
+*.log
+tmp/
+temp/
+sample/
+
+# Local data
+data/
+
+# Local env
+.env
+.env.*
