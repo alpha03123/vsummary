@@ -36,11 +36,6 @@ function workspaceReducer(state, action) {
         ...state,
         mindmapVisible: !state.mindmapVisible,
       };
-    case "chapter_nav_toggled":
-      return {
-        ...state,
-        chapterNavVisible: !state.chapterNavVisible,
-      };
     default:
       return state;
   }
@@ -74,7 +69,6 @@ export function useWorkspaceController() {
 
   const summary = state.summary;
   const activeSeries = state.library?.series?.[0] ?? null;
-  const currentVideoTitle = summary?.title ?? activeSeries?.videos?.[0]?.title ?? "未命名视频";
   const selectedNode = useMemo(
     () => findNodeById(summary?.mindmap, state.selectedNodeId),
     [summary?.mindmap, state.selectedNodeId],
@@ -107,19 +101,13 @@ export function useWorkspaceController() {
     dispatch({ type: "mindmap_toggled" });
   }
 
-  function onToggleChapterNavVisibility() {
-    dispatch({ type: "chapter_nav_toggled" });
-  }
-
   return {
     state,
     summary,
     activeSeries,
-    currentVideoTitle,
     selectedNode,
     onFocusChapter,
     onFocusNode,
     onToggleMindmapVisibility,
-    onToggleChapterNavVisibility,
   };
 }

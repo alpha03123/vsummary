@@ -110,7 +110,6 @@ button {
 
 .brand-title,
 .content-header h2,
-.chapter-pane-head h2,
 .problem-card h2,
 .article-head h3,
 .mindmap-pane-head h2,
@@ -185,22 +184,16 @@ button {
 
 .document-grid {
   --map-pane-width: clamp(340px, 34vw, 620px);
-  --nav-pane-width: 304px;
   --map-column-width: var(--map-pane-width);
-  --nav-column-width: var(--nav-pane-width);
   min-height: 0;
   position: relative;
   display: grid;
-  grid-template-columns: var(--map-column-width) minmax(0, 1fr) var(--nav-column-width);
+  grid-template-columns: var(--map-column-width) minmax(0, 1fr);
   gap: 16px;
 }
 
 .document-grid.is-map-hidden {
   --map-column-width: 0px;
-}
-
-.document-grid.is-nav-hidden {
-  --nav-column-width: 0px;
 }
 
 .reading-pane {
@@ -210,8 +203,7 @@ button {
   background: rgba(255, 250, 243, 0.72);
 }
 
-.mindmap-pane,
-.chapter-pane {
+.mindmap-pane {
   min-height: 0;
   min-width: 0;
   border-radius: 24px;
@@ -221,18 +213,13 @@ button {
     transform 180ms ease;
 }
 
-.mindmap-pane,
-.chapter-pane {
-  overflow: auto;
-}
-
 .mindmap-pane {
+  overflow: auto;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.mindmap-pane.is-hidden,
-.chapter-pane.is-hidden {
+.mindmap-pane.is-hidden {
   opacity: 0;
   pointer-events: none;
   border-color: transparent;
@@ -241,10 +228,6 @@ button {
 
 .mindmap-pane.is-hidden {
   transform: translateX(-28px);
-}
-
-.chapter-pane.is-hidden {
-  transform: translateX(28px);
 }
 
 .mindmap-pane-head {
@@ -606,84 +589,6 @@ button {
   line-height: 1.7;
 }
 
-.chapter-pane {
-  padding: 18px 16px;
-}
-
-.chapter-pane-head {
-  margin-bottom: 14px;
-}
-
-.chapter-pane-head h2 {
-  font-size: 1.45rem;
-}
-
-.chapter-pane-head p:last-child {
-  margin: 8px 0 0;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-  line-height: 1.6;
-}
-
-.chapter-list {
-  display: grid;
-  gap: 10px;
-}
-
-.chapter-card {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  text-align: left;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
-}
-
-.chapter-card:hover,
-.chapter-card:focus-visible {
-  outline: none;
-  background: rgba(255, 255, 255, 0.45);
-}
-
-.chapter-card.is-active {
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: var(--shadow-card);
-  border-color: rgba(15, 118, 110, 0.15);
-}
-
-.chapter-index {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.08);
-  color: var(--teal);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.chapter-card-copy {
-  display: grid;
-  gap: 6px;
-}
-
-.chapter-card-copy strong {
-  font-size: 0.92rem;
-  line-height: 1.4;
-}
-
-.chapter-card-copy span {
-  color: var(--ink-soft);
-  font-size: 0.76rem;
-  font-weight: 600;
-}
-
 .loading-screen {
   display: grid;
   place-items: center;
@@ -720,7 +625,6 @@ button {
 @media (max-width: 1440px) {
   .document-grid {
     --map-pane-width: clamp(300px, 32vw, 520px);
-    --nav-pane-width: 280px;
   }
 }
 
@@ -735,16 +639,13 @@ button {
   }
 
   .document-grid,
-  .document-grid.is-map-hidden,
-  .document-grid.is-nav-hidden {
+  .document-grid.is-map-hidden {
     --map-column-width: 1fr;
-    --nav-column-width: 1fr;
     grid-template-columns: 1fr;
   }
 
   .mindmap-pane,
-  .reading-pane,
-  .chapter-pane {
+  .reading-pane {
     min-height: auto;
     overflow: visible;
   }

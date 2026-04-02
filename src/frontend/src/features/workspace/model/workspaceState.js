@@ -4,7 +4,6 @@ export const initialWorkspaceState = {
   selectedChapterId: null,
   selectedNodeId: null,
   mindmapVisible: true,
-  chapterNavVisible: true,
   error: "",
   loading: true,
 };
@@ -16,7 +15,6 @@ export function createLoadedState(summary, library) {
     selectedChapterId: summary.chapters?.[0]?.id ?? null,
     selectedNodeId: summary.mindmap?.children?.[0]?.id ?? summary.mindmap?.id ?? null,
     mindmapVisible: true,
-    chapterNavVisible: true,
     error: "",
     loading: false,
   };
