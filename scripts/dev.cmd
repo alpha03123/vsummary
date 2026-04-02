@@ -1,3 +1,3 @@
 @echo off
 setlocal
-powershell -ExecutionPolicy Bypass -File "%~dp0scripts\dev.ps1"
+powershell -ExecutionPolicy Bypass -File "%~dp0dev.ps1"

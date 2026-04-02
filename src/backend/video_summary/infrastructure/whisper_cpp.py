@@ -4,8 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
-from domain.models import Transcript, TranscriptSegment
-from infra.settings import WhisperCppSettings
+from backend.video_summary.domain.models import Transcript, TranscriptSegment
+from backend.video_summary.infrastructure.settings import WhisperCppSettings
 
 
 def resolve_whisper_executable(settings: WhisperCppSettings) -> Path:

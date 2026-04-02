@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from domain.models import Transcript, TranscriptSegment
+from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
 
 class FasterWhisperTranscriber:
