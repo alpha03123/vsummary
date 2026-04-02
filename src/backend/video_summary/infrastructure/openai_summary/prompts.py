@@ -70,8 +70,7 @@ def build_document_prompt(
         "1. 只输出 JSON，不要输出额外解释。\n"
         "2. 不要编造原文没有提到的内容。\n"
         "3. 章节必须给出 start_seconds 和 end_seconds，单位为秒。\n"
-        "4. 思维导图必须是可递归展开的树结构。\n"
-        "5. 关键结论控制在 5 到 10 条。\n\n"
+        "4. 关键结论控制在 5 到 10 条。\n\n"
         "JSON 结构：\n"
         "{\n"
         '  "title": "视频标题",\n'
@@ -87,24 +86,7 @@ def build_document_prompt(
         '      "key_points": ["要点1", "要点2"]\n'
         "    }\n"
         "  ],\n"
-        '  "key_takeaways": ["结论1", "结论2"],\n'
-        '  "mindmap": {\n'
-        '    "id": "root",\n'
-        '    "title": "根节点标题",\n'
-        '    "summary": "根节点摘要",\n'
-        '    "start_seconds": 0,\n'
-        f'    "end_seconds": {int(video.duration_seconds)},\n'
-        '    "children": [\n'
-        "      {\n"
-        '        "id": "node-1",\n'
-        '        "title": "一级节点",\n'
-        '        "summary": "节点摘要",\n'
-        '        "start_seconds": 30,\n'
-        '        "end_seconds": 200,\n'
-        '        "children": []\n'
-        "      }\n"
-        "    ]\n"
-        "  }\n"
+        '  "key_takeaways": ["结论1", "结论2"]\n'
         "}\n\n"
         "片段总结如下：\n"
         f"{joined_summaries}"
@@ -118,4 +100,3 @@ def segments_to_text(segments: list[TranscriptSegment]) -> str:
         end = format_timestamp(segment.end_seconds)
         lines.append(f"[{start}-{end}] {segment.text}")
     return "\n".join(lines)
-

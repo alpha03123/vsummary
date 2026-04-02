@@ -32,8 +32,4 @@ def render_markdown(summary_data: dict[str, Any]) -> str:
     for point in summary_data["key_takeaways"]:
         lines.append(f"- {point}")
     lines.append("")
-    lines.append("## 思维导图数据")
-    lines.append("交互式思维导图请读取同目录下的 `mindmap.json`。")
-    lines.append("")
     return "\n".join(lines).strip() + "\n"
-

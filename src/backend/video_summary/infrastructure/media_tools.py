@@ -20,6 +20,8 @@ class FfmpegMediaProcessor:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         return float(result.stdout.strip())
 
@@ -41,7 +43,7 @@ class FfmpegMediaProcessor:
                 str(audio_path),
             ],
             check=True,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         return audio_path

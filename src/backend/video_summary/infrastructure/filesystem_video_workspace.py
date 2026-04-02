@@ -6,8 +6,11 @@ from pathlib import Path
 from backend.video_summary.library.views import (
     SeriesView,
     VideoCardView,
+    VideoMindmapView,
     VideoSourceView,
     VideoSummaryView,
+    VideoWorkspaceToolsView,
+    WorkspaceToolView,
     WorkspaceView,
 )
 
@@ -76,6 +79,56 @@ class FileSystemVideoWorkspace:
             video_id=video_id,
             title=title,
             summary=summary,
+        )
+
+    def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapView | None:
+        mindmap_path = self._workspace_dir / series_id / video_id / "mindmap.json"
+        if not mindmap_path.exists():
+            return None
+
+        summary = self.get_video_summary(series_id, video_id)
+        title = summary.title if summary is not None else video_id
+        return VideoMindmapView(
+            series_id=series_id,
+            video_id=video_id,
+            title=title,
+            mindmap=json.loads(mindmap_path.read_text(encoding="utf-8")),
+        )
+
+    def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsView | None:
+        video = self.get_video_source(series_id, video_id)
+        if video is None:
+            return None
+
+        summary_exists = (video.output_dir / "summary.json").exists()
+        mindmap_exists = (video.output_dir / "mindmap.json").exists()
+        preview_url = f"/api/videos/{series_id}/{video_id}/preview"
+        return VideoWorkspaceToolsView(
+            series_id=series_id,
+            video_id=video_id,
+            overview=WorkspaceToolView(
+                id="overview",
+                title="AI概况",
+                available=True,
+                generated=summary_exists,
+                status="ready" if summary_exists else "pending",
+            ),
+            mindmap=WorkspaceToolView(
+                id="mindmap",
+                title="思维导图",
+                available=summary_exists,
+                generated=mindmap_exists,
+                status="ready" if mindmap_exists else ("available" if summary_exists else "blocked"),
+            ),
+            preview=WorkspaceToolView(
+                id="preview",
+                title="视频预览",
+                available=True,
+                generated=True,
+                status="ready",
+                preview_url=preview_url,
+            ),
+            ai_todo="TODO: 后续让 AI 根据当前工具状态触发概况、导图和视频预览联动。",
         )
 
     def _list_videos_for_series(self, series_dir: Path) -> list[VideoCardView]:

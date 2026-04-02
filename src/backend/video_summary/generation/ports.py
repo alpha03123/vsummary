@@ -27,3 +27,15 @@ class Summarizer(Protocol):
         output_dir: Path,
     ) -> SummaryDocument:
         ...
+
+
+class MindmapGenerator(Protocol):
+    def generate(
+        self,
+        *,
+        title: str,
+        duration_seconds: float,
+        summary_data: dict[str, object],
+        output_dir: Path,
+    ) -> dict[str, object]:
+        ...

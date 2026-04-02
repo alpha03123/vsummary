@@ -29,15 +29,10 @@ class OpenAIResponsesClient(Summarizer):
             video,
         )
         markdown = render_markdown(summary_data)
-        mindmap_data = summary_data["mindmap"]
 
         (output_dir / "summary.md").write_text(markdown, encoding="utf-8")
         (output_dir / "summary.json").write_text(
             json.dumps(summary_data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        (output_dir / "mindmap.json").write_text(
-            json.dumps(mindmap_data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        return SummaryDocument(markdown=markdown, summary_data=summary_data, mindmap_data=mindmap_data)
+        return SummaryDocument(markdown=markdown, summary_data=summary_data)

@@ -75,6 +75,26 @@ class FileSystemVideoWorkspaceTests(unittest.TestCase):
             self.assertEqual(summary.video_id, "clip-01")
             self.assertEqual(summary.title, "clip-01")
 
+    def test_get_video_workspace_tools_reflects_summary_and_mindmap_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "video_include"
+            source_path = root / "videos" / "series-a" / "clip-01.mp4"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("video", encoding="utf-8")
+            output_dir = root / "workspace" / "series-a" / "clip-01"
+            output_dir.mkdir(parents=True)
+            (output_dir / "summary.json").write_text(json.dumps({"title": "clip-01"}), encoding="utf-8")
+
+            workspace = FileSystemVideoWorkspace(root)
+
+            tools = workspace.get_video_workspace_tools("series-a", "clip-01")
+
+            self.assertIsNotNone(tools)
+            self.assertTrue(tools.overview.generated)
+            self.assertFalse(tools.mindmap.generated)
+            self.assertTrue(tools.mindmap.available)
+            self.assertEqual(tools.preview.preview_url, "/api/videos/series-a/clip-01/preview")
+
 
 if __name__ == "__main__":
     unittest.main()

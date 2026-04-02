@@ -56,7 +56,6 @@ class FakeSummarizer:
         return SummaryDocument(
             markdown="# Summary",
             summary_data={"title": video.title},
-            mindmap_data={"id": "root"},
         )
 
 

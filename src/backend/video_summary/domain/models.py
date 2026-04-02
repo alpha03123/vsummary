@@ -33,4 +33,4 @@ class Transcript:
 class SummaryDocument:
     markdown: str
     summary_data: dict[str, Any]
-    mindmap_data: dict[str, Any]
+    mindmap_data: dict[str, Any] | None = None

@@ -41,6 +41,18 @@ function asVideoCard(value, label) {
   };
 }
 
+function asTool(value, label) {
+  const record = asRecord(value, label);
+  return {
+    id: asString(record.id, `${label}.id`),
+    title: asString(record.title, `${label}.title`),
+    available: Boolean(record.available),
+    generated: Boolean(record.generated),
+    status: asString(record.status, `${label}.status`),
+    previewUrl: typeof record.preview_url === "string" ? record.preview_url : null,
+  };
+}
+
 function asChapter(value, label) {
   const record = asRecord(value, label);
   return {
@@ -85,7 +97,22 @@ export function toWorkspaceSummary(payload) {
       ? asStringList(record.key_takeaways, "summary.key_takeaways")
       : [],
     chapters: record.chapters.map((chapter, index) => asChapter(chapter, `summary.chapters[${index}]`)),
-    mindmap: record.mindmap == null ? null : asMindmapNode(record.mindmap, "summary.mindmap"),
+  };
+}
+
+export function toWorkspaceMindmap(payload) {
+  return asMindmapNode(asRecord(payload, "mindmap"), "mindmap");
+}
+
+export function toWorkspaceTools(payload) {
+  const record = asRecord(payload, "tools");
+  return {
+    seriesId: asString(record.series_id, "tools.series_id"),
+    videoId: asString(record.video_id, "tools.video_id"),
+    overview: asTool(record.overview, "tools.overview"),
+    mindmap: asTool(record.mindmap, "tools.mindmap"),
+    preview: asTool(record.preview, "tools.preview"),
+    aiTodo: asOptionalString(record.ai_todo),
   };
 }
 

@@ -37,22 +37,25 @@ class FakeGenerator:
                     "end_seconds": 10.0,
                 }
             ],
-            "mindmap": {
-                "id": "root",
-                "title": source_path.stem,
-                "summary": "mindmap",
-                "start_seconds": 0.0,
-                "end_seconds": 10.0,
-                "children": [],
-            },
         }
         (output_dir / "summary.json").write_text(__import__("json").dumps(payload, ensure_ascii=False), encoding="utf-8")
         (output_dir / "summary.md").write_text("# generated", encoding="utf-8")
-        (output_dir / "mindmap.json").write_text(
-            __import__("json").dumps(payload["mindmap"], ensure_ascii=False),
-            encoding="utf-8",
-        )
-        return SummaryDocument(markdown="# generated", summary_data=payload, mindmap_data=payload["mindmap"])
+        return SummaryDocument(markdown="# generated", summary_data=payload)
+
+
+class FakeMindmapGenerator:
+    def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+        payload = {
+            "id": "root",
+            "title": source_path.stem,
+            "summary": "mindmap",
+            "start_seconds": 0.0,
+            "end_seconds": 10.0,
+            "children": [],
+        }
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "mindmap.json").write_text(__import__("json").dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return payload
 
 
 class ApiContractTests(unittest.IsolatedAsyncioTestCase):
@@ -64,11 +67,19 @@ class ApiContractTests(unittest.IsolatedAsyncioTestCase):
         (self.root / "videos" / "series-a" / "advanced.mp4").write_text("video", encoding="utf-8")
         (self.root / "workspace" / "series-a" / "advanced").mkdir(parents=True)
         (self.root / "workspace" / "series-a" / "advanced" / "summary.json").write_text(
-            '{"title":"advanced","chapters":[],"mindmap":{"id":"root","title":"advanced","children":[]}}',
+            '{"title":"advanced","chapters":[],"key_takeaways":[]}',
+            encoding="utf-8",
+        )
+        (self.root / "workspace" / "series-a" / "advanced" / "mindmap.json").write_text(
+            '{"id":"root","title":"advanced","summary":"","start_seconds":0,"end_seconds":0,"children":[]}',
             encoding="utf-8",
         )
         self.original_container = api_module.CONTAINER
-        api_module.CONTAINER = build_api_container(self.root, generator=FakeGenerator())
+        api_module.CONTAINER = build_api_container(
+            self.root,
+            generator=FakeGenerator(),
+            mindmap_generator=FakeMindmapGenerator(),
+        )
         transport = httpx.ASGITransport(app=app)
         self.client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
 
@@ -101,7 +112,7 @@ class ApiContractTests(unittest.IsolatedAsyncioTestCase):
         payload = response.json()
         self.assertEqual(payload["title"], "advanced")
         self.assertIn("chapters", payload)
-        self.assertIn("mindmap", payload)
+        self.assertNotIn("mindmap", payload)
 
     async def test_summary_endpoint_returns_404_for_missing_video(self) -> None:
         response = await self.client.get("/api/videos/series-a/intro/summary")
@@ -115,6 +126,35 @@ class ApiContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["title"], "intro")
         self.assertTrue((self.root / "workspace" / "series-a" / "intro" / "summary.json").exists())
+        self.assertFalse((self.root / "workspace" / "series-a" / "intro" / "mindmap.json").exists())
+
+    async def test_tools_endpoint_returns_generation_status_for_each_tool(self) -> None:
+        response = await self.client.get("/api/videos/series-a/advanced/tools")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["overview"]["generated"])
+        self.assertTrue(payload["mindmap"]["generated"])
+        self.assertTrue(payload["preview"]["available"])
+        self.assertEqual(payload["preview"]["preview_url"], "/api/videos/series-a/advanced/preview")
+
+    async def test_mindmap_endpoint_returns_existing_mindmap(self) -> None:
+        response = await self.client.get("/api/videos/series-a/advanced/mindmap")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], "root")
+
+    async def test_generate_mindmap_endpoint_requires_existing_summary(self) -> None:
+        response = await self.client.post("/api/videos/series-a/intro/mindmap/generate")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "summary not found for video 'series-a/intro'")
+
+    async def test_generate_mindmap_endpoint_creates_mindmap_when_summary_exists(self) -> None:
+        response = await self.client.post("/api/videos/series-a/advanced/mindmap/generate")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue((self.root / "workspace" / "series-a" / "advanced" / "mindmap.json").exists())
 
 
 if __name__ == "__main__":

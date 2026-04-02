@@ -9,12 +9,19 @@ export const defaultUiSettings = {
 export function createInitialWorkspaceState() {
   return {
     library: null,
+    tools: null,
     summary: null,
+    mindmap: null,
     selectedSeriesId: null,
     selectedVideoId: null,
+    selectedToolId: "overview",
     selectedChapterId: null,
+    selectedNodeId: null,
     generatingVideoKey: null,
+    generatingMindmapKey: null,
+    toolsLoading: false,
     summaryLoading: false,
+    mindmapLoading: false,
     ui: loadUiSettings(),
     settingsPanelOpen: false,
     error: "",
@@ -43,13 +50,30 @@ export function createSummaryLoadedState(summary, currentState) {
   };
 }
 
+export function createMindmapLoadedState(mindmap, currentState) {
+  return {
+    ...currentState,
+    mindmap,
+    mindmapLoading: false,
+    selectedNodeId: mindmap?.children?.[0]?.id ?? mindmap?.id ?? null,
+  };
+}
+
 export function getDefaultSelection(library, preferredSeriesId = null, preferredVideoId = null) {
   const series = library?.series ?? [];
   if (!series.length) {
     return { seriesId: null, videoId: null };
   }
 
-  const preferredSeries = series.find((item) => item.id === preferredSeriesId) ?? series[0];
+  if (!preferredSeriesId) {
+    return { seriesId: null, videoId: null };
+  }
+
+  const preferredSeries = series.find((item) => item.id === preferredSeriesId);
+  if (!preferredSeries) {
+    return { seriesId: null, videoId: null };
+  }
+
   const preferredVideo =
     preferredSeries.videos.find((item) => item.id === preferredVideoId) ?? preferredSeries.videos[0] ?? null;
 

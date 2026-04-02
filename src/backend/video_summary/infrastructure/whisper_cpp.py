@@ -36,6 +36,8 @@ def _is_nvidia_gpu_available() -> bool:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False

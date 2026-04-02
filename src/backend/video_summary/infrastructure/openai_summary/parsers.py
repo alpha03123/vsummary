@@ -17,19 +17,27 @@ def parse_summary_payload(raw_text: str, video: VideoAsset) -> dict[str, Any]:
     key_takeaways = [
         str(item).strip() for item in parsed.get("key_takeaways", []) if str(item).strip()
     ]
-    mindmap = normalize_mindmap_node(
-        parsed.get("mindmap", {"title": video.title, "children": []}),
-        "root",
-    )
-
     return {
         "title": str(parsed.get("title", video.title)).strip(),
         "one_sentence_summary": str(parsed.get("one_sentence_summary", "")).strip(),
         "core_problem": str(parsed.get("core_problem", "")).strip(),
         "chapters": chapters,
         "key_takeaways": key_takeaways,
-        "mindmap": mindmap,
     }
+
+
+def parse_mindmap_payload(raw_text: str, *, title: str, duration_seconds: float) -> dict[str, Any]:
+    parsed = extract_json_block(raw_text)
+    default_root = {
+        "id": "root",
+        "title": title,
+        "summary": "",
+        "start_seconds": 0.0,
+        "end_seconds": duration_seconds,
+        "children": [],
+    }
+    root = parsed if isinstance(parsed, dict) and "children" in parsed else parsed.get("mindmap", default_root)
+    return normalize_mindmap_node(root, "root")
 
 
 def extract_json_block(text: str) -> dict[str, Any]:
@@ -74,4 +82,3 @@ def normalize_mindmap_node(node: dict[str, Any], fallback_id: str) -> dict[str, 
         "end_seconds": float(node.get("end_seconds", 0.0) or 0.0),
         "children": normalized_children,
     }
-
