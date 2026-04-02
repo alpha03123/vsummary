@@ -1,13 +1,19 @@
 import { MindmapCanvas } from "./MindmapCanvas";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
+import { WorkspaceSettingsPanel } from "./WorkspaceSettingsPanel";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 
 export function WorkspacePage({
   state,
+  ui,
   summary,
   activeSeries,
   selectedNode,
   onToggleMindmapVisibility,
+  onToggleSettingsPanel,
+  onCloseSettingsPanel,
+  onChangeSetting,
+  onResetSettings,
   onFocusNode,
 }) {
   if (state.loading && !summary) {
@@ -25,16 +31,27 @@ export function WorkspacePage({
   return (
     <div className="workspace-shell">
       <WorkspaceToolbar
-        mindmapVisible={state.mindmapVisible}
+        mindmapVisible={ui.mindmapVisible}
+        settingsOpen={state.settingsPanelOpen}
         onToggleMindmapVisibility={onToggleMindmapVisibility}
+        onToggleSettingsPanel={onToggleSettingsPanel}
       />
+
+      {state.settingsPanelOpen ? (
+        <WorkspaceSettingsPanel
+          ui={ui}
+          onChangeSetting={onChangeSetting}
+          onResetSettings={onResetSettings}
+          onClose={onCloseSettingsPanel}
+        />
+      ) : null}
 
       {state.error ? <div className="error-banner">{state.error}</div> : null}
 
-      <main className={`document-grid${state.mindmapVisible ? "" : " is-map-hidden"}`}>
+      <main className={`document-grid${ui.mindmapVisible ? "" : " is-map-hidden"}`}>
         <aside
-          className={`mindmap-pane${state.mindmapVisible ? "" : " is-hidden"}`}
-          aria-hidden={!state.mindmapVisible}
+          className={`mindmap-pane${ui.mindmapVisible ? "" : " is-hidden"}`}
+          aria-hidden={!ui.mindmapVisible}
         >
           <div className="mindmap-pane-head">
             <p className="eyebrow">Mindmap View</p>
@@ -47,6 +64,7 @@ export function WorkspacePage({
         </aside>
 
         <WorkspaceReadingPane
+          ui={ui}
           summary={summary}
           activeSeries={activeSeries}
           selectedChapterId={state.selectedChapterId}

@@ -2,12 +2,17 @@ import { useEffect, useMemo, useReducer } from "react";
 
 import { loadWorkspaceFromLocation } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
-import { createLoadedState, initialWorkspaceState } from "./workspaceState";
+import {
+  createInitialWorkspaceState,
+  createLoadedState,
+  persistUiSettings,
+  resetUiSettings,
+} from "./workspaceState";
 
 function workspaceReducer(state, action) {
   switch (action.type) {
     case "loaded":
-      return createLoadedState(action.summary, action.library);
+      return createLoadedState(action.summary, action.library, state);
     case "load_failed":
       return {
         ...state,
@@ -34,7 +39,33 @@ function workspaceReducer(state, action) {
     case "mindmap_toggled":
       return {
         ...state,
-        mindmapVisible: !state.mindmapVisible,
+        ui: {
+          ...state.ui,
+          mindmapVisible: !state.ui.mindmapVisible,
+        },
+      };
+    case "settings_panel_toggled":
+      return {
+        ...state,
+        settingsPanelOpen: !state.settingsPanelOpen,
+      };
+    case "settings_panel_closed":
+      return {
+        ...state,
+        settingsPanelOpen: false,
+      };
+    case "ui_setting_changed":
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          [action.key]: action.value,
+        },
+      };
+    case "ui_settings_reset":
+      return {
+        ...state,
+        ui: resetUiSettings(),
       };
     default:
       return state;
@@ -42,7 +73,7 @@ function workspaceReducer(state, action) {
 }
 
 export function useWorkspaceController() {
-  const [state, dispatch] = useReducer(workspaceReducer, initialWorkspaceState);
+  const [state, dispatch] = useReducer(workspaceReducer, undefined, createInitialWorkspaceState);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +97,10 @@ export function useWorkspaceController() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    persistUiSettings(state.ui);
+  }, [state.ui]);
 
   const summary = state.summary;
   const activeSeries = state.library?.series?.[0] ?? null;
@@ -101,13 +136,34 @@ export function useWorkspaceController() {
     dispatch({ type: "mindmap_toggled" });
   }
 
+  function onToggleSettingsPanel() {
+    dispatch({ type: "settings_panel_toggled" });
+  }
+
+  function onCloseSettingsPanel() {
+    dispatch({ type: "settings_panel_closed" });
+  }
+
+  function onChangeSetting(key, value) {
+    dispatch({ type: "ui_setting_changed", key, value });
+  }
+
+  function onResetSettings() {
+    dispatch({ type: "ui_settings_reset" });
+  }
+
   return {
     state,
+    ui: state.ui,
     summary,
     activeSeries,
     selectedNode,
     onFocusChapter,
     onFocusNode,
     onToggleMindmapVisibility,
+    onToggleSettingsPanel,
+    onCloseSettingsPanel,
+    onChangeSetting,
+    onResetSettings,
   };
 }

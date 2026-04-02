@@ -83,6 +83,7 @@ button {
 }
 
 .topbar {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 24px;
@@ -182,6 +183,149 @@ button {
   border: 1px solid rgba(138, 61, 31, 0.16);
 }
 
+.settings-panel {
+  width: min(420px, calc(100% - 28px));
+  margin: -6px 0 0 auto;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 251, 244, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(16px);
+}
+
+.settings-panel-head,
+.settings-section,
+.settings-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-panel-head {
+  margin-bottom: 14px;
+}
+
+.settings-panel-head h2 {
+  margin: 0;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.settings-dismiss,
+.settings-reset,
+.mindmap-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.settings-dismiss:hover,
+.settings-reset:hover,
+.mindmap-reset:hover {
+  background: #ffffff;
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.settings-section {
+  padding: 14px 0;
+  border-top: 1px solid rgba(24, 24, 27, 0.08);
+}
+
+.settings-section.is-block {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.settings-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-copy strong {
+  font-size: 0.98rem;
+}
+
+.settings-copy span,
+.settings-panel-foot p {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.settings-switch {
+  position: relative;
+  width: 54px;
+  height: 32px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.12);
+  transition: background 180ms ease;
+}
+
+.settings-switch.is-on {
+  background: rgba(15, 118, 110, 0.18);
+}
+
+.settings-switch-handle {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 6px 14px rgba(24, 24, 27, 0.12);
+  transform: translateX(0);
+  transition: transform 180ms ease;
+}
+
+.settings-switch.is-on .settings-switch-handle {
+  transform: translateX(22px);
+}
+
+.segmented-control {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+  border-radius: 16px;
+  background: rgba(24, 24, 27, 0.05);
+}
+
+.segmented-option {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-soft);
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.segmented-option.is-active {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+
+.settings-panel-foot {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(24, 24, 27, 0.08);
+}
+
+.settings-panel-foot p {
+  margin: 0;
+  max-width: 22rem;
+}
+
 .document-grid {
   --map-pane-width: clamp(340px, 34vw, 620px);
   --map-column-width: var(--map-pane-width);
@@ -247,13 +391,52 @@ button {
 }
 
 .mindmap-scroll {
-  overflow: auto;
-  padding: 16px 14px 18px;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  touch-action: none;
+  cursor: grab;
+}
+
+.mindmap-scroll.is-panning {
+  cursor: grabbing;
+}
+
+.mindmap-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.mindmap-hud {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mindmap-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--ink-soft);
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 /* --- HTML/CSS Tree Mindmap --- */
 .css-tree {
-  padding: 10px;
+  padding: 72px 24px 24px;
 }
 .css-tree ul {
   display: flex;
@@ -325,6 +508,7 @@ button {
   background: transparent;
   color: var(--ink);
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .mindmap-node.is-active .mindmap-label {
@@ -376,6 +560,36 @@ button {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.reading-pane.is-wide .content-summary,
+.reading-pane.is-wide .article-summary,
+.reading-pane.is-wide .problem-card p:last-child {
+  max-width: 82ch;
+}
+
+.reading-pane.is-compact .content-header {
+  padding: 18px 20px 16px;
+}
+
+.reading-pane.is-compact .reading-scroll {
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.reading-pane.is-compact .problem-card,
+.reading-pane.is-compact .article-card {
+  padding: 18px 20px;
+}
+
+.reading-pane.is-compact .article-summary {
+  margin-bottom: 14px;
+  line-height: 1.68;
+}
+
+.reading-pane.is-compact .keypoint-card,
+.reading-pane.is-compact .takeaway-card {
+  padding: 12px 14px;
 }
 
 .content-header {
@@ -651,7 +865,7 @@ button {
   }
 
   .mindmap-scroll {
-    overflow: auto;
+    min-height: 520px;
   }
 
   .sidebar-handle {
@@ -671,6 +885,7 @@ button {
 
   .toolbar {
     width: 100%;
+    justify-content: flex-end;
   }
 
   .tool-button {
@@ -686,6 +901,17 @@ button {
   }
 
   .article-head {
+    flex-direction: column;
+  }
+
+  .settings-panel {
+    width: 100%;
+    margin-top: -2px;
+  }
+
+  .settings-panel-head,
+  .settings-panel-foot {
+    align-items: start;
     flex-direction: column;
   }
 }

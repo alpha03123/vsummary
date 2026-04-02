@@ -7,9 +7,11 @@ import {
 
 import { formatRange } from "../../../shared/lib/time";
 
-export function WorkspaceReadingPane({ summary, activeSeries, selectedChapterId }) {
+export function WorkspaceReadingPane({ ui, summary, activeSeries, selectedChapterId }) {
   return (
-    <section className="reading-pane">
+    <section
+      className={`reading-pane${ui.contentWidth === "wide" ? " is-wide" : ""}${ui.readingDensity === "compact" ? " is-compact" : ""}`}
+    >
       <header className="content-header">
         <div className="content-header-main">
           <div className="content-title-wrapper">
@@ -40,20 +42,22 @@ export function WorkspaceReadingPane({ summary, activeSeries, selectedChapterId 
           <p>{summary?.core_problem ?? "当前没有核心问题描述。"}</p>
         </article>
 
-        <section className="takeaways-section">
-          <div className="section-heading">
-            <p className="eyebrow">Signals</p>
-            <h2>关键收获</h2>
-          </div>
-          <div className="takeaway-grid">
-            {(summary?.key_takeaways ?? []).map((item) => (
-              <article key={item} className="takeaway-card">
-                <Sparkles size={15} strokeWidth={2.2} />
-                <p>{item}</p>
-              </article>
-            ))}
-          </div>
-        </section>
+        {ui.showTakeaways ? (
+          <section className="takeaways-section">
+            <div className="section-heading">
+              <p className="eyebrow">Signals</p>
+              <h2>关键收获</h2>
+            </div>
+            <div className="takeaway-grid">
+              {(summary?.key_takeaways ?? []).map((item) => (
+                <article key={item} className="takeaway-card">
+                  <Sparkles size={15} strokeWidth={2.2} />
+                  <p>{item}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <div className="article-stack">
           {(summary?.chapters ?? []).map((chapter, index) => (
