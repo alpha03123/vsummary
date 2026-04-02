@@ -12,17 +12,14 @@ export function App() {
       summary={controller.summary}
       activeSeries={controller.activeSeries}
       selectedVideo={controller.selectedVideo}
-      selectedNode={controller.selectedNode}
       isGeneratingSelectedVideo={controller.isGeneratingSelectedVideo}
       onSelectSeries={controller.onSelectSeries}
       onSelectVideo={controller.onSelectVideo}
       onGenerateVideo={controller.onGenerateVideo}
-      onToggleMindmapVisibility={controller.onToggleMindmapVisibility}
       onToggleSettingsPanel={controller.onToggleSettingsPanel}
       onCloseSettingsPanel={controller.onCloseSettingsPanel}
       onChangeSetting={controller.onChangeSetting}
       onResetSettings={controller.onResetSettings}
-      onFocusNode={controller.onFocusNode}
     />
   );
 }

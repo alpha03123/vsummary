@@ -1,14 +1,11 @@
 import { useEffect, useRef } from "react";
 import {
   BookOpenText,
-  PanelLeft,
   Settings2,
 } from "lucide-react";
 
 export function WorkspaceToolbar({
-  mindmapVisible,
   settingsOpen,
-  onToggleMindmapVisibility,
   onToggleSettingsPanel,
 }) {
   const settingsButtonRef = useRef(null);
@@ -32,26 +29,23 @@ export function WorkspaceToolbar({
 
   return (
     <header className="topbar">
-      <div className="brand-block">
-        <div className="brand-icon">
-          <BookOpenText size={24} strokeWidth={2.1} />
+      <div className="topbar-main">
+        <div className="brand-block">
+          <div className="brand-icon">
+            <BookOpenText size={24} strokeWidth={2.1} />
+          </div>
+          <div>
+            <p className="eyebrow">Videos Library Workspace</p>
+            <h1 className="brand-title">Video Include</h1>
+          </div>
         </div>
-        <div>
-          <p className="eyebrow">Editorial Knowledge Workspace</p>
-          <h1 className="brand-title">Video Include</h1>
+        <div className="topbar-copy">
+          <strong>videos / series / video</strong>
+          <span>主页先浏览素材库，再进入单个视频的生成结果与阅读。</span>
         </div>
       </div>
 
       <div className="toolbar">
-        <button
-          className={`panel-toggle${mindmapVisible ? " is-active" : ""}`}
-          onClick={onToggleMindmapVisibility}
-          title="Toggle Mindmap"
-          aria-label="切换思维导图面板"
-          aria-pressed={mindmapVisible}
-        >
-          <PanelLeft size={20} strokeWidth={2.2} />
-        </button>
         <button
           ref={settingsButtonRef}
           className={`panel-toggle${settingsOpen ? " is-active" : ""}`}

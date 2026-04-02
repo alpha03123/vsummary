@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useReducer } from "react";
 
 import { generateVideoSummary, loadVideoSummary, loadWorkspaceLibrary } from "./workspaceApi";
-import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
   createInitialWorkspaceState,
   createSummaryLoadedState,
@@ -33,7 +32,6 @@ function workspaceReducer(state, action) {
         selectedVideoId: series?.videos?.[0]?.id ?? null,
         summary: null,
         selectedChapterId: null,
-        selectedNodeId: null,
       };
     }
     case "video_selected":
@@ -43,7 +41,6 @@ function workspaceReducer(state, action) {
         selectedVideoId: action.videoId,
         summary: null,
         selectedChapterId: null,
-        selectedNodeId: null,
       };
     case "summary_loading_started":
       return {
@@ -59,26 +56,11 @@ function workspaceReducer(state, action) {
         summary: null,
         summaryLoading: false,
         selectedChapterId: null,
-        selectedNodeId: null,
       };
     case "chapter_selected":
       return {
         ...state,
         selectedChapterId: action.chapterId,
-      };
-    case "node_selected":
-      return {
-        ...state,
-        selectedNodeId: action.nodeId,
-        selectedChapterId: action.chapterId ?? state.selectedChapterId,
-      };
-    case "mindmap_toggled":
-      return {
-        ...state,
-        ui: {
-          ...state.ui,
-          mindmapVisible: !state.ui.mindmapVisible,
-        },
       };
     case "settings_panel_toggled":
       return {
@@ -186,10 +168,6 @@ export function useWorkspaceController() {
   const summary = state.summary;
   const activeSeries = findSeriesById(state.library, state.selectedSeriesId);
   const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-  const selectedNode = useMemo(
-    () => findNodeById(summary?.mindmap, state.selectedNodeId),
-    [summary?.mindmap, state.selectedNodeId],
-  );
   const isGeneratingSelectedVideo =
     state.generatingVideoKey != null &&
     state.generatingVideoKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
@@ -200,33 +178,6 @@ export function useWorkspaceController() {
 
   function onSelectVideo(seriesId, videoId) {
     dispatch({ type: "video_selected", seriesId, videoId });
-  }
-
-  function onFocusChapter(chapterId) {
-    dispatch({ type: "chapter_selected", chapterId });
-
-    requestAnimationFrame(() => {
-      document.getElementById(chapterId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
-  function onFocusNode(node) {
-    const chapterId = findChapterForNode(state.summary?.chapters ?? [], node)?.id ?? null;
-    dispatch({
-      type: "node_selected",
-      nodeId: node.id,
-      chapterId,
-    });
-
-    requestAnimationFrame(() => {
-      if (chapterId) {
-        document.getElementById(chapterId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  }
-
-  function onToggleMindmapVisibility() {
-    dispatch({ type: "mindmap_toggled" });
   }
 
   function onToggleSettingsPanel() {
@@ -274,14 +225,10 @@ export function useWorkspaceController() {
     summary,
     activeSeries,
     selectedVideo,
-    selectedNode,
     isGeneratingSelectedVideo,
     onSelectSeries,
     onSelectVideo,
-    onFocusChapter,
-    onFocusNode,
     onGenerateVideo,
-    onToggleMindmapVisibility,
     onToggleSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,

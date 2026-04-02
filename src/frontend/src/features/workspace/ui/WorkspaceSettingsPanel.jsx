@@ -18,21 +18,6 @@ export function WorkspaceSettingsPanel({
 
       <div className="settings-section">
         <div className="settings-copy">
-          <strong>思维导图</strong>
-          <span>控制左侧导图是否显示。</span>
-        </div>
-        <button
-          type="button"
-          className={`settings-switch${ui.mindmapVisible ? " is-on" : ""}`}
-          onClick={() => onChangeSetting("mindmapVisible", !ui.mindmapVisible)}
-          aria-pressed={ui.mindmapVisible}
-        >
-          <span className="settings-switch-handle" />
-        </button>
-      </div>
-
-      <div className="settings-section is-block">
-        <div className="settings-copy">
           <strong>正文宽度</strong>
           <span>标准适合专注阅读，舒展更适合横屏大屏。</span>
         </div>
@@ -93,7 +78,7 @@ export function WorkspaceSettingsPanel({
       </div>
 
       <div className="settings-panel-foot">
-        <p>导图支持滚轮缩放、拖动画布、双击复位。</p>
+        <p>这里只保留阅读相关设置，主页默认专注在系列浏览和视频处理流程。</p>
         <button type="button" className="settings-reset" onClick={onResetSettings}>
           恢复默认
         </button>

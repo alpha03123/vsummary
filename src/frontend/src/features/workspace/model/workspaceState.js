@@ -1,7 +1,6 @@
 const UI_SETTINGS_STORAGE_KEY = "video-include-ui-settings";
 
 export const defaultUiSettings = {
-  mindmapVisible: true,
   contentWidth: "regular",
   readingDensity: "comfortable",
   showTakeaways: true,
@@ -14,7 +13,6 @@ export function createInitialWorkspaceState() {
     selectedSeriesId: null,
     selectedVideoId: null,
     selectedChapterId: null,
-    selectedNodeId: null,
     generatingVideoKey: null,
     summaryLoading: false,
     ui: loadUiSettings(),
@@ -42,7 +40,6 @@ export function createSummaryLoadedState(summary, currentState) {
     summary,
     summaryLoading: false,
     selectedChapterId: summary?.chapters?.[0]?.id ?? null,
-    selectedNodeId: summary?.mindmap?.children?.[0]?.id ?? summary?.mindmap?.id ?? null,
   };
 }
 
@@ -126,7 +123,6 @@ function loadUiSettings() {
 function normalizeUiSettings(value) {
   const record = value && typeof value === "object" ? value : {};
   return {
-    mindmapVisible: typeof record.mindmapVisible === "boolean" ? record.mindmapVisible : true,
     contentWidth: record.contentWidth === "wide" ? "wide" : "regular",
     readingDensity: record.readingDensity === "compact" ? "compact" : "comfortable",
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
