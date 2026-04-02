@@ -9,10 +9,14 @@ export const defaultUiSettings = {
 
 export function createInitialWorkspaceState() {
   return {
-    summary: null,
     library: null,
+    summary: null,
+    selectedSeriesId: null,
+    selectedVideoId: null,
     selectedChapterId: null,
     selectedNodeId: null,
+    generatingVideoKey: null,
+    summaryLoading: false,
     ui: loadUiSettings(),
     settingsPanelOpen: false,
     error: "",
@@ -20,40 +24,76 @@ export function createInitialWorkspaceState() {
   };
 }
 
-export function createLoadedState(summary, library, currentState) {
+export function createWorkspaceLoadedState(library, currentState) {
+  const selection = getDefaultSelection(library, currentState.selectedSeriesId, currentState.selectedVideoId);
   return {
     ...currentState,
-    summary,
     library,
-    selectedChapterId: summary.chapters?.[0]?.id ?? null,
-    selectedNodeId: summary.mindmap?.children?.[0]?.id ?? summary.mindmap?.id ?? null,
+    selectedSeriesId: selection.seriesId,
+    selectedVideoId: selection.videoId,
     error: "",
     loading: false,
   };
 }
 
-export function currentLibrary(existingLibrary, summary) {
-  if (existingLibrary) {
-    return existingLibrary;
-  }
-
+export function createSummaryLoadedState(summary, currentState) {
   return {
-    workspace: { id: "local", title: "Local Workspace" },
-    series: [
-      {
-        id: "imported",
-        title: "Imported Series",
-        videos: [{ id: summary.title, title: summary.title }],
-      },
-    ],
+    ...currentState,
+    summary,
+    summaryLoading: false,
+    selectedChapterId: summary?.chapters?.[0]?.id ?? null,
+    selectedNodeId: summary?.mindmap?.children?.[0]?.id ?? summary?.mindmap?.id ?? null,
   };
 }
 
-export function normalizeSummaryPayload(payload) {
-  if (payload && typeof payload === "object" && payload.summary && typeof payload.summary === "object") {
-    return payload.summary;
+export function getDefaultSelection(library, preferredSeriesId = null, preferredVideoId = null) {
+  const series = library?.series ?? [];
+  if (!series.length) {
+    return { seriesId: null, videoId: null };
   }
-  return payload;
+
+  const preferredSeries = series.find((item) => item.id === preferredSeriesId) ?? series[0];
+  const preferredVideo =
+    preferredSeries.videos.find((item) => item.id === preferredVideoId) ?? preferredSeries.videos[0] ?? null;
+
+  return {
+    seriesId: preferredSeries.id,
+    videoId: preferredVideo?.id ?? null,
+  };
+}
+
+export function findSeriesById(library, seriesId) {
+  return library?.series?.find((series) => series.id === seriesId) ?? null;
+}
+
+export function findVideoById(library, seriesId, videoId) {
+  return findSeriesById(library, seriesId)?.videos.find((video) => video.id === videoId) ?? null;
+}
+
+export function markVideoAsReady(library, seriesId, videoId) {
+  if (!library) {
+    return library;
+  }
+
+  return {
+    ...library,
+    series: library.series.map((series) =>
+      series.id !== seriesId
+        ? series
+        : {
+            ...series,
+            videos: series.videos.map((video) =>
+              video.id !== videoId
+                ? video
+                : {
+                    ...video,
+                    processed: true,
+                    status: "ready",
+                  },
+            ),
+          },
+    ),
+  };
 }
 
 export function persistUiSettings(ui) {

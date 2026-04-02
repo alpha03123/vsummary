@@ -1,3 +1,4 @@
+import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { MindmapCanvas } from "./MindmapCanvas";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 import { WorkspaceSettingsPanel } from "./WorkspaceSettingsPanel";
@@ -6,9 +7,15 @@ import { WorkspaceToolbar } from "./WorkspaceToolbar";
 export function WorkspacePage({
   state,
   ui,
+  library,
   summary,
   activeSeries,
+  selectedVideo,
   selectedNode,
+  isGeneratingSelectedVideo,
+  onSelectSeries,
+  onSelectVideo,
+  onGenerateVideo,
   onToggleMindmapVisibility,
   onToggleSettingsPanel,
   onCloseSettingsPanel,
@@ -22,7 +29,7 @@ export function WorkspacePage({
         <div className="loading-card">
           <p className="eyebrow">Preparing Workspace</p>
           <h1>正在载入知识工作台</h1>
-          <p>默认会优先读取 sample 里的第一条总结结果。</p>
+          <p>正在扫描 `videos/` 目录并构建当前工作区。</p>
         </div>
       </div>
     );
@@ -65,10 +72,24 @@ export function WorkspacePage({
 
         <WorkspaceReadingPane
           ui={ui}
+          library={library}
           summary={summary}
           activeSeries={activeSeries}
+          selectedVideo={selectedVideo}
           selectedChapterId={state.selectedChapterId}
-        />
+          summaryLoading={state.summaryLoading}
+          isGeneratingSelectedVideo={isGeneratingSelectedVideo}
+        >
+          <WorkspaceLibraryPanel
+            library={library}
+            activeSeries={activeSeries}
+            selectedVideo={selectedVideo}
+            isGeneratingSelectedVideo={isGeneratingSelectedVideo}
+            onSelectSeries={onSelectSeries}
+            onSelectVideo={onSelectVideo}
+            onGenerateVideo={onGenerateVideo}
+          />
+        </WorkspaceReadingPane>
       </main>
     </div>
   );

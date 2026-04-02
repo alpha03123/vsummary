@@ -12,6 +12,7 @@
 
 - 仓库处于重构阶段，后端正在从按技术层组织调整为按功能组织
 - 本地模型目录固定为 `data/models/`，整个 `data/` 目录不提交到 Git
+- 输入视频放在 `videos/<series>/`，处理产物输出到 `workspace/<series>/<video>/`
 - `whisper.cpp` 当前通过外部运行时接入，不把模型或运行时二进制提交到仓库
 - 产品愿景与阶段路线见 [docs/product-roadmap.md](E:/gittools/self/video_include/docs/product-roadmap.md)
 
@@ -23,25 +24,27 @@ vsummary/
 ├─ data/           本地运行数据，不提交到 Git
 ├─ docs/           项目文档、设计草图、调研记录
 ├─ scripts/        构建、开发、样例执行脚本
+├─ videos/         本地视频输入，按 series 分组，不提交到 Git
+├─ workspace/      本地处理中间产物与总结结果，不提交到 Git
 ├─ src/
 │  ├─ backend/
 │  │  ├─ api/                  FastAPI 入口与组装
 │  │  └─ video_summary/        视频总结主能力
 │  │     ├─ domain/            领域模型
 │  │     ├─ generation/        转写与总结生成流程
-│  │     ├─ library/           样例浏览查询流程
-│  │     └─ infrastructure/    外部依赖实现与样例数据适配
+│  │     ├─ library/           series / videos 浏览与生成流程
+│  │     └─ infrastructure/    外部依赖实现与文件系统适配
 │  └─ frontend/                Vite + React 前端工程
 ├─ tests/          测试代码
-└─ sample/         本地样例输入输出，不提交到 Git
+└─ sample/         历史样例目录，已不作为主工作流
 ```
 
 ## 架构说明
 
 - `src/backend/video_summary/domain` 只放视频总结领域模型
 - `src/backend/video_summary/generation` 负责转写与总结生成
-- `src/backend/video_summary/library` 负责样例浏览查询
-- `src/backend/video_summary/infrastructure` 实现 ffmpeg、whisper、OpenAI 等外部依赖
+- `src/backend/video_summary/library` 负责 series 浏览、视频选择与生成入口
+- `src/backend/video_summary/infrastructure` 实现 ffmpeg、whisper、OpenAI 与文件系统适配
 - `src/backend/api` 是后端对外入口与依赖组装层
 - `src/frontend` 保持为独立前端工程，不和后端实现细节混放
 
@@ -101,16 +104,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 - 前端开发服务器默认地址：
   - `http://127.0.0.1:4173`
 - 后端开发接口默认地址：
-  - `http://127.0.0.1:8000`
+  - `http://127.0.0.1:8001`
 
 ## 当前 API
 
 - `GET /api/health`
 - `GET /api/videos`
-- `GET /api/videos/{video_id}/summary`
+- `GET /api/videos/{series_id}/{video_id}/summary`
+- `POST /api/videos/{series_id}/{video_id}/generate`
 
-页面也可以通过 URL 参数预载入样例结果：
+## 使用方式
 
-```text
-http://127.0.0.1:4173/?summary=/sample/output/<video>/summary.json&mindmap=/sample/output/<video>/mindmap.json
-```
+- 把视频放进 `videos/<series>/`
+- 前端会把 `videos` 下的一级目录识别为 series
+- 选择某个视频后，如果还没有处理结果，可以点击 `Generate Video`
+- 处理中间文件和最终结果会写到 `workspace/<series>/<video_stem>/`

@@ -20,6 +20,8 @@ build/
 tmp/
 temp/
 sample/
+videos/
+workspace/
 
 # Local data
 data/

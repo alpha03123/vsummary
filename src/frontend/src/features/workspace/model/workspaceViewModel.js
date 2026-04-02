@@ -35,6 +35,9 @@ function asVideoCard(value, label) {
   return {
     id: asString(record.id, `${label}.id`),
     title: asString(record.title, `${label}.title`),
+    sourceName: asString(record.source_name, `${label}.source_name`),
+    processed: Boolean(record.processed),
+    status: asString(record.status, `${label}.status`),
   };
 }
 
@@ -67,15 +70,8 @@ function asMindmapNode(value, label) {
   };
 }
 
-export function unwrapSummaryPayload(payload) {
-  if (payload && typeof payload === "object" && payload.summary && typeof payload.summary === "object") {
-    return payload.summary;
-  }
-  return payload;
-}
-
 export function toWorkspaceSummary(payload) {
-  const record = asRecord(unwrapSummaryPayload(payload), "summary");
+  const record = asRecord(payload, "summary");
 
   if (!Array.isArray(record.chapters)) {
     throw new Error("summary.chapters 不是有效列表。");
@@ -97,13 +93,9 @@ export function toWorkspaceLibrary(payload) {
   const record = asRecord(payload, "library");
   const workspace = asRecord(record.workspace, "library.workspace");
   const series = record.series ?? [];
-  const videos = record.videos ?? [];
 
   if (!Array.isArray(series)) {
     throw new Error("library.series 不是有效列表。");
-  }
-  if (!Array.isArray(videos)) {
-    throw new Error("library.videos 不是有效列表。");
   }
 
   return {
@@ -125,6 +117,5 @@ export function toWorkspaceLibrary(payload) {
         ),
       };
     }),
-    videos: videos.map((video, index) => asVideoCard(video, `library.videos[${index}]`)),
   };
 }

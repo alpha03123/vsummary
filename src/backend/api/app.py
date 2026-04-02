@@ -27,10 +27,19 @@ def list_videos() -> VideoLibraryResponse:
     return VideoLibraryResponse.from_view(library)
 
 
-@app.get("/api/videos/{video_id}/summary")
-def get_video_summary(video_id: str) -> dict[str, object]:
-    video_summary = CONTAINER.get_video_summary.run(video_id)
+@app.get("/api/videos/{series_id}/{video_id}/summary")
+def get_video_summary(series_id: str, video_id: str) -> dict[str, object]:
+    video_summary = CONTAINER.get_video_summary.run(series_id, video_id)
     if video_summary is None:
-        raise HTTPException(status_code=404, detail=f"summary not found for video '{video_id}'")
+        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+
+    return video_summary.summary
+
+
+@app.post("/api/videos/{series_id}/{video_id}/generate")
+def generate_video_summary(series_id: str, video_id: str) -> dict[str, object]:
+    video_summary = CONTAINER.generate_video_summary.run(series_id, video_id)
+    if video_summary is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
 
     return video_summary.summary

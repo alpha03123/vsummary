@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Move, RotateCcw, ZoomIn } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 const MIN_SCALE = 0.55;
 const MAX_SCALE = 2.4;
@@ -81,6 +81,8 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
       return;
     }
 
+    event.preventDefault();
+
     dragStateRef.current = {
       active: true,
       pointerId: event.pointerId,
@@ -132,14 +134,6 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
       onPointerCancel={handlePointerUp}
     >
       <div className="mindmap-hud">
-        <span className="mindmap-hint">
-          <Move size={14} strokeWidth={2.1} />
-          拖动画布
-        </span>
-        <span className="mindmap-hint">
-          <ZoomIn size={14} strokeWidth={2.1} />
-          {Math.round(view.scale * 100)}%
-        </span>
         <button type="button" className="mindmap-reset" onClick={resetView}>
           <RotateCcw size={14} strokeWidth={2.1} />
           复位

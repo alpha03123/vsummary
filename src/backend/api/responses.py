@@ -12,10 +12,19 @@ class HealthResponse(BaseModel):
 class VideoCardResponse(BaseModel):
     id: str
     title: str
+    source_name: str
+    processed: bool
+    status: str
 
     @classmethod
     def from_view(cls, video: VideoCardView) -> "VideoCardResponse":
-        return cls(id=video.id, title=video.title)
+        return cls(
+            id=video.id,
+            title=video.title,
+            source_name=video.source_name,
+            processed=video.processed,
+            status=video.status,
+        )
 
 
 class SeriesResponse(BaseModel):
@@ -32,11 +41,9 @@ class WorkspaceResponse(BaseModel):
 class VideoLibraryResponse(BaseModel):
     workspace: WorkspaceResponse
     series: list[SeriesResponse]
-    videos: list[VideoCardResponse]
 
     @classmethod
     def from_view(cls, library: VideoLibraryView) -> "VideoLibraryResponse":
-        videos = [VideoCardResponse.from_view(video) for video in library.videos]
         return cls(
             workspace=WorkspaceResponse(
                 id=library.workspace.id,
@@ -44,10 +51,10 @@ class VideoLibraryResponse(BaseModel):
             ),
             series=[
                 SeriesResponse(
-                    id=library.series.id,
-                    title=library.series.title,
-                    videos=videos,
+                    id=series.id,
+                    title=series.title,
+                    videos=[VideoCardResponse.from_view(video) for video in series.videos],
                 )
+                for series in library.series
             ],
-            videos=videos,
         )

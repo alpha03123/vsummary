@@ -1,29 +1,65 @@
 import { useEffect, useMemo, useReducer } from "react";
 
-import { loadWorkspaceFromLocation } from "./workspaceApi";
+import { generateVideoSummary, loadVideoSummary, loadWorkspaceLibrary } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
   createInitialWorkspaceState,
-  createLoadedState,
+  createSummaryLoadedState,
+  createWorkspaceLoadedState,
+  findSeriesById,
+  findVideoById,
+  markVideoAsReady,
   persistUiSettings,
   resetUiSettings,
 } from "./workspaceState";
 
 function workspaceReducer(state, action) {
   switch (action.type) {
-    case "loaded":
-      return createLoadedState(action.summary, action.library, state);
+    case "workspace_loaded":
+      return createWorkspaceLoadedState(action.library, state);
     case "load_failed":
       return {
         ...state,
         loading: false,
+        summaryLoading: false,
+        generatingVideoKey: null,
         error: action.message,
       };
-    case "loading_started":
+    case "series_selected": {
+      const series = findSeriesById(state.library, action.seriesId);
       return {
         ...state,
-        loading: true,
+        selectedSeriesId: action.seriesId,
+        selectedVideoId: series?.videos?.[0]?.id ?? null,
+        summary: null,
+        selectedChapterId: null,
+        selectedNodeId: null,
+      };
+    }
+    case "video_selected":
+      return {
+        ...state,
+        selectedSeriesId: action.seriesId,
+        selectedVideoId: action.videoId,
+        summary: null,
+        selectedChapterId: null,
+        selectedNodeId: null,
+      };
+    case "summary_loading_started":
+      return {
+        ...state,
+        summaryLoading: true,
         error: "",
+      };
+    case "summary_loaded":
+      return createSummaryLoadedState(action.summary, state);
+    case "summary_cleared":
+      return {
+        ...state,
+        summary: null,
+        summaryLoading: false,
+        selectedChapterId: null,
+        selectedNodeId: null,
       };
     case "chapter_selected":
       return {
@@ -67,6 +103,18 @@ function workspaceReducer(state, action) {
         ...state,
         ui: resetUiSettings(),
       };
+    case "generation_started":
+      return {
+        ...state,
+        generatingVideoKey: action.videoKey,
+        error: "",
+      };
+    case "generation_succeeded":
+      return createSummaryLoadedState(action.summary, {
+        ...state,
+        library: markVideoAsReady(state.library, action.seriesId, action.videoId),
+        generatingVideoKey: null,
+      });
     default:
       return state;
   }
@@ -78,10 +126,10 @@ export function useWorkspaceController() {
   useEffect(() => {
     let cancelled = false;
 
-    loadWorkspaceFromLocation()
-      .then(({ summary, library }) => {
+    loadWorkspaceLibrary()
+      .then((library) => {
         if (!cancelled) {
-          dispatch({ type: "loaded", summary, library });
+          dispatch({ type: "workspace_loaded", library });
         }
       })
       .catch((error) => {
@@ -102,12 +150,57 @@ export function useWorkspaceController() {
     persistUiSettings(state.ui);
   }, [state.ui]);
 
+  useEffect(() => {
+    const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
+    if (!selectedVideo) {
+      dispatch({ type: "summary_cleared" });
+      return;
+    }
+    if (!selectedVideo.processed) {
+      dispatch({ type: "summary_cleared" });
+      return;
+    }
+
+    let cancelled = false;
+    dispatch({ type: "summary_loading_started" });
+    loadVideoSummary(state.selectedSeriesId, state.selectedVideoId)
+      .then((summary) => {
+        if (!cancelled) {
+          dispatch({ type: "summary_loaded", summary });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.library, state.selectedSeriesId, state.selectedVideoId]);
+
   const summary = state.summary;
-  const activeSeries = state.library?.series?.[0] ?? null;
+  const activeSeries = findSeriesById(state.library, state.selectedSeriesId);
+  const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
   const selectedNode = useMemo(
     () => findNodeById(summary?.mindmap, state.selectedNodeId),
     [summary?.mindmap, state.selectedNodeId],
   );
+  const isGeneratingSelectedVideo =
+    state.generatingVideoKey != null &&
+    state.generatingVideoKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
+
+  function onSelectSeries(seriesId) {
+    dispatch({ type: "series_selected", seriesId });
+  }
+
+  function onSelectVideo(seriesId, videoId) {
+    dispatch({ type: "video_selected", seriesId, videoId });
+  }
 
   function onFocusChapter(chapterId) {
     dispatch({ type: "chapter_selected", chapterId });
@@ -152,18 +245,53 @@ export function useWorkspaceController() {
     dispatch({ type: "ui_settings_reset" });
   }
 
+  async function onGenerateVideo() {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      return;
+    }
+
+    const videoKey = buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
+    dispatch({ type: "generation_started", videoKey });
+    try {
+      const summaryResult = await generateVideoSummary(state.selectedSeriesId, state.selectedVideoId);
+      dispatch({
+        type: "generation_succeeded",
+        seriesId: state.selectedSeriesId,
+        videoId: state.selectedVideoId,
+        summary: summaryResult,
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "生成失败",
+      });
+    }
+  }
+
   return {
     state,
     ui: state.ui,
     summary,
     activeSeries,
+    selectedVideo,
     selectedNode,
+    isGeneratingSelectedVideo,
+    onSelectSeries,
+    onSelectVideo,
     onFocusChapter,
     onFocusNode,
+    onGenerateVideo,
     onToggleMindmapVisibility,
     onToggleSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,
     onResetSettings,
   };
+}
+
+function buildVideoKey(seriesId, videoId) {
+  if (!seriesId || !videoId) {
+    return null;
+  }
+  return `${seriesId}/${videoId}`;
 }

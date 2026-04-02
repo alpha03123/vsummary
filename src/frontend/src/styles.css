@@ -396,6 +396,8 @@ button {
   padding: 0;
   touch-action: none;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .mindmap-scroll.is-panning {
@@ -408,6 +410,8 @@ button {
   left: 0;
   transform-origin: 0 0;
   will-change: transform;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .mindmap-hud {
@@ -421,22 +425,11 @@ button {
   flex-wrap: wrap;
 }
 
-.mindmap-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--ink-soft);
-  border: 1px solid rgba(24, 24, 27, 0.08);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
 /* --- HTML/CSS Tree Mindmap --- */
 .css-tree {
-  padding: 72px 24px 24px;
+  padding: 62px 24px 24px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .css-tree ul {
   display: flex;
@@ -509,6 +502,8 @@ button {
   color: var(--ink);
   white-space: nowrap;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .mindmap-node.is-active .mindmap-label {
@@ -528,6 +523,8 @@ button {
   background: rgba(255, 255, 255, 0.4);
   border: 1px solid transparent;
   transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .mindmap-node.depth-0 .mindmap-label {
@@ -673,6 +670,216 @@ button {
   padding: 24px;
   display: grid;
   gap: 18px;
+}
+
+.library-panel,
+.empty-state-card {
+  padding: 22px 24px;
+  border-radius: 22px;
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-card);
+}
+
+.library-panel.is-empty,
+.empty-state-card {
+  display: grid;
+  gap: 10px;
+}
+
+.library-panel h2,
+.empty-state-card h2,
+.generate-copy h3 {
+  margin: 0;
+  font-family: "Newsreader", Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+.library-panel p,
+.empty-state-card p,
+.generate-copy p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.72;
+}
+
+.library-head,
+.generate-panel {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.library-meta,
+.inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.series-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.series-chip,
+.video-card,
+.generate-button {
+  cursor: pointer;
+}
+
+.series-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink-soft);
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.series-chip strong {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--ink);
+  font-size: 0.76rem;
+}
+
+.series-chip.is-active {
+  background: rgba(15, 118, 110, 0.09);
+  border-color: rgba(15, 118, 110, 0.18);
+  color: var(--teal);
+}
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.video-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  background: rgba(250, 245, 234, 0.62);
+  color: var(--ink);
+  text-align: left;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.video-card:hover,
+.video-card:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
+}
+
+.video-card.is-active {
+  border-color: rgba(198, 123, 92, 0.24);
+  box-shadow: 0 18px 30px rgba(198, 123, 92, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.video-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-soft);
+}
+
+.video-card strong {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.video-card span:last-child {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.video-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.video-status.is-ready {
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--teal);
+}
+
+.video-status.is-pending {
+  background: rgba(198, 123, 92, 0.12);
+  color: #9a5335;
+}
+
+.generate-panel {
+  margin-top: 16px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(24, 24, 27, 0.08);
+}
+
+.generate-copy {
+  display: grid;
+  gap: 6px;
+  max-width: 34rem;
+}
+
+.generate-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 220px;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(145deg, var(--teal), #145a54);
+  color: #fffaf2;
+  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.18);
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.generate-button:hover,
+.generate-button:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 30px rgba(15, 118, 110, 0.22);
+}
+
+.generate-button:disabled {
+  opacity: 0.72;
+}
+
+.generate-button.is-busy {
+  background: linear-gradient(145deg, #1f2937, #111827);
+}
+
+.spin-icon {
+  animation: spin 0.9s linear infinite;
 }
 
 .problem-card {
@@ -914,6 +1121,15 @@ button {
     align-items: start;
     flex-direction: column;
   }
+
+  .library-head,
+  .generate-panel {
+    flex-direction: column;
+  }
+
+  .generate-button {
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -926,5 +1142,15 @@ button {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }

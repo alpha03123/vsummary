@@ -8,9 +8,15 @@ export function App() {
     <WorkspacePage
       state={controller.state}
       ui={controller.ui}
+      library={controller.state.library}
       summary={controller.summary}
       activeSeries={controller.activeSeries}
+      selectedVideo={controller.selectedVideo}
       selectedNode={controller.selectedNode}
+      isGeneratingSelectedVideo={controller.isGeneratingSelectedVideo}
+      onSelectSeries={controller.onSelectSeries}
+      onSelectVideo={controller.onSelectVideo}
+      onGenerateVideo={controller.onGenerateVideo}
       onToggleMindmapVisibility={controller.onToggleMindmapVisibility}
       onToggleSettingsPanel={controller.onToggleSettingsPanel}
       onCloseSettingsPanel={controller.onCloseSettingsPanel}
