@@ -33,6 +33,7 @@ class ConfiguredVideoSummaryWorkflowTests(unittest.TestCase):
             root = Path(temp_dir)
             config_dir = root / "config"
             config_dir.mkdir(parents=True)
+            (root / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
             (config_dir / "settings.toml").write_text(
                 """
 [asr]
@@ -50,7 +51,6 @@ transcription_mode = "fast"
 provider = "openai_compatible"
 base_url = "http://127.0.0.1:8317/v1/responses"
 model = "gpt-5.4"
-api_key = "test-key"
                 """.strip(),
                 encoding="utf-8",
             )

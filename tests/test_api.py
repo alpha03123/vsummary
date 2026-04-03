@@ -101,6 +101,7 @@ class ApiContractTests(unittest.IsolatedAsyncioTestCase):
         self.root = Path(self.temp_dir.name) / "video_include"
         (self.root / "videos" / "series-a").mkdir(parents=True)
         (self.root / "config").mkdir(parents=True)
+        (self.root / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
         (self.root / "videos" / "series-a" / "intro.mp4").write_text("video", encoding="utf-8")
         (self.root / "videos" / "series-a" / "advanced.mp4").write_text("video", encoding="utf-8")
         (self.root / "config" / "settings.toml").write_text(
@@ -120,7 +121,6 @@ transcription_mode = "fast"
 provider = "openai_compatible"
 base_url = "http://127.0.0.1:8317/v1/responses"
 model = "gpt-5.4"
-api_key = "test-key"
 
 [workspace_ui]
 theme = "light"
@@ -202,7 +202,6 @@ ai_transcript_enhancement = true
                 "llm_provider": "openai_compatible",
                 "openai_base_url": "http://127.0.0.1:8317/v1/responses",
                 "openai_model": "gpt-5.4",
-                "openai_api_key": "test-key",
             },
         )
 
@@ -218,7 +217,6 @@ ai_transcript_enhancement = true
                 "llm_provider": "openai_compatible",
                 "openai_base_url": "https://api.openai.com/v1/responses",
                 "openai_model": "gpt-5.4",
-                "openai_api_key": "next-key",
             },
         )
 
@@ -234,7 +232,6 @@ ai_transcript_enhancement = true
                 "llm_provider": "openai_compatible",
                 "openai_base_url": "https://api.openai.com/v1/responses",
                 "openai_model": "gpt-5.4",
-                "openai_api_key": "next-key",
             },
         )
         saved_text = (self.root / "config" / "settings.toml").read_text(encoding="utf-8")
@@ -245,7 +242,7 @@ ai_transcript_enhancement = true
         self.assertIn('transcription_mode = "accurate"', saved_text)
         self.assertIn('provider = "openai_compatible"', saved_text)
         self.assertIn('base_url = "https://api.openai.com/v1/responses"', saved_text)
-        self.assertIn('api_key = "next-key"', saved_text)
+        self.assertNotIn("api_key =", saved_text)
 
     async def test_faster_whisper_models_endpoint_returns_download_status(self) -> None:
         response = await self.client.get("/api/asr/faster-whisper/models")

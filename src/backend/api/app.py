@@ -45,7 +45,6 @@ class WorkspaceSettingsResponse(BaseModel):
     llm_provider: str
     openai_base_url: str
     openai_model: str
-    openai_api_key: str
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -57,7 +56,6 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     llm_provider: str
     openai_base_url: str
     openai_model: str
-    openai_api_key: str
 
 
 class FasterWhisperModelResponse(BaseModel):
@@ -91,7 +89,6 @@ def get_workspace_settings() -> WorkspaceSettingsResponse:
         llm_provider=settings.openai.provider,
         openai_base_url=settings.openai.base_url,
         openai_model=settings.openai.model,
-        openai_api_key=settings.openai.api_key,
     )
 
 
@@ -124,7 +121,6 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         provider=request.llm_provider,
         base_url=request.openai_base_url.strip(),
         model=request.openai_model.strip(),
-        api_key=request.openai_api_key,
     )
     save_settings(CONTAINER.config_path, next_settings)
     return WorkspaceSettingsResponse(
@@ -136,7 +132,6 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         llm_provider=request.llm_provider,
         openai_base_url=request.openai_base_url.strip(),
         openai_model=request.openai_model.strip(),
-        openai_api_key=request.openai_api_key,
     )
 
 

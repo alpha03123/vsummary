@@ -52,6 +52,7 @@ class AppSettings:
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    env_values = _load_dotenv(root_dir / ".env")
 
     asr_payload = payload["asr"]
     provider = asr_payload["provider"].lower()
@@ -83,7 +84,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         provider=str(openai_payload.get("provider", "openai_compatible")),
         base_url=openai_payload["base_url"],
         model=openai_payload["model"],
-        api_key=str(openai_payload.get("api_key", "")),
+        api_key=env_values.get("OPENAI_API_KEY", "").strip(),
     )
 
     workspace_ui_payload = payload.get("workspace_ui", {})
@@ -157,7 +158,6 @@ def replace_openai_settings(
     provider: str,
     base_url: str,
     model: str,
-    api_key: str,
 ) -> AppSettings:
     return AppSettings(
         asr=settings.asr,
@@ -165,7 +165,7 @@ def replace_openai_settings(
             provider=provider,
             base_url=base_url,
             model=model,
-            api_key=api_key,
+            api_key=settings.openai.api_key,
         ),
         workspace_ui=settings.workspace_ui,
     )
@@ -209,7 +209,6 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'provider = "{settings.openai.provider}"',
         f'base_url = "{settings.openai.base_url}"',
         f'model = "{settings.openai.model}"',
-        f'api_key = "{settings.openai.api_key}"',
         "",
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
@@ -226,3 +225,20 @@ def _toml_bool(value: bool) -> str:
 
 def _toml_path(path: Path) -> str:
     return str(path).replace("\\", "/")
+
+
+def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
+    if not dotenv_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        normalized_key = key.strip()
+        normalized_value = value.strip().strip('"').strip("'")
+        if normalized_key:
+            values[normalized_key] = normalized_value
+    return values

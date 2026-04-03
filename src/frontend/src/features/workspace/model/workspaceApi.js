@@ -15,7 +15,6 @@ export async function loadWorkspaceSettings() {
     llmProvider: payload.llm_provider,
     openaiBaseUrl: payload.openai_base_url,
     openaiModel: payload.openai_model,
-    openaiApiKey: payload.openai_api_key,
   };
 }
 
@@ -34,7 +33,6 @@ export async function updateWorkspaceSettings(settings) {
       llm_provider: settings.llmProvider,
       openai_base_url: settings.openaiBaseUrl,
       openai_model: settings.openaiModel,
-      openai_api_key: settings.openaiApiKey,
     }),
   });
   return {
@@ -46,7 +44,6 @@ export async function updateWorkspaceSettings(settings) {
     llmProvider: payload.llm_provider,
     openaiBaseUrl: payload.openai_base_url,
     openaiModel: payload.openai_model,
-    openaiApiKey: payload.openai_api_key,
   };
 }
 

@@ -295,7 +295,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">模型供应商</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">当前只提供 OpenAI 兼容协议。配置会保存到 `settings.toml`，后端调用直接读取这里，不再依赖环境变量兜底。</p>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">当前只提供 OpenAI 兼容协议。`API URL` 和模型名会保存到 `settings.toml`，`API Key` 只从项目根目录 `.env` 读取。</p>
                 </div>
 
                 <SettingRow
@@ -340,15 +340,11 @@ export function WorkspaceSettingsPanel({
 
                 <SettingRow
                   title="API Key"
-                  description="本地保存到 `settings.toml`，供总结和转写增强直接使用。"
+                  description="请在项目根目录 `.env` 中配置 `OPENAI_API_KEY=...`。出于安全考虑，不会写入 `settings.toml`。"
                 >
-                  <input
-                    type="password"
-                    value={ui.openaiApiKey}
-                    onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
-                    className="w-[340px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
-                    placeholder="sk-..."
-                  />
+                  <div className="w-[340px] rounded-xl border border-dashed border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-500 dark:border-stone-700 dark:bg-stone-900/60 dark:text-stone-400">
+                    OPENAI_API_KEY=sk-...
+                  </div>
                 </SettingRow>
               </>
             )}
