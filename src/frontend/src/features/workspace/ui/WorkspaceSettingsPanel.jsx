@@ -7,8 +7,11 @@ export function WorkspaceSettingsPanel({
   ui,
   fasterWhisperModels,
   fasterWhisperModelsLoading,
+  downloadingModelId,
+  modelDownloadProgress,
   onChangeSetting,
   onDownloadFasterWhisperModel,
+  onCancelFasterWhisperModelDownload,
   onResetSettings,
   onClose,
 }) {
@@ -19,7 +22,7 @@ export function WorkspaceSettingsPanel({
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
     { id: "ai", label: "AI 总结能力", icon: Cpu },
-    { id: "keys", label: "模型密钥 (等待接入)", icon: Key },
+    { id: "keys", label: "模型供应商", icon: Key },
     { id: "network", label: "网络代理 (等待接入)", icon: Globe },
   ];
 
@@ -191,6 +194,12 @@ export function WorkspaceSettingsPanel({
                       fasterWhisperModels.map((model) => {
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
+                        const isDownloading = downloadingModelId === model.id;
+                        const statusText = model.downloaded
+                          ? "已下载到本地"
+                          : isCurrent
+                            ? "当前配置使用该模型，尚未下载到项目目录"
+                            : "尚未下载";
                         return (
                           <div
                             key={model.id}
@@ -211,10 +220,28 @@ export function WorkspaceSettingsPanel({
                                   ) : null}
                                 </div>
                                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                                  {model.downloaded ? "已下载到本地" : "尚未下载"}
+                                  {isDownloading
+                                    ? `正在下载... ${typeof modelDownloadProgress === "number" ? `${Math.round(modelDownloadProgress)}%` : ""}`.trim()
+                                    : statusText}
                                 </p>
+                                {isDownloading ? (
+                                  <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-[#0b6bff] transition-[width] duration-200 ease-out"
+                                      style={{ width: `${typeof modelDownloadProgress === "number" ? modelDownloadProgress : 8}%` }}
+                                    />
+                                  </div>
+                                ) : null}
                               </div>
-                              {model.current ? (
+                              {isDownloading ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onCancelFasterWhisperModelDownload(model.id)}
+                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                >
+                                  取消
+                                </button>
+                              ) : model.current ? (
                                 <button
                                   type="button"
                                   disabled
@@ -264,7 +291,69 @@ export function WorkspaceSettingsPanel({
               </>
             )}
 
-            {(activeTab === "network" || activeTab === "keys") && (
+            {activeTab === "keys" && (
+              <>
+                <div className="mb-2">
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">模型供应商</h3>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">当前只提供 OpenAI 兼容协议。配置会保存到 `settings.toml`，后端调用直接读取这里，不再依赖环境变量兜底。</p>
+                </div>
+
+                <SettingRow
+                  title="供应商协议"
+                  description="先固定为 OpenAI 兼容协议，便于接入 OpenAI、本地中转网关或兼容服务。"
+                >
+                  <div className="flex p-1 bg-stone-100 dark:bg-stone-800/60 rounded-xl" role="group">
+                    <button
+                      type="button"
+                      className="py-2 px-4 rounded-lg text-sm font-medium bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
+                    >
+                      OpenAI 兼容
+                    </button>
+                  </div>
+                </SettingRow>
+
+                <SettingRow
+                  title="API URL"
+                  description="填写完整的 Responses 接口地址，例如 `https://api.openai.com/v1/responses`。"
+                >
+                  <input
+                    type="text"
+                    value={ui.openaiBaseUrl}
+                    onChange={(event) => onChangeSetting("openaiBaseUrl", event.target.value)}
+                    className="w-[340px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    placeholder="https://api.openai.com/v1/responses"
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="模型名称"
+                  description="例如 `gpt-5.4` 或你的 OpenAI 兼容服务实际支持的模型名。"
+                >
+                  <input
+                    type="text"
+                    value={ui.openaiModel}
+                    onChange={(event) => onChangeSetting("openaiModel", event.target.value)}
+                    className="w-[240px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    placeholder="gpt-5.4"
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="API Key"
+                  description="本地保存到 `settings.toml`，供总结和转写增强直接使用。"
+                >
+                  <input
+                    type="password"
+                    value={ui.openaiApiKey}
+                    onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
+                    className="w-[340px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    placeholder="sk-..."
+                  />
+                </SettingRow>
+              </>
+            )}
+
+            {activeTab === "network" && (
               <div className="flex flex-col items-center justify-center p-10 h-64 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-3xl mt-4">
                 <FileText className="text-stone-300 dark:text-stone-700 mb-4" size={48} strokeWidth={1} />
                 <h3 className="font-bold text-stone-900 dark:text-stone-100 mb-2">此模块预留中</h3>

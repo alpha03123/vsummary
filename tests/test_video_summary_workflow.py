@@ -47,8 +47,10 @@ compute_type = "int8"
 transcription_mode = "fast"
 
 [openai]
+provider = "openai_compatible"
 base_url = "http://127.0.0.1:8317/v1/responses"
 model = "gpt-5.4"
+api_key = "test-key"
                 """.strip(),
                 encoding="utf-8",
             )

@@ -38,6 +38,8 @@ export function WorkspacePage({
   previewUrl,
   fasterWhisperModels,
   fasterWhisperModelsLoading,
+  downloadingModelId,
+  modelDownloadProgress,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
   selectedContextType,
@@ -53,6 +55,7 @@ export function WorkspacePage({
   onCloseSettingsPanel,
   onChangeSetting,
   onDownloadFasterWhisperModel,
+  onCancelFasterWhisperModelDownload,
   onResetSettings,
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -286,8 +289,11 @@ export function WorkspacePage({
                 ui={ui}
                 fasterWhisperModels={fasterWhisperModels}
                 fasterWhisperModelsLoading={fasterWhisperModelsLoading}
+                downloadingModelId={downloadingModelId}
+                modelDownloadProgress={modelDownloadProgress}
                 onChangeSetting={onChangeSetting}
                 onDownloadFasterWhisperModel={onDownloadFasterWhisperModel}
+                onCancelFasterWhisperModelDownload={onCancelFasterWhisperModelDownload}
                 onResetSettings={onResetSettings}
                 onClose={onCloseSettingsPanel}
               />

@@ -8,8 +8,8 @@ from backend.video_summary.infrastructure.openai_summary import OpenAIResponsesG
 
 
 class OpenAITranscriptEnhancer:
-    def __init__(self, model: str | None = None, base_url: str | None = None) -> None:
-        self._gateway = OpenAIResponsesGateway(model=model, base_url=base_url)
+    def __init__(self, model: str, base_url: str, api_key: str) -> None:
+        self._gateway = OpenAIResponsesGateway(model=model, base_url=base_url, api_key=api_key)
 
     def enhance(self, video: VideoAsset, transcript: Transcript, output_dir: Path) -> Transcript:
         chunks = _chunk_segments(transcript.segments)

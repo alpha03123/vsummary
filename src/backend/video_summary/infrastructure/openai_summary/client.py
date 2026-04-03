@@ -1,28 +1,18 @@
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 import urllib.request
-from typing import Any
 
 
 class OpenAIResponsesGateway:
-    def __init__(self, model: str | None = None, base_url: str | None = None) -> None:
-        api_key = os.environ.get("OPENAI_API_KEY")
+    def __init__(self, model: str, base_url: str, api_key: str) -> None:
         if not api_key:
-            raise RuntimeError("缺少 OPENAI_API_KEY，无法生成总结。")
-
-        resolved_base_url = (
-            base_url
-            or os.environ.get("OPENAI_BASE_URL")
-            or os.environ.get("OPENAI_API_BASE")
-            or "https://api.openai.com/v1/responses"
-        )
+            raise RuntimeError("缺少 API Key，无法生成总结。")
 
         self._api_key = api_key
-        self._model = model or os.environ.get("OPENAI_MODEL", "gpt-5.4")
-        self._base_url = resolved_base_url.rstrip("/")
+        self._model = model
+        self._base_url = base_url.rstrip("/")
 
     def create_text(self, prompt: str) -> str:
         payload = {
@@ -60,4 +50,3 @@ class OpenAIResponsesGateway:
             return "\n".join(part for part in content_parts if part)
 
         raise RuntimeError(f"OpenAI 返回中缺少 output_text: {raw_response}")
-

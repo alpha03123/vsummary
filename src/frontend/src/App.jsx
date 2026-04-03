@@ -33,6 +33,8 @@ export function App() {
       previewUrl={controller.previewUrl}
       fasterWhisperModels={controller.fasterWhisperModels}
       fasterWhisperModelsLoading={controller.fasterWhisperModelsLoading}
+      downloadingModelId={controller.downloadingModelId}
+      modelDownloadProgress={controller.modelDownloadProgress}
       isGeneratingMindmapSelectedVideo={controller.isGeneratingMindmapSelectedVideo}
       isGeneratingSelectedVideo={controller.isGeneratingSelectedVideo}
       selectedContextType={controller.selectedContextType}
@@ -48,6 +50,7 @@ export function App() {
       onCloseSettingsPanel={controller.onCloseSettingsPanel}
       onChangeSetting={controller.onChangeSetting}
       onDownloadFasterWhisperModel={controller.onDownloadFasterWhisperModel}
+      onCancelFasterWhisperModelDownload={controller.onCancelFasterWhisperModelDownload}
       onResetSettings={controller.onResetSettings}
     />
   );

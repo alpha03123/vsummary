@@ -21,6 +21,7 @@ from backend.video_summary.infrastructure.settings import (
     load_settings,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
+    replace_openai_settings,
     replace_workspace_ui_settings,
     save_settings,
 )
@@ -41,6 +42,10 @@ class WorkspaceSettingsResponse(BaseModel):
     ai_transcript_enhancement: bool
     asr_model_quality: str
     transcription_mode: str
+    llm_provider: str
+    openai_base_url: str
+    openai_model: str
+    openai_api_key: str
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -49,6 +54,10 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     ai_transcript_enhancement: bool
     asr_model_quality: str
     transcription_mode: str
+    llm_provider: str
+    openai_base_url: str
+    openai_model: str
+    openai_api_key: str
 
 
 class FasterWhisperModelResponse(BaseModel):
@@ -79,6 +88,10 @@ def get_workspace_settings() -> WorkspaceSettingsResponse:
         ai_transcript_enhancement=settings.workspace_ui.ai_transcript_enhancement,
         asr_model_quality=settings.asr.faster_whisper.model_size,
         transcription_mode=settings.asr.faster_whisper.transcription_mode,
+        llm_provider=settings.openai.provider,
+        openai_base_url=settings.openai.base_url,
+        openai_model=settings.openai.model,
+        openai_api_key=settings.openai.api_key,
     )
 
 
@@ -90,6 +103,12 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         raise HTTPException(status_code=400, detail=f"unsupported asr model '{request.asr_model_quality}'")
     if request.transcription_mode not in VALID_TRANSCRIPTION_MODES:
         raise HTTPException(status_code=400, detail=f"unsupported transcription mode '{request.transcription_mode}'")
+    if request.llm_provider != "openai_compatible":
+        raise HTTPException(status_code=400, detail=f"unsupported llm provider '{request.llm_provider}'")
+    if not request.openai_base_url.strip():
+        raise HTTPException(status_code=400, detail="openai_base_url is required")
+    if not request.openai_model.strip():
+        raise HTTPException(status_code=400, detail="openai_model is required")
 
     current_settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
     next_workspace_ui = WorkspaceUiSettings(
@@ -100,6 +119,13 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
     next_settings = replace_workspace_ui_settings(current_settings, next_workspace_ui)
     next_settings = replace_faster_whisper_model_size(next_settings, request.asr_model_quality)
     next_settings = replace_faster_whisper_transcription_mode(next_settings, request.transcription_mode)
+    next_settings = replace_openai_settings(
+        next_settings,
+        provider=request.llm_provider,
+        base_url=request.openai_base_url.strip(),
+        model=request.openai_model.strip(),
+        api_key=request.openai_api_key,
+    )
     save_settings(CONTAINER.config_path, next_settings)
     return WorkspaceSettingsResponse(
         theme=next_workspace_ui.theme,
@@ -107,6 +133,10 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         ai_transcript_enhancement=next_workspace_ui.ai_transcript_enhancement,
         asr_model_quality=request.asr_model_quality,
         transcription_mode=request.transcription_mode,
+        llm_provider=request.llm_provider,
+        openai_base_url=request.openai_base_url.strip(),
+        openai_model=request.openai_model.strip(),
+        openai_api_key=request.openai_api_key,
     )
 
 
@@ -130,7 +160,15 @@ def download_faster_whisper_model(model_id: str) -> FasterWhisperModelResponse:
     if not CONTAINER.faster_whisper_model_manager.is_supported(model_id):
         raise HTTPException(status_code=400, detail=f"unsupported faster-whisper model '{model_id}'")
 
-    CONTAINER.faster_whisper_model_manager.download(model_id)
+    reporter = CONTAINER.model_download_progress_tracker.create_reporter(_build_model_download_task_id(model_id))
+    try:
+        CONTAINER.faster_whisper_model_manager.download(model_id, progress_reporter=reporter)
+    except Exception as error:
+        if "取消" in str(error):
+            reporter.cancelled("模型下载已取消")
+            raise HTTPException(status_code=409, detail="模型下载已取消") from error
+        reporter.failed(str(error))
+        raise
     settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
     downloaded_model = next(
         model
@@ -144,6 +182,37 @@ def download_faster_whisper_model(model_id: str) -> FasterWhisperModelResponse:
         current=downloaded_model.current,
         recommended=downloaded_model.recommended,
     )
+
+
+@app.get("/api/asr/faster-whisper/models/{model_id}/download/progress")
+async def stream_faster_whisper_model_download_progress(model_id: str) -> StreamingResponse:
+    task_id = _build_model_download_task_id(model_id)
+
+    async def event_stream():
+        last_sequence = -1
+        while True:
+            snapshot = CONTAINER.model_download_progress_tracker.get_snapshot(task_id)
+            if snapshot.sequence != last_sequence:
+                last_sequence = snapshot.sequence
+                yield f"data: {json.dumps(snapshot.to_dict(), ensure_ascii=False)}\n\n"
+            if snapshot.status in {"completed", "failed", "cancelled"}:
+                break
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.post("/api/asr/faster-whisper/models/{model_id}/download/cancel")
+def cancel_faster_whisper_model_download(model_id: str) -> dict[str, object]:
+    CONTAINER.model_download_progress_tracker.request_cancel(_build_model_download_task_id(model_id))
+    return {"status": "cancelled"}
 
 
 @app.get("/api/videos/{series_id}/{video_id}/summary")
@@ -237,3 +306,7 @@ async def stream_video_generation_progress(series_id: str, video_id: str) -> Str
 
 def _build_task_id(series_id: str, video_id: str) -> str:
     return f"{series_id}/{video_id}"
+
+
+def _build_model_download_task_id(model_id: str) -> str:
+    return f"asr-download/{model_id}"

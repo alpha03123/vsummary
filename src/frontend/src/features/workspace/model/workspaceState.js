@@ -4,6 +4,10 @@ export const defaultUiSettings = {
   aiTranscriptEnhancement: true,
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
+  llmProvider: "openai_compatible",
+  openaiBaseUrl: "http://127.0.0.1:8317/v1/responses",
+  openaiModel: "gpt-5.4",
+  openaiApiKey: "",
 };
 
 export function createInitialWorkspaceState() {
@@ -21,6 +25,8 @@ export function createInitialWorkspaceState() {
     generatingVideoKey: null,
     generatingMindmapKey: null,
     generationProgress: null,
+    downloadingModelId: null,
+    modelDownloadProgress: null,
     toolsLoading: false,
     summaryLoading: false,
     mindmapLoading: false,
@@ -141,5 +147,15 @@ export function normalizeUiSettings(value) {
       record.transcriptionMode === "accurate" || record.transcriptionMode === "balanced"
         ? record.transcriptionMode
         : "fast",
+    llmProvider: record.llmProvider === "openai_compatible" ? record.llmProvider : "openai_compatible",
+    openaiBaseUrl:
+      typeof record.openaiBaseUrl === "string" && record.openaiBaseUrl.trim()
+        ? record.openaiBaseUrl.trim()
+        : "http://127.0.0.1:8317/v1/responses",
+    openaiModel:
+      typeof record.openaiModel === "string" && record.openaiModel.trim()
+        ? record.openaiModel.trim()
+        : "gpt-5.4",
+    openaiApiKey: typeof record.openaiApiKey === "string" ? record.openaiApiKey : "",
   };
 }

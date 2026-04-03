@@ -12,6 +12,10 @@ export async function loadWorkspaceSettings() {
     aiTranscriptEnhancement: payload.ai_transcript_enhancement,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
+    llmProvider: payload.llm_provider,
+    openaiBaseUrl: payload.openai_base_url,
+    openaiModel: payload.openai_model,
+    openaiApiKey: payload.openai_api_key,
   };
 }
 
@@ -27,6 +31,10 @@ export async function updateWorkspaceSettings(settings) {
       ai_transcript_enhancement: settings.aiTranscriptEnhancement,
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
+      llm_provider: settings.llmProvider,
+      openai_base_url: settings.openaiBaseUrl,
+      openai_model: settings.openaiModel,
+      openai_api_key: settings.openaiApiKey,
     }),
   });
   return {
@@ -35,6 +43,10 @@ export async function updateWorkspaceSettings(settings) {
     aiTranscriptEnhancement: payload.ai_transcript_enhancement,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
+    llmProvider: payload.llm_provider,
+    openaiBaseUrl: payload.openai_base_url,
+    openaiModel: payload.openai_model,
+    openaiApiKey: payload.openai_api_key,
   };
 }
 
@@ -46,6 +58,47 @@ export async function downloadFasterWhisperModel(modelId) {
   return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download`, {
     method: "POST",
   });
+}
+
+export async function cancelFasterWhisperModelDownload(modelId) {
+  return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/cancel`, {
+    method: "POST",
+  });
+}
+
+export function subscribeFasterWhisperModelDownloadProgress(modelId, listener) {
+  const eventSource = new EventSource(
+    `/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/progress`,
+  );
+  let terminal = false;
+
+  eventSource.onmessage = (event) => {
+    const snapshot = parseProgressMessage(event.data);
+    listener(snapshot);
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      terminal = true;
+      eventSource.close();
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (terminal) {
+      return;
+    }
+    listener({
+      status: "failed",
+      stage: "failed",
+      progress: null,
+      detail: null,
+      error: "模型下载进度连接已中断",
+    });
+    eventSource.close();
+  };
+
+  return () => {
+    terminal = true;
+    eventSource.close();
+  };
 }
 
 export async function loadVideoSummary(seriesId, videoId) {
@@ -127,7 +180,14 @@ export function getVideoPreviewUrl(seriesId, videoId) {
 async function fetchJson(path, init) {
   const response = await fetch(path, init);
   if (!response.ok) {
-    throw new Error(`加载失败：${path}`);
+    let detail = "";
+    try {
+      const payload = await response.json();
+      detail = typeof payload.detail === "string" ? payload.detail : "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail ? `${response.status} ${detail}` : `加载失败：${path}`);
   }
   return response.json();
 }

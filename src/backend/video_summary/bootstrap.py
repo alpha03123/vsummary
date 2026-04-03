@@ -23,9 +23,6 @@ class VideoSummaryApplication:
 def load_video_summary_application(
     config_path: Path,
     root_dir: Path,
-    *,
-    model: str | None = None,
-    base_url: str | None = None,
     transcript_enhancement_enabled: bool | None = None,
 ) -> VideoSummaryApplication:
     settings = load_settings(config_path=config_path, root_dir=root_dir)
@@ -34,16 +31,16 @@ def load_video_summary_application(
         if transcript_enhancement_enabled is None
         else transcript_enhancement_enabled
     )
-    runtime = build_video_summary_runtime(
-        settings,
-        model=model,
-        base_url=base_url,
-    )
+    runtime = build_video_summary_runtime(settings)
     use_case = GenerateVideoSummary(
         media_processor=FfmpegMediaProcessor(),
         transcriber=runtime.transcriber,
         transcript_enhancer=(
-            OpenAITranscriptEnhancer(model=runtime.model, base_url=runtime.base_url)
+            OpenAITranscriptEnhancer(
+                model=runtime.model,
+                base_url=runtime.base_url,
+                api_key=runtime.api_key,
+            )
             if resolved_transcript_enhancement_enabled
             else None
         ),

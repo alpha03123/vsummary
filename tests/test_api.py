@@ -87,7 +87,10 @@ class FakeFasterWhisperModelManager:
             for model_id in ["small", "medium", "large-v3", "large-v3-turbo"]
         ]
 
-    def download(self, model_size: str):
+    def download(self, model_size: str, progress_reporter=None):
+        if progress_reporter is not None:
+            progress_reporter.update("download", 45.0, "正在下载 model.bin")
+            progress_reporter.completed("模型下载完成")
         self.downloaded_models.add(model_size)
         return model_size
 
@@ -114,8 +117,10 @@ compute_type = "float16"
 transcription_mode = "fast"
 
 [openai]
+provider = "openai_compatible"
 base_url = "http://127.0.0.1:8317/v1/responses"
 model = "gpt-5.4"
+api_key = "test-key"
 
 [workspace_ui]
 theme = "light"
@@ -194,6 +199,10 @@ ai_transcript_enhancement = true
                 "ai_transcript_enhancement": True,
                 "asr_model_quality": "large-v3-turbo",
                 "transcription_mode": "fast",
+                "llm_provider": "openai_compatible",
+                "openai_base_url": "http://127.0.0.1:8317/v1/responses",
+                "openai_model": "gpt-5.4",
+                "openai_api_key": "test-key",
             },
         )
 
@@ -206,6 +215,10 @@ ai_transcript_enhancement = true
                 "ai_transcript_enhancement": False,
                 "asr_model_quality": "large-v3",
                 "transcription_mode": "accurate",
+                "llm_provider": "openai_compatible",
+                "openai_base_url": "https://api.openai.com/v1/responses",
+                "openai_model": "gpt-5.4",
+                "openai_api_key": "next-key",
             },
         )
 
@@ -218,6 +231,10 @@ ai_transcript_enhancement = true
                 "ai_transcript_enhancement": False,
                 "asr_model_quality": "large-v3",
                 "transcription_mode": "accurate",
+                "llm_provider": "openai_compatible",
+                "openai_base_url": "https://api.openai.com/v1/responses",
+                "openai_model": "gpt-5.4",
+                "openai_api_key": "next-key",
             },
         )
         saved_text = (self.root / "config" / "settings.toml").read_text(encoding="utf-8")
@@ -226,6 +243,9 @@ ai_transcript_enhancement = true
         self.assertIn("ai_transcript_enhancement = false", saved_text)
         self.assertIn('model_size = "large-v3"', saved_text)
         self.assertIn('transcription_mode = "accurate"', saved_text)
+        self.assertIn('provider = "openai_compatible"', saved_text)
+        self.assertIn('base_url = "https://api.openai.com/v1/responses"', saved_text)
+        self.assertIn('api_key = "next-key"', saved_text)
 
     async def test_faster_whisper_models_endpoint_returns_download_status(self) -> None:
         response = await self.client.get("/api/asr/faster-whisper/models")
@@ -243,6 +263,22 @@ ai_transcript_enhancement = true
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], "medium")
         self.assertTrue(response.json()["downloaded"])
+
+    async def test_faster_whisper_model_download_progress_endpoint_returns_completed_snapshot(self) -> None:
+        response = await self.client.post("/api/asr/faster-whisper/models/medium/download")
+
+        self.assertEqual(response.status_code, 200)
+
+        progress_response = await self.client.get("/api/asr/faster-whisper/models/medium/download/progress")
+
+        self.assertEqual(progress_response.status_code, 200)
+        self.assertIn('"status": "completed"', progress_response.text)
+
+    async def test_faster_whisper_model_download_cancel_endpoint_marks_task_cancelled(self) -> None:
+        response = await self.client.post("/api/asr/faster-whisper/models/medium/download/cancel")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "cancelled")
 
     async def test_videos_endpoint_returns_workspace_library(self) -> None:
         response = await self.client.get("/api/videos")

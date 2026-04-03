@@ -23,9 +23,11 @@ class InMemoryProgressTracker:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._snapshots: dict[str, ProgressSnapshot] = {}
+        self._cancelled_tasks: set[str] = set()
 
     def create_reporter(self, task_id: str) -> "TaskProgressReporter":
         with self._lock:
+            self._cancelled_tasks.discard(task_id)
             self._snapshots[task_id] = ProgressSnapshot(
                 status="running",
                 stage="prepare",
@@ -51,6 +53,25 @@ class InMemoryProgressTracker:
                     updated_at=time.time(),
                 ),
             )
+
+    def request_cancel(self, task_id: str) -> None:
+        with self._lock:
+            self._cancelled_tasks.add(task_id)
+            previous = self._snapshots.get(task_id)
+            sequence = 0 if previous is None else previous.sequence + 1
+            self._snapshots[task_id] = ProgressSnapshot(
+                status="cancelled",
+                stage="cancelled",
+                progress=previous.progress if previous is not None else None,
+                detail="任务已取消",
+                error=None,
+                sequence=sequence,
+                updated_at=time.time(),
+            )
+
+    def is_cancel_requested(self, task_id: str) -> bool:
+        with self._lock:
+            return task_id in self._cancelled_tasks
 
     def _write(
         self,
@@ -111,3 +132,20 @@ class TaskProgressReporter:
             detail=None,
             error=message,
         )
+
+    def cancelled(self, detail: str | None = None) -> None:
+        self._tracker._write(
+            self._task_id,
+            status="cancelled",
+            stage="cancelled",
+            progress=None,
+            detail=detail or "任务已取消",
+            error=None,
+        )
+
+    def is_cancel_requested(self) -> bool:
+        return self._tracker.is_cancel_requested(self._task_id)
+
+    def raise_if_cancelled(self) -> None:
+        if self.is_cancel_requested():
+            raise RuntimeError("下载已取消")

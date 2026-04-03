@@ -10,8 +10,10 @@ compute_type = "float16"
 transcription_mode = "accurate"
 
 [openai]
+provider = "openai_compatible"
 base_url = "http://127.0.0.1:8317/v1/responses"
 model = "gpt-5.4"
+api_key = ""
 
 [workspace_ui]
 theme = "light"

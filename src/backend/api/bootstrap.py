@@ -33,6 +33,7 @@ class ApiContainer:
     generate_video_summary: GenerateVideoSummaryFromLibrary
     generate_video_mindmap: GenerateVideoMindmapFromLibrary
     generation_progress_tracker: InMemoryProgressTracker
+    model_download_progress_tracker: InMemoryProgressTracker
 
 
 def build_api_container(
@@ -44,6 +45,7 @@ def build_api_container(
     config_path = root_dir / "config" / "settings.toml"
     workspace = FileSystemVideoWorkspace(root_dir)
     progress_tracker = InMemoryProgressTracker()
+    model_download_progress_tracker = InMemoryProgressTracker()
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
     )
@@ -61,4 +63,5 @@ def build_api_container(
         generate_video_summary=GenerateVideoSummaryFromLibrary(workspace, resolved_generator, progress_tracker),
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
         generation_progress_tracker=progress_tracker,
+        model_download_progress_tracker=model_download_progress_tracker,
     )

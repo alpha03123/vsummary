@@ -25,24 +25,25 @@ class VideoSummaryRuntime:
     asr: AsrRuntimeInfo
     model: str
     base_url: str
+    api_key: str
 
 
 def build_video_summary_runtime(
     settings: AppSettings,
-    *,
-    model: str | None = None,
-    base_url: str | None = None,
 ) -> VideoSummaryRuntime:
-    resolved_model = model or settings.openai.model
-    resolved_base_url = base_url or settings.openai.base_url
     transcriber, asr = _build_transcriber(settings)
-    summarizer = OpenAIResponsesClient(model=resolved_model, base_url=resolved_base_url)
+    summarizer = OpenAIResponsesClient(
+        model=settings.openai.model,
+        base_url=settings.openai.base_url,
+        api_key=settings.openai.api_key,
+    )
     return VideoSummaryRuntime(
         transcriber=transcriber,
         summarizer=summarizer,
         asr=asr,
-        model=resolved_model,
-        base_url=resolved_base_url,
+        model=settings.openai.model,
+        base_url=settings.openai.base_url,
+        api_key=settings.openai.api_key,
     )
 
 

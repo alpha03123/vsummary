@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer } from "react";
 
 import {
+  cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
   generateVideoMindmap,
   generateVideoSummary,
@@ -11,6 +12,7 @@ import {
   loadWorkspaceSettings,
   loadVideoTools,
   loadWorkspaceLibrary,
+  subscribeFasterWhisperModelDownloadProgress,
   subscribeVideoGenerationProgress,
   updateWorkspaceSettings,
 } from "./workspaceApi";
@@ -41,11 +43,34 @@ function workspaceReducer(state, action) {
         ...state,
         fasterWhisperModelsLoading: true,
       };
+    case "faster_whisper_model_download_started":
+      return {
+        ...state,
+        downloadingModelId: action.modelId,
+        modelDownloadProgress: 0,
+        fasterWhisperModelsLoading: true,
+        error: "",
+      };
+    case "faster_whisper_model_download_progress_updated":
+      return {
+        ...state,
+        downloadingModelId: action.modelId,
+        modelDownloadProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
+      };
+    case "faster_whisper_model_download_cancelled":
+      return {
+        ...state,
+        downloadingModelId: null,
+        modelDownloadProgress: null,
+        fasterWhisperModelsLoading: false,
+      };
     case "faster_whisper_models_loaded":
       return {
         ...state,
         fasterWhisperModels: action.models,
         fasterWhisperModelsLoading: false,
+        downloadingModelId: null,
+        modelDownloadProgress: null,
       };
     case "load_failed":
       return {
@@ -57,6 +82,8 @@ function workspaceReducer(state, action) {
         generatingVideoKey: null,
         generatingMindmapKey: null,
         generationProgress: null,
+        downloadingModelId: null,
+        modelDownloadProgress: null,
         error: action.message,
         fasterWhisperModelsLoading: false,
       };
@@ -525,7 +552,26 @@ export function useWorkspaceController() {
   }
 
   async function onDownloadFasterWhisperModel(modelId) {
-    dispatch({ type: "faster_whisper_models_loading_started" });
+    dispatch({ type: "faster_whisper_model_download_started", modelId });
+    const unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
+      if (snapshot.status === "running" || snapshot.status === "completed") {
+        dispatch({
+          type: "faster_whisper_model_download_progress_updated",
+          modelId,
+          progress: snapshot.progress,
+        });
+      }
+
+      if (snapshot.status === "failed") {
+        dispatch({
+          type: "load_failed",
+          message: snapshot.error ?? "语音模型下载失败",
+        });
+      }
+      if (snapshot.status === "cancelled") {
+        dispatch({ type: "faster_whisper_model_download_cancelled" });
+      }
+    });
     try {
       await downloadFasterWhisperModel(modelId);
       const savedSettings = await updateWorkspaceSettings({
@@ -536,9 +582,29 @@ export function useWorkspaceController() {
       const models = await loadFasterWhisperModels();
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
+      if (error instanceof Error && error.message.includes("409")) {
+        dispatch({ type: "faster_whisper_model_download_cancelled" });
+        return;
+      }
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "语音模型下载失败",
+      });
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  async function onCancelFasterWhisperModelDownload(modelId) {
+    try {
+      await cancelFasterWhisperModelDownload(modelId);
+      dispatch({ type: "faster_whisper_model_download_cancelled" });
+      const models = await loadFasterWhisperModels();
+      dispatch({ type: "faster_whisper_models_loaded", models });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "取消语音模型下载失败",
       });
     }
   }
@@ -615,6 +681,8 @@ export function useWorkspaceController() {
     ui: state.ui,
     fasterWhisperModels: state.fasterWhisperModels,
     fasterWhisperModelsLoading: state.fasterWhisperModelsLoading,
+    downloadingModelId: state.downloadingModelId,
+    modelDownloadProgress: state.modelDownloadProgress,
     tools,
     summary,
     mindmap,
@@ -637,6 +705,7 @@ export function useWorkspaceController() {
     onCloseSettingsPanel,
     onChangeSetting,
     onDownloadFasterWhisperModel,
+    onCancelFasterWhisperModelDownload,
     onResetSettings,
   };
 }

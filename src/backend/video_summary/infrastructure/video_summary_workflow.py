@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from threading import Lock
 
@@ -14,7 +13,7 @@ class ConfiguredVideoSummaryWorkflow:
         self._root_dir = root_dir
         self._config_path = root_dir / "config" / "settings.toml"
         self._application_lock = Lock()
-        self._cached_signature: tuple[str, str | None, str | None, bool | None] | None = None
+        self._cached_signature: tuple[str, bool | None] | None = None
         self._cached_application = None
 
     def run(
@@ -32,12 +31,8 @@ class ConfiguredVideoSummaryWorkflow:
         )
 
     def _get_application(self, transcript_enhancement_enabled: bool | None):
-        base_url = os.environ.get("OPENAI_BASE_URL")
-        model = os.environ.get("OPENAI_MODEL")
         signature = (
             self._config_path.read_text(encoding="utf-8"),
-            base_url,
-            model,
             transcript_enhancement_enabled,
         )
         with self._application_lock:
@@ -45,8 +40,6 @@ class ConfiguredVideoSummaryWorkflow:
                 self._cached_application = load_video_summary_application(
                     config_path=self._config_path,
                     root_dir=self._root_dir,
-                    base_url=base_url,
-                    model=model,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
                 )
                 self._cached_signature = signature

@@ -30,8 +30,10 @@ class AsrSettings:
 
 @dataclass(frozen=True)
 class OpenAISettings:
+    provider: str
     base_url: str
     model: str
+    api_key: str
 
 
 @dataclass(frozen=True)
@@ -78,8 +80,10 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 
     openai_payload = payload["openai"]
     openai_settings = OpenAISettings(
+        provider=str(openai_payload.get("provider", "openai_compatible")),
         base_url=openai_payload["base_url"],
         model=openai_payload["model"],
+        api_key=str(openai_payload.get("api_key", "")),
     )
 
     workspace_ui_payload = payload.get("workspace_ui", {})
@@ -147,6 +151,26 @@ def replace_faster_whisper_transcription_mode(settings: AppSettings, transcripti
     )
 
 
+def replace_openai_settings(
+    settings: AppSettings,
+    *,
+    provider: str,
+    base_url: str,
+    model: str,
+    api_key: str,
+) -> AppSettings:
+    return AppSettings(
+        asr=settings.asr,
+        openai=OpenAISettings(
+            provider=provider,
+            base_url=base_url,
+            model=model,
+            api_key=api_key,
+        ),
+        workspace_ui=settings.workspace_ui,
+    )
+
+
 def _resolve(root_dir: Path, raw_path: str) -> Path:
     path = Path(raw_path)
     if path.is_absolute():
@@ -182,8 +206,10 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'transcription_mode = "{settings.asr.faster_whisper.transcription_mode}"',
         "",
         "[openai]",
+        f'provider = "{settings.openai.provider}"',
         f'base_url = "{settings.openai.base_url}"',
         f'model = "{settings.openai.model}"',
+        f'api_key = "{settings.openai.api_key}"',
         "",
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
