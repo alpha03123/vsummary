@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from backend.video_summary.infrastructure.openai_mindmap_generator import OpenAIMindmapGenerator
@@ -15,8 +14,9 @@ class ConfiguredMindmapWorkflow:
     def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
         settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
         generator = OpenAIMindmapGenerator(
-            model=os.environ.get("OPENAI_MODEL") or settings.openai.model,
-            base_url=os.environ.get("OPENAI_BASE_URL") or settings.openai.base_url,
+            model=settings.openai.model,
+            base_url=settings.openai.base_url,
+            api_key=settings.openai.api_key,
         )
         return generator.generate(
             title=source_path.stem,

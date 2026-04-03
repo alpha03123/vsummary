@@ -5,7 +5,7 @@ transcript_enhancement_enabled = true
 
 [asr.faster_whisper]
 device = "auto"
-model_size = "large-v3"
+model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
 
