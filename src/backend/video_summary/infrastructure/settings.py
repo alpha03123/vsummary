@@ -8,6 +8,7 @@ import tomllib
 VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper"}
 VALID_THEMES = {"light", "dark"}
+VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,7 @@ class FasterWhisperSettings:
     device: str
     model_size: str
     compute_type: str
+    transcription_mode: str
     models_dir: Path
 
 
@@ -63,6 +65,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         device=faster_device,
         model_size=faster_payload["model_size"],
         compute_type=faster_payload["compute_type"],
+        transcription_mode=_normalize_transcription_mode(faster_payload.get("transcription_mode")),
         models_dir=root_dir / "data" / "models" / "faster-whisper",
     )
 
@@ -115,6 +118,27 @@ def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) ->
                 device=settings.asr.faster_whisper.device,
                 model_size=model_size,
                 compute_type=settings.asr.faster_whisper.compute_type,
+                transcription_mode=settings.asr.faster_whisper.transcription_mode,
+                models_dir=settings.asr.faster_whisper.models_dir,
+            ),
+        ),
+        openai=settings.openai,
+        workspace_ui=settings.workspace_ui,
+    )
+
+
+def replace_faster_whisper_transcription_mode(settings: AppSettings, transcription_mode: str) -> AppSettings:
+    normalized_mode = _normalize_transcription_mode(transcription_mode)
+    return AppSettings(
+        asr=AsrSettings(
+            provider=settings.asr.provider,
+            language=settings.asr.language,
+            transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
+            faster_whisper=FasterWhisperSettings(
+                device=settings.asr.faster_whisper.device,
+                model_size=settings.asr.faster_whisper.model_size,
+                compute_type=settings.asr.faster_whisper.compute_type,
+                transcription_mode=normalized_mode,
                 models_dir=settings.asr.faster_whisper.models_dir,
             ),
         ),
@@ -136,6 +160,14 @@ def _normalize_theme(value: object) -> str:
     return "light"
 
 
+def _normalize_transcription_mode(value: object) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in VALID_TRANSCRIPTION_MODES:
+            return normalized
+    return "fast"
+
+
 def _render_settings_toml(settings: AppSettings) -> str:
     lines = [
         "[asr]",
@@ -147,6 +179,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'device = "{settings.asr.faster_whisper.device}"',
         f'model_size = "{settings.asr.faster_whisper.model_size}"',
         f'compute_type = "{settings.asr.faster_whisper.compute_type}"',
+        f'transcription_mode = "{settings.asr.faster_whisper.transcription_mode}"',
         "",
         "[openai]",
         f'base_url = "{settings.openai.base_url}"',

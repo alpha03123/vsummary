@@ -55,6 +55,7 @@ def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeIn
                 model_size=model_manager.resolve_model_source(settings.asr.faster_whisper.model_size),
                 device=settings.asr.faster_whisper.device,
                 compute_type=settings.asr.faster_whisper.compute_type,
+                transcription_mode=settings.asr.faster_whisper.transcription_mode,
                 language=settings.asr.language,
             ),
             AsrRuntimeInfo(

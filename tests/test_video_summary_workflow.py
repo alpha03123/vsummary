@@ -44,6 +44,7 @@ transcript_enhancement_enabled = true
 device = "auto"
 model_size = "small"
 compute_type = "int8"
+transcription_mode = "fast"
 
 [openai]
 base_url = "http://127.0.0.1:8317/v1/responses"

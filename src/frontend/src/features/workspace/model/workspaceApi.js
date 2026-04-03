@@ -11,6 +11,7 @@ export async function loadWorkspaceSettings() {
     showTakeaways: payload.show_takeaways,
     aiTranscriptEnhancement: payload.ai_transcript_enhancement,
     asrModelQuality: payload.asr_model_quality,
+    transcriptionMode: payload.transcription_mode,
   };
 }
 
@@ -25,6 +26,7 @@ export async function updateWorkspaceSettings(settings) {
       show_takeaways: settings.showTakeaways,
       ai_transcript_enhancement: settings.aiTranscriptEnhancement,
       asr_model_quality: settings.asrModelQuality,
+      transcription_mode: settings.transcriptionMode,
     }),
   });
   return {
@@ -32,6 +34,7 @@ export async function updateWorkspaceSettings(settings) {
     showTakeaways: payload.show_takeaways,
     aiTranscriptEnhancement: payload.ai_transcript_enhancement,
     asrModelQuality: payload.asr_model_quality,
+    transcriptionMode: payload.transcription_mode,
   };
 }
 

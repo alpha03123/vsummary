@@ -12,6 +12,7 @@ class FasterWhisperTranscriber:
         model_size: str,
         device: str,
         compute_type: str,
+        transcription_mode: str,
         language: str = "zh",
     ) -> None:
         try:
@@ -21,6 +22,7 @@ class FasterWhisperTranscriber:
 
         resolved_device = _resolve_device(device)
         self._language = language
+        self._decode_options = _build_decode_options(transcription_mode)
         self._model = WhisperModel(
             model_size,
             device=resolved_device,
@@ -38,10 +40,7 @@ class FasterWhisperTranscriber:
             str(audio_path),
             language=self._language,
             vad_filter=True,
-            beam_size=1,
-            best_of=1,
-            condition_on_previous_text=False,
-            temperature=0.0,
+            **self._decode_options,
         )
         total_duration = getattr(info, "duration", None)
         segments = []
@@ -85,3 +84,26 @@ def _is_nvidia_gpu_available() -> bool:
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
     return "NVIDIA-SMI" in result.stdout
+
+
+def _build_decode_options(transcription_mode: str) -> dict[str, object]:
+    if transcription_mode == "accurate":
+        return {
+            "beam_size": 5,
+            "best_of": 5,
+            "condition_on_previous_text": True,
+            "temperature": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        }
+    if transcription_mode == "balanced":
+        return {
+            "beam_size": 3,
+            "best_of": 3,
+            "condition_on_previous_text": True,
+            "temperature": 0.0,
+        }
+    return {
+        "beam_size": 1,
+        "best_of": 1,
+        "condition_on_previous_text": False,
+        "temperature": 0.0,
+    }

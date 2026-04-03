@@ -3,6 +3,7 @@ export const defaultUiSettings = {
   theme: "light",
   aiTranscriptEnhancement: true,
   asrModelQuality: "large-v3-turbo",
+  transcriptionMode: "fast",
 };
 
 export function createInitialWorkspaceState() {
@@ -136,5 +137,9 @@ export function normalizeUiSettings(value) {
       typeof record.asrModelQuality === "string" && record.asrModelQuality.trim()
         ? record.asrModelQuality.trim()
         : "large-v3-turbo",
+    transcriptionMode:
+      record.transcriptionMode === "accurate" || record.transcriptionMode === "balanced"
+        ? record.transcriptionMode
+        : "fast",
   };
 }

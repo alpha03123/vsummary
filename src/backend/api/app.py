@@ -16,9 +16,11 @@ from backend.api.responses import (
     VideoWorkspaceToolsResponse,
 )
 from backend.video_summary.infrastructure.settings import (
+    VALID_TRANSCRIPTION_MODES,
     WorkspaceUiSettings,
     load_settings,
     replace_faster_whisper_model_size,
+    replace_faster_whisper_transcription_mode,
     replace_workspace_ui_settings,
     save_settings,
 )
@@ -38,6 +40,7 @@ class WorkspaceSettingsResponse(BaseModel):
     show_takeaways: bool
     ai_transcript_enhancement: bool
     asr_model_quality: str
+    transcription_mode: str
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -45,6 +48,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     show_takeaways: bool
     ai_transcript_enhancement: bool
     asr_model_quality: str
+    transcription_mode: str
 
 
 class FasterWhisperModelResponse(BaseModel):
@@ -74,6 +78,7 @@ def get_workspace_settings() -> WorkspaceSettingsResponse:
         show_takeaways=settings.workspace_ui.show_takeaways,
         ai_transcript_enhancement=settings.workspace_ui.ai_transcript_enhancement,
         asr_model_quality=settings.asr.faster_whisper.model_size,
+        transcription_mode=settings.asr.faster_whisper.transcription_mode,
     )
 
 
@@ -83,6 +88,8 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         raise HTTPException(status_code=400, detail=f"unsupported theme '{request.theme}'")
     if not CONTAINER.faster_whisper_model_manager.is_supported(request.asr_model_quality):
         raise HTTPException(status_code=400, detail=f"unsupported asr model '{request.asr_model_quality}'")
+    if request.transcription_mode not in VALID_TRANSCRIPTION_MODES:
+        raise HTTPException(status_code=400, detail=f"unsupported transcription mode '{request.transcription_mode}'")
 
     current_settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
     next_workspace_ui = WorkspaceUiSettings(
@@ -92,12 +99,14 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
     )
     next_settings = replace_workspace_ui_settings(current_settings, next_workspace_ui)
     next_settings = replace_faster_whisper_model_size(next_settings, request.asr_model_quality)
+    next_settings = replace_faster_whisper_transcription_mode(next_settings, request.transcription_mode)
     save_settings(CONTAINER.config_path, next_settings)
     return WorkspaceSettingsResponse(
         theme=next_workspace_ui.theme,
         show_takeaways=next_workspace_ui.show_takeaways,
         ai_transcript_enhancement=next_workspace_ui.ai_transcript_enhancement,
         asr_model_quality=request.asr_model_quality,
+        transcription_mode=request.transcription_mode,
     )
 
 

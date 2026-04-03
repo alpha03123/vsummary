@@ -7,6 +7,7 @@ transcript_enhancement_enabled = true
 device = "auto"
 model_size = "large-v3-turbo"
 compute_type = "float16"
+transcription_mode = "accurate"
 
 [openai]
 base_url = "http://127.0.0.1:8317/v1/responses"

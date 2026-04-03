@@ -111,6 +111,7 @@ transcript_enhancement_enabled = true
 device = "auto"
 model_size = "large-v3-turbo"
 compute_type = "float16"
+transcription_mode = "fast"
 
 [openai]
 base_url = "http://127.0.0.1:8317/v1/responses"
@@ -192,6 +193,7 @@ ai_transcript_enhancement = true
                 "show_takeaways": True,
                 "ai_transcript_enhancement": True,
                 "asr_model_quality": "large-v3-turbo",
+                "transcription_mode": "fast",
             },
         )
 
@@ -203,6 +205,7 @@ ai_transcript_enhancement = true
                 "show_takeaways": False,
                 "ai_transcript_enhancement": False,
                 "asr_model_quality": "large-v3",
+                "transcription_mode": "accurate",
             },
         )
 
@@ -214,6 +217,7 @@ ai_transcript_enhancement = true
                 "show_takeaways": False,
                 "ai_transcript_enhancement": False,
                 "asr_model_quality": "large-v3",
+                "transcription_mode": "accurate",
             },
         )
         saved_text = (self.root / "config" / "settings.toml").read_text(encoding="utf-8")
@@ -221,6 +225,7 @@ ai_transcript_enhancement = true
         self.assertIn("show_takeaways = false", saved_text)
         self.assertIn("ai_transcript_enhancement = false", saved_text)
         self.assertIn('model_size = "large-v3"', saved_text)
+        self.assertIn('transcription_mode = "accurate"', saved_text)
 
     async def test_faster_whisper_models_endpoint_returns_download_status(self) -> None:
         response = await self.client.get("/api/asr/faster-whisper/models")

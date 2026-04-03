@@ -152,6 +152,32 @@ export function WorkspaceSettingsPanel({
                 </SettingRow>
 
                 <SettingRow
+                  title="转写模式"
+                  description="控制 faster-whisper 的解码策略。极速更快，平衡更稳，高精度更适合术语和中英混合内容。"
+                >
+                  <div className="flex p-1 bg-stone-100 dark:bg-stone-800/60 rounded-xl" role="group">
+                    {[
+                      { id: "fast", label: "极速" },
+                      { id: "balanced", label: "平衡" },
+                      { id: "accurate", label: "高精度" },
+                    ].map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                          ui.transcriptionMode === mode.id
+                            ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
+                            : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                        }`}
+                        onClick={() => onChangeSetting("transcriptionMode", mode.id)}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </SettingRow>
+
+                <SettingRow
                   title="语音模型质量"
                   description="当前只保留 faster-whisper。质量越高，效果越好，但下载体积和推理成本也更高。"
                 >
