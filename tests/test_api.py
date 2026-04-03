@@ -101,7 +101,18 @@ class ApiContractTests(unittest.IsolatedAsyncioTestCase):
         self.root = Path(self.temp_dir.name) / "video_include"
         (self.root / "videos" / "series-a").mkdir(parents=True)
         (self.root / "config").mkdir(parents=True)
-        (self.root / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+        (self.root / ".env").write_text(
+            "\n".join(
+                [
+                    "OPENAI_PROVIDER=openai_compatible",
+                    "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                    "OPENAI_MODEL=gpt-5.4",
+                    "OPENAI_API_KEY=test-key",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
         (self.root / "videos" / "series-a" / "intro.mp4").write_text("video", encoding="utf-8")
         (self.root / "videos" / "series-a" / "advanced.mp4").write_text("video", encoding="utf-8")
         (self.root / "config" / "settings.toml").write_text(
@@ -243,6 +254,40 @@ ai_transcript_enhancement = true
         self.assertIn('provider = "openai_compatible"', saved_text)
         self.assertIn('base_url = "https://api.openai.com/v1/responses"', saved_text)
         self.assertNotIn("api_key =", saved_text)
+        env_text = (self.root / ".env").read_text(encoding="utf-8")
+        self.assertIn("OPENAI_API_KEY=test-key", env_text)
+
+    async def test_provider_settings_endpoint_reads_env_file(self) -> None:
+        response = await self.client.get("/api/provider-settings")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "llm_provider": "openai_compatible",
+                "openai_base_url": "http://127.0.0.1:8317/v1/responses",
+                "openai_model": "gpt-5.4",
+                "openai_api_key": "test-key",
+            },
+        )
+
+    async def test_provider_settings_endpoint_updates_env_file(self) -> None:
+        response = await self.client.put(
+            "/api/provider-settings",
+            json={
+                "llm_provider": "openai_compatible",
+                "openai_base_url": "https://api.openai.com/v1/responses",
+                "openai_model": "gpt-5.4",
+                "openai_api_key": "next-key",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["openai_api_key"], "next-key")
+        env_text = (self.root / ".env").read_text(encoding="utf-8")
+        self.assertIn("OPENAI_BASE_URL=https://api.openai.com/v1/responses", env_text)
+        self.assertIn("OPENAI_MODEL=gpt-5.4", env_text)
+        self.assertIn("OPENAI_API_KEY=next-key", env_text)
 
     async def test_faster_whisper_models_endpoint_returns_download_status(self) -> None:
         response = await self.client.get("/api/asr/faster-whisper/models")

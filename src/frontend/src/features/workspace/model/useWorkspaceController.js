@@ -7,6 +7,7 @@ import {
   generateVideoSummary,
   getVideoPreviewUrl,
   loadFasterWhisperModels,
+  loadProviderSettings,
   loadVideoMindmap,
   loadVideoSummary,
   loadWorkspaceSettings,
@@ -14,6 +15,7 @@ import {
   loadWorkspaceLibrary,
   subscribeFasterWhisperModelDownloadProgress,
   subscribeVideoGenerationProgress,
+  updateProviderSettings,
   updateWorkspaceSettings,
 } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
@@ -350,6 +352,32 @@ export function useWorkspaceController() {
   }, []);
 
   useEffect(() => {
+    if (!state.settingsPanelOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    loadProviderSettings()
+      .then((settings) => {
+        if (!cancelled) {
+          dispatch({ type: "workspace_settings_loaded", settings: { ...state.ui, ...settings } });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "供应商设置加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.settingsPanelOpen]);
+
+  useEffect(() => {
     if (typeof document === "undefined") {
       return;
     }
@@ -522,10 +550,15 @@ export function useWorkspaceController() {
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
     try {
-      const savedSettings = await updateWorkspaceSettings(nextUi);
-      dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
-      const models = await loadFasterWhisperModels();
-      dispatch({ type: "faster_whisper_models_loaded", models });
+      if (key === "llmProvider" || key === "openaiBaseUrl" || key === "openaiModel" || key === "openaiApiKey") {
+        const savedProviderSettings = await updateProviderSettings(nextUi);
+        dispatch({ type: "workspace_settings_loaded", settings: { ...state.ui, ...savedProviderSettings } });
+      } else {
+        const savedSettings = await updateWorkspaceSettings(nextUi);
+        dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+        const models = await loadFasterWhisperModels();
+        dispatch({ type: "faster_whisper_models_loaded", models });
+      }
     } catch (error) {
       dispatch({
         type: "load_failed",

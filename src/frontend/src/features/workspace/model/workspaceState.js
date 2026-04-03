@@ -7,6 +7,7 @@ export const defaultUiSettings = {
   llmProvider: "openai_compatible",
   openaiBaseUrl: "http://127.0.0.1:8317/v1/responses",
   openaiModel: "gpt-5.4",
+  openaiApiKey: "",
 };
 
 export function createInitialWorkspaceState() {
@@ -155,5 +156,6 @@ export function normalizeUiSettings(value) {
       typeof record.openaiModel === "string" && record.openaiModel.trim()
         ? record.openaiModel.trim()
         : "gpt-5.4",
+    openaiApiKey: typeof record.openaiApiKey === "string" ? record.openaiApiKey : "",
   };
 }

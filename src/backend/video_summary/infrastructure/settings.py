@@ -52,7 +52,7 @@ class AppSettings:
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    env_values = _load_dotenv(root_dir / ".env")
+    env_values = load_env_settings(root_dir)
 
     asr_payload = payload["asr"]
     provider = asr_payload["provider"].lower()
@@ -81,10 +81,10 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 
     openai_payload = payload["openai"]
     openai_settings = OpenAISettings(
-        provider=str(openai_payload.get("provider", "openai_compatible")),
-        base_url=openai_payload["base_url"],
-        model=openai_payload["model"],
-        api_key=env_values.get("OPENAI_API_KEY", "").strip(),
+        provider=env_values.provider,
+        base_url=env_values.base_url or openai_payload["base_url"],
+        model=env_values.model or openai_payload["model"],
+        api_key=env_values.api_key,
     )
 
     workspace_ui_payload = payload.get("workspace_ui", {})
@@ -225,6 +225,57 @@ def _toml_bool(value: bool) -> str:
 
 def _toml_path(path: Path) -> str:
     return str(path).replace("\\", "/")
+
+
+@dataclass(frozen=True)
+class EnvSettings:
+    provider: str
+    base_url: str
+    model: str
+    api_key: str
+
+
+def load_env_settings(root_dir: Path) -> EnvSettings:
+    values = _load_dotenv(root_dir / ".env")
+    return EnvSettings(
+        provider=values.get("OPENAI_PROVIDER", "openai_compatible").strip() or "openai_compatible",
+        base_url=values.get("OPENAI_BASE_URL", "").strip(),
+        model=values.get("OPENAI_MODEL", "").strip(),
+        api_key=values.get("OPENAI_API_KEY", "").strip(),
+    )
+
+
+def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
+    dotenv_path = root_dir / ".env"
+    lines = dotenv_path.read_text(encoding="utf-8").splitlines() if dotenv_path.exists() else []
+    replacements = {
+        "OPENAI_PROVIDER": settings.provider,
+        "OPENAI_BASE_URL": settings.base_url,
+        "OPENAI_MODEL": settings.model,
+        "OPENAI_API_KEY": settings.api_key,
+    }
+    next_lines: list[str] = []
+    seen_keys: set[str] = set()
+
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in raw_line:
+            next_lines.append(raw_line)
+            continue
+
+        key, _ = raw_line.split("=", 1)
+        normalized_key = key.strip()
+        if normalized_key in replacements:
+            next_lines.append(f"{normalized_key}={replacements[normalized_key]}")
+            seen_keys.add(normalized_key)
+        else:
+            next_lines.append(raw_line)
+
+    for key, value in replacements.items():
+        if key not in seen_keys:
+            next_lines.append(f"{key}={value}")
+
+    dotenv_path.write_text("\n".join(next_lines).rstrip() + "\n", encoding="utf-8")
 
 
 def _load_dotenv(dotenv_path: Path) -> dict[str, str]:

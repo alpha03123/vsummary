@@ -18,6 +18,16 @@ export async function loadWorkspaceSettings() {
   };
 }
 
+export async function loadProviderSettings() {
+  const payload = await fetchJson("/api/provider-settings");
+  return {
+    llmProvider: payload.llm_provider,
+    openaiBaseUrl: payload.openai_base_url,
+    openaiModel: payload.openai_model,
+    openaiApiKey: payload.openai_api_key,
+  };
+}
+
 export async function updateWorkspaceSettings(settings) {
   const payload = await fetchJson("/api/settings", {
     method: "PUT",
@@ -44,6 +54,27 @@ export async function updateWorkspaceSettings(settings) {
     llmProvider: payload.llm_provider,
     openaiBaseUrl: payload.openai_base_url,
     openaiModel: payload.openai_model,
+  };
+}
+
+export async function updateProviderSettings(settings) {
+  const payload = await fetchJson("/api/provider-settings", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      llm_provider: settings.llmProvider,
+      openai_base_url: settings.openaiBaseUrl,
+      openai_model: settings.openaiModel,
+      openai_api_key: settings.openaiApiKey,
+    }),
+  });
+  return {
+    llmProvider: payload.llm_provider,
+    openaiBaseUrl: payload.openai_base_url,
+    openaiModel: payload.openai_model,
+    openaiApiKey: payload.openai_api_key,
   };
 }
 

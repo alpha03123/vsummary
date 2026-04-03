@@ -16,13 +16,16 @@ from backend.api.responses import (
     VideoWorkspaceToolsResponse,
 )
 from backend.video_summary.infrastructure.settings import (
+    EnvSettings,
     VALID_TRANSCRIPTION_MODES,
     WorkspaceUiSettings,
+    load_env_settings,
     load_settings,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_openai_settings,
     replace_workspace_ui_settings,
+    save_env_settings,
     save_settings,
 )
 
@@ -123,6 +126,15 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         model=request.openai_model.strip(),
     )
     save_settings(CONTAINER.config_path, next_settings)
+    save_env_settings(
+        CONTAINER.root_dir,
+        EnvSettings(
+            provider=request.llm_provider,
+            base_url=request.openai_base_url.strip(),
+            model=request.openai_model.strip(),
+            api_key=load_env_settings(CONTAINER.root_dir).api_key,
+        ),
+    )
     return WorkspaceSettingsResponse(
         theme=next_workspace_ui.theme,
         show_takeaways=next_workspace_ui.show_takeaways,
@@ -132,6 +144,65 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
         llm_provider=request.llm_provider,
         openai_base_url=request.openai_base_url.strip(),
         openai_model=request.openai_model.strip(),
+    )
+
+
+class ProviderSettingsResponse(BaseModel):
+    llm_provider: str
+    openai_base_url: str
+    openai_model: str
+    openai_api_key: str
+
+
+class UpdateProviderSettingsRequest(BaseModel):
+    llm_provider: str
+    openai_base_url: str
+    openai_model: str
+    openai_api_key: str
+
+
+@app.get("/api/provider-settings", response_model=ProviderSettingsResponse)
+def get_provider_settings() -> ProviderSettingsResponse:
+    env_settings = load_env_settings(CONTAINER.root_dir)
+    return ProviderSettingsResponse(
+        llm_provider=env_settings.provider,
+        openai_base_url=env_settings.base_url,
+        openai_model=env_settings.model,
+        openai_api_key=env_settings.api_key,
+    )
+
+
+@app.put("/api/provider-settings", response_model=ProviderSettingsResponse)
+def update_provider_settings(request: UpdateProviderSettingsRequest) -> ProviderSettingsResponse:
+    if request.llm_provider != "openai_compatible":
+        raise HTTPException(status_code=400, detail=f"unsupported llm provider '{request.llm_provider}'")
+    if not request.openai_base_url.strip():
+        raise HTTPException(status_code=400, detail="openai_base_url is required")
+    if not request.openai_model.strip():
+        raise HTTPException(status_code=400, detail="openai_model is required")
+
+    env_settings = EnvSettings(
+        provider=request.llm_provider,
+        base_url=request.openai_base_url.strip(),
+        model=request.openai_model.strip(),
+        api_key=request.openai_api_key,
+    )
+    save_env_settings(CONTAINER.root_dir, env_settings)
+
+    current_settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
+    next_settings = replace_openai_settings(
+        current_settings,
+        provider=env_settings.provider,
+        base_url=env_settings.base_url,
+        model=env_settings.model,
+    )
+    save_settings(CONTAINER.config_path, next_settings)
+
+    return ProviderSettingsResponse(
+        llm_provider=env_settings.provider,
+        openai_base_url=env_settings.base_url,
+        openai_model=env_settings.model,
+        openai_api_key=env_settings.api_key,
     )
 
 

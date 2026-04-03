@@ -96,6 +96,8 @@ class FasterWhisperModelManager:
 
 
 def _get_expected_download_size(repo_id: str) -> int | None:
+    from huggingface_hub import HfApi
+
     info = HfApi().model_info(repo_id, files_metadata=True)
     total = 0
     has_size = False

@@ -33,7 +33,18 @@ class ConfiguredVideoSummaryWorkflowTests(unittest.TestCase):
             root = Path(temp_dir)
             config_dir = root / "config"
             config_dir.mkdir(parents=True)
-            (root / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+            (root / ".env").write_text(
+                "\n".join(
+                    [
+                        "OPENAI_PROVIDER=openai_compatible",
+                        "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                        "OPENAI_MODEL=gpt-5.4",
+                        "OPENAI_API_KEY=test-key",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (config_dir / "settings.toml").write_text(
                 """
 [asr]
