@@ -1,9 +1,8 @@
-const UI_SETTINGS_STORAGE_KEY = "video-include-ui-settings";
-
 export const defaultUiSettings = {
-  contentWidth: "regular",
-  readingDensity: "comfortable",
   showTakeaways: true,
+  theme: "light",
+  aiTranscriptEnhancement: true,
+  asrModelQuality: "large-v3-turbo",
 };
 
 export function createInitialWorkspaceState() {
@@ -14,15 +13,19 @@ export function createInitialWorkspaceState() {
     mindmap: null,
     selectedSeriesId: null,
     selectedVideoId: null,
-    selectedToolId: "overview",
+    selectedContextType: "library",
+    selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
     generatingVideoKey: null,
     generatingMindmapKey: null,
+    generationProgress: null,
     toolsLoading: false,
     summaryLoading: false,
     mindmapLoading: false,
-    ui: loadUiSettings(),
+    fasterWhisperModels: [],
+    fasterWhisperModelsLoading: false,
+    ui: resetUiSettings(),
     settingsPanelOpen: false,
     error: "",
     loading: true,
@@ -36,6 +39,7 @@ export function createWorkspaceLoadedState(library, currentState) {
     library,
     selectedSeriesId: selection.seriesId,
     selectedVideoId: selection.videoId,
+    selectedContextType: selection.seriesId ? currentState.selectedContextType : "library",
     error: "",
     loading: false,
   };
@@ -117,38 +121,20 @@ export function markVideoAsReady(library, seriesId, videoId) {
   };
 }
 
-export function persistUiSettings(ui) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(UI_SETTINGS_STORAGE_KEY, JSON.stringify(normalizeUiSettings(ui)));
-}
-
 export function resetUiSettings() {
   return { ...defaultUiSettings };
 }
 
-function loadUiSettings() {
-  if (typeof window === "undefined") {
-    return resetUiSettings();
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(UI_SETTINGS_STORAGE_KEY);
-    if (!rawValue) {
-      return resetUiSettings();
-    }
-    return normalizeUiSettings(JSON.parse(rawValue));
-  } catch {
-    return resetUiSettings();
-  }
-}
-
-function normalizeUiSettings(value) {
+export function normalizeUiSettings(value) {
   const record = value && typeof value === "object" ? value : {};
   return {
-    contentWidth: record.contentWidth === "wide" ? "wide" : "regular",
-    readingDensity: record.readingDensity === "compact" ? "compact" : "comfortable",
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
+    theme: record.theme === "dark" ? "dark" : "light",
+    aiTranscriptEnhancement:
+      typeof record.aiTranscriptEnhancement === "boolean" ? record.aiTranscriptEnhancement : true,
+    asrModelQuality:
+      typeof record.asrModelQuality === "string" && record.asrModelQuality.trim()
+        ? record.asrModelQuality.trim()
+        : "large-v3-turbo",
   };
 }

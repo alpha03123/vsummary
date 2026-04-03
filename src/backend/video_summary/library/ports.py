@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.domain.models import SummaryDocument
 from backend.video_summary.library.views import (
     SeriesView,
@@ -36,10 +37,21 @@ class VideoWorkspace(Protocol):
 
 
 class VideoSummaryGenerator(Protocol):
-    def run(self, source_path: Path, output_dir: Path) -> SummaryDocument:
+    def run(
+        self,
+        source_path: Path,
+        output_dir: Path,
+        progress_reporter: ProgressReporter | None = None,
+        transcript_enhancement_enabled: bool | None = None,
+    ) -> SummaryDocument:
         ...
 
 
 class VideoMindmapGenerator(Protocol):
     def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+        ...
+
+
+class VideoGenerationProgressTracker(Protocol):
+    def create_reporter(self, task_id: str) -> ProgressReporter:
         ...

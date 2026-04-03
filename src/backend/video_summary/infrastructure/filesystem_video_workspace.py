@@ -73,6 +73,8 @@ class FileSystemVideoWorkspace:
             return None
 
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        transcript = _load_transcript(self._workspace_dir / series_id / video_id / "transcript.cleaned.json")
+        summary = _attach_chapter_transcript(summary, transcript)
         title = str(summary.get("title", video_id)).strip() or video_id
         return VideoSummaryView(
             series_id=series_id,
@@ -160,3 +162,78 @@ def _is_video_file(path: Path) -> bool:
 
 def _to_title(raw_value: str) -> str:
     return raw_value.replace("_", " ").replace("-", " ").title()
+
+
+def _load_transcript(transcript_path: Path) -> list[dict[str, object]]:
+    if not transcript_path.exists():
+        return []
+
+    payload = json.loads(transcript_path.read_text(encoding="utf-8"))
+    segments = payload.get("segments", [])
+    if not isinstance(segments, list):
+        return []
+    return [segment for segment in segments if isinstance(segment, dict)]
+
+
+def _attach_chapter_transcript(summary: dict[str, object], transcript_segments: list[dict[str, object]]) -> dict[str, object]:
+    chapters = summary.get("chapters", [])
+    if not isinstance(chapters, list):
+        return summary
+
+    enriched_chapters = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            enriched_chapters.append(chapter)
+            continue
+
+        chapter_segments = _slice_transcript_segments(
+            transcript_segments,
+            _as_seconds(chapter.get("start_seconds")),
+            _as_seconds(chapter.get("end_seconds")),
+        )
+        enriched_chapters.append(
+            {
+                **chapter,
+                "transcript_segments": chapter_segments,
+            }
+        )
+
+    return {
+        **summary,
+        "chapters": enriched_chapters,
+    }
+
+
+def _slice_transcript_segments(
+    transcript_segments: list[dict[str, object]],
+    start_seconds: float | None,
+    end_seconds: float | None,
+) -> list[dict[str, object]]:
+    if start_seconds is None or end_seconds is None:
+        return []
+
+    sliced_segments = []
+    for segment in transcript_segments:
+        segment_start = _as_seconds(segment.get("start_seconds"))
+        segment_end = _as_seconds(segment.get("end_seconds"))
+        segment_text = segment.get("text")
+        if segment_start is None or segment_end is None or not isinstance(segment_text, str) or not segment_text.strip():
+            continue
+        if segment_end < start_seconds or segment_start > end_seconds:
+            continue
+
+        sliced_segments.append(
+            {
+                "start_seconds": segment_start,
+                "end_seconds": segment_end,
+                "text": segment_text.strip(),
+            }
+        )
+
+    return sliced_segments
+
+
+def _as_seconds(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None

@@ -13,7 +13,7 @@ if (-not (Test-Path $pythonExe)) {
     throw "Python executable not found: $pythonExe"
 }
 
-$backendCommand = "Set-Location '$root'; & '$pythonExe' -m uvicorn backend.api.app:app --host 127.0.0.1 --port $backendPort --reload --app-dir src"
+$backendCommand = "Set-Location '$root'; & '$pythonExe' -m uvicorn backend.api.app:app --host 127.0.0.1 --port $backendPort --reload --reload-dir src --reload-exclude workspace --reload-exclude videos --reload-exclude temp --app-dir src"
 $frontendCommand = "Set-Location '$frontendDir'; npm run dev"
 
 Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $backendCommand | Out-Null

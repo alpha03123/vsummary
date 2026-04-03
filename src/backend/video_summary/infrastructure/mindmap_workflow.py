@@ -10,7 +10,7 @@ from backend.video_summary.infrastructure.settings import load_settings
 class ConfiguredMindmapWorkflow:
     def __init__(self, root_dir: Path) -> None:
         self._root_dir = root_dir
-        self._config_path = root_dir / "config" / "settings.yaml"
+        self._config_path = root_dir / "config" / "settings.toml"
 
     def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
         settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)

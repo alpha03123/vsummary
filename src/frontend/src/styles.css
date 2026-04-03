@@ -5,8 +5,60 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    --workspace-shell-bg:
+      radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 28%),
+      radial-gradient(circle at top right, rgba(37, 99, 235, 0.06), transparent 24%),
+      linear-gradient(180deg, #f4f7fb 0%, #edf2f7 100%);
+    --workspace-panel-bg: rgba(255, 255, 255, 0.94);
+    --workspace-panel-border: rgba(218, 226, 237, 0.96);
+    --workspace-panel-shadow:
+      0 12px 32px rgba(15, 23, 42, 0.05),
+      0 2px 8px rgba(15, 23, 42, 0.03);
+    --workspace-muted-bg: rgba(255, 255, 255, 0.96);
+    --workspace-muted-border: rgba(221, 229, 240, 0.96);
+    --workspace-toolbar-bg: rgba(255, 255, 255, 0.9);
+    --workspace-hero-bg:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 252, 0.96));
+    --workspace-elevated-bg: rgba(255, 255, 255, 0.985);
+    --workspace-input-bg: rgba(255, 255, 255, 0.98);
+    --workspace-accent-bg: linear-gradient(145deg, rgba(236, 253, 245, 0.96), rgba(224, 242, 254, 0.92));
+    --workspace-accent-border: rgba(94, 234, 212, 0.4);
+    --workspace-glow: 0 0 0 rgba(37, 99, 235, 0);
+  }
+
+  .dark {
+    color-scheme: dark;
+    --workspace-shell-bg:
+      linear-gradient(180deg, #000000 0%, #050505 100%);
+    --workspace-panel-bg: rgba(10, 10, 10, 0.92);
+    --workspace-panel-border: rgba(255, 255, 255, 0.08);
+    --workspace-panel-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    --workspace-muted-bg: rgba(20, 20, 20, 0.96);
+    --workspace-muted-border: rgba(255, 255, 255, 0.08);
+    --workspace-toolbar-bg: rgba(8, 8, 8, 0.92);
+    --workspace-hero-bg: linear-gradient(180deg, rgba(18, 18, 18, 0.96), rgba(10, 10, 10, 0.96));
+    --workspace-elevated-bg: rgba(28, 28, 28, 0.96);
+    --workspace-input-bg: rgba(20, 20, 20, 0.98);
+    --workspace-accent-bg: linear-gradient(180deg, rgba(20, 20, 20, 0.98), rgba(16, 16, 16, 0.98));
+    --workspace-accent-border: rgba(0, 112, 243, 0.48);
+    --workspace-glow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+@layer base {
   body {
-    @apply bg-stone-50 text-stone-900 font-sans antialiased overflow-hidden m-0;
+    @apply text-stone-900 font-sans antialiased overflow-hidden m-0;
+    background: var(--workspace-shell-bg);
+    transition:
+      background-color 220ms ease,
+      color 220ms ease,
+      border-color 220ms ease,
+      box-shadow 220ms ease,
+      background 280ms ease;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
   }
   #root {
     @apply h-screen flex flex-col relative z-0;
@@ -15,6 +67,230 @@
   /* Reset button and input fonts to inherit */
   button, input {
     font: inherit;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.38) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(100, 116, 139, 0.32);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 180ms ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.48);
+    background-clip: padding-box;
+  }
+
+  .dark * {
+    scrollbar-color: rgba(148, 163, 184, 0.24) transparent;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.18);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.32);
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  .workspace-panel {
+    background: var(--workspace-panel-bg);
+    border-color: var(--workspace-panel-border);
+    box-shadow: var(--workspace-panel-shadow);
+    backdrop-filter: blur(16px);
+  }
+
+  .workspace-muted-panel {
+    background: var(--workspace-muted-bg);
+    border-color: var(--workspace-muted-border);
+    box-shadow: var(--workspace-glow);
+  }
+
+  .workspace-toolbar-surface {
+    background: var(--workspace-toolbar-bg);
+    border-color: var(--workspace-panel-border);
+    backdrop-filter: blur(14px);
+  }
+
+  .workspace-hero-surface {
+    background: var(--workspace-hero-bg);
+    border-color: var(--workspace-muted-border);
+    box-shadow: var(--workspace-glow);
+  }
+
+  .workspace-elevated-panel {
+    background: var(--workspace-elevated-bg);
+    border-color: var(--workspace-muted-border);
+    box-shadow: var(--workspace-panel-shadow);
+  }
+
+  .workspace-accent-panel {
+    background: var(--workspace-accent-bg);
+    border-color: var(--workspace-accent-border);
+    box-shadow: var(--workspace-glow);
+  }
+
+  .workspace-input-surface {
+    background: var(--workspace-input-bg);
+    border-color: var(--workspace-panel-border);
+    box-shadow: var(--workspace-glow);
+  }
+
+  .motion-fade-up {
+    animation: workspace-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-fade-scale {
+    animation: workspace-fade-scale 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-slide-in {
+    animation: workspace-slide-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-stagger {
+    animation: workspace-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--stagger-index, 0) * 40ms);
+  }
+
+  .motion-busy-button {
+    animation: workspace-button-bounce 220ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  }
+
+  .motion-arrow-shift {
+    transition:
+      transform 200ms ease,
+      color 200ms ease,
+      background-color 200ms ease,
+      filter 200ms ease;
+  }
+
+  .group:hover .motion-arrow-shift {
+    transform: translateX(2px);
+  }
+
+  .motion-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .motion-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.5),
+      transparent
+    );
+    animation: workspace-shimmer 1.3s linear infinite;
+  }
+
+  .dark .motion-shimmer::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.08),
+      transparent
+    );
+  }
+}
+
+@keyframes workspace-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes workspace-fade-scale {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes workspace-button-bounce {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes workspace-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade-up,
+  .motion-fade-scale,
+  .motion-slide-in,
+  .motion-stagger,
+  .motion-busy-button {
+    animation: none !important;
+  }
+
+  .motion-shimmer::after {
+    animation: none !important;
+  }
+
+  .motion-arrow-shift,
+  .workspace-panel,
+  .workspace-muted-panel,
+  .workspace-toolbar-surface,
+  .workspace-elevated-panel,
+  .workspace-input-surface,
+  button,
+  video {
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -58,6 +334,12 @@
   height: 2px;
   background: #d6d3d1; /* stone-300 */
   transform: translateY(-50%);
+}
+
+.dark .css-tree li::before,
+.dark .css-tree li::after,
+.dark .css-tree-node-wrapper::before {
+  background: #44403c;
 }
 
 .css-tree > ul > li::before {

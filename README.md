@@ -13,7 +13,7 @@
 - 仓库处于重构阶段，后端正在从按技术层组织调整为按功能组织
 - 本地模型目录固定为 `data/models/`，整个 `data/` 目录不提交到 Git
 - 输入视频放在 `videos/<series>/`，处理产物输出到 `workspace/<series>/<video>/`
-- `whisper.cpp` 当前通过外部运行时接入，不把模型或运行时二进制提交到仓库
+- 当前默认且唯一的转写实现为 `faster-whisper`
 - 产品愿景与阶段路线见 [docs/product-roadmap.md](E:/gittools/self/video_include/docs/product-roadmap.md)
 
 ## 目录结构
@@ -44,7 +44,7 @@ vsummary/
 - `src/backend/video_summary/domain` 只放视频总结领域模型
 - `src/backend/video_summary/generation` 负责转写与总结生成
 - `src/backend/video_summary/library` 负责 series 浏览、视频选择与生成入口
-- `src/backend/video_summary/infrastructure` 实现 ffmpeg、whisper、OpenAI 与文件系统适配
+- `src/backend/video_summary/infrastructure` 实现 ffmpeg、faster-whisper、OpenAI 与文件系统适配
 - `src/backend/api` 是后端对外入口与依赖组装层
 - `src/frontend` 保持为独立前端工程，不和后端实现细节混放
 
@@ -52,17 +52,17 @@ vsummary/
 
 - 本地模型统一放在 `data/models/`
 - 该目录不会进入版本控制
-- `whisper.cpp` 运行时通过配置引用仓库外路径，或在初始化阶段按需下载
+- `faster-whisper` 模型下载到 `data/models/faster-whisper/<model_id>/`
 
 ## 配置约定
 
-- [config/settings.yaml](E:/gittools/self/video_include/config/settings.yaml) 用于保存公开配置
+- [config/settings.toml](E:/gittools/self/video_include/config/settings.toml) 用于保存公开配置和工作区设置
 - `.env` 用于保存本地密钥，不提交到 Git
 - [.env.example](E:/gittools/self/video_include/.env.example) 只提供环境变量模板
 
 推荐分工：
 
-- `settings.yaml`：设备选择、运行时路径、模型路径、公开接口地址、模型名
+- `settings.toml`：转写设备、模型质量、公开接口地址，以及前端工作区设置
 - `.env`：`OPENAI_API_KEY` 等敏感凭证
 
 ## 前端开发

@@ -44,16 +44,16 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
           >
             <span className={`mindmap-label inline-flex items-center min-h-[36px] px-4 py-1.5 rounded-full text-sm border transition-all duration-200 outline-none
               ${node.id === selectedNodeId
-                ? "bg-white border-teal-500 text-teal-900 shadow-md ring-2 ring-teal-500/20 z-10 font-bold"
+                ? "bg-white dark:bg-[#101214] border-[#0070f3] text-stone-900 dark:text-white shadow-md ring-2 ring-[#0070f3]/20 z-10 font-bold"
                 : isRoot
-                  ? "bg-stone-900 border-stone-800 text-white shadow-sm font-bold"
-                  : "bg-white/80 border-stone-200 text-stone-700 hover:bg-white hover:border-stone-300 hover:shadow-sm"
+                  ? "bg-stone-900 dark:bg-[#111111] border-stone-800 dark:border-white/10 text-white shadow-sm font-bold"
+                  : "bg-white/80 dark:bg-[#161616] border-stone-200 dark:border-white/10 text-stone-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-[#1c1c1c] hover:border-stone-300 dark:hover:border-white/16 hover:shadow-sm"
               }`}
             >
               {node.title}
             </span>
             {!isRoot && hasChildren && (
-              <span className="mindmap-badge ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-teal-50 text-teal-700 font-bold text-xs shadow-sm">
+              <span className="mindmap-badge ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-[#111111] text-stone-700 dark:text-white font-bold text-xs shadow-sm border border-stone-200 dark:border-white/10">
                 {node.children.length}
               </span>
             )}
@@ -127,7 +127,7 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
   return (
     <div
       ref={viewportRef}
-      className={`absolute inset-0 overflow-hidden w-full h-full select-none bg-stone-50/50 rounded-b-3xl ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+      className={`absolute inset-0 overflow-hidden w-full h-full select-none bg-stone-50/50 dark:bg-[#0f0f10] rounded-b-3xl ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
       onDoubleClick={resetView}
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}

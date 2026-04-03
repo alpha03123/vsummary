@@ -62,7 +62,26 @@ function asChapter(value, label) {
     key_points: asStringList(record.key_points, `${label}.key_points`),
     start_seconds: asNumber(record.start_seconds, `${label}.start_seconds`),
     end_seconds: asNumber(record.end_seconds, `${label}.end_seconds`),
+    transcript_segments: asTranscriptSegments(record.transcript_segments, `${label}.transcript_segments`),
   };
+}
+
+function asTranscriptSegments(value, label) {
+  if (value == null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} 不是有效列表。`);
+  }
+
+  return value.map((item, index) => {
+    const record = asRecord(item, `${label}[${index}]`);
+    return {
+      start_seconds: asNumber(record.start_seconds, `${label}[${index}].start_seconds`),
+      end_seconds: asNumber(record.end_seconds, `${label}[${index}].end_seconds`),
+      text: asString(record.text, `${label}[${index}].text`),
+    };
+  });
 }
 
 function asMindmapNode(value, label) {

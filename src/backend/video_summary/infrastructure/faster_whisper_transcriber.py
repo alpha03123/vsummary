@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
@@ -26,22 +27,32 @@ class FasterWhisperTranscriber:
             compute_type=compute_type,
         )
 
-    def transcribe(self, audio_path: Path, output_stem: Path) -> Transcript:
+    def transcribe(
+        self,
+        audio_path: Path,
+        output_stem: Path,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> Transcript:
         output_stem.parent.mkdir(parents=True, exist_ok=True)
         segments_iter, info = self._model.transcribe(
             str(audio_path),
             language=self._language,
             vad_filter=True,
         )
-        segments = [
-            TranscriptSegment(
-                start_seconds=float(segment.start),
-                end_seconds=float(segment.end),
-                text=segment.text.strip(),
+        total_duration = getattr(info, "duration", None)
+        segments = []
+        for segment in segments_iter:
+            if not segment.text.strip():
+                continue
+            segments.append(
+                TranscriptSegment(
+                    start_seconds=float(segment.start),
+                    end_seconds=float(segment.end),
+                    text=segment.text.strip(),
+                ),
             )
-            for segment in segments_iter
-            if segment.text.strip()
-        ]
+            if on_progress is not None and total_duration:
+                on_progress(float(segment.end) / float(total_duration))
         return Transcript(language=getattr(info, "language", self._language), segments=segments)
 
 

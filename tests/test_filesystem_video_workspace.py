@@ -62,7 +62,32 @@ class FileSystemVideoWorkspaceTests(unittest.TestCase):
             summary_dir = root / "workspace" / "series-a" / "clip-01"
             summary_dir.mkdir(parents=True)
             (summary_dir / "summary.json").write_text(
-                json.dumps({"title": "  ", "chapters": []}),
+                json.dumps(
+                    {
+                        "title": "  ",
+                        "chapters": [
+                            {
+                                "id": "chapter-1",
+                                "title": "Intro",
+                                "summary": "summary",
+                                "key_points": ["point"],
+                                "start_seconds": 0.0,
+                                "end_seconds": 12.0,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (summary_dir / "transcript.cleaned.json").write_text(
+                json.dumps(
+                    {
+                        "segments": [
+                            {"start_seconds": 1.0, "end_seconds": 3.0, "text": "第一段"},
+                            {"start_seconds": 15.0, "end_seconds": 18.0, "text": "第二段"},
+                        ]
+                    }
+                ),
                 encoding="utf-8",
             )
 
@@ -74,6 +99,9 @@ class FileSystemVideoWorkspaceTests(unittest.TestCase):
             self.assertEqual(summary.series_id, "series-a")
             self.assertEqual(summary.video_id, "clip-01")
             self.assertEqual(summary.title, "clip-01")
+            self.assertEqual(summary.summary["chapters"][0]["transcript_segments"], [
+                {"start_seconds": 1.0, "end_seconds": 3.0, "text": "第一段"}
+            ])
 
     def test_get_video_workspace_tools_reflects_summary_and_mindmap_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
 
@@ -15,7 +15,12 @@ class MediaProcessor(Protocol):
 
 
 class Transcriber(Protocol):
-    def transcribe(self, audio_path: Path, output_stem: Path) -> Transcript:
+    def transcribe(
+        self,
+        audio_path: Path,
+        output_stem: Path,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> Transcript:
         ...
 
 
@@ -29,6 +34,16 @@ class Summarizer(Protocol):
         ...
 
 
+class TranscriptEnhancer(Protocol):
+    def enhance(
+        self,
+        video: VideoAsset,
+        transcript: Transcript,
+        output_dir: Path,
+    ) -> Transcript:
+        ...
+
+
 class MindmapGenerator(Protocol):
     def generate(
         self,
@@ -38,4 +53,15 @@ class MindmapGenerator(Protocol):
         summary_data: dict[str, object],
         output_dir: Path,
     ) -> dict[str, object]:
+        ...
+
+
+class ProgressReporter(Protocol):
+    def update(self, stage: str, progress: float | None = None, detail: str | None = None) -> None:
+        ...
+
+    def completed(self, detail: str | None = None) -> None:
+        ...
+
+    def failed(self, message: str) -> None:
         ...

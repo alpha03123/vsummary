@@ -39,7 +39,8 @@ def build_chunk_prompt(video: VideoAsset, chunk: list[TranscriptSegment], index:
     return (
         "你正在整理一个中文技术视频的转写片段。\n"
         f"视频标题：{video.title}\n"
-        f"这是第 {index} 个片段，请输出中文 Markdown，只保留事实，不要编造。\n\n"
+        f"这是第 {index} 个片段，请输出中文 Markdown，只保留事实，不要编造。\n"
+        "如果片段中存在少量 ASR 噪声或个别句子不完整，忽略噪声并提炼可确认的信息，不要写“后文文本混乱”“文本有误”“内容不清晰”等说明性废话。\n\n"
         "输出格式：\n"
         "## 片段主题\n"
         "- 用 1 句话概括本片段在讲什么\n"
@@ -71,6 +72,7 @@ def build_document_prompt(
         "2. 不要编造原文没有提到的内容。\n"
         "3. 章节必须给出 start_seconds 和 end_seconds，单位为秒。\n"
         "4. 关键结论控制在 5 到 10 条。\n\n"
+        "5. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n\n"
         "JSON 结构：\n"
         "{\n"
         '  "title": "视频标题",\n'

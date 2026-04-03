@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useReducer } from "react";
 
 import {
+  downloadFasterWhisperModel,
   generateVideoMindmap,
   generateVideoSummary,
   getVideoPreviewUrl,
+  loadFasterWhisperModels,
   loadVideoMindmap,
   loadVideoSummary,
+  loadWorkspaceSettings,
   loadVideoTools,
   loadWorkspaceLibrary,
+  subscribeVideoGenerationProgress,
+  updateWorkspaceSettings,
 } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
@@ -18,7 +23,7 @@ import {
   findSeriesById,
   findVideoById,
   markVideoAsReady,
-  persistUiSettings,
+  normalizeUiSettings,
   resetUiSettings,
 } from "./workspaceState";
 
@@ -26,6 +31,22 @@ function workspaceReducer(state, action) {
   switch (action.type) {
     case "workspace_loaded":
       return createWorkspaceLoadedState(action.library, state);
+    case "workspace_settings_loaded":
+      return {
+        ...state,
+        ui: normalizeUiSettings(action.settings),
+      };
+    case "faster_whisper_models_loading_started":
+      return {
+        ...state,
+        fasterWhisperModelsLoading: true,
+      };
+    case "faster_whisper_models_loaded":
+      return {
+        ...state,
+        fasterWhisperModels: action.models,
+        fasterWhisperModelsLoading: false,
+      };
     case "load_failed":
       return {
         ...state,
@@ -35,20 +56,23 @@ function workspaceReducer(state, action) {
         mindmapLoading: false,
         generatingVideoKey: null,
         generatingMindmapKey: null,
+        generationProgress: null,
         error: action.message,
+        fasterWhisperModelsLoading: false,
       };
     case "series_selected": {
-      const series = findSeriesById(state.library, action.seriesId);
       return {
         ...state,
         tools: null,
         selectedSeriesId: action.seriesId,
-        selectedVideoId: series?.videos?.[0]?.id ?? null,
-        selectedToolId: "overview",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        selectedToolId: "series-home",
         summary: null,
         mindmap: null,
         selectedChapterId: null,
         selectedNodeId: null,
+        generationProgress: null,
       };
     }
     case "library_home_entered":
@@ -57,7 +81,8 @@ function workspaceReducer(state, action) {
         tools: null,
         selectedSeriesId: null,
         selectedVideoId: null,
-        selectedToolId: "overview",
+        selectedContextType: "library",
+        selectedToolId: "studio",
         summary: null,
         mindmap: null,
         selectedChapterId: null,
@@ -65,24 +90,40 @@ function workspaceReducer(state, action) {
         toolsLoading: false,
         summaryLoading: false,
         mindmapLoading: false,
+        generationProgress: null,
       };
     case "video_selected":
       return {
         ...state,
         selectedSeriesId: action.seriesId,
         selectedVideoId: action.videoId,
-        selectedToolId: "overview",
+        selectedContextType: "video",
+        selectedToolId: "studio",
         tools: null,
         summary: null,
         mindmap: null,
         selectedChapterId: null,
         selectedNodeId: null,
+        generationProgress: null,
       };
     case "tool_selected":
       return {
         ...state,
         selectedToolId: action.toolId,
         error: "",
+      };
+    case "series_context_selected":
+      return {
+        ...state,
+        selectedContextType: "series",
+        selectedVideoId: null,
+        selectedToolId: "series-home",
+        tools: null,
+        summary: null,
+        mindmap: null,
+        selectedChapterId: null,
+        selectedNodeId: null,
+        generationProgress: null,
       };
     case "tools_loading_started":
       return {
@@ -147,24 +188,17 @@ function workspaceReducer(state, action) {
         ...state,
         settingsPanelOpen: false,
       };
-    case "ui_setting_changed":
-      return {
-        ...state,
-        ui: {
-          ...state.ui,
-          [action.key]: action.value,
-        },
-      };
-    case "ui_settings_reset":
-      return {
-        ...state,
-        ui: resetUiSettings(),
-      };
     case "generation_started":
       return {
         ...state,
         generatingVideoKey: action.videoKey,
+        generationProgress: null,
         error: "",
+      };
+    case "generation_progress_updated":
+      return {
+        ...state,
+        generationProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
       };
     case "generation_succeeded":
       return createSummaryLoadedState(action.summary, {
@@ -187,6 +221,7 @@ function workspaceReducer(state, action) {
               },
             },
         generatingVideoKey: null,
+        generationProgress: null,
       });
     case "mindmap_generation_started":
       return {
@@ -242,12 +277,61 @@ export function useWorkspaceController() {
   }, []);
 
   useEffect(() => {
-    persistUiSettings(state.ui);
-  }, [state.ui]);
+    let cancelled = false;
+    dispatch({ type: "faster_whisper_models_loading_started" });
+    loadFasterWhisperModels()
+      .then((models) => {
+        if (!cancelled) {
+          dispatch({ type: "faster_whisper_models_loaded", models });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "语音模型列表加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadWorkspaceSettings()
+      .then((settings) => {
+        if (!cancelled) {
+          dispatch({ type: "workspace_settings_loaded", settings });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "设置加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.documentElement.classList.toggle("dark", state.ui.theme === "dark");
+  }, [state.ui.theme]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-    if (!selectedVideo) {
+    if (!selectedVideo || state.selectedContextType !== "video") {
       dispatch({ type: "tools_loaded", tools: null });
       return;
     }
@@ -272,11 +356,11 @@ export function useWorkspaceController() {
     return () => {
       cancelled = true;
     };
-  }, [state.library, state.selectedSeriesId, state.selectedVideoId]);
+  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-    if (!selectedVideo) {
+    if (!selectedVideo || state.selectedContextType !== "video") {
       dispatch({ type: "summary_cleared" });
       return;
     }
@@ -305,11 +389,16 @@ export function useWorkspaceController() {
     return () => {
       cancelled = true;
     };
-  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.tools?.overview.generated]);
+  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.overview.generated]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-    if (!selectedVideo || state.selectedToolId !== "mindmap" || !state.tools?.mindmap.generated) {
+    if (
+      !selectedVideo ||
+      state.selectedContextType !== "video" ||
+      state.selectedToolId !== "mindmap" ||
+      !state.tools?.mindmap.generated
+    ) {
       dispatch({ type: "mindmap_cleared" });
       return;
     }
@@ -334,7 +423,7 @@ export function useWorkspaceController() {
     return () => {
       cancelled = true;
     };
-  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedToolId, state.tools?.mindmap.generated]);
+  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.mindmap.generated]);
 
   const summary = state.summary;
   const mindmap = state.mindmap;
@@ -367,6 +456,10 @@ export function useWorkspaceController() {
     dispatch({ type: "video_selected", seriesId, videoId });
   }
 
+  function onSelectSeriesContext() {
+    dispatch({ type: "series_context_selected" });
+  }
+
   function onSelectTool(toolId) {
     dispatch({ type: "tool_selected", toolId });
   }
@@ -394,12 +487,60 @@ export function useWorkspaceController() {
     dispatch({ type: "settings_panel_closed" });
   }
 
-  function onChangeSetting(key, value) {
-    dispatch({ type: "ui_setting_changed", key, value });
+  async function onChangeSetting(key, value) {
+    const nextUi = normalizeUiSettings({
+      ...state.ui,
+      [key]: value,
+    });
+    dispatch({ type: "workspace_settings_loaded", settings: nextUi });
+
+    try {
+      const savedSettings = await updateWorkspaceSettings(nextUi);
+      dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+      const models = await loadFasterWhisperModels();
+      dispatch({ type: "faster_whisper_models_loaded", models });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "设置保存失败",
+      });
+    }
   }
 
-  function onResetSettings() {
-    dispatch({ type: "ui_settings_reset" });
+  async function onResetSettings() {
+    const nextUi = resetUiSettings();
+    dispatch({ type: "workspace_settings_loaded", settings: nextUi });
+
+    try {
+      const savedSettings = await updateWorkspaceSettings(nextUi);
+      dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+      const models = await loadFasterWhisperModels();
+      dispatch({ type: "faster_whisper_models_loaded", models });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "设置保存失败",
+      });
+    }
+  }
+
+  async function onDownloadFasterWhisperModel(modelId) {
+    dispatch({ type: "faster_whisper_models_loading_started" });
+    try {
+      await downloadFasterWhisperModel(modelId);
+      const savedSettings = await updateWorkspaceSettings({
+        ...state.ui,
+        asrModelQuality: modelId,
+      });
+      dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+      const models = await loadFasterWhisperModels();
+      dispatch({ type: "faster_whisper_models_loaded", models });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "语音模型下载失败",
+      });
+    }
   }
 
   async function onGenerateVideo() {
@@ -407,14 +548,35 @@ export function useWorkspaceController() {
       return;
     }
 
-    const videoKey = buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    const videoKey = buildVideoKey(seriesId, videoId);
     dispatch({ type: "generation_started", videoKey });
+
+    const unsubscribe = subscribeVideoGenerationProgress(seriesId, videoId, (snapshot) => {
+      if (snapshot.status === "running" || snapshot.status === "completed") {
+        dispatch({
+          type: "generation_progress_updated",
+          progress: snapshot.progress,
+        });
+      }
+
+      if (snapshot.status === "failed") {
+        dispatch({
+          type: "load_failed",
+          message: snapshot.error ?? "生成失败",
+        });
+      }
+    });
+
     try {
-      const summaryResult = await generateVideoSummary(state.selectedSeriesId, state.selectedVideoId);
+      const summaryResult = await generateVideoSummary(seriesId, videoId, {
+        transcriptEnhancementEnabled: state.ui.aiTranscriptEnhancement,
+      });
       dispatch({
         type: "generation_succeeded",
-        seriesId: state.selectedSeriesId,
-        videoId: state.selectedVideoId,
+        seriesId,
+        videoId,
         summary: summaryResult,
       });
     } catch (error) {
@@ -422,6 +584,8 @@ export function useWorkspaceController() {
         type: "load_failed",
         message: error instanceof Error ? error.message : "生成失败",
       });
+    } finally {
+      unsubscribe();
     }
   }
 
@@ -449,6 +613,8 @@ export function useWorkspaceController() {
   return {
     state,
     ui: state.ui,
+    fasterWhisperModels: state.fasterWhisperModels,
+    fasterWhisperModelsLoading: state.fasterWhisperModelsLoading,
     tools,
     summary,
     mindmap,
@@ -458,9 +624,11 @@ export function useWorkspaceController() {
     previewUrl,
     isGeneratingMindmapSelectedVideo,
     isGeneratingSelectedVideo,
+    selectedContextType: state.selectedContextType,
     onSelectSeries,
     onEnterLibraryHome,
     onSelectVideo,
+    onSelectSeriesContext,
     onSelectTool,
     onFocusNode,
     onGenerateVideo,
@@ -468,6 +636,7 @@ export function useWorkspaceController() {
     onToggleSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,
+    onDownloadFasterWhisperModel,
     onResetSettings,
   };
 }

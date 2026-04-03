@@ -1,8 +1,23 @@
+import { useState, useEffect } from "react";
 import { useWorkspaceController } from "./features/workspace/model/useWorkspaceController";
 import { WorkspacePage } from "./features/workspace/ui/WorkspacePage";
+import { MotionShowcase } from "./tests/MotionShowcase";
 
 export function App() {
   const controller = useWorkspaceController();
+  const [isTestMode, setIsTestMode] = useState(window.location.hash === '#test');
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setIsTestMode(window.location.hash === '#test');
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  if (isTestMode) {
+    return <MotionShowcase />;
+  }
 
   return (
     <WorkspacePage
@@ -16,11 +31,15 @@ export function App() {
       selectedVideo={controller.selectedVideo}
       selectedNode={controller.selectedNode}
       previewUrl={controller.previewUrl}
+      fasterWhisperModels={controller.fasterWhisperModels}
+      fasterWhisperModelsLoading={controller.fasterWhisperModelsLoading}
       isGeneratingMindmapSelectedVideo={controller.isGeneratingMindmapSelectedVideo}
       isGeneratingSelectedVideo={controller.isGeneratingSelectedVideo}
+      selectedContextType={controller.selectedContextType}
       onSelectSeries={controller.onSelectSeries}
       onEnterLibraryHome={controller.onEnterLibraryHome}
       onSelectVideo={controller.onSelectVideo}
+      onSelectSeriesContext={controller.onSelectSeriesContext}
       onSelectTool={controller.onSelectTool}
       onFocusNode={controller.onFocusNode}
       onGenerateVideo={controller.onGenerateVideo}
@@ -28,6 +47,7 @@ export function App() {
       onToggleSettingsPanel={controller.onToggleSettingsPanel}
       onCloseSettingsPanel={controller.onCloseSettingsPanel}
       onChangeSetting={controller.onChangeSetting}
+      onDownloadFasterWhisperModel={controller.onDownloadFasterWhisperModel}
       onResetSettings={controller.onResetSettings}
     />
   );
