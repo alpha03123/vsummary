@@ -14,9 +14,10 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.api import app as api_module
-from backend.api.bootstrap import _normalize_openai_base_url, build_api_container
+from backend.api.bootstrap import build_api_container
 from backend.video_summary.domain.models import SummaryDocument
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelInfo
+from backend.video_summary.infrastructure.settings import normalize_openai_base_url
 
 app = api_module.app
 
@@ -134,7 +135,7 @@ class ApiContractTests(unittest.IsolatedAsyncioTestCase):
             "\n".join(
                 [
                     "OPENAI_PROVIDER=openai_compatible",
-                    "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                    "OPENAI_BASE_URL=http://127.0.0.1:8317/v1",
                     "OPENAI_MODEL=gpt-5.4",
                     "OPENAI_API_KEY=test-key",
                     "",
@@ -157,15 +158,9 @@ model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "fast"
 
-[openai]
-provider = "openai_compatible"
-base_url = "http://127.0.0.1:8317/v1/responses"
-model = "gpt-5.4"
-
 [workspace_ui]
 theme = "light"
 show_takeaways = true
-ai_transcript_enhancement = true
 """.strip(),
             encoding="utf-8",
         )
@@ -234,15 +229,15 @@ ai_transcript_enhancement = true
 
     async def test_openai_base_url_is_normalized_to_api_root(self) -> None:
         self.assertEqual(
-            _normalize_openai_base_url("https://api.openai.com/v1/chat/completions"),
+            normalize_openai_base_url("https://api.openai.com/v1/chat/completions"),
             "https://api.openai.com/v1",
         )
         self.assertEqual(
-            _normalize_openai_base_url("https://api.openai.com/v1/responses"),
+            normalize_openai_base_url("https://api.openai.com/v1/responses"),
             "https://api.openai.com/v1",
         )
         self.assertEqual(
-            _normalize_openai_base_url("https://api.openai.com/v1"),
+            normalize_openai_base_url("https://api.openai.com/v1"),
             "https://api.openai.com/v1",
         )
 
@@ -255,12 +250,9 @@ ai_transcript_enhancement = true
             {
                 "theme": "light",
                 "show_takeaways": True,
-                "ai_transcript_enhancement": True,
+                "transcript_enhancement_enabled": True,
                 "asr_model_quality": "large-v3-turbo",
                 "transcription_mode": "fast",
-                "llm_provider": "openai_compatible",
-                "openai_base_url": "http://127.0.0.1:8317/v1/responses",
-                "openai_model": "gpt-5.4",
             },
         )
 
@@ -270,12 +262,9 @@ ai_transcript_enhancement = true
             json={
                 "theme": "dark",
                 "show_takeaways": False,
-                "ai_transcript_enhancement": False,
+                "transcript_enhancement_enabled": False,
                 "asr_model_quality": "large-v3",
                 "transcription_mode": "accurate",
-                "llm_provider": "openai_compatible",
-                "openai_base_url": "https://api.openai.com/v1/responses",
-                "openai_model": "gpt-5.4",
             },
         )
 
@@ -285,22 +274,18 @@ ai_transcript_enhancement = true
             {
                 "theme": "dark",
                 "show_takeaways": False,
-                "ai_transcript_enhancement": False,
+                "transcript_enhancement_enabled": False,
                 "asr_model_quality": "large-v3",
                 "transcription_mode": "accurate",
-                "llm_provider": "openai_compatible",
-                "openai_base_url": "https://api.openai.com/v1/responses",
-                "openai_model": "gpt-5.4",
             },
         )
         saved_text = (self.root / "config" / "settings.toml").read_text(encoding="utf-8")
         self.assertIn('theme = "dark"', saved_text)
         self.assertIn("show_takeaways = false", saved_text)
-        self.assertIn("ai_transcript_enhancement = false", saved_text)
+        self.assertIn("transcript_enhancement_enabled = false", saved_text)
         self.assertIn('model_size = "large-v3"', saved_text)
         self.assertIn('transcription_mode = "accurate"', saved_text)
-        self.assertIn('provider = "openai_compatible"', saved_text)
-        self.assertIn('base_url = "https://api.openai.com/v1/responses"', saved_text)
+        self.assertNotIn("[openai]", saved_text)
         self.assertNotIn("api_key =", saved_text)
         env_text = (self.root / ".env").read_text(encoding="utf-8")
         self.assertIn("OPENAI_API_KEY=test-key", env_text)
@@ -313,9 +298,10 @@ ai_transcript_enhancement = true
             response.json(),
             {
                 "llm_provider": "openai_compatible",
-                "openai_base_url": "http://127.0.0.1:8317/v1/responses",
+                "openai_base_url": "http://127.0.0.1:8317/v1",
                 "openai_model": "gpt-5.4",
-                "openai_api_key": "test-key",
+                "has_openai_api_key": True,
+                "openai_api_key_masked": "********",
             },
         )
 
@@ -324,18 +310,37 @@ ai_transcript_enhancement = true
             "/api/provider-settings",
             json={
                 "llm_provider": "openai_compatible",
-                "openai_base_url": "https://api.openai.com/v1/responses",
+                "openai_base_url": "https://api.openai.com/v1",
                 "openai_model": "gpt-5.4",
                 "openai_api_key": "next-key",
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["openai_api_key"], "next-key")
+        self.assertTrue(response.json()["has_openai_api_key"])
+        self.assertEqual(response.json()["openai_api_key_masked"], "********")
         env_text = (self.root / ".env").read_text(encoding="utf-8")
-        self.assertIn("OPENAI_BASE_URL=https://api.openai.com/v1/responses", env_text)
+        self.assertIn("OPENAI_BASE_URL=https://api.openai.com/v1", env_text)
         self.assertIn("OPENAI_MODEL=gpt-5.4", env_text)
         self.assertIn("OPENAI_API_KEY=next-key", env_text)
+
+    async def test_provider_settings_endpoint_keeps_existing_api_key_when_request_omits_it(self) -> None:
+        response = await self.client.put(
+            "/api/provider-settings",
+            json={
+                "llm_provider": "openai_compatible",
+                "openai_base_url": "https://api.openai.com/v1",
+                "openai_model": "gpt-5.4",
+                "openai_api_key": None,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["has_openai_api_key"])
+        self.assertEqual(response.json()["openai_api_key_masked"], "********")
+        env_text = (self.root / ".env").read_text(encoding="utf-8")
+        self.assertIn("OPENAI_BASE_URL=https://api.openai.com/v1", env_text)
+        self.assertIn("OPENAI_API_KEY=test-key", env_text)
 
     async def test_faster_whisper_models_endpoint_returns_download_status(self) -> None:
         response = await self.client.get("/api/asr/faster-whisper/models")
@@ -580,7 +585,7 @@ ai_transcript_enhancement = true
             "\n".join(
                 [
                     "OPENAI_PROVIDER=openai_compatible",
-                    "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                    "OPENAI_BASE_URL=http://127.0.0.1:8317/v1",
                     "OPENAI_MODEL=gpt-5.4",
                     "OPENAI_API_KEY=",
                     "",

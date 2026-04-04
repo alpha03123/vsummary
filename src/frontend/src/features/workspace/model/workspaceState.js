@@ -1,13 +1,15 @@
 export const defaultUiSettings = {
   showTakeaways: true,
   theme: "light",
-  aiTranscriptEnhancement: true,
+  transcriptEnhancementEnabled: true,
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
   llmProvider: "openai_compatible",
-  openaiBaseUrl: "http://127.0.0.1:8317/v1/responses",
+  openaiBaseUrl: "http://127.0.0.1:8317/v1",
   openaiModel: "gpt-5.4",
   openaiApiKey: "",
+  hasOpenaiApiKey: false,
+  openaiApiKeyMasked: "",
 };
 
 export function createWelcomeChatMessages() {
@@ -68,13 +70,15 @@ export function createInitialWorkspaceState() {
     summaryLoading: false,
     mindmapLoading: false,
     knowledgeCardsLoading: false,
+    knowledgeCardsGenerating: false,
+    knowledgeCardsFeedback: null,
     notesLoading: false,
     savingNote: false,
     fasterWhisperModels: [],
     fasterWhisperModelsLoading: false,
     ui: resetUiSettings(),
     chatThreads: {
-      library: createWelcomeChatMessages(),
+      "library|studio": createWelcomeChatMessages(),
     },
     chatMessages: createWelcomeChatMessages(),
     chatPending: false,
@@ -182,8 +186,8 @@ export function normalizeUiSettings(value) {
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
     theme: record.theme === "dark" ? "dark" : "light",
-    aiTranscriptEnhancement:
-      typeof record.aiTranscriptEnhancement === "boolean" ? record.aiTranscriptEnhancement : true,
+    transcriptEnhancementEnabled:
+      typeof record.transcriptEnhancementEnabled === "boolean" ? record.transcriptEnhancementEnabled : true,
     asrModelQuality:
       typeof record.asrModelQuality === "string" && record.asrModelQuality.trim()
         ? record.asrModelQuality.trim()
@@ -196,11 +200,13 @@ export function normalizeUiSettings(value) {
     openaiBaseUrl:
       typeof record.openaiBaseUrl === "string" && record.openaiBaseUrl.trim()
         ? record.openaiBaseUrl.trim()
-        : "http://127.0.0.1:8317/v1/responses",
+        : "http://127.0.0.1:8317/v1",
     openaiModel:
       typeof record.openaiModel === "string" && record.openaiModel.trim()
         ? record.openaiModel.trim()
         : "gpt-5.4",
     openaiApiKey: typeof record.openaiApiKey === "string" ? record.openaiApiKey : "",
+    hasOpenaiApiKey: typeof record.hasOpenaiApiKey === "boolean" ? record.hasOpenaiApiKey : false,
+    openaiApiKeyMasked: typeof record.openaiApiKeyMasked === "string" ? record.openaiApiKeyMasked : "",
   };
 }

@@ -60,6 +60,8 @@ export function WorkspacePage({
   summary,
   mindmap,
   knowledgeCards,
+  knowledgeCardsGenerating,
+  knowledgeCardsFeedback,
   notes,
   activeSeries,
   selectedVideo,
@@ -263,6 +265,8 @@ export function WorkspacePage({
                     summary={summary}
                     mindmap={mindmap}
                     knowledgeCards={knowledgeCards}
+                    knowledgeCardsGenerating={knowledgeCardsGenerating}
+                    knowledgeCardsFeedback={knowledgeCardsFeedback}
                     notes={notes}
                     activeSeries={activeSeries}
                     selectedVideo={selectedVideo}

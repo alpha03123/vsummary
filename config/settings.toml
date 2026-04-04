@@ -9,15 +9,9 @@ model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
 
-[openai]
-provider = "openai_compatible"
-base_url = "http://127.0.0.1:8317/v1/responses"
-model = "gpt-5.4"
-
 [workspace_ui]
-theme = "light"
+theme = "dark"
 show_takeaways = true
-ai_transcript_enhancement = false
 
 [debug]
 mode = true

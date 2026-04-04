@@ -27,6 +27,10 @@ export function App() {
       tools={controller.tools}
       summary={controller.summary}
       mindmap={controller.mindmap}
+      knowledgeCards={controller.knowledgeCards}
+      knowledgeCardsGenerating={controller.knowledgeCardsGenerating}
+      knowledgeCardsFeedback={controller.knowledgeCardsFeedback}
+      notes={controller.notes}
       activeSeries={controller.activeSeries}
       selectedVideo={controller.selectedVideo}
       selectedNode={controller.selectedNode}
@@ -40,6 +44,9 @@ export function App() {
       modelDownloadProgress={controller.modelDownloadProgress}
       isGeneratingMindmapSelectedVideo={controller.isGeneratingMindmapSelectedVideo}
       isGeneratingSelectedVideo={controller.isGeneratingSelectedVideo}
+      knowledgeCardsLoading={controller.knowledgeCardsLoading}
+      notesLoading={controller.notesLoading}
+      savingNote={controller.savingNote}
       selectedContextType={controller.selectedContextType}
       onSelectSeries={controller.onSelectSeries}
       onEnterLibraryHome={controller.onEnterLibraryHome}
@@ -47,9 +54,14 @@ export function App() {
       onSelectSeriesContext={controller.onSelectSeriesContext}
       onSelectTool={controller.onSelectTool}
       onFocusNode={controller.onFocusNode}
+      onOpenCard={controller.onOpenCard}
       onSubmitChat={controller.onSubmitChat}
       onGenerateVideo={controller.onGenerateVideo}
       onGenerateMindmap={controller.onGenerateMindmap}
+      onGenerateKnowledgeCards={controller.onGenerateKnowledgeCards}
+      onCreateNote={controller.onCreateNote}
+      onUpdateNote={controller.onUpdateNote}
+      onDeleteNote={controller.onDeleteNote}
       onToggleSettingsPanel={controller.onToggleSettingsPanel}
       onCloseSettingsPanel={controller.onCloseSettingsPanel}
       onChangeSetting={controller.onChangeSetting}

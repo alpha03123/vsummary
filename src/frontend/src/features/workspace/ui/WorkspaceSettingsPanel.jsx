@@ -19,6 +19,8 @@ export function WorkspaceSettingsPanel({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmDownloadModelId, setConfirmDownloadModelId] = useState(null);
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
+  const hasApiKey = ui.hasOpenaiApiKey;
+  const apiKeyStatus = ui.openaiApiKey.trim() || ui.openaiApiKeyMasked;
 
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
@@ -26,8 +28,6 @@ export function WorkspaceSettingsPanel({
     { id: "keys", label: "模型供应商", icon: Key },
     { id: "network", label: "网络代理 (等待接入)", icon: Globe },
   ];
-  const hasApiKey = Boolean(ui.openaiApiKey?.trim());
-
   return (
     <motion.section 
       variants={popScaleVariant}
@@ -101,7 +101,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">常规与显示</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">修改的配置项会自动写入后端的 `settings.toml` 中并实时生效。</p>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">这里的配置会写入后端的 `settings.toml` 并实时生效，不承载模型供应商信息。</p>
                 </div>
                 
                 {/* Theme Setting */}
@@ -143,7 +143,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">AI 总结能力</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">配置大语言模型对视频进行自动提炼时的核心行为。</p>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">这里控制总结流程本身，仍然属于工作区配置，会写入 `settings.toml`。</p>
                 </div>
 
                 <SettingRow 
@@ -151,8 +151,8 @@ export function WorkspaceSettingsPanel({
                   description="利用大模型理解上下文后纠正转写文本，让总结结果更加精确。关闭可提高处理速度但会降低准确率。"
                 >
                   <ToggleSwitch 
-                    checked={ui.aiTranscriptEnhancement} 
-                    onChange={() => onChangeSetting("aiTranscriptEnhancement", !ui.aiTranscriptEnhancement)} 
+                    checked={ui.transcriptEnhancementEnabled} 
+                    onChange={() => onChangeSetting("transcriptEnhancementEnabled", !ui.transcriptEnhancementEnabled)} 
                   />
                 </SettingRow>
 
@@ -297,7 +297,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">模型供应商</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">当前只提供 OpenAI 兼容协议。这一页的内容全部与项目根目录 `.env` 双向同步，手动改 `.env` 后重新打开面板即可刷新看到。</p>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">这一页只对应项目根目录 `.env`。协议、API 根地址、模型名和密钥都统一从 `.env` 读取与写回。</p>
                 </div>
 
                 <SettingRow
@@ -315,15 +315,15 @@ export function WorkspaceSettingsPanel({
                 </SettingRow>
 
                 <SettingRow
-                  title="API URL"
-                  description="填写完整的 Responses 接口地址，例如 `https://api.openai.com/v1/responses`。"
+                  title="API 根地址"
+                  description="填写 OpenAI 兼容 API 的根地址，例如 `https://api.openai.com/v1`。具体 `/responses` 接口会由后端统一派生。"
                 >
                   <input
                     type="text"
                     value={ui.openaiBaseUrl}
                     onChange={(event) => onChangeSetting("openaiBaseUrl", event.target.value)}
                     className="w-[340px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
-                    placeholder="https://api.openai.com/v1/responses"
+                    placeholder="https://api.openai.com/v1"
                   />
                 </SettingRow>
 
@@ -350,11 +350,16 @@ export function WorkspaceSettingsPanel({
                         <p className={`text-sm font-semibold ${hasApiKey ? "text-emerald-600 dark:text-emerald-400" : "text-stone-500 dark:text-stone-400"}`}>
                           {hasApiKey ? "已配置" : "未配置"}
                         </p>
+                        {apiKeyStatus ? (
+                          <p className="mt-1 truncate text-xs text-stone-500 dark:text-stone-400">
+                            当前状态：{ui.openaiApiKey.trim() ? "待保存的新密钥" : apiKeyStatus}
+                          </p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
                         onClick={() => setShowApiKeyValue((value) => !value)}
-                        disabled={!hasApiKey}
+                        disabled={!apiKeyStatus}
                         className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
                       >
                         {showApiKeyValue ? "隐藏" : "显示"}
@@ -365,7 +370,7 @@ export function WorkspaceSettingsPanel({
                       value={ui.openaiApiKey}
                       onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
                       className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
-                      placeholder="sk-..."
+                      placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
                     />
                   </div>
                 </SettingRow>
@@ -402,7 +407,7 @@ export function WorkspaceSettingsPanel({
             >
               <h3 className="text-xl font-bold text-stone-900 dark:text-white mb-2">恢复默认设置？</h3>
               <p className="text-[13px] leading-relaxed text-stone-500 dark:text-stone-400 mb-6">
-                此操作将会擦除你的所有修改，立即覆盖真实的 <code className="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded text-stone-700 dark:text-stone-300">settings.toml</code>。该操作不可逆，确定继续？
+                此操作将恢复工作区默认设置，并立即覆盖真实的 <code className="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded text-stone-700 dark:text-stone-300">settings.toml</code>。`.env` 中的模型供应商配置不会被改动。确定继续？
               </p>
               <div className="flex gap-3 justify-center w-full">
                 <button 

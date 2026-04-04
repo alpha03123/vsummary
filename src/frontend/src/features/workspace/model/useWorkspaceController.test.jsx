@@ -64,17 +64,16 @@ describe("useWorkspaceController", () => {
     workspaceApi.loadWorkspaceSettings.mockResolvedValue({
       theme: "light",
       showTakeaways: true,
-      aiTranscriptEnhancement: true,
+      transcriptEnhancementEnabled: true,
       asrModelQuality: "large-v3-turbo",
       transcriptionMode: "fast",
-      llmProvider: "openai_compatible",
-      openaiBaseUrl: "http://127.0.0.1:8317/v1/chat/completions",
-      openaiModel: "gpt-5.4",
     });
     workspaceApi.loadProviderSettings.mockResolvedValue({
       llmProvider: "openai_compatible",
-      openaiBaseUrl: "http://127.0.0.1:8317/v1/chat/completions",
+      openaiBaseUrl: "http://127.0.0.1:8317/v1",
       openaiModel: "gpt-5.4",
+      hasOpenaiApiKey: false,
+      openaiApiKeyMasked: "",
       openaiApiKey: "",
     });
     workspaceApi.loadVideoTools.mockResolvedValue({
@@ -353,6 +352,85 @@ describe("useWorkspaceController", () => {
 
     await waitFor(() => {
       expect(workspaceApi.loadVideoKnowledgeCards).toHaveBeenCalledWith("series-a", "video-1");
+    });
+  });
+
+  it("marks knowledge cards as generated after a successful generation request", async () => {
+    workspaceApi.loadVideoTools.mockResolvedValueOnce({
+      seriesId: "series-a",
+      videoId: "video-1",
+      overview: { id: "overview", title: "AI概况", available: true, generated: true, status: "ready" },
+      knowledgeCards: { id: "knowledge-cards", title: "知识卡片", available: true, generated: false, status: "available" },
+      mindmap: { id: "mindmap", title: "思维导图", available: true, generated: false, status: "available" },
+      notes: { id: "notes", title: "笔记", available: true, generated: true, status: "ready" },
+      preview: {
+        id: "preview",
+        title: "视频预览",
+        available: true,
+        generated: true,
+        status: "ready",
+        previewUrl: "/api/videos/series-a/video-1/preview",
+      },
+      aiTodo: "AI 已支持工具联动。",
+    });
+    workspaceApi.generateVideoKnowledgeCards.mockResolvedValueOnce({
+      seriesId: "series-a",
+      videoId: "video-1",
+      title: "Video 1",
+      cards: [
+        {
+          id: "card-1",
+          kind: "concept",
+          title: "懒加载",
+          summary: "按需加载资源。",
+          details: "减少初始加载成本。",
+          tags: ["performance"],
+          sourceRefs: [],
+        },
+      ],
+    });
+    workspaceApi.loadVideoKnowledgeCards.mockResolvedValueOnce({
+      seriesId: "series-a",
+      videoId: "video-1",
+      title: "Video 1",
+      cards: [
+        {
+          id: "card-1",
+          kind: "concept",
+          title: "懒加载",
+          summary: "按需加载资源。",
+          details: "减少初始加载成本。",
+          tags: ["performance"],
+          sourceRefs: [],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+    act(() => {
+      result.current.onSelectVideo("series-a", "video-1");
+    });
+
+    await waitFor(() => expect(result.current.tools?.knowledgeCards?.generated).toBe(false));
+    act(() => {
+      result.current.onSelectTool("knowledge-cards");
+    });
+
+    await act(async () => {
+      await result.current.onGenerateKnowledgeCards();
+    });
+
+    expect(result.current.tools?.knowledgeCards?.generated).toBe(true);
+    expect(result.current.knowledgeCards?.cards).toHaveLength(1);
+    expect(result.current.knowledgeCardsFeedback).toEqual({
+      tone: "success",
+      message: "已生成 1 张知识卡片",
     });
   });
 

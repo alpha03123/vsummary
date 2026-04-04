@@ -21,7 +21,7 @@ from backend.video_summary.infrastructure.faster_whisper_models import FasterWhi
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rule_based_knowledge_card_generator import RuleBasedKnowledgeCardGenerator
-from backend.video_summary.infrastructure.settings import load_env_settings
+from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
@@ -112,16 +112,6 @@ def build_api_container(
         get_agent_service=LazyAgentServiceProvider(root_dir=root_dir, workspace=workspace),
     )
 
-
-def _normalize_openai_base_url(base_url: str) -> str:
-    normalized = base_url.rstrip("/")
-    if normalized.endswith("/chat/completions"):
-        return normalized[: -len("/chat/completions")]
-    if normalized.endswith("/responses"):
-        return normalized[: -len("/responses")]
-    return normalized
-
-
 class LazyAgentServiceProvider:
     def __init__(self, *, root_dir: Path, workspace: FileSystemVideoWorkspace) -> None:
         self._root_dir = root_dir
@@ -151,7 +141,7 @@ def _build_agent_service(root_dir: Path, workspace: FileSystemVideoWorkspace) ->
     return AgentService(
         gateway=OpenAICompatibleChatGateway(
             model=env_settings.model,
-            base_url=_normalize_openai_base_url(env_settings.base_url),
+            base_url=normalize_openai_base_url(env_settings.base_url),
             api_key=env_settings.api_key,
         ),
         context_loader=WorkspaceAgentContextLoader(workspace),

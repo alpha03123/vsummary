@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.video_summary.infrastructure.openai_mindmap_generator import OpenAIMindmapGenerator
-from backend.video_summary.infrastructure.settings import load_settings
+from backend.video_summary.infrastructure.settings import build_openai_responses_url, load_settings
 
 
 class ConfiguredMindmapWorkflow:
@@ -15,7 +15,7 @@ class ConfiguredMindmapWorkflow:
         settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
         generator = OpenAIMindmapGenerator(
             model=settings.openai.model,
-            base_url=settings.openai.base_url,
+            base_url=build_openai_responses_url(settings.openai.base_url),
             api_key=settings.openai.api_key,
         )
         return generator.generate(

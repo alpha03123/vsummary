@@ -9,11 +9,12 @@ from backend.video_summary.infrastructure.settings import (
     VALID_THEMES,
     VALID_TRANSCRIPTION_MODES,
     WorkspaceUiSettings,
+    normalize_openai_base_url,
     load_env_settings,
     load_settings,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
-    replace_openai_settings,
+    replace_transcript_enhancement_enabled,
     replace_workspace_ui_settings,
     save_env_settings,
     save_settings,
@@ -29,7 +30,8 @@ class ProviderSettings:
     llm_provider: str
     openai_base_url: str
     openai_model: str
-    openai_api_key: str
+    has_openai_api_key: bool
+    openai_api_key_masked: str
 
 
 @dataclass(frozen=True)
@@ -37,31 +39,25 @@ class ProviderSettingsUpdate:
     llm_provider: str
     openai_base_url: str
     openai_model: str
-    openai_api_key: str
+    openai_api_key: str | None
 
 
 @dataclass(frozen=True)
 class WorkspaceSettings:
     theme: str
     show_takeaways: bool
-    ai_transcript_enhancement: bool
+    transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
-    llm_provider: str
-    openai_base_url: str
-    openai_model: str
 
 
 @dataclass(frozen=True)
 class WorkspaceSettingsUpdate:
     theme: str
     show_takeaways: bool
-    ai_transcript_enhancement: bool
+    transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
-    llm_provider: str
-    openai_base_url: str
-    openai_model: str
 
 
 class ApiSettingsService:
@@ -81,12 +77,9 @@ class ApiSettingsService:
         return WorkspaceSettings(
             theme=settings.workspace_ui.theme,
             show_takeaways=settings.workspace_ui.show_takeaways,
-            ai_transcript_enhancement=settings.workspace_ui.ai_transcript_enhancement,
+            transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
             asr_model_quality=settings.asr.faster_whisper.model_size,
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
-            llm_provider=settings.openai.provider,
-            openai_base_url=settings.openai.base_url,
-            openai_model=settings.openai.model,
         )
 
     def update_workspace_settings(self, request: WorkspaceSettingsUpdate) -> WorkspaceSettings:
@@ -97,41 +90,25 @@ class ApiSettingsService:
         if request.transcription_mode not in VALID_TRANSCRIPTION_MODES:
             raise SettingsValidationError(f"unsupported transcription mode '{request.transcription_mode}'")
 
-        provider_settings = self._validate_provider_settings(
-            llm_provider=request.llm_provider,
-            openai_base_url=request.openai_base_url,
-            openai_model=request.openai_model,
-            openai_api_key=load_env_settings(self._root_dir).api_key,
-        )
-
         current_settings = load_settings(self._config_path, self._root_dir)
         next_settings = replace_workspace_ui_settings(
             current_settings,
             WorkspaceUiSettings(
                 theme=request.theme,
                 show_takeaways=request.show_takeaways,
-                ai_transcript_enhancement=request.ai_transcript_enhancement,
             ),
         )
+        next_settings = replace_transcript_enhancement_enabled(next_settings, request.transcript_enhancement_enabled)
         next_settings = replace_faster_whisper_model_size(next_settings, request.asr_model_quality)
         next_settings = replace_faster_whisper_transcription_mode(next_settings, request.transcription_mode)
-        next_settings = replace_openai_settings(
-            next_settings,
-            provider=provider_settings.llm_provider,
-            base_url=provider_settings.openai_base_url,
-            model=provider_settings.openai_model,
-        )
-        self._save_provider_settings(provider_settings, next_settings)
+        save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
             theme=request.theme,
             show_takeaways=request.show_takeaways,
-            ai_transcript_enhancement=request.ai_transcript_enhancement,
+            transcript_enhancement_enabled=request.transcript_enhancement_enabled,
             asr_model_quality=request.asr_model_quality,
             transcription_mode=request.transcription_mode,
-            llm_provider=provider_settings.llm_provider,
-            openai_base_url=provider_settings.openai_base_url,
-            openai_model=provider_settings.openai_model,
         )
 
     def get_provider_settings(self) -> ProviderSettings:
@@ -140,7 +117,8 @@ class ApiSettingsService:
             llm_provider=env_settings.provider,
             openai_base_url=env_settings.base_url,
             openai_model=env_settings.model,
-            openai_api_key=env_settings.api_key,
+            has_openai_api_key=bool(env_settings.api_key),
+            openai_api_key_masked=_mask_api_key(env_settings.api_key),
         )
 
     def update_provider_settings(self, request: ProviderSettingsUpdate) -> ProviderSettings:
@@ -150,14 +128,14 @@ class ApiSettingsService:
             openai_model=request.openai_model,
             openai_api_key=request.openai_api_key,
         )
-        current_settings = load_settings(self._config_path, self._root_dir)
-        next_settings = replace_openai_settings(
-            current_settings,
-            provider=provider_settings.llm_provider,
-            base_url=provider_settings.openai_base_url,
-            model=provider_settings.openai_model,
+        self._save_provider_settings(
+            ProviderSettingsUpdate(
+                llm_provider=provider_settings.llm_provider,
+                openai_base_url=provider_settings.openai_base_url,
+                openai_model=provider_settings.openai_model,
+                openai_api_key=self._resolve_openai_api_key(request.openai_api_key),
+            )
         )
-        self._save_provider_settings(provider_settings, next_settings)
         return provider_settings
 
     def _validate_provider_settings(
@@ -166,7 +144,7 @@ class ApiSettingsService:
         llm_provider: str,
         openai_base_url: str,
         openai_model: str,
-        openai_api_key: str,
+        openai_api_key: str | None,
     ) -> ProviderSettings:
         normalized_provider = llm_provider.strip()
         normalized_base_url = openai_base_url.strip()
@@ -181,13 +159,13 @@ class ApiSettingsService:
 
         return ProviderSettings(
             llm_provider=normalized_provider,
-            openai_base_url=normalized_base_url,
+            openai_base_url=normalize_openai_base_url(normalized_base_url),
             openai_model=normalized_model,
-            openai_api_key=openai_api_key,
+            has_openai_api_key=bool(self._resolve_openai_api_key(openai_api_key)),
+            openai_api_key_masked=_mask_api_key(self._resolve_openai_api_key(openai_api_key)),
         )
 
-    def _save_provider_settings(self, provider_settings: ProviderSettings, settings) -> None:
-        save_settings(self._config_path, settings)
+    def _save_provider_settings(self, provider_settings: ProviderSettingsUpdate) -> None:
         save_env_settings(
             self._root_dir,
             EnvSettings(
@@ -197,3 +175,17 @@ class ApiSettingsService:
                 api_key=provider_settings.openai_api_key,
             ),
         )
+
+    def _resolve_openai_api_key(self, openai_api_key: str | None) -> str:
+        if openai_api_key is None:
+            return load_env_settings(self._root_dir).api_key
+        return openai_api_key.strip()
+
+
+def _mask_api_key(api_key: str) -> str:
+    normalized = api_key.strip()
+    if not normalized:
+        return ""
+    if len(normalized) <= 8:
+        return "*" * len(normalized)
+    return f"{normalized[:4]}{'*' * max(4, len(normalized) - 8)}{normalized[-4:]}"

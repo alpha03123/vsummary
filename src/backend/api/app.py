@@ -51,23 +51,17 @@ class UpdateVideoNoteRequest(BaseModel):
 class WorkspaceSettingsResponse(BaseModel):
     theme: str
     show_takeaways: bool
-    ai_transcript_enhancement: bool
+    transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
-    llm_provider: str
-    openai_base_url: str
-    openai_model: str
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
     theme: str
     show_takeaways: bool
-    ai_transcript_enhancement: bool
+    transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
-    llm_provider: str
-    openai_base_url: str
-    openai_model: str
 
 
 class FasterWhisperModelResponse(BaseModel):
@@ -95,12 +89,9 @@ def get_workspace_settings() -> WorkspaceSettingsResponse:
     return WorkspaceSettingsResponse(
         theme=settings.theme,
         show_takeaways=settings.show_takeaways,
-        ai_transcript_enhancement=settings.ai_transcript_enhancement,
+        transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
-        llm_provider=settings.llm_provider,
-        openai_base_url=settings.openai_base_url,
-        openai_model=settings.openai_model,
     )
 
 
@@ -111,12 +102,9 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
             WorkspaceSettingsUpdate(
                 theme=request.theme,
                 show_takeaways=request.show_takeaways,
-                ai_transcript_enhancement=request.ai_transcript_enhancement,
+                transcript_enhancement_enabled=request.transcript_enhancement_enabled,
                 asr_model_quality=request.asr_model_quality,
                 transcription_mode=request.transcription_mode,
-                llm_provider=request.llm_provider,
-                openai_base_url=request.openai_base_url,
-                openai_model=request.openai_model,
             )
         )
     except SettingsValidationError as error:
@@ -125,12 +113,9 @@ def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> Worksp
     return WorkspaceSettingsResponse(
         theme=settings.theme,
         show_takeaways=settings.show_takeaways,
-        ai_transcript_enhancement=settings.ai_transcript_enhancement,
+        transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
-        llm_provider=settings.llm_provider,
-        openai_base_url=settings.openai_base_url,
-        openai_model=settings.openai_model,
     )
 
 
@@ -138,14 +123,15 @@ class ProviderSettingsResponse(BaseModel):
     llm_provider: str
     openai_base_url: str
     openai_model: str
-    openai_api_key: str
+    has_openai_api_key: bool
+    openai_api_key_masked: str
 
 
 class UpdateProviderSettingsRequest(BaseModel):
     llm_provider: str
     openai_base_url: str
     openai_model: str
-    openai_api_key: str
+    openai_api_key: str | None = None
 
 
 @app.get("/api/provider-settings", response_model=ProviderSettingsResponse)
@@ -155,7 +141,8 @@ def get_provider_settings() -> ProviderSettingsResponse:
         llm_provider=env_settings.llm_provider,
         openai_base_url=env_settings.openai_base_url,
         openai_model=env_settings.openai_model,
-        openai_api_key=env_settings.openai_api_key,
+        has_openai_api_key=env_settings.has_openai_api_key,
+        openai_api_key_masked=env_settings.openai_api_key_masked,
     )
 
 
@@ -177,7 +164,8 @@ def update_provider_settings(request: UpdateProviderSettingsRequest) -> Provider
         llm_provider=env_settings.llm_provider,
         openai_base_url=env_settings.openai_base_url,
         openai_model=env_settings.openai_model,
-        openai_api_key=env_settings.openai_api_key,
+        has_openai_api_key=env_settings.has_openai_api_key,
+        openai_api_key_masked=env_settings.openai_api_key_masked,
     )
 
 

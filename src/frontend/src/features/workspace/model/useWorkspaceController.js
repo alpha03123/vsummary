@@ -92,6 +92,7 @@ function workspaceReducer(state, action) {
         summaryLoading: false,
         mindmapLoading: false,
         knowledgeCardsLoading: false,
+        knowledgeCardsGenerating: false,
         notesLoading: false,
         savingNote: false,
         generatingVideoKey: null,
@@ -115,6 +116,7 @@ function workspaceReducer(state, action) {
         summary: null,
         mindmap: null,
         knowledgeCards: null,
+        knowledgeCardsFeedback: null,
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
@@ -137,6 +139,7 @@ function workspaceReducer(state, action) {
         summary: null,
         mindmap: null,
         knowledgeCards: null,
+        knowledgeCardsFeedback: null,
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
@@ -162,6 +165,7 @@ function workspaceReducer(state, action) {
         summary: null,
         mindmap: null,
         knowledgeCards: null,
+        knowledgeCardsFeedback: null,
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
@@ -176,6 +180,7 @@ function workspaceReducer(state, action) {
       return {
         ...state,
         selectedToolId: action.toolId,
+        knowledgeCardsFeedback: action.toolId === "knowledge-cards" ? state.knowledgeCardsFeedback : null,
         error: "",
       };
     case "series_context_selected": {
@@ -189,6 +194,7 @@ function workspaceReducer(state, action) {
         summary: null,
         mindmap: null,
         knowledgeCards: null,
+        knowledgeCardsFeedback: null,
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
@@ -245,6 +251,15 @@ function workspaceReducer(state, action) {
       return {
         ...state,
         knowledgeCardsLoading: true,
+        knowledgeCardsGenerating: false,
+        error: "",
+      };
+    case "knowledge_cards_generation_started":
+      return {
+        ...state,
+        knowledgeCardsLoading: true,
+        knowledgeCardsGenerating: true,
+        knowledgeCardsFeedback: null,
         error: "",
       };
     case "knowledge_cards_loaded":
@@ -252,12 +267,38 @@ function workspaceReducer(state, action) {
         ...state,
         knowledgeCards: action.cards,
         knowledgeCardsLoading: false,
+        knowledgeCardsGenerating: false,
+        knowledgeCardsFeedback:
+          action.feedbackMessage == null
+            ? state.knowledgeCardsFeedback
+            : {
+                tone: action.feedbackTone ?? "success",
+                message: action.feedbackMessage,
+              },
+        tools: state.tools == null
+          ? state.tools
+          : {
+              ...state.tools,
+              knowledgeCards: {
+                ...state.tools.knowledgeCards,
+                available: true,
+                generated: true,
+                status: "ready",
+              },
+            },
       };
     case "knowledge_cards_cleared":
       return {
         ...state,
         knowledgeCards: null,
         knowledgeCardsLoading: false,
+        knowledgeCardsGenerating: false,
+        knowledgeCardsFeedback: null,
+      };
+    case "knowledge_cards_feedback_cleared":
+      return {
+        ...state,
+        knowledgeCardsFeedback: null,
       };
     case "notes_loading_started":
       return {
@@ -826,10 +867,18 @@ export function useWorkspaceController() {
       return;
     }
 
-    dispatch({ type: "knowledge_cards_loading_started" });
+    dispatch({ type: "knowledge_cards_generation_started" });
     try {
       const cards = await generateVideoKnowledgeCards(state.selectedSeriesId, state.selectedVideoId);
-      dispatch({ type: "knowledge_cards_loaded", cards });
+      dispatch({
+        type: "knowledge_cards_loaded",
+        cards,
+        feedbackTone: "success",
+        feedbackMessage:
+          Array.isArray(cards?.cards) && cards.cards.length
+            ? `已生成 ${cards.cards.length} 张知识卡片`
+            : "知识卡片已生成，但这次没有抽取出稳定卡片",
+      });
     } catch (error) {
       dispatch({
         type: "load_failed",
@@ -856,10 +905,23 @@ export function useWorkspaceController() {
     try {
       if (key === "llmProvider" || key === "openaiBaseUrl" || key === "openaiModel" || key === "openaiApiKey") {
         const savedProviderSettings = await updateProviderSettings(nextUi);
-        dispatch({ type: "workspace_settings_loaded", settings: { ...state.ui, ...savedProviderSettings } });
+        dispatch({
+          type: "workspace_settings_loaded",
+          settings: {
+            ...nextUi,
+            ...savedProviderSettings,
+            openaiApiKey: "",
+          },
+        });
       } else {
         const savedSettings = await updateWorkspaceSettings(nextUi);
-        dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+        dispatch({
+          type: "workspace_settings_loaded",
+          settings: {
+            ...state.ui,
+            ...savedSettings,
+          },
+        });
         const models = await loadFasterWhisperModels();
         dispatch({ type: "faster_whisper_models_loaded", models });
       }
@@ -872,12 +934,27 @@ export function useWorkspaceController() {
   }
 
   async function onResetSettings() {
-    const nextUi = resetUiSettings();
+    const nextUi = normalizeUiSettings({
+      ...state.ui,
+      ...resetUiSettings(),
+      llmProvider: state.ui.llmProvider,
+      openaiBaseUrl: state.ui.openaiBaseUrl,
+      openaiModel: state.ui.openaiModel,
+      hasOpenaiApiKey: state.ui.hasOpenaiApiKey,
+      openaiApiKeyMasked: state.ui.openaiApiKeyMasked,
+      openaiApiKey: "",
+    });
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
     try {
       const savedSettings = await updateWorkspaceSettings(nextUi);
-      dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...nextUi,
+          ...savedSettings,
+        },
+      });
       const models = await loadFasterWhisperModels();
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
@@ -975,7 +1052,7 @@ export function useWorkspaceController() {
 
     try {
       const summaryResult = await generateVideoSummary(seriesId, videoId, {
-        transcriptEnhancementEnabled: state.ui.aiTranscriptEnhancement,
+        transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
       });
       dispatch({
         type: "generation_succeeded",
@@ -1177,6 +1254,8 @@ export function useWorkspaceController() {
     summary,
     mindmap,
     knowledgeCards: state.knowledgeCards,
+    knowledgeCardsGenerating: state.knowledgeCardsGenerating,
+    knowledgeCardsFeedback: state.knowledgeCardsFeedback,
     notes: state.notes,
     activeSeries,
     selectedVideo,

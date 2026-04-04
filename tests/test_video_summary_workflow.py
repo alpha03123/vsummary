@@ -39,7 +39,7 @@ class ConfiguredVideoSummaryWorkflowTests(unittest.TestCase):
                 "\n".join(
                     [
                         "OPENAI_PROVIDER=openai_compatible",
-                        "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                        "OPENAI_BASE_URL=http://127.0.0.1:8317/v1",
                         "OPENAI_MODEL=gpt-5.4",
                         "OPENAI_API_KEY=test-key",
                         "",
@@ -59,11 +59,6 @@ device = "auto"
 model_size = "small"
 compute_type = "int8"
 transcription_mode = "fast"
-
-[openai]
-provider = "openai_compatible"
-base_url = "http://127.0.0.1:8317/v1/responses"
-model = "gpt-5.4"
                 """.strip(),
                 encoding="utf-8",
             )
@@ -96,7 +91,7 @@ model = "gpt-5.4"
                 "\n".join(
                     [
                         "OPENAI_PROVIDER=openai_compatible",
-                        "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                        "OPENAI_BASE_URL=http://127.0.0.1:8317/v1",
                         "OPENAI_MODEL=gpt-5.4",
                         "OPENAI_API_KEY=test-key",
                         "",
@@ -116,11 +111,6 @@ device = "auto"
 model_size = "small"
 compute_type = "int8"
 transcription_mode = "fast"
-
-[openai]
-provider = "openai_compatible"
-base_url = "http://127.0.0.1:8317/v1/responses"
-model = "gpt-5.4"
 
 [debug]
 mode = true

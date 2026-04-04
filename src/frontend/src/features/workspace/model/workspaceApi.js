@@ -18,12 +18,9 @@ export async function loadWorkspaceSettings() {
   return {
     theme: payload.theme,
     showTakeaways: payload.show_takeaways,
-    aiTranscriptEnhancement: payload.ai_transcript_enhancement,
+    transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
-    llmProvider: payload.llm_provider,
-    openaiBaseUrl: payload.openai_base_url,
-    openaiModel: payload.openai_model,
   };
 }
 
@@ -33,7 +30,9 @@ export async function loadProviderSettings() {
     llmProvider: payload.llm_provider,
     openaiBaseUrl: payload.openai_base_url,
     openaiModel: payload.openai_model,
-    openaiApiKey: payload.openai_api_key,
+    hasOpenaiApiKey: payload.has_openai_api_key,
+    openaiApiKeyMasked: payload.openai_api_key_masked,
+    openaiApiKey: "",
   };
 }
 
@@ -46,23 +45,17 @@ export async function updateWorkspaceSettings(settings) {
     body: JSON.stringify({
       theme: settings.theme,
       show_takeaways: settings.showTakeaways,
-      ai_transcript_enhancement: settings.aiTranscriptEnhancement,
+      transcript_enhancement_enabled: settings.transcriptEnhancementEnabled,
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
-      llm_provider: settings.llmProvider,
-      openai_base_url: settings.openaiBaseUrl,
-      openai_model: settings.openaiModel,
     }),
   });
   return {
     theme: payload.theme,
     showTakeaways: payload.show_takeaways,
-    aiTranscriptEnhancement: payload.ai_transcript_enhancement,
+    transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
-    llmProvider: payload.llm_provider,
-    openaiBaseUrl: payload.openai_base_url,
-    openaiModel: payload.openai_model,
   };
 }
 
@@ -76,14 +69,16 @@ export async function updateProviderSettings(settings) {
       llm_provider: settings.llmProvider,
       openai_base_url: settings.openaiBaseUrl,
       openai_model: settings.openaiModel,
-      openai_api_key: settings.openaiApiKey,
+      openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
     }),
   });
   return {
     llmProvider: payload.llm_provider,
     openaiBaseUrl: payload.openai_base_url,
     openaiModel: payload.openai_model,
-    openaiApiKey: payload.openai_api_key,
+    hasOpenaiApiKey: payload.has_openai_api_key,
+    openaiApiKeyMasked: payload.openai_api_key_masked,
+    openaiApiKey: "",
   };
 }
 

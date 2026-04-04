@@ -40,7 +40,6 @@ class OpenAISettings:
 class WorkspaceUiSettings:
     theme: str
     show_takeaways: bool
-    ai_transcript_enhancement: bool
 
 
 @dataclass(frozen=True)
@@ -85,11 +84,10 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         faster_whisper=faster_settings,
     )
 
-    openai_payload = payload["openai"]
     openai_settings = OpenAISettings(
         provider=env_values.provider,
-        base_url=env_values.base_url or openai_payload["base_url"],
-        model=env_values.model or openai_payload["model"],
+        base_url=normalize_openai_base_url(env_values.base_url),
+        model=env_values.model,
         api_key=env_values.api_key,
     )
 
@@ -97,7 +95,6 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     workspace_ui_settings = WorkspaceUiSettings(
         theme=_normalize_theme(workspace_ui_payload.get("theme")),
         show_takeaways=bool(workspace_ui_payload.get("show_takeaways", True)),
-        ai_transcript_enhancement=bool(workspace_ui_payload.get("ai_transcript_enhancement", True)),
     )
     debug_payload = payload.get("debug", {})
     debug_settings = DebugSettings(
@@ -145,6 +142,20 @@ def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) ->
     )
 
 
+def replace_transcript_enhancement_enabled(settings: AppSettings, transcript_enhancement_enabled: bool) -> AppSettings:
+    return AppSettings(
+        asr=AsrSettings(
+            provider=settings.asr.provider,
+            language=settings.asr.language,
+            transcript_enhancement_enabled=transcript_enhancement_enabled,
+            faster_whisper=settings.asr.faster_whisper,
+        ),
+        openai=settings.openai,
+        workspace_ui=settings.workspace_ui,
+        debug=settings.debug,
+    )
+
+
 def replace_faster_whisper_transcription_mode(settings: AppSettings, transcription_mode: str) -> AppSettings:
     normalized_mode = _normalize_transcription_mode(transcription_mode)
     return AppSettings(
@@ -177,7 +188,7 @@ def replace_openai_settings(
         asr=settings.asr,
         openai=OpenAISettings(
             provider=provider,
-            base_url=base_url,
+            base_url=normalize_openai_base_url(base_url),
             model=model,
             api_key=settings.openai.api_key,
         ),
@@ -200,6 +211,20 @@ def _normalize_transcription_mode(value: object) -> str:
     return "fast"
 
 
+def normalize_openai_base_url(value: str) -> str:
+    normalized = value.strip().rstrip("/")
+    if normalized.endswith("/chat/completions"):
+        return normalized[: -len("/chat/completions")]
+    if normalized.endswith("/responses"):
+        return normalized[: -len("/responses")]
+    return normalized
+
+
+def build_openai_responses_url(base_url: str) -> str:
+    normalized = normalize_openai_base_url(base_url)
+    return f"{normalized}/responses"
+
+
 def _render_settings_toml(settings: AppSettings) -> str:
     lines = [
         "[asr]",
@@ -213,15 +238,9 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'compute_type = "{settings.asr.faster_whisper.compute_type}"',
         f'transcription_mode = "{settings.asr.faster_whisper.transcription_mode}"',
         "",
-        "[openai]",
-        f'provider = "{settings.openai.provider}"',
-        f'base_url = "{settings.openai.base_url}"',
-        f'model = "{settings.openai.model}"',
-        "",
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
         f"show_takeaways = {_toml_bool(settings.workspace_ui.show_takeaways)}",
-        f"ai_transcript_enhancement = {_toml_bool(settings.workspace_ui.ai_transcript_enhancement)}",
         "",
         "[debug]",
         f"mode = {_toml_bool(settings.debug.mode)}",
@@ -246,7 +265,7 @@ def load_env_settings(root_dir: Path) -> EnvSettings:
     values = _load_dotenv(root_dir / ".env")
     return EnvSettings(
         provider=values.get("OPENAI_PROVIDER", "openai_compatible").strip() or "openai_compatible",
-        base_url=values.get("OPENAI_BASE_URL", "").strip(),
+        base_url=normalize_openai_base_url(values.get("OPENAI_BASE_URL", "").strip()),
         model=values.get("OPENAI_MODEL", "").strip(),
         api_key=values.get("OPENAI_API_KEY", "").strip(),
     )
@@ -257,7 +276,7 @@ def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
     lines = dotenv_path.read_text(encoding="utf-8").splitlines() if dotenv_path.exists() else []
     replacements = {
         "OPENAI_PROVIDER": settings.provider,
-        "OPENAI_BASE_URL": settings.base_url,
+        "OPENAI_BASE_URL": normalize_openai_base_url(settings.base_url),
         "OPENAI_MODEL": settings.model,
         "OPENAI_API_KEY": settings.api_key,
     }

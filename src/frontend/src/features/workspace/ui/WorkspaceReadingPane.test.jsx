@@ -17,6 +17,8 @@ describe("WorkspaceReadingPane", () => {
         summary={null}
         mindmap={null}
         knowledgeCards={null}
+        knowledgeCardsGenerating={false}
+        knowledgeCardsFeedback={null}
         notes={null}
         activeSeries={{
           id: "series-a",
@@ -94,6 +96,8 @@ describe("WorkspaceReadingPane", () => {
         summary={null}
         mindmap={null}
         knowledgeCards={null}
+        knowledgeCardsGenerating={false}
+        knowledgeCardsFeedback={null}
         notes={{ seriesId: "series-a", videoId: "video-1", title: "Video 1", notes: [] }}
         activeSeries={{
           id: "series-a",
