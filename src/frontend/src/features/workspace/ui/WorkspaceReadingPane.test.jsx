@@ -61,7 +61,7 @@ describe("WorkspaceReadingPane", () => {
       />,
     );
 
-    expect(screen.getByText("已定位到 02:08 - 02:26 · 准备工作")).toBeInTheDocument();
+    expect(await screen.findByText("已定位到 02:08 - 02:26 · 准备工作")).toBeInTheDocument();
     expect(screen.getByText("检索问题：百度地图 API Key")).toBeInTheDocument();
     expect(screen.getByText("后续项目会用到百度地图 API，需要提前申请 API Key。")).toBeInTheDocument();
 
@@ -74,7 +74,7 @@ describe("WorkspaceReadingPane", () => {
     expect(video.currentTime).toBe(128);
   });
 
-  it("renders notes panel and submits a manual note", () => {
+  it("renders notes panel and submits a manual note", async () => {
     const onCreateNote = vi.fn();
 
     render(
@@ -133,7 +133,7 @@ describe("WorkspaceReadingPane", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("笔记标题"), { target: { value: "新的笔记" } });
+    fireEvent.change(await screen.findByPlaceholderText("笔记标题"), { target: { value: "新的笔记" } });
     fireEvent.change(screen.getByPlaceholderText("记录要点、结论或待办..."), {
       target: { value: "这里记录一条手动笔记。" },
     });

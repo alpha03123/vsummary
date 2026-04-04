@@ -2,6 +2,12 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { popScaleVariant, blurVariant } from "../../../lib/animations";
 import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download } from "lucide-react";
+import {
+  WorkspaceSegmentedControl,
+  WorkspaceSettingRow,
+  WorkspaceTextInput,
+  WorkspaceToggleSwitch,
+} from "./shared/WorkspaceSettingsControls";
 
 export function WorkspaceSettingsPanel({
   ui,
@@ -105,37 +111,29 @@ export function WorkspaceSettingsPanel({
                 </div>
                 
                 {/* Theme Setting */}
-                <SettingRow 
+                <WorkspaceSettingRow 
                   title="深色模式" 
                   description="切换整个工作区界面的明暗主题模式。"
                 >
-                  <div className="flex p-1 bg-stone-100 dark:bg-stone-800/60 rounded-xl" role="group">
-                    <button
-                      type="button"
-                      className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${ui.theme === "light" ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm" : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"}`}
-                      onClick={() => onChangeSetting("theme", "light")}
-                    >
-                      浅色
-                    </button>
-                    <button
-                      type="button"
-                      className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${ui.theme === "dark" ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm" : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"}`}
-                      onClick={() => onChangeSetting("theme", "dark")}
-                    >
-                      深色
-                    </button>
-                  </div>
-                </SettingRow>
+                  <WorkspaceSegmentedControl
+                    value={ui.theme}
+                    options={[
+                      { id: "light", label: "浅色" },
+                      { id: "dark", label: "深色" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("theme", nextValue)}
+                  />
+                </WorkspaceSettingRow>
 
-                <SettingRow 
+                <WorkspaceSettingRow 
                   title="显示关键收获" 
                   description="在详情正文顶部优先显示由 AI 提炼的全局“Key Takeaways”。"
                 >
-                  <ToggleSwitch 
+                  <WorkspaceToggleSwitch 
                     checked={ui.showTakeaways} 
                     onChange={() => onChangeSetting("showTakeaways", !ui.showTakeaways)} 
                   />
-                </SettingRow>
+                </WorkspaceSettingRow>
               </>
             )}
 
@@ -146,43 +144,32 @@ export function WorkspaceSettingsPanel({
                   <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">这里控制总结流程本身，仍然属于工作区配置，会写入 `settings.toml`。</p>
                 </div>
 
-                <SettingRow 
+                <WorkspaceSettingRow 
                   title="AI 视频内容增强" 
                   description="利用大模型理解上下文后纠正转写文本，让总结结果更加精确。关闭可提高处理速度但会降低准确率。"
                 >
-                  <ToggleSwitch 
+                  <WorkspaceToggleSwitch 
                     checked={ui.transcriptEnhancementEnabled} 
                     onChange={() => onChangeSetting("transcriptEnhancementEnabled", !ui.transcriptEnhancementEnabled)} 
                   />
-                </SettingRow>
+                </WorkspaceSettingRow>
 
-                <SettingRow
+                <WorkspaceSettingRow
                   title="转写模式"
                   description="控制 faster-whisper 的解码策略。极速更快，平衡更稳，高精度更适合术语和中英混合内容。"
                 >
-                  <div className="flex p-1 bg-stone-100 dark:bg-stone-800/60 rounded-xl" role="group">
-                    {[
+                  <WorkspaceSegmentedControl
+                    value={ui.transcriptionMode}
+                    options={[
                       { id: "fast", label: "极速" },
                       { id: "balanced", label: "平衡" },
                       { id: "accurate", label: "高精度" },
-                    ].map((mode) => (
-                      <button
-                        key={mode.id}
-                        type="button"
-                        className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                          ui.transcriptionMode === mode.id
-                            ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
-                            : "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
-                        }`}
-                        onClick={() => onChangeSetting("transcriptionMode", mode.id)}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                </SettingRow>
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("transcriptionMode", nextValue)}
+                  />
+                </WorkspaceSettingRow>
 
-                <SettingRow
+                <WorkspaceSettingRow
                   title="语音模型质量"
                   description="当前只保留 faster-whisper。质量越高，效果越好，但下载体积和推理成本也更高。"
                 >
@@ -289,7 +276,7 @@ export function WorkspaceSettingsPanel({
                       })
                     )}
                   </div>
-                </SettingRow>
+                </WorkspaceSettingRow>
               </>
             )}
 
@@ -300,47 +287,42 @@ export function WorkspaceSettingsPanel({
                   <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">这一页只对应项目根目录 `.env`。协议、API 根地址、模型名和密钥都统一从 `.env` 读取与写回。</p>
                 </div>
 
-                <SettingRow
+                <WorkspaceSettingRow
                   title="供应商协议"
                   description="先固定为 OpenAI 兼容协议，便于接入 OpenAI、本地中转网关或兼容服务。"
                 >
-                  <div className="flex p-1 bg-stone-100 dark:bg-stone-800/60 rounded-xl" role="group">
-                    <button
-                      type="button"
-                      className="py-2 px-4 rounded-lg text-sm font-medium bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
-                    >
-                      OpenAI 兼容
-                    </button>
-                  </div>
-                </SettingRow>
+                  <WorkspaceSegmentedControl
+                    value="openai_compatible"
+                    options={[{ id: "openai_compatible", label: "OpenAI 兼容" }]}
+                    onChange={() => {}}
+                  />
+                </WorkspaceSettingRow>
 
-                <SettingRow
+                <WorkspaceSettingRow
                   title="API 根地址"
                   description="填写 OpenAI 兼容 API 的根地址，例如 `https://api.openai.com/v1`。具体 `/responses` 接口会由后端统一派生。"
                 >
-                  <input
-                    type="text"
+                  <WorkspaceTextInput
                     value={ui.openaiBaseUrl}
-                    onChange={(event) => onChangeSetting("openaiBaseUrl", event.target.value)}
-                    className="w-[340px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
                     placeholder="https://api.openai.com/v1"
+                    className="w-[340px]"
                   />
-                </SettingRow>
+                </WorkspaceSettingRow>
 
-                <SettingRow
+                <WorkspaceSettingRow
                   title="模型名称"
                   description="例如 `gpt-5.4` 或你的 OpenAI 兼容服务实际支持的模型名。"
                 >
-                  <input
-                    type="text"
+                  <WorkspaceTextInput
                     value={ui.openaiModel}
-                    onChange={(event) => onChangeSetting("openaiModel", event.target.value)}
-                    className="w-[240px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    onChange={(nextValue) => onChangeSetting("openaiModel", nextValue)}
                     placeholder="gpt-5.4"
+                    className="w-[240px]"
                   />
-                </SettingRow>
+                </WorkspaceSettingRow>
 
-                <SettingRow
+                <WorkspaceSettingRow
                   title="API Key"
                   description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。不会进入 `settings.toml`。"
                 >
@@ -365,15 +347,15 @@ export function WorkspaceSettingsPanel({
                         {showApiKeyValue ? "隐藏" : "显示"}
                       </button>
                     </div>
-                    <input
+                    <WorkspaceTextInput
                       type={showApiKeyValue ? "text" : "password"}
                       value={ui.openaiApiKey}
-                      onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
-                      className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
+                      onChange={(nextValue) => onChangeSetting("openaiApiKey", nextValue)}
                       placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
+                      className="mt-3 w-full dark:bg-stone-950"
                     />
                   </div>
-                </SettingRow>
+                </WorkspaceSettingRow>
               </>
             )}
 
@@ -434,31 +416,4 @@ export function WorkspaceSettingsPanel({
       </AnimatePresence>
     </motion.section>
   );
-}
-
-function SettingRow({ title, description, children }) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 bg-stone-50/50 dark:bg-stone-800/30 rounded-[1.5rem] border border-stone-100 dark:border-stone-800/60 transition-colors">
-      <div className="max-w-[400px]">
-        <strong className="block text-base font-bold text-stone-900 dark:text-stone-100 mb-1.5">{title}</strong>
-        <span className="text-[13px] leading-relaxed text-stone-500 dark:text-stone-400 block">{description}</span>
-      </div>
-      <div className="shrink-0 flex items-center justify-end">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function ToggleSwitch({ checked, onChange }) {
-  return (
-    <button
-      type="button"
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0070f3]/50 focus-visible:ring-offset-2 ${checked ? "bg-[#0b6bff]" : "bg-stone-300 dark:bg-stone-600"}`}
-      onClick={onChange}
-      aria-pressed={checked}
-    >
-      <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${checked ? "translate-x-5" : "translate-x-0"}`} />
-    </button>
-  )
 }

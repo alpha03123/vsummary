@@ -1,0 +1,136 @@
+import { BrainCircuit } from "lucide-react";
+
+import { formatRange } from "../../../../shared/lib/time";
+import { WorkspaceFeedbackBanner } from "../shared/WorkspaceFeedbackBanner";
+import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+
+export function WorkspaceKnowledgeCardsView({
+  tools,
+  knowledgeCards,
+  knowledgeCardsGenerating,
+  knowledgeCardsFeedback,
+  knowledgeCardsLoading,
+  onGenerateKnowledgeCards,
+  onOpenCard,
+}) {
+  const hasKnowledgeCards = Boolean(knowledgeCards?.cards?.length);
+
+  if (knowledgeCardsGenerating) {
+    return (
+      <WorkspaceStateBlock
+        eyebrow="Knowledge Cards"
+        title="正在生成知识卡片"
+        description="正在把视频里的核心概念抽成可复习、可检索、可串联的知识原子。"
+        loading
+      >
+        <div className="mt-6 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-amber-500" />
+        </div>
+        <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">生成完成后会自动展示结果。</p>
+      </WorkspaceStateBlock>
+    );
+  }
+
+  if (!tools?.knowledgeCards.available) {
+    return (
+      <WorkspaceStateBlock
+        eyebrow="Knowledge Cards"
+        title="需要先生成 AI 概况"
+        description="知识卡片依赖 AI 概况的结构化理解，没有概况就没有抽取基础。"
+      />
+    );
+  }
+
+  if (!tools.knowledgeCards.generated) {
+    return (
+      <WorkspaceStateBlock
+        eyebrow="Knowledge Cards"
+        title="知识卡片尚未生成"
+        description="这里展示的是独立的知识资产，不是章节摘要换皮。生成后会落盘到 `knowledge_cards.json`。"
+      >
+        <button
+          type="button"
+          onClick={onGenerateKnowledgeCards}
+          className="inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0070f3] dark:bg-white dark:text-black"
+        >
+          <BrainCircuit size={16} strokeWidth={2.2} />
+          生成知识卡片
+        </button>
+      </WorkspaceStateBlock>
+    );
+  }
+
+  if (knowledgeCardsLoading) {
+    return (
+      <WorkspaceStateBlock
+        eyebrow="Knowledge Cards"
+        title="载入知识卡片"
+        description="正在读取已生成的知识卡片。"
+        loading
+      />
+    );
+  }
+
+  if (!hasKnowledgeCards) {
+    return (
+      <div className="flex flex-col gap-4">
+        <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} />
+        <WorkspaceStateBlock
+          eyebrow="Knowledge Cards"
+          title="还没有可展示的卡片"
+          description="当前视频还没有抽取出足够稳定的知识原子，可稍后重新生成。"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {knowledgeCards.cards.map((card) => (
+          <article
+            key={card.id}
+            className="workspace-elevated-panel rounded-[2rem] border p-6 transition-all hover:-translate-y-0.5 hover:border-stone-300 dark:hover:border-white/16"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{card.kind}</p>
+                <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+              </div>
+              {card.sourceRefs[0]?.startSeconds != null ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenCard(card)}
+                  className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200"
+                >
+                  {formatRange(card.sourceRefs[0].startSeconds, card.sourceRefs[0].endSeconds ?? card.sourceRefs[0].startSeconds)}
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{card.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.details}</p>
+            {card.tags.length ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {card.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {card.sourceRefs.length ? (
+              <div className="mt-5 rounded-2xl border border-stone-200/80 bg-stone-50/80 p-4 dark:border-stone-800 dark:bg-stone-950/50">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Source</p>
+                <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.sourceRefs[0].quote}</p>
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}

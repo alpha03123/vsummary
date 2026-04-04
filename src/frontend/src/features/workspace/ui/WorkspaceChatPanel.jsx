@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Sparkles, Plus, ArrowUp, LoaderCircle } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+
+const WorkspaceMarkdownMessage = lazy(() =>
+  import("./shared/WorkspaceMarkdownMessage").then((module) => ({
+    default: module.WorkspaceMarkdownMessage,
+  })),
+);
 
 function describeCurrentTool(selectedToolId) {
   if (selectedToolId === "series-home") {
@@ -78,14 +82,9 @@ export function WorkspaceChatPanel({
     }
 
     return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
-        }}
-      >
-        {message.content}
-      </ReactMarkdown>
+      <Suspense fallback={<AssistantMessageFallback content={message.content} />}>
+        <WorkspaceMarkdownMessage content={message.content} />
+      </Suspense>
     );
   }
 
@@ -200,4 +199,8 @@ export function WorkspaceChatPanel({
       </div>
     </div>
   );
+}
+
+function AssistantMessageFallback({ content }) {
+  return <div className="whitespace-pre-wrap break-words">{content}</div>;
 }

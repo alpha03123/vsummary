@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
 
 describe("WorkspaceChatPanel", () => {
-  it("renders assistant messages as markdown", () => {
+  it("renders assistant messages as markdown", async () => {
     render(
       <WorkspaceChatPanel
         activeSeries={{ id: "series-a", title: "Series A" }}
@@ -25,7 +25,7 @@ describe("WorkspaceChatPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "标题" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "标题" })).toBeInTheDocument();
     expect(screen.getByText("第一项")).toBeInTheDocument();
     expect(screen.getByText("重点")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "文档" })).toHaveAttribute("href", "https://example.com");
