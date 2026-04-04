@@ -186,13 +186,6 @@ def replace_openai_settings(
     )
 
 
-def _resolve(root_dir: Path, raw_path: str) -> Path:
-    path = Path(raw_path)
-    if path.is_absolute():
-        return path
-    return root_dir / path
-
-
 def _normalize_theme(value: object) -> str:
     if isinstance(value, str) and value in VALID_THEMES:
         return value
@@ -239,10 +232,6 @@ def _render_settings_toml(settings: AppSettings) -> str:
 
 def _toml_bool(value: bool) -> str:
     return "true" if value else "false"
-
-
-def _toml_path(path: Path) -> str:
-    return str(path).replace("\\", "/")
 
 
 @dataclass(frozen=True)

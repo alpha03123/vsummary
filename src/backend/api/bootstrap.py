@@ -9,8 +9,8 @@ from backend.agent import AgentService, InMemoryAgentMemoryStore
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import OpenAICompatibleChatGateway, WorkspaceAgentContextLoader, WorkspaceTranscriptLookup
 from backend.agent.schemas.tool_calls import ToolName
-from backend.agent.tools.notes import execute_open_notes, execute_save_note
-from backend.agent.tools.mindmap import execute_generate_mindmap
+from backend.agent.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
+from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
 from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
 from backend.agent.tools.series import execute_open_series_home
 from backend.agent.tools.transcript import create_transcript_lookup_handler
@@ -113,12 +113,12 @@ def build_api_container(
     )
 
 
-def _normalize_chat_completions_url(base_url: str) -> str:
+def _normalize_openai_base_url(base_url: str) -> str:
     normalized = base_url.rstrip("/")
     if normalized.endswith("/chat/completions"):
-        return normalized
+        return normalized[: -len("/chat/completions")]
     if normalized.endswith("/responses"):
-        return normalized[: -len("/responses")] + "/chat/completions"
+        return normalized[: -len("/responses")]
     return normalized
 
 
@@ -151,7 +151,7 @@ def _build_agent_service(root_dir: Path, workspace: FileSystemVideoWorkspace) ->
     return AgentService(
         gateway=OpenAICompatibleChatGateway(
             model=env_settings.model,
-            base_url=_normalize_chat_completions_url(env_settings.base_url),
+            base_url=_normalize_openai_base_url(env_settings.base_url),
             api_key=env_settings.api_key,
         ),
         context_loader=WorkspaceAgentContextLoader(workspace),
@@ -160,6 +160,8 @@ def _build_agent_service(root_dir: Path, workspace: FileSystemVideoWorkspace) ->
             registry={
                 ToolName.OPEN_SERIES_HOME: execute_open_series_home,
                 ToolName.OPEN_OVERVIEW: execute_open_overview,
+                ToolName.OPEN_MINDMAP: execute_open_mindmap,
+                ToolName.OPEN_KNOWLEDGE_CARDS: execute_open_knowledge_cards,
                 ToolName.OPEN_NOTES: execute_open_notes,
                 ToolName.OPEN_VIDEO: execute_open_video,
                 ToolName.VIDEO_SEEK: execute_video_seek,

@@ -32,6 +32,7 @@ function describeCurrentTool(selectedToolId) {
 }
 
 export function WorkspaceChatPanel({
+  workspaceTitle,
   activeSeries,
   selectedVideo,
   selectedContextType,
@@ -42,23 +43,25 @@ export function WorkspaceChatPanel({
   onSubmitChat,
 }) {
   const [draft, setDraft] = useState("");
-
-  if (!activeSeries) {
-    return (
-      <div className="workspace-muted-panel flex-1 h-full flex items-center justify-center">
-        <p className="text-stone-400 dark:text-stone-500 font-medium">请先在左侧选择系列</p>
-      </div>
-    );
-  }
-
-  const scopeLabel = selectedContextType === "series" ? activeSeries.title : selectedVideo?.title ?? activeSeries.title;
+  const scopeLabel = selectedContextType === "library"
+    ? workspaceTitle ?? "整个知识库"
+    : selectedContextType === "series"
+      ? activeSeries?.title ?? "当前系列"
+      : selectedVideo?.title ?? activeSeries?.title ?? "当前视频";
   const currentPageLabel = describeCurrentTool(selectedToolId);
-  const suggestedPrompts = [
-    "给我总结一下这个视频的核心结论",
-    "帮我记一下这个视频的重点",
-    "这个系列主要讲了哪些主题？",
-    "某个知识点在视频里的什么时间出现？",
-  ];
+  const suggestedPrompts = selectedContextType === "library"
+    ? [
+        "这个知识库主要覆盖了哪些主题？",
+        "帮我找一下和 API Key 相关的视频",
+        "最近适合先看的入门视频有哪些？",
+        "帮我按主题整理一下整个库的学习路径",
+      ]
+    : [
+        "给我总结一下这个视频的核心结论",
+        "帮我记一下这个视频的重点",
+        "这个系列主要讲了哪些主题？",
+        "某个知识点在视频里的什么时间出现？",
+      ];
 
   function handleSubmit() {
     const trimmed = draft.trim();

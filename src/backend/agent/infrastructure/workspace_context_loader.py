@@ -64,6 +64,8 @@ class WorkspaceAgentContextLoader:
             selected_tool=selected_tool or "studio",
             overview=_map_tool_availability(None if tools is None else tools.overview),
             mindmap=_map_tool_availability(None if tools is None else tools.mindmap),
+            knowledge_cards=_map_tool_availability(None if tools is None else tools.knowledge_cards),
+            notes=_map_tool_availability(None if tools is None else tools.notes),
             preview=_map_tool_availability(None if tools is None else tools.preview),
             chapter_titles=chapter_titles,
         )

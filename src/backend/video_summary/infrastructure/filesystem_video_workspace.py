@@ -77,6 +77,10 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryView | None:
+        video = self.get_video_source(series_id, video_id)
+        if video is None:
+            return None
+
         summary_path = self._workspace_dir / series_id / video_id / "summary.json"
         if not summary_path.exists():
             return None
@@ -84,7 +88,7 @@ class FileSystemVideoWorkspace:
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         transcript = _load_transcript(self._workspace_dir / series_id / video_id / "transcript.cleaned.json")
         summary = _attach_chapter_transcript(summary, transcript)
-        title = str(summary.get("title", video_id)).strip() or video_id
+        title = str(summary.get("title", video.title)).strip() or video.title
         return VideoSummaryView(
             series_id=series_id,
             video_id=video_id,
@@ -93,12 +97,16 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapView | None:
+        video = self.get_video_source(series_id, video_id)
+        if video is None:
+            return None
+
         mindmap_path = self._get_video_output_dir(series_id, video_id) / "mindmap.json"
         if not mindmap_path.exists():
             return None
 
         summary = self.get_video_summary(series_id, video_id)
-        title = summary.title if summary is not None else video_id
+        title = summary.title if summary is not None else video.title
         return VideoMindmapView(
             series_id=series_id,
             video_id=video_id,

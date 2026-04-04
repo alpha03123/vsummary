@@ -22,11 +22,14 @@ export function createWelcomeChatMessages() {
   ];
 }
 
-export function buildChatScopeKey(selectedContextType, seriesId) {
-  if (selectedContextType === "library" || !seriesId) {
-    return "library";
+export function buildChatScopeKey(selectedContextType, seriesId, videoId, selectedToolId) {
+  if (selectedContextType === "library") {
+    return `library|${selectedToolId ?? "studio"}`;
   }
-  return `series:${seriesId}`;
+  if (selectedContextType === "series") {
+    return `series|${seriesId ?? ""}|${selectedToolId ?? "series-home"}`;
+  }
+  return `video|${seriesId ?? ""}|${videoId ?? ""}|${selectedToolId ?? "studio"}`;
 }
 
 export function getChatMessagesForScope(chatThreads, scopeKey) {

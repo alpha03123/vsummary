@@ -15,7 +15,7 @@ def build_agent_planner_prompt(context: AgentContext) -> str:
         "当用户询问某个内容在当前视频哪个时间点、哪一段、哪里提到时，优先调用 transcript_lookup。\n"
         "transcript_lookup 会基于当前视频的转写和章节定位片段，并返回可直接跳转的视频时间。\n"
         "只有时间点已经非常明确时，才直接返回 video_seek。\n"
-        "当用户明确要求打开概况、导图、视频预览，或者当前回答强依赖这些工具页时，再返回对应工具动作。\n"
+        "当用户明确要求打开概况、导图、知识卡片、笔记、视频预览，或者当前回答强依赖这些工具页时，再返回对应工具动作。\n"
         "当用户要求概况或导图而该工具尚未生成时，应返回 generate_overview 或 generate_mindmap。\n"
         "如果问题与当前工作台无关，返回 out_of_scope。\n\n"
         "当前上下文：\n"

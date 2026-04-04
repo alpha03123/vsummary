@@ -19,12 +19,12 @@ build/
 *.log
 tmp/
 /temp/
-sample/
-videos/
-workspace/
+/sample/
+/videos/
+/workspace/
 
 # Local data
-data/
+/data/
 
 # Local env
 .env

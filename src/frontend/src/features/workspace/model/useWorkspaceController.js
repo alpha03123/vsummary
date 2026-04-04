@@ -28,7 +28,6 @@ import {
 import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
   createInitialWorkspaceState,
-  createWelcomeChatMessages,
   createMindmapLoadedState,
   createSummaryLoadedState,
   createWorkspaceLoadedState,
@@ -105,7 +104,7 @@ function workspaceReducer(state, action) {
         fasterWhisperModelsLoading: false,
       };
     case "series_selected": {
-      const chatScopeKey = buildChatScopeKey("series", action.seriesId);
+      const chatScopeKey = buildChatScopeKey("series", action.seriesId, null, "series-home");
       return {
         ...state,
         tools: null,
@@ -127,7 +126,7 @@ function workspaceReducer(state, action) {
       };
     }
     case "library_home_entered": {
-      const chatScopeKey = buildChatScopeKey("library", null);
+      const chatScopeKey = buildChatScopeKey("library", null, null, "studio");
       return {
         ...state,
         tools: null,
@@ -152,7 +151,7 @@ function workspaceReducer(state, action) {
       };
     }
     case "video_selected": {
-      const chatScopeKey = buildChatScopeKey("video", action.seriesId);
+      const chatScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
       return {
         ...state,
         selectedSeriesId: action.seriesId,
@@ -180,7 +179,7 @@ function workspaceReducer(state, action) {
         error: "",
       };
     case "series_context_selected": {
-      const chatScopeKey = buildChatScopeKey("series", state.selectedSeriesId);
+      const chatScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");
       return {
         ...state,
         selectedContextType: "series",
@@ -464,7 +463,12 @@ function workspaceReducer(state, action) {
 }
 
 function applyChatThreadUpdate(state, nextMessages, chatPending) {
-  const chatScopeKey = buildChatScopeKey(state.selectedContextType, state.selectedSeriesId);
+  const chatScopeKey = buildChatScopeKey(
+    state.selectedContextType,
+    state.selectedSeriesId,
+    state.selectedVideoId,
+    state.selectedToolId,
+  );
   return {
     ...state,
     chatPending,
@@ -1076,7 +1080,7 @@ export function useWorkspaceController() {
 
   async function onSubmitChat(message) {
     const trimmedMessage = message.trim();
-    if (!trimmedMessage || !activeSeries || state.chatPending) {
+    if (!trimmedMessage || state.chatPending) {
       return;
     }
 
@@ -1218,13 +1222,7 @@ function buildVideoKey(seriesId, videoId) {
 }
 
 function buildAgentSessionId(selectedContextType, seriesId, videoId, selectedToolId) {
-  if (selectedContextType === "library") {
-    return `library|${selectedToolId ?? "studio"}`;
-  }
-  if (selectedContextType === "series") {
-    return `series|${seriesId ?? ""}|${selectedToolId ?? "series-home"}`;
-  }
-  return `video|${seriesId ?? ""}|${videoId ?? ""}|${selectedToolId ?? "studio"}`;
+  return buildChatScopeKey(selectedContextType, seriesId, videoId, selectedToolId);
 }
 
 function normalizeAgentToolId(toolId) {

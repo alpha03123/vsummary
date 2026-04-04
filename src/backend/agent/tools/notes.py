@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.tool_calls import (
+    OpenKnowledgeCardsCall,
     OpenNotesCall,
     SaveNoteCall,
     ToolDefinition,
     ToolExecutionResult,
     ToolName,
+)
+
+OPEN_KNOWLEDGE_CARDS_TOOL = ToolDefinition(
+    name=ToolName.OPEN_KNOWLEDGE_CARDS,
+    title="打开知识卡片",
+    description="切换到知识卡片工具页。",
 )
 
 OPEN_NOTES_TOOL = ToolDefinition(
@@ -24,6 +31,14 @@ SAVE_NOTE_TOOL = ToolDefinition(
         "note_content": "笔记正文",
     },
 )
+
+
+def execute_open_knowledge_cards(call: OpenKnowledgeCardsCall, context: AgentContext) -> ToolExecutionResult:
+    return ToolExecutionResult(
+        tool_name=ToolName.OPEN_KNOWLEDGE_CARDS,
+        status="ok",
+        payload={"selected_tool": "knowledge-cards"},
+    )
 
 
 def execute_open_notes(call: OpenNotesCall, context: AgentContext) -> ToolExecutionResult:

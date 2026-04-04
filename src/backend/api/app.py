@@ -250,6 +250,7 @@ def cancel_faster_whisper_model_download(model_id: str) -> dict[str, object]:
 
 @app.get("/api/videos/{series_id}/{video_id}/summary")
 def get_video_summary(series_id: str, video_id: str) -> dict[str, object]:
+    _ensure_video_exists(series_id, video_id)
     video_summary = CONTAINER.get_video_summary.run(series_id, video_id)
     if video_summary is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
@@ -259,6 +260,7 @@ def get_video_summary(series_id: str, video_id: str) -> dict[str, object]:
 
 @app.get("/api/videos/{series_id}/{video_id}/mindmap")
 def get_video_mindmap(series_id: str, video_id: str) -> dict[str, object]:
+    _ensure_video_exists(series_id, video_id)
     video_mindmap = CONTAINER.get_video_mindmap.run(series_id, video_id)
     if video_mindmap is None:
         raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
@@ -268,6 +270,7 @@ def get_video_mindmap(series_id: str, video_id: str) -> dict[str, object]:
 
 @app.get("/api/videos/{series_id}/{video_id}/cards", response_model=VideoChapterCardsResponse)
 def get_video_cards(series_id: str, video_id: str) -> VideoChapterCardsResponse:
+    _ensure_video_exists(series_id, video_id)
     video_cards = CONTAINER.get_video_chapter_cards.run(series_id, video_id)
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"cards not found for video '{series_id}/{video_id}'")
@@ -277,6 +280,7 @@ def get_video_cards(series_id: str, video_id: str) -> VideoChapterCardsResponse:
 
 @app.get("/api/videos/{series_id}/{video_id}/knowledge-cards", response_model=VideoKnowledgeCardsResponse)
 def get_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowledgeCardsResponse:
+    _ensure_video_exists(series_id, video_id)
     video_cards = CONTAINER.get_video_cards.run(series_id, video_id)
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"knowledge cards not found for video '{series_id}/{video_id}'")
@@ -286,9 +290,8 @@ def get_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowledgeCa
 
 @app.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate", response_model=VideoKnowledgeCardsResponse)
 def generate_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowledgeCardsResponse:
+    _ensure_video_exists(series_id, video_id)
     video_cards = CONTAINER.generate_video_cards.run(series_id, video_id)
-    if CONTAINER.get_video_source.run(series_id, video_id) is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
     return VideoKnowledgeCardsResponse.from_view(video_cards)
@@ -454,6 +457,11 @@ def _build_task_id(series_id: str, video_id: str) -> str:
 
 def _build_model_download_task_id(model_id: str) -> str:
     return f"asr-download/{model_id}"
+
+
+def _ensure_video_exists(series_id: str, video_id: str) -> None:
+    if CONTAINER.get_video_source.run(series_id, video_id) is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
 
 
 async def _stream_progress_events(*, tracker, task_id: str, terminal_statuses: set[str]):

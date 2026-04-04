@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class ToolName(str, Enum):
     OPEN_SERIES_HOME = "open_series_home"
     OPEN_OVERVIEW = "open_overview"
+    OPEN_MINDMAP = "open_mindmap"
+    OPEN_KNOWLEDGE_CARDS = "open_knowledge_cards"
     OPEN_NOTES = "open_notes"
     OPEN_VIDEO = "open_video"
     VIDEO_SEEK = "video_seek"
@@ -31,6 +33,14 @@ class OpenSeriesHomeCall(BaseModel):
 
 class OpenOverviewCall(BaseModel):
     tool_name: Literal[ToolName.OPEN_OVERVIEW] = ToolName.OPEN_OVERVIEW
+
+
+class OpenMindmapCall(BaseModel):
+    tool_name: Literal[ToolName.OPEN_MINDMAP] = ToolName.OPEN_MINDMAP
+
+
+class OpenKnowledgeCardsCall(BaseModel):
+    tool_name: Literal[ToolName.OPEN_KNOWLEDGE_CARDS] = ToolName.OPEN_KNOWLEDGE_CARDS
 
 
 class OpenVideoCall(BaseModel):
@@ -68,6 +78,8 @@ class TranscriptLookupCall(BaseModel):
 ToolCall = Annotated[
     OpenSeriesHomeCall
     | OpenOverviewCall
+    | OpenMindmapCall
+    | OpenKnowledgeCardsCall
     | OpenNotesCall
     | OpenVideoCall
     | VideoSeekCall

@@ -41,6 +41,20 @@ class AgentValidationTests(unittest.TestCase):
         with self.assertRaises(AgentPlanError):
             validate_action_plan(plan)
 
+    def test_open_tool_accepts_open_mindmap(self) -> None:
+        plan = AgentActionPlan.model_validate(
+            {
+                "intent_type": "open_tool",
+                "scope_type": "video",
+                "tool_calls": [{"tool_name": "open_mindmap"}],
+                "reason": "用户要查看已有导图",
+            }
+        )
+
+        validated = validate_action_plan(plan)
+
+        self.assertEqual(validated.tool_calls[0].tool_name.value, "open_mindmap")
+
     def test_seek_video_rejects_library_scope(self) -> None:
         plan = AgentActionPlan.model_validate(
             {

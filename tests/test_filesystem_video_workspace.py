@@ -59,6 +59,9 @@ class FileSystemVideoWorkspaceTests(unittest.TestCase):
     def test_get_video_summary_reads_workspace_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "video_include"
+            source_path = root / "videos" / "series-a" / "clip-01.mp4"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("video", encoding="utf-8")
             summary_dir = root / "workspace" / "series-a" / "clip-01"
             summary_dir.mkdir(parents=True)
             (summary_dir / "summary.json").write_text(
@@ -103,6 +106,17 @@ class FileSystemVideoWorkspaceTests(unittest.TestCase):
                 {"start_seconds": 1.0, "end_seconds": 3.0, "text": "第一段"}
             ])
 
+    def test_get_video_summary_returns_none_when_source_video_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "video_include"
+            summary_dir = root / "workspace" / "series-a" / "clip-01"
+            summary_dir.mkdir(parents=True)
+            (summary_dir / "summary.json").write_text(json.dumps({"title": "clip-01"}), encoding="utf-8")
+
+            workspace = FileSystemVideoWorkspace(root)
+
+            self.assertIsNone(workspace.get_video_summary("series-a", "clip-01"))
+
     def test_get_video_workspace_tools_reflects_summary_and_mindmap_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "video_include"
@@ -122,6 +136,56 @@ class FileSystemVideoWorkspaceTests(unittest.TestCase):
             self.assertFalse(tools.mindmap.generated)
             self.assertTrue(tools.mindmap.available)
             self.assertEqual(tools.preview.preview_url, "/api/videos/series-a/clip-01/preview")
+
+    def test_get_video_knowledge_cards_rejects_invalid_cards_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "video_include"
+            source_path = root / "videos" / "series-a" / "clip-01.mp4"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("video", encoding="utf-8")
+            output_dir = root / "workspace" / "series-a" / "clip-01"
+            output_dir.mkdir(parents=True)
+            (output_dir / "knowledge_cards.json").write_text(
+                json.dumps({"title": "clip-01", "cards": {"bad": "shape"}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            workspace = FileSystemVideoWorkspace(root)
+
+            with self.assertRaisesRegex(ValueError, "cards 必须是数组"):
+                workspace.get_video_knowledge_cards("series-a", "clip-01")
+
+    def test_get_video_notes_rejects_invalid_note_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "video_include"
+            source_path = root / "videos" / "series-a" / "clip-01.mp4"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("video", encoding="utf-8")
+            output_dir = root / "workspace" / "series-a" / "clip-01"
+            output_dir.mkdir(parents=True)
+            (output_dir / "notes.json").write_text(
+                json.dumps(
+                    {
+                        "notes": [
+                            {
+                                "id": "note-1",
+                                "title": "",
+                                "content": "正文",
+                                "source": "manual",
+                                "created_at": "2026-04-04T10:00:00Z",
+                                "updated_at": "2026-04-04T10:00:00Z",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            workspace = FileSystemVideoWorkspace(root)
+
+            with self.assertRaisesRegex(ValueError, "note.title 不能为空"):
+                workspace.get_video_notes("series-a", "clip-01")
 
 
 if __name__ == "__main__":

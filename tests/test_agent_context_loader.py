@@ -41,6 +41,9 @@ class AgentContextLoaderTests(unittest.TestCase):
             self.assertEqual(context.video_id, "intro")
             self.assertEqual(context.selected_tool, "overview")
             self.assertTrue(context.overview.generated)
+            self.assertFalse(context.mindmap.generated)
+            self.assertTrue(context.notes.available)
+            self.assertFalse(context.knowledge_cards.generated)
             self.assertEqual(context.chapter_titles, ["第一章"])
 
     def test_loads_series_context_when_video_missing(self) -> None:

@@ -20,6 +20,8 @@ class AgentContext(BaseModel):
     selected_tool: str | None = None
     overview: ToolAvailability = Field(default_factory=ToolAvailability)
     mindmap: ToolAvailability = Field(default_factory=ToolAvailability)
+    knowledge_cards: ToolAvailability = Field(default_factory=ToolAvailability)
+    notes: ToolAvailability = Field(default_factory=ToolAvailability)
     preview: ToolAvailability = Field(default_factory=ToolAvailability)
     chapter_titles: list[str] = Field(default_factory=list)
     recent_messages: list[str] = Field(default_factory=list)

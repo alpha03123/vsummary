@@ -167,82 +167,89 @@ export function WorkspacePage({
         )}
 
         <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
+          <section className="flex-1 min-w-[380px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
+             <WorkspaceChatPanel
+               workspaceTitle={library?.workspace?.title}
+               activeSeries={activeSeries}
+               selectedVideo={selectedVideo}
+               selectedContextType={selectedContextType}
+               selectedToolId={state.selectedToolId}
+               tools={tools}
+               chatMessages={chatMessages}
+               chatPending={chatPending}
+               onSubmitChat={onSubmitChat}
+             />
+          </section>
+
           {!activeSeries ? (
-            <section className="flex-1 overflow-auto h-full bg-transparent">
-              <div className="mx-auto flex h-full max-w-5xl flex-col gap-6 p-8 xl:p-10">
-                <motion.div variants={blurVariant} initial="initial" animate="animate" className="workspace-hero-surface rounded-[2rem] border p-8">
-                  <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Information Panel</p>
-                  <h2 className="mt-3 text-4xl font-bold text-stone-900 dark:text-stone-100">Workspace 信息面板</h2>
-                  <p className="mt-4 max-w-3xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
-                    左侧书架现在就是首页主内容，右侧只负责提供当前工作区的汇总信息、说明和最近书架概览，不再重复展示整块首页卡片。
-                  </p>
-                </motion.div>
+            <AnimatePresence mode="wait">
+              <motion.section
+                key="library-home:pane"
+                variants={blurVariant}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="w-[45vw] xl:w-[760px] shrink-0 h-full overflow-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all"
+              >
+                <div className="mx-auto flex h-full max-w-5xl flex-col gap-6 p-8 xl:p-10">
+                  <motion.div variants={blurVariant} initial="initial" animate="animate" className="workspace-hero-surface rounded-[2rem] border p-8">
+                    <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Information Panel</p>
+                    <h2 className="mt-3 text-4xl font-bold text-stone-900 dark:text-stone-100">Workspace 信息面板</h2>
+                    <p className="mt-4 max-w-3xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
+                      现在首页也能直接和整个知识库对话。右侧继续保留工作区总览，用来快速理解当前书架规模和入口分布。
+                    </p>
+                  </motion.div>
 
-                <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <motion.article variants={blurVariant} className="workspace-muted-panel rounded-3xl border p-6">
-                    <p className="text-sm font-semibold uppercase tracking-widest text-stone-500 dark:text-stone-400">系列总数</p>
-                    <strong className="mt-3 block text-4xl font-bold text-stone-900 dark:text-stone-100">{librarySummary.seriesCount}</strong>
-                  </motion.article>
-                  <motion.article variants={blurVariant} className="workspace-muted-panel rounded-3xl border p-6">
-                    <p className="text-sm font-semibold uppercase tracking-widest text-stone-500 dark:text-stone-400">视频总数</p>
-                    <strong className="mt-3 block text-4xl font-bold text-stone-900 dark:text-stone-100">{librarySummary.totalVideos}</strong>
-                  </motion.article>
-                  <motion.article variants={blurVariant} className="rounded-3xl border border-sky-200/80 dark:border-sky-900/60 bg-sky-50/80 dark:bg-sky-950/25 p-6">
-                    <p className="text-sm font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">已处理视频</p>
-                    <strong className="mt-3 block text-4xl font-bold text-sky-900 dark:text-sky-100">{librarySummary.processedVideos}</strong>
-                  </motion.article>
-                </motion.div>
+                  <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <motion.article variants={blurVariant} className="workspace-muted-panel rounded-3xl border p-6">
+                      <p className="text-sm font-semibold uppercase tracking-widest text-stone-500 dark:text-stone-400">系列总数</p>
+                      <strong className="mt-3 block text-4xl font-bold text-stone-900 dark:text-stone-100">{librarySummary.seriesCount}</strong>
+                    </motion.article>
+                    <motion.article variants={blurVariant} className="workspace-muted-panel rounded-3xl border p-6">
+                      <p className="text-sm font-semibold uppercase tracking-widest text-stone-500 dark:text-stone-400">视频总数</p>
+                      <strong className="mt-3 block text-4xl font-bold text-stone-900 dark:text-stone-100">{librarySummary.totalVideos}</strong>
+                    </motion.article>
+                    <motion.article variants={blurVariant} className="rounded-3xl border border-sky-200/80 dark:border-sky-900/60 bg-sky-50/80 dark:bg-sky-950/25 p-6">
+                      <p className="text-sm font-semibold uppercase tracking-widest text-sky-700 dark:text-sky-300">已处理视频</p>
+                      <strong className="mt-3 block text-4xl font-bold text-sky-900 dark:text-sky-100">{librarySummary.processedVideos}</strong>
+                    </motion.article>
+                  </motion.div>
 
-                <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_0.9fr]">
-                  <motion.article variants={blurVariant} className="workspace-muted-panel rounded-[2rem] border p-7">
-                    <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">How To Use</p>
-                    <div className="mt-4 flex flex-col gap-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-                      <p>1. 在左侧选择一个 series，进入该主题下的视频工作区。</p>
-                      <p>2. 进入 series 后，在左栏选择视频并生成 AI 概况。</p>
-                      <p>3. 再从工具页进入 AI概况、思维导图或视频预览。</p>
-                    </div>
-                  </motion.article>
+                  <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_0.9fr]">
+                    <motion.article variants={blurVariant} className="workspace-muted-panel rounded-[2rem] border p-7">
+                      <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">How To Use</p>
+                      <div className="mt-4 flex flex-col gap-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+                        <p>1. 先在首页直接问整个知识库，快速确定应该看哪个主题或视频。</p>
+                        <p>2. 在左侧选择 series，进入该主题下的视频工作区。</p>
+                        <p>3. 进入视频后，再从工具页进入 AI概况、知识卡片、思维导图或笔记。</p>
+                      </div>
+                    </motion.article>
 
-                  <motion.article variants={blurVariant} className="workspace-muted-panel rounded-[2rem] border p-7">
-                    <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Recent Shelves</p>
-                    <div className="mt-4 flex flex-col gap-3">
-                      {librarySummary.latestSeries.map((seriesItem, index) => (
-                        <motion.button
-                          key={seriesItem.id}
-                          type="button"
-                          variants={blurVariant}
-                          whileHover="hover"
-                          whileTap="tap"
-                          onClick={() => onSelectSeries(seriesItem.id)}
-                          className="workspace-elevated-panel rounded-2xl border px-4 py-3 text-left hover:border-stone-300 dark:hover:border-white/16 hover:bg-white dark:hover:bg-[#1f1f1f] hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
-                        >
-                          <strong className="block text-sm font-semibold text-stone-900 dark:text-stone-100">{seriesItem.title}</strong>
-                          <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">{seriesItem.videos.length} 个视频</span>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </motion.article>
-                </motion.div>
-              </div>
-            </section>
+                    <motion.article variants={blurVariant} className="workspace-muted-panel rounded-[2rem] border p-7">
+                      <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Recent Shelves</p>
+                      <div className="mt-4 flex flex-col gap-3">
+                        {librarySummary.latestSeries.map((seriesItem) => (
+                          <motion.button
+                            key={seriesItem.id}
+                            type="button"
+                            variants={blurVariant}
+                            whileHover="hover"
+                            whileTap="tap"
+                            onClick={() => onSelectSeries(seriesItem.id)}
+                            className="workspace-elevated-panel rounded-2xl border px-4 py-3 text-left hover:border-stone-300 dark:hover:border-white/16 hover:bg-white dark:hover:bg-[#1f1f1f] hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
+                          >
+                            <strong className="block text-sm font-semibold text-stone-900 dark:text-stone-100">{seriesItem.title}</strong>
+                            <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">{seriesItem.videos.length} 个视频</span>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </motion.article>
+                  </motion.div>
+                </div>
+              </motion.section>
+            </AnimatePresence>
           ) : (
-            <>
-              {/* Center AI Chat */}
-              <section className="flex-1 min-w-[380px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
-                 <WorkspaceChatPanel
-                   activeSeries={activeSeries}
-                   selectedVideo={selectedVideo}
-                   selectedContextType={selectedContextType}
-                   selectedToolId={state.selectedToolId}
-                   tools={tools}
-                   chatMessages={chatMessages}
-                   chatPending={chatPending}
-                   onSubmitChat={onSubmitChat}
-                 />
-              </section>
-
-              {/* Right Reading Pane */}
-              <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait">
                 <motion.section 
                   key={`${selectedContextType}:${selectedVideo?.id ?? "series"}:${state.selectedToolId}:pane`} 
                   variants={blurVariant}
@@ -283,8 +290,7 @@ export function WorkspacePage({
                     onDeleteNote={onDeleteNote}
                   />
                 </motion.section>
-              </AnimatePresence>
-            </>
+            </AnimatePresence>
           )}
 
           {/* Loading Overlay when generating AI Summary */}

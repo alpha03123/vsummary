@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.api import app as api_module
-from backend.api.bootstrap import build_api_container
+from backend.api.bootstrap import _normalize_openai_base_url, build_api_container
 from backend.video_summary.domain.models import SummaryDocument
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelInfo
 
@@ -232,6 +232,20 @@ ai_transcript_enhancement = true
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
 
+    async def test_openai_base_url_is_normalized_to_api_root(self) -> None:
+        self.assertEqual(
+            _normalize_openai_base_url("https://api.openai.com/v1/chat/completions"),
+            "https://api.openai.com/v1",
+        )
+        self.assertEqual(
+            _normalize_openai_base_url("https://api.openai.com/v1/responses"),
+            "https://api.openai.com/v1",
+        )
+        self.assertEqual(
+            _normalize_openai_base_url("https://api.openai.com/v1"),
+            "https://api.openai.com/v1",
+        )
+
     async def test_settings_endpoint_returns_workspace_settings(self) -> None:
         response = await self.client.get("/api/settings")
 
@@ -386,6 +400,16 @@ ai_transcript_enhancement = true
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "summary not found for video 'series-a/intro'")
 
+    async def test_summary_endpoint_rejects_stale_workspace_output_when_source_video_is_missing(self) -> None:
+        stale_dir = self.root / "workspace" / "series-a" / "ghost"
+        stale_dir.mkdir(parents=True)
+        (stale_dir / "summary.json").write_text(json.dumps({"title": "ghost"}), encoding="utf-8")
+
+        response = await self.client.get("/api/videos/series-a/ghost/summary")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "video not found 'series-a/ghost'")
+
     async def test_generate_endpoint_creates_summary_for_selected_video(self) -> None:
         response = await self.client.post("/api/videos/series-a/intro/generate")
 
@@ -435,6 +459,20 @@ ai_transcript_enhancement = true
         self.assertEqual(payload["cards"][0]["kind"], "concept")
         self.assertIn("source_refs", payload["cards"][0])
         self.assertTrue((self.root / "workspace" / "series-a" / "advanced" / "knowledge_cards.json").exists())
+
+    async def test_generate_knowledge_cards_endpoint_does_not_write_when_video_source_is_missing(self) -> None:
+        stale_dir = self.root / "workspace" / "series-a" / "ghost"
+        stale_dir.mkdir(parents=True)
+        (stale_dir / "summary.json").write_text(
+            json.dumps({"title": "ghost", "chapters": [], "key_takeaways": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        response = await self.client.post("/api/videos/series-a/ghost/knowledge-cards/generate")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "video not found 'series-a/ghost'")
+        self.assertFalse((stale_dir / "knowledge_cards.json").exists())
 
     async def test_knowledge_cards_endpoint_returns_404_before_generation(self) -> None:
         response = await self.client.get("/api/videos/series-a/advanced/knowledge-cards")

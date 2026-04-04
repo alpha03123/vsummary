@@ -1,5 +1,17 @@
-from backend.agent.tools.mindmap import MINDMAP_TOOL, execute_generate_mindmap
-from backend.agent.tools.notes import OPEN_NOTES_TOOL, SAVE_NOTE_TOOL, execute_open_notes, execute_save_note
+from backend.agent.tools.mindmap import (
+    GENERATE_MINDMAP_TOOL,
+    OPEN_MINDMAP_TOOL,
+    execute_generate_mindmap,
+    execute_open_mindmap,
+)
+from backend.agent.tools.notes import (
+    OPEN_KNOWLEDGE_CARDS_TOOL,
+    OPEN_NOTES_TOOL,
+    SAVE_NOTE_TOOL,
+    execute_open_knowledge_cards,
+    execute_open_notes,
+    execute_save_note,
+)
 from backend.agent.tools.overview import (
     GENERATE_OVERVIEW_TOOL,
     OPEN_OVERVIEW_TOOL,
@@ -15,9 +27,11 @@ def list_tool_definitions():
     return [
         OPEN_SERIES_HOME_TOOL,
         OPEN_OVERVIEW_TOOL,
+        OPEN_MINDMAP_TOOL,
+        OPEN_KNOWLEDGE_CARDS_TOOL,
         OPEN_NOTES_TOOL,
         GENERATE_OVERVIEW_TOOL,
-        MINDMAP_TOOL,
+        GENERATE_MINDMAP_TOOL,
         OPEN_VIDEO_TOOL,
         VIDEO_SEEK_TOOL,
         SAVE_NOTE_TOOL,
@@ -27,6 +41,8 @@ def list_tool_definitions():
 
 __all__ = [
     "execute_generate_mindmap",
+    "execute_open_knowledge_cards",
+    "execute_open_mindmap",
     "execute_open_notes",
     "execute_generate_overview",
     "execute_open_overview",

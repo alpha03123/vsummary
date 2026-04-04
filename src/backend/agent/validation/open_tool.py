@@ -18,6 +18,8 @@ def validate_open_tool_plan(plan: AgentActionPlan) -> AgentActionPlan:
         {
             ToolName.OPEN_SERIES_HOME,
             ToolName.OPEN_OVERVIEW,
+            ToolName.OPEN_MINDMAP,
+            ToolName.OPEN_KNOWLEDGE_CARDS,
             ToolName.OPEN_NOTES,
             ToolName.OPEN_VIDEO,
             ToolName.SAVE_NOTE,
