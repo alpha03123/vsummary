@@ -9,6 +9,15 @@ import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
 import { motion, AnimatePresence } from "framer-motion";
 import { staggerContainer, blurVariant, popScaleVariant } from "../../../lib/animations";
 
+const GENERATION_STAGE_ITEMS = [
+  { id: "probe", label: "分析视频" },
+  { id: "extract_audio", label: "MP4 转音频" },
+  { id: "transcribe", label: "Whisper 转写" },
+  { id: "enhance_transcript", label: "AI 修正文本" },
+  { id: "summarize", label: "AI 生成概况" },
+  { id: "completed", label: "完成" },
+];
+
 function summarizeLibrary(library) {
   const series = library?.series ?? [];
   const totalVideos = series.reduce((count, item) => count + item.videos.length, 0);
@@ -25,6 +34,24 @@ function summarizeLibrary(library) {
   };
 }
 
+function formatDurationLabel(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "--";
+  }
+  const totalSeconds = Math.max(0, Math.round(value));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}小时${remainingMinutes}分${seconds}秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes}分${seconds}秒`;
+  }
+  return `${seconds}秒`;
+}
+
 export function WorkspacePage({
   state,
   ui,
@@ -32,16 +59,24 @@ export function WorkspacePage({
   tools,
   summary,
   mindmap,
+  knowledgeCards,
+  notes,
   activeSeries,
   selectedVideo,
   selectedNode,
   previewUrl,
+  previewSeekRequest,
+  chatMessages,
+  chatPending,
   fasterWhisperModels,
   fasterWhisperModelsLoading,
   downloadingModelId,
   modelDownloadProgress,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
+  knowledgeCardsLoading,
+  notesLoading,
+  savingNote,
   selectedContextType,
   onSelectSeries,
   onEnterLibraryHome,
@@ -49,8 +84,14 @@ export function WorkspacePage({
   onSelectSeriesContext,
   onSelectTool,
   onFocusNode,
+  onOpenCard,
+  onSubmitChat,
   onGenerateVideo,
   onGenerateMindmap,
+  onGenerateKnowledgeCards,
+  onCreateNote,
+  onUpdateNote,
+  onDeleteNote,
   onToggleSettingsPanel,
   onCloseSettingsPanel,
   onChangeSetting,
@@ -60,10 +101,17 @@ export function WorkspacePage({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const librarySummary = summarizeLibrary(library);
+  const generationSnapshot = state.generationSnapshot;
   const hasRealGenerationProgress = typeof state.generationProgress === "number";
   const generationProgressLabel = hasRealGenerationProgress
     ? `${Math.round(state.generationProgress)}%`
     : "处理中";
+  const activeStageId = generationSnapshot?.status === "completed" ? "completed" : generationSnapshot?.stage;
+  const activeStageLabel =
+    GENERATION_STAGE_ITEMS.find((item) => item.id === activeStageId)?.label ?? "处理中";
+  const elapsedLabel = formatDurationLabel(generationSnapshot?.elapsedSeconds);
+  const estimatedTotalLabel = formatDurationLabel(generationSnapshot?.estimatedTotalSeconds);
+  const remainingLabel = formatDurationLabel(generationSnapshot?.remainingSeconds);
 
   if (state.loading && !summary) {
     return (
@@ -187,6 +235,9 @@ export function WorkspacePage({
                    selectedContextType={selectedContextType}
                    selectedToolId={state.selectedToolId}
                    tools={tools}
+                   chatMessages={chatMessages}
+                   chatPending={chatPending}
+                   onSubmitChat={onSubmitChat}
                  />
               </section>
 
@@ -204,21 +255,32 @@ export function WorkspacePage({
                     library={library}
                     summary={summary}
                     mindmap={mindmap}
+                    knowledgeCards={knowledgeCards}
+                    notes={notes}
                     activeSeries={activeSeries}
                     selectedVideo={selectedVideo}
                     selectedContextType={selectedContextType}
                     selectedNode={selectedNode}
                     previewUrl={previewUrl}
+                    previewSeekRequest={previewSeekRequest}
                     selectedToolId={state.selectedToolId}
                     selectedChapterId={state.selectedChapterId}
                     toolsLoading={state.toolsLoading}
                     summaryLoading={state.summaryLoading}
                     mindmapLoading={state.mindmapLoading}
+                    knowledgeCardsLoading={knowledgeCardsLoading}
+                    notesLoading={notesLoading}
+                    savingNote={savingNote}
                     isGeneratingMindmapSelectedVideo={isGeneratingMindmapSelectedVideo}
                     isGeneratingSelectedVideo={isGeneratingSelectedVideo}
                     onSelectTool={onSelectTool}
                     onFocusNode={onFocusNode}
+                    onOpenCard={onOpenCard}
                     onGenerateMindmap={onGenerateMindmap}
+                    onGenerateKnowledgeCards={onGenerateKnowledgeCards}
+                    onCreateNote={onCreateNote}
+                    onUpdateNote={onUpdateNote}
+                    onDeleteNote={onDeleteNote}
                   />
                 </motion.section>
               </AnimatePresence>
@@ -243,10 +305,10 @@ export function WorkspacePage({
                   <div className="w-full">
                     <h3 className="font-bold text-stone-900 dark:text-stone-100 text-base mb-1.5">正在生成 AI 概况</h3>
                     <p className="text-[13px] font-medium text-stone-500 dark:text-stone-400 mb-2">
-                      正在阅读视频并提炼核心内容...
+                      {generationSnapshot?.detail ?? "正在阅读视频并提炼核心内容..."}
                     </p>
                     <p className="text-xs font-bold text-[#0b6bff] mb-3">
-                      {generationProgressLabel}
+                      {activeStageLabel} · {generationProgressLabel}
                     </p>
                     <div className="w-full h-1.5 bg-stone-200/60 dark:bg-stone-800 rounded-full overflow-hidden relative">
                       {hasRealGenerationProgress ? (
@@ -265,9 +327,45 @@ export function WorkspacePage({
                         />
                       )}
                     </div>
-                    <p className="mt-3 text-[11px] text-stone-400 dark:text-stone-500">
-                      {hasRealGenerationProgress ? "已接收后端进度流" : "等待后端返回真实进度"}
-                    </p>
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-left">
+                      <div className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3 py-2 dark:border-white/8 dark:bg-white/[0.03]">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400 dark:text-stone-500">已耗时</p>
+                        <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">{elapsedLabel}</p>
+                      </div>
+                      <div className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3 py-2 dark:border-white/8 dark:bg-white/[0.03]">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400 dark:text-stone-500">预计总时长</p>
+                        <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">{estimatedTotalLabel}</p>
+                      </div>
+                      <div className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3 py-2 dark:border-white/8 dark:bg-white/[0.03]">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400 dark:text-stone-500">预计剩余</p>
+                        <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">{remainingLabel}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2">
+                      {GENERATION_STAGE_ITEMS.filter((item) => item.id !== "completed" || generationSnapshot?.status === "completed").map((item) => {
+                        const activeIndex = GENERATION_STAGE_ITEMS.findIndex((stage) => stage.id === activeStageId);
+                        const itemIndex = GENERATION_STAGE_ITEMS.findIndex((stage) => stage.id === item.id);
+                        const isCurrent = item.id === activeStageId;
+                        const isDone = activeIndex > -1 && itemIndex < activeIndex;
+                        return (
+                          <div
+                            key={item.id}
+                            className={`flex items-center justify-between rounded-2xl border px-3 py-2 text-left transition-colors ${
+                              isCurrent
+                                ? "border-[#0b6bff]/30 bg-[#0b6bff]/8"
+                                : isDone
+                                  ? "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                                  : "border-stone-200/70 bg-stone-50/70 dark:border-white/8 dark:bg-white/[0.03]"
+                            }`}
+                          >
+                            <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{item.label}</span>
+                            <span className="text-[11px] font-semibold text-stone-400 dark:text-stone-500">
+                              {isCurrent ? "进行中" : isDone ? "已完成" : "等待中"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </motion.div>
               </motion.div>

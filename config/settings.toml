@@ -17,4 +17,7 @@ model = "gpt-5.4"
 [workspace_ui]
 theme = "light"
 show_takeaways = true
-ai_transcript_enhancement = true
+ai_transcript_enhancement = false
+
+[debug]
+mode = true

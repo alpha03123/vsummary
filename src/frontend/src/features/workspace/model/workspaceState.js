@@ -10,29 +10,71 @@ export const defaultUiSettings = {
   openaiApiKey: "",
 };
 
+export function createWelcomeChatMessages() {
+  return [
+    {
+      id: "assistant-welcome",
+      role: "assistant",
+      content:
+        "你好！我已经准备好当前知识库。你可以问我视频在讲什么、某个知识点在哪个时间点，或者让我打开概况、导图和视频工具。",
+      meta: "Notebook Assistant • Just now",
+    },
+  ];
+}
+
+export function buildChatScopeKey(selectedContextType, seriesId) {
+  if (selectedContextType === "library" || !seriesId) {
+    return "library";
+  }
+  return `series:${seriesId}`;
+}
+
+export function getChatMessagesForScope(chatThreads, scopeKey) {
+  return chatThreads?.[scopeKey] ? [...chatThreads[scopeKey]] : createWelcomeChatMessages();
+}
+
+export function setChatMessagesForScope(chatThreads, scopeKey, messages) {
+  return {
+    ...(chatThreads ?? {}),
+    [scopeKey]: [...messages],
+  };
+}
+
 export function createInitialWorkspaceState() {
   return {
     library: null,
     tools: null,
     summary: null,
     mindmap: null,
+    knowledgeCards: null,
+    notes: null,
     selectedSeriesId: null,
     selectedVideoId: null,
     selectedContextType: "library",
     selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
+    previewSeekRequest: null,
     generatingVideoKey: null,
     generatingMindmapKey: null,
     generationProgress: null,
+    generationSnapshot: null,
     downloadingModelId: null,
     modelDownloadProgress: null,
     toolsLoading: false,
     summaryLoading: false,
     mindmapLoading: false,
+    knowledgeCardsLoading: false,
+    notesLoading: false,
+    savingNote: false,
     fasterWhisperModels: [],
     fasterWhisperModelsLoading: false,
     ui: resetUiSettings(),
+    chatThreads: {
+      library: createWelcomeChatMessages(),
+    },
+    chatMessages: createWelcomeChatMessages(),
+    chatPending: false,
     settingsPanelOpen: false,
     error: "",
     loading: true,

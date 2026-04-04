@@ -106,6 +106,46 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 - 后端开发接口默认地址：
   - `http://127.0.0.1:8001`
 
+## 测试
+
+- 运行后端快速测试组：
+
+```powershell
+python .\scripts\run_backend_tests.py
+```
+
+- 查看所有后端测试分组：
+
+```powershell
+python .\scripts\run_backend_tests.py --list
+```
+
+- 按职责运行指定测试组：
+
+```powershell
+python .\scripts\run_backend_tests.py agent
+python .\scripts\run_backend_tests.py api
+python .\scripts\run_backend_tests.py summary
+python .\scripts\run_backend_tests.py workspace
+python .\scripts\run_backend_tests.py all
+```
+
+```powershell
+python .\scripts\run_backend_tests.py tests.test_api
+python .\scripts\run_backend_tests.py agent workspace
+python .\scripts\run_backend_tests.py tests\test_generate_summary.py
+```
+
+推荐约定：
+
+- 日常改 Agent：跑 `agent`
+- 改文件系统、状态跟踪：跑 `workspace`
+- 改总结生成流程：跑 `summary`
+- 改 FastAPI 接口或组装：跑 `api`
+- 只改某一个测试文件：直接传 `tests.test_xxx` 或 `tests\test_xxx.py`
+- 一次涉及多个职责：把多个目标并列传进去
+- 提交前做一次完整检查：跑 `all`
+
 ## 当前 API
 
 - `GET /api/health`

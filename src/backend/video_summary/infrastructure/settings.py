@@ -44,10 +44,16 @@ class WorkspaceUiSettings:
 
 
 @dataclass(frozen=True)
+class DebugSettings:
+    mode: bool
+
+
+@dataclass(frozen=True)
 class AppSettings:
     asr: AsrSettings
     openai: OpenAISettings
     workspace_ui: WorkspaceUiSettings
+    debug: DebugSettings
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
@@ -93,11 +99,16 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         show_takeaways=bool(workspace_ui_payload.get("show_takeaways", True)),
         ai_transcript_enhancement=bool(workspace_ui_payload.get("ai_transcript_enhancement", True)),
     )
+    debug_payload = payload.get("debug", {})
+    debug_settings = DebugSettings(
+        mode=bool(debug_payload.get("mode", False)),
+    )
 
     return AppSettings(
         asr=asr_settings,
         openai=openai_settings,
         workspace_ui=workspace_ui_settings,
+        debug=debug_settings,
     )
 
 
@@ -110,6 +121,7 @@ def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: Workspace
         asr=settings.asr,
         openai=settings.openai,
         workspace_ui=workspace_ui,
+        debug=settings.debug,
     )
 
 
@@ -129,6 +141,7 @@ def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) ->
         ),
         openai=settings.openai,
         workspace_ui=settings.workspace_ui,
+        debug=settings.debug,
     )
 
 
@@ -149,6 +162,7 @@ def replace_faster_whisper_transcription_mode(settings: AppSettings, transcripti
         ),
         openai=settings.openai,
         workspace_ui=settings.workspace_ui,
+        debug=settings.debug,
     )
 
 
@@ -168,6 +182,7 @@ def replace_openai_settings(
             api_key=settings.openai.api_key,
         ),
         workspace_ui=settings.workspace_ui,
+        debug=settings.debug,
     )
 
 
@@ -214,6 +229,9 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'theme = "{settings.workspace_ui.theme}"',
         f"show_takeaways = {_toml_bool(settings.workspace_ui.show_takeaways)}",
         f"ai_transcript_enhancement = {_toml_bool(settings.workspace_ui.ai_transcript_enhancement)}",
+        "",
+        "[debug]",
+        f"mode = {_toml_bool(settings.debug.mode)}",
         "",
     ]
     return "\n".join(lines)

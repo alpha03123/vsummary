@@ -50,6 +50,72 @@ class VideoMindmapView:
 
 
 @dataclass(frozen=True)
+class ChapterCardView:
+    id: str
+    title: str
+    summary: str
+    key_points: list[str]
+    start_seconds: float | None
+    end_seconds: float | None
+    kind: str
+
+
+@dataclass(frozen=True)
+class VideoChapterCardsView:
+    series_id: str
+    video_id: str
+    title: str
+    cards: list[ChapterCardView]
+
+
+@dataclass(frozen=True)
+class KnowledgeCardSourceRefView:
+    chapter_id: str | None
+    start_seconds: float | None
+    end_seconds: float | None
+    quote: str
+
+
+@dataclass(frozen=True)
+class KnowledgeCardView:
+    id: str
+    title: str
+    kind: str
+    summary: str
+    details: str
+    tags: list[str]
+    keywords: list[str]
+    source_refs: list[KnowledgeCardSourceRefView]
+    related_card_ids: list[str]
+
+
+@dataclass(frozen=True)
+class VideoKnowledgeCardsView:
+    series_id: str
+    video_id: str
+    title: str
+    cards: list[KnowledgeCardView]
+
+
+@dataclass(frozen=True)
+class VideoNoteView:
+    id: str
+    title: str
+    content: str
+    source: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class VideoNotesView:
+    series_id: str
+    video_id: str
+    title: str
+    notes: list[VideoNoteView]
+
+
+@dataclass(frozen=True)
 class WorkspaceToolView:
     id: str
     title: str
@@ -64,7 +130,9 @@ class VideoWorkspaceToolsView:
     series_id: str
     video_id: str
     overview: WorkspaceToolView
+    knowledge_cards: WorkspaceToolView
     mindmap: WorkspaceToolView
+    notes: WorkspaceToolView
     preview: WorkspaceToolView
     ai_todo: str
 

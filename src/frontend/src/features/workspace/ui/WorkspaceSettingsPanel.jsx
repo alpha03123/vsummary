@@ -18,6 +18,7 @@ export function WorkspaceSettingsPanel({
   const [activeTab, setActiveTab] = useState("general");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmDownloadModelId, setConfirmDownloadModelId] = useState(null);
+  const [showApiKeyValue, setShowApiKeyValue] = useState(false);
 
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
@@ -25,6 +26,7 @@ export function WorkspaceSettingsPanel({
     { id: "keys", label: "模型供应商", icon: Key },
     { id: "network", label: "网络代理 (等待接入)", icon: Globe },
   ];
+  const hasApiKey = Boolean(ui.openaiApiKey?.trim());
 
   return (
     <motion.section 
@@ -342,13 +344,30 @@ export function WorkspaceSettingsPanel({
                   title="API Key"
                   description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。不会进入 `settings.toml`。"
                 >
-                  <input
-                    type="password"
-                    value={ui.openaiApiKey}
-                    onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
-                    className="w-[340px] rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
-                    placeholder="sk-..."
-                  />
+                  <div className="w-[340px] rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold ${hasApiKey ? "text-emerald-600 dark:text-emerald-400" : "text-stone-500 dark:text-stone-400"}`}>
+                          {hasApiKey ? "已配置" : "未配置"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKeyValue((value) => !value)}
+                        disabled={!hasApiKey}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                      >
+                        {showApiKeyValue ? "隐藏" : "显示"}
+                      </button>
+                    </div>
+                    <input
+                      type={showApiKeyValue ? "text" : "password"}
+                      value={ui.openaiApiKey}
+                      onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
+                      className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
+                      placeholder="sk-..."
+                    />
+                  </div>
                 </SettingRow>
               </>
             )}

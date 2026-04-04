@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30,<1
 faster-whisper>=1.1,<2
 huggingface-hub>=0.24,<1
 httpx>=0.27,<1
+openai>=2.30,<3

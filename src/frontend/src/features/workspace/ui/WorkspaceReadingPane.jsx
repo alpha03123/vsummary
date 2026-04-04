@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   LoaderCircle,
   Sparkles,
@@ -10,6 +11,10 @@ import {
   ListChecks,
   ChevronDown,
   Captions,
+  StickyNote,
+  BrainCircuit,
+  PencilLine,
+  Trash2,
 } from "lucide-react";
 
 import { formatRange, formatTimestamp } from "../../../shared/lib/time";
@@ -31,6 +36,22 @@ const TOOL_TILES = {
     palette: "workspace-muted-panel border text-stone-900 dark:text-stone-100 hover:border-violet-300/70 dark:hover:border-violet-700/70",
     iconShell: "bg-violet-100 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300 border border-violet-100 dark:border-violet-900/50",
     arrowShell: "bg-violet-50 text-violet-700 dark:bg-violet-950/20 dark:text-violet-300",
+  },
+  "knowledge-cards": {
+    label: "知识卡片",
+    description: "原子知识、标签与来源锚点",
+    icon: BrainCircuit,
+    palette: "workspace-muted-panel border text-stone-900 dark:text-stone-100 hover:border-amber-300/70 dark:hover:border-amber-700/70",
+    iconShell: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 border border-amber-100 dark:border-amber-900/50",
+    arrowShell: "bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-300",
+  },
+  notes: {
+    label: "笔记",
+    description: "手记与 Agent 记录",
+    icon: StickyNote,
+    palette: "workspace-muted-panel border text-stone-900 dark:text-stone-100 hover:border-rose-300/70 dark:hover:border-rose-700/70",
+    iconShell: "bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300 border border-rose-100 dark:border-rose-900/50",
+    arrowShell: "bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-300",
   },
   preview: {
     label: "视频预览",
@@ -68,6 +89,9 @@ function describeToolState(toolId, toolState) {
   if (toolId === "preview") {
     return "随时可查看";
   }
+  if (toolId === "notes") {
+    return toolState.generated ? "可记录与整理" : "可立即使用";
+  }
   if (toolState.generated) {
     return "已生成";
   }
@@ -77,30 +101,53 @@ function describeToolState(toolId, toolState) {
   return "点击进入后生成";
 }
 
+function getToolState(tools, toolId) {
+  if (!tools) {
+    return null;
+  }
+  if (toolId === "knowledge-cards") {
+    return tools.knowledgeCards ?? null;
+  }
+  return tools[toolId] ?? null;
+}
+
 export function WorkspaceReadingPane({
   ui,
   tools,
   library,
   summary,
   mindmap,
+  knowledgeCards,
+  notes,
   activeSeries,
   selectedVideo,
   selectedContextType,
   selectedNode,
   previewUrl,
+  previewSeekRequest,
   selectedToolId,
   selectedChapterId,
   toolsLoading,
   summaryLoading,
   mindmapLoading,
+  knowledgeCardsLoading,
+  notesLoading,
+  savingNote,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
   onSelectTool,
   onFocusNode,
+  onOpenCard,
   onGenerateMindmap,
+  onGenerateKnowledgeCards,
+  onCreateNote,
+  onUpdateNote,
+  onDeleteNote,
 }) {
+  const previewVideoRef = useRef(null);
   const hasSummary = Boolean(summary);
   const hasMindmap = Boolean(mindmap);
+  const hasKnowledgeCards = Boolean(knowledgeCards?.cards?.length);
   const previewSource = tools?.preview.previewUrl ?? previewUrl ?? undefined;
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
@@ -108,6 +155,35 @@ export function WorkspaceReadingPane({
   const seriesVideos = activeSeries?.videos ?? [];
   const processedSeriesVideos = seriesVideos.filter((video) => video.processed);
   const contentMotionKey = `${selectedContextType}:${selectedToolId}:${selectedVideo?.id ?? activeSeries?.id ?? "empty"}`;
+
+  useEffect(() => {
+    if (selectedToolId !== "preview" || !previewSeekRequest || !previewVideoRef.current) {
+      return;
+    }
+
+    const video = previewVideoRef.current;
+    const seekTo = () => {
+      if (!Number.isFinite(previewSeekRequest.seconds)) {
+        return;
+      }
+      const duration = Number.isFinite(video.duration) ? video.duration : null;
+      const nextSeconds =
+        duration == null
+          ? Math.max(0, previewSeekRequest.seconds)
+          : Math.min(Math.max(0, previewSeekRequest.seconds), duration);
+      video.currentTime = nextSeconds;
+    };
+
+    if (video.readyState >= 1) {
+      seekTo();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", seekTo, { once: true });
+    return () => {
+      video.removeEventListener("loadedmetadata", seekTo);
+    };
+  }, [previewSeekRequest, previewSource, selectedToolId]);
 
   return (
     <section className="h-full flex flex-col w-full relative bg-transparent">
@@ -132,7 +208,7 @@ export function WorkspaceReadingPane({
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {Object.entries(TOOL_TILES).map(([toolId, meta], index) => {
-                      const toolState = tools?.[toolId];
+                      const toolState = getToolState(tools, toolId);
                       const Icon = meta.icon;
                       const isDisabled = toolState?.available === false;
 
@@ -516,14 +592,134 @@ export function WorkspaceReadingPane({
                 ) : null
               )}
 
+              {selectedToolId === "knowledge-cards" && !toolsLoading && (
+                !tools?.knowledgeCards.available ? (
+                  <div className="workspace-muted-panel flex flex-col items-center justify-center min-h-[320px] text-center rounded-3xl border mt-10 p-6">
+                    <p className="text-xs font-bold text-stone-500 tracking-widest uppercase mb-2">Knowledge Cards</p>
+                    <h2 className="text-xl font-semibold text-stone-800 mb-2">需要先生成 AI 概况</h2>
+                    <p className="text-stone-500 text-sm max-w-md">知识卡片依赖 AI 概况的结构化理解，没有概况就没有抽取基础。</p>
+                  </div>
+                ) : !tools.knowledgeCards.generated ? (
+                  <div className="workspace-muted-panel flex flex-col items-center justify-center min-h-[320px] text-center rounded-3xl border mt-10 p-6">
+                    <p className="text-xs font-bold text-stone-500 tracking-widest uppercase mb-2">Knowledge Cards</p>
+                    <h2 className="text-xl font-semibold text-stone-800 mb-2">知识卡片尚未生成</h2>
+                    <p className="text-stone-500 text-sm max-w-md">
+                      这里展示的是独立的知识资产，不是章节摘要换皮。生成后会落盘到 `knowledge_cards.json`。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onGenerateKnowledgeCards}
+                      className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0070f3] dark:bg-white dark:text-black"
+                    >
+                      <BrainCircuit size={16} strokeWidth={2.2} />
+                      生成知识卡片
+                    </button>
+                  </div>
+                ) : knowledgeCardsLoading ? (
+                  <div className="workspace-muted-panel flex items-center justify-center min-h-[320px] rounded-3xl border">
+                    <div className="inline-flex items-center gap-2 text-stone-600 dark:text-stone-300 bg-white/95 dark:bg-stone-950 px-4 py-2 rounded-full shadow-sm border border-stone-200 dark:border-stone-700 text-sm">
+                      <LoaderCircle size={16} strokeWidth={2.2} className="animate-spin text-[#0070f3]" />
+                      载入知识卡片...
+                    </div>
+                  </div>
+                ) : hasKnowledgeCards ? (
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    {knowledgeCards.cards.map((card) => (
+                      <article
+                        key={card.id}
+                        className="workspace-elevated-panel rounded-[2rem] border p-6 transition-all hover:-translate-y-0.5 hover:border-stone-300 dark:hover:border-white/16"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+                              {card.kind}
+                            </p>
+                            <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+                          </div>
+                          {card.sourceRefs[0]?.startSeconds != null ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenCard(card)}
+                              className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200"
+                            >
+                              {formatRange(
+                                card.sourceRefs[0].startSeconds,
+                                card.sourceRefs[0].endSeconds ?? card.sourceRefs[0].startSeconds,
+                              )}
+                            </button>
+                          ) : null}
+                        </div>
+                        <p className="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{card.summary}</p>
+                        <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.details}</p>
+                        {card.tags.length ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {card.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {card.sourceRefs.length ? (
+                          <div className="mt-5 rounded-2xl border border-stone-200/80 bg-stone-50/80 p-4 dark:border-stone-800 dark:bg-stone-950/50">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Source</p>
+                            <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.sourceRefs[0].quote}</p>
+                          </div>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="workspace-muted-panel flex flex-col items-center justify-center min-h-[320px] text-center rounded-3xl border mt-10 p-6">
+                    <p className="text-xs font-bold text-stone-500 tracking-widest uppercase mb-2">Knowledge Cards</p>
+                    <h2 className="text-xl font-semibold text-stone-800 mb-2">还没有可展示的卡片</h2>
+                    <p className="text-stone-500 text-sm max-w-md">当前视频还没有抽取出足够稳定的知识原子，可稍后重新生成。</p>
+                  </div>
+                )
+              )}
+
+              {selectedToolId === "notes" && !toolsLoading ? (
+                <VideoNotesPanel
+                  notes={notes}
+                  notesLoading={notesLoading}
+                  savingNote={savingNote}
+                  onCreateNote={onCreateNote}
+                  onUpdateNote={onUpdateNote}
+                  onDeleteNote={onDeleteNote}
+                />
+              ) : null}
+
               {selectedToolId === "preview" && !toolsLoading ? (
                 <div className="flex flex-col gap-4">
                   <div className="workspace-muted-panel rounded-3xl border p-4">
                     <p className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase mb-2">Video Preview</p>
-                    <p className="text-sm text-stone-600 dark:text-stone-400">后续 AI 可根据问题自动切到这里，并跳转到对应时间点。当前先实现工具容器与预览能力。</p>
+                    <p className="text-sm text-stone-600 dark:text-stone-400">AI 现在可以根据当前视频的转写结果自动切到这里，并跳转到对应时间点。</p>
+                    {previewSeekRequest ? (
+                      <div className="mt-3 rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
+                        <p className="font-semibold">
+                          已定位到 {formatRange(previewSeekRequest.seconds, previewSeekRequest.endSeconds ?? previewSeekRequest.seconds)}
+                          {previewSeekRequest.chapterTitle ? ` · ${previewSeekRequest.chapterTitle}` : ""}
+                        </p>
+                        {previewSeekRequest.query ? (
+                          <p className="mt-1 text-sky-800/90 dark:text-sky-200/90">检索问题：{previewSeekRequest.query}</p>
+                        ) : null}
+                        {previewSeekRequest.matchedText ? (
+                          <p className="mt-2 line-clamp-3 text-sky-900/90 dark:text-sky-100/90">{previewSeekRequest.matchedText}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="workspace-elevated-panel overflow-hidden rounded-3xl border bg-black shadow-sm">
-                    <video key={previewSource} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
+                    <video
+                      key={previewSource}
+                      ref={previewVideoRef}
+                      className="h-full w-full max-h-[72vh] bg-black"
+                      controls
+                      preload="metadata"
+                    >
                       <source src={previewSource} />
                     </video>
                   </div>
@@ -535,5 +731,193 @@ export function WorkspaceReadingPane({
         )}
       </div>
     </section>
+  );
+}
+
+function VideoNotesPanel({
+  notes,
+  notesLoading,
+  savingNote,
+  onCreateNote,
+  onUpdateNote,
+  onDeleteNote,
+}) {
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftContent, setDraftContent] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingContent, setEditingContent] = useState("");
+
+  function handleCreateNote() {
+    if (!draftTitle.trim() || !draftContent.trim() || savingNote) {
+      return;
+    }
+    onCreateNote({
+      title: draftTitle,
+      content: draftContent,
+      source: "manual",
+    });
+    setDraftTitle("");
+    setDraftContent("");
+  }
+
+  function handleStartEdit(note) {
+    setEditingNoteId(note.id);
+    setEditingTitle(note.title);
+    setEditingContent(note.content);
+  }
+
+  function handleCancelEdit() {
+    setEditingNoteId(null);
+    setEditingTitle("");
+    setEditingContent("");
+  }
+
+  function handleSaveEdit() {
+    if (!editingNoteId || !editingTitle.trim() || !editingContent.trim() || savingNote) {
+      return;
+    }
+    onUpdateNote(editingNoteId, {
+      title: editingTitle,
+      content: editingContent,
+    });
+    handleCancelEdit();
+  }
+
+  if (notesLoading) {
+    return (
+      <div className="workspace-muted-panel flex items-center justify-center min-h-[320px] rounded-3xl border">
+        <div className="inline-flex items-center gap-2 text-stone-600 dark:text-stone-300 bg-white/95 dark:bg-stone-950 px-4 py-2 rounded-full shadow-sm border border-stone-200 dark:border-stone-700 text-sm">
+          <LoaderCircle size={16} strokeWidth={2.2} className="animate-spin text-[#0070f3]" />
+          载入笔记...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.92fr_1.08fr]">
+      <section className="workspace-muted-panel rounded-[2rem] border p-6">
+        <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">New Note</p>
+        <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">手动记一条笔记</h3>
+        <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+          你可以自己记，也可以在左侧对话里直接让 Agent “帮我记一下”，它会自动落到这里。
+        </p>
+        <div className="mt-6 flex flex-col gap-4">
+          <input
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            placeholder="笔记标题"
+            className="rounded-2xl border border-stone-200/80 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
+          />
+          <textarea
+            value={draftContent}
+            onChange={(event) => setDraftContent(event.target.value)}
+            placeholder="记录要点、结论或待办..."
+            className="min-h-[180px] rounded-3xl border border-stone-200/80 bg-white px-4 py-4 text-sm leading-relaxed text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
+          />
+          <button
+            type="button"
+            onClick={handleCreateNote}
+            disabled={savingNote || !draftTitle.trim() || !draftContent.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0070f3] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+          >
+            {savingNote ? <LoaderCircle size={16} className="animate-spin" /> : <PencilLine size={16} />}
+            保存笔记
+          </button>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        {(notes?.notes ?? []).length ? (
+          notes.notes.map((note) => {
+            const isEditing = editingNoteId === note.id;
+            return (
+              <article key={note.id} className="workspace-elevated-panel rounded-[2rem] border p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+                      {note.source === "agent" ? "Agent Note" : "Manual Note"}
+                    </p>
+                    {isEditing ? (
+                      <input
+                        value={editingTitle}
+                        onChange={(event) => setEditingTitle(event.target.value)}
+                        className="mt-2 w-full rounded-2xl border border-stone-200/80 bg-white px-4 py-3 text-base font-semibold text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
+                      />
+                    ) : (
+                      <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{note.title}</h3>
+                    )}
+                    <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+                      创建于 {note.createdAt.replace("T", " ").replace("Z", "")}
+                      {note.updatedAt !== note.createdAt ? ` · 更新于 ${note.updatedAt.replace("T", " ").replace("Z", "")}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSaveEdit}
+                          disabled={savingNote || !editingTitle.trim() || !editingContent.trim()}
+                          className="rounded-2xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0070f3] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+                        >
+                          保存
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          className="rounded-2xl border border-stone-200/80 px-3 py-2 text-xs font-semibold text-stone-600 transition hover:bg-stone-50 dark:border-stone-800 dark:text-stone-300 dark:hover:bg-stone-900"
+                        >
+                          取消
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(note)}
+                          className="rounded-2xl border border-stone-200/80 px-3 py-2 text-xs font-semibold text-stone-600 transition hover:bg-stone-50 dark:border-stone-800 dark:text-stone-300 dark:hover:bg-stone-900"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteNote(note.id)}
+                          disabled={savingNote}
+                          className="rounded-2xl border border-red-200/80 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/70 dark:text-red-300 dark:hover:bg-red-950/30"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing ? (
+                  <textarea
+                    value={editingContent}
+                    onChange={(event) => setEditingContent(event.target.value)}
+                    className="mt-4 min-h-[160px] w-full rounded-3xl border border-stone-200/80 bg-white px-4 py-4 text-sm leading-relaxed text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
+                  />
+                ) : (
+                  <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-stone-700 dark:text-stone-300">{note.content}</p>
+                )}
+              </article>
+            );
+          })
+        ) : (
+          <div className="workspace-muted-panel flex min-h-[320px] items-center justify-center rounded-[2rem] border border-dashed text-center">
+            <div className="max-w-md px-6 py-10">
+              <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Notes</p>
+              <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">这里还没有笔记</h3>
+              <p className="mt-3 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+                可以手动新增，也可以直接对 Agent 说“帮我记一下这个视频的重点”。
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

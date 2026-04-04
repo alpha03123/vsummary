@@ -10,23 +10,21 @@ from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 
 from backend.api.bootstrap import build_api_container
+from backend.api.settings_service import ProviderSettingsUpdate, SettingsValidationError, WorkspaceSettingsUpdate
 from backend.api.responses import (
+    AgentChatRequest,
+    AgentChatResponse,
     HealthResponse,
+    VideoChapterCardsResponse,
+    VideoKnowledgeCardsResponse,
     VideoLibraryResponse,
+    VideoNoteResponse,
+    VideoNotesResponse,
     VideoWorkspaceToolsResponse,
 )
+from backend.agent.memory.context import AgentContext
 from backend.video_summary.infrastructure.settings import (
-    EnvSettings,
-    VALID_TRANSCRIPTION_MODES,
-    WorkspaceUiSettings,
-    load_env_settings,
     load_settings,
-    replace_faster_whisper_model_size,
-    replace_faster_whisper_transcription_mode,
-    replace_openai_settings,
-    replace_workspace_ui_settings,
-    save_env_settings,
-    save_settings,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -37,6 +35,17 @@ app = FastAPI(title="video_include api")
 
 class GenerateVideoSummaryRequest(BaseModel):
     transcript_enhancement_enabled: bool | None = None
+
+
+class CreateVideoNoteRequest(BaseModel):
+    title: str
+    content: str
+    source: str = "manual"
+
+
+class UpdateVideoNoteRequest(BaseModel):
+    title: str
+    content: str
 
 
 class WorkspaceSettingsResponse(BaseModel):
@@ -82,68 +91,46 @@ def list_videos() -> VideoLibraryResponse:
 
 @app.get("/api/settings", response_model=WorkspaceSettingsResponse)
 def get_workspace_settings() -> WorkspaceSettingsResponse:
-    settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
+    settings = CONTAINER.settings_service.get_workspace_settings()
     return WorkspaceSettingsResponse(
-        theme=settings.workspace_ui.theme,
-        show_takeaways=settings.workspace_ui.show_takeaways,
-        ai_transcript_enhancement=settings.workspace_ui.ai_transcript_enhancement,
-        asr_model_quality=settings.asr.faster_whisper.model_size,
-        transcription_mode=settings.asr.faster_whisper.transcription_mode,
-        llm_provider=settings.openai.provider,
-        openai_base_url=settings.openai.base_url,
-        openai_model=settings.openai.model,
+        theme=settings.theme,
+        show_takeaways=settings.show_takeaways,
+        ai_transcript_enhancement=settings.ai_transcript_enhancement,
+        asr_model_quality=settings.asr_model_quality,
+        transcription_mode=settings.transcription_mode,
+        llm_provider=settings.llm_provider,
+        openai_base_url=settings.openai_base_url,
+        openai_model=settings.openai_model,
     )
 
 
 @app.put("/api/settings", response_model=WorkspaceSettingsResponse)
 def update_workspace_settings(request: UpdateWorkspaceSettingsRequest) -> WorkspaceSettingsResponse:
-    if request.theme not in {"light", "dark"}:
-        raise HTTPException(status_code=400, detail=f"unsupported theme '{request.theme}'")
-    if not CONTAINER.faster_whisper_model_manager.is_supported(request.asr_model_quality):
-        raise HTTPException(status_code=400, detail=f"unsupported asr model '{request.asr_model_quality}'")
-    if request.transcription_mode not in VALID_TRANSCRIPTION_MODES:
-        raise HTTPException(status_code=400, detail=f"unsupported transcription mode '{request.transcription_mode}'")
-    if request.llm_provider != "openai_compatible":
-        raise HTTPException(status_code=400, detail=f"unsupported llm provider '{request.llm_provider}'")
-    if not request.openai_base_url.strip():
-        raise HTTPException(status_code=400, detail="openai_base_url is required")
-    if not request.openai_model.strip():
-        raise HTTPException(status_code=400, detail="openai_model is required")
+    try:
+        settings = CONTAINER.settings_service.update_workspace_settings(
+            WorkspaceSettingsUpdate(
+                theme=request.theme,
+                show_takeaways=request.show_takeaways,
+                ai_transcript_enhancement=request.ai_transcript_enhancement,
+                asr_model_quality=request.asr_model_quality,
+                transcription_mode=request.transcription_mode,
+                llm_provider=request.llm_provider,
+                openai_base_url=request.openai_base_url,
+                openai_model=request.openai_model,
+            )
+        )
+    except SettingsValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
-    current_settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
-    next_workspace_ui = WorkspaceUiSettings(
-        theme=request.theme,
-        show_takeaways=request.show_takeaways,
-        ai_transcript_enhancement=request.ai_transcript_enhancement,
-    )
-    next_settings = replace_workspace_ui_settings(current_settings, next_workspace_ui)
-    next_settings = replace_faster_whisper_model_size(next_settings, request.asr_model_quality)
-    next_settings = replace_faster_whisper_transcription_mode(next_settings, request.transcription_mode)
-    next_settings = replace_openai_settings(
-        next_settings,
-        provider=request.llm_provider,
-        base_url=request.openai_base_url.strip(),
-        model=request.openai_model.strip(),
-    )
-    save_settings(CONTAINER.config_path, next_settings)
-    save_env_settings(
-        CONTAINER.root_dir,
-        EnvSettings(
-            provider=request.llm_provider,
-            base_url=request.openai_base_url.strip(),
-            model=request.openai_model.strip(),
-            api_key=load_env_settings(CONTAINER.root_dir).api_key,
-        ),
-    )
     return WorkspaceSettingsResponse(
-        theme=next_workspace_ui.theme,
-        show_takeaways=next_workspace_ui.show_takeaways,
-        ai_transcript_enhancement=next_workspace_ui.ai_transcript_enhancement,
-        asr_model_quality=request.asr_model_quality,
-        transcription_mode=request.transcription_mode,
-        llm_provider=request.llm_provider,
-        openai_base_url=request.openai_base_url.strip(),
-        openai_model=request.openai_model.strip(),
+        theme=settings.theme,
+        show_takeaways=settings.show_takeaways,
+        ai_transcript_enhancement=settings.ai_transcript_enhancement,
+        asr_model_quality=settings.asr_model_quality,
+        transcription_mode=settings.transcription_mode,
+        llm_provider=settings.llm_provider,
+        openai_base_url=settings.openai_base_url,
+        openai_model=settings.openai_model,
     )
 
 
@@ -163,46 +150,34 @@ class UpdateProviderSettingsRequest(BaseModel):
 
 @app.get("/api/provider-settings", response_model=ProviderSettingsResponse)
 def get_provider_settings() -> ProviderSettingsResponse:
-    env_settings = load_env_settings(CONTAINER.root_dir)
+    env_settings = CONTAINER.settings_service.get_provider_settings()
     return ProviderSettingsResponse(
-        llm_provider=env_settings.provider,
-        openai_base_url=env_settings.base_url,
-        openai_model=env_settings.model,
-        openai_api_key=env_settings.api_key,
+        llm_provider=env_settings.llm_provider,
+        openai_base_url=env_settings.openai_base_url,
+        openai_model=env_settings.openai_model,
+        openai_api_key=env_settings.openai_api_key,
     )
 
 
 @app.put("/api/provider-settings", response_model=ProviderSettingsResponse)
 def update_provider_settings(request: UpdateProviderSettingsRequest) -> ProviderSettingsResponse:
-    if request.llm_provider != "openai_compatible":
-        raise HTTPException(status_code=400, detail=f"unsupported llm provider '{request.llm_provider}'")
-    if not request.openai_base_url.strip():
-        raise HTTPException(status_code=400, detail="openai_base_url is required")
-    if not request.openai_model.strip():
-        raise HTTPException(status_code=400, detail="openai_model is required")
-
-    env_settings = EnvSettings(
-        provider=request.llm_provider,
-        base_url=request.openai_base_url.strip(),
-        model=request.openai_model.strip(),
-        api_key=request.openai_api_key,
-    )
-    save_env_settings(CONTAINER.root_dir, env_settings)
-
-    current_settings = load_settings(CONTAINER.config_path, CONTAINER.root_dir)
-    next_settings = replace_openai_settings(
-        current_settings,
-        provider=env_settings.provider,
-        base_url=env_settings.base_url,
-        model=env_settings.model,
-    )
-    save_settings(CONTAINER.config_path, next_settings)
+    try:
+        env_settings = CONTAINER.settings_service.update_provider_settings(
+            ProviderSettingsUpdate(
+                llm_provider=request.llm_provider,
+                openai_base_url=request.openai_base_url,
+                openai_model=request.openai_model,
+                openai_api_key=request.openai_api_key,
+            )
+        )
+    except SettingsValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     return ProviderSettingsResponse(
-        llm_provider=env_settings.provider,
-        openai_base_url=env_settings.base_url,
-        openai_model=env_settings.model,
-        openai_api_key=env_settings.api_key,
+        llm_provider=env_settings.llm_provider,
+        openai_base_url=env_settings.openai_base_url,
+        openai_model=env_settings.openai_model,
+        openai_api_key=env_settings.openai_api_key,
     )
 
 
@@ -253,20 +228,12 @@ def download_faster_whisper_model(model_id: str) -> FasterWhisperModelResponse:
 @app.get("/api/asr/faster-whisper/models/{model_id}/download/progress")
 async def stream_faster_whisper_model_download_progress(model_id: str) -> StreamingResponse:
     task_id = _build_model_download_task_id(model_id)
-
-    async def event_stream():
-        last_sequence = -1
-        while True:
-            snapshot = CONTAINER.model_download_progress_tracker.get_snapshot(task_id)
-            if snapshot.sequence != last_sequence:
-                last_sequence = snapshot.sequence
-                yield f"data: {json.dumps(snapshot.to_dict(), ensure_ascii=False)}\n\n"
-            if snapshot.status in {"completed", "failed", "cancelled"}:
-                break
-            await asyncio.sleep(0.25)
-
     return StreamingResponse(
-        event_stream(),
+        _stream_progress_events(
+            tracker=CONTAINER.model_download_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -297,6 +264,100 @@ def get_video_mindmap(series_id: str, video_id: str) -> dict[str, object]:
         raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
 
     return video_mindmap.mindmap
+
+
+@app.get("/api/videos/{series_id}/{video_id}/cards", response_model=VideoChapterCardsResponse)
+def get_video_cards(series_id: str, video_id: str) -> VideoChapterCardsResponse:
+    video_cards = CONTAINER.get_video_chapter_cards.run(series_id, video_id)
+    if video_cards is None:
+        raise HTTPException(status_code=404, detail=f"cards not found for video '{series_id}/{video_id}'")
+
+    return VideoChapterCardsResponse.from_view(video_cards)
+
+
+@app.get("/api/videos/{series_id}/{video_id}/knowledge-cards", response_model=VideoKnowledgeCardsResponse)
+def get_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowledgeCardsResponse:
+    video_cards = CONTAINER.get_video_cards.run(series_id, video_id)
+    if video_cards is None:
+        raise HTTPException(status_code=404, detail=f"knowledge cards not found for video '{series_id}/{video_id}'")
+
+    return VideoKnowledgeCardsResponse.from_view(video_cards)
+
+
+@app.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate", response_model=VideoKnowledgeCardsResponse)
+def generate_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowledgeCardsResponse:
+    video_cards = CONTAINER.generate_video_cards.run(series_id, video_id)
+    if CONTAINER.get_video_source.run(series_id, video_id) is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    if video_cards is None:
+        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+    return VideoKnowledgeCardsResponse.from_view(video_cards)
+
+
+@app.get("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNotesResponse)
+def get_video_notes(series_id: str, video_id: str) -> VideoNotesResponse:
+    video_notes = CONTAINER.get_video_notes.run(series_id, video_id)
+    if video_notes is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+
+    return VideoNotesResponse.from_view(video_notes)
+
+
+@app.post("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNoteResponse)
+def create_video_note(
+    series_id: str,
+    video_id: str,
+    request: CreateVideoNoteRequest,
+) -> VideoNoteResponse:
+    try:
+        note = CONTAINER.create_video_note.run(
+            series_id,
+            video_id,
+            title=request.title,
+            content=request.content,
+            source=request.source,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    if note is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    return VideoNoteResponse.from_view(note)
+
+
+@app.put("/api/videos/{series_id}/{video_id}/notes/{note_id}", response_model=VideoNoteResponse)
+def update_video_note(
+    series_id: str,
+    video_id: str,
+    note_id: str,
+    request: UpdateVideoNoteRequest,
+) -> VideoNoteResponse:
+    try:
+        note = CONTAINER.update_video_note.run(
+            series_id,
+            video_id,
+            note_id,
+            title=request.title,
+            content=request.content,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    if CONTAINER.get_video_source.run(series_id, video_id) is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    if note is None:
+        raise HTTPException(status_code=404, detail=f"note not found '{note_id}'")
+    return VideoNoteResponse.from_view(note)
+
+
+@app.delete("/api/videos/{series_id}/{video_id}/notes/{note_id}")
+def delete_video_note(series_id: str, video_id: str, note_id: str) -> dict[str, object]:
+    deleted = CONTAINER.delete_video_note.run(series_id, video_id, note_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    if deleted is False:
+        raise HTTPException(status_code=404, detail=f"note not found '{note_id}'")
+    return {"status": "deleted", "note_id": note_id}
 
 
 @app.get("/api/videos/{series_id}/{video_id}/tools", response_model=VideoWorkspaceToolsResponse)
@@ -345,23 +406,40 @@ def generate_video_mindmap(series_id: str, video_id: str) -> dict[str, object]:
     return video_mindmap.mindmap
 
 
+@app.post("/api/agent/chat", response_model=AgentChatResponse)
+def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
+    context_override = None
+    if request.context is not None:
+        context_override = AgentContext(
+            session_id=request.session_id,
+            scope_type=request.context.scope_type or "library",
+            series_id=request.context.series_id,
+            series_title=request.context.series_title,
+            video_id=request.context.video_id,
+            video_title=request.context.video_title,
+            selected_tool=request.context.selected_tool,
+        )
+
+    try:
+        result = CONTAINER.get_agent_service().run_with_context(
+            session_id=request.session_id,
+            user_message=request.message,
+            context_override=context_override,
+        )
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return AgentChatResponse.from_result(result)
+
+
 @app.get("/api/videos/{series_id}/{video_id}/generate/progress")
 async def stream_video_generation_progress(series_id: str, video_id: str) -> StreamingResponse:
     task_id = _build_task_id(series_id, video_id)
-
-    async def event_stream():
-        last_sequence = -1
-        while True:
-            snapshot = CONTAINER.generation_progress_tracker.get_snapshot(task_id)
-            if snapshot.sequence != last_sequence:
-                last_sequence = snapshot.sequence
-                yield f"data: {json.dumps(snapshot.to_dict(), ensure_ascii=False)}\n\n"
-            if snapshot.status in {"completed", "failed"}:
-                break
-            await asyncio.sleep(0.25)
-
     return StreamingResponse(
-        event_stream(),
+        _stream_progress_events(
+            tracker=CONTAINER.generation_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed"},
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -376,3 +454,15 @@ def _build_task_id(series_id: str, video_id: str) -> str:
 
 def _build_model_download_task_id(model_id: str) -> str:
     return f"asr-download/{model_id}"
+
+
+async def _stream_progress_events(*, tracker, task_id: str, terminal_statuses: set[str]):
+    last_sequence = -1
+    while True:
+        snapshot = tracker.get_snapshot(task_id)
+        if snapshot.sequence != last_sequence:
+            last_sequence = snapshot.sequence
+            yield f"data: {json.dumps(snapshot.to_dict(), ensure_ascii=False)}\n\n"
+        if snapshot.status in terminal_statuses:
+            break
+        await asyncio.sleep(0.25)

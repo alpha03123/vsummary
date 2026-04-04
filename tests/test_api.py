@@ -68,6 +68,35 @@ class FakeMindmapGenerator:
         return payload
 
 
+class FakeAgentService:
+    def __init__(self) -> None:
+        self.last_context_override = None
+
+    def run_with_context(self, *, session_id: str, user_message: str, context_override=None):
+        from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult
+        from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
+
+        self.last_context_override = context_override
+        return AgentTurnResult(
+            assistant_message=f"已收到：{user_message}",
+            plan=AgentActionPlan(
+                intent_type="open_tool",
+                scope_type="video",
+                assistant_message="",
+                tool_calls=[],
+                reason=f"session={session_id}",
+                out_of_scope_reason="",
+            ),
+            tool_results=[
+                ToolExecutionResult(
+                    tool_name=ToolName.OPEN_OVERVIEW,
+                    status="ok",
+                    payload={"selected_tool": "overview"},
+                )
+            ],
+        )
+
+
 class FakeFasterWhisperModelManager:
     def __init__(self) -> None:
         self.downloaded_models = {"large-v3-turbo"}
@@ -184,6 +213,11 @@ ai_transcript_enhancement = true
             mindmap_generator=FakeMindmapGenerator(),
             faster_whisper_model_manager=FakeFasterWhisperModelManager(),
         )
+        self.fake_agent_service = FakeAgentService()
+        api_module.CONTAINER = api_module.CONTAINER.__class__(**{
+            **api_module.CONTAINER.__dict__,
+            "get_agent_service": lambda: self.fake_agent_service,
+        })
         transport = httpx.ASGITransport(app=app)
         self.client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
 
@@ -375,9 +409,76 @@ ai_transcript_enhancement = true
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["overview"]["generated"])
+        self.assertFalse(payload["knowledge_cards"]["generated"])
         self.assertTrue(payload["mindmap"]["generated"])
+        self.assertTrue(payload["notes"]["available"])
         self.assertTrue(payload["preview"]["available"])
         self.assertEqual(payload["preview"]["preview_url"], "/api/videos/series-a/advanced/preview")
+
+    async def test_cards_endpoint_derives_cards_from_summary(self) -> None:
+        response = await self.client.get("/api/videos/series-a/advanced/cards")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["series_id"], "series-a")
+        self.assertEqual(payload["video_id"], "advanced")
+        self.assertEqual(payload["cards"][0]["id"], "chapter-1")
+        self.assertEqual(payload["cards"][0]["kind"], "chapter")
+
+    async def test_generate_knowledge_cards_endpoint_creates_independent_knowledge_cards_file(self) -> None:
+        response = await self.client.post("/api/videos/series-a/advanced/knowledge-cards/generate")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["series_id"], "series-a")
+        self.assertEqual(payload["video_id"], "advanced")
+        self.assertEqual(payload["cards"][0]["kind"], "concept")
+        self.assertIn("source_refs", payload["cards"][0])
+        self.assertTrue((self.root / "workspace" / "series-a" / "advanced" / "knowledge_cards.json").exists())
+
+    async def test_knowledge_cards_endpoint_returns_404_before_generation(self) -> None:
+        response = await self.client.get("/api/videos/series-a/advanced/knowledge-cards")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "knowledge cards not found for video 'series-a/advanced'")
+
+    async def test_notes_crud_endpoints_persist_notes(self) -> None:
+        create_response = await self.client.post(
+            "/api/videos/series-a/advanced/notes",
+            json={
+                "title": "准备工作",
+                "content": "记下 API Key 申请是前置步骤。",
+                "source": "manual",
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 200)
+        created_note = create_response.json()
+        note_id = created_note["id"]
+        self.assertEqual(created_note["title"], "准备工作")
+        self.assertEqual(created_note["source"], "manual")
+
+        list_response = await self.client.get("/api/videos/series-a/advanced/notes")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()["notes"]), 1)
+
+        update_response = await self.client.put(
+            f"/api/videos/series-a/advanced/notes/{note_id}",
+            json={
+                "title": "准备工作更新",
+                "content": "API Key 申请和配额确认都要提前做。",
+            },
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.json()["title"], "准备工作更新")
+
+        delete_response = await self.client.delete(f"/api/videos/series-a/advanced/notes/{note_id}")
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.json()["status"], "deleted")
+
+        final_list_response = await self.client.get("/api/videos/series-a/advanced/notes")
+        self.assertEqual(final_list_response.status_code, 200)
+        self.assertEqual(final_list_response.json()["notes"], [])
 
     async def test_mindmap_endpoint_returns_existing_mindmap(self) -> None:
         response = await self.client.get("/api/videos/series-a/advanced/mindmap")
@@ -407,6 +508,68 @@ ai_transcript_enhancement = true
         self.assertEqual(progress_response.status_code, 200)
         self.assertIn('"status": "completed"', progress_response.text)
         self.assertIn('"progress": 100.0', progress_response.text)
+
+    async def test_agent_chat_endpoint_returns_tool_results(self) -> None:
+        response = await self.client.post(
+            "/api/agent/chat",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "message": "打开概况",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["assistant_message"], "已收到：打开概况")
+        self.assertEqual(payload["intent_type"], "open_tool")
+        self.assertEqual(payload["scope_type"], "video")
+        self.assertEqual(payload["tool_results"][0]["tool_name"], "open_overview")
+        self.assertEqual(payload["tool_results"][0]["payload"]["selected_tool"], "overview")
+        self.assertIsNotNone(self.fake_agent_service.last_context_override)
+        self.assertEqual(self.fake_agent_service.last_context_override.selected_tool, "overview")
+        self.assertEqual(self.fake_agent_service.last_context_override.video_id, "advanced")
+
+    async def test_agent_chat_endpoint_returns_503_when_agent_is_not_configured(self) -> None:
+        (self.root / ".env").write_text(
+            "\n".join(
+                [
+                    "OPENAI_PROVIDER=openai_compatible",
+                    "OPENAI_BASE_URL=http://127.0.0.1:8317/v1/responses",
+                    "OPENAI_MODEL=gpt-5.4",
+                    "OPENAI_API_KEY=",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        api_module.CONTAINER = build_api_container(
+            self.root,
+            generator=FakeGenerator(),
+            mindmap_generator=FakeMindmapGenerator(),
+            faster_whisper_model_manager=FakeFasterWhisperModelManager(),
+        )
+
+        health_response = await self.client.get("/api/health")
+        self.assertEqual(health_response.status_code, 200)
+
+        response = await self.client.post(
+            "/api/agent/chat",
+            json={
+                "session_id": "library",
+                "message": "打开概况",
+            },
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "缺少 API Key，无法调用 Agent 模型。")
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ class GenerateVideoSummary:
         transcript_stem = output_dir / "transcript"
 
         if progress_reporter is not None:
-            progress_reporter.update("probe", 5.0, "正在探测视频时长")
+            progress_reporter.update("probe", 5.0, "正在分析视频信息")
         video = VideoAsset(
             source_path=video_path,
             title=video_path.stem,
@@ -45,10 +45,10 @@ class GenerateVideoSummary:
         )
 
         if progress_reporter is not None:
-            progress_reporter.update("extract_audio", 15.0, "正在提取音频")
+            progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
         self._media_processor.extract_audio(video_path, audio_path)
         if progress_reporter is not None:
-            progress_reporter.update("transcribe", 20.0, "正在转写音频")
+            progress_reporter.update("transcribe", 20.0, "正在使用 Whisper 转写音频")
         transcript = self._transcriber.transcribe(
             audio_path,
             transcript_stem,
@@ -58,14 +58,14 @@ class GenerateVideoSummary:
                 else lambda ratio: progress_reporter.update(
                     "transcribe",
                     20.0 + max(0.0, min(1.0, ratio)) * 55.0,
-                    "Whisper 正在转写",
+                    "Whisper 正在转写音频",
                 )
             ),
         )
 
         if self._transcript_enhancer is not None:
             if progress_reporter is not None:
-                progress_reporter.update("enhance_transcript", 78.0, "正在纠正转写文本")
+                progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
             transcript = self._transcript_enhancer.enhance(video, transcript, output_dir)
 
         (output_dir / "transcript.cleaned.json").write_text(

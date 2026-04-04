@@ -53,6 +53,60 @@ function asTool(value, label) {
   };
 }
 
+function asChapterCard(value, label) {
+  const record = asRecord(value, label);
+  return {
+    id: asString(record.id, `${label}.id`),
+    title: asString(record.title, `${label}.title`),
+    summary: asString(record.summary, `${label}.summary`),
+    keyPoints: Array.isArray(record.key_points) ? asStringList(record.key_points, `${label}.key_points`) : [],
+    startSeconds: typeof record.start_seconds === "number" ? record.start_seconds : null,
+    endSeconds: typeof record.end_seconds === "number" ? record.end_seconds : null,
+    kind: asString(record.kind, `${label}.kind`),
+  };
+}
+
+function asKnowledgeCardSourceRef(value, label) {
+  const record = asRecord(value, label);
+  return {
+    chapterId: typeof record.chapter_id === "string" ? record.chapter_id : null,
+    startSeconds: typeof record.start_seconds === "number" ? record.start_seconds : null,
+    endSeconds: typeof record.end_seconds === "number" ? record.end_seconds : null,
+    quote: asString(record.quote, `${label}.quote`),
+  };
+}
+
+function asKnowledgeCard(value, label) {
+  const record = asRecord(value, label);
+  return {
+    id: asString(record.id, `${label}.id`),
+    title: asString(record.title, `${label}.title`),
+    kind: asString(record.kind, `${label}.kind`),
+    summary: asString(record.summary, `${label}.summary`),
+    details: asString(record.details, `${label}.details`),
+    tags: Array.isArray(record.tags) ? asStringList(record.tags, `${label}.tags`) : [],
+    keywords: Array.isArray(record.keywords) ? asStringList(record.keywords, `${label}.keywords`) : [],
+    sourceRefs: Array.isArray(record.source_refs)
+      ? record.source_refs.map((item, index) => asKnowledgeCardSourceRef(item, `${label}.source_refs[${index}]`))
+      : [],
+    relatedCardIds: Array.isArray(record.related_card_ids)
+      ? asStringList(record.related_card_ids, `${label}.related_card_ids`)
+      : [],
+  };
+}
+
+function asNote(value, label) {
+  const record = asRecord(value, label);
+  return {
+    id: asString(record.id, `${label}.id`),
+    title: asString(record.title, `${label}.title`),
+    content: asString(record.content, `${label}.content`),
+    source: asString(record.source, `${label}.source`),
+    createdAt: asString(record.created_at, `${label}.created_at`),
+    updatedAt: asString(record.updated_at, `${label}.updated_at`),
+  };
+}
+
 function asChapter(value, label) {
   const record = asRecord(value, label);
   return {
@@ -129,10 +183,55 @@ export function toWorkspaceTools(payload) {
     seriesId: asString(record.series_id, "tools.series_id"),
     videoId: asString(record.video_id, "tools.video_id"),
     overview: asTool(record.overview, "tools.overview"),
+    knowledgeCards: asTool(record.knowledge_cards, "tools.knowledge_cards"),
     mindmap: asTool(record.mindmap, "tools.mindmap"),
+    notes: asTool(record.notes, "tools.notes"),
     preview: asTool(record.preview, "tools.preview"),
     aiTodo: asOptionalString(record.ai_todo),
   };
+}
+
+export function toWorkspaceCards(payload) {
+  const record = asRecord(payload, "cards");
+  if (!Array.isArray(record.cards)) {
+    throw new Error("cards.cards 不是有效列表。");
+  }
+  return {
+    seriesId: asString(record.series_id, "cards.series_id"),
+    videoId: asString(record.video_id, "cards.video_id"),
+    title: asString(record.title, "cards.title"),
+    cards: record.cards.map((item, index) => asChapterCard(item, `cards.cards[${index}]`)),
+  };
+}
+
+export function toWorkspaceKnowledgeCards(payload) {
+  const record = asRecord(payload, "knowledgeCards");
+  if (!Array.isArray(record.cards)) {
+    throw new Error("knowledgeCards.cards 不是有效列表。");
+  }
+  return {
+    seriesId: asString(record.series_id, "knowledgeCards.series_id"),
+    videoId: asString(record.video_id, "knowledgeCards.video_id"),
+    title: asString(record.title, "knowledgeCards.title"),
+    cards: record.cards.map((item, index) => asKnowledgeCard(item, `knowledgeCards.cards[${index}]`)),
+  };
+}
+
+export function toWorkspaceNotes(payload) {
+  const record = asRecord(payload, "notes");
+  if (!Array.isArray(record.notes)) {
+    throw new Error("notes.notes 不是有效列表。");
+  }
+  return {
+    seriesId: asString(record.series_id, "notes.series_id"),
+    videoId: asString(record.video_id, "notes.video_id"),
+    title: asString(record.title, "notes.title"),
+    notes: record.notes.map((item, index) => asNote(item, `notes.notes[${index}]`)),
+  };
+}
+
+export function toWorkspaceNote(payload) {
+  return asNote(payload, "note");
 }
 
 export function toWorkspaceLibrary(payload) {

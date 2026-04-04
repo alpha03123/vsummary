@@ -1,4 +1,13 @@
-import { toWorkspaceLibrary, toWorkspaceMindmap, toWorkspaceSummary, toWorkspaceTools } from "./workspaceViewModel";
+import {
+  toWorkspaceCards,
+  toWorkspaceKnowledgeCards,
+  toWorkspaceLibrary,
+  toWorkspaceMindmap,
+  toWorkspaceNote,
+  toWorkspaceNotes,
+  toWorkspaceSummary,
+  toWorkspaceTools,
+} from "./workspaceViewModel";
 
 export async function loadWorkspaceLibrary() {
   return toWorkspaceLibrary(await fetchJson("/api/videos"));
@@ -141,6 +150,65 @@ export async function loadVideoMindmap(seriesId, videoId) {
   return toWorkspaceMindmap(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap`));
 }
 
+export async function loadVideoCards(seriesId, videoId) {
+  return toWorkspaceCards(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/cards`));
+}
+
+export async function loadVideoKnowledgeCards(seriesId, videoId) {
+  return toWorkspaceKnowledgeCards(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards`),
+  );
+}
+
+export async function generateVideoKnowledgeCards(seriesId, videoId) {
+  return toWorkspaceKnowledgeCards(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards/generate`, {
+      method: "POST",
+    }),
+  );
+}
+
+export async function loadVideoNotes(seriesId, videoId) {
+  return toWorkspaceNotes(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes`));
+}
+
+export async function createVideoNote(seriesId, videoId, note) {
+  return toWorkspaceNote(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: note.title,
+        content: note.content,
+        source: note.source,
+      }),
+    }),
+  );
+}
+
+export async function updateVideoNote(seriesId, videoId, noteId, note) {
+  return toWorkspaceNote(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes/${encodeURIComponent(noteId)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: note.title,
+        content: note.content,
+      }),
+    }),
+  );
+}
+
+export async function deleteVideoNote(seriesId, videoId, noteId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes/${encodeURIComponent(noteId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function generateVideoSummary(seriesId, videoId, options = {}) {
   return toWorkspaceSummary(
     await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate`, {
@@ -164,6 +232,20 @@ export async function generateVideoMindmap(seriesId, videoId) {
       method: "POST",
     }),
   );
+}
+
+export async function sendAgentChat(sessionId, message, context) {
+  return fetchJson("/api/agent/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      context: context ?? null,
+    }),
+  });
 }
 
 export function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
@@ -228,5 +310,13 @@ function parseProgressMessage(rawValue) {
     progress: typeof payload.progress === "number" ? payload.progress : null,
     detail: typeof payload.detail === "string" ? payload.detail : null,
     error: typeof payload.error === "string" ? payload.error : null,
+    startedAt: typeof payload.started_at === "number" ? payload.started_at : null,
+    stageStartedAt: typeof payload.stage_started_at === "number" ? payload.stage_started_at : null,
+    elapsedSeconds: typeof payload.elapsed_seconds === "number" ? payload.elapsed_seconds : null,
+    stageElapsedSeconds:
+      typeof payload.stage_elapsed_seconds === "number" ? payload.stage_elapsed_seconds : null,
+    estimatedTotalSeconds:
+      typeof payload.estimated_total_seconds === "number" ? payload.estimated_total_seconds : null,
+    remainingSeconds: typeof payload.remaining_seconds === "number" ? payload.remaining_seconds : null,
   };
 }

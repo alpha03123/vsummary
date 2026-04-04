@@ -2,33 +2,44 @@ import { useEffect, useMemo, useReducer } from "react";
 
 import {
   cancelFasterWhisperModelDownload,
+  createVideoNote,
+  deleteVideoNote,
   downloadFasterWhisperModel,
+  generateVideoKnowledgeCards,
   generateVideoMindmap,
   generateVideoSummary,
   getVideoPreviewUrl,
   loadFasterWhisperModels,
   loadProviderSettings,
+  loadVideoKnowledgeCards,
+  sendAgentChat,
   loadVideoMindmap,
+  loadVideoNotes,
   loadVideoSummary,
   loadWorkspaceSettings,
   loadVideoTools,
   loadWorkspaceLibrary,
   subscribeFasterWhisperModelDownloadProgress,
   subscribeVideoGenerationProgress,
+  updateVideoNote,
   updateProviderSettings,
   updateWorkspaceSettings,
 } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
   createInitialWorkspaceState,
+  createWelcomeChatMessages,
   createMindmapLoadedState,
   createSummaryLoadedState,
   createWorkspaceLoadedState,
   findSeriesById,
   findVideoById,
+  getChatMessagesForScope,
   markVideoAsReady,
   normalizeUiSettings,
   resetUiSettings,
+  buildChatScopeKey,
+  setChatMessagesForScope,
 } from "./workspaceState";
 
 function workspaceReducer(state, action) {
@@ -81,15 +92,20 @@ function workspaceReducer(state, action) {
         toolsLoading: false,
         summaryLoading: false,
         mindmapLoading: false,
+        knowledgeCardsLoading: false,
+        notesLoading: false,
+        savingNote: false,
         generatingVideoKey: null,
         generatingMindmapKey: null,
         generationProgress: null,
+        generationSnapshot: null,
         downloadingModelId: null,
         modelDownloadProgress: null,
         error: action.message,
         fasterWhisperModelsLoading: false,
       };
     case "series_selected": {
+      const chatScopeKey = buildChatScopeKey("series", action.seriesId);
       return {
         ...state,
         tools: null,
@@ -99,12 +115,19 @@ function workspaceReducer(state, action) {
         selectedToolId: "series-home",
         summary: null,
         mindmap: null,
+        knowledgeCards: null,
+        notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
+        previewSeekRequest: null,
         generationProgress: null,
+        generationSnapshot: null,
+        chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
+        chatPending: false,
       };
     }
-    case "library_home_entered":
+    case "library_home_entered": {
+      const chatScopeKey = buildChatScopeKey("library", null);
       return {
         ...state,
         tools: null,
@@ -114,14 +137,22 @@ function workspaceReducer(state, action) {
         selectedToolId: "studio",
         summary: null,
         mindmap: null,
+        knowledgeCards: null,
+        notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
+        previewSeekRequest: null,
         toolsLoading: false,
         summaryLoading: false,
         mindmapLoading: false,
         generationProgress: null,
+        generationSnapshot: null,
+        chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
+        chatPending: false,
       };
-    case "video_selected":
+    }
+    case "video_selected": {
+      const chatScopeKey = buildChatScopeKey("video", action.seriesId);
       return {
         ...state,
         selectedSeriesId: action.seriesId,
@@ -131,17 +162,25 @@ function workspaceReducer(state, action) {
         tools: null,
         summary: null,
         mindmap: null,
+        knowledgeCards: null,
+        notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
+        previewSeekRequest: null,
         generationProgress: null,
+        generationSnapshot: null,
+        chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
+        chatPending: false,
       };
+    }
     case "tool_selected":
       return {
         ...state,
         selectedToolId: action.toolId,
         error: "",
       };
-    case "series_context_selected":
+    case "series_context_selected": {
+      const chatScopeKey = buildChatScopeKey("series", state.selectedSeriesId);
       return {
         ...state,
         selectedContextType: "series",
@@ -150,10 +189,17 @@ function workspaceReducer(state, action) {
         tools: null,
         summary: null,
         mindmap: null,
+        knowledgeCards: null,
+        notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
+        previewSeekRequest: null,
         generationProgress: null,
+        generationSnapshot: null,
+        chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
+        chatPending: false,
       };
+    }
     case "tools_loading_started":
       return {
         ...state,
@@ -196,6 +242,86 @@ function workspaceReducer(state, action) {
         mindmapLoading: false,
         selectedNodeId: null,
       };
+    case "knowledge_cards_loading_started":
+      return {
+        ...state,
+        knowledgeCardsLoading: true,
+        error: "",
+      };
+    case "knowledge_cards_loaded":
+      return {
+        ...state,
+        knowledgeCards: action.cards,
+        knowledgeCardsLoading: false,
+      };
+    case "knowledge_cards_cleared":
+      return {
+        ...state,
+        knowledgeCards: null,
+        knowledgeCardsLoading: false,
+      };
+    case "notes_loading_started":
+      return {
+        ...state,
+        notesLoading: true,
+        error: "",
+      };
+    case "notes_loaded":
+      return {
+        ...state,
+        notes: action.notes,
+        notesLoading: false,
+      };
+    case "notes_cleared":
+      return {
+        ...state,
+        notes: null,
+        notesLoading: false,
+      };
+    case "note_save_started":
+      return {
+        ...state,
+        savingNote: true,
+        error: "",
+      };
+    case "note_created":
+      return {
+        ...state,
+        savingNote: false,
+        notes: state.notes == null
+          ? {
+              seriesId: action.seriesId,
+              videoId: action.videoId,
+              title: action.videoTitle,
+              notes: [action.note],
+            }
+          : {
+              ...state.notes,
+              notes: [action.note, ...state.notes.notes],
+            },
+      };
+    case "note_updated":
+      return {
+        ...state,
+        savingNote: false,
+        notes: state.notes == null
+          ? state.notes
+          : {
+              ...state.notes,
+              notes: state.notes.notes.map((note) => (note.id === action.note.id ? action.note : note)),
+            },
+      };
+    case "note_deleted":
+      return {
+        ...state,
+        savingNote: false,
+        notes: state.notes == null
+          ? state.notes
+          : {
+              ...state.notes,
+              notes: state.notes.notes.filter((note) => note.id !== action.noteId),
+            },
+      };
     case "chapter_selected":
       return {
         ...state,
@@ -207,11 +333,43 @@ function workspaceReducer(state, action) {
         selectedNodeId: action.nodeId,
         selectedChapterId: action.chapterId ?? state.selectedChapterId,
       };
+    case "preview_seek_requested":
+      return {
+        ...state,
+        previewSeekRequest: {
+          seconds: action.seconds,
+          endSeconds: action.endSeconds ?? null,
+          query: action.query ?? "",
+          matchedText: action.matchedText ?? "",
+          chapterTitle: action.chapterTitle ?? "",
+          requestId: action.requestId,
+        },
+      };
     case "settings_panel_toggled":
       return {
         ...state,
         settingsPanelOpen: !state.settingsPanelOpen,
       };
+    case "chat_request_started":
+      return applyChatThreadUpdate(state, [
+        ...state.chatMessages,
+        {
+          id: action.userMessageId,
+          role: "user",
+          content: action.message,
+          meta: "You • Just now",
+        },
+      ], true);
+    case "chat_response_received":
+      return applyChatThreadUpdate(state, [
+        ...state.chatMessages,
+        {
+          id: action.assistantMessageId,
+          role: "assistant",
+          content: action.message,
+          meta: action.meta ?? "Notebook Assistant • Just now",
+        },
+      ], false);
     case "settings_panel_closed":
       return {
         ...state,
@@ -221,13 +379,27 @@ function workspaceReducer(state, action) {
       return {
         ...state,
         generatingVideoKey: action.videoKey,
-        generationProgress: null,
+        generationProgress: 0,
+        generationSnapshot: {
+          status: "running",
+          stage: "prepare",
+          progress: 0,
+          detail: "任务已开始",
+          error: null,
+          startedAt: null,
+          stageStartedAt: null,
+          elapsedSeconds: 0,
+          stageElapsedSeconds: 0,
+          estimatedTotalSeconds: null,
+          remainingSeconds: null,
+        },
         error: "",
       };
     case "generation_progress_updated":
       return {
         ...state,
         generationProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
+        generationSnapshot: action.snapshot,
       };
     case "generation_succeeded":
       return createSummaryLoadedState(action.summary, {
@@ -248,9 +420,16 @@ function workspaceReducer(state, action) {
                 generated: false,
                 status: "available",
               },
+              knowledgeCards: {
+                ...state.tools.knowledgeCards,
+                available: true,
+                generated: false,
+                status: "available",
+              },
             },
         generatingVideoKey: null,
         generationProgress: null,
+        generationSnapshot: null,
       });
     case "mindmap_generation_started":
       return {
@@ -274,9 +453,25 @@ function workspaceReducer(state, action) {
             },
         generatingMindmapKey: null,
       });
+    case "chat_pending_cleared":
+      return {
+        ...state,
+        chatPending: false,
+      };
     default:
       return state;
   }
+}
+
+function applyChatThreadUpdate(state, nextMessages, chatPending) {
+  const chatScopeKey = buildChatScopeKey(state.selectedContextType, state.selectedSeriesId);
+  return {
+    ...state,
+    chatPending,
+    chatMessages: nextMessages,
+    chatThreads: setChatMessagesForScope(state.chatThreads, chatScopeKey, nextMessages),
+    error: "",
+  };
 }
 
 export function useWorkspaceController() {
@@ -480,6 +675,73 @@ export function useWorkspaceController() {
     };
   }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.mindmap.generated]);
 
+  useEffect(() => {
+    const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
+    if (
+      !selectedVideo ||
+      state.selectedContextType !== "video" ||
+      state.selectedToolId !== "knowledge-cards" ||
+      !state.tools?.knowledgeCards.generated
+    ) {
+      dispatch({ type: "knowledge_cards_cleared" });
+      return;
+    }
+
+    let cancelled = false;
+    dispatch({ type: "knowledge_cards_loading_started" });
+    loadVideoKnowledgeCards(state.selectedSeriesId, state.selectedVideoId)
+      .then((cards) => {
+        if (!cancelled) {
+          dispatch({ type: "knowledge_cards_loaded", cards });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "知识卡片加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.knowledgeCards.generated]);
+
+  useEffect(() => {
+    const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
+    if (
+      !selectedVideo ||
+      state.selectedContextType !== "video" ||
+      state.selectedToolId !== "notes"
+    ) {
+      dispatch({ type: "notes_cleared" });
+      return;
+    }
+
+    let cancelled = false;
+    dispatch({ type: "notes_loading_started" });
+    loadVideoNotes(state.selectedSeriesId, state.selectedVideoId)
+      .then((notes) => {
+        if (!cancelled) {
+          dispatch({ type: "notes_loaded", notes });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "笔记加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId]);
+
   const summary = state.summary;
   const mindmap = state.mindmap;
   const tools = state.tools;
@@ -532,6 +794,44 @@ export function useWorkspaceController() {
         document.getElementById(chapterId)?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     });
+  }
+
+  function onOpenCard(card) {
+    const primarySource = Array.isArray(card?.sourceRefs) ? card.sourceRefs[0] : null;
+    const startSeconds = typeof card?.startSeconds === "number"
+      ? card.startSeconds
+      : primarySource?.startSeconds;
+    const endSeconds = typeof card?.endSeconds === "number"
+      ? card.endSeconds
+      : primarySource?.endSeconds;
+    if (typeof startSeconds !== "number") {
+      return;
+    }
+    dispatch({ type: "tool_selected", toolId: "preview" });
+    dispatch({
+      type: "preview_seek_requested",
+      seconds: startSeconds,
+      endSeconds: typeof endSeconds === "number" ? endSeconds : null,
+      chapterTitle: typeof card.title === "string" ? card.title : "",
+      requestId: `${Date.now()}-${card.id}`,
+    });
+  }
+
+  async function onGenerateKnowledgeCards() {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      return;
+    }
+
+    dispatch({ type: "knowledge_cards_loading_started" });
+    try {
+      const cards = await generateVideoKnowledgeCards(state.selectedSeriesId, state.selectedVideoId);
+      dispatch({ type: "knowledge_cards_loaded", cards });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "知识卡片生成失败",
+      });
+    }
   }
 
   function onToggleSettingsPanel() {
@@ -657,6 +957,7 @@ export function useWorkspaceController() {
         dispatch({
           type: "generation_progress_updated",
           progress: snapshot.progress,
+          snapshot,
         });
       }
 
@@ -709,6 +1010,158 @@ export function useWorkspaceController() {
     }
   }
 
+  async function onCreateNote(note) {
+    if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
+      return;
+    }
+
+    dispatch({ type: "note_save_started" });
+    try {
+      const createdNote = await createVideoNote(state.selectedSeriesId, state.selectedVideoId, {
+        title: note.title,
+        content: note.content,
+        source: note.source ?? "manual",
+      });
+      dispatch({
+        type: "note_created",
+        seriesId: state.selectedSeriesId,
+        videoId: state.selectedVideoId,
+        videoTitle: selectedVideo.title,
+        note: createdNote,
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "笔记保存失败",
+      });
+    }
+  }
+
+  async function onUpdateNote(noteId, note) {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      return;
+    }
+
+    dispatch({ type: "note_save_started" });
+    try {
+      const updatedNote = await updateVideoNote(state.selectedSeriesId, state.selectedVideoId, noteId, {
+        title: note.title,
+        content: note.content,
+      });
+      dispatch({ type: "note_updated", note: updatedNote });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "笔记更新失败",
+      });
+    }
+  }
+
+  async function onDeleteNote(noteId) {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      return;
+    }
+
+    dispatch({ type: "note_save_started" });
+    try {
+      await deleteVideoNote(state.selectedSeriesId, state.selectedVideoId, noteId);
+      dispatch({ type: "note_deleted", noteId });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "笔记删除失败",
+      });
+    }
+  }
+
+  async function onSubmitChat(message) {
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage || !activeSeries || state.chatPending) {
+      return;
+    }
+
+    const sessionId = buildAgentSessionId(
+      state.selectedContextType,
+      state.selectedSeriesId,
+      state.selectedVideoId,
+      state.selectedToolId,
+    );
+
+    dispatch({
+      type: "chat_request_started",
+      userMessageId: `user-${Date.now()}`,
+      message: trimmedMessage,
+    });
+
+    try {
+      const response = await sendAgentChat(sessionId, trimmedMessage, {
+        scope_type: state.selectedContextType,
+        series_id: activeSeries?.id ?? null,
+        series_title: activeSeries?.title ?? null,
+        video_id: selectedVideo?.id ?? null,
+        video_title: selectedVideo?.title ?? null,
+        selected_tool: state.selectedToolId ?? null,
+      });
+      await applyAgentToolResults(response.tool_results ?? []);
+      dispatch({
+        type: "chat_response_received",
+        assistantMessageId: `assistant-${Date.now()}`,
+        message: response.assistant_message,
+        meta: response.reason ? `Notebook Assistant • ${response.reason}` : "Notebook Assistant • Just now",
+      });
+    } catch (error) {
+      dispatch({ type: "chat_pending_cleared" });
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "AI 对话失败",
+      });
+    }
+  }
+
+  async function applyAgentToolResults(toolResults) {
+    for (const result of toolResults) {
+      const payload = result?.payload ?? {};
+      if (payload.selected_tool) {
+        const nextToolId = normalizeAgentToolId(payload.selected_tool);
+        if (nextToolId) {
+          dispatch({ type: "tool_selected", toolId: nextToolId });
+        }
+      }
+
+      if (typeof payload.seek_seconds === "number") {
+        dispatch({
+          type: "preview_seek_requested",
+          seconds: payload.seek_seconds,
+          endSeconds: typeof payload.match_end_seconds === "number" ? payload.match_end_seconds : null,
+          query: typeof payload.query === "string" ? payload.query : "",
+          matchedText: typeof payload.matched_text === "string" ? payload.matched_text : "",
+          chapterTitle: typeof payload.chapter_title === "string" ? payload.chapter_title : "",
+          requestId: `${Date.now()}-${payload.seek_seconds}`,
+        });
+      }
+
+      if (payload.action === "generate_overview") {
+        void onGenerateVideo();
+      }
+
+      if (payload.action === "generate_mindmap") {
+        void onGenerateMindmap();
+      }
+
+      if (
+        payload.action === "save_note" &&
+        typeof payload.note_title === "string" &&
+        typeof payload.note_content === "string"
+      ) {
+        await onCreateNote({
+          title: payload.note_title,
+          content: payload.note_content,
+          source: typeof payload.note_source === "string" ? payload.note_source : "agent",
+        });
+      }
+    }
+  }
+
   return {
     state,
     ui: state.ui,
@@ -719,12 +1172,20 @@ export function useWorkspaceController() {
     tools,
     summary,
     mindmap,
+    knowledgeCards: state.knowledgeCards,
+    notes: state.notes,
     activeSeries,
     selectedVideo,
     selectedNode,
     previewUrl,
+    previewSeekRequest: state.previewSeekRequest,
+    chatMessages: state.chatMessages,
+    chatPending: state.chatPending,
     isGeneratingMindmapSelectedVideo,
     isGeneratingSelectedVideo,
+    knowledgeCardsLoading: state.knowledgeCardsLoading,
+    notesLoading: state.notesLoading,
+    savingNote: state.savingNote,
     selectedContextType: state.selectedContextType,
     onSelectSeries,
     onEnterLibraryHome,
@@ -732,8 +1193,14 @@ export function useWorkspaceController() {
     onSelectSeriesContext,
     onSelectTool,
     onFocusNode,
+    onOpenCard,
+    onSubmitChat,
     onGenerateVideo,
     onGenerateMindmap,
+    onGenerateKnowledgeCards,
+    onCreateNote,
+    onUpdateNote,
+    onDeleteNote,
     onToggleSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,
@@ -748,4 +1215,32 @@ function buildVideoKey(seriesId, videoId) {
     return null;
   }
   return `${seriesId}/${videoId}`;
+}
+
+function buildAgentSessionId(selectedContextType, seriesId, videoId, selectedToolId) {
+  if (selectedContextType === "library") {
+    return `library|${selectedToolId ?? "studio"}`;
+  }
+  if (selectedContextType === "series") {
+    return `series|${seriesId ?? ""}|${selectedToolId ?? "series-home"}`;
+  }
+  return `video|${seriesId ?? ""}|${videoId ?? ""}|${selectedToolId ?? "studio"}`;
+}
+
+function normalizeAgentToolId(toolId) {
+  if (toolId === "video") {
+    return "preview";
+  }
+  if (
+    toolId === "overview" ||
+    toolId === "cards" ||
+    toolId === "knowledge-cards" ||
+    toolId === "mindmap" ||
+    toolId === "notes" ||
+    toolId === "preview" ||
+    toolId === "series-home"
+  ) {
+    return toolId;
+  }
+  return null;
 }

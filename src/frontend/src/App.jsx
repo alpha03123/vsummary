@@ -31,6 +31,9 @@ export function App() {
       selectedVideo={controller.selectedVideo}
       selectedNode={controller.selectedNode}
       previewUrl={controller.previewUrl}
+      previewSeekRequest={controller.previewSeekRequest}
+      chatMessages={controller.chatMessages}
+      chatPending={controller.chatPending}
       fasterWhisperModels={controller.fasterWhisperModels}
       fasterWhisperModelsLoading={controller.fasterWhisperModelsLoading}
       downloadingModelId={controller.downloadingModelId}
@@ -44,6 +47,7 @@ export function App() {
       onSelectSeriesContext={controller.onSelectSeriesContext}
       onSelectTool={controller.onSelectTool}
       onFocusNode={controller.onFocusNode}
+      onSubmitChat={controller.onSubmitChat}
       onGenerateVideo={controller.onGenerateVideo}
       onGenerateMindmap={controller.onGenerateMindmap}
       onToggleSettingsPanel={controller.onToggleSettingsPanel}

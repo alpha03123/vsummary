@@ -388,3 +388,124 @@
 .css-tree li:not(:has(> ul)) > .css-tree-node-wrapper::before {
   display: none;
 }
+
+.markdown-body {
+  line-height: 1.75;
+}
+
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body pre,
+.markdown-body blockquote,
+.markdown-body table {
+  margin: 0.75rem 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 1rem 0 0.5rem;
+  font-weight: 700;
+  color: inherit;
+}
+
+.markdown-body h1 {
+  font-size: 1.25rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.125rem;
+}
+
+.markdown-body h3,
+.markdown-body h4 {
+  font-size: 1rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.3rem;
+}
+
+.markdown-body li + li {
+  margin-top: 0.3rem;
+}
+
+.markdown-body code {
+  border-radius: 0.5rem;
+  background: rgba(148, 163, 184, 0.15);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.92em;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.92);
+  padding: 0.9rem 1rem;
+  color: #e2e8f0;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid rgba(14, 116, 144, 0.35);
+  padding-left: 0.9rem;
+  color: rgba(68, 64, 60, 0.9);
+}
+
+.dark .markdown-body blockquote {
+  border-left-color: rgba(125, 211, 252, 0.28);
+  color: rgba(214, 211, 209, 0.9);
+}
+
+.markdown-body a {
+  color: #0070f3;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.dark .markdown-body a {
+  color: #7dd3fc;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 0.9rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid rgba(214, 211, 209, 0.8);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+}
+
+.dark .markdown-body th,
+.dark .markdown-body td {
+  border-color: rgba(68, 64, 60, 0.9);
+}
+
+.markdown-body th {
+  background: rgba(245, 245, 244, 0.9);
+}
+
+.dark .markdown-body th {
+  background: rgba(28, 25, 23, 0.9);
+}

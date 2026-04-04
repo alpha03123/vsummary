@@ -1,0 +1,2 @@
+class AgentPlanError(ValueError):
+    pass
