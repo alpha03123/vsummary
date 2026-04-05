@@ -15,11 +15,12 @@ class ConfiguredVideoSummaryWorkflow:
     def __init__(self, root_dir: Path) -> None:
         self._root_dir = root_dir
         self._config_path = root_dir / "config" / "settings.toml"
+        self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
-        self._cached_signature: tuple[str, bool | None] | None = None
+        self._cached_signature: tuple[str, str, bool | None] | None = None
         self._cached_application = None
 
-    def run(
+    async def run(
         self,
         source_path: Path,
         output_dir: Path,
@@ -33,7 +34,7 @@ class ConfiguredVideoSummaryWorkflow:
                 wrapped=progress_reporter,
                 log_path=output_dir / "debug.log",
             )
-        return application.use_case.run(
+        return await application.use_case.run(
             video_path=source_path,
             output_dir=output_dir,
             progress_reporter=resolved_progress_reporter,
@@ -42,6 +43,7 @@ class ConfiguredVideoSummaryWorkflow:
     def _get_application(self, transcript_enhancement_enabled: bool | None):
         signature = (
             self._config_path.read_text(encoding="utf-8"),
+            self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
             transcript_enhancement_enabled,
         )
         with self._application_lock:

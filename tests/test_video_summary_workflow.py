@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,7 +19,7 @@ class FakeUseCase:
     def __init__(self) -> None:
         self.calls: list[tuple[Path, Path, object]] = []
 
-    def run(self, video_path: Path, output_dir: Path, progress_reporter=None):
+    async def run(self, video_path: Path, output_dir: Path, progress_reporter=None):
         self.calls.append((video_path, output_dir, progress_reporter))
         return {"title": video_path.stem}
 
@@ -73,8 +74,8 @@ transcription_mode = "fast"
 
             workflow_module.load_video_summary_application = fake_loader
             try:
-                first = workflow.run(root / "videos" / "a.mp4", root / "workspace" / "a")
-                second = workflow.run(root / "videos" / "b.mp4", root / "workspace" / "b")
+                first = asyncio.run(workflow.run(root / "videos" / "a.mp4", root / "workspace" / "a"))
+                second = asyncio.run(workflow.run(root / "videos" / "b.mp4", root / "workspace" / "b"))
             finally:
                 workflow_module.load_video_summary_application = original_loader
 
@@ -142,7 +143,7 @@ mode = true
             def fake_loader(**kwargs):
                 application = FakeApplication(debug_mode=True)
 
-                def run(video_path: Path, output_dir: Path, progress_reporter=None):
+                async def run(video_path: Path, output_dir: Path, progress_reporter=None):
                     progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
                     progress_reporter.update("transcribe", 60.0, "Whisper 正在转写音频")
                     progress_reporter.completed("AI 概况已生成")
@@ -154,7 +155,7 @@ mode = true
             workflow_module.load_video_summary_application = fake_loader
             try:
                 output_dir = root / "workspace" / "demo"
-                workflow.run(root / "videos" / "demo.mp4", output_dir, progress_reporter=FakeReporter())
+                asyncio.run(workflow.run(root / "videos" / "demo.mp4", output_dir, progress_reporter=FakeReporter()))
             finally:
                 workflow_module.load_video_summary_application = original_loader
 

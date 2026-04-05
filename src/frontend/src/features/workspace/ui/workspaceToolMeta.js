@@ -70,6 +70,15 @@ export const SERIES_TOOL_TILES = {
   },
 };
 
+const DEFAULT_TOOL_META = {
+  label: "工具页",
+  description: "当前工具信息正在同步",
+  icon: FileText,
+  palette: "workspace-muted-panel border text-stone-900 dark:text-stone-100",
+  iconShell: "bg-stone-100 text-stone-700 dark:bg-stone-900 dark:text-stone-300 border border-stone-100 dark:border-stone-800",
+  arrowShell: "bg-stone-50 text-stone-700 dark:bg-stone-900 dark:text-stone-300",
+};
+
 export function describeToolState(toolId, toolState) {
   if (!toolState) {
     return "读取中";
@@ -101,4 +110,8 @@ export function getToolState(tools, toolId) {
 
 export function getToolMeta(toolId) {
   return TOOL_TILES[toolId] ?? SERIES_TOOL_TILES[toolId] ?? null;
+}
+
+export function resolveToolMeta(toolId) {
+  return getToolMeta(toolId) ?? DEFAULT_TOOL_META;
 }

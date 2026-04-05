@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import asyncio
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,7 @@ if str(SRC) not in sys.path:
 
 from backend.video_summary.domain.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
+from backend.video_summary.infrastructure.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
 
 
 class FakeMediaProcessor:
@@ -53,10 +55,9 @@ class FakeSummarizer:
         self.last_transcript: Transcript | None = None
         self.last_output_dir: Path | None = None
 
-    def summarize(self, video: VideoAsset, transcript: Transcript, output_dir: Path) -> SummaryDocument:
+    async def summarize(self, video: VideoAsset, transcript: Transcript) -> SummaryDocument:
         self.last_video = video
         self.last_transcript = transcript
-        self.last_output_dir = output_dir
         return SummaryDocument(
             markdown="# Summary",
             summary_data={"title": video.title},
@@ -68,9 +69,8 @@ class FakeTranscriptEnhancer:
         self.last_transcript: Transcript | None = None
         self.last_output_dir: Path | None = None
 
-    def enhance(self, video: VideoAsset, transcript: Transcript, output_dir: Path) -> Transcript:
+    async def enhance(self, video: VideoAsset, transcript: Transcript) -> Transcript:
         self.last_transcript = transcript
-        self.last_output_dir = output_dir
         return Transcript(
             language=transcript.language,
             segments=[
@@ -104,6 +104,7 @@ class GenerateVideoSummaryTests(unittest.TestCase):
             transcriber=transcriber,
             transcript_enhancer=transcript_enhancer,
             summarizer=summarizer,
+            artifact_store=FileSystemGenerationArtifactStore(),
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -112,10 +113,12 @@ class GenerateVideoSummaryTests(unittest.TestCase):
             video_path.write_text("video", encoding="utf-8")
             output_dir = root / "output"
 
-            result = use_case.run(
-                video_path=video_path,
-                output_dir=output_dir,
-                progress_reporter=progress_reporter,
+            result = asyncio.run(
+                use_case.run(
+                    video_path=video_path,
+                    output_dir=output_dir,
+                    progress_reporter=progress_reporter,
+                )
             )
 
             self.assertEqual(result.markdown, "# Summary")
@@ -130,8 +133,6 @@ class GenerateVideoSummaryTests(unittest.TestCase):
             self.assertIsNotNone(summarizer.last_video)
             self.assertEqual(summarizer.last_video.title, "demo")
             self.assertEqual(summarizer.last_video.duration_seconds, 12.5)
-            self.assertEqual(summarizer.last_output_dir, output_dir)
-            self.assertEqual(transcript_enhancer.last_output_dir, output_dir)
             self.assertEqual(
                 [segment.text for segment in summarizer.last_transcript.segments],
                 ["第一段-已纠正", "第二段-已纠正"],
@@ -148,6 +149,10 @@ class GenerateVideoSummaryTests(unittest.TestCase):
                     {"start_seconds": 2.0, "end_seconds": 4.0, "text": "第二段-已纠正"},
                 ],
             )
+            enhanced_payload = json.loads((output_dir / "transcript.enhanced.json").read_text(encoding="utf-8"))
+            self.assertEqual(enhanced_payload["language"], "zh")
+            self.assertEqual(len(enhanced_payload["segments"]), 2)
+            self.assertEqual((output_dir / "summary.md").read_text(encoding="utf-8"), "# Summary")
 
 
 if __name__ == "__main__":

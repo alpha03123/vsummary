@@ -1,29 +1,42 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Lock
 
-from backend.video_summary.infrastructure.openai_mindmap_generator import OpenAIMindmapGenerator
-from backend.video_summary.infrastructure.settings import build_openai_responses_url, load_settings
+from backend.video_summary.bootstrap import load_mindmap_application
 
 
 class ConfiguredMindmapWorkflow:
     def __init__(self, root_dir: Path) -> None:
         self._root_dir = root_dir
         self._config_path = root_dir / "config" / "settings.toml"
+        self._dotenv_path = root_dir / ".env"
+        self._application_lock = Lock()
+        self._cached_signature: tuple[str, str] | None = None
+        self._cached_application = None
 
-    def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
-        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
-        generator = OpenAIMindmapGenerator(
-            model=settings.openai.model,
-            base_url=build_openai_responses_url(settings.openai.base_url),
-            api_key=settings.openai.api_key,
-        )
-        return generator.generate(
+    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+        application = self._get_application()
+        return await application.use_case.run(
             title=source_path.stem,
             duration_seconds=_resolve_duration_seconds(summary_data),
             summary_data=summary_data,
             output_dir=output_dir,
         )
+
+    def _get_application(self):
+        signature = (
+            self._config_path.read_text(encoding="utf-8"),
+            self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
+        )
+        with self._application_lock:
+            if self._cached_application is None or self._cached_signature != signature:
+                self._cached_application = load_mindmap_application(
+                    config_path=self._config_path,
+                    root_dir=self._root_dir,
+                )
+                self._cached_signature = signature
+            return self._cached_application
 
 
 def _resolve_duration_seconds(summary_data: dict[str, object]) -> float:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from backend.video_summary.infrastructure.faster_whisper_transcriber import FasterWhisperTranscriber
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.openai_summary import OpenAIResponsesGateway
 from backend.video_summary.infrastructure.openai_summarizer import OpenAIResponsesClient
 from backend.video_summary.infrastructure.settings import AppSettings, build_openai_responses_url
 from backend.video_summary.generation.ports import Summarizer, Transcriber
@@ -22,28 +23,29 @@ class AsrRuntimeInfo:
 class VideoSummaryRuntime:
     transcriber: Transcriber
     summarizer: Summarizer
+    gateway: OpenAIResponsesGateway
     asr: AsrRuntimeInfo
-    model: str
-    base_url: str
-    api_key: str
+
+
+def build_openai_responses_gateway(settings: AppSettings) -> OpenAIResponsesGateway:
+    return OpenAIResponsesGateway(
+        model=settings.openai.model,
+        base_url=build_openai_responses_url(settings.openai.base_url),
+        api_key=settings.openai.api_key,
+    )
 
 
 def build_video_summary_runtime(
     settings: AppSettings,
 ) -> VideoSummaryRuntime:
     transcriber, asr = _build_transcriber(settings)
-    summarizer = OpenAIResponsesClient(
-        model=settings.openai.model,
-        base_url=build_openai_responses_url(settings.openai.base_url),
-        api_key=settings.openai.api_key,
-    )
+    gateway = build_openai_responses_gateway(settings)
+    summarizer = OpenAIResponsesClient(gateway=gateway)
     return VideoSummaryRuntime(
         transcriber=transcriber,
         summarizer=summarizer,
+        gateway=gateway,
         asr=asr,
-        model=settings.openai.model,
-        base_url=build_openai_responses_url(settings.openai.base_url),
-        api_key=settings.openai.api_key,
     )
 
 

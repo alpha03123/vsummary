@@ -19,7 +19,7 @@ class GenerateVideoSummaryFromLibrary:
         self._generator = generator
         self._progress_tracker = progress_tracker
 
-    def run(
+    async def run(
         self,
         series_id: str,
         video_id: str,
@@ -31,7 +31,7 @@ class GenerateVideoSummaryFromLibrary:
 
         reporter = self._progress_tracker.create_reporter(f"{series_id}/{video_id}")
         try:
-            self._generator.run(
+            await self._generator.run(
                 video.source_path,
                 video.output_dir,
                 progress_reporter=reporter,

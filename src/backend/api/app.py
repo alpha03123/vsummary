@@ -370,12 +370,12 @@ def preview_video(series_id: str, video_id: str) -> FileResponse:
 
 
 @app.post("/api/videos/{series_id}/{video_id}/generate")
-def generate_video_summary(
+async def generate_video_summary(
     series_id: str,
     video_id: str,
     request: GenerateVideoSummaryRequest | None = None,
 ) -> dict[str, object]:
-    video_summary = CONTAINER.generate_video_summary.run(
+    video_summary = await CONTAINER.generate_video_summary.run(
         series_id,
         video_id,
         transcript_enhancement_enabled=(
@@ -389,8 +389,8 @@ def generate_video_summary(
 
 
 @app.post("/api/videos/{series_id}/{video_id}/mindmap/generate")
-def generate_video_mindmap(series_id: str, video_id: str) -> dict[str, object]:
-    video_mindmap = CONTAINER.generate_video_mindmap.run(series_id, video_id)
+async def generate_video_mindmap(series_id: str, video_id: str) -> dict[str, object]:
+    video_mindmap = await CONTAINER.generate_video_mindmap.run(series_id, video_id)
     if video_mindmap is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
 

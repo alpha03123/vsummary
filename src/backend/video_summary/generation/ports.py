@@ -25,34 +25,56 @@ class Transcriber(Protocol):
 
 
 class Summarizer(Protocol):
-    def summarize(
+    async def summarize(
         self,
         video: VideoAsset,
         transcript: Transcript,
-        output_dir: Path,
     ) -> SummaryDocument:
         ...
 
 
 class TranscriptEnhancer(Protocol):
-    def enhance(
+    async def enhance(
         self,
         video: VideoAsset,
         transcript: Transcript,
-        output_dir: Path,
     ) -> Transcript:
         ...
 
 
 class MindmapGenerator(Protocol):
-    def generate(
+    async def generate(
         self,
         *,
         title: str,
         duration_seconds: float,
         summary_data: dict[str, object],
-        output_dir: Path,
     ) -> dict[str, object]:
+        ...
+
+
+class GenerationArtifactStore(Protocol):
+    async def save_cleaned_transcript(
+        self,
+        *,
+        video: VideoAsset,
+        transcript: Transcript,
+        output_dir: Path,
+    ) -> None:
+        ...
+
+    async def save_enhanced_transcript(
+        self,
+        *,
+        transcript: Transcript,
+        output_dir: Path,
+    ) -> None:
+        ...
+
+    async def save_summary_document(self, *, document: SummaryDocument, output_dir: Path) -> None:
+        ...
+
+    async def save_mindmap(self, *, mindmap: dict[str, object], output_dir: Path) -> None:
         ...
 
 

@@ -9,7 +9,7 @@ class GenerateVideoMindmapFromLibrary:
         self._workspace = workspace
         self._generator = generator
 
-    def run(self, series_id: str, video_id: str) -> VideoMindmapView | None:
+    async def run(self, series_id: str, video_id: str) -> VideoMindmapView | None:
         video = self._workspace.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -18,5 +18,5 @@ class GenerateVideoMindmapFromLibrary:
         if summary is None:
             return None
 
-        self._generator.run(video.source_path, video.output_dir, summary.summary)
+        await self._generator.run(video.source_path, video.output_dir, summary.summary)
         return self._workspace.get_video_mindmap(series_id, video_id)

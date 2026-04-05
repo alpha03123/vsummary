@@ -1,32 +1,29 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.infrastructure.openai_summary import OpenAIResponsesGateway
+from backend.video_summary.infrastructure.openai_summary.parsers import extract_json_block
 
 
 class OpenAITranscriptEnhancer:
-    def __init__(self, model: str, base_url: str, api_key: str) -> None:
-        self._gateway = OpenAIResponsesGateway(model=model, base_url=base_url, api_key=api_key)
+    def __init__(self, gateway: OpenAIResponsesGateway) -> None:
+        self._gateway = gateway
 
-    def enhance(self, video: VideoAsset, transcript: Transcript, output_dir: Path) -> Transcript:
+    async def enhance(self, video: VideoAsset, transcript: Transcript) -> Transcript:
         chunks = _chunk_segments(transcript.segments)
         enhanced_segments = []
         for index, chunk in enumerate(chunks, start=1):
-            corrected_payload = self._gateway.create_text(_build_transcript_enhancement_prompt(video, chunk, index, len(chunks)))
+            corrected_payload = await self._gateway.create_text(
+                _build_transcript_enhancement_prompt(video, chunk, index, len(chunks))
+            )
             enhanced_segments.extend(_parse_corrected_segments(corrected_payload, chunk))
 
-        enhanced_transcript = Transcript(
+        return Transcript(
             language=transcript.language,
             segments=enhanced_segments or transcript.segments,
         )
-        (output_dir / "transcript.enhanced.json").write_text(
-            json.dumps(_build_transcript_payload(enhanced_transcript), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        return enhanced_transcript
 
 
 def _build_transcript_enhancement_prompt(
@@ -60,7 +57,7 @@ def _build_transcript_enhancement_prompt(
 
 
 def _parse_corrected_segments(raw_text: str, fallback_segments: list[TranscriptSegment]) -> list[TranscriptSegment]:
-    payload = _extract_json_block(raw_text)
+    payload = extract_json_block(raw_text)
     segments = payload.get("segments", [])
     if not isinstance(segments, list):
         raise RuntimeError("Transcript enhancer returned invalid segments payload.")
@@ -82,21 +79,6 @@ def _parse_corrected_segments(raw_text: str, fallback_segments: list[TranscriptS
     if len(normalized_segments) != len(fallback_segments):
         return fallback_segments
     return normalized_segments
-
-
-def _extract_json_block(raw_text: str) -> dict[str, object]:
-    candidate = raw_text.strip()
-    if candidate.startswith("```"):
-        lines = candidate.splitlines()
-        if len(lines) >= 3:
-            candidate = "\n".join(lines[1:-1]).strip()
-
-    start = candidate.find("{")
-    end = candidate.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        raise RuntimeError(f"Model did not return valid JSON: {raw_text[:400]}")
-    return json.loads(candidate[start : end + 1])
-
 
 def _chunk_segments(segments: list[TranscriptSegment], max_chars: int = 10000) -> list[list[TranscriptSegment]]:
     chunks: list[list[TranscriptSegment]] = []
@@ -135,17 +117,3 @@ def _segments_to_json(segments: list[TranscriptSegment]) -> str:
         ensure_ascii=False,
         indent=2,
     )
-
-
-def _build_transcript_payload(transcript: Transcript) -> dict[str, object]:
-    return {
-        "language": transcript.language,
-        "segments": [
-            {
-                "start_seconds": segment.start_seconds,
-                "end_seconds": segment.end_seconds,
-                "text": segment.text,
-            }
-            for segment in transcript.segments
-        ],
-    }

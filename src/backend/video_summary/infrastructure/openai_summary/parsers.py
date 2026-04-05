@@ -47,12 +47,20 @@ def extract_json_block(text: str) -> dict[str, Any]:
         if len(lines) >= 3:
             candidate = "\n".join(lines[1:-1]).strip()
 
-    start = candidate.find("{")
-    end = candidate.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        raise RuntimeError(f"Model did not return valid JSON: {text[:400]}")
+    direct_value = _try_load_json_object(candidate)
+    if direct_value is not None:
+        return direct_value
 
-    return json.loads(candidate[start : end + 1])
+    last_valid_object: dict[str, Any] | None = None
+    for start_index in _iter_object_starts(candidate):
+        parsed = _extract_balanced_object(candidate, start_index)
+        if parsed is not None:
+            last_valid_object = parsed
+
+    if last_valid_object is not None:
+        return last_valid_object
+
+    raise RuntimeError(f"Model did not return valid JSON object: {text[:400]}")
 
 
 def normalize_chapter(chapter: dict[str, Any], index: int) -> dict[str, Any]:
@@ -82,3 +90,57 @@ def normalize_mindmap_node(node: dict[str, Any], fallback_id: str) -> dict[str, 
         "end_seconds": float(node.get("end_seconds", 0.0) or 0.0),
         "children": normalized_children,
     }
+
+
+def _try_load_json_object(candidate: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict):
+        return parsed
+    return None
+
+
+def _iter_object_starts(candidate: str):
+    in_string = False
+    escape = False
+    for index, char in enumerate(candidate):
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = in_string
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if not in_string and char == "{":
+            yield index
+
+
+def _extract_balanced_object(candidate: str, start_index: int) -> dict[str, Any] | None:
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start_index, len(candidate)):
+        char = candidate[index]
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            escape = in_string
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+            continue
+        if char == "}":
+            depth -= 1
+            if depth == 0:
+                return _try_load_json_object(candidate[start_index : index + 1])
+    return None

@@ -23,7 +23,7 @@ app = api_module.app
 
 
 class FakeGenerator:
-    def run(
+    async def run(
         self,
         source_path: Path,
         output_dir: Path,
@@ -55,7 +55,7 @@ class FakeGenerator:
 
 
 class FakeMindmapGenerator:
-    def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
         payload = {
             "id": "root",
             "title": source_path.stem,

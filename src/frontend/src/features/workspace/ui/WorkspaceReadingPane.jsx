@@ -7,8 +7,8 @@ import {
   SERIES_TOOL_TILES,
   TOOL_TILES,
   describeToolState,
-  getToolMeta,
   getToolState,
+  resolveToolMeta,
 } from "./workspaceToolMeta";
 
 const WorkspaceKnowledgeCardsView = lazy(() =>
@@ -93,8 +93,8 @@ export function WorkspaceReadingPane({
 }) {
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
-  const currentToolMeta = getToolMeta(selectedToolId);
-  const previewSource = tools?.preview.previewUrl ?? previewUrl ?? undefined;
+  const currentToolMeta = resolveToolMeta(selectedToolId);
+  const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
 
   return (
     <section className="relative flex h-full w-full flex-col bg-transparent">

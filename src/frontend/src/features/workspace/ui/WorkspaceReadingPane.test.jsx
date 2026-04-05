@@ -4,6 +4,55 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 
 describe("WorkspaceReadingPane", () => {
+  it("falls back to a safe tool meta when selectedToolId is unknown", async () => {
+    render(
+      <WorkspaceReadingPane
+        ui={{ showTakeaways: true }}
+        tools={{}}
+        library={null}
+        summary={null}
+        mindmap={null}
+        knowledgeCards={null}
+        knowledgeCardsGenerating={false}
+        knowledgeCardsFeedback={null}
+        notes={null}
+        activeSeries={{
+          id: "series-a",
+          title: "Series A",
+          videos: [],
+        }}
+        selectedVideo={{
+          id: "video-1",
+          title: "Video 1",
+        }}
+        selectedContextType="video"
+        selectedNode={null}
+        previewUrl={null}
+        previewSeekRequest={null}
+        selectedToolId={null}
+        selectedChapterId={null}
+        toolsLoading={false}
+        summaryLoading={false}
+        mindmapLoading={false}
+        knowledgeCardsLoading={false}
+        notesLoading={false}
+        savingNote={false}
+        isGeneratingMindmapSelectedVideo={false}
+        isGeneratingSelectedVideo={false}
+        onSelectTool={() => {}}
+        onFocusNode={() => {}}
+        onOpenCard={() => {}}
+        onGenerateMindmap={() => {}}
+        onGenerateKnowledgeCards={() => {}}
+        onCreateNote={() => {}}
+        onUpdateNote={() => {}}
+        onDeleteNote={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("工具页")).toBeInTheDocument();
+  });
+
   it("renders seek details and seeks the preview video", async () => {
     const { container } = render(
       <WorkspaceReadingPane

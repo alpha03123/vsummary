@@ -1,29 +1,28 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from backend.video_summary.generation.ports import MindmapGenerator
 from backend.video_summary.infrastructure.openai_summary import OpenAIResponsesGateway, parse_mindmap_payload
 
 
 class OpenAIMindmapGenerator(MindmapGenerator):
-    def __init__(self, model: str, base_url: str, api_key: str) -> None:
-        self._gateway = OpenAIResponsesGateway(model=model, base_url=base_url, api_key=api_key)
+    def __init__(self, gateway: OpenAIResponsesGateway) -> None:
+        self._gateway = gateway
 
-    def generate(
+    async def generate(
         self,
         *,
         title: str,
         duration_seconds: float,
         summary_data: dict[str, object],
-        output_dir: Path,
     ) -> dict[str, object]:
         prompt = build_mindmap_prompt(title=title, duration_seconds=duration_seconds, summary_data=summary_data)
-        mindmap = parse_mindmap_payload(self._gateway.create_text(prompt), title=title, duration_seconds=duration_seconds)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "mindmap.json").write_text(json.dumps(mindmap, ensure_ascii=False, indent=2), encoding="utf-8")
-        return mindmap
+        return parse_mindmap_payload(
+            await self._gateway.create_text(prompt),
+            title=title,
+            duration_seconds=duration_seconds,
+        )
 
 
 def build_mindmap_prompt(*, title: str, duration_seconds: float, summary_data: dict[str, object]) -> str:

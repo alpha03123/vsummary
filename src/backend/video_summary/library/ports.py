@@ -86,7 +86,7 @@ class VideoWorkspace(Protocol):
 
 
 class VideoSummaryGenerator(Protocol):
-    def run(
+    async def run(
         self,
         source_path: Path,
         output_dir: Path,
@@ -97,7 +97,7 @@ class VideoSummaryGenerator(Protocol):
 
 
 class VideoMindmapGenerator(Protocol):
-    def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
         ...
 
 

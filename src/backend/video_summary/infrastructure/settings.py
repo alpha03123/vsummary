@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import tomllib
 
@@ -114,66 +114,31 @@ def save_settings(config_path: Path, settings: AppSettings) -> None:
 
 
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:
-    return AppSettings(
-        asr=settings.asr,
-        openai=settings.openai,
-        workspace_ui=workspace_ui,
-        debug=settings.debug,
-    )
+    return replace(settings, workspace_ui=workspace_ui)
 
 
 def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) -> AppSettings:
-    return AppSettings(
-        asr=AsrSettings(
-            provider=settings.asr.provider,
-            language=settings.asr.language,
-            transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
-            faster_whisper=FasterWhisperSettings(
-                device=settings.asr.faster_whisper.device,
-                model_size=model_size,
-                compute_type=settings.asr.faster_whisper.compute_type,
-                transcription_mode=settings.asr.faster_whisper.transcription_mode,
-                models_dir=settings.asr.faster_whisper.models_dir,
-            ),
+    return replace(
+        settings,
+        asr=replace(
+            settings.asr,
+            faster_whisper=replace(settings.asr.faster_whisper, model_size=model_size),
         ),
-        openai=settings.openai,
-        workspace_ui=settings.workspace_ui,
-        debug=settings.debug,
     )
 
 
 def replace_transcript_enhancement_enabled(settings: AppSettings, transcript_enhancement_enabled: bool) -> AppSettings:
-    return AppSettings(
-        asr=AsrSettings(
-            provider=settings.asr.provider,
-            language=settings.asr.language,
-            transcript_enhancement_enabled=transcript_enhancement_enabled,
-            faster_whisper=settings.asr.faster_whisper,
-        ),
-        openai=settings.openai,
-        workspace_ui=settings.workspace_ui,
-        debug=settings.debug,
-    )
+    return replace(settings, asr=replace(settings.asr, transcript_enhancement_enabled=transcript_enhancement_enabled))
 
 
 def replace_faster_whisper_transcription_mode(settings: AppSettings, transcription_mode: str) -> AppSettings:
     normalized_mode = _normalize_transcription_mode(transcription_mode)
-    return AppSettings(
-        asr=AsrSettings(
-            provider=settings.asr.provider,
-            language=settings.asr.language,
-            transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
-            faster_whisper=FasterWhisperSettings(
-                device=settings.asr.faster_whisper.device,
-                model_size=settings.asr.faster_whisper.model_size,
-                compute_type=settings.asr.faster_whisper.compute_type,
-                transcription_mode=normalized_mode,
-                models_dir=settings.asr.faster_whisper.models_dir,
-            ),
+    return replace(
+        settings,
+        asr=replace(
+            settings.asr,
+            faster_whisper=replace(settings.asr.faster_whisper, transcription_mode=normalized_mode),
         ),
-        openai=settings.openai,
-        workspace_ui=settings.workspace_ui,
-        debug=settings.debug,
     )
 
 
@@ -184,16 +149,14 @@ def replace_openai_settings(
     base_url: str,
     model: str,
 ) -> AppSettings:
-    return AppSettings(
-        asr=settings.asr,
+    return replace(
+        settings,
         openai=OpenAISettings(
             provider=provider,
             base_url=normalize_openai_base_url(base_url),
             model=model,
             api_key=settings.openai.api_key,
         ),
-        workspace_ui=settings.workspace_ui,
-        debug=settings.debug,
     )
 
 
