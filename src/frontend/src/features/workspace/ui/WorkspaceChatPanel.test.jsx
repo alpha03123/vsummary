@@ -119,4 +119,54 @@ describe("WorkspaceChatPanel", () => {
     expect(screen.getByText("读取系列视频列表")).toBeInTheDocument();
     expect(screen.getByText("读取视频概况")).toBeInTheDocument();
   });
+
+  it("renders streaming thought summary and hides the running badge after tool steps settle", async () => {
+    render(
+      <WorkspaceChatPanel
+        workspaceTitle="Video Include"
+        activeSeries={{ id: "series-a", title: "Series A" }}
+        selectedVideo={null}
+        selectedContextType="series"
+        selectedToolId="series-home"
+        tools={null}
+        chatMessages={[
+          {
+            id: "thought-1",
+            role: "assistant",
+            kind: "thought-trace",
+            content: "思考中",
+            thoughtTrace: {
+              status: "running",
+              summary: "先读取系列视频，再读取视频概况。",
+            },
+            meta: "Notebook Assistant • 思考中",
+          },
+          {
+            id: "tool-trace-1",
+            role: "assistant",
+            kind: "tool-trace",
+            content: "已调用 1 个工具",
+            toolTrace: {
+              status: "idle",
+              steps: [
+                {
+                  toolName: "list_series_videos",
+                  label: "读取系列视频列表",
+                  target: "Series A",
+                  status: "completed",
+                },
+              ],
+            },
+            meta: "Notebook Assistant • 等待下一步",
+          },
+        ]}
+        chatPending={false}
+        onSubmitChat={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("先读取系列视频，再读取视频概况。")).toBeInTheDocument();
+    expect(screen.getByText("当前这一步已完成，等待下一步规划")).toBeInTheDocument();
+    expect(screen.queryByText("调用中")).not.toBeInTheDocument();
+  });
 });

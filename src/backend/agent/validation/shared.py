@@ -56,8 +56,17 @@ def validate_tool_call_arguments(plan: AgentActionPlan) -> None:
                 raise AgentPlanError("get_video_summary 的 series_id 不能为空字符串。")
             if call.video_id is not None and not call.video_id.strip():
                 raise AgentPlanError("get_video_summary 的 video_id 不能为空字符串。")
+            if call.video_id is not None and _looks_like_unresolved_placeholder(call.video_id):
+                raise AgentPlanError("get_video_summary 的 video_id 不能使用未解析占位值。")
         if isinstance(call, GetVideoToolsCall):
             if call.series_id is not None and not call.series_id.strip():
                 raise AgentPlanError("get_video_tools 的 series_id 不能为空字符串。")
             if call.video_id is not None and not call.video_id.strip():
                 raise AgentPlanError("get_video_tools 的 video_id 不能为空字符串。")
+            if call.video_id is not None and _looks_like_unresolved_placeholder(call.video_id):
+                raise AgentPlanError("get_video_tools 的 video_id 不能使用未解析占位值。")
+
+
+def _looks_like_unresolved_placeholder(value: str) -> bool:
+    normalized = value.strip().lower()
+    return normalized.startswith("*pending_") or "pending_from_" in normalized

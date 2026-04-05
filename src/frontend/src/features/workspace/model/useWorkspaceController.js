@@ -12,10 +12,10 @@ import {
   loadFasterWhisperModels,
   loadProviderSettings,
   loadVideoKnowledgeCards,
-  sendAgentChat,
   loadVideoMindmap,
   loadVideoNotes,
   loadVideoSummary,
+  streamAgentChat,
   loadWorkspaceSettings,
   loadVideoTools,
   loadWorkspaceLibrary,
@@ -401,6 +401,8 @@ function workspaceReducer(state, action) {
         content: action.message,
         meta: "You • Just now",
       }, true);
+    case "chat_stream_event_received":
+      return applyChatStreamEvent(state, action.chatScopeKey, action.requestId, action.event);
     case "chat_response_received":
       return appendChatThreadMessage(state, action.chatScopeKey, {
         id: action.assistantMessageId,
@@ -526,6 +528,206 @@ function applyChatThreadUpdate(state, chatScopeKey, nextMessages, chatPending) {
 function appendChatThreadMessage(state, chatScopeKey, message, chatPending) {
   const currentMessages = getChatMessagesForScope(state.chatThreads, chatScopeKey);
   return applyChatThreadUpdate(state, chatScopeKey, [...currentMessages, message], chatPending);
+}
+
+function transformChatThreadMessages(state, chatScopeKey, transform, chatPending = state.chatPending) {
+  const currentMessages = getChatMessagesForScope(state.chatThreads, chatScopeKey);
+  return applyChatThreadUpdate(state, chatScopeKey, transform(currentMessages), chatPending);
+}
+
+function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
+  switch (event?.type) {
+    case "thinking_started":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, buildThinkingMessage(requestId, event.payload, { status: "running" })), true);
+    case "thinking_delta":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, appendThinkingDelta(messages, requestId, event.payload?.delta)), true);
+    case "thinking_completed":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, buildThinkingMessage(requestId, event.payload, { status: "completed" })), true);
+    case "tool_started":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, false)), true);
+    case "tool_completed":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, false)), true);
+    case "tool_chain_completed":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, true)), true);
+    case "answer_started":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, buildStreamingAnswerMessage(requestId, "", "running", null)), true);
+    case "answer_delta":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(messages, appendStreamingAnswerDelta(messages, requestId, event.payload?.delta)), true);
+    case "answer_completed":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
+        upsertChatMessage(
+          messages,
+          buildStreamingAnswerMessage(
+            requestId,
+            typeof event.payload?.message === "string" ? event.payload.message : getMessageContent(messages, `assistant-${requestId}`),
+            "completed",
+            event.payload?.duration_ms,
+          ),
+        ), false);
+    default:
+      return state;
+  }
+}
+
+function upsertChatMessage(messages, nextMessage) {
+  const nextMessages = [...messages];
+  const index = nextMessages.findIndex((message) => message.id === nextMessage.id);
+  if (index === -1) {
+    nextMessages.push(nextMessage);
+    return nextMessages;
+  }
+  nextMessages[index] = {
+    ...nextMessages[index],
+    ...nextMessage,
+  };
+  return nextMessages;
+}
+
+function getMessageContent(messages, messageId) {
+  return messages.find((message) => message.id === messageId)?.content ?? "";
+}
+
+function buildThinkingMessage(requestId, payload, { status }) {
+  const durationMs = typeof payload?.duration_ms === "number" ? payload.duration_ms : null;
+  const summary = typeof payload?.summary === "string" ? payload.summary : "";
+  return {
+    id: `thought-${requestId}`,
+    role: "assistant",
+    kind: "thought-trace",
+    content: status === "running" ? "思考中" : "思路已完成",
+    thoughtTrace: {
+      status,
+      summary,
+      durationMs,
+    },
+    meta: status === "running"
+      ? "Notebook Assistant • 思考中"
+      : buildStatusMeta("思路", durationMs),
+  };
+}
+
+function buildToolTraceMessage(requestId, messages, event, completed) {
+  const messageId = `tool-trace-${requestId}`;
+  const previous = messages.find((message) => message.id === messageId);
+  const previousSteps = Array.isArray(previous?.toolTrace?.steps) ? previous.toolTrace.steps : [];
+
+  let nextSteps = previousSteps;
+  if (event.type === "tool_started" || event.type === "tool_completed") {
+    const step = buildToolTraceStep(event);
+    nextSteps = upsertToolStep(previousSteps, step);
+  }
+
+  const durationMs = event.type === "tool_chain_completed"
+    ? event.payload?.duration_ms
+    : previous?.toolTrace?.durationMs ?? null;
+  const status = completed
+    ? "completed"
+    : nextSteps.some((step) => step.status === "running")
+      ? "running"
+      : "idle";
+  const stepCount = nextSteps.length;
+
+  return {
+    id: messageId,
+    role: "assistant",
+    kind: "tool-trace",
+    content: status === "running"
+      ? `正在调用 ${Math.max(stepCount, 1)} 个工具`
+      : `已调用 ${stepCount} 个工具`,
+    toolTrace: {
+      status,
+      steps: nextSteps,
+      durationMs: typeof durationMs === "number" ? durationMs : null,
+    },
+    meta: completed
+      ? buildStatusMeta("工具链", durationMs)
+      : status === "running"
+        ? "Notebook Assistant • 正在调用工具"
+        : "Notebook Assistant • 等待下一步",
+  };
+}
+
+function upsertToolStep(steps, nextStep) {
+  const nextSteps = [...steps];
+  const index = nextSteps.findIndex((step) => step.id === nextStep.id);
+  if (index === -1) {
+    nextSteps.push(nextStep);
+    return nextSteps;
+  }
+  nextSteps[index] = {
+    ...nextSteps[index],
+    ...nextStep,
+  };
+  return nextSteps;
+}
+
+function buildToolTraceStep(event) {
+  const payload = event.payload ?? {};
+  const normalized = normalizeAgentToolTraceStep({
+    tool_name: payload.tool_name ?? event.payload?.tool_name,
+    payload: payload.payload ?? payload,
+  });
+  return {
+    id: typeof payload.tool_call_id === "string" ? payload.tool_call_id : `${payload.tool_name ?? "tool"}-${payload.index ?? 0}`,
+    toolName: normalized.toolName,
+    label: normalized.label,
+    target: normalized.target,
+    status: event.type === "tool_started" ? "running" : "completed",
+    durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : null,
+  };
+}
+
+function appendStreamingAnswerDelta(messages, requestId, delta) {
+  const currentContent = getMessageContent(messages, `assistant-${requestId}`);
+  return buildStreamingAnswerMessage(
+    requestId,
+    `${currentContent}${typeof delta === "string" ? delta : ""}`,
+    "running",
+    null,
+  );
+}
+
+function appendThinkingDelta(messages, requestId, delta) {
+  const messageId = `thought-${requestId}`;
+  const currentMessage = messages.find((message) => message.id === messageId);
+  const currentSummary = currentMessage?.thoughtTrace?.summary ?? "";
+  const nextSummary = `${currentSummary}${typeof delta === "string" ? delta : ""}`;
+  return buildThinkingMessage(
+    requestId,
+    {
+      summary: nextSummary,
+      duration_ms: currentMessage?.thoughtTrace?.durationMs ?? null,
+    },
+    { status: "running" },
+  );
+}
+
+function buildStreamingAnswerMessage(requestId, content, status, durationMs) {
+  return {
+    id: `assistant-${requestId}`,
+    role: "assistant",
+    content,
+    streamingStatus: status,
+    meta: status === "running"
+      ? "Notebook Assistant • 输出中"
+      : buildAssistantChatMeta(durationMs),
+  };
+}
+
+function buildStatusMeta(label, durationMs) {
+  const durationLabel = formatDurationLabel(durationMs);
+  if (!durationLabel) {
+    return `Notebook Assistant • ${label}完成`;
+  }
+  return `Notebook Assistant • ${label}用时 ${durationLabel}`;
 }
 
 export function useWorkspaceController() {
@@ -1183,30 +1385,32 @@ export function useWorkspaceController() {
       state.selectedToolId,
     );
 
+    const requestId = Date.now();
+
     dispatch({
       type: "chat_request_started",
       chatScopeKey,
-      userMessageId: `user-${Date.now()}`,
+      userMessageId: `user-${requestId}`,
       message: trimmedMessage,
     });
 
-    const requestStartedAt = Date.now();
     try {
-      const response = await sendAgentChat(sessionId, trimmedMessage, {
+      await streamAgentChat(sessionId, trimmedMessage, {
         scope_type: state.selectedContextType,
         series_id: activeSeries?.id ?? null,
         series_title: activeSeries?.title ?? null,
         video_id: selectedVideo?.id ?? null,
         video_title: selectedVideo?.title ?? null,
         selected_tool: state.selectedToolId ?? null,
-      });
-      await applyAgentToolResults(chatScopeKey, response.tool_results ?? [], Date.now() - requestStartedAt);
-      dispatch({
-        type: "chat_response_received",
-        chatScopeKey,
-        assistantMessageId: `assistant-${Date.now()}`,
-        message: response.assistant_message,
-        meta: buildAssistantChatMeta(Date.now() - requestStartedAt),
+      }, async (event) => {
+        dispatch({
+          type: "chat_stream_event_received",
+          chatScopeKey,
+          requestId,
+          event,
+        });
+
+        await applyAgentStreamSideEffects(event);
       });
     } catch (error) {
       dispatch({ type: "chat_pending_cleared" });
@@ -1217,63 +1421,50 @@ export function useWorkspaceController() {
     }
   }
 
-  async function applyAgentToolResults(chatScopeKey, toolResults, durationMs) {
-    const traceSteps = toolResults
-      .map((result) => normalizeAgentToolTraceStep(result))
-      .filter((step) => step != null);
+  async function applyAgentStreamSideEffects(event) {
+    if (event?.type !== "tool_completed") {
+      return;
+    }
 
-    if (traceSteps.length > 0) {
+    const payload = event.payload?.payload ?? {};
+
+    if (payload.selected_tool) {
+      const nextToolId = normalizeAgentToolId(payload.selected_tool);
+      if (nextToolId) {
+        dispatch({ type: "tool_selected", toolId: nextToolId });
+      }
+    }
+
+    if (typeof payload.seek_seconds === "number") {
       dispatch({
-        type: "chat_tool_trace_recorded",
-        chatScopeKey,
-        messageId: `tool-trace-${Date.now()}`,
-        summary: `已调用 ${traceSteps.length} 个工具`,
-        steps: traceSteps,
-        durationMs,
+        type: "preview_seek_requested",
+        seconds: payload.seek_seconds,
+        endSeconds: typeof payload.match_end_seconds === "number" ? payload.match_end_seconds : null,
+        query: typeof payload.query === "string" ? payload.query : "",
+        matchedText: typeof payload.matched_text === "string" ? payload.matched_text : "",
+        chapterTitle: typeof payload.chapter_title === "string" ? payload.chapter_title : "",
+        requestId: `${Date.now()}-${payload.seek_seconds}`,
       });
     }
 
-    for (const result of toolResults) {
-      const payload = result?.payload ?? {};
+    if (payload.action === "generate_overview") {
+      void onGenerateVideo();
+    }
 
-      if (payload.selected_tool) {
-        const nextToolId = normalizeAgentToolId(payload.selected_tool);
-        if (nextToolId) {
-          dispatch({ type: "tool_selected", toolId: nextToolId });
-        }
-      }
+    if (payload.action === "generate_mindmap") {
+      void onGenerateMindmap();
+    }
 
-      if (typeof payload.seek_seconds === "number") {
-        dispatch({
-          type: "preview_seek_requested",
-          seconds: payload.seek_seconds,
-          endSeconds: typeof payload.match_end_seconds === "number" ? payload.match_end_seconds : null,
-          query: typeof payload.query === "string" ? payload.query : "",
-          matchedText: typeof payload.matched_text === "string" ? payload.matched_text : "",
-          chapterTitle: typeof payload.chapter_title === "string" ? payload.chapter_title : "",
-          requestId: `${Date.now()}-${payload.seek_seconds}`,
-        });
-      }
-
-      if (payload.action === "generate_overview") {
-        void onGenerateVideo();
-      }
-
-      if (payload.action === "generate_mindmap") {
-        void onGenerateMindmap();
-      }
-
-      if (
-        payload.action === "save_note" &&
-        typeof payload.note_title === "string" &&
-        typeof payload.note_content === "string"
-      ) {
-        await onCreateNote({
-          title: payload.note_title,
-          content: payload.note_content,
-          source: typeof payload.note_source === "string" ? payload.note_source : "agent",
-        });
-      }
+    if (
+      payload.action === "save_note" &&
+      typeof payload.note_title === "string" &&
+      typeof payload.note_content === "string"
+    ) {
+      await onCreateNote({
+        title: payload.note_title,
+        content: payload.note_content,
+        source: typeof payload.note_source === "string" ? payload.note_source : "agent",
+      });
     }
   }
 

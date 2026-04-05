@@ -3,15 +3,9 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
-class ResponderFact(BaseModel):
-    kind: str
-    value: str
-
-
 class ResponderToolFact(BaseModel):
     tool_name: str
     status: str
-    facts: list[ResponderFact] = Field(default_factory=list)
     payload: dict[str, object] = Field(default_factory=dict)
 
 

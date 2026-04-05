@@ -97,6 +97,41 @@ class FakeAgentService:
             ],
         )
 
+    def stream_with_context(self, *, session_id: str, user_message: str, context_override=None):
+        self.last_context_override = context_override
+        yield type("Event", (), {"type": "thinking_started", "payload": {"message": "正在分析当前问题"}})()
+        yield type("Event", (), {"type": "thinking_completed", "payload": {"summary": f"session={session_id}", "duration_ms": 5}})()
+        yield type("Event", (), {"type": "tool_started", "payload": {"tool_call_id": "tool-1", "tool_name": "open_overview", "index": 1}})()
+        yield type(
+            "Event",
+            (),
+            {
+                "type": "tool_completed",
+                "payload": {
+                    "tool_call_id": "tool-1",
+                    "tool_name": "open_overview",
+                    "status": "ok",
+                    "duration_ms": 3,
+                    "payload": {"selected_tool": "overview"},
+                },
+            },
+        )()
+        yield type("Event", (), {"type": "tool_chain_completed", "payload": {"count": 1, "duration_ms": 3}})()
+        yield type("Event", (), {"type": "answer_started", "payload": {"message": "正在组织回答"}})()
+        yield type("Event", (), {"type": "answer_delta", "payload": {"delta": "已收到："}})()
+        yield type("Event", (), {"type": "answer_delta", "payload": {"delta": user_message}})()
+        yield type(
+            "Event",
+            (),
+            {
+                "type": "answer_completed",
+                "payload": {
+                    "message": f"已收到：{user_message}",
+                    "duration_ms": 7,
+                },
+            },
+        )()
+
 
 class FakeFasterWhisperModelManager:
     def __init__(self) -> None:
@@ -613,6 +648,29 @@ show_takeaways = true
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "缺少 API Key，无法调用 Agent 模型。")
+
+    async def test_agent_chat_stream_endpoint_returns_sse_events(self) -> None:
+        response = await self.client.post(
+            "/api/agent/chat/stream",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "message": "打开概况",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("event: thinking_started", response.text)
+        self.assertIn("event: tool_completed", response.text)
+        self.assertIn("event: answer_delta", response.text)
+        self.assertIn("event: answer_completed", response.text)
 
 
 if __name__ == "__main__":

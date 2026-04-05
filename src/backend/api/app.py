@@ -422,6 +422,41 @@ def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
     return AgentChatResponse.from_result(result)
 
 
+@app.post("/api/agent/chat/stream")
+def agent_chat_stream(request: AgentChatRequest) -> StreamingResponse:
+    context_override = None
+    if request.context is not None:
+        context_override = AgentContext(
+            session_id=request.session_id,
+            scope_type=request.context.scope_type or "library",
+            series_id=request.context.series_id,
+            series_title=request.context.series_title,
+            video_id=request.context.video_id,
+            video_title=request.context.video_title,
+            selected_tool=request.context.selected_tool,
+        )
+
+    def event_iterator():
+        try:
+            for event in CONTAINER.get_agent_service().stream_with_context(
+                session_id=request.session_id,
+                user_message=request.message,
+                context_override=context_override,
+            ):
+                yield _encode_sse_event(event.type, event.payload)
+        except RuntimeError as error:
+            yield _encode_sse_event("error", {"message": str(error)})
+
+    return StreamingResponse(
+        event_iterator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @app.get("/api/videos/{series_id}/{video_id}/generate/progress")
 async def stream_video_generation_progress(series_id: str, video_id: str) -> StreamingResponse:
     task_id = _build_task_id(series_id, video_id)
@@ -462,3 +497,7 @@ async def _stream_progress_events(*, tracker, task_id: str, terminal_statuses: s
         if snapshot.status in terminal_statuses:
             break
         await asyncio.sleep(0.25)
+
+
+def _encode_sse_event(event_type: str, payload: dict[str, object]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"

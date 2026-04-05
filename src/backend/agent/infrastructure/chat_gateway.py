@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from pydantic import BaseModel
 
 from backend.agent.ports import ChatGateway, StructuredResponseT
@@ -30,6 +32,20 @@ class OpenAICompatibleChatGateway:
         if isinstance(content, str) and content.strip():
             return content.strip()
         raise RuntimeError("Agent 返回缺少 message.content。")
+
+    def create_text_completion_stream(self, messages: list[AgentChatMessage]) -> Iterator[str]:
+        stream = self._client.chat.completions.create(
+            model=self._model,
+            messages=[message.model_dump() for message in messages],
+            temperature=0,
+            stream=True,
+        )
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content
+            if isinstance(delta, str) and delta:
+                yield delta
 
     def create_structured_completion(
         self,

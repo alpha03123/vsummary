@@ -32,6 +32,7 @@ def _validate_optional_information_tool_chain(plan: AgentActionPlan) -> None:
             ToolName.LIST_SERIES_VIDEOS,
             ToolName.GET_VIDEO_SUMMARY,
             ToolName.GET_VIDEO_TOOLS,
+            ToolName.TRANSCRIPT_LOOKUP,
         },
     )
     validate_tool_call_arguments(plan)

@@ -15,10 +15,10 @@ const workspaceApi = vi.hoisted(() => ({
   loadFasterWhisperModels: vi.fn(),
   loadProviderSettings: vi.fn(),
   loadVideoKnowledgeCards: vi.fn(),
-  sendAgentChat: vi.fn(),
   loadVideoMindmap: vi.fn(),
   loadVideoNotes: vi.fn(),
   loadVideoSummary: vi.fn(),
+  streamAgentChat: vi.fn(),
   loadWorkspaceSettings: vi.fn(),
   loadVideoTools: vi.fn(),
   loadWorkspaceLibrary: vi.fn(),
@@ -113,16 +113,17 @@ describe("useWorkspaceController", () => {
       title: "Video 1",
       notes: [],
     });
-    workspaceApi.sendAgentChat.mockResolvedValue({
-      assistant_message: "相关内容在 02:08 左右，我已经帮你打开视频。",
-      intent_type: "seek_video",
-      scope_type: "video",
-      reason: "定位到转写片段",
-      out_of_scope_reason: "",
-      tool_results: [
-        {
+    workspaceApi.streamAgentChat.mockImplementation(async (sessionId, message, context, listener) => {
+      listener({ type: "thinking_started", payload: { message: "正在分析当前问题" } });
+      listener({ type: "thinking_completed", payload: { summary: "先检索转写，再定位视频时间点。", duration_ms: 20 } });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "transcript_lookup", index: 1 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-1",
           tool_name: "transcript_lookup",
           status: "ok",
+          duration_ms: 10,
           payload: {
             selected_tool: "video",
             query: "百度地图 API Key",
@@ -132,7 +133,18 @@ describe("useWorkspaceController", () => {
             chapter_title: "准备工作",
           },
         },
-      ],
+      });
+      listener({ type: "tool_chain_completed", payload: { count: 1, duration_ms: 10 } });
+      listener({ type: "answer_started", payload: { message: "正在组织回答" } });
+      listener({ type: "answer_delta", payload: { delta: "相关内容在 02:08 左右，" } });
+      listener({ type: "answer_delta", payload: { delta: "我已经帮你打开视频。" } });
+      listener({
+        type: "answer_completed",
+        payload: {
+          message: "相关内容在 02:08 左右，我已经帮你打开视频。",
+          duration_ms: 30,
+        },
+      });
     });
     workspaceApi.getVideoPreviewUrl.mockReturnValue("/api/videos/series-a/video-1/preview");
     workspaceApi.subscribeFasterWhisperModelDownloadProgress.mockReturnValue(() => {});
@@ -182,7 +194,7 @@ describe("useWorkspaceController", () => {
       await result.current.onSubmitChat("百度地图 API Key 在视频什么位置？");
     });
 
-    expect(workspaceApi.sendAgentChat).toHaveBeenCalledWith(
+    expect(workspaceApi.streamAgentChat).toHaveBeenCalledWith(
       "video|series-a|video-1|studio",
       "百度地图 API Key 在视频什么位置？",
       {
@@ -193,6 +205,7 @@ describe("useWorkspaceController", () => {
         video_title: "Video 1",
         selected_tool: "studio",
       },
+      expect.any(Function),
     );
     await waitFor(() => expect(result.current.state.selectedToolId).toBe("preview"));
     expect(result.current.previewSeekRequest).toEqual(
@@ -251,7 +264,7 @@ describe("useWorkspaceController", () => {
       await result.current.onSubmitChat("这个知识库里先看什么？");
     });
 
-    expect(workspaceApi.sendAgentChat).toHaveBeenCalledWith(
+    expect(workspaceApi.streamAgentChat).toHaveBeenCalledWith(
       "library|studio",
       "这个知识库里先看什么？",
       {
@@ -262,6 +275,7 @@ describe("useWorkspaceController", () => {
         video_title: null,
         selected_tool: "studio",
       },
+      expect.any(Function),
     );
     expect(result.current.chatMessages.some((message) => message.content === "这个知识库里先看什么？")).toBe(true);
   });
@@ -282,16 +296,16 @@ describe("useWorkspaceController", () => {
         },
       ],
     });
-    workspaceApi.sendAgentChat.mockResolvedValueOnce({
-      assistant_message: "我已经帮你记到笔记里了。",
-      intent_type: "open_tool",
-      scope_type: "video",
-      reason: "整理重点",
-      out_of_scope_reason: "",
-      tool_results: [
-        {
+    workspaceApi.streamAgentChat.mockImplementationOnce(async (_sessionId, _message, _context, listener) => {
+      listener({ type: "thinking_started", payload: { message: "正在分析当前问题" } });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "save_note", index: 1 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-1",
           tool_name: "save_note",
           status: "ok",
+          duration_ms: 8,
           payload: {
             action: "save_note",
             selected_tool: "notes",
@@ -300,7 +314,11 @@ describe("useWorkspaceController", () => {
             note_source: "agent",
           },
         },
-      ],
+      });
+      listener({ type: "tool_chain_completed", payload: { count: 1, duration_ms: 8 } });
+      listener({ type: "answer_started", payload: { message: "正在组织回答" } });
+      listener({ type: "answer_delta", payload: { delta: "我已经帮你记到笔记里了。" } });
+      listener({ type: "answer_completed", payload: { message: "我已经帮你记到笔记里了。", duration_ms: 12 } });
     });
 
     const { result } = renderHook(() => useWorkspaceController());
@@ -454,21 +472,25 @@ describe("useWorkspaceController", () => {
   });
 
   it("switches to knowledge cards when agent returns an open-tool action", async () => {
-    workspaceApi.sendAgentChat.mockResolvedValueOnce({
-      assistant_message: "我已经帮你打开知识卡片。",
-      intent_type: "open_tool",
-      scope_type: "video",
-      reason: "切到知识卡片",
-      out_of_scope_reason: "",
-      tool_results: [
-        {
+    workspaceApi.streamAgentChat.mockImplementationOnce(async (_sessionId, _message, _context, listener) => {
+      listener({ type: "thinking_started", payload: { message: "正在分析当前问题" } });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "open_knowledge_cards", index: 1 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-1",
           tool_name: "open_knowledge_cards",
           status: "ok",
+          duration_ms: 6,
           payload: {
             selected_tool: "knowledge-cards",
           },
         },
-      ],
+      });
+      listener({ type: "tool_chain_completed", payload: { count: 1, duration_ms: 6 } });
+      listener({ type: "answer_started", payload: { message: "正在组织回答" } });
+      listener({ type: "answer_delta", payload: { delta: "我已经帮你打开知识卡片。" } });
+      listener({ type: "answer_completed", payload: { message: "我已经帮你打开知识卡片。", duration_ms: 9 } });
     });
 
     const { result } = renderHook(() => useWorkspaceController());
@@ -496,16 +518,19 @@ describe("useWorkspaceController", () => {
   });
 
   it("records visible tool-chain messages before the final assistant reply", async () => {
-    workspaceApi.sendAgentChat.mockResolvedValueOnce({
-      assistant_message: "我已经整理了当前系列里已生成概况的几个视频重点。",
-      intent_type: "series_answer",
-      scope_type: "series",
-      reason: "先读取系列视频，再读取视频概况",
-      out_of_scope_reason: "",
-      tool_results: [
-        {
+    workspaceApi.streamAgentChat.mockImplementationOnce(async (_sessionId, _message, _context, listener) => {
+      listener({ type: "thinking_started", payload: { message: "正在分析当前问题" } });
+      listener({ type: "thinking_delta", payload: { delta: "先读取系列视频，" } });
+      listener({ type: "thinking_delta", payload: { delta: "再读取视频概况。" } });
+      listener({ type: "thinking_completed", payload: { summary: "先读取系列视频，再读取视频概况。", duration_ms: 14 } });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "list_series_videos", index: 1 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-1",
           tool_name: "list_series_videos",
           status: "ok",
+          duration_ms: 5,
           payload: {
             series_id: "series-a",
             series_title: "Series A",
@@ -514,9 +539,15 @@ describe("useWorkspaceController", () => {
             ],
           },
         },
-        {
+      });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-2", tool_name: "get_video_summary", index: 2 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-2",
           tool_name: "get_video_summary",
           status: "ok",
+          duration_ms: 11,
           payload: {
             series_id: "series-a",
             video_id: "video-1",
@@ -528,7 +559,18 @@ describe("useWorkspaceController", () => {
             chapters: [],
           },
         },
-      ],
+      });
+      listener({ type: "tool_chain_completed", payload: { count: 2, duration_ms: 16 } });
+      listener({ type: "answer_started", payload: { message: "正在组织回答" } });
+      listener({ type: "answer_delta", payload: { delta: "我已经整理了当前系列里" } });
+      listener({ type: "answer_delta", payload: { delta: "已生成概况的几个视频重点。" } });
+      listener({
+        type: "answer_completed",
+        payload: {
+          message: "我已经整理了当前系列里已生成概况的几个视频重点。",
+          duration_ms: 22,
+        },
+      });
     });
 
     const { result } = renderHook(() => useWorkspaceController());
@@ -546,9 +588,17 @@ describe("useWorkspaceController", () => {
     expect(result.current.chatMessages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          kind: "thought-trace",
+          thoughtTrace: expect.objectContaining({
+            status: "completed",
+            summary: "先读取系列视频，再读取视频概况。",
+          }),
+        }),
+        expect.objectContaining({
           kind: "tool-trace",
           content: "已调用 2 个工具",
           toolTrace: expect.objectContaining({
+            status: "completed",
             steps: [
               expect.objectContaining({
                 toolName: "list_series_videos",

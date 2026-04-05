@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3 } from "lucide-react";
+import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit } from "lucide-react";
 
 const WorkspaceMarkdownMessage = lazy(() =>
   import("./shared/WorkspaceMarkdownMessage").then((module) => ({
@@ -77,6 +77,10 @@ export function WorkspaceChatPanel({
   }
 
   function renderMessageContent(message, isAssistant) {
+    if (message.kind === "thought-trace") {
+      return <WorkspaceThoughtTraceMessage message={message} />;
+    }
+
     if (message.kind === "tool-trace") {
       return <WorkspaceToolTraceMessage message={message} />;
     }
@@ -160,7 +164,7 @@ export function WorkspaceChatPanel({
           );
         })}
 
-        {chatPending ? (
+        {chatPending && chatMessages.every((message) => message.kind == null) ? (
           <div className="flex items-start gap-4 max-w-2xl">
             <div className="w-8 h-8 rounded-2xl bg-[#0070f3] flex items-center justify-center shrink-0 shadow-sm mt-1">
               <LoaderCircle size={16} className="animate-spin text-white" />
@@ -214,6 +218,8 @@ function AssistantMessageFallback({ content }) {
 function WorkspaceToolTraceMessage({ message }) {
   const steps = Array.isArray(message.toolTrace?.steps) ? message.toolTrace.steps : [];
   const durationLabel = formatDurationLabel(message.toolTrace?.durationMs);
+  const isRunning = message.toolTrace?.status === "running";
+  const isIdle = message.toolTrace?.status === "idle";
 
   return (
     <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
@@ -231,9 +237,19 @@ function WorkspaceToolTraceMessage({ message }) {
                   用时 {durationLabel}
                 </span>
               ) : null}
+              {isRunning ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                  <LoaderCircle size={12} className="animate-spin" />
+                  调用中
+                </span>
+              ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              展开查看本轮实际调用的工具名和步骤说明
+              {isRunning
+                ? "工具正在执行中"
+                : isIdle
+                  ? "当前这一步已完成，等待下一步规划"
+                  : "展开查看本轮实际调用的工具名和步骤说明"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
@@ -252,13 +268,60 @@ function WorkspaceToolTraceMessage({ message }) {
                   {step.toolName}
                 </code>
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{step.label}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  step.status === "running"
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                }`}>
+                  {step.status === "running" ? "进行中" : "已完成"}
+                </span>
                 {step.target ? (
                   <span className="truncate text-xs text-stone-500 dark:text-stone-400">({step.target})</span>
+                ) : null}
+                {typeof step.durationMs === "number" ? (
+                  <span className="text-xs text-stone-400 dark:text-stone-500">用时 {formatDurationLabel(step.durationMs)}</span>
                 ) : null}
               </div>
             </div>
           ))}
         </div>
+      </div>
+    </details>
+  );
+}
+
+function WorkspaceThoughtTraceMessage({ message }) {
+  const isRunning = message.thoughtTrace?.status === "running";
+  const durationLabel = formatDurationLabel(message.thoughtTrace?.durationMs);
+  const summary = typeof message.thoughtTrace?.summary === "string" ? message.thoughtTrace.summary : "";
+
+  return (
+    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
+      <summary className="list-none cursor-pointer px-4 py-3.5">
+        <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+            {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong className="text-[15px] font-semibold">{message.content}</strong>
+              {durationLabel ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                  <Clock3 size={12} />
+                  用时 {durationLabel}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              {isRunning ? "正在分析当前问题与上下文" : "展开查看本轮对问题的思路摘要"}
+            </p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
+        </div>
+      </summary>
+
+      <div className="border-t border-stone-200/80 px-4 py-3 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:text-stone-300">
+        {summary || "正在思考中..."}
       </div>
     </details>
   );

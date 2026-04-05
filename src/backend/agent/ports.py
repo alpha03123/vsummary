@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, TypeVar
+from typing import Iterator, Protocol, TypeVar
 
 from pydantic import BaseModel
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent.schemas.tool_calls import ToolExecutionResult
+from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult
 
 StructuredResponseT = TypeVar("StructuredResponseT", bound=BaseModel)
 
 
 class ChatGateway(Protocol):
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
+        ...
+
+    def create_text_completion_stream(self, messages: list[AgentChatMessage]) -> Iterator[str]:
         ...
 
     def create_structured_completion(
@@ -58,4 +61,7 @@ class AgentTranscriptLookup(Protocol):
 
 class AgentToolExecutor(Protocol):
     def execute(self, plan: AgentActionPlan, context: AgentContext) -> list[ToolExecutionResult]:
+        ...
+
+    def execute_call(self, call: ToolCall, context: AgentContext) -> ToolExecutionResult:
         ...

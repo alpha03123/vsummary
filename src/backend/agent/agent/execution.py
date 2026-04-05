@@ -18,10 +18,10 @@ class RegistryAgentToolExecutor(AgentToolExecutor):
     registry: dict[ToolName, ToolHandler]
 
     def execute(self, plan: AgentActionPlan, context: AgentContext) -> list[ToolExecutionResult]:
-        results: list[ToolExecutionResult] = []
-        for call in plan.tool_calls:
-            handler = self.registry.get(call.tool_name)
-            if handler is None:
-                raise AgentPlanError(f"Unsupported tool_name: {call.tool_name.value}")
-            results.append(handler(call, context))
-        return results
+        return [self.execute_call(call, context) for call in plan.tool_calls]
+
+    def execute_call(self, call: ToolCall, context: AgentContext) -> ToolExecutionResult:
+        handler = self.registry.get(call.tool_name)
+        if handler is None:
+            raise AgentPlanError(f"Unsupported tool_name: {call.tool_name.value}")
+        return handler(call, context)

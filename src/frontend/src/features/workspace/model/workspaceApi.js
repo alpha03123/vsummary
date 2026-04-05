@@ -243,6 +243,60 @@ export async function sendAgentChat(sessionId, message, context) {
   });
 }
 
+export async function streamAgentChat(sessionId, message, context, listener) {
+  const response = await fetch("/api/agent/chat/stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      context: context ?? null,
+    }),
+  });
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const payload = await response.json();
+      detail = typeof payload.detail === "string" ? payload.detail : "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail ? `${response.status} ${detail}` : "AI 对话失败");
+  }
+  if (response.body == null) {
+    throw new Error("AI 对话流未返回内容。");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const rawEvent = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const event = parseSseEvent(rawEvent);
+      if (event != null) {
+        if (event.type === "error") {
+          throw new Error(typeof event.payload?.message === "string" ? event.payload.message : "AI 对话失败");
+        }
+        listener(event);
+      }
+      boundary = buffer.indexOf("\n\n");
+    }
+
+    if (done) {
+      break;
+    }
+  }
+}
+
 export function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
   const eventSource = new EventSource(
     `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate/progress`,
@@ -313,5 +367,33 @@ function parseProgressMessage(rawValue) {
     estimatedTotalSeconds:
       typeof payload.estimated_total_seconds === "number" ? payload.estimated_total_seconds : null,
     remainingSeconds: typeof payload.remaining_seconds === "number" ? payload.remaining_seconds : null,
+  };
+}
+
+function parseSseEvent(rawValue) {
+  const lines = rawValue
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) {
+    return null;
+  }
+
+  let type = "message";
+  const dataLines = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      type = line.slice("event:".length).trim() || "message";
+      continue;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+
+  const rawData = dataLines.join("\n");
+  return {
+    type,
+    payload: rawData ? JSON.parse(rawData) : {},
   };
 }
