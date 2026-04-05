@@ -123,6 +123,7 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
       };
@@ -149,6 +150,7 @@ function workspaceReducer(state, action) {
         mindmapLoading: false,
         generationProgress: null,
         generationSnapshot: null,
+        chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
       };
@@ -172,6 +174,7 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
       };
@@ -201,6 +204,7 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
       };
@@ -391,25 +395,31 @@ function workspaceReducer(state, action) {
         settingsPanelOpen: !state.settingsPanelOpen,
       };
     case "chat_request_started":
-      return applyChatThreadUpdate(state, [
-        ...state.chatMessages,
-        {
-          id: action.userMessageId,
-          role: "user",
-          content: action.message,
-          meta: "You • Just now",
-        },
-      ], true);
+      return appendChatThreadMessage(state, action.chatScopeKey, {
+        id: action.userMessageId,
+        role: "user",
+        content: action.message,
+        meta: "You • Just now",
+      }, true);
     case "chat_response_received":
-      return applyChatThreadUpdate(state, [
-        ...state.chatMessages,
-        {
-          id: action.assistantMessageId,
-          role: "assistant",
-          content: action.message,
-          meta: action.meta ?? "Notebook Assistant • Just now",
+      return appendChatThreadMessage(state, action.chatScopeKey, {
+        id: action.assistantMessageId,
+        role: "assistant",
+        content: action.message,
+        meta: action.meta ?? "Notebook Assistant • Just now",
+      }, false);
+    case "chat_tool_trace_recorded":
+      return appendChatThreadMessage(state, action.chatScopeKey, {
+        id: action.messageId,
+        role: "assistant",
+        kind: "tool-trace",
+        content: action.summary,
+        toolTrace: {
+          steps: action.steps,
+          durationMs: action.durationMs,
         },
-      ], false);
+        meta: action.meta ?? "Notebook Assistant • Tool Chain",
+      }, true);
     case "settings_panel_closed":
       return {
         ...state,
@@ -503,20 +513,19 @@ function workspaceReducer(state, action) {
   }
 }
 
-function applyChatThreadUpdate(state, nextMessages, chatPending) {
-  const chatScopeKey = buildChatScopeKey(
-    state.selectedContextType,
-    state.selectedSeriesId,
-    state.selectedVideoId,
-    state.selectedToolId,
-  );
+function applyChatThreadUpdate(state, chatScopeKey, nextMessages, chatPending) {
   return {
     ...state,
     chatPending,
-    chatMessages: nextMessages,
+    chatMessages: state.chatScopeKey === chatScopeKey ? nextMessages : state.chatMessages,
     chatThreads: setChatMessagesForScope(state.chatThreads, chatScopeKey, nextMessages),
     error: "",
   };
+}
+
+function appendChatThreadMessage(state, chatScopeKey, message, chatPending) {
+  const currentMessages = getChatMessagesForScope(state.chatThreads, chatScopeKey);
+  return applyChatThreadUpdate(state, chatScopeKey, [...currentMessages, message], chatPending);
 }
 
 export function useWorkspaceController() {
@@ -1161,6 +1170,12 @@ export function useWorkspaceController() {
       return;
     }
 
+    const chatScopeKey = buildChatScopeKey(
+      state.selectedContextType,
+      state.selectedSeriesId,
+      state.selectedVideoId,
+      state.selectedToolId,
+    );
     const sessionId = buildAgentSessionId(
       state.selectedContextType,
       state.selectedSeriesId,
@@ -1170,10 +1185,12 @@ export function useWorkspaceController() {
 
     dispatch({
       type: "chat_request_started",
+      chatScopeKey,
       userMessageId: `user-${Date.now()}`,
       message: trimmedMessage,
     });
 
+    const requestStartedAt = Date.now();
     try {
       const response = await sendAgentChat(sessionId, trimmedMessage, {
         scope_type: state.selectedContextType,
@@ -1183,12 +1200,13 @@ export function useWorkspaceController() {
         video_title: selectedVideo?.title ?? null,
         selected_tool: state.selectedToolId ?? null,
       });
-      await applyAgentToolResults(response.tool_results ?? []);
+      await applyAgentToolResults(chatScopeKey, response.tool_results ?? [], Date.now() - requestStartedAt);
       dispatch({
         type: "chat_response_received",
+        chatScopeKey,
         assistantMessageId: `assistant-${Date.now()}`,
         message: response.assistant_message,
-        meta: response.reason ? `Notebook Assistant • ${response.reason}` : "Notebook Assistant • Just now",
+        meta: buildAssistantChatMeta(Date.now() - requestStartedAt),
       });
     } catch (error) {
       dispatch({ type: "chat_pending_cleared" });
@@ -1199,9 +1217,25 @@ export function useWorkspaceController() {
     }
   }
 
-  async function applyAgentToolResults(toolResults) {
+  async function applyAgentToolResults(chatScopeKey, toolResults, durationMs) {
+    const traceSteps = toolResults
+      .map((result) => normalizeAgentToolTraceStep(result))
+      .filter((step) => step != null);
+
+    if (traceSteps.length > 0) {
+      dispatch({
+        type: "chat_tool_trace_recorded",
+        chatScopeKey,
+        messageId: `tool-trace-${Date.now()}`,
+        summary: `已调用 ${traceSteps.length} 个工具`,
+        steps: traceSteps,
+        durationMs,
+      });
+    }
+
     for (const result of toolResults) {
       const payload = result?.payload ?? {};
+
       if (payload.selected_tool) {
         const nextToolId = normalizeAgentToolId(payload.selected_tool);
         if (nextToolId) {
@@ -1320,4 +1354,83 @@ function normalizeAgentToolId(toolId) {
     return toolId;
   }
   return null;
+}
+
+function normalizeAgentToolTraceStep(result) {
+  const payload = result?.payload ?? {};
+  switch (result?.tool_name) {
+    case "list_series_videos":
+      return createToolTraceStep(result.tool_name, "读取系列视频列表", payload.series_title ?? payload.series_id);
+    case "get_video_summary":
+      return createToolTraceStep(result.tool_name, "读取视频概况", payload.title ?? payload.video_id);
+    case "get_video_tools":
+      return createToolTraceStep(result.tool_name, "读取视频工具状态", payload.video_id);
+    case "open_series_home":
+      return createToolTraceStep(result.tool_name, "打开系列首页");
+    case "open_overview":
+      return createToolTraceStep(result.tool_name, "打开 AI 概况");
+    case "open_mindmap":
+      return createToolTraceStep(result.tool_name, "打开思维导图");
+    case "open_knowledge_cards":
+      return createToolTraceStep(result.tool_name, "打开知识卡片");
+    case "open_notes":
+      return createToolTraceStep(result.tool_name, "打开笔记");
+    case "open_video":
+      return createToolTraceStep(result.tool_name, "打开视频预览");
+    case "video_seek":
+      return createToolTraceStep(
+        result.tool_name,
+        typeof payload.seek_seconds === "number" ? `跳转视频到 ${formatSeconds(payload.seek_seconds)}` : "跳转视频",
+      );
+    case "generate_overview":
+      return createToolTraceStep(result.tool_name, "生成 AI 概况");
+    case "generate_mindmap":
+      return createToolTraceStep(result.tool_name, "生成思维导图");
+    case "save_note":
+      return createToolTraceStep(result.tool_name, "保存笔记", payload.note_title);
+    case "transcript_lookup":
+      return createToolTraceStep(result.tool_name, "检索转写", payload.query);
+    default:
+      return createToolTraceStep(result?.tool_name ?? "unknown_tool", "执行工作流步骤");
+  }
+}
+
+function createToolTraceStep(toolName, label, target = "") {
+  return {
+    toolName,
+    label,
+    target: normalizeToolTarget(target),
+  };
+}
+
+function normalizeToolTarget(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  return value.trim();
+}
+
+function formatSeconds(seconds) {
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function buildAssistantChatMeta(durationMs) {
+  const durationLabel = formatDurationLabel(durationMs);
+  if (!durationLabel) {
+    return "Notebook Assistant • Just now";
+  }
+  return `Notebook Assistant • 用时 ${durationLabel}`;
+}
+
+function formatDurationLabel(durationMs) {
+  if (typeof durationMs !== "number" || Number.isNaN(durationMs) || durationMs < 0) {
+    return "";
+  }
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+  return `${(durationMs / 1000).toFixed(1)}秒`;
 }

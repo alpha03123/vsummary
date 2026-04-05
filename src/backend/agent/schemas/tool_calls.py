@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 
 
 class ToolName(str, Enum):
+    LIST_SERIES_VIDEOS = "list_series_videos"
+    GET_VIDEO_SUMMARY = "get_video_summary"
+    GET_VIDEO_TOOLS = "get_video_tools"
     OPEN_SERIES_HOME = "open_series_home"
     OPEN_OVERVIEW = "open_overview"
     OPEN_MINDMAP = "open_mindmap"
@@ -25,6 +28,23 @@ class ToolDefinition(BaseModel):
     title: str
     description: str
     arguments: dict[str, str] = Field(default_factory=dict)
+
+
+class ListSeriesVideosCall(BaseModel):
+    tool_name: Literal[ToolName.LIST_SERIES_VIDEOS] = ToolName.LIST_SERIES_VIDEOS
+    series_id: str | None = None
+
+
+class GetVideoSummaryCall(BaseModel):
+    tool_name: Literal[ToolName.GET_VIDEO_SUMMARY] = ToolName.GET_VIDEO_SUMMARY
+    series_id: str | None = None
+    video_id: str | None = None
+
+
+class GetVideoToolsCall(BaseModel):
+    tool_name: Literal[ToolName.GET_VIDEO_TOOLS] = ToolName.GET_VIDEO_TOOLS
+    series_id: str | None = None
+    video_id: str | None = None
 
 
 class OpenSeriesHomeCall(BaseModel):
@@ -76,7 +96,10 @@ class TranscriptLookupCall(BaseModel):
 
 
 ToolCall = Annotated[
-    OpenSeriesHomeCall
+    ListSeriesVideosCall
+    | GetVideoSummaryCall
+    | GetVideoToolsCall
+    | OpenSeriesHomeCall
     | OpenOverviewCall
     | OpenMindmapCall
     | OpenKnowledgeCardsCall

@@ -1,89 +1,69 @@
 from __future__ import annotations
 
-import asyncio
-
 import httpx
+import instructor
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+from typing import TypeVar
 
 
-RETRIABLE_STATUS_CODES = {429, 502, 503, 504}
+StructuredResponse = TypeVar("StructuredResponse", bound=BaseModel)
 
 
-class OpenAIResponsesGateway:
+class OpenAICompletionGateway:
     def __init__(
         self,
         model: str,
         base_url: str,
         api_key: str,
         *,
-        transport: httpx.AsyncBaseTransport | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         if not api_key:
             raise RuntimeError("缺少 API Key，无法生成总结。")
 
-        self._api_key = api_key
         self._model = model
-        self._base_url = base_url.rstrip("/")
-        self._transport = transport
+        self._http_client = http_client or httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=30.0),
+        )
+        self._openai_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url.rstrip("/"),
+            http_client=self._http_client,
+            max_retries=2,
+        )
+        self._structured_client = instructor.from_openai(self._openai_client)
 
     async def create_text(self, prompt: str) -> str:
-        payload = {
-            "model": self._model,
-            "input": prompt,
-            "text": {"format": {"type": "text"}},
-        }
         try:
-            raw_response = await self._post_with_retry(payload)
-        except httpx.HTTPStatusError as error:
-            body = error.response.text
-            raise RuntimeError(f"OpenAI 请求失败: {error.response.status_code} {body}") from error
+            response = await self._openai_client.chat.completions.create(
+                model=self._model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+            )
         except httpx.HTTPError as error:
             raise RuntimeError(f"OpenAI 请求失败: {error}") from error
 
-        output_text = raw_response.get("output_text")
-        if output_text:
-            return output_text.strip()
+        content = response.choices[0].message.content
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        raise RuntimeError("模型返回缺少 message.content。")
 
-        output_items = raw_response.get("output", [])
-        content_parts: list[str] = []
-        for item in output_items:
-            for content in item.get("content", []):
-                if content.get("type") == "output_text" and content.get("text"):
-                    content_parts.append(content["text"].strip())
-        if content_parts:
-            return "\n".join(part for part in content_parts if part)
-
-        raise RuntimeError(f"OpenAI 返回中缺少 output_text: {raw_response}")
-
-    async def _post_with_retry(self, payload: dict[str, object]) -> dict[str, object]:
-        for attempt in range(3):
-            try:
-                async with httpx.AsyncClient(
-                    transport=self._transport,
-                    timeout=httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=30.0),
-                ) as client:
-                    response = await client.post(
-                        self._base_url,
-                        json=payload,
-                        headers={
-                            "Authorization": f"Bearer {self._api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    if response.status_code in RETRIABLE_STATUS_CODES:
-                        raise _RetriableStatusError(response)
-                    response.raise_for_status()
-                    return response.json()
-            except (httpx.TransportError, _RetriableStatusError):
-                if attempt == 2:
-                    raise
-                await asyncio.sleep(min(2 ** attempt, 8))
-        raise RuntimeError("OpenAI 请求失败: retried without response")
-
-
-class _RetriableStatusError(httpx.HTTPStatusError):
-    def __init__(self, response: httpx.Response) -> None:
-        super().__init__(
-            f"Retriable OpenAI status: {response.status_code}",
-            request=response.request,
-            response=response,
-        )
+    async def create_structured_completion(
+        self,
+        *,
+        prompt: str,
+        response_model: type[StructuredResponse],
+    ) -> StructuredResponse:
+        try:
+            return await self._structured_client.chat.completions.create(
+                model=self._model,
+                response_model=response_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_retries=3,
+            )
+        except (httpx.HTTPError, Exception) as error:
+            if isinstance(error, RuntimeError):
+                raise
+            raise RuntimeError(f"OpenAI 结构化请求失败: {error}") from error

@@ -3,7 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from backend.agent.schemas.action_plan import AgentActionPlan
-from backend.agent.schemas.tool_calls import ToolName, TranscriptLookupCall, VideoSeekCall
+from backend.agent.schemas.tool_calls import (
+    GetVideoSummaryCall,
+    GetVideoToolsCall,
+    ListSeriesVideosCall,
+    ToolName,
+    TranscriptLookupCall,
+    VideoSeekCall,
+)
 from backend.agent.validation.errors import AgentPlanError
 
 
@@ -22,6 +29,11 @@ def require_tool_calls(plan: AgentActionPlan) -> None:
         raise AgentPlanError("当前意图至少需要一个工具调用。")
 
 
+def require_max_tool_calls(plan: AgentActionPlan, maximum: int) -> None:
+    if len(plan.tool_calls) > maximum:
+        raise AgentPlanError(f"{plan.intent_type.value} 最多允许 {maximum} 个工具调用。")
+
+
 def require_only_tool_names(plan: AgentActionPlan, allowed_tool_names: Iterable[ToolName]) -> None:
     allowed = set(allowed_tool_names)
     for call in plan.tool_calls:
@@ -37,3 +49,15 @@ def validate_tool_call_arguments(plan: AgentActionPlan) -> None:
             raise AgentPlanError("video_seek 的 seek_seconds 不能为负数。")
         if isinstance(call, TranscriptLookupCall) and not call.query.strip():
             raise AgentPlanError("transcript_lookup 的 query 不能为空。")
+        if isinstance(call, ListSeriesVideosCall) and call.series_id is not None and not call.series_id.strip():
+            raise AgentPlanError("list_series_videos 的 series_id 不能为空字符串。")
+        if isinstance(call, GetVideoSummaryCall):
+            if call.series_id is not None and not call.series_id.strip():
+                raise AgentPlanError("get_video_summary 的 series_id 不能为空字符串。")
+            if call.video_id is not None and not call.video_id.strip():
+                raise AgentPlanError("get_video_summary 的 video_id 不能为空字符串。")
+        if isinstance(call, GetVideoToolsCall):
+            if call.series_id is not None and not call.series_id.strip():
+                raise AgentPlanError("get_video_tools 的 series_id 不能为空字符串。")
+            if call.video_id is not None and not call.video_id.strip():
+                raise AgentPlanError("get_video_tools 的 video_id 不能为空字符串。")

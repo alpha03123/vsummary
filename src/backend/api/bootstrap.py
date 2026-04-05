@@ -9,6 +9,11 @@ from backend.agent import AgentService, InMemoryAgentMemoryStore
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import OpenAICompatibleChatGateway, WorkspaceAgentContextLoader, WorkspaceTranscriptLookup
 from backend.agent.schemas.tool_calls import ToolName
+from backend.agent.tools.library_info import (
+    create_get_video_summary_handler,
+    create_get_video_tools_handler,
+    create_list_series_videos_handler,
+)
 from backend.agent.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
 from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
 from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
@@ -137,6 +142,9 @@ class LazyAgentServiceProvider:
 
 def _build_agent_service(root_dir: Path, workspace: FileSystemVideoWorkspace) -> AgentService:
     transcript_lookup = WorkspaceTranscriptLookup(workspace)
+    list_series_videos = create_list_series_videos_handler(workspace)
+    get_video_summary = create_get_video_summary_handler(workspace)
+    get_video_tools = create_get_video_tools_handler(workspace)
     env_settings = load_env_settings(root_dir)
     return AgentService(
         gateway=OpenAICompatibleChatGateway(
@@ -148,6 +156,9 @@ def _build_agent_service(root_dir: Path, workspace: FileSystemVideoWorkspace) ->
         memory_store=InMemoryAgentMemoryStore(),
         tool_executor=RegistryAgentToolExecutor(
             registry={
+                ToolName.LIST_SERIES_VIDEOS: list_series_videos,
+                ToolName.GET_VIDEO_SUMMARY: get_video_summary,
+                ToolName.GET_VIDEO_TOOLS: get_video_tools,
                 ToolName.OPEN_SERIES_HOME: execute_open_series_home,
                 ToolName.OPEN_OVERVIEW: execute_open_overview,
                 ToolName.OPEN_MINDMAP: execute_open_mindmap,

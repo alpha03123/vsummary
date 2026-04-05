@@ -5,16 +5,7 @@
 ## 方向
 
 - 本地优先，用户自带模型或 API Key
-- 先做稳定的音频转写与分段总结
-- 再逐步加入关键帧、OCR 与时间轴融合
 
-## 当前状态
-
-- 仓库处于重构阶段，后端正在从按技术层组织调整为按功能组织
-- 本地模型目录固定为 `data/models/`，整个 `data/` 目录不提交到 Git
-- 输入视频放在 `videos/<series>/`，处理产物输出到 `workspace/<series>/<video>/`
-- 当前默认且唯一的转写实现为 `faster-whisper`
-- 产品愿景与阶段路线见 [docs/product-roadmap.md](E:/gittools/self/video_include/docs/product-roadmap.md)
 
 ## 目录结构
 
@@ -62,7 +53,7 @@ vsummary/
 
 推荐分工：
 
-- `settings.toml`：转写设备、模型质量、公开接口地址，以及前端工作区设置
+- `settings.toml`：转写设备、模型质量，以及前端工作区设置
 - `.env`：`OPENAI_API_KEY` 等敏感凭证
 
 ## 前端开发
@@ -158,4 +149,3 @@ python .\scripts\run_backend_tests.py tests\test_generate_summary.py
 - 把视频放进 `videos/<series>/`
 - 前端会把 `videos` 下的一级目录识别为 series
 - 选择某个视频后，如果还没有处理结果，可以点击 `Generate Video`
-- 处理中间文件和最终结果会写到 `workspace/<series>/<video_stem>/`

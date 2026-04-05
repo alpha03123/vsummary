@@ -183,11 +183,6 @@ def normalize_openai_base_url(value: str) -> str:
     return normalized
 
 
-def build_openai_responses_url(base_url: str) -> str:
-    normalized = normalize_openai_base_url(base_url)
-    return f"{normalized}/responses"
-
-
 def _render_settings_toml(settings: AppSettings) -> str:
     lines = [
         "[asr]",

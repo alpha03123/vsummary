@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 
@@ -14,8 +15,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
-from backend.video_summary.infrastructure.openai_summary.client import OpenAIResponsesGateway
-from backend.video_summary.infrastructure.openai_summary.parsers import extract_json_block
+from backend.video_summary.infrastructure.openai_summary.client import OpenAICompletionGateway
+from backend.video_summary.infrastructure.openai_summary.schemas import SummaryPayload
 from backend.video_summary.infrastructure.settings import (
     AppSettings,
     AsrSettings,
@@ -31,31 +32,66 @@ from backend.video_summary.infrastructure.settings import (
 
 
 class OpenAISummaryInfrastructureTests(unittest.TestCase):
-    def test_gateway_retries_on_transient_status_and_returns_output_text(self) -> None:
-        responses = iter(
-            [
-                httpx.Response(502, request=httpx.Request("POST", "https://example.com/v1/responses"), text="bad gateway"),
-                httpx.Response(200, request=httpx.Request("POST", "https://example.com/v1/responses"), json={"output_text": "final answer"}),
-            ]
-        )
-        transport = httpx.MockTransport(lambda request: next(responses))
-        gateway = OpenAIResponsesGateway(
+    def test_gateway_returns_text_from_chat_completion(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(str(request.url), "https://example.com/v1/chat/completions")
+            return httpx.Response(
+                200,
+                request=request,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "final answer",
+                            }
+                        }
+                    ]
+                },
+            )
+
+        http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        gateway = OpenAICompletionGateway(
             model="gpt-5.4",
-            base_url="https://example.com/v1/responses",
+            base_url="https://example.com/v1",
             api_key="test-key",
-            transport=transport,
+            http_client=http_client,
         )
 
         result = asyncio.run(gateway.create_text("hello"))
 
         self.assertEqual(result, "final answer")
 
-    def test_extract_json_block_ignores_non_json_braces_before_payload(self) -> None:
-        payload = extract_json_block(
-            '<think>先看看这个例子 {"noise": true}</think>\n最终答案：{"title":"demo","chapters":[],"key_takeaways":[]}'
+    def test_gateway_returns_structured_payload_from_instructor_client(self) -> None:
+        gateway = OpenAICompletionGateway(
+            model="gpt-5.4",
+            base_url="https://example.com/v1",
+            api_key="test-key",
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500, request=request))),
+        )
+        gateway._structured_client = SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: _return_async(
+                        SummaryPayload(
+                            title="demo",
+                            one_sentence_summary="一句话",
+                            core_problem="问题",
+                            chapters=[],
+                            key_takeaways=["结论"],
+                        )
+                    )
+                )
+            )
         )
 
-        self.assertEqual(payload["title"], "demo")
+        payload = asyncio.run(
+            gateway.create_structured_completion(
+                prompt="提取视频摘要",
+                response_model=SummaryPayload,
+            )
+        )
+
+        self.assertEqual(payload.title, "demo")
 
     def test_settings_replace_helpers_preserve_other_fields(self) -> None:
         settings = AppSettings(
@@ -160,3 +196,7 @@ transcription_mode = "fast"
 
 if __name__ == "__main__":
     unittest.main()
+
+
+async def _return_async(value):
+    return value

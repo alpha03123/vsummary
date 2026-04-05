@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Sparkles, Plus, ArrowUp, LoaderCircle } from "lucide-react";
+import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3 } from "lucide-react";
 
 const WorkspaceMarkdownMessage = lazy(() =>
   import("./shared/WorkspaceMarkdownMessage").then((module) => ({
@@ -77,6 +77,10 @@ export function WorkspaceChatPanel({
   }
 
   function renderMessageContent(message, isAssistant) {
+    if (message.kind === "tool-trace") {
+      return <WorkspaceToolTraceMessage message={message} />;
+    }
+
     if (!isAssistant) {
       return message.content;
     }
@@ -141,7 +145,9 @@ export function WorkspaceChatPanel({
               <div className={`flex flex-col gap-2 ${isAssistant ? "" : "items-end"}`}>
                 <div
                   className={
-                    isAssistant
+                    message.kind === "tool-trace"
+                      ? "w-full"
+                      : isAssistant
                       ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
                       : "px-5 py-3 rounded-[1.5rem] rounded-tr-sm bg-slate-800 dark:bg-slate-800/92 border border-slate-700/80 dark:border-slate-700 text-slate-50 shadow-sm"
                   }
@@ -203,4 +209,67 @@ export function WorkspaceChatPanel({
 
 function AssistantMessageFallback({ content }) {
   return <div className="whitespace-pre-wrap break-words">{content}</div>;
+}
+
+function WorkspaceToolTraceMessage({ message }) {
+  const steps = Array.isArray(message.toolTrace?.steps) ? message.toolTrace.steps : [];
+  const durationLabel = formatDurationLabel(message.toolTrace?.durationMs);
+
+  return (
+    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
+      <summary className="list-none cursor-pointer px-4 py-3.5">
+        <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+            <Wrench size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong className="text-[15px] font-semibold">{message.content}</strong>
+              {durationLabel ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                  <Clock3 size={12} />
+                  用时 {durationLabel}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              展开查看本轮实际调用的工具名和步骤说明
+            </p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
+        </div>
+      </summary>
+
+      <div className="border-t border-stone-200/80 px-4 py-3 dark:border-stone-800">
+        <div className="flex flex-col gap-2.5">
+          {steps.map((step, index) => (
+            <div
+              key={`${step.toolName}-${index}`}
+              className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3 py-3 dark:border-stone-800 dark:bg-stone-900/70"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="rounded-md bg-stone-200/80 px-2 py-0.5 text-[11px] font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
+                  {step.toolName}
+                </code>
+                <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{step.label}</span>
+                {step.target ? (
+                  <span className="truncate text-xs text-stone-500 dark:text-stone-400">({step.target})</span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function formatDurationLabel(durationMs) {
+  if (typeof durationMs !== "number" || Number.isNaN(durationMs) || durationMs < 0) {
+    return "";
+  }
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+  return `${(durationMs / 1000).toFixed(1)}秒`;
 }

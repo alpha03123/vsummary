@@ -208,6 +208,7 @@ describe("useWorkspaceController", () => {
       expect.objectContaining({
         role: "assistant",
         content: "相关内容在 02:08 左右，我已经帮你打开视频。",
+        meta: expect.stringMatching(/^Notebook Assistant • 用时 /),
       }),
     );
   });
@@ -330,6 +331,24 @@ describe("useWorkspaceController", () => {
         source: "agent",
       }),
     );
+    expect(result.current.chatMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "tool-trace",
+        toolTrace: expect.objectContaining({
+          steps: [
+            expect.objectContaining({
+              toolName: "save_note",
+              label: "保存笔记",
+              target: "重点",
+            }),
+          ],
+        }),
+      }),
+      expect.objectContaining({
+        role: "assistant",
+        content: "我已经帮你记到笔记里了。",
+      }),
+    ]));
   });
 
   it("loads knowledge cards when switching to the knowledge cards tool", async () => {
@@ -473,6 +492,79 @@ describe("useWorkspaceController", () => {
         role: "assistant",
         content: "我已经帮你打开知识卡片。",
       }),
+    );
+  });
+
+  it("records visible tool-chain messages before the final assistant reply", async () => {
+    workspaceApi.sendAgentChat.mockResolvedValueOnce({
+      assistant_message: "我已经整理了当前系列里已生成概况的几个视频重点。",
+      intent_type: "series_answer",
+      scope_type: "series",
+      reason: "先读取系列视频，再读取视频概况",
+      out_of_scope_reason: "",
+      tool_results: [
+        {
+          tool_name: "list_series_videos",
+          status: "ok",
+          payload: {
+            series_id: "series-a",
+            series_title: "Series A",
+            videos: [
+              { video_id: "video-1", title: "Video 1", processed: true, status: "ready" },
+            ],
+          },
+        },
+        {
+          tool_name: "get_video_summary",
+          status: "ok",
+          payload: {
+            series_id: "series-a",
+            video_id: "video-1",
+            title: "Video 1",
+            generated: true,
+            one_sentence_summary: "Video 1 的一句话总结",
+            core_problem: "",
+            key_takeaways: [],
+            chapters: [],
+          },
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("总结当前系列");
+    });
+
+    expect(result.current.chatMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "tool-trace",
+          content: "已调用 2 个工具",
+          toolTrace: expect.objectContaining({
+            steps: [
+              expect.objectContaining({
+                toolName: "list_series_videos",
+                label: "读取系列视频列表",
+                target: "Series A",
+              }),
+              expect.objectContaining({
+                toolName: "get_video_summary",
+                label: "读取视频概况",
+                target: "Video 1",
+              }),
+            ],
+          }),
+        }),
+        expect.objectContaining({ content: "我已经整理了当前系列里已生成概况的几个视频重点。" }),
+      ]),
     );
   });
 });

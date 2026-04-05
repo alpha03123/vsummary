@@ -80,6 +80,7 @@ export function createInitialWorkspaceState() {
     chatThreads: {
       "library|studio": createWelcomeChatMessages(),
     },
+    chatScopeKey: "library|studio",
     chatMessages: createWelcomeChatMessages(),
     chatPending: false,
     settingsPanelOpen: false,

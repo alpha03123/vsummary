@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 
 from backend.video_summary.generation.ports import MindmapGenerator
-from backend.video_summary.infrastructure.openai_summary import OpenAIResponsesGateway, parse_mindmap_payload
+from backend.video_summary.infrastructure.openai_summary import MindmapNodePayload, OpenAICompletionGateway
 
 
 class OpenAIMindmapGenerator(MindmapGenerator):
-    def __init__(self, gateway: OpenAIResponsesGateway) -> None:
+    def __init__(self, gateway: OpenAICompletionGateway) -> None:
         self._gateway = gateway
 
     async def generate(
@@ -18,11 +18,11 @@ class OpenAIMindmapGenerator(MindmapGenerator):
         summary_data: dict[str, object],
     ) -> dict[str, object]:
         prompt = build_mindmap_prompt(title=title, duration_seconds=duration_seconds, summary_data=summary_data)
-        return parse_mindmap_payload(
-            await self._gateway.create_text(prompt),
-            title=title,
-            duration_seconds=duration_seconds,
+        payload = await self._gateway.create_structured_completion(
+            prompt=prompt,
+            response_model=MindmapNodePayload,
         )
+        return payload.model_dump()
 
 
 def build_mindmap_prompt(*, title: str, duration_seconds: float, summary_data: dict[str, object]) -> str:

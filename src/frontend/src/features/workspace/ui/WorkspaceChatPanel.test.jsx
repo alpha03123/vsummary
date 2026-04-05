@@ -70,4 +70,53 @@ describe("WorkspaceChatPanel", () => {
 
     expect(onSubmitChat).toHaveBeenCalledWith("帮我找一下入门视频");
   });
+
+  it("renders tool traces as a collapsed expandable block with actual tool names", async () => {
+    render(
+      <WorkspaceChatPanel
+        workspaceTitle="Video Include"
+        activeSeries={{ id: "series-a", title: "Series A" }}
+        selectedVideo={null}
+        selectedContextType="series"
+        selectedToolId="series-home"
+        tools={null}
+        chatMessages={[
+          {
+            id: "tool-trace-1",
+            role: "assistant",
+            kind: "tool-trace",
+            content: "已调用 2 个工具",
+            toolTrace: {
+              durationMs: 1200,
+              steps: [
+                {
+                  toolName: "list_series_videos",
+                  label: "读取系列视频列表",
+                  target: "Series A",
+                },
+                {
+                  toolName: "get_video_summary",
+                  label: "读取视频概况",
+                  target: "Video 1",
+                },
+              ],
+            },
+            meta: "Notebook Assistant • Tool Chain",
+          },
+        ]}
+        chatPending={false}
+        onSubmitChat={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("已调用 2 个工具")).toBeInTheDocument();
+    expect(screen.getByText("用时 1.2秒")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("已调用 2 个工具"));
+
+    expect(await screen.findByText("list_series_videos")).toBeInTheDocument();
+    expect(screen.getByText("get_video_summary")).toBeInTheDocument();
+    expect(screen.getByText("读取系列视频列表")).toBeInTheDocument();
+    expect(screen.getByText("读取视频概况")).toBeInTheDocument();
+  });
 });

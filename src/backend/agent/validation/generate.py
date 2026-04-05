@@ -4,6 +4,7 @@ from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolName
 from backend.agent.validation.shared import (
     require_empty_out_of_scope_reason,
+    require_max_tool_calls,
     require_only_tool_names,
     require_scope_not_library,
     require_tool_calls,
@@ -23,6 +24,11 @@ def _validate_generate_plan(plan: AgentActionPlan, expected_tool_name: ToolName)
     require_empty_out_of_scope_reason(plan)
     require_scope_not_library(plan)
     require_tool_calls(plan)
-    require_only_tool_names(plan, {expected_tool_name})
+    require_max_tool_calls(plan, 2)
+    if expected_tool_name == ToolName.GENERATE_OVERVIEW:
+        allowed_tool_names = {ToolName.GENERATE_OVERVIEW, ToolName.OPEN_OVERVIEW}
+    else:
+        allowed_tool_names = {ToolName.GENERATE_MINDMAP, ToolName.OPEN_MINDMAP}
+    require_only_tool_names(plan, allowed_tool_names)
     validate_tool_call_arguments(plan)
     return plan

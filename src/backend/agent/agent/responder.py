@@ -77,7 +77,7 @@ def _describe_answer_goal(plan: AgentActionPlan) -> str:
 
 
 def _build_tool_fact(result: ToolExecutionResult) -> ResponderToolFact:
-    payload = result.payload
+    payload = _sanitize_payload(result.payload)
     facts: list[ResponderFact] = []
 
     selected_tool = payload.get("selected_tool")
@@ -112,4 +112,35 @@ def _build_tool_fact(result: ToolExecutionResult) -> ResponderToolFact:
         tool_name=result.tool_name.value,
         status=result.status,
         facts=facts,
+        payload=payload,
     )
+
+
+def _sanitize_payload(payload: dict[str, object]) -> dict[str, object]:
+    allowed_keys = {
+        "series_id",
+        "series_title",
+        "video_id",
+        "title",
+        "generated",
+        "one_sentence_summary",
+        "core_problem",
+        "key_takeaways",
+        "chapters",
+        "videos",
+        "overview",
+        "knowledge_cards",
+        "mindmap",
+        "notes",
+        "preview",
+        "selected_tool",
+        "seek_seconds",
+        "match_end_seconds",
+        "query",
+        "matched_text",
+        "chapter_title",
+        "action",
+        "note_title",
+        "note_content",
+    }
+    return {key: value for key, value in payload.items() if key in allowed_keys}

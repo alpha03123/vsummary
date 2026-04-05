@@ -3,20 +3,20 @@ from __future__ import annotations
 import json
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment, VideoAsset
-from backend.video_summary.infrastructure.openai_summary import OpenAIResponsesGateway
-from backend.video_summary.infrastructure.openai_summary.parsers import extract_json_block
+from backend.video_summary.infrastructure.openai_summary import OpenAICompletionGateway, TranscriptEnhancementPayload
 
 
 class OpenAITranscriptEnhancer:
-    def __init__(self, gateway: OpenAIResponsesGateway) -> None:
+    def __init__(self, gateway: OpenAICompletionGateway) -> None:
         self._gateway = gateway
 
     async def enhance(self, video: VideoAsset, transcript: Transcript) -> Transcript:
         chunks = _chunk_segments(transcript.segments)
         enhanced_segments = []
         for index, chunk in enumerate(chunks, start=1):
-            corrected_payload = await self._gateway.create_text(
-                _build_transcript_enhancement_prompt(video, chunk, index, len(chunks))
+            corrected_payload = await self._gateway.create_structured_completion(
+                prompt=_build_transcript_enhancement_prompt(video, chunk, index, len(chunks)),
+                response_model=TranscriptEnhancementPayload,
             )
             enhanced_segments.extend(_parse_corrected_segments(corrected_payload, chunk))
 
@@ -56,22 +56,19 @@ def _build_transcript_enhancement_prompt(
     )
 
 
-def _parse_corrected_segments(raw_text: str, fallback_segments: list[TranscriptSegment]) -> list[TranscriptSegment]:
-    payload = extract_json_block(raw_text)
-    segments = payload.get("segments", [])
-    if not isinstance(segments, list):
-        raise RuntimeError("Transcript enhancer returned invalid segments payload.")
-
+def _parse_corrected_segments(
+    payload: TranscriptEnhancementPayload,
+    fallback_segments: list[TranscriptSegment],
+) -> list[TranscriptSegment]:
+    segments = payload.segments
     normalized_segments = []
     for index, item in enumerate(segments):
-        if not isinstance(item, dict):
-            continue
         fallback = fallback_segments[min(index, len(fallback_segments) - 1)]
-        text = str(item.get("text", fallback.text)).strip() or fallback.text
+        text = item.text.strip() or fallback.text
         normalized_segments.append(
             TranscriptSegment(
-                start_seconds=float(item.get("start_seconds", fallback.start_seconds)),
-                end_seconds=float(item.get("end_seconds", fallback.end_seconds)),
+                start_seconds=float(item.start_seconds),
+                end_seconds=float(item.end_seconds),
                 text=text,
             )
         )
@@ -79,6 +76,7 @@ def _parse_corrected_segments(raw_text: str, fallback_segments: list[TranscriptS
     if len(normalized_segments) != len(fallback_segments):
         return fallback_segments
     return normalized_segments
+
 
 def _chunk_segments(segments: list[TranscriptSegment], max_chars: int = 10000) -> list[list[TranscriptSegment]]:
     chunks: list[list[TranscriptSegment]] = []

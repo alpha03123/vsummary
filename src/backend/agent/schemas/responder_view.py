@@ -12,6 +12,7 @@ class ResponderToolFact(BaseModel):
     tool_name: str
     status: str
     facts: list[ResponderFact] = Field(default_factory=list)
+    payload: dict[str, object] = Field(default_factory=dict)
 
 
 class ResponderInputView(BaseModel):

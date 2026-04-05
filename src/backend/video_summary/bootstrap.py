@@ -10,7 +10,7 @@ from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcesso
 from backend.video_summary.infrastructure.openai_mindmap_generator import OpenAIMindmapGenerator
 from backend.video_summary.infrastructure.openai_transcript_enhancer import OpenAITranscriptEnhancer
 from backend.video_summary.infrastructure.runtime import (
-    build_openai_responses_gateway,
+    build_openai_completion_gateway,
     build_video_summary_runtime,
 )
 from backend.video_summary.infrastructure.settings import AppSettings, load_settings
@@ -60,7 +60,7 @@ def load_video_summary_application(
 
 def load_mindmap_application(config_path: Path, root_dir: Path) -> MindmapApplication:
     settings = load_settings(config_path=config_path, root_dir=root_dir)
-    gateway = build_openai_responses_gateway(settings)
+    gateway = build_openai_completion_gateway(settings)
     use_case = GenerateMindmap(
         generator=OpenAIMindmapGenerator(gateway=gateway),
         artifact_store=FileSystemGenerationArtifactStore(),

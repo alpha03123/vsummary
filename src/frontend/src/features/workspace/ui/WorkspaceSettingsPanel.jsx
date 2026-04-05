@@ -300,7 +300,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="API 根地址"
-                  description="填写 OpenAI 兼容 API 的根地址，例如 `https://api.openai.com/v1`。具体 `/responses` 接口会由后端统一派生。"
+                  description="填写 OpenAI 兼容 API 的根地址，例如 `https://api.openai.com/v1`。后端会基于这个根地址发起 `chat.completions` 请求。"
                 >
                   <WorkspaceTextInput
                     value={ui.openaiBaseUrl}
