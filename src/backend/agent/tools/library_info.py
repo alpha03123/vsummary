@@ -3,10 +3,14 @@ from __future__ import annotations
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.tool_calls import (
     GetVideoSummaryCall,
+    GetVideoTranscriptCall,
     GetVideoToolsCall,
     ListSeriesVideosCall,
     ToolDefinition,
+    ToolContextTag,
+    ToolEffectTag,
     ToolExecutionResult,
+    ToolIntentTag,
     ToolName,
 )
 from backend.video_summary.library.ports import VideoWorkspace
@@ -17,27 +21,66 @@ LIST_SERIES_VIDEOS_TOOL = ToolDefinition(
     title="读取系列视频列表",
     description="读取当前系列下的视频列表与处理状态，用于系列级总结和跨视频检索。",
     arguments={"series_id": "可选，目标系列 ID；不填则默认当前系列"},
+    contexts=(ToolContextTag.SERIES_DISCOVERY, ToolContextTag.SERIES_INSPECTION),
+    intents=(ToolIntentTag.SERIES_ANSWER,),
 )
 
 GET_VIDEO_SUMMARY_TOOL = ToolDefinition(
     name=ToolName.GET_VIDEO_SUMMARY,
     title="读取视频概况",
     description="读取指定视频的概况内容，用于系列级聚合回答。",
+    batch_tag="candidate_buffer",
     arguments={
         "series_id": "可选，目标系列 ID；不填则默认当前系列",
         "video_id": "可选，目标视频 ID；不填则默认当前视频",
     },
+    contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
+    intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER),
+    effects=(ToolEffectTag.MARK_VIDEO_INSPECTED,),
+    requires_video_id=True,
+    requires_candidate_buffer=True,
 )
 
 GET_VIDEO_TOOLS_TOOL = ToolDefinition(
     name=ToolName.GET_VIDEO_TOOLS,
     title="读取视频工具状态",
     description="读取指定视频的概况、导图、知识卡片和笔记等工具状态。",
+    batch_tag="candidate_buffer",
     arguments={
         "series_id": "可选，目标系列 ID；不填则默认当前系列",
         "video_id": "可选，目标视频 ID；不填则默认当前视频",
     },
+    contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
+    intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER),
+    effects=(ToolEffectTag.MARK_VIDEO_INSPECTED,),
+    requires_video_id=True,
+    requires_candidate_buffer=True,
 )
+
+GET_VIDEO_TRANSCRIPT_TOOL = ToolDefinition(
+    name=ToolName.GET_VIDEO_TRANSCRIPT,
+    title="读取视频转写全文",
+    description="读取指定视频的完整转写分段，包含时间轴与原文。",
+    batch_tag="candidate_buffer",
+    arguments={
+        "series_id": "可选，目标系列 ID；不填则默认当前系列",
+        "video_id": "可选，目标视频 ID；不填则默认当前视频",
+    },
+    contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
+    intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SEEK_VIDEO),
+    effects=(ToolEffectTag.MARK_VIDEO_INSPECTED,),
+    requires_video_id=True,
+    requires_candidate_buffer=True,
+)
+
+
+def list_library_info_tool_definitions() -> list[ToolDefinition]:
+    return [
+        LIST_SERIES_VIDEOS_TOOL,
+        GET_VIDEO_SUMMARY_TOOL,
+        GET_VIDEO_TOOLS_TOOL,
+        GET_VIDEO_TRANSCRIPT_TOOL,
+    ]
 
 
 def create_list_series_videos_handler(workspace: VideoWorkspace):
@@ -170,6 +213,55 @@ def create_get_video_tools_handler(workspace: VideoWorkspace):
         )
 
     return execute_get_video_tools
+
+
+def create_get_video_transcript_handler(workspace: VideoWorkspace):
+    def execute_get_video_transcript(call: GetVideoTranscriptCall, context: AgentContext) -> ToolExecutionResult:
+        resolved_target = _resolve_video_target(call.series_id, call.video_id, context)
+        if resolved_target is None:
+            return ToolExecutionResult(
+                tool_name=ToolName.GET_VIDEO_TRANSCRIPT,
+                status="invalid_input",
+                payload={
+                    "series_id": _resolve_series_id(call.series_id, context),
+                    "generated": False,
+                    "error": "缺少 video_id，无法读取视频转写。",
+                },
+            )
+        resolved_series_id, resolved_video_id = resolved_target
+        transcript = workspace.get_video_transcript(resolved_series_id, resolved_video_id)
+        if transcript is None:
+            return ToolExecutionResult(
+                tool_name=ToolName.GET_VIDEO_TRANSCRIPT,
+                status="not_found",
+                payload={
+                    "series_id": resolved_series_id,
+                    "video_id": resolved_video_id,
+                    "generated": False,
+                },
+            )
+
+        return ToolExecutionResult(
+            tool_name=ToolName.GET_VIDEO_TRANSCRIPT,
+            status="ok",
+            payload={
+                "series_id": transcript.series_id,
+                "video_id": transcript.video_id,
+                "title": transcript.title,
+                "generated": True,
+                "duration_seconds": transcript.duration_seconds,
+                "segments": [
+                    {
+                        "start_seconds": item.start_seconds,
+                        "end_seconds": item.end_seconds,
+                        "text": item.text,
+                    }
+                    for item in transcript.segments
+                ],
+            },
+        )
+
+    return execute_get_video_transcript
 
 
 def _resolve_series_id(series_id: str | None, context: AgentContext) -> str:

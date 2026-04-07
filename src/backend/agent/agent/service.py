@@ -4,17 +4,22 @@ from collections.abc import Iterator
 from time import perf_counter
 from typing import Callable
 
-from backend.agent.agent.planner import extract_action_plan
+from backend.agent.agent.planner import extract_action_plan, stream_action_plan
+from backend.agent.context.compact import AgentMemoryCompactionService
 from backend.agent.agent.responder import generate_assistant_message, stream_assistant_message
 from backend.agent.agent.execution import RegistryAgentToolExecutor
-from backend.agent.memory.context import AgentContext
+from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
+from backend.agent.memory.runtime import load_runtime_context
 from backend.agent.memory.store import AgentMemoryStore, InMemoryAgentMemoryStore
-from backend.agent.ports import AgentContextLoader, AgentToolExecutor, ChatGateway
+from backend.agent.ports import AgentContextLoader, AgentSessionStore, AgentToolExecutor, ChatGateway
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.stream_events import AgentStreamEvent
-from backend.agent.schemas.tool_calls import ToolExecutionResult
+from backend.agent.schemas.tool_calls import ToolEffectTag, ToolExecutionResult
+from backend.agent.tools import tool_has_effect
 from backend.agent.validation.errors import AgentPlanError
+
+MAX_PLANNING_ROUNDS = 6
 
 
 class AgentService:
@@ -23,11 +28,15 @@ class AgentService:
         gateway: ChatGateway,
         context_loader: AgentContextLoader,
         memory_store: AgentMemoryStore | None = None,
+        session_store: AgentSessionStore | None = None,
+        memory_compaction_service: AgentMemoryCompactionService | None = None,
         tool_executor: AgentToolExecutor | None = None,
     ) -> None:
         self._gateway = gateway
         self._context_loader = context_loader
         self._memory_store = memory_store or InMemoryAgentMemoryStore()
+        self._session_store = session_store
+        self._memory_compaction_service = memory_compaction_service
         self._tool_executor = tool_executor or RegistryAgentToolExecutor(registry={})
 
     def run(self, session_id: str, user_message: str) -> AgentTurnResult:
@@ -40,8 +49,9 @@ class AgentService:
         user_message: str,
         context_override: AgentContext | None,
     ) -> AgentTurnResult:
+        self._compact_memory_if_needed(session_id, context_override)
         context, memory_key = self._load_runtime_context(session_id, context_override)
-        plan, tool_results = self._run_planning_loop(
+        context, plan, tool_results = self._run_planning_loop(
             context=context,
             memory_key=memory_key,
             user_message=user_message,
@@ -62,6 +72,13 @@ class AgentService:
                 AgentChatMessage(role="assistant", content=assistant_message),
             ],
         )
+        self._record_session_turn(
+            session_id=session_id,
+            memory_key=memory_key,
+            context=context,
+            user_message=user_message,
+            assistant_message=assistant_message,
+        )
         return AgentTurnResult(
             assistant_message=assistant_message,
             plan=plan,
@@ -75,8 +92,9 @@ class AgentService:
         user_message: str,
         context_override: AgentContext | None,
     ) -> Iterator[AgentStreamEvent]:
+        self._compact_memory_if_needed(session_id, context_override)
         context, memory_key = self._load_runtime_context(session_id, context_override)
-        plan, tool_results = yield from self._stream_planning_loop(
+        context, plan, tool_results = yield from self._stream_planning_loop(
             context=context,
             memory_key=memory_key,
             user_message=user_message,
@@ -113,6 +131,25 @@ class AgentService:
                 AgentChatMessage(role="assistant", content=assistant_message),
             ],
         )
+        self._record_session_turn(
+            session_id=session_id,
+            memory_key=memory_key,
+            context=context,
+            user_message=user_message,
+            assistant_message=assistant_message,
+        )
+
+    def clear_session(
+        self,
+        *,
+        session_id: str,
+        context_override: AgentContext | None,
+    ) -> None:
+        context, memory_key = self._load_runtime_context(session_id, context_override)
+        del context
+        self._memory_store.clear_messages(memory_key)
+        if self._session_store is not None:
+            self._session_store.clear_snapshot(session_id)
 
     def _stream_planning_loop(
         self,
@@ -128,19 +165,19 @@ class AgentService:
         overall_tool_started_at: float | None = None
         tool_event_index = 0
 
-        for _round in range(4):
+        for _round in range(MAX_PLANNING_ROUNDS):
             thinking_started_at = perf_counter()
             yield AgentStreamEvent(type="thinking_started", payload={"message": "正在分析当前问题"})
-            plan = self._extract_valid_action_plan(
+            streamed_reason_parts: list[str] = []
+            plan = yield from self._extract_valid_action_plan_stream(
                 context=context,
                 memory_key=memory_key,
                 user_message=user_message,
                 observed_tool_results=observed_tool_results,
+                streamed_reason_parts=streamed_reason_parts,
             )
             final_plan = plan
-            reasoning_summary = _describe_plan_reason(plan.reason, plan)
-            for chunk in _chunk_text(reasoning_summary):
-                yield AgentStreamEvent(type="thinking_delta", payload={"delta": chunk})
+            reasoning_summary = "".join(streamed_reason_parts).strip() or _describe_plan_reason(plan.reason, plan)
             yield AgentStreamEvent(
                 type="thinking_completed",
                 payload={
@@ -177,6 +214,7 @@ class AgentService:
                 )
                 result = self._tool_executor.execute_call(call, context)
                 observed_tool_results.append(result)
+                context = _apply_tool_result_to_context(context, result)
                 yield AgentStreamEvent(
                     type="tool_completed",
                     payload={
@@ -202,17 +240,21 @@ class AgentService:
                 },
             )
 
-        return final_plan, observed_tool_results
+        return context, final_plan, observed_tool_results
 
     def _load_runtime_context(
         self,
         session_id: str,
         context_override: AgentContext | None,
     ) -> tuple[AgentContext, str]:
-        base_context = self._context_loader.load(session_id)
-        context = _merge_context(base_context, context_override)
-        memory_key = _build_memory_key(context, session_id)
-        return _attach_recent_messages(context, self._memory_store.get_messages(memory_key)), memory_key
+        context, memory_key, _history = load_runtime_context(
+            context_loader=self._context_loader,
+            memory_store=self._memory_store,
+            session_id=session_id,
+            context_override=context_override,
+            session_store=self._session_store,
+        )
+        return context, memory_key
 
     def _run_planning_loop(
         self,
@@ -221,14 +263,14 @@ class AgentService:
         memory_key: str,
         user_message: str,
         emit: Callable[[AgentStreamEvent], None] | None = None,
-    ) -> tuple[AgentActionPlan, list[ToolExecutionResult]]:
+    ) -> tuple[AgentContext, AgentActionPlan, list[ToolExecutionResult]]:
         observed_tool_results: list[ToolExecutionResult] = []
         final_plan: AgentActionPlan | None = None
         last_tool_plan: AgentActionPlan | None = None
         seen_calls: set[str] = set()
         overall_tool_started_at: float | None = None
 
-        for _round in range(4):
+        for _round in range(MAX_PLANNING_ROUNDS):
             thinking_started_at = perf_counter()
             if emit is not None:
                 emit(AgentStreamEvent(type="thinking_started", payload={"message": "正在分析当前问题"}))
@@ -277,6 +319,7 @@ class AgentService:
                     )
                 result = self._tool_executor.execute_call(call, context)
                 observed_tool_results.append(result)
+                context = _apply_tool_result_to_context(context, result)
                 if emit is not None:
                     emit(
                         AgentStreamEvent(
@@ -305,7 +348,7 @@ class AgentService:
                     },
                 )
             )
-        return final_plan, observed_tool_results
+        return context, final_plan, observed_tool_results
 
     def _extract_valid_action_plan(
         self,
@@ -333,26 +376,69 @@ class AgentService:
                 feedback = _build_retry_feedback(last_error)
         raise RuntimeError(f"Agent 无法生成有效工具规划：{last_error or '未知错误'}")
 
+    def _extract_valid_action_plan_stream(
+        self,
+        *,
+        context: AgentContext,
+        memory_key: str,
+        user_message: str,
+        observed_tool_results: list[ToolExecutionResult],
+        streamed_reason_parts: list[str],
+    ) -> Iterator[AgentStreamEvent]:
+        feedback = ""
+        last_error = ""
+        for _attempt in range(3):
+            try:
+                planner_stream = stream_action_plan(
+                    gateway=self._gateway,
+                    context=context,
+                    memory_store=self._memory_store,
+                    session_id=memory_key,
+                    user_message=user_message,
+                    observed_tool_results=observed_tool_results,
+                    planner_feedback=feedback,
+                )
+                while True:
+                    try:
+                        delta = next(planner_stream)
+                    except StopIteration as completed:
+                        return completed.value
+                    if delta:
+                        streamed_reason_parts.append(delta)
+                        yield AgentStreamEvent(type="thinking_delta", payload={"delta": delta})
+            except AgentPlanError as error:
+                last_error = str(error)
+                feedback = _build_retry_feedback(last_error)
+                if streamed_reason_parts:
+                    streamed_reason_parts.append("\n")
+                    yield AgentStreamEvent(type="thinking_delta", payload={"delta": "\n"})
+        raise RuntimeError(f"Agent 无法生成有效工具规划：{last_error or '未知错误'}")
 
-def _merge_context(base_context: AgentContext, context_override: AgentContext | None) -> AgentContext:
-    if context_override is None:
-        return base_context
+    def _record_session_turn(
+        self,
+        *,
+        session_id: str,
+        memory_key: str,
+        context: AgentContext,
+        user_message: str,
+        assistant_message: str,
+    ) -> None:
+        if self._session_store is None:
+            return
+        self._session_store.append_turn(
+            session_id=session_id,
+            memory_key=memory_key,
+            context=context,
+            user_message=user_message,
+            assistant_message=assistant_message,
+        )
 
-    override_payload = context_override.model_dump(exclude_unset=True)
-    override_payload.pop("session_id", None)
-    return base_context.model_copy(update=override_payload)
-
-
-def _build_memory_key(context: AgentContext, session_id: str) -> str:
-    if context.scope_type == "library" or not context.series_id:
-        return "library"
-    return f"series|{context.series_id}"
-
-
-def _attach_recent_messages(context: AgentContext, history: list[AgentChatMessage]) -> AgentContext:
-    recent_messages = [message.content for message in history[-6:]]
-    return context.model_copy(update={"recent_messages": recent_messages})
-
+    def _compact_memory_if_needed(self, session_id: str, context_override: AgentContext | None) -> None:
+        if self._memory_compaction_service is None:
+            return
+        context, memory_key = self._load_runtime_context(session_id, context_override)
+        del context
+        self._memory_compaction_service.compact_if_needed(memory_key)
 
 def _elapsed_ms(started_at: float) -> int:
     return max(0, int((perf_counter() - started_at) * 1000))
@@ -366,16 +452,69 @@ def _describe_plan_reason(reason: str, plan) -> str:
     return "当前问题不需要调用工具，直接组织回答。"
 
 
-def _chunk_text(text: str, chunk_size: int = 14) -> Iterator[str]:
-    normalized = text.strip()
-    if not normalized:
-        return
-    for index in range(0, len(normalized), chunk_size):
-        yield normalized[index:index + chunk_size]
-
-
 def _build_retry_feedback(last_error: str) -> str:
     return (
         "上一次规划存在错误，请严格根据错误原因重新规划，不要重复相同错误。\n"
+        "如果错误来自 intent_type 与 tool_calls 不匹配，先修正意图分类，再选择该意图允许的工具。\n"
         f"{last_error}"
+    )
+
+
+def _apply_tool_result_to_context(context: AgentContext, result: ToolExecutionResult) -> AgentContext:
+    payload = result.payload
+    next_context = _apply_selected_tool_payload(context, payload)
+    if tool_has_effect(result.tool_name, ToolEffectTag.APPLY_CANDIDATE_BUFFER_PAYLOAD):
+        return _apply_candidate_buffer_payload(next_context, payload)
+    if tool_has_effect(result.tool_name, ToolEffectTag.MARK_VIDEO_INSPECTED):
+        return _mark_video_as_inspected(next_context, payload.get("video_id"))
+    return next_context
+
+
+def _apply_selected_tool_payload(context: AgentContext, payload: dict[str, object]) -> AgentContext:
+    selected_tool = payload.get("selected_tool")
+    if not isinstance(selected_tool, str) or not selected_tool.strip():
+        return context
+    return context.model_copy(update={"selected_tool": selected_tool.strip()})
+
+
+def _apply_candidate_buffer_payload(context: AgentContext, payload: dict[str, object]) -> AgentContext:
+    raw_buffer = payload.get("candidate_buffer")
+    next_buffer = context.candidate_buffer
+    if isinstance(raw_buffer, list):
+        next_buffer = [
+            CandidateBufferEntry.model_validate(item)
+            for item in raw_buffer
+            if isinstance(item, dict)
+        ]
+    inspected_video_ids = context.inspected_video_ids
+    rejected_video_ids = context.rejected_video_ids
+    raw_inspected = payload.get("inspected_video_ids")
+    if isinstance(raw_inspected, list):
+        inspected_video_ids = [str(item).strip() for item in raw_inspected if str(item).strip()]
+    raw_rejected = payload.get("rejected_video_ids")
+    if isinstance(raw_rejected, list):
+        rejected_video_ids = [str(item).strip() for item in raw_rejected if str(item).strip()]
+    next_stage = InspectionStage.VIDEO_INSPECTION if next_buffer else InspectionStage.SERIES_DISCOVERY
+    return context.model_copy(
+        update={
+            "candidate_buffer": next_buffer,
+            "inspected_video_ids": inspected_video_ids,
+            "rejected_video_ids": rejected_video_ids,
+            "inspection_stage": next_stage,
+        }
+    )
+
+
+def _mark_video_as_inspected(context: AgentContext, video_id: object) -> AgentContext:
+    if not isinstance(video_id, str) or not video_id.strip():
+        return context
+    normalized_video_id = video_id.strip()
+    inspected_video_ids = list(context.inspected_video_ids)
+    if normalized_video_id not in inspected_video_ids:
+        inspected_video_ids.append(normalized_video_id)
+    return context.model_copy(
+        update={
+            "inspected_video_ids": inspected_video_ids,
+            "inspection_stage": InspectionStage.ANSWER_READY,
+        }
     )

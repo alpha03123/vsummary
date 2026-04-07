@@ -13,6 +13,12 @@ class AgentMemoryStore(Protocol):
     def append_messages(self, session_id: str, messages: list[AgentChatMessage]) -> None:
         ...
 
+    def replace_messages(self, session_id: str, messages: list[AgentChatMessage]) -> None:
+        ...
+
+    def clear_messages(self, session_id: str) -> None:
+        ...
+
 
 class InMemoryAgentMemoryStore:
     def __init__(self) -> None:
@@ -23,3 +29,9 @@ class InMemoryAgentMemoryStore:
 
     def append_messages(self, session_id: str, messages: list[AgentChatMessage]) -> None:
         self._messages[session_id].extend(messages)
+
+    def replace_messages(self, session_id: str, messages: list[AgentChatMessage]) -> None:
+        self._messages[session_id] = list(messages)
+
+    def clear_messages(self, session_id: str) -> None:
+        self._messages.pop(session_id, None)

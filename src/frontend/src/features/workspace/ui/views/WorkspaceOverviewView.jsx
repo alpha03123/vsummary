@@ -13,12 +13,24 @@ export function WorkspaceOverviewView({
   isGeneratingSelectedVideo,
 }) {
   const hasSummary = Boolean(summary);
+  const overviewTitle = summary?.title ?? selectedVideo?.title ?? "AI 概况";
+
+  if (!selectedVideo) {
+    return (
+      <WorkspaceStateBlock
+        eyebrow="AI Overview"
+        title="等待视频"
+        description="先在左侧选中一个具体视频，这里才会显示对应的 AI 概况。"
+        dashed
+      />
+    );
+  }
 
   if (!tools?.overview.generated) {
     return (
       <WorkspaceStateBlock
         eyebrow="AI Overview"
-        title={selectedVideo.title}
+        title={overviewTitle}
         description="先在左侧点击生成，生成完成后这里会显示 AI 概况、章节纪要和关键结论。"
       >
         {isGeneratingSelectedVideo ? (
@@ -44,7 +56,7 @@ export function WorkspaceOverviewView({
     return (
       <WorkspaceStateBlock
         eyebrow="AI Overview"
-        title="载入 AI 概况"
+        title={overviewTitle}
         description="正在读取已生成的概况结果。"
         loading
       />

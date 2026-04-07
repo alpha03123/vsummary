@@ -25,27 +25,110 @@ export function createWelcomeChatMessages() {
 }
 
 export function buildChatScopeKey(selectedContextType, seriesId, videoId, selectedToolId) {
-  if (selectedContextType === "library") {
-    return `library|${selectedToolId ?? "studio"}`;
-  }
   if (selectedContextType === "series") {
     return `series|${seriesId ?? ""}|${selectedToolId ?? "series-home"}`;
   }
-  return `video|${seriesId ?? ""}|${videoId ?? ""}|${selectedToolId ?? "studio"}`;
+  if (selectedContextType === "video") {
+    return `video|${seriesId ?? ""}|${videoId ?? ""}|${selectedToolId ?? "studio"}`;
+  }
+  return null;
+}
+
+const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
+
+export function loadChatSessionIdsByScope() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const rawValue = window.localStorage.getItem(CHAT_SESSION_STORAGE_KEY);
+    if (!rawValue) {
+      return {};
+    }
+    const parsed = JSON.parse(rawValue);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function persistChatSessionIdsByScope(chatSessionIdsByScope) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(chatSessionIdsByScope ?? {}));
+}
+
+export function getChatSessionIdForScope(chatSessionIdsByScope, scopeKey) {
+  if (!scopeKey) {
+    return null;
+  }
+  return chatSessionIdsByScope?.[scopeKey] ?? scopeKey;
+}
+
+export function setChatSessionIdForScope(chatSessionIdsByScope, scopeKey, sessionId) {
+  if (!scopeKey || !sessionId) {
+    return { ...(chatSessionIdsByScope ?? {}) };
+  }
+  return {
+    ...(chatSessionIdsByScope ?? {}),
+    [scopeKey]: sessionId,
+  };
 }
 
 export function getChatMessagesForScope(chatThreads, scopeKey) {
+  if (!scopeKey) {
+    return [];
+  }
   return chatThreads?.[scopeKey] ? [...chatThreads[scopeKey]] : createWelcomeChatMessages();
 }
 
+export function getContextUsageForScope(contextUsageByScope, scopeKey) {
+  if (!scopeKey) {
+    return null;
+  }
+  return contextUsageByScope?.[scopeKey] ?? null;
+}
+
 export function setChatMessagesForScope(chatThreads, scopeKey, messages) {
+  if (!scopeKey) {
+    return { ...(chatThreads ?? {}) };
+  }
   return {
     ...(chatThreads ?? {}),
     [scopeKey]: [...messages],
   };
 }
 
+export function setContextUsageForScope(contextUsageByScope, scopeKey, usage) {
+  if (!scopeKey) {
+    return { ...(contextUsageByScope ?? {}) };
+  }
+  return {
+    ...(contextUsageByScope ?? {}),
+    [scopeKey]: usage,
+  };
+}
+
+export function hasRecoveredChatScope(chatRecoveryByScope, scopeKey) {
+  if (!scopeKey) {
+    return false;
+  }
+  return Boolean(chatRecoveryByScope?.[scopeKey]);
+}
+
+export function setRecoveredChatScope(chatRecoveryByScope, scopeKey, recovered) {
+  if (!scopeKey) {
+    return { ...(chatRecoveryByScope ?? {}) };
+  }
+  return {
+    ...(chatRecoveryByScope ?? {}),
+    [scopeKey]: recovered,
+  };
+}
+
 export function createInitialWorkspaceState() {
+  const chatSessionIdsByScope = loadChatSessionIdsByScope();
   return {
     library: null,
     tools: null,
@@ -55,7 +138,7 @@ export function createInitialWorkspaceState() {
     notes: null,
     selectedSeriesId: null,
     selectedVideoId: null,
-    selectedContextType: "library",
+    selectedContextType: null,
     selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
@@ -77,12 +160,17 @@ export function createInitialWorkspaceState() {
     fasterWhisperModels: [],
     fasterWhisperModelsLoading: false,
     ui: resetUiSettings(),
-    chatThreads: {
-      "library|studio": createWelcomeChatMessages(),
-    },
-    chatScopeKey: "library|studio",
-    chatMessages: createWelcomeChatMessages(),
+    chatThreads: {},
+    chatRecoveryByScope: {},
+    chatScopeKey: null,
+    chatBaseScopeKey: null,
+    chatSessionIdsByScope,
+    chatMessages: [],
     chatPending: false,
+    chatRecoveryLoading: false,
+    contextUsageByScope: {},
+    contextUsage: null,
+    contextUsageLoading: false,
     settingsPanelOpen: false,
     error: "",
     loading: true,
@@ -91,12 +179,45 @@ export function createInitialWorkspaceState() {
 
 export function createWorkspaceLoadedState(library, currentState) {
   const selection = getDefaultSelection(library, currentState.selectedSeriesId, currentState.selectedVideoId);
+  if (!selection.seriesId) {
+    return {
+      ...currentState,
+      library,
+      tools: null,
+      summary: null,
+      mindmap: null,
+      knowledgeCards: null,
+      knowledgeCardsFeedback: null,
+      notes: null,
+      selectedSeriesId: null,
+      selectedVideoId: null,
+      selectedContextType: null,
+      selectedToolId: "studio",
+      selectedChapterId: null,
+      selectedNodeId: null,
+      previewSeekRequest: null,
+      toolsLoading: false,
+      summaryLoading: false,
+      mindmapLoading: false,
+      generationProgress: null,
+      generationSnapshot: null,
+      chatScopeKey: null,
+      chatBaseScopeKey: null,
+      chatMessages: [],
+      chatPending: false,
+      chatRecoveryLoading: false,
+      contextUsage: null,
+      contextUsageLoading: false,
+      error: "",
+      loading: false,
+    };
+  }
   return {
     ...currentState,
     library,
     selectedSeriesId: selection.seriesId,
     selectedVideoId: selection.videoId,
-    selectedContextType: selection.seriesId ? currentState.selectedContextType : "library",
+    selectedContextType: currentState.selectedContextType,
     error: "",
     loading: false,
   };

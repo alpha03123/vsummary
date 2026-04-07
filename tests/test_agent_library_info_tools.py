@@ -10,9 +10,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.agent.memory.context import AgentContext
-from backend.agent.schemas.tool_calls import GetVideoSummaryCall, GetVideoToolsCall
+from backend.agent.schemas.tool_calls import GetVideoSummaryCall, GetVideoToolsCall, GetVideoTranscriptCall
 from backend.agent.tools.library_info import (
+    GET_VIDEO_SUMMARY_TOOL,
+    GET_VIDEO_TRANSCRIPT_TOOL,
+    GET_VIDEO_TOOLS_TOOL,
     create_get_video_summary_handler,
+    create_get_video_transcript_handler,
     create_get_video_tools_handler,
 )
 from backend.video_summary.library.views import (
@@ -52,6 +56,11 @@ class FakeWorkspace:
 
 
 class AgentLibraryInfoToolTests(unittest.TestCase):
+    def test_library_info_read_tools_are_marked_with_candidate_buffer_batch_tag(self) -> None:
+        self.assertEqual(GET_VIDEO_SUMMARY_TOOL.batch_tag, "candidate_buffer")
+        self.assertEqual(GET_VIDEO_TOOLS_TOOL.batch_tag, "candidate_buffer")
+        self.assertEqual(GET_VIDEO_TRANSCRIPT_TOOL.batch_tag, "candidate_buffer")
+
     def test_get_video_summary_returns_invalid_input_when_series_context_has_no_video(self) -> None:
         handler = create_get_video_summary_handler(FakeWorkspace())
         result = handler(
@@ -85,6 +94,23 @@ class AgentLibraryInfoToolTests(unittest.TestCase):
         self.assertEqual(result.status, "invalid_input")
         self.assertEqual(result.payload["series_id"], "series-a")
         self.assertEqual(result.payload["error"], "缺少 video_id，无法读取视频工具状态。")
+
+    def test_get_video_transcript_returns_invalid_input_when_series_context_has_no_video(self) -> None:
+        handler = create_get_video_transcript_handler(FakeWorkspace())
+        result = handler(
+            GetVideoTranscriptCall(tool_name="get_video_transcript"),
+            AgentContext(
+                session_id="series|series-a|series-home",
+                scope_type="series",
+                series_id="series-a",
+                series_title="Series A",
+                selected_tool="series-home",
+            ),
+        )
+
+        self.assertEqual(result.status, "invalid_input")
+        self.assertEqual(result.payload["series_id"], "series-a")
+        self.assertEqual(result.payload["error"], "缺少 video_id，无法读取视频转写。")
 
 
 if __name__ == "__main__":

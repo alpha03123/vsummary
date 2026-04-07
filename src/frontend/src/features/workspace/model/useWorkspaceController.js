@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer } from "react";
 
 import {
+  clearAgentSession,
   cancelFasterWhisperModelDownload,
   createVideoNote,
   deleteVideoNote,
@@ -9,6 +10,8 @@ import {
   generateVideoMindmap,
   generateVideoSummary,
   getVideoPreviewUrl,
+  loadAgentContextUsage,
+  loadAgentSessionRecovery,
   loadFasterWhisperModels,
   loadProviderSettings,
   loadVideoKnowledgeCards,
@@ -27,17 +30,25 @@ import {
 } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
+  createWelcomeChatMessages,
   createInitialWorkspaceState,
   createMindmapLoadedState,
   createSummaryLoadedState,
   createWorkspaceLoadedState,
   findSeriesById,
   findVideoById,
+  getChatSessionIdForScope,
+  getContextUsageForScope,
   getChatMessagesForScope,
+  hasRecoveredChatScope,
   markVideoAsReady,
   normalizeUiSettings,
+  persistChatSessionIdsByScope,
   resetUiSettings,
   buildChatScopeKey,
+  setChatSessionIdForScope,
+  setRecoveredChatScope,
+  setContextUsageForScope,
   setChatMessagesForScope,
 } from "./workspaceState";
 
@@ -101,11 +112,13 @@ function workspaceReducer(state, action) {
         generationSnapshot: null,
         downloadingModelId: null,
         modelDownloadProgress: null,
+        contextUsageLoading: false,
         error: action.message,
         fasterWhisperModelsLoading: false,
       };
     case "series_selected": {
-      const chatScopeKey = buildChatScopeKey("series", action.seriesId, null, "series-home");
+      const chatBaseScopeKey = buildChatScopeKey("series", action.seriesId, null, "series-home");
+      const chatScopeKey = getChatSessionIdForScope(state.chatSessionIdsByScope, chatBaseScopeKey);
       return {
         ...state,
         tools: null,
@@ -123,40 +136,17 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        chatBaseScopeKey,
         chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
-      };
-    }
-    case "library_home_entered": {
-      const chatScopeKey = buildChatScopeKey("library", null, null, "studio");
-      return {
-        ...state,
-        tools: null,
-        selectedSeriesId: null,
-        selectedVideoId: null,
-        selectedContextType: "library",
-        selectedToolId: "studio",
-        summary: null,
-        mindmap: null,
-        knowledgeCards: null,
-        knowledgeCardsFeedback: null,
-        notes: null,
-        selectedChapterId: null,
-        selectedNodeId: null,
-        previewSeekRequest: null,
-        toolsLoading: false,
-        summaryLoading: false,
-        mindmapLoading: false,
-        generationProgress: null,
-        generationSnapshot: null,
-        chatScopeKey,
-        chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
-        chatPending: false,
+        contextUsage: getContextUsageForScope(state.contextUsageByScope, chatScopeKey),
+        contextUsageLoading: false,
       };
     }
     case "video_selected": {
-      const chatScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
+      const chatBaseScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
+      const chatScopeKey = getChatSessionIdForScope(state.chatSessionIdsByScope, chatBaseScopeKey);
       return {
         ...state,
         selectedSeriesId: action.seriesId,
@@ -174,9 +164,12 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        chatBaseScopeKey,
         chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
+        contextUsage: getContextUsageForScope(state.contextUsageByScope, chatScopeKey),
+        contextUsageLoading: false,
       };
     }
     case "tool_selected":
@@ -187,7 +180,8 @@ function workspaceReducer(state, action) {
         error: "",
       };
     case "series_context_selected": {
-      const chatScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");
+      const chatBaseScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");
+      const chatScopeKey = getChatSessionIdForScope(state.chatSessionIdsByScope, chatBaseScopeKey);
       return {
         ...state,
         selectedContextType: "series",
@@ -204,9 +198,12 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        chatBaseScopeKey,
         chatScopeKey,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
+        contextUsage: getContextUsageForScope(state.contextUsageByScope, chatScopeKey),
+        contextUsageLoading: false,
       };
     }
     case "tools_loading_started":
@@ -510,6 +507,70 @@ function workspaceReducer(state, action) {
         ...state,
         chatPending: false,
       };
+    case "chat_recovery_started":
+      return {
+        ...state,
+        chatRecoveryLoading: true,
+      };
+    case "chat_recovery_loaded": {
+      const nextMessages =
+        action.restored && action.messages.length ? action.messages : getChatMessagesForScope(state.chatThreads, action.chatScopeKey);
+      return {
+        ...state,
+        chatRecoveryLoading: false,
+        chatRecoveryByScope: setRecoveredChatScope(state.chatRecoveryByScope, action.chatScopeKey, true),
+        chatThreads: action.restored && action.messages.length
+          ? setChatMessagesForScope(state.chatThreads, action.chatScopeKey, action.messages)
+          : state.chatThreads,
+        chatMessages: state.chatScopeKey === action.chatScopeKey ? nextMessages : state.chatMessages,
+      };
+    }
+    case "chat_session_started": {
+      const chatSessionIdsByScope = setChatSessionIdForScope(
+        state.chatSessionIdsByScope,
+        action.chatBaseScopeKey,
+        action.sessionId,
+      );
+      persistChatSessionIdsByScope(chatSessionIdsByScope);
+      return {
+        ...state,
+        chatSessionIdsByScope,
+        chatBaseScopeKey: action.chatBaseScopeKey,
+        chatScopeKey: action.sessionId,
+        chatMessages: createWelcomeChatMessages(),
+        chatThreads: setChatMessagesForScope(state.chatThreads, action.sessionId, createWelcomeChatMessages()),
+        chatRecoveryByScope: setRecoveredChatScope(state.chatRecoveryByScope, action.sessionId, true),
+        chatPending: false,
+        contextUsage: null,
+        contextUsageLoading: false,
+        error: "",
+      };
+    }
+    case "chat_session_cleared":
+      return {
+        ...state,
+        chatPending: false,
+        chatMessages: createWelcomeChatMessages(),
+        chatThreads: setChatMessagesForScope(state.chatThreads, action.sessionId, createWelcomeChatMessages()),
+        contextUsage: null,
+        contextUsageLoading: false,
+        error: "",
+      };
+    case "context_usage_loading_started":
+      return {
+        ...state,
+        contextUsageLoading: state.chatScopeKey != null,
+      };
+    case "context_usage_loaded":
+      return {
+        ...state,
+        contextUsageLoading: false,
+        contextUsage:
+          action.currentScopeKey === action.chatScopeKey
+            ? action.usage
+            : state.contextUsage,
+        contextUsageByScope: setContextUsageForScope(state.contextUsageByScope, action.chatScopeKey, action.usage),
+      };
     default:
       return state;
   }
@@ -539,7 +600,17 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
   switch (event?.type) {
     case "thinking_started":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
-        upsertChatMessage(messages, buildThinkingMessage(requestId, event.payload, { status: "running" })), true);
+        upsertChatMessage(
+          messages,
+          buildThinkingMessage(
+            requestId,
+            {
+              ...event.payload,
+              previous_summary: messages.find((message) => message.id === `thought-${requestId}`)?.thoughtTrace?.summary ?? "",
+            },
+            { status: "running" },
+          ),
+        ), true);
     case "thinking_delta":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
         upsertChatMessage(messages, appendThinkingDelta(messages, requestId, event.payload?.delta)), true);
@@ -596,8 +667,11 @@ function getMessageContent(messages, messageId) {
 }
 
 function buildThinkingMessage(requestId, payload, { status }) {
+  const previousSummary = typeof payload?.previous_summary === "string" ? payload.previous_summary : "";
   const durationMs = typeof payload?.duration_ms === "number" ? payload.duration_ms : null;
-  const summary = typeof payload?.summary === "string" ? payload.summary : "";
+  const summary = typeof payload?.summary === "string" && payload.summary
+    ? payload.summary
+    : previousSummary;
   return {
     id: `thought-${requestId}`,
     role: "assistant",
@@ -624,10 +698,14 @@ function buildToolTraceMessage(requestId, messages, event, completed) {
     const step = buildToolTraceStep(event);
     nextSteps = upsertToolStep(previousSteps, step);
   }
+  if (completed) {
+    nextSteps = nextSteps.map((step) => ({
+      ...step,
+      status: "completed",
+    }));
+  }
 
-  const durationMs = event.type === "tool_chain_completed"
-    ? event.payload?.duration_ms
-    : previous?.toolTrace?.durationMs ?? null;
+  const durationMs = sumVisibleToolDurations(nextSteps);
   const status = completed
     ? "completed"
     : nextSteps.some((step) => step.status === "running")
@@ -646,6 +724,9 @@ function buildToolTraceMessage(requestId, messages, event, completed) {
       status,
       steps: nextSteps,
       durationMs: typeof durationMs === "number" ? durationMs : null,
+      stageDurationMs: event.type === "tool_chain_completed" && typeof event.payload?.duration_ms === "number"
+        ? event.payload.duration_ms
+        : previous?.toolTrace?.stageDurationMs ?? null,
     },
     meta: completed
       ? buildStatusMeta("工具链", durationMs)
@@ -683,6 +764,16 @@ function buildToolTraceStep(event) {
     status: event.type === "tool_started" ? "running" : "completed",
     durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : null,
   };
+}
+
+function sumVisibleToolDurations(steps) {
+  const durations = steps
+    .map((step) => step.durationMs)
+    .filter((durationMs) => typeof durationMs === "number" && durationMs >= 0);
+  if (!durations.length) {
+    return null;
+  }
+  return durations.reduce((total, durationMs) => total + durationMs, 0);
 }
 
 function appendStreamingAnswerDelta(messages, requestId, delta) {
@@ -834,6 +925,106 @@ export function useWorkspaceController() {
     }
     document.documentElement.classList.toggle("dark", state.ui.theme === "dark");
   }, [state.ui.theme]);
+
+  useEffect(() => {
+    if (!state.library || !state.chatScopeKey || !state.chatBaseScopeKey) {
+      return;
+    }
+    const sessionId = state.chatScopeKey;
+    if (hasRecoveredChatScope(state.chatRecoveryByScope, sessionId)) {
+      return;
+    }
+    const context = buildAgentChatContextPayload(
+      state.library,
+      state.selectedContextType,
+      state.selectedSeriesId,
+      state.selectedVideoId,
+      state.selectedToolId,
+    );
+
+    let cancelled = false;
+    dispatch({ type: "chat_recovery_started" });
+    loadAgentSessionRecovery(sessionId, context)
+      .then((recovery) => {
+        if (!cancelled) {
+          dispatch({
+            type: "chat_recovery_loaded",
+            chatScopeKey: sessionId,
+            restored: recovery.restored,
+            messages: recovery.messages,
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "会话恢复失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    state.library,
+    state.chatScopeKey,
+    state.chatBaseScopeKey,
+    state.selectedContextType,
+    state.selectedSeriesId,
+    state.selectedVideoId,
+    state.selectedToolId,
+    state.chatRecoveryByScope,
+  ]);
+
+  useEffect(() => {
+    if (!state.library || !state.chatScopeKey || !state.chatBaseScopeKey) {
+      return;
+    }
+    const sessionId = state.chatScopeKey;
+    const context = buildAgentChatContextPayload(
+      state.library,
+      state.selectedContextType,
+      state.selectedSeriesId,
+      state.selectedVideoId,
+      state.selectedToolId,
+    );
+
+    let cancelled = false;
+    dispatch({ type: "context_usage_loading_started" });
+    loadAgentContextUsage(sessionId, context)
+      .then((usage) => {
+        if (!cancelled) {
+          dispatch({
+            type: "context_usage_loaded",
+            chatScopeKey: sessionId,
+            currentScopeKey: state.chatScopeKey,
+            usage,
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({
+            type: "load_failed",
+            message: error instanceof Error ? error.message : "上下文预算加载失败",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    state.library,
+    state.chatScopeKey,
+    state.chatBaseScopeKey,
+    state.selectedContextType,
+    state.selectedSeriesId,
+    state.selectedVideoId,
+    state.selectedToolId,
+  ]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
@@ -1022,7 +1213,7 @@ export function useWorkspaceController() {
   }
 
   function onEnterLibraryHome() {
-    dispatch({ type: "library_home_entered" });
+    dispatch({ type: "workspace_loaded", library: state.library });
   }
 
   function onSelectVideo(seriesId, videoId) {
@@ -1372,13 +1563,12 @@ export function useWorkspaceController() {
       return;
     }
 
-    const chatScopeKey = buildChatScopeKey(
-      state.selectedContextType,
-      state.selectedSeriesId,
-      state.selectedVideoId,
-      state.selectedToolId,
-    );
-    const sessionId = buildAgentSessionId(
+    const sessionId = state.chatScopeKey;
+    if (!sessionId) {
+      throw new Error("当前未处于 series 或 video 上下文，无法发起 AI 对话。");
+    }
+    const context = buildAgentChatContextPayload(
+      state.library,
       state.selectedContextType,
       state.selectedSeriesId,
       state.selectedVideoId,
@@ -1389,34 +1579,73 @@ export function useWorkspaceController() {
 
     dispatch({
       type: "chat_request_started",
-      chatScopeKey,
+      chatScopeKey: sessionId,
       userMessageId: `user-${requestId}`,
       message: trimmedMessage,
     });
 
     try {
-      await streamAgentChat(sessionId, trimmedMessage, {
-        scope_type: state.selectedContextType,
-        series_id: activeSeries?.id ?? null,
-        series_title: activeSeries?.title ?? null,
-        video_id: selectedVideo?.id ?? null,
-        video_title: selectedVideo?.title ?? null,
-        selected_tool: state.selectedToolId ?? null,
-      }, async (event) => {
+      await streamAgentChat(sessionId, trimmedMessage, context, async (event) => {
         dispatch({
           type: "chat_stream_event_received",
-          chatScopeKey,
+          chatScopeKey: sessionId,
           requestId,
           event,
         });
 
         await applyAgentStreamSideEffects(event);
       });
+      const usage = await loadAgentContextUsage(sessionId, context);
+      dispatch({
+        type: "context_usage_loaded",
+        chatScopeKey: sessionId,
+        currentScopeKey: state.chatScopeKey,
+        usage,
+      });
     } catch (error) {
       dispatch({ type: "chat_pending_cleared" });
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "AI 对话失败",
+      });
+    }
+  }
+
+  function onStartNewChat() {
+    const chatBaseScopeKey = state.chatBaseScopeKey;
+    if (!chatBaseScopeKey) {
+      throw new Error("当前未处于 series 或 video 上下文，无法新建对话。");
+    }
+    const sessionId = `${chatBaseScopeKey}::${Date.now()}`;
+    dispatch({
+      type: "chat_session_started",
+      chatBaseScopeKey,
+      sessionId,
+    });
+  }
+
+  async function onClearChat() {
+    const sessionId = state.chatScopeKey;
+    if (!sessionId) {
+      throw new Error("当前未处于 series 或 video 上下文，无法清空对话。");
+    }
+    const context = buildAgentChatContextPayload(
+      state.library,
+      state.selectedContextType,
+      state.selectedSeriesId,
+      state.selectedVideoId,
+      state.selectedToolId,
+    );
+    try {
+      await clearAgentSession(sessionId, context);
+      dispatch({
+        type: "chat_session_cleared",
+        sessionId,
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "清空对话失败",
       });
     }
   }
@@ -1489,6 +1718,9 @@ export function useWorkspaceController() {
     previewSeekRequest: state.previewSeekRequest,
     chatMessages: state.chatMessages,
     chatPending: state.chatPending,
+    chatRecoveryLoading: state.chatRecoveryLoading,
+    contextUsage: state.contextUsage,
+    contextUsageLoading: state.contextUsageLoading,
     isGeneratingMindmapSelectedVideo,
     isGeneratingSelectedVideo,
     knowledgeCardsLoading: state.knowledgeCardsLoading,
@@ -1503,6 +1735,8 @@ export function useWorkspaceController() {
     onFocusNode,
     onOpenCard,
     onSubmitChat,
+    onStartNewChat,
+    onClearChat,
     onGenerateVideo,
     onGenerateMindmap,
     onGenerateKnowledgeCards,
@@ -1525,8 +1759,20 @@ function buildVideoKey(seriesId, videoId) {
   return `${seriesId}/${videoId}`;
 }
 
-function buildAgentSessionId(selectedContextType, seriesId, videoId, selectedToolId) {
-  return buildChatScopeKey(selectedContextType, seriesId, videoId, selectedToolId);
+function buildAgentChatContextPayload(library, selectedContextType, seriesId, videoId, selectedToolId) {
+  if (selectedContextType !== "series" && selectedContextType !== "video") {
+    throw new Error("Agent 对话上下文必须是 series 或 video。");
+  }
+  const activeSeries = findSeriesById(library, seriesId);
+  const selectedVideo = findVideoById(library, seriesId, videoId);
+  return {
+    scope_type: selectedContextType,
+    series_id: activeSeries?.id ?? null,
+    series_title: activeSeries?.title ?? null,
+    video_id: selectedVideo?.id ?? null,
+    video_title: selectedVideo?.title ?? null,
+    selected_tool: selectedToolId ?? null,
+  };
 }
 
 function normalizeAgentToolId(toolId) {
@@ -1534,6 +1780,7 @@ function normalizeAgentToolId(toolId) {
     return "preview";
   }
   if (
+    toolId === "series-overview" ||
     toolId === "overview" ||
     toolId === "cards" ||
     toolId === "knowledge-cards" ||
@@ -1552,6 +1799,8 @@ function normalizeAgentToolTraceStep(result) {
   switch (result?.tool_name) {
     case "list_series_videos":
       return createToolTraceStep(result.tool_name, "读取系列视频列表", payload.series_title ?? payload.series_id);
+    case "open_series_overview":
+      return createToolTraceStep(result.tool_name, "打开系列概览");
     case "get_video_summary":
       return createToolTraceStep(result.tool_name, "读取视频概况", payload.title ?? payload.video_id);
     case "get_video_tools":
@@ -1579,8 +1828,8 @@ function normalizeAgentToolTraceStep(result) {
       return createToolTraceStep(result.tool_name, "生成思维导图");
     case "save_note":
       return createToolTraceStep(result.tool_name, "保存笔记", payload.note_title);
-    case "transcript_lookup":
-      return createToolTraceStep(result.tool_name, "检索转写", payload.query);
+    case "get_video_transcript":
+      return createToolTraceStep(result.tool_name, "读取视频转写全文", payload.title ?? payload.video_id);
     default:
       return createToolTraceStep(result?.tool_name ?? "unknown_tool", "执行工作流步骤");
   }

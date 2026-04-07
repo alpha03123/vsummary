@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from backend.agent.memory.context import AgentContext, InspectionStage
 from backend.agent.schemas.action_plan import AgentActionPlan, IntentType
-from backend.agent.schemas.tool_calls import GetVideoSummaryCall, GetVideoToolsCall, ToolExecutionResult, ToolName
+from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
+from backend.agent.tools import tool_is_available_in_context, tool_requires_candidate_buffer, tool_requires_video_id
 from backend.agent.validation.answer import (
     validate_answer_question_plan,
     validate_series_answer_plan,
@@ -16,6 +18,7 @@ from backend.agent.validation.generate import (
 from backend.agent.validation.open_tool import validate_open_tool_plan
 from backend.agent.validation.out_of_scope import validate_out_of_scope_plan
 from backend.agent.validation.seek_video import validate_seek_video_plan
+from backend.agent.validation.shared import validate_batch_tool_usage
 
 
 PlanValidator = Callable[[AgentActionPlan], AgentActionPlan]
@@ -34,33 +37,62 @@ PLAN_VALIDATORS: dict[IntentType, PlanValidator] = {
 
 def validate_action_plan(
     plan: AgentActionPlan,
+    context: AgentContext,
     observed_tool_results: list[ToolExecutionResult] | None = None,
 ) -> AgentActionPlan:
     validator = PLAN_VALIDATORS.get(plan.intent_type)
     if validator is None:
         raise AgentPlanError(f"Unsupported intent_type: {plan.intent_type.value}")
+    resolved_tool_results = observed_tool_results or []
     validated_plan = validator(plan)
-    _validate_plan_against_observations(validated_plan, observed_tool_results or [])
+    validate_batch_tool_usage(validated_plan)
+    _validate_plan_against_context(validated_plan, context)
+    _validate_plan_against_observations(validated_plan, context, resolved_tool_results)
+    _validate_terminal_action_plan(validated_plan, resolved_tool_results)
     return validated_plan
 
 
 def _validate_plan_against_observations(
     plan: AgentActionPlan,
+    context: AgentContext,
     observed_tool_results: list[ToolExecutionResult],
 ) -> None:
     valid_video_ids = _extract_listed_video_ids(observed_tool_results)
-    if not valid_video_ids:
+    if not valid_video_ids or context.candidate_buffer:
         return
 
     for call in plan.tool_calls:
-        if not isinstance(call, GetVideoSummaryCall | GetVideoToolsCall):
+        if not tool_requires_video_id(call.tool_name):
             continue
-        if call.video_id is None:
+        video_id = getattr(call, "video_id", None)
+        if video_id is None:
             continue
-        if call.video_id not in valid_video_ids:
+        if video_id not in valid_video_ids:
             raise AgentPlanError(
-                "get_video_summary / get_video_tools 的 video_id 必须直接使用上一轮 list_series_videos 返回的真实 video_id。"
+                f"{call.tool_name.value} 的 video_id 必须直接使用上一轮 list_series_videos 返回的真实 video_id。"
             )
+
+
+def _validate_plan_against_context(plan: AgentActionPlan, context: AgentContext) -> None:
+    for call in plan.tool_calls:
+        if not tool_is_available_in_context(call.tool_name, context):
+            current_stage = context.scope_type if context.scope_type == "video" else context.inspection_stage.value
+            raise AgentPlanError(
+                f"{current_stage} 阶段不允许工具 {call.tool_name.value}。"
+            )
+        if context.scope_type == "video":
+            continue
+        if (
+            context.inspection_stage != InspectionStage.SERIES_DISCOVERY
+            and context.candidate_buffer
+            and tool_requires_candidate_buffer(call.tool_name)
+        ):
+            video_id = getattr(call, "video_id", None)
+            candidate_video_ids = {item.video_id for item in context.candidate_buffer}
+            if video_id is None or video_id not in candidate_video_ids:
+                raise AgentPlanError(
+                    f"{call.tool_name.value} 的 video_id 必须来自当前候选缓冲区。"
+                )
 
 
 def _extract_listed_video_ids(observed_tool_results: list[ToolExecutionResult]) -> set[str]:
@@ -77,3 +109,21 @@ def _extract_listed_video_ids(observed_tool_results: list[ToolExecutionResult]) 
         }
         return {video_id.strip() for video_id in resolved_ids}
     return set()
+
+
+def _validate_terminal_action_plan(
+    plan: AgentActionPlan,
+    observed_tool_results: list[ToolExecutionResult],
+) -> None:
+    if plan.tool_calls:
+        return
+    if plan.intent_type not in {
+        IntentType.OPEN_TOOL,
+        IntentType.SEEK_VIDEO,
+        IntentType.GENERATE_OVERVIEW,
+        IntentType.GENERATE_MINDMAP,
+    }:
+        return
+    if observed_tool_results:
+        return
+    raise AgentPlanError(f"{plan.intent_type.value} 首轮至少需要一个工具调用。")

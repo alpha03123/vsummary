@@ -1,3 +1,12 @@
+from backend.agent.memory.context import AgentContext, InspectionStage
+from backend.agent.schemas.tool_calls import ToolContextTag, ToolDefinition, ToolEffectTag, ToolIntentTag, ToolName
+from backend.agent.tools.library_info import (
+    GET_VIDEO_SUMMARY_TOOL,
+    GET_VIDEO_TRANSCRIPT_TOOL,
+    GET_VIDEO_TOOLS_TOOL,
+    LIST_SERIES_VIDEOS_TOOL,
+    create_get_video_transcript_handler,
+)
 from backend.agent.tools.mindmap import (
     GENERATE_MINDMAP_TOOL,
     OPEN_MINDMAP_TOOL,
@@ -18,28 +27,109 @@ from backend.agent.tools.overview import (
     execute_generate_overview,
     execute_open_overview,
 )
-from backend.agent.tools.series import OPEN_SERIES_HOME_TOOL, execute_open_series_home
-from backend.agent.tools.transcript import TRANSCRIPT_LOOKUP_TOOL, create_transcript_lookup_handler
+from backend.agent.tools.series import (
+    OPEN_SERIES_HOME_TOOL,
+    OPEN_SERIES_OVERVIEW_TOOL,
+    execute_open_series_home,
+    execute_open_series_overview,
+)
+from backend.agent.tools.series_buffer import (
+    ADD_SERIES_CANDIDATES_TOOL,
+    CLEAR_SERIES_CANDIDATES_TOOL,
+    REMOVE_SERIES_CANDIDATES_TOOL,
+    REPLACE_SERIES_CANDIDATES_TOOL,
+    VIEW_SERIES_CANDIDATES_TOOL,
+    create_add_series_candidates_handler,
+    create_clear_series_candidates_handler,
+    create_remove_series_candidates_handler,
+    create_replace_series_candidates_handler,
+    create_view_series_candidates_handler,
+)
 from backend.agent.tools.video import OPEN_VIDEO_TOOL, VIDEO_SEEK_TOOL, execute_open_video, execute_video_seek
 
 
-def list_tool_definitions():
+ALL_TOOL_DEFINITIONS: list[ToolDefinition] = [
+    LIST_SERIES_VIDEOS_TOOL,
+    VIEW_SERIES_CANDIDATES_TOOL,
+    ADD_SERIES_CANDIDATES_TOOL,
+    REMOVE_SERIES_CANDIDATES_TOOL,
+    REPLACE_SERIES_CANDIDATES_TOOL,
+    CLEAR_SERIES_CANDIDATES_TOOL,
+    GET_VIDEO_SUMMARY_TOOL,
+    GET_VIDEO_TOOLS_TOOL,
+    GET_VIDEO_TRANSCRIPT_TOOL,
+    OPEN_SERIES_HOME_TOOL,
+    OPEN_SERIES_OVERVIEW_TOOL,
+    OPEN_OVERVIEW_TOOL,
+    OPEN_MINDMAP_TOOL,
+    OPEN_KNOWLEDGE_CARDS_TOOL,
+    OPEN_NOTES_TOOL,
+    GENERATE_OVERVIEW_TOOL,
+    GENERATE_MINDMAP_TOOL,
+    OPEN_VIDEO_TOOL,
+    VIDEO_SEEK_TOOL,
+    SAVE_NOTE_TOOL,
+]
+
+TOOL_DEFINITIONS_BY_NAME: dict[ToolName, ToolDefinition] = {
+    tool.name: tool
+    for tool in ALL_TOOL_DEFINITIONS
+}
+
+
+def list_tool_definitions_for_context(context: AgentContext) -> list[ToolDefinition]:
+    allowed_contexts = _resolve_tool_context_tags(context)
     return [
-        OPEN_SERIES_HOME_TOOL,
-        OPEN_OVERVIEW_TOOL,
-        OPEN_MINDMAP_TOOL,
-        OPEN_KNOWLEDGE_CARDS_TOOL,
-        OPEN_NOTES_TOOL,
-        GENERATE_OVERVIEW_TOOL,
-        GENERATE_MINDMAP_TOOL,
-        OPEN_VIDEO_TOOL,
-        VIDEO_SEEK_TOOL,
-        SAVE_NOTE_TOOL,
-        TRANSCRIPT_LOOKUP_TOOL,
+        tool
+        for tool in ALL_TOOL_DEFINITIONS
+        if any(tag in allowed_contexts for tag in tool.contexts)
     ]
 
 
+def get_tool_definition(tool_name: ToolName) -> ToolDefinition:
+    return TOOL_DEFINITIONS_BY_NAME[tool_name]
+
+
+def list_tool_names_for_intent(intent_tag: ToolIntentTag) -> set[ToolName]:
+    return {
+        tool.name
+        for tool in ALL_TOOL_DEFINITIONS
+        if intent_tag in tool.intents
+    }
+
+
+def tool_is_available_in_context(tool_name: ToolName, context: AgentContext) -> bool:
+    tool = get_tool_definition(tool_name)
+    allowed_contexts = _resolve_tool_context_tags(context)
+    return any(tag in allowed_contexts for tag in tool.contexts)
+
+
+def tool_requires_candidate_buffer(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).requires_candidate_buffer
+
+
+def tool_requires_video_id(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).requires_video_id
+
+
+def tool_has_effect(tool_name: ToolName, effect: ToolEffectTag) -> bool:
+    return effect in get_tool_definition(tool_name).effects
+
+
+def _resolve_tool_context_tags(context: AgentContext) -> tuple[ToolContextTag, ...]:
+    if context.scope_type == "video":
+        return (ToolContextTag.VIDEO,)
+    if context.inspection_stage == InspectionStage.SERIES_DISCOVERY:
+        return (ToolContextTag.SERIES_DISCOVERY,)
+    return (
+        ToolContextTag.SERIES_DISCOVERY,
+        ToolContextTag.SERIES_INSPECTION,
+    )
+
+
 __all__ = [
+    "create_add_series_candidates_handler",
+    "create_clear_series_candidates_handler",
     "execute_generate_mindmap",
     "execute_open_knowledge_cards",
     "execute_open_mindmap",
@@ -47,9 +137,19 @@ __all__ = [
     "execute_generate_overview",
     "execute_open_overview",
     "execute_open_series_home",
+    "execute_open_series_overview",
+    "create_remove_series_candidates_handler",
+    "create_replace_series_candidates_handler",
     "execute_save_note",
     "execute_open_video",
-    "create_transcript_lookup_handler",
+    "create_get_video_transcript_handler",
+    "create_view_series_candidates_handler",
     "execute_video_seek",
-    "list_tool_definitions",
+    "get_tool_definition",
+    "list_tool_definitions_for_context",
+    "list_tool_names_for_intent",
+    "tool_has_effect",
+    "tool_is_available_in_context",
+    "tool_requires_candidate_buffer",
+    "tool_requires_video_id",
 ]

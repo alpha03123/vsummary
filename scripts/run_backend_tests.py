@@ -12,7 +12,7 @@ TEST_GROUPS: dict[str, list[str]] = {
     "agent": [
         "tests.test_agent_context_loader",
         "tests.test_agent_scaffold",
-        "tests.test_agent_transcript_lookup",
+        "tests.test_agent_video_transcript",
         "tests.test_agent_validation",
     ],
     "api": [
@@ -29,7 +29,7 @@ TEST_GROUPS: dict[str, list[str]] = {
     "fast": [
         "tests.test_agent_context_loader",
         "tests.test_agent_scaffold",
-        "tests.test_agent_transcript_lookup",
+        "tests.test_agent_video_transcript",
         "tests.test_agent_validation",
         "tests.test_filesystem_video_workspace",
         "tests.test_progress_tracker",
@@ -37,7 +37,7 @@ TEST_GROUPS: dict[str, list[str]] = {
     "all": [
         "tests.test_agent_context_loader",
         "tests.test_agent_scaffold",
-        "tests.test_agent_transcript_lookup",
+        "tests.test_agent_video_transcript",
         "tests.test_agent_validation",
         "tests.test_api",
         "tests.test_filesystem_video_workspace",

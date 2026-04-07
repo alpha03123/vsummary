@@ -99,6 +99,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 
 ## 测试
 
+- 常规后端回归只跑 `unittest` 测试组，不包含真实模型对话脚本
 - 运行后端快速测试组：
 
 ```powershell
@@ -136,6 +137,25 @@ python .\scripts\run_backend_tests.py tests\test_generate_summary.py
 - 只改某一个测试文件：直接传 `tests.test_xxx` 或 `tests\test_xxx.py`
 - 一次涉及多个职责：把多个目标并列传进去
 - 提交前做一次完整检查：跑 `all`
+
+## 真实 Agent 对话回归
+
+- `scripts/run_agent_series_reply.py`
+- `scripts/run_agent_manual_cases.py`
+
+这两类脚本会真实调用模型，耗时和成本都更高，因此项目里将它们视为：
+
+- 低优先级回归
+- 仅手动触发
+- 不纳入默认日常测试
+- 不纳入提交前常规检查
+
+手动确认要跑时，再显式追加 `--manual`：
+
+```powershell
+python .\scripts\run_agent_series_reply.py --manual
+python .\scripts\run_agent_manual_cases.py --manual
+```
 
 ## 当前 API
 

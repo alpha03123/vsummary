@@ -18,7 +18,6 @@ class IntentType(str, Enum):
 
 
 class ScopeType(str, Enum):
-    LIBRARY = "library"
     SERIES = "series"
     VIDEO = "video"
 
@@ -27,10 +26,12 @@ class PlannerToolCall(BaseModel):
     tool_name: ToolName
     series_id: str | None = None
     video_id: str | None = None
+    video_ids: list[str] = Field(default_factory=list)
     seek_seconds: float | None = None
     note_title: str | None = None
     note_content: str | None = None
     query: str | None = None
+    reason: str = ""
 
 
 class PlannerActionPlan(BaseModel):

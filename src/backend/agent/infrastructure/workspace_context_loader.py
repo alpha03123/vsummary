@@ -13,22 +13,9 @@ class WorkspaceAgentContextLoader:
         scope_type, series_id, video_id, selected_tool = _parse_session_id(session_id)
         workspace_view = self._workspace.get_workspace()
 
-        if scope_type == "library":
-            return AgentContext(
-                session_id=session_id,
-                workspace_title=workspace_view.title,
-                scope_type="library",
-                selected_tool=selected_tool or "studio",
-            )
-
         series = next((item for item in self._workspace.list_series() if item.id == series_id), None)
         if series is None:
-            return AgentContext(
-                session_id=session_id,
-                workspace_title=workspace_view.title,
-                scope_type="library",
-                selected_tool="studio",
-            )
+            raise RuntimeError("当前缺少有效的 series 上下文，无法建立 Agent 会话。")
 
         if scope_type == "series" or not video_id:
             return AgentContext(
@@ -84,11 +71,9 @@ def _map_tool_availability(tool) -> ToolAvailability:
 def _parse_session_id(session_id: str) -> tuple[str, str | None, str | None, str | None]:
     parts = [part for part in session_id.split("|") if part]
     if not parts:
-        return "library", None, None, "studio"
+        return "series", None, None, "series-home"
 
     scope_type = parts[0]
-    if scope_type == "library":
-        return "library", None, None, parts[1] if len(parts) > 1 else "studio"
     if scope_type == "series":
         return "series", parts[1] if len(parts) > 1 else None, None, parts[2] if len(parts) > 2 else "series-home"
     if scope_type == "video":
@@ -98,4 +83,4 @@ def _parse_session_id(session_id: str) -> tuple[str, str | None, str | None, str
             parts[2] if len(parts) > 2 else None,
             parts[3] if len(parts) > 3 else "studio",
         )
-    return "library", None, None, "studio"
+    return "series", None, None, "series-home"

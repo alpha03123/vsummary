@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceController } from "./useWorkspaceController";
 
 const workspaceApi = vi.hoisted(() => ({
+  clearAgentSession: vi.fn(),
   cancelFasterWhisperModelDownload: vi.fn(),
   createVideoNote: vi.fn(),
   deleteVideoNote: vi.fn(),
@@ -12,6 +13,8 @@ const workspaceApi = vi.hoisted(() => ({
   generateVideoMindmap: vi.fn(),
   generateVideoSummary: vi.fn(),
   getVideoPreviewUrl: vi.fn(),
+  loadAgentContextUsage: vi.fn(),
+  loadAgentSessionRecovery: vi.fn(),
   loadFasterWhisperModels: vi.fn(),
   loadProviderSettings: vi.fn(),
   loadVideoKnowledgeCards: vi.fn(),
@@ -33,6 +36,7 @@ vi.mock("./workspaceApi", () => workspaceApi);
 
 describe("useWorkspaceController", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     vi.clearAllMocks();
 
     workspaceApi.loadWorkspaceLibrary.mockResolvedValue({
@@ -61,6 +65,35 @@ describe("useWorkspaceController", () => {
       ],
     });
     workspaceApi.loadFasterWhisperModels.mockResolvedValue([]);
+    workspaceApi.loadAgentContextUsage.mockResolvedValue({
+      sessionId: "series|series-a|series-home",
+      scopeType: "series",
+      memoryKey: "series|series-a|series-home",
+      estimatedTotalTokens: 2048,
+      windowTokens: 200000,
+      reservedOutputTokens: 20000,
+      warningThresholdTokens: 120000,
+      compactThresholdTokens: 160000,
+      blockingThresholdTokens: 184000,
+      remainingTokens: 197952,
+      usagePercent: 1.02,
+      level: "normal",
+      sources: [
+        { id: "system_prompt", label: "系统指令", estimatedTokens: 1000 },
+        { id: "recent_messages", label: "最近消息", estimatedTokens: 500 },
+        { id: "tool_results", label: "工具结果", estimatedTokens: 0 },
+        { id: "workspace_context", label: "工作区上下文", estimatedTokens: 548 },
+      ],
+    });
+    workspaceApi.loadAgentSessionRecovery.mockResolvedValue({
+      sessionId: "series|series-a|series-home",
+      restored: false,
+      memoryKey: null,
+      updatedAt: null,
+      messageCount: 0,
+      messages: [],
+    });
+    workspaceApi.clearAgentSession.mockResolvedValue({ status: "cleared" });
     workspaceApi.loadWorkspaceSettings.mockResolvedValue({
       theme: "light",
       showTakeaways: true,
@@ -115,15 +148,39 @@ describe("useWorkspaceController", () => {
     });
     workspaceApi.streamAgentChat.mockImplementation(async (sessionId, message, context, listener) => {
       listener({ type: "thinking_started", payload: { message: "正在分析当前问题" } });
-      listener({ type: "thinking_completed", payload: { summary: "先检索转写，再定位视频时间点。", duration_ms: 20 } });
-      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "transcript_lookup", index: 1 } });
+      listener({ type: "thinking_completed", payload: { summary: "先读取转写全文，再定位视频时间点。", duration_ms: 20 } });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "get_video_transcript", index: 1 } });
       listener({
         type: "tool_completed",
         payload: {
           tool_call_id: "tool-1",
-          tool_name: "transcript_lookup",
+          tool_name: "get_video_transcript",
           status: "ok",
           duration_ms: 10,
+          payload: {
+            series_id: "series-a",
+            video_id: "video-1",
+            title: "Video 1",
+            generated: true,
+            duration_seconds: 300,
+            segments: [
+              {
+                start_seconds: 128,
+                end_seconds: 146,
+                text: "后续项目会用到百度地图 API，需要提前申请 API Key。",
+              },
+            ],
+          },
+        },
+      });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-2", tool_name: "video_seek", index: 2 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-2",
+          tool_name: "video_seek",
+          status: "ok",
+          duration_ms: 6,
           payload: {
             selected_tool: "video",
             query: "百度地图 API Key",
@@ -134,7 +191,7 @@ describe("useWorkspaceController", () => {
           },
         },
       });
-      listener({ type: "tool_chain_completed", payload: { count: 1, duration_ms: 10 } });
+      listener({ type: "tool_chain_completed", payload: { count: 2, duration_ms: 16 } });
       listener({ type: "answer_started", payload: { message: "正在组织回答" } });
       listener({ type: "answer_delta", payload: { delta: "相关内容在 02:08 左右，" } });
       listener({ type: "answer_delta", payload: { delta: "我已经帮你打开视频。" } });
@@ -189,6 +246,7 @@ describe("useWorkspaceController", () => {
     });
 
     await waitFor(() => expect(result.current.tools?.preview?.previewUrl).toBe("/api/videos/series-a/video-1/preview"));
+    await waitFor(() => expect(result.current.contextUsage?.estimatedTotalTokens).toBe(2048));
 
     await act(async () => {
       await result.current.onSubmitChat("百度地图 API Key 在视频什么位置？");
@@ -224,6 +282,17 @@ describe("useWorkspaceController", () => {
         meta: expect.stringMatching(/^Notebook Assistant • 用时 /),
       }),
     );
+    expect(workspaceApi.loadAgentContextUsage).toHaveBeenCalledWith(
+      "video|series-a|video-1|studio",
+      {
+        scope_type: "video",
+        series_id: "series-a",
+        series_title: "Series A",
+        video_id: "video-1",
+        video_title: "Video 1",
+        selected_tool: "studio",
+      },
+    );
   });
 
   it("keeps chat history when switching videos inside the same series", async () => {
@@ -255,29 +324,107 @@ describe("useWorkspaceController", () => {
     ]));
   });
 
-  it("supports library-scope chat before selecting a series", async () => {
+  it("hydrates recovered chat messages for the current scope", async () => {
+    workspaceApi.loadAgentSessionRecovery.mockResolvedValueOnce({
+      sessionId: "series|series-a|series-home",
+      restored: true,
+      memoryKey: "series|series-a|series-home",
+      updatedAt: "2026-04-05T10:00:00Z",
+      messageCount: 2,
+      messages: [
+        {
+          id: "recovered-series|series-a|series-home-0",
+          role: "user",
+          content: "之前的问题",
+          meta: "You • 已恢复",
+        },
+        {
+          id: "recovered-series|series-a|series-home-1",
+          role: "assistant",
+          content: "之前的回答",
+          meta: "Notebook Assistant • 已恢复",
+        },
+      ],
+    });
+
     const { result } = renderHook(() => useWorkspaceController());
 
     await waitFor(() => expect(result.current.state.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.onSubmitChat("这个知识库里先看什么？");
+    act(() => {
+      result.current.onSelectSeries("series-a");
     });
-
-    expect(workspaceApi.streamAgentChat).toHaveBeenCalledWith(
-      "library|studio",
-      "这个知识库里先看什么？",
+    await waitFor(() => expect(result.current.chatMessages.some((message) => message.content === "之前的回答")).toBe(true));
+    expect(workspaceApi.loadAgentSessionRecovery).toHaveBeenCalledWith(
+      "series|series-a|series-home",
       {
-        scope_type: "library",
-        series_id: null,
-        series_title: null,
+        scope_type: "series",
+        series_id: "series-a",
+        series_title: "Series A",
         video_id: null,
         video_title: null,
-        selected_tool: "studio",
+        selected_tool: "series-home",
       },
-      expect.any(Function),
     );
-    expect(result.current.chatMessages.some((message) => message.content === "这个知识库里先看什么？")).toBe(true);
+  });
+
+  it("starts a new chat session and clears the visible history", async () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("这个系列先看哪一节？");
+    });
+    expect(result.current.chatMessages.some((message) => message.content === "这个系列先看哪一节？")).toBe(true);
+
+    act(() => {
+      result.current.onStartNewChat();
+    });
+
+    expect(result.current.chatMessages).toEqual([
+      expect.objectContaining({
+        id: "assistant-welcome",
+        role: "assistant",
+      }),
+    ]);
+  });
+
+  it("clears the current chat session through the api", async () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("这个系列先看哪一节？");
+    });
+
+    await act(async () => {
+      await result.current.onClearChat();
+    });
+
+    expect(workspaceApi.clearAgentSession).toHaveBeenCalledWith(
+      result.current.state.chatScopeKey,
+      {
+        scope_type: "series",
+        series_id: "series-a",
+        series_title: "Series A",
+        video_id: null,
+        video_title: null,
+        selected_tool: "preview",
+      },
+    );
+    expect(result.current.chatMessages).toEqual([
+      expect.objectContaining({
+        id: "assistant-welcome",
+        role: "assistant",
+      }),
+    ]);
   });
 
   it("creates note when agent returns save_note action", async () => {
@@ -515,6 +662,56 @@ describe("useWorkspaceController", () => {
         content: "我已经帮你打开知识卡片。",
       }),
     );
+  });
+
+  it("switches to series overview when agent returns a series-level open-tool action", async () => {
+    workspaceApi.streamAgentChat.mockImplementationOnce(async (_sessionId, _message, _context, listener) => {
+      listener({ type: "thinking_started", payload: { message: "正在分析当前问题" } });
+      listener({ type: "tool_started", payload: { tool_call_id: "tool-1", tool_name: "open_series_overview", index: 1 } });
+      listener({
+        type: "tool_completed",
+        payload: {
+          tool_call_id: "tool-1",
+          tool_name: "open_series_overview",
+          status: "ok",
+          duration_ms: 4,
+          payload: {
+            selected_tool: "series-overview",
+          },
+        },
+      });
+      listener({ type: "tool_chain_completed", payload: { count: 1, duration_ms: 4 } });
+      listener({ type: "answer_started", payload: { message: "正在组织回答" } });
+      listener({ type: "answer_delta", payload: { delta: "我已经帮你打开系列概览。" } });
+      listener({ type: "answer_completed", payload: { message: "我已经帮你打开系列概览。", duration_ms: 8 } });
+    });
+
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("打开系列概览");
+    });
+
+    await waitFor(() => expect(result.current.state.selectedToolId).toBe("series-overview"));
+    expect(result.current.chatMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "tool-trace",
+        toolTrace: expect.objectContaining({
+          steps: [
+            expect.objectContaining({
+              toolName: "open_series_overview",
+              label: "打开系列概览",
+            }),
+          ],
+        }),
+      }),
+    ]));
   });
 
   it("records visible tool-chain messages before the final assistant reply", async () => {

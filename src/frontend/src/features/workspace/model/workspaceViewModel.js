@@ -53,6 +53,15 @@ function asTool(value, label) {
   };
 }
 
+function asContextUsageSource(value, label) {
+  const record = asRecord(value, label);
+  return {
+    id: asString(record.id, `${label}.id`),
+    label: asString(record.label, `${label}.label`),
+    estimatedTokens: asNumber(record.estimated_tokens, `${label}.estimated_tokens`),
+  };
+}
+
 function asChapterCard(value, label) {
   const record = asRecord(value, label);
   return {
@@ -262,5 +271,29 @@ export function toWorkspaceLibrary(payload) {
         ),
       };
     }),
+  };
+}
+
+export function toWorkspaceContextUsage(payload) {
+  const record = asRecord(payload, "contextUsage");
+  const rawSources = record.sources ?? [];
+  if (!Array.isArray(rawSources)) {
+    throw new Error("contextUsage.sources 不是有效列表。");
+  }
+
+  return {
+    sessionId: asString(record.session_id, "contextUsage.session_id"),
+    scopeType: asString(record.scope_type, "contextUsage.scope_type"),
+    memoryKey: asString(record.memory_key, "contextUsage.memory_key"),
+    estimatedTotalTokens: asNumber(record.estimated_total_tokens, "contextUsage.estimated_total_tokens"),
+    windowTokens: asNumber(record.window_tokens, "contextUsage.window_tokens"),
+    reservedOutputTokens: asNumber(record.reserved_output_tokens, "contextUsage.reserved_output_tokens"),
+    warningThresholdTokens: asNumber(record.warning_threshold_tokens, "contextUsage.warning_threshold_tokens"),
+    compactThresholdTokens: asNumber(record.compact_threshold_tokens, "contextUsage.compact_threshold_tokens"),
+    blockingThresholdTokens: asNumber(record.blocking_threshold_tokens, "contextUsage.blocking_threshold_tokens"),
+    remainingTokens: asNumber(record.remaining_tokens, "contextUsage.remaining_tokens"),
+    usagePercent: asNumber(record.usage_percent, "contextUsage.usage_percent"),
+    level: asString(record.level, "contextUsage.level"),
+    sources: rawSources.map((item, index) => asContextUsageSource(item, `contextUsage.sources[${index}]`)),
   };
 }

@@ -70,14 +70,23 @@ class FakeMindmapGenerator:
 
 
 class FakeAgentService:
-    def __init__(self) -> None:
+    def __init__(self, session_store=None) -> None:
         self.last_context_override = None
+        self.session_store = session_store
 
     def run_with_context(self, *, session_id: str, user_message: str, context_override=None):
         from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult
         from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
         self.last_context_override = context_override
+        if self.session_store is not None and context_override is not None:
+            self.session_store.append_turn(
+                session_id=session_id,
+                memory_key=session_id,
+                context=context_override,
+                user_message=user_message,
+                assistant_message=f"已收到：{user_message}",
+            )
         return AgentTurnResult(
             assistant_message=f"已收到：{user_message}",
             plan=AgentActionPlan(
@@ -99,6 +108,14 @@ class FakeAgentService:
 
     def stream_with_context(self, *, session_id: str, user_message: str, context_override=None):
         self.last_context_override = context_override
+        if self.session_store is not None and context_override is not None:
+            self.session_store.append_turn(
+                session_id=session_id,
+                memory_key=session_id,
+                context=context_override,
+                user_message=user_message,
+                assistant_message=f"已收到：{user_message}",
+            )
         yield type("Event", (), {"type": "thinking_started", "payload": {"message": "正在分析当前问题"}})()
         yield type("Event", (), {"type": "thinking_completed", "payload": {"summary": f"session={session_id}", "duration_ms": 5}})()
         yield type("Event", (), {"type": "tool_started", "payload": {"tool_call_id": "tool-1", "tool_name": "open_overview", "index": 1}})()
@@ -131,6 +148,11 @@ class FakeAgentService:
                 },
             },
         )()
+
+    def clear_session(self, *, session_id: str, context_override=None) -> None:
+        self.last_context_override = context_override
+        if self.session_store is not None:
+            self.session_store.clear_snapshot(session_id)
 
 
 class FakeFasterWhisperModelManager:
@@ -243,7 +265,7 @@ show_takeaways = true
             mindmap_generator=FakeMindmapGenerator(),
             faster_whisper_model_manager=FakeFasterWhisperModelManager(),
         )
-        self.fake_agent_service = FakeAgentService()
+        self.fake_agent_service = FakeAgentService(api_module.CONTAINER.agent_session_store)
         api_module.CONTAINER = api_module.CONTAINER.__class__(**{
             **api_module.CONTAINER.__dict__,
             "get_agent_service": lambda: self.fake_agent_service,
@@ -615,6 +637,35 @@ show_takeaways = true
         self.assertEqual(self.fake_agent_service.last_context_override.selected_tool, "overview")
         self.assertEqual(self.fake_agent_service.last_context_override.video_id, "advanced")
 
+    async def test_agent_context_usage_endpoint_returns_budget_breakdown(self) -> None:
+        response = await self.client.post(
+            "/api/agent/context/usage",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["session_id"], "video|series-a|advanced|overview")
+        self.assertEqual(payload["scope_type"], "video")
+        self.assertEqual(payload["memory_key"], "video|series-a|advanced|overview")
+        self.assertGreater(payload["estimated_total_tokens"], 0)
+        self.assertEqual(payload["window_tokens"], 200000)
+        self.assertEqual(payload["reserved_output_tokens"], 20000)
+        self.assertEqual(
+            [source["id"] for source in payload["sources"]],
+            ["system_prompt", "recent_messages", "tool_results", "workspace_context"],
+        )
+
     async def test_agent_chat_endpoint_returns_503_when_agent_is_not_configured(self) -> None:
         (self.root / ".env").write_text(
             "\n".join(
@@ -641,7 +692,7 @@ show_takeaways = true
         response = await self.client.post(
             "/api/agent/chat",
             json={
-                "session_id": "library",
+                "session_id": "series|series-a|series-home",
                 "message": "打开概况",
             },
         )
@@ -671,6 +722,100 @@ show_takeaways = true
         self.assertIn("event: tool_completed", response.text)
         self.assertIn("event: answer_delta", response.text)
         self.assertIn("event: answer_completed", response.text)
+
+    async def test_agent_session_recovery_endpoint_returns_persisted_messages(self) -> None:
+        chat_response = await self.client.post(
+            "/api/agent/chat",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "message": "打开概况",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+        self.assertEqual(chat_response.status_code, 200)
+
+        response = await self.client.post(
+            "/api/agent/session/recover",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["restored"])
+        self.assertEqual(payload["memory_key"], "video|series-a|advanced|overview")
+        self.assertEqual(payload["message_count"], 2)
+        self.assertEqual(payload["messages"][0]["role"], "user")
+        self.assertEqual(payload["messages"][0]["content"], "打开概况")
+        self.assertEqual(payload["messages"][1]["role"], "assistant")
+        self.assertEqual(payload["messages"][1]["content"], "已收到：打开概况")
+
+    async def test_agent_session_clear_endpoint_removes_persisted_snapshot(self) -> None:
+        await self.client.post(
+            "/api/agent/chat",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "message": "打开概况",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+
+        clear_response = await self.client.post(
+            "/api/agent/session/clear",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+        self.assertEqual(clear_response.status_code, 200)
+        self.assertEqual(clear_response.json()["status"], "cleared")
+
+        recovery_response = await self.client.post(
+            "/api/agent/session/recover",
+            json={
+                "session_id": "video|series-a|advanced|overview",
+                "context": {
+                    "scope_type": "video",
+                    "series_id": "series-a",
+                    "series_title": "series-a",
+                    "video_id": "advanced",
+                    "video_title": "advanced",
+                    "selected_tool": "overview",
+                },
+            },
+        )
+        self.assertEqual(recovery_response.status_code, 200)
+        self.assertFalse(recovery_response.json()["restored"])
 
 
 if __name__ == "__main__":

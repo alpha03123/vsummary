@@ -53,6 +53,61 @@ describe("WorkspaceReadingPane", () => {
     expect(await screen.findByText("工具页")).toBeInTheDocument();
   });
 
+  it("shows a waiting state instead of crashing when overview is opened without a selected video", async () => {
+    render(
+      <WorkspaceReadingPane
+        ui={{ showTakeaways: true }}
+        tools={{
+          overview: {
+            id: "overview",
+            title: "AI概况",
+            available: false,
+            generated: false,
+            status: "idle",
+          },
+        }}
+        library={null}
+        summary={null}
+        mindmap={null}
+        knowledgeCards={null}
+        knowledgeCardsGenerating={false}
+        knowledgeCardsFeedback={null}
+        notes={null}
+        activeSeries={{
+          id: "series-a",
+          title: "Series A",
+          videos: [],
+        }}
+        selectedVideo={null}
+        selectedContextType="series"
+        selectedNode={null}
+        previewUrl={null}
+        previewSeekRequest={null}
+        selectedToolId="overview"
+        selectedChapterId={null}
+        toolsLoading={false}
+        summaryLoading={false}
+        mindmapLoading={false}
+        knowledgeCardsLoading={false}
+        notesLoading={false}
+        savingNote={false}
+        isGeneratingMindmapSelectedVideo={false}
+        isGeneratingSelectedVideo={false}
+        onSelectTool={() => {}}
+        onFocusNode={() => {}}
+        onOpenCard={() => {}}
+        onGenerateMindmap={() => {}}
+        onGenerateKnowledgeCards={() => {}}
+        onCreateNote={() => {}}
+        onUpdateNote={() => {}}
+        onDeleteNote={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("等待视频")).toBeInTheDocument();
+    expect(screen.getByText("先在左侧选中一个具体视频，这里才会显示对应的 AI 概况。")).toBeInTheDocument();
+  });
+
   it("renders seek details and seeks the preview video", async () => {
     const { container } = render(
       <WorkspaceReadingPane

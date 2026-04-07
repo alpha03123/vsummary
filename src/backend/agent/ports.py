@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Iterator, Protocol, TypeVar
 
 from pydantic import BaseModel
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.messages import AgentChatMessage
+from backend.agent.session.models import AgentSessionSnapshot
 from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult
 
 StructuredResponseT = TypeVar("StructuredResponseT", bound=BaseModel)
@@ -31,37 +31,28 @@ class AgentContextLoader(Protocol):
     def load(self, session_id: str) -> AgentContext:
         ...
 
-
-@dataclass(frozen=True)
-class TranscriptLookupMatch:
-    source: str
-    text: str
-    start_seconds: float
-    end_seconds: float
-    chapter_title: str | None = None
-    score: float = 0.0
-
-
-@dataclass(frozen=True)
-class TranscriptLookupResult:
-    query: str
-    matches: list[TranscriptLookupMatch]
-
-    @property
-    def seek_seconds(self) -> float | None:
-        if not self.matches:
-            return None
-        return self.matches[0].start_seconds
-
-
-class AgentTranscriptLookup(Protocol):
-    def lookup(self, context: AgentContext, query: str) -> TranscriptLookupResult:
-        ...
-
-
 class AgentToolExecutor(Protocol):
     def execute(self, plan: AgentActionPlan, context: AgentContext) -> list[ToolExecutionResult]:
         ...
 
     def execute_call(self, call: ToolCall, context: AgentContext) -> ToolExecutionResult:
+        ...
+
+
+class AgentSessionStore(Protocol):
+    def get_snapshot(self, session_id: str) -> AgentSessionSnapshot | None:
+        ...
+
+    def append_turn(
+        self,
+        *,
+        session_id: str,
+        memory_key: str,
+        context: AgentContext,
+        user_message: str,
+        assistant_message: str,
+    ) -> None:
+        ...
+
+    def clear_snapshot(self, session_id: str) -> None:
         ...

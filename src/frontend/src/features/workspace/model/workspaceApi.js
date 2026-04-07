@@ -1,5 +1,6 @@
 import {
   toWorkspaceCards,
+  toWorkspaceContextUsage,
   toWorkspaceKnowledgeCards,
   toWorkspaceLibrary,
   toWorkspaceMindmap,
@@ -243,6 +244,65 @@ export async function sendAgentChat(sessionId, message, context) {
   });
 }
 
+export async function loadAgentContextUsage(sessionId, context) {
+  return toWorkspaceContextUsage(
+    await fetchJson("/api/agent/context/usage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        context: context ?? null,
+      }),
+    }),
+  );
+}
+
+export async function loadAgentSessionRecovery(sessionId, context) {
+  const payload = await fetchJson("/api/agent/session/recover", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      context: context ?? null,
+    }),
+  });
+  return {
+    sessionId: payload.session_id,
+    restored: Boolean(payload.restored),
+    memoryKey: typeof payload.memory_key === "string" ? payload.memory_key : null,
+    updatedAt: typeof payload.updated_at === "string" ? payload.updated_at : null,
+    messageCount: typeof payload.message_count === "number" ? payload.message_count : 0,
+    messages: Array.isArray(payload.messages)
+      ? payload.messages.map((message, index) => ({
+          id: `recovered-${payload.session_id}-${index}`,
+          role: typeof message.role === "string" ? message.role : "assistant",
+          content: typeof message.content === "string" ? message.content : "",
+          meta: buildRecoveredMeta(
+            typeof message.role === "string" ? message.role : "assistant",
+            typeof message.created_at === "string" ? message.created_at : "",
+          ),
+        }))
+      : [],
+  };
+}
+
+export async function clearAgentSession(sessionId, context) {
+  return fetchJson("/api/agent/session/clear", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      context: context ?? null,
+    }),
+  });
+}
+
 export async function streamAgentChat(sessionId, message, context, listener) {
   const response = await fetch("/api/agent/chat/stream", {
     method: "POST",
@@ -396,4 +456,10 @@ function parseSseEvent(rawValue) {
     type,
     payload: rawData ? JSON.parse(rawData) : {},
   };
+}
+
+function buildRecoveredMeta(role, createdAt) {
+  const actor = role === "user" ? "You" : "Notebook Assistant";
+  const suffix = createdAt ? "已恢复" : "恢复记录";
+  return `${actor} • ${suffix}`;
 }

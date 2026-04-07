@@ -21,6 +21,10 @@ export function buildWorkspacePageModel(controller) {
     chat: {
       messages: controller.chatMessages,
       pending: controller.chatPending,
+      contextUsage: controller.contextUsage,
+      contextUsageLoading: controller.contextUsageLoading,
+      startNewChat: controller.onStartNewChat,
+      clearChat: controller.onClearChat,
       submit: controller.onSubmitChat,
     },
     generation: {

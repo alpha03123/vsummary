@@ -42,6 +42,22 @@ class VideoSummaryView:
 
 
 @dataclass(frozen=True)
+class TranscriptSegmentView:
+    start_seconds: float
+    end_seconds: float
+    text: str
+
+
+@dataclass(frozen=True)
+class VideoTranscriptView:
+    series_id: str
+    video_id: str
+    title: str
+    duration_seconds: float | None
+    segments: list[TranscriptSegmentView]
+
+
+@dataclass(frozen=True)
 class VideoMindmapView:
     series_id: str
     video_id: str

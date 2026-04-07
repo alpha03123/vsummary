@@ -239,7 +239,7 @@ infrastructure
 
 - `src/backend/agent/infrastructure/chat_gateway.py`
 - `src/backend/agent/infrastructure/workspace_context_loader.py`
-- `src/backend/agent/infrastructure/transcript_lookup.py`
+- 视频转写直接由 `VideoWorkspace.get_video_transcript(...)` 提供，不再单独维护 `transcript_lookup.py`
 
 这里是 Agent 的外部适配层，实现上面的端口。
 

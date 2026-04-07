@@ -4,7 +4,9 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.tool_calls import (
     OpenVideoCall,
     ToolDefinition,
+    ToolContextTag,
     ToolExecutionResult,
+    ToolIntentTag,
     ToolName,
     VideoSeekCall,
 )
@@ -13,6 +15,8 @@ OPEN_VIDEO_TOOL = ToolDefinition(
     name=ToolName.OPEN_VIDEO,
     title="打开视频工具",
     description="切换到视频预览工具页。",
+    contexts=(ToolContextTag.VIDEO,),
+    intents=(ToolIntentTag.OPEN_TOOL,),
 )
 
 VIDEO_SEEK_TOOL = ToolDefinition(
@@ -20,6 +24,8 @@ VIDEO_SEEK_TOOL = ToolDefinition(
     title="跳转视频时间点",
     description="打开视频工具，并跳到指定秒数。",
     arguments={"seek_seconds": "需要跳转到的视频秒数"},
+    contexts=(ToolContextTag.VIDEO,),
+    intents=(ToolIntentTag.SEEK_VIDEO,),
 )
 
 

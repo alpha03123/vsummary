@@ -100,19 +100,25 @@ export function WorkspacePage({ page }) {
         )}
 
         <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
-          <section className="flex-1 min-w-[380px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
-             <WorkspaceChatPanel
-               workspaceTitle={library?.workspace?.title}
-               activeSeries={activeSeries}
-               selectedVideo={selectedVideo}
-               selectedContextType={selectedContextType}
-               selectedToolId={state.selectedToolId}
-               tools={tools}
-               chatMessages={chat.messages}
-               chatPending={chat.pending}
-               onSubmitChat={chat.submit}
-             />
-          </section>
+          {activeSeries ? (
+            <section className="flex-1 min-w-[380px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
+               <WorkspaceChatPanel
+                 workspaceTitle={library?.workspace?.title}
+                 activeSeries={activeSeries}
+                 selectedVideo={selectedVideo}
+                 selectedContextType={selectedContextType}
+                 selectedToolId={state.selectedToolId}
+                 tools={tools}
+                 chatMessages={chat.messages}
+                 chatPending={chat.pending}
+                 contextUsage={chat.contextUsage}
+                 contextUsageLoading={chat.contextUsageLoading}
+                 onStartNewChat={chat.startNewChat}
+                 onClearChat={chat.clearChat}
+                 onSubmitChat={chat.submit}
+               />
+            </section>
+          ) : null}
 
           {!activeSeries ? (
             <AnimatePresence mode="wait">

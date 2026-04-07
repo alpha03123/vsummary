@@ -140,7 +140,7 @@ Agent 后端只返回结构化动作，不直接承担整条 UI 工作流。
 
 这些工具用于支持复杂问答和多步聚合：
 
-- `transcript_lookup`
+- `get_video_transcript`
 - `list_series_videos`
 - `get_video_summary`
 - `get_video_tools`
@@ -347,7 +347,7 @@ class AgentChatResponse(BaseModel):
 
 链路：
 
-1. `transcript_lookup`
+1. `get_video_transcript`
 2. `video_seek`
 
 这是最典型、最值钱的两步链。
@@ -356,7 +356,7 @@ class AgentChatResponse(BaseModel):
 
 链路：
 
-1. 必要时先 `transcript_lookup`
+1. 必要时先 `get_video_transcript`
 2. `save_note`
 3. `open_notes`
 

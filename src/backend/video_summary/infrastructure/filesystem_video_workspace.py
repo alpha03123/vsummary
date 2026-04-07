@@ -10,6 +10,7 @@ from backend.video_summary.library.views import (
     KnowledgeCardView,
     KnowledgeCardSourceRefView,
     SeriesView,
+    TranscriptSegmentView,
     VideoCardView,
     VideoChapterCardsView,
     VideoKnowledgeCardsView,
@@ -18,6 +19,7 @@ from backend.video_summary.library.views import (
     VideoNotesView,
     VideoSourceView,
     VideoSummaryView,
+    VideoTranscriptView,
     VideoWorkspaceToolsView,
     WorkspaceToolView,
     WorkspaceView,
@@ -86,7 +88,7 @@ class FileSystemVideoWorkspace:
             return None
 
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        transcript = _load_transcript(self._workspace_dir / series_id / video_id / "transcript.cleaned.json")
+        transcript = _load_transcript_segments(self._workspace_dir / series_id / video_id / "transcript.cleaned.json")
         summary = _attach_chapter_transcript(summary, transcript)
         title = str(summary.get("title", video.title)).strip() or video.title
         return VideoSummaryView(
@@ -94,6 +96,32 @@ class FileSystemVideoWorkspace:
             video_id=video_id,
             title=title,
             summary=summary,
+        )
+
+    def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptView | None:
+        video = self.get_video_source(series_id, video_id)
+        if video is None:
+            return None
+
+        transcript_path = self._workspace_dir / series_id / video_id / "transcript.cleaned.json"
+        if not transcript_path.exists():
+            return None
+
+        payload = json.loads(transcript_path.read_text(encoding="utf-8"))
+        title = str(payload.get("title", video.title)).strip() or video.title
+        return VideoTranscriptView(
+            series_id=series_id,
+            video_id=video_id,
+            title=title,
+            duration_seconds=_as_seconds(payload.get("duration_seconds")),
+            segments=[
+                TranscriptSegmentView(
+                    start_seconds=segment["start_seconds"],
+                    end_seconds=segment["end_seconds"],
+                    text=segment["text"],
+                )
+                for segment in _normalize_transcript_segments(payload.get("segments"))
+            ],
         )
 
     def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapView | None:
@@ -367,15 +395,37 @@ def _to_title(raw_value: str) -> str:
     return raw_value.replace("_", " ").replace("-", " ").title()
 
 
-def _load_transcript(transcript_path: Path) -> list[dict[str, object]]:
+def _load_transcript_segments(transcript_path: Path) -> list[dict[str, object]]:
     if not transcript_path.exists():
         return []
 
     payload = json.loads(transcript_path.read_text(encoding="utf-8"))
-    segments = payload.get("segments", [])
-    if not isinstance(segments, list):
+    return _normalize_transcript_segments(payload.get("segments"))
+
+
+def _normalize_transcript_segments(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
         return []
-    return [segment for segment in segments if isinstance(segment, dict)]
+
+    normalized_segments: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        start_seconds = _as_seconds(item.get("start_seconds"))
+        end_seconds = _as_seconds(item.get("end_seconds"))
+        text = item.get("text")
+        if start_seconds is None or end_seconds is None:
+            continue
+        if not isinstance(text, str) or not text.strip():
+            continue
+        normalized_segments.append(
+            {
+                "start_seconds": start_seconds,
+                "end_seconds": end_seconds,
+                "text": text.strip(),
+            }
+        )
+    return normalized_segments
 
 
 def _attach_chapter_transcript(summary: dict[str, object], transcript_segments: list[dict[str, object]]) -> dict[str, object]:
@@ -417,11 +467,9 @@ def _slice_transcript_segments(
 
     sliced_segments = []
     for segment in transcript_segments:
-        segment_start = _as_seconds(segment.get("start_seconds"))
-        segment_end = _as_seconds(segment.get("end_seconds"))
-        segment_text = segment.get("text")
-        if segment_start is None or segment_end is None or not isinstance(segment_text, str) or not segment_text.strip():
-            continue
+        segment_start = segment["start_seconds"]
+        segment_end = segment["end_seconds"]
+        segment_text = segment["text"]
         if segment_end < start_seconds or segment_start > end_seconds:
             continue
 
@@ -429,7 +477,7 @@ def _slice_transcript_segments(
             {
                 "start_seconds": segment_start,
                 "end_seconds": segment_end,
-                "text": segment_text.strip(),
+                "text": segment_text,
             }
         )
 

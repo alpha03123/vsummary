@@ -106,7 +106,7 @@ def _describe_answer_goal(plan: AgentActionPlan) -> str:
     if plan.intent_type.value == "open_tool":
         return "根据用户请求切换到合适的工具页面，并自然说明结果。"
     if plan.intent_type.value == "generate_overview":
-        return "告诉用户系统已经开始生成或完成生成概况。"
+        return "告诉用户当前视频的 AI 概况已经开始生成，或说明生成结果。"
     if plan.intent_type.value == "generate_mindmap":
         return "告诉用户系统已经开始生成或完成生成导图。"
     if plan.intent_type.value == "series_answer":

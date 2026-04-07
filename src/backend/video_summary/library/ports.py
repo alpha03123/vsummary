@@ -16,6 +16,7 @@ from backend.video_summary.library.views import (
     VideoNotesView,
     VideoSourceView,
     VideoSummaryView,
+    VideoTranscriptView,
     VideoWorkspaceToolsView,
     WorkspaceView,
 )
@@ -32,6 +33,9 @@ class VideoWorkspace(Protocol):
         ...
 
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryView | None:
+        ...
+
+    def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptView | None:
         ...
 
     def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapView | None:

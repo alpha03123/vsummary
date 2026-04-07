@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit } from "lucide-react";
+import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, Trash2 } from "lucide-react";
 
 const WorkspaceMarkdownMessage = lazy(() =>
   import("./shared/WorkspaceMarkdownMessage").then((module) => ({
@@ -44,28 +44,23 @@ export function WorkspaceChatPanel({
   tools,
   chatMessages = [],
   chatPending = false,
+  contextUsage = null,
+  contextUsageLoading = false,
+  onStartNewChat,
+  onClearChat,
   onSubmitChat,
 }) {
   const [draft, setDraft] = useState("");
-  const scopeLabel = selectedContextType === "library"
-    ? workspaceTitle ?? "整个知识库"
-    : selectedContextType === "series"
-      ? activeSeries?.title ?? "当前系列"
-      : selectedVideo?.title ?? activeSeries?.title ?? "当前视频";
+  const scopeLabel = selectedContextType === "series"
+    ? activeSeries?.title ?? "当前系列"
+    : selectedVideo?.title ?? activeSeries?.title ?? workspaceTitle ?? "当前视频";
   const currentPageLabel = describeCurrentTool(selectedToolId);
-  const suggestedPrompts = selectedContextType === "library"
-    ? [
-        "这个知识库主要覆盖了哪些主题？",
-        "帮我找一下和 API Key 相关的视频",
-        "最近适合先看的入门视频有哪些？",
-        "帮我按主题整理一下整个库的学习路径",
-      ]
-    : [
-        "给我总结一下这个视频的核心结论",
-        "帮我记一下这个视频的重点",
-        "这个系列主要讲了哪些主题？",
-        "某个知识点在视频里的什么时间出现？",
-      ];
+  const suggestedPrompts = [
+    "给我总结一下这个视频的核心结论",
+    "帮我记一下这个视频的重点",
+    "这个系列主要讲了哪些主题？",
+    "某个知识点在视频里的什么时间出现？",
+  ];
 
   function handleSubmit() {
     const trimmed = draft.trim();
@@ -114,10 +109,31 @@ export function WorkspaceChatPanel({
             <p className="text-xs text-stone-500 dark:text-stone-400">基于《{scopeLabel}》</p>
           </div>
         </div>
-        <button className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors" title="新建对话">
-          <Plus size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="新建对话"
+            className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/80 px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:border-sky-300 hover:text-sky-700 dark:border-stone-700 dark:bg-stone-950/80 dark:text-stone-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+            title="新建对话"
+            onClick={onStartNewChat}
+          >
+            <Plus size={14} />
+            新建对话
+          </button>
+          <button
+            type="button"
+            aria-label="清空当前对话"
+            className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/80 px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:border-red-300 hover:text-red-700 dark:border-stone-700 dark:bg-stone-950/80 dark:text-stone-300 dark:hover:border-red-700 dark:hover:text-red-300"
+            title="清空当前对话"
+            onClick={onClearChat}
+          >
+            <Trash2 size={14} />
+            清空
+          </button>
+        </div>
       </div>
+
+      <WorkspaceContextUsageBanner usage={contextUsage} loading={contextUsageLoading} />
 
       {/* Chat History Area */}
       <div className="flex-1 overflow-auto p-6 md:p-8 flex flex-col gap-6">
@@ -215,6 +231,67 @@ function AssistantMessageFallback({ content }) {
   return <div className="whitespace-pre-wrap break-words">{content}</div>;
 }
 
+function WorkspaceContextUsageBanner({ usage, loading }) {
+  if (loading && !usage) {
+    return (
+      <div className="border-b border-stone-200/70 bg-stone-50/75 px-6 py-3 text-xs text-stone-500 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-400">
+        正在估算当前上下文预算...
+      </div>
+    );
+  }
+  if (!usage) {
+    return null;
+  }
+
+  const usageLabel = `${formatTokenCount(usage.estimatedTotalTokens)} / ${formatTokenCount(usage.windowTokens)}`;
+  const thresholdLabel = usage.level === "blocking"
+    ? "已超过阻塞阈值"
+    : usage.level === "compact"
+      ? "已进入压缩区间"
+      : usage.level === "warning"
+        ? "接近压缩阈值"
+        : "预算充足";
+  const progressWidth = `${Math.max(4, Math.min(100, usage.usagePercent))}%`;
+
+  return (
+    <div className="border-b border-stone-200/70 bg-stone-50/75 px-6 py-3 dark:border-stone-800 dark:bg-stone-950/50">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <strong className="text-xs font-semibold text-stone-700 dark:text-stone-200">上下文预算</strong>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${resolveUsageToneClass(usage.level)}`}>
+              {thresholdLabel}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            已估算 {usageLabel}，保留输出 {formatTokenCount(usage.reservedOutputTokens)}
+          </p>
+        </div>
+        <div className="text-right text-xs text-stone-500 dark:text-stone-400">
+          <div>{usage.usagePercent.toFixed(1)}%</div>
+          <div>剩余 {formatTokenCount(usage.remainingTokens)}</div>
+        </div>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800">
+        <div
+          className={`h-full rounded-full transition-all ${resolveUsageBarClass(usage.level)}`}
+          style={{ width: progressWidth }}
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {usage.sources.map((source) => (
+          <span
+            key={source.id}
+            className="rounded-full border border-stone-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+          >
+            {source.label} {formatTokenCount(source.estimatedTokens)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceToolTraceMessage({ message }) {
   const steps = Array.isArray(message.toolTrace?.steps) ? message.toolTrace.steps : [];
   const durationLabel = formatDurationLabel(message.toolTrace?.durationMs);
@@ -222,7 +299,7 @@ function WorkspaceToolTraceMessage({ message }) {
   const isIdle = message.toolTrace?.status === "idle";
 
   return (
-    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
+    <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
@@ -278,7 +355,7 @@ function WorkspaceToolTraceMessage({ message }) {
                 {step.target ? (
                   <span className="truncate text-xs text-stone-500 dark:text-stone-400">({step.target})</span>
                 ) : null}
-                {typeof step.durationMs === "number" ? (
+                {shouldShowDuration(step.durationMs) ? (
                   <span className="text-xs text-stone-400 dark:text-stone-500">用时 {formatDurationLabel(step.durationMs)}</span>
                 ) : null}
               </div>
@@ -294,9 +371,10 @@ function WorkspaceThoughtTraceMessage({ message }) {
   const isRunning = message.thoughtTrace?.status === "running";
   const durationLabel = formatDurationLabel(message.thoughtTrace?.durationMs);
   const summary = typeof message.thoughtTrace?.summary === "string" ? message.thoughtTrace.summary : "";
+  const displaySummary = summary || (isRunning ? "正在思考中..." : "本轮未返回思路摘要。");
 
   return (
-    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
+    <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
@@ -313,7 +391,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
               ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              {isRunning ? "正在分析当前问题与上下文" : "展开查看本轮对问题的思路摘要"}
+              {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : "展开查看本轮对问题的思路摘要"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
@@ -321,10 +399,14 @@ function WorkspaceThoughtTraceMessage({ message }) {
       </summary>
 
       <div className="border-t border-stone-200/80 px-4 py-3 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:text-stone-300">
-        {summary || "正在思考中..."}
+        {displaySummary}
       </div>
     </details>
   );
+}
+
+function shouldShowDuration(durationMs) {
+  return typeof durationMs === "number" && durationMs > 0;
 }
 
 function formatDurationLabel(durationMs) {
@@ -335,4 +417,40 @@ function formatDurationLabel(durationMs) {
     return `${durationMs}ms`;
   }
   return `${(durationMs / 1000).toFixed(1)}秒`;
+}
+
+function formatTokenCount(value) {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "0";
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return `${Math.round(value)}`;
+}
+
+function resolveUsageToneClass(level) {
+  if (level === "blocking") {
+    return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+  }
+  if (level === "compact") {
+    return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  }
+  if (level === "warning") {
+    return "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
+  }
+  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+}
+
+function resolveUsageBarClass(level) {
+  if (level === "blocking") {
+    return "bg-red-500";
+  }
+  if (level === "compact") {
+    return "bg-amber-500";
+  }
+  if (level === "warning") {
+    return "bg-orange-500";
+  }
+  return "bg-emerald-500";
 }

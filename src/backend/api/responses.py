@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.agent.schemas.action_plan import AgentTurnResult
 from backend.video_summary.library.views import (
@@ -261,6 +261,58 @@ class AgentChatContextRequest(BaseModel):
 class AgentChatRequest(BaseModel):
     session_id: str
     message: str
+    context: AgentChatContextRequest | None = None
+
+
+class AgentContextUsageRequest(BaseModel):
+    session_id: str
+    context: AgentChatContextRequest | None = None
+
+
+class AgentContextUsageSourceResponse(BaseModel):
+    id: str
+    label: str
+    estimated_tokens: int
+
+
+class AgentContextUsageResponse(BaseModel):
+    session_id: str
+    scope_type: str
+    memory_key: str
+    estimated_total_tokens: int
+    window_tokens: int
+    reserved_output_tokens: int
+    warning_threshold_tokens: int
+    compact_threshold_tokens: int
+    blocking_threshold_tokens: int
+    remaining_tokens: int
+    usage_percent: float
+    level: str
+    sources: list[AgentContextUsageSourceResponse]
+
+
+class AgentSessionMessageResponse(BaseModel):
+    role: str
+    content: str
+    created_at: str
+
+
+class AgentSessionRecoveryRequest(BaseModel):
+    session_id: str
+    context: AgentChatContextRequest | None = None
+
+
+class AgentSessionRecoveryResponse(BaseModel):
+    session_id: str
+    restored: bool
+    memory_key: str | None = None
+    updated_at: str | None = None
+    message_count: int = 0
+    messages: list[AgentSessionMessageResponse] = Field(default_factory=list)
+
+
+class AgentSessionClearRequest(BaseModel):
+    session_id: str
     context: AgentChatContextRequest | None = None
 
 

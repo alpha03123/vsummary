@@ -36,7 +36,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries }) {
           <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Information Panel</p>
           <h2 className="mt-3 text-4xl font-bold text-stone-900 dark:text-stone-100">Workspace 信息面板</h2>
           <p className="mt-4 max-w-3xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
-            现在首页也能直接和整个知识库对话。右侧继续保留工作区总览，用来快速理解当前书架规模和入口分布。
+            首页现在只负责浏览整个工作区的规模、入口和系列分布。进入某个 series 后，再使用 AI 对话和右侧工具页。
           </p>
         </motion.div>
 
@@ -56,9 +56,9 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries }) {
           <motion.article variants={blurVariant} className="workspace-muted-panel rounded-[2rem] border p-7">
             <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">How To Use</p>
             <div className="mt-4 flex flex-col gap-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-              <p>1. 先在首页直接问整个知识库，快速确定应该看哪个主题或视频。</p>
+              <p>1. 先在首页浏览系列分布，找到要进入的主题。</p>
               <p>2. 在左侧选择 series，进入该主题下的视频工作区。</p>
-              <p>3. 进入视频后，再从工具页进入 AI概况、知识卡片、思维导图或笔记。</p>
+              <p>3. 进入 series 或视频后，再使用 AI 对话、概况、知识卡片、思维导图或笔记。</p>
             </div>
           </motion.article>
 
