@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+from backend.agent.schemas.tool_calls import (
+    ToolDefinition,
+    ToolEffectTag,
+    ToolIntentTag,
+    ToolName,
+    ToolPlane,
+)
+from backend.agent.tools.library_info import (
+    GET_VIDEO_SUMMARY_TOOL,
+    GET_VIDEO_TRANSCRIPT_TOOL,
+    GET_VIDEO_TOOLS_TOOL,
+    LIST_SERIES_VIDEOS_TOOL,
+)
+from backend.agent.tools.mindmap import GENERATE_MINDMAP_TOOL, OPEN_MINDMAP_TOOL
+from backend.agent.tools.notes import OPEN_KNOWLEDGE_CARDS_TOOL, OPEN_NOTES_TOOL, SAVE_NOTE_TOOL
+from backend.agent.tools.overview import GENERATE_OVERVIEW_TOOL, OPEN_OVERVIEW_TOOL
+from backend.agent.tools.series import OPEN_SERIES_HOME_TOOL, OPEN_SERIES_OVERVIEW_TOOL
+from backend.agent.tools.series_buffer import (
+    ADD_SERIES_CANDIDATES_TOOL,
+    CLEAR_SERIES_CANDIDATES_TOOL,
+    REMOVE_SERIES_CANDIDATES_TOOL,
+    REPLACE_SERIES_CANDIDATES_TOOL,
+    VIEW_SERIES_CANDIDATES_TOOL,
+)
+from backend.agent.tools.video import OPEN_VIDEO_TOOL, VIDEO_SEEK_TOOL
+
+
+BUSINESS_READ_TOOL_DEFINITIONS: list[ToolDefinition] = [
+    LIST_SERIES_VIDEOS_TOOL,
+    GET_VIDEO_SUMMARY_TOOL,
+    GET_VIDEO_TOOLS_TOOL,
+    GET_VIDEO_TRANSCRIPT_TOOL,
+]
+
+RUNTIME_INTERNAL_TOOL_DEFINITIONS: list[ToolDefinition] = [
+    VIEW_SERIES_CANDIDATES_TOOL,
+    ADD_SERIES_CANDIDATES_TOOL,
+    REMOVE_SERIES_CANDIDATES_TOOL,
+    REPLACE_SERIES_CANDIDATES_TOOL,
+    CLEAR_SERIES_CANDIDATES_TOOL,
+]
+
+UI_ACTION_TOOL_DEFINITIONS: list[ToolDefinition] = [
+    OPEN_SERIES_HOME_TOOL,
+    OPEN_SERIES_OVERVIEW_TOOL,
+    OPEN_OVERVIEW_TOOL,
+    OPEN_MINDMAP_TOOL,
+    OPEN_KNOWLEDGE_CARDS_TOOL,
+    OPEN_NOTES_TOOL,
+    GENERATE_OVERVIEW_TOOL,
+    GENERATE_MINDMAP_TOOL,
+    OPEN_VIDEO_TOOL,
+    VIDEO_SEEK_TOOL,
+    SAVE_NOTE_TOOL,
+]
+
+ALL_TOOL_DEFINITIONS: list[ToolDefinition] = [
+    *BUSINESS_READ_TOOL_DEFINITIONS,
+    *RUNTIME_INTERNAL_TOOL_DEFINITIONS,
+    *UI_ACTION_TOOL_DEFINITIONS,
+]
+
+MODEL_VISIBLE_TOOL_PLANES: tuple[ToolPlane, ...] = (
+    ToolPlane.BUSINESS_READ,
+    ToolPlane.UI_ACTION,
+)
+
+TOOL_DEFINITIONS_BY_NAME: dict[ToolName, ToolDefinition] = {tool.name: tool for tool in ALL_TOOL_DEFINITIONS}
+
+
+def get_tool_definition(tool_name: ToolName) -> ToolDefinition:
+    return TOOL_DEFINITIONS_BY_NAME[tool_name]
+
+
+def list_tool_definitions_for_plane(plane: ToolPlane) -> list[ToolDefinition]:
+    return [tool for tool in ALL_TOOL_DEFINITIONS if tool.plane == plane]
+
+
+def tool_is_model_visible(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).plane in MODEL_VISIBLE_TOOL_PLANES
+
+
+def list_tool_names_for_intent(intent_tag: ToolIntentTag) -> set[ToolName]:
+    return {tool.name for tool in ALL_TOOL_DEFINITIONS if intent_tag in tool.intents}
+
+
+def tool_requires_candidate_buffer(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).requires_candidate_buffer
+
+
+def tool_requires_video_id(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).requires_video_id
+
+
+def tool_has_effect(tool_name: ToolName, effect: ToolEffectTag) -> bool:
+    return effect in get_tool_definition(tool_name).effects
+
+
+def tool_is_concurrency_safe(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).concurrency_safe
+

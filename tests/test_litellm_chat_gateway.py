@@ -20,6 +20,10 @@ class GatewayPayload(BaseModel):
 
 
 class LiteLLMChatGatewayTests(unittest.TestCase):
+    async def _unused_acompletion(self, **kwargs):
+        del kwargs
+        return {"choices": [{"message": {"content": "unused"}}]}
+
     def test_create_text_completion_uses_provider_normalized_model(self) -> None:
         captured_calls: list[dict[str, object]] = []
 
@@ -33,6 +37,7 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
             base_url="https://example.com/v1",
             api_key="test-key",
             completion_fn=fake_completion,
+            acompletion_fn=self._unused_acompletion,
         )
 
         result = gateway.create_text_completion(
@@ -62,6 +67,7 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
             base_url="https://example.com/v1",
             api_key="test-key",
             completion_fn=fake_completion,
+            acompletion_fn=self._unused_acompletion,
         )
 
         chunks = list(
@@ -89,6 +95,7 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
             base_url="https://example.com/v1",
             api_key="test-key",
             completion_fn=fake_completion,
+            acompletion_fn=self._unused_acompletion,
         )
 
         result = gateway.create_text_completion(
@@ -107,6 +114,7 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
             base_url="https://example.com/v1",
             api_key="test-key",
             completion_fn=fake_completion,
+            acompletion_fn=self._unused_acompletion,
         )
 
         payload = gateway.create_structured_completion(
@@ -132,6 +140,7 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
             base_url="https://example.com/v1",
             api_key="test-key",
             completion_fn=fake_completion,
+            acompletion_fn=self._unused_acompletion,
         )
 
         payload = gateway.create_structured_completion(

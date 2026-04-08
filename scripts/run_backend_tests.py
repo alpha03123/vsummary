@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 TEST_GROUPS: dict[str, list[str]] = {
     "agent": [
+        "tests.test_agent_context_compaction",
         "tests.test_agent_context_loader",
         "tests.test_agent_direct_action_response",
         "tests.test_agent_evidence_cache",
@@ -25,7 +26,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_request_router",
         "tests.test_series_locator",
         "tests.test_agent_tool_catalog",
-        "tests.test_agent_video_transcript",
+        "tests.test_agent_library_info_tools",
         "tests.test_series_evidence_selector",
         "tests.test_video_evidence_selector",
         "tests.test_agent_validation",
@@ -44,6 +45,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_video_summary_workflow",
     ],
     "fast": [
+        "tests.test_agent_context_compaction",
         "tests.test_agent_context_loader",
         "tests.test_agent_direct_action_response",
         "tests.test_agent_evidence_cache",
@@ -59,7 +61,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_request_router",
         "tests.test_series_locator",
         "tests.test_agent_tool_catalog",
-        "tests.test_agent_video_transcript",
+        "tests.test_agent_library_info_tools",
         "tests.test_series_evidence_selector",
         "tests.test_video_evidence_selector",
         "tests.test_agent_validation",
@@ -69,6 +71,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_progress_tracker",
     ],
     "all": [
+        "tests.test_agent_context_compaction",
         "tests.test_agent_context_loader",
         "tests.test_agent_direct_action_response",
         "tests.test_agent_evidence_cache",
@@ -84,7 +87,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_request_router",
         "tests.test_series_locator",
         "tests.test_agent_tool_catalog",
-        "tests.test_agent_video_transcript",
+        "tests.test_agent_library_info_tools",
         "tests.test_series_evidence_selector",
         "tests.test_video_evidence_selector",
         "tests.test_agent_validation",
