@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import ChatGateway
 from backend.agent.runtime.json_protocol import parse_json_completion
-from backend.agent.schemas.action_plan import AgentActionPlan
+from backend.agent.schemas.action_plan import AgentActionPlan, ScopeType
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent.schemas.tool_calls import ToolExecutionResult
+from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent.tools import list_model_visible_tool_definitions_for_context
 
 
@@ -28,6 +29,28 @@ INITIAL_PLANNER_SYSTEM_PROMPT = (
     "8. 只输出 JSON，不要输出代码块，不要解释。\n"
     '9. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
 )
+
+
+class PlannedToolCall(BaseModel):
+    name: ToolName
+    series_id: str | None = None
+    video_id: str | None = None
+    video_ids: list[str] = Field(default_factory=list)
+    seek_seconds: float | None = None
+    match_end_seconds: float | None = None
+    matched_text: str = ""
+    chapter_title: str = ""
+    query: str = ""
+    note_title: str = ""
+    note_content: str = ""
+
+
+class PlannerOutput(BaseModel):
+    scope_type: ScopeType
+    tool_calls: list[PlannedToolCall] = Field(default_factory=list)
+    reason: str = ""
+    direct_response: str = ""
+    use_answerer: bool = False
 
 
 def generate_execution_plan(
@@ -81,8 +104,12 @@ def generate_execution_plan(
             ),
         ),
     ]
-    raw_output = gateway.create_text_completion(messages).strip()
-    return parse_json_completion(raw_output, AgentActionPlan)
+    try:
+        payload = gateway.create_structured_completion(messages, PlannerOutput)
+        return _convert_planner_output(payload)
+    except NotImplementedError:
+        raw_output = gateway.create_text_completion(messages).strip()
+        return _parse_execution_plan(raw_output)
 
 
 def _dump_tool_state(value: object) -> dict[str, object]:
@@ -91,3 +118,80 @@ def _dump_tool_state(value: object) -> dict[str, object]:
     if isinstance(value, dict):
         return dict(value)
     return {}
+
+
+def _parse_execution_plan(raw_output: str) -> AgentActionPlan:
+    payload = json.loads(raw_output)
+    normalized = _normalize_plan_payload(payload)
+    return AgentActionPlan.model_validate(normalized)
+
+
+def _convert_planner_output(payload: PlannerOutput) -> AgentActionPlan:
+    return AgentActionPlan.model_validate(
+        {
+            "scope_type": payload.scope_type,
+            "reason": payload.reason,
+            "direct_response": payload.direct_response,
+            "use_answerer": payload.use_answerer,
+            "tool_calls": [
+                _planned_tool_call_to_payload(item)
+                for item in payload.tool_calls
+            ],
+        }
+    )
+
+
+def _normalize_plan_payload(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise ValueError("planner 必须返回 JSON object。")
+    normalized = dict(payload)
+    raw_tool_calls = normalized.get("tool_calls", [])
+    if isinstance(raw_tool_calls, list):
+        normalized["tool_calls"] = [_normalize_tool_call(item) for item in raw_tool_calls]
+    return normalized
+
+
+def _normalize_tool_call(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("tool_call 必须是 JSON object。")
+    if "tool_name" in value:
+        return dict(value)
+    name = value.get("name")
+    arguments = value.get("arguments", {})
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("tool_call 缺少 name/tool_name。")
+    if arguments is None:
+        arguments = {}
+    if not isinstance(arguments, dict):
+        raise ValueError("tool_call.arguments 必须是 object。")
+    return {
+        "tool_name": name.strip(),
+        **arguments,
+    }
+
+
+def _planned_tool_call_to_payload(item: PlannedToolCall) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "tool_name": item.name.value,
+    }
+    if item.series_id is not None:
+        payload["series_id"] = item.series_id
+    if item.video_id is not None:
+        payload["video_id"] = item.video_id
+    if item.video_ids:
+        payload["video_ids"] = item.video_ids
+    if item.seek_seconds is not None:
+        payload["seek_seconds"] = item.seek_seconds
+    if item.match_end_seconds is not None:
+        payload["match_end_seconds"] = item.match_end_seconds
+    if item.matched_text:
+        payload["matched_text"] = item.matched_text
+    if item.chapter_title:
+        payload["chapter_title"] = item.chapter_title
+    if item.query:
+        payload["query"] = item.query
+    if item.note_title:
+        payload["note_title"] = item.note_title
+    if item.note_content:
+        payload["note_content"] = item.note_content
+    return payload
