@@ -376,37 +376,7 @@ export function createInitialWorkspaceState() {
 export function createWorkspaceLoadedState(library, currentState) {
   const selection = getDefaultSelection(library, currentState.selectedSeriesId, currentState.selectedVideoId);
   if (!selection.seriesId) {
-    return {
-      ...currentState,
-      library,
-      tools: null,
-      summary: null,
-      mindmap: null,
-      knowledgeCards: null,
-      knowledgeCardsFeedback: null,
-      notes: null,
-      selectedSeriesId: null,
-      selectedVideoId: null,
-      selectedContextType: null,
-      selectedToolId: "studio",
-      selectedChapterId: null,
-      selectedNodeId: null,
-      previewSeekRequest: null,
-      toolsLoading: false,
-      summaryLoading: false,
-      mindmapLoading: false,
-      generationProgress: null,
-      generationSnapshot: null,
-      chatScopeKey: null,
-      chatBaseScopeKey: null,
-      chatMessages: [],
-      chatPending: false,
-      chatRecoveryLoading: false,
-      contextUsage: null,
-      contextUsageLoading: false,
-      error: "",
-      loading: false,
-    };
+    return createLibraryHomeState(library, currentState);
   }
   return {
     ...currentState,
@@ -414,6 +384,40 @@ export function createWorkspaceLoadedState(library, currentState) {
     selectedSeriesId: selection.seriesId,
     selectedVideoId: selection.videoId,
     selectedContextType: currentState.selectedContextType,
+    error: "",
+    loading: false,
+  };
+}
+
+export function createLibraryHomeState(library, currentState) {
+  return {
+    ...currentState,
+    library,
+    tools: null,
+    summary: null,
+    mindmap: null,
+    knowledgeCards: null,
+    knowledgeCardsFeedback: null,
+    notes: null,
+    selectedSeriesId: null,
+    selectedVideoId: null,
+    selectedContextType: null,
+    selectedToolId: "studio",
+    selectedChapterId: null,
+    selectedNodeId: null,
+    previewSeekRequest: null,
+    toolsLoading: false,
+    summaryLoading: false,
+    mindmapLoading: false,
+    generationProgress: null,
+    generationSnapshot: null,
+    chatScopeKey: null,
+    chatBaseScopeKey: null,
+    chatMessages: [],
+    chatPending: false,
+    chatRecoveryLoading: false,
+    contextUsage: null,
+    contextUsageLoading: false,
     error: "",
     loading: false,
   };

@@ -32,6 +32,7 @@ import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
   createWelcomeChatMessages,
   createInitialWorkspaceState,
+  createLibraryHomeState,
   createMindmapLoadedState,
   createSummaryLoadedState,
   createWorkspaceLoadedState,
@@ -65,6 +66,8 @@ function workspaceReducer(state, action) {
   switch (action.type) {
     case "workspace_loaded":
       return createWorkspaceLoadedState(action.library, state);
+    case "library_home_selected":
+      return createLibraryHomeState(state.library, state);
     case "workspace_settings_loaded":
       return {
         ...state,
@@ -1349,7 +1352,7 @@ export function useWorkspaceController() {
   }
 
   function onEnterLibraryHome() {
-    dispatch({ type: "workspace_loaded", library: state.library });
+    dispatch({ type: "library_home_selected" });
   }
 
   function onSelectVideo(seriesId, videoId) {

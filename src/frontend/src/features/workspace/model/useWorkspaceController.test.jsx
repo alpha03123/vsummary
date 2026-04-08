@@ -333,6 +333,31 @@ describe("useWorkspaceController", () => {
     ]));
   });
 
+  it("returns to library home when leaving an active series", async () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+    act(() => {
+      result.current.onSelectVideo("series-a", "video-1");
+    });
+
+    expect(result.current.activeSeries?.id).toBe("series-a");
+    expect(result.current.selectedVideo?.id).toBe("video-1");
+
+    act(() => {
+      result.current.onEnterLibraryHome();
+    });
+
+    expect(result.current.activeSeries).toBeNull();
+    expect(result.current.selectedVideo).toBeNull();
+    expect(result.current.selectedContextType).toBeNull();
+    expect(result.current.chatMessages).toEqual([]);
+  });
+
   it("hydrates recovered chat messages for the current scope", async () => {
     workspaceApi.loadAgentSessionRecovery.mockResolvedValueOnce({
       sessionId: "series|series-a|series-home",
