@@ -40,6 +40,7 @@ TEST_GROUPS: dict[str, list[str]] = {
     ],
     "summary": [
         "tests.test_generate_summary",
+        "tests.test_litellm_video_summary_infrastructure",
         "tests.test_video_summary_workflow",
     ],
     "fast": [
@@ -63,6 +64,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_video_evidence_selector",
         "tests.test_agent_validation",
         "tests.test_litellm_chat_gateway",
+        "tests.test_litellm_video_summary_infrastructure",
         "tests.test_filesystem_video_workspace",
         "tests.test_progress_tracker",
     ],
@@ -87,6 +89,7 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_video_evidence_selector",
         "tests.test_agent_validation",
         "tests.test_litellm_chat_gateway",
+        "tests.test_litellm_video_summary_infrastructure",
         "tests.test_api",
         "tests.test_filesystem_video_workspace",
         "tests.test_generate_summary",

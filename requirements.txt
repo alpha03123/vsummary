@@ -4,4 +4,3 @@ faster-whisper>=1.1,<2
 huggingface-hub>=0.24,<1
 httpx>=0.27,<1
 litellm==1.74.0
-openai>=2.30,<3

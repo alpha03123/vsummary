@@ -5,6 +5,7 @@
 本文件只记录执行状态，不重复设计内容。
 
 - 设计准绳以 [agent-runtime-overhaul-plan.md](/E:/gittools/self/video_include/docs/plan/agent-runtime-overhaul-plan.md) 的 14 条改造目标为准。
+- LLM 统一入口的专项设计以 [unified-litellm-design.md](/E:/gittools/self/video_include/docs/plan/unified-litellm-design.md) 为准。
 - 只有达到可交付状态的批次，才会把目标标记为“已完成”。
 - 如果只是完成局部基础设施、前置清理或试运行验证，则标记为“进行中”，不会提前算完成。
 
@@ -16,7 +17,7 @@
 
 ## 2. 当前总览
 
-更新时间：2026-04-08（第十二次更新）
+更新时间：2026-04-08（第十三次更新）
 
 当前完成度：
 
@@ -128,6 +129,19 @@
 - [bootstrap.py](/E:/gittools/self/video_include/src/backend/api/bootstrap.py) 已改为通过 provider 配置组装该 gateway。
 - `AgentContextBudgetService` 已与 gateway 实例化解耦，避免预算检查被 provider 初始化耦合。
 - [requirements.txt](/E:/gittools/self/video_include/requirements.txt) 已固定 `litellm==1.74.0`。
+- 已新增 shared LiteLLM 基础设施：
+  - [litellm_gateway.py](/E:/gittools/self/video_include/src/backend/shared/llm/litellm_gateway.py)
+  - [json_mode.py](/E:/gittools/self/video_include/src/backend/shared/llm/json_mode.py)
+- `video_summary` 的 `summary / transcript enhancement / mindmap` 结构化生成链已统一迁到 LiteLLM 主路：
+  - [litellm_summarizer.py](/E:/gittools/self/video_include/src/backend/video_summary/infrastructure/litellm_summarizer.py)
+  - [litellm_transcript_enhancer.py](/E:/gittools/self/video_include/src/backend/video_summary/infrastructure/litellm_transcript_enhancer.py)
+  - [litellm_mindmap_generator.py](/E:/gittools/self/video_include/src/backend/video_summary/infrastructure/litellm_mindmap_generator.py)
+- 旧 `AsyncOpenAI + Instructor` 链已删除：
+  - `openai_summary/client.py`
+  - `openai_summarizer.py`
+  - `openai_transcript_enhancer.py`
+  - `openai_mindmap_generator.py`
+- 统一 LiteLLM 设计说明已落到 [unified-litellm-design.md](/E:/gittools/self/video_include/docs/plan/unified-litellm-design.md)。
 
 9. `#9 工具面分层：业务读取 / UI 动作 / 内部状态`
 状态：已完成
@@ -249,3 +263,9 @@
 - `python .\scripts\run_assistant_regressions.py --fake --providers openai_compatible --skip-tests --skip-provider --skip-tool-catalog --skip-prompt-report --skip-evidence-policy`
 - `.\.venv\Scripts\python.exe .\scripts\run_agent_provider_probe.py`
 - `.\.venv\Scripts\python.exe -c "from litellm import completion; print('litellm-import-ok')"`
+- `.\.venv\Scripts\python.exe -m unittest -v tests.test_litellm_chat_gateway tests.test_agent_gateway tests.test_litellm_video_summary_infrastructure`
+- `.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py summary api`
+- `.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py all`
+- `npm test -- --run src/features/workspace/model/workspaceState.test.jsx src/features/workspace/model/useWorkspaceController.test.jsx src/features/workspace/ui/WorkspaceChatPanel.test.jsx src/features/workspace/ui/WorkspaceReadingPane.test.jsx`
+- `npm run build`
+- `.\.venv\Scripts\python.exe -`（真实样本：`agent-frameworks / 1-7 具备ReAct核心能力的框架：AgentScope`，已确认 mindmap 生成成功并落到返回结果）

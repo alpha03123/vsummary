@@ -2,20 +2,21 @@ from __future__ import annotations
 
 import json
 
+from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.domain.models import Transcript, TranscriptSegment, VideoAsset
-from backend.video_summary.infrastructure.openai_summary import OpenAICompletionGateway, TranscriptEnhancementPayload
+from backend.video_summary.infrastructure.structured_generation import TranscriptEnhancementPayload
 
 
-class OpenAITranscriptEnhancer:
-    def __init__(self, gateway: OpenAICompletionGateway) -> None:
+class LiteLLMTranscriptEnhancer:
+    def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
     async def enhance(self, video: VideoAsset, transcript: Transcript) -> Transcript:
         chunks = _chunk_segments(transcript.segments)
         enhanced_segments = []
         for index, chunk in enumerate(chunks, start=1):
-            corrected_payload = await self._gateway.create_structured_completion(
-                prompt=_build_transcript_enhancement_prompt(video, chunk, index, len(chunks)),
+            corrected_payload = await self._gateway.acomplete_structured(
+                [{"role": "user", "content": _build_transcript_enhancement_prompt(video, chunk, index, len(chunks))}],
                 response_model=TranscriptEnhancementPayload,
             )
             enhanced_segments.extend(_parse_corrected_segments(corrected_payload, chunk))

@@ -5,18 +5,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
-
-import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
-from backend.video_summary.infrastructure.openai_summary.client import OpenAICompletionGateway
-from backend.video_summary.infrastructure.openai_summary.schemas import SummaryPayload
 from backend.video_summary.infrastructure.settings import (
     AgentContextSettings,
     AppSettings,
@@ -30,68 +26,173 @@ from backend.video_summary.infrastructure.settings import (
     replace_transcript_enhancement_enabled,
     replace_workspace_ui_settings,
 )
+from backend.video_summary.infrastructure.structured_generation.schemas import SummaryPayload
 
 
-async def _return_async(value):
+async def _async_return(value):
     return value
 
 
-class OpenAISummaryInfrastructureTests(unittest.TestCase):
-    def test_gateway_returns_text_from_chat_completion(self) -> None:
-        async def handler(request: httpx.Request) -> httpx.Response:
-            self.assertEqual(str(request.url), "https://example.com/v1/chat/completions")
-            return httpx.Response(
-                200,
-                request=request,
-                json={
-                    "choices": [
-                        {
-                            "message": {
-                                "content": "final answer",
-                            }
-                        }
-                    ]
-                },
-            )
-
-        http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-        gateway = OpenAICompletionGateway(
+class LiteLLMVideoSummaryInfrastructureTests(unittest.TestCase):
+    def test_gateway_returns_text_from_async_completion(self) -> None:
+        gateway = LiteLLMCompletionGateway(
+            provider="openai_compatible",
             model="gpt-5.4",
             base_url="https://example.com/v1",
             api_key="test-key",
-            http_client=http_client,
+            completion_fn=lambda **kwargs: {"choices": [{"message": {"content": "unused"}}]},
+            acompletion_fn=lambda **kwargs: _async_return(
+                {"choices": [{"message": {"content": "final answer"}}]}
+            ),
         )
 
-        result = asyncio.run(gateway.create_text("hello"))
+        result = asyncio.run(
+            gateway.acomplete_text([{"role": "user", "content": "hello"}])
+        )
 
         self.assertEqual(result, "final answer")
 
-    def test_gateway_returns_structured_payload_from_instructor_client(self) -> None:
-        gateway = OpenAICompletionGateway(
+    def test_gateway_async_text_falls_back_to_stream_when_content_is_empty(self) -> None:
+        class FakeAsyncStream:
+            def __init__(self, chunks):
+                self._chunks = iter(chunks)
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._chunks)
+                except StopIteration as error:
+                    raise StopAsyncIteration from error
+
+        async def fake_acompletion(**kwargs):
+            if kwargs.get("stream"):
+                return FakeAsyncStream(
+                    [
+                        {"choices": [{"delta": {"content": "回退"}}]},
+                        {"choices": [{"delta": {"content": "成功"}}]},
+                    ]
+                )
+            return {"choices": [{"message": {"content": None}}]}
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai_compatible",
             model="gpt-5.4",
             base_url="https://example.com/v1",
             api_key="test-key",
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500, request=request))),
+            completion_fn=lambda **kwargs: {"choices": [{"message": {"content": "unused"}}]},
+            acompletion_fn=fake_acompletion,
         )
-        gateway._structured_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(
-                    create=lambda **kwargs: _return_async(
-                        SummaryPayload(
-                            title="demo",
-                            one_sentence_summary="一句话",
-                            core_problem="问题",
-                            chapters=[],
-                            key_takeaways=["结论"],
-                        )
-                    )
-                )
-            )
+
+        result = asyncio.run(
+            gateway.acomplete_text([{"role": "user", "content": "hello"}])
+        )
+
+        self.assertEqual(result, "回退成功")
+
+    def test_gateway_returns_structured_payload_from_json_completion(self) -> None:
+        gateway = LiteLLMCompletionGateway(
+            provider="openai_compatible",
+            model="gpt-5.4",
+            base_url="https://example.com/v1",
+            api_key="test-key",
+            completion_fn=lambda **kwargs: {"choices": [{"message": {"content": "unused"}}]},
+            acompletion_fn=lambda **kwargs: _async_return(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": (
+                                    '{"title":"demo","one_sentence_summary":"一句话","core_problem":"问题","chapters":[],"key_takeaways":["结论"]}'
+                                )
+                            }
+                        }
+                    ]
+                }
+            ),
         )
 
         payload = asyncio.run(
-            gateway.create_structured_completion(
-                prompt="提取视频摘要",
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "提取视频摘要"}],
+                response_model=SummaryPayload,
+            )
+        )
+
+        self.assertEqual(payload.title, "demo")
+        self.assertEqual(payload.key_takeaways, ["结论"])
+
+    def test_gateway_retries_structured_payload_after_validation_error(self) -> None:
+        call_count = 0
+
+        async def fake_acompletion(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"choices": [{"message": {"content": '{"wrong":"field"}'}}]}
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"title":"demo","one_sentence_summary":"一句话","core_problem":"问题","chapters":[],"key_takeaways":["结论"]}'
+                            )
+                        }
+                    }
+                ]
+            }
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai_compatible",
+            model="gpt-5.4",
+            base_url="https://example.com/v1",
+            api_key="test-key",
+            completion_fn=lambda **kwargs: {"choices": [{"message": {"content": "unused"}}]},
+            acompletion_fn=fake_acompletion,
+        )
+
+        payload = asyncio.run(
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "提取视频摘要"}],
+                response_model=SummaryPayload,
+            )
+        )
+
+        self.assertEqual(call_count, 2)
+        self.assertEqual(payload.title, "demo")
+
+    def test_gateway_extracts_structured_payload_from_tool_calls(self) -> None:
+        gateway = LiteLLMCompletionGateway(
+            provider="openai_compatible",
+            model="gpt-5.4",
+            base_url="https://example.com/v1",
+            api_key="test-key",
+            completion_fn=lambda **kwargs: {"choices": [{"message": {"content": "unused"}}]},
+            acompletion_fn=lambda **kwargs: _async_return(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "function": {
+                                            "name": "json_tool_call",
+                                            "arguments": '{"title":"demo","one_sentence_summary":"一句话","core_problem":"问题","chapters":[],"key_takeaways":["结论"]}',
+                                        }
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ),
+        )
+
+        payload = asyncio.run(
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "提取视频摘要"}],
                 response_model=SummaryPayload,
             )
         )

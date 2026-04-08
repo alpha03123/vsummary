@@ -4,6 +4,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from pydantic import BaseModel
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
@@ -11,6 +13,10 @@ if str(SRC) not in sys.path:
 
 from backend.agent.infrastructure.chat_gateway import LiteLLMChatGateway
 from backend.agent.schemas.messages import AgentChatMessage
+
+
+class AgentGatewayPayload(BaseModel):
+    status: str
 
 
 class AgentGatewayTests(unittest.TestCase):
@@ -36,17 +42,23 @@ class AgentGatewayTests(unittest.TestCase):
         self.assertEqual(captured_calls[0]["api_base"], "https://api.openai.com/v1")
         self.assertEqual(captured_calls[0]["model"], "openai/gpt-5.4")
 
-    def test_litellm_gateway_fails_fast_for_structured_completion(self) -> None:
+    def test_litellm_gateway_supports_structured_completion(self) -> None:
         gateway = LiteLLMChatGateway(
             provider="openai_compatible",
             model="gpt-5.4",
             base_url="https://api.openai.com/v1",
             api_key="test-key",
-            completion_fn=lambda **kwargs: kwargs,
+            completion_fn=lambda **kwargs: {
+                "choices": [{"message": {"content": '{"status":"ok"}'}}]
+            },
         )
 
-        with self.assertRaises(RuntimeError):
-            gateway.create_structured_completion([], dict)  # type: ignore[arg-type]
+        payload = gateway.create_structured_completion(
+            [AgentChatMessage(role="user", content="输出 JSON")],
+            AgentGatewayPayload,
+        )
+
+        self.assertEqual(payload.status, "ok")
 
 
 if __name__ == "__main__":

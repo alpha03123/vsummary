@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.ports import Summarizer
-from backend.video_summary.infrastructure.openai_summary import (
-    OpenAICompletionGateway,
+from backend.video_summary.infrastructure.structured_generation import (
     SummaryPayload,
     build_chunk_prompt,
     build_document_prompt,
@@ -12,17 +12,19 @@ from backend.video_summary.infrastructure.openai_summary import (
 )
 
 
-class OpenAICompletionSummarizer(Summarizer):
-    def __init__(self, gateway: OpenAICompletionGateway) -> None:
+class LiteLLMCompletionSummarizer(Summarizer):
+    def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
     async def summarize(self, video: VideoAsset, transcript: Transcript) -> SummaryDocument:
         chunk_summaries = [
-            await self._gateway.create_text(build_chunk_prompt(video, chunk, index))
+            await self._gateway.acomplete_text(
+                [{"role": "user", "content": build_chunk_prompt(video, chunk, index)}]
+            )
             for index, chunk in enumerate(chunk_segments(transcript.segments), start=1)
         ]
-        payload = await self._gateway.create_structured_completion(
-            prompt=build_document_prompt(video, transcript, chunk_summaries),
+        payload = await self._gateway.acomplete_structured(
+            [{"role": "user", "content": build_document_prompt(video, transcript, chunk_summaries)}],
             response_model=SummaryPayload,
         )
         summary_data = payload.model_dump()

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 
+from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.generation.ports import MindmapGenerator
-from backend.video_summary.infrastructure.openai_summary import MindmapNodePayload, OpenAICompletionGateway
+from backend.video_summary.infrastructure.structured_generation import MindmapNodePayload
 
 
-class OpenAIMindmapGenerator(MindmapGenerator):
-    def __init__(self, gateway: OpenAICompletionGateway) -> None:
+class LiteLLMMindmapGenerator(MindmapGenerator):
+    def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
     async def generate(
@@ -17,10 +18,15 @@ class OpenAIMindmapGenerator(MindmapGenerator):
         duration_seconds: float,
         summary_data: dict[str, object],
     ) -> dict[str, object]:
-        prompt = build_mindmap_prompt(title=title, duration_seconds=duration_seconds, summary_data=summary_data)
-        payload = await self._gateway.create_structured_completion(
-            prompt=prompt,
+        prompt = build_mindmap_prompt(
+            title=title,
+            duration_seconds=duration_seconds,
+            summary_data=summary_data,
+        )
+        payload = await self._gateway.acomplete_structured(
+            [{"role": "user", "content": prompt}],
             response_model=MindmapNodePayload,
+            retries=3,
         )
         return payload.model_dump()
 

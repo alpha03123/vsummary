@@ -4,6 +4,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from pydantic import BaseModel
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
@@ -11,6 +13,10 @@ if str(SRC) not in sys.path:
 
 from backend.agent.infrastructure.chat_gateway import LiteLLMChatGateway
 from backend.agent.schemas.messages import AgentChatMessage
+
+
+class GatewayPayload(BaseModel):
+    answer: str
 
 
 class LiteLLMChatGatewayTests(unittest.TestCase):
@@ -91,17 +97,50 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
 
         self.assertEqual(result, "回退成功")
 
-    def test_create_structured_completion_fails_fast(self) -> None:
+    def test_create_structured_completion_returns_validated_payload(self) -> None:
+        def fake_completion(**kwargs):
+            return {"choices": [{"message": {"content": '{"answer":"结构化成功"}'}}]}
+
         gateway = LiteLLMChatGateway(
             provider="openai_compatible",
             model="gpt-5.4",
             base_url="https://example.com/v1",
             api_key="test-key",
-            completion_fn=lambda **kwargs: kwargs,
+            completion_fn=fake_completion,
         )
 
-        with self.assertRaises(RuntimeError):
-            gateway.create_structured_completion([], dict)  # type: ignore[arg-type]
+        payload = gateway.create_structured_completion(
+            [AgentChatMessage(role="user", content="输出 JSON")],
+            GatewayPayload,
+        )
+
+        self.assertEqual(payload.answer, "结构化成功")
+
+    def test_create_structured_completion_retries_after_validation_error(self) -> None:
+        call_count = 0
+
+        def fake_completion(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"choices": [{"message": {"content": '{"wrong":"field"}'}}]}
+            return {"choices": [{"message": {"content": '{"answer":"第二次成功"}'}}]}
+
+        gateway = LiteLLMChatGateway(
+            provider="openai_compatible",
+            model="gpt-5.4",
+            base_url="https://example.com/v1",
+            api_key="test-key",
+            completion_fn=fake_completion,
+        )
+
+        payload = gateway.create_structured_completion(
+            [AgentChatMessage(role="user", content="输出 JSON")],
+            GatewayPayload,
+        )
+
+        self.assertEqual(call_count, 2)
+        self.assertEqual(payload.answer, "第二次成功")
 
     def test_unsupported_provider_fails_fast(self) -> None:
         with self.assertRaises(RuntimeError):
