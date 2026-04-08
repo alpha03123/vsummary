@@ -3,9 +3,12 @@ from __future__ import annotations
 from math import ceil
 
 from backend.agent.memory.store import AgentMemoryStore
+from backend.agent.ports import ChatGateway
+from backend.agent.context.semantic_compactor import compact_conversation_messages, render_compacted_payload
 from backend.agent.schemas.messages import AgentChatMessage
 
-DEFAULT_COMPACT_THRESHOLD_TOKENS = 12_000
+DEFAULT_CONTEXT_WINDOW_TOKENS = 1_000_000
+DEFAULT_COMPACT_THRESHOLD_RATIO = 0.80
 DEFAULT_KEEP_TAIL_MESSAGES = 6
 
 
@@ -13,12 +16,17 @@ class AgentMemoryCompactionService:
     def __init__(
         self,
         *,
+        gateway: ChatGateway,
         memory_store: AgentMemoryStore,
-        compact_threshold_tokens: int = DEFAULT_COMPACT_THRESHOLD_TOKENS,
+        context_window_tokens: int = DEFAULT_CONTEXT_WINDOW_TOKENS,
+        compact_threshold_ratio: float = DEFAULT_COMPACT_THRESHOLD_RATIO,
         keep_tail_messages: int = DEFAULT_KEEP_TAIL_MESSAGES,
     ) -> None:
+        self._gateway = gateway
         self._memory_store = memory_store
-        self._compact_threshold_tokens = compact_threshold_tokens
+        self._context_window_tokens = context_window_tokens
+        self._compact_threshold_ratio = compact_threshold_ratio
+        self._compact_threshold_tokens = int(context_window_tokens * compact_threshold_ratio)
         self._keep_tail_messages = keep_tail_messages
 
     def compact_if_needed(self, session_id: str) -> bool:
@@ -30,23 +38,16 @@ class AgentMemoryCompactionService:
 
         head_messages = messages[:-self._keep_tail_messages]
         tail_messages = messages[-self._keep_tail_messages:]
+        compacted_payload = compact_conversation_messages(
+            gateway=self._gateway,
+            messages=head_messages,
+        )
         summary_message = AgentChatMessage(
             role="system",
-            content=_build_summary_message(head_messages),
+            content=render_compacted_payload(compacted_payload),
         )
         self._memory_store.replace_messages(session_id, [summary_message, *tail_messages])
         return True
-
-
-def _build_summary_message(messages: list[AgentChatMessage]) -> str:
-    lines = ["以下是更早对话的压缩摘要，请在后续规划中把它当作已知上下文："]
-    for index, message in enumerate(messages, start=1):
-        speaker = "用户" if message.role == "user" else "助手" if message.role == "assistant" else "系统"
-        normalized = " ".join(message.content.split())
-        if len(normalized) > 160:
-            normalized = f"{normalized[:157]}..."
-        lines.append(f"{index}. {speaker}：{normalized}")
-    return "\n".join(lines)
 
 
 def _estimate_messages_tokens(messages: list[AgentChatMessage]) -> int:

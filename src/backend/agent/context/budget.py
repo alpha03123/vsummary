@@ -4,13 +4,17 @@ from math import ceil
 
 from pydantic import BaseModel, Field
 
-from backend.agent.agent.prompt import get_agent_planner_instruction, get_agent_responder_instruction
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.runtime import load_runtime_context
 from backend.agent.memory.store import AgentMemoryStore
 from backend.agent.ports import AgentContextLoader
+from backend.agent.runtime.note_drafter import VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT
+from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
+from backend.agent.runtime.series_locator import SERIES_LOCATOR_SYSTEM_PROMPT
+from backend.agent.runtime.video_seek_locator import VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT
 
-DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000
+DEFAULT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_WARNING_THRESHOLD_RATIO = 0.60
 DEFAULT_COMPACT_THRESHOLD_RATIO = 0.80
@@ -72,8 +76,11 @@ class AgentContextBudgetService:
             context_override=context_override,
         )
         system_prompt_tokens = (
-            _estimate_tokens(get_agent_planner_instruction())
-            + _estimate_tokens(get_agent_responder_instruction())
+            _estimate_tokens(REQUEST_ROUTER_SYSTEM_PROMPT)
+            + _estimate_tokens(ROUTED_ANSWERER_SYSTEM_PROMPT)
+            + _estimate_tokens(VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT)
+            + _estimate_tokens(SERIES_LOCATOR_SYSTEM_PROMPT)
+            + _estimate_tokens(VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT)
         )
         recent_messages_tokens = _estimate_recent_messages_tokens(context.recent_messages)
         workspace_context_tokens = _estimate_workspace_context_tokens(context)

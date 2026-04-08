@@ -18,6 +18,7 @@ from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMind
 from backend.video_summary.infrastructure.openai_summary.client import OpenAICompletionGateway
 from backend.video_summary.infrastructure.openai_summary.schemas import SummaryPayload
 from backend.video_summary.infrastructure.settings import (
+    AgentContextSettings,
     AppSettings,
     AsrSettings,
     DebugSettings,
@@ -29,6 +30,10 @@ from backend.video_summary.infrastructure.settings import (
     replace_transcript_enhancement_enabled,
     replace_workspace_ui_settings,
 )
+
+
+async def _return_async(value):
+    return value
 
 
 class OpenAISummaryInfrastructureTests(unittest.TestCase):
@@ -115,6 +120,15 @@ class OpenAISummaryInfrastructureTests(unittest.TestCase):
             ),
             workspace_ui=WorkspaceUiSettings(theme="light", show_takeaways=True),
             debug=DebugSettings(mode=False),
+            agent_context=AgentContextSettings(
+                window_tokens=1_000_000,
+                reserved_output_tokens=20_000,
+                warning_threshold_ratio=0.60,
+                compact_threshold_ratio=0.80,
+                blocking_threshold_ratio=0.92,
+                keep_tail_messages=6,
+                projection_max_tokens_ratio=0.08,
+            ),
         )
 
         next_settings = replace_workspace_ui_settings(
@@ -196,7 +210,3 @@ transcription_mode = "fast"
 
 if __name__ == "__main__":
     unittest.main()
-
-
-async def _return_async(value):
-    return value

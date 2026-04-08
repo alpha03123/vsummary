@@ -10,8 +10,28 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.agent.context.compact import AgentMemoryCompactionService
+from backend.agent.context.semantic_compactor import COMPACTOR_SYSTEM_PROMPT
 from backend.agent.memory.store import InMemoryAgentMemoryStore
 from backend.agent.schemas.messages import AgentChatMessage
+
+
+class _CompactionGateway:
+    def create_structured_completion(self, messages, response_model):
+        del messages, response_model
+        raise NotImplementedError
+
+    def create_text_completion_stream(self, messages):
+        del messages
+        yield ""
+
+    def create_text_completion(self, messages):
+        assert COMPACTOR_SYSTEM_PROMPT in messages[0].content
+        return (
+            '{"summary":"用户希望总结系列主题与学习顺序。",'
+            '"confirmed_facts":["需要总结主题","需要补学习顺序"],'
+            '"open_threads":["保留主线"],'
+            '"constraints":["内容太多时先抓主线"]}'
+        )
 
 
 class AgentContextCompactionTests(unittest.TestCase):
@@ -33,8 +53,10 @@ class AgentContextCompactionTests(unittest.TestCase):
         )
 
         compacted = AgentMemoryCompactionService(
+            gateway=_CompactionGateway(),
             memory_store=store,
-            compact_threshold_tokens=40,
+            context_window_tokens=40,
+            compact_threshold_ratio=1.0,
             keep_tail_messages=4,
         ).compact_if_needed(memory_key)
 
@@ -43,7 +65,9 @@ class AgentContextCompactionTests(unittest.TestCase):
         self.assertEqual(len(messages), 5)
         self.assertEqual(messages[0].role, "system")
         self.assertIn("压缩摘要", messages[0].content)
-        self.assertIn("用户：请总结这个系列的主要主题", messages[0].content)
+        self.assertIn("用户希望总结系列主题与学习顺序", messages[0].content)
+        self.assertIn("已确认事实", messages[0].content)
+        self.assertIn("待继续事项", messages[0].content)
         self.assertEqual(messages[-1].content, "可以，我会在结尾补上建议。")
 
 

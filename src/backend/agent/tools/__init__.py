@@ -1,5 +1,5 @@
 from backend.agent.memory.context import AgentContext, InspectionStage
-from backend.agent.schemas.tool_calls import ToolContextTag, ToolDefinition, ToolEffectTag, ToolIntentTag, ToolName
+from backend.agent.schemas.tool_calls import ToolContextTag, ToolDefinition, ToolEffectTag, ToolIntentTag, ToolName, ToolPlane
 from backend.agent.tools.library_info import (
     GET_VIDEO_SUMMARY_TOOL,
     GET_VIDEO_TRANSCRIPT_TOOL,
@@ -48,16 +48,22 @@ from backend.agent.tools.series_buffer import (
 from backend.agent.tools.video import OPEN_VIDEO_TOOL, VIDEO_SEEK_TOOL, execute_open_video, execute_video_seek
 
 
-ALL_TOOL_DEFINITIONS: list[ToolDefinition] = [
+BUSINESS_READ_TOOL_DEFINITIONS: list[ToolDefinition] = [
     LIST_SERIES_VIDEOS_TOOL,
+    GET_VIDEO_SUMMARY_TOOL,
+    GET_VIDEO_TOOLS_TOOL,
+    GET_VIDEO_TRANSCRIPT_TOOL,
+]
+
+RUNTIME_INTERNAL_TOOL_DEFINITIONS: list[ToolDefinition] = [
     VIEW_SERIES_CANDIDATES_TOOL,
     ADD_SERIES_CANDIDATES_TOOL,
     REMOVE_SERIES_CANDIDATES_TOOL,
     REPLACE_SERIES_CANDIDATES_TOOL,
     CLEAR_SERIES_CANDIDATES_TOOL,
-    GET_VIDEO_SUMMARY_TOOL,
-    GET_VIDEO_TOOLS_TOOL,
-    GET_VIDEO_TRANSCRIPT_TOOL,
+]
+
+UI_ACTION_TOOL_DEFINITIONS: list[ToolDefinition] = [
     OPEN_SERIES_HOME_TOOL,
     OPEN_SERIES_OVERVIEW_TOOL,
     OPEN_OVERVIEW_TOOL,
@@ -70,6 +76,17 @@ ALL_TOOL_DEFINITIONS: list[ToolDefinition] = [
     VIDEO_SEEK_TOOL,
     SAVE_NOTE_TOOL,
 ]
+
+ALL_TOOL_DEFINITIONS: list[ToolDefinition] = [
+    *BUSINESS_READ_TOOL_DEFINITIONS,
+    *RUNTIME_INTERNAL_TOOL_DEFINITIONS,
+    *UI_ACTION_TOOL_DEFINITIONS,
+]
+
+MODEL_VISIBLE_TOOL_PLANES: tuple[ToolPlane, ...] = (
+    ToolPlane.BUSINESS_READ,
+    ToolPlane.UI_ACTION,
+)
 
 TOOL_DEFINITIONS_BY_NAME: dict[ToolName, ToolDefinition] = {
     tool.name: tool
@@ -88,6 +105,26 @@ def list_tool_definitions_for_context(context: AgentContext) -> list[ToolDefinit
 
 def get_tool_definition(tool_name: ToolName) -> ToolDefinition:
     return TOOL_DEFINITIONS_BY_NAME[tool_name]
+
+
+def list_tool_definitions_for_plane(plane: ToolPlane) -> list[ToolDefinition]:
+    return [
+        tool
+        for tool in ALL_TOOL_DEFINITIONS
+        if tool.plane == plane
+    ]
+
+
+def list_model_visible_tool_definitions_for_context(context: AgentContext) -> list[ToolDefinition]:
+    return [
+        tool
+        for tool in list_tool_definitions_for_context(context)
+        if tool.plane in MODEL_VISIBLE_TOOL_PLANES
+    ]
+
+
+def tool_is_model_visible(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).plane in MODEL_VISIBLE_TOOL_PLANES
 
 
 def list_tool_names_for_intent(intent_tag: ToolIntentTag) -> set[ToolName]:
@@ -114,6 +151,10 @@ def tool_requires_video_id(tool_name: ToolName) -> bool:
 
 def tool_has_effect(tool_name: ToolName, effect: ToolEffectTag) -> bool:
     return effect in get_tool_definition(tool_name).effects
+
+
+def tool_is_concurrency_safe(tool_name: ToolName) -> bool:
+    return get_tool_definition(tool_name).concurrency_safe
 
 
 def _resolve_tool_context_tags(context: AgentContext) -> tuple[ToolContextTag, ...]:
@@ -145,11 +186,19 @@ __all__ = [
     "create_get_video_transcript_handler",
     "create_view_series_candidates_handler",
     "execute_video_seek",
+    "BUSINESS_READ_TOOL_DEFINITIONS",
     "get_tool_definition",
+    "list_model_visible_tool_definitions_for_context",
+    "list_tool_definitions_for_plane",
     "list_tool_definitions_for_context",
     "list_tool_names_for_intent",
+    "MODEL_VISIBLE_TOOL_PLANES",
+    "RUNTIME_INTERNAL_TOOL_DEFINITIONS",
     "tool_has_effect",
     "tool_is_available_in_context",
+    "tool_is_concurrency_safe",
+    "tool_is_model_visible",
     "tool_requires_candidate_buffer",
     "tool_requires_video_id",
+    "UI_ACTION_TOOL_DEFINITIONS",
 ]

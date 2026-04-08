@@ -38,8 +38,10 @@ class ToolContextTag(str, Enum):
 class ToolIntentTag(str, Enum):
     ANSWER_QUESTION = "answer_question"
     SERIES_ANSWER = "series_answer"
+    SERIES_LOCATE = "series_locate"
     OPEN_TOOL = "open_tool"
     SEEK_VIDEO = "seek_video"
+    SAVE_NOTE = "save_note"
     GENERATE_OVERVIEW = "generate_overview"
     GENERATE_MINDMAP = "generate_mindmap"
 
@@ -49,10 +51,18 @@ class ToolEffectTag(str, Enum):
     MARK_VIDEO_INSPECTED = "mark_video_inspected"
 
 
+class ToolPlane(str, Enum):
+    BUSINESS_READ = "business_read"
+    UI_ACTION = "ui_action"
+    RUNTIME_INTERNAL = "runtime_internal"
+
+
 class ToolDefinition(BaseModel):
     name: ToolName
     title: str
     description: str
+    plane: ToolPlane
+    concurrency_safe: bool = False
     arguments: dict[str, str] = Field(default_factory=dict)
     batch_tag: str | None = None
     contexts: tuple[ToolContextTag, ...] = ()
@@ -142,6 +152,10 @@ class OpenNotesCall(BaseModel):
 class VideoSeekCall(BaseModel):
     tool_name: Literal[ToolName.VIDEO_SEEK] = ToolName.VIDEO_SEEK
     seek_seconds: float
+    match_end_seconds: float | None = None
+    matched_text: str = ""
+    chapter_title: str = ""
+    query: str = ""
 
 
 class GenerateOverviewCall(BaseModel):

@@ -12,6 +12,7 @@ from backend.agent.schemas.tool_calls import (
     ToolExecutionResult,
     ToolIntentTag,
     ToolName,
+    ToolPlane,
     ViewSeriesCandidatesCall,
 )
 from backend.video_summary.library.ports import VideoWorkspace
@@ -20,6 +21,7 @@ VIEW_SERIES_CANDIDATES_TOOL = ToolDefinition(
     name=ToolName.VIEW_SERIES_CANDIDATES,
     title="查看候选缓冲区",
     description="查看当前系列缓冲区中的候选视频、已检查视频和已淘汰视频。",
+    plane=ToolPlane.RUNTIME_INTERNAL,
     contexts=(ToolContextTag.SERIES_DISCOVERY, ToolContextTag.SERIES_INSPECTION),
     intents=(ToolIntentTag.SERIES_ANSWER,),
 )
@@ -28,6 +30,7 @@ ADD_SERIES_CANDIDATES_TOOL = ToolDefinition(
     name=ToolName.ADD_SERIES_CANDIDATES,
     title="加入候选视频",
     description="把一个或多个视频加入当前系列的候选缓冲区，供下一阶段深度检查。",
+    plane=ToolPlane.RUNTIME_INTERNAL,
     arguments={
         "video_ids": "要加入缓冲区的 video_id 列表",
         "reason": "可选，为什么把这些视频加入缓冲区",
@@ -41,6 +44,7 @@ REMOVE_SERIES_CANDIDATES_TOOL = ToolDefinition(
     name=ToolName.REMOVE_SERIES_CANDIDATES,
     title="移出候选视频",
     description="把一个或多个视频从当前系列的候选缓冲区中移出。",
+    plane=ToolPlane.RUNTIME_INTERNAL,
     arguments={
         "video_ids": "要移出的 video_id 列表",
         "reason": "可选，为什么把这些视频移出缓冲区",
@@ -54,6 +58,7 @@ REPLACE_SERIES_CANDIDATES_TOOL = ToolDefinition(
     name=ToolName.REPLACE_SERIES_CANDIDATES,
     title="替换候选缓冲区",
     description="用一组新视频直接替换当前候选缓冲区。",
+    plane=ToolPlane.RUNTIME_INTERNAL,
     arguments={
         "video_ids": "新的候选 video_id 列表",
         "reason": "可选，为什么重建这组候选",
@@ -67,6 +72,7 @@ CLEAR_SERIES_CANDIDATES_TOOL = ToolDefinition(
     name=ToolName.CLEAR_SERIES_CANDIDATES,
     title="清空候选缓冲区",
     description="清空当前系列的候选缓冲区、已检查列表和已淘汰列表。",
+    plane=ToolPlane.RUNTIME_INTERNAL,
     contexts=(ToolContextTag.SERIES_DISCOVERY, ToolContextTag.SERIES_INSPECTION),
     intents=(ToolIntentTag.SERIES_ANSWER,),
     effects=(ToolEffectTag.APPLY_CANDIDATE_BUFFER_PAYLOAD,),

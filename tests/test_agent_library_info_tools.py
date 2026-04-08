@@ -56,10 +56,10 @@ class FakeWorkspace:
 
 
 class AgentLibraryInfoToolTests(unittest.TestCase):
-    def test_library_info_read_tools_are_marked_with_candidate_buffer_batch_tag(self) -> None:
-        self.assertEqual(GET_VIDEO_SUMMARY_TOOL.batch_tag, "candidate_buffer")
-        self.assertEqual(GET_VIDEO_TOOLS_TOOL.batch_tag, "candidate_buffer")
-        self.assertEqual(GET_VIDEO_TRANSCRIPT_TOOL.batch_tag, "candidate_buffer")
+    def test_library_info_read_tools_are_marked_with_series_videos_batch_tag(self) -> None:
+        self.assertEqual(GET_VIDEO_SUMMARY_TOOL.batch_tag, "series_videos")
+        self.assertEqual(GET_VIDEO_TOOLS_TOOL.batch_tag, "series_videos")
+        self.assertEqual(GET_VIDEO_TRANSCRIPT_TOOL.batch_tag, "series_videos")
 
     def test_get_video_summary_returns_invalid_input_when_series_context_has_no_video(self) -> None:
         handler = create_get_video_summary_handler(FakeWorkspace())

@@ -17,6 +17,8 @@ from backend.agent.validation.generate import (
 )
 from backend.agent.validation.open_tool import validate_open_tool_plan
 from backend.agent.validation.out_of_scope import validate_out_of_scope_plan
+from backend.agent.validation.save_note import validate_save_note_plan
+from backend.agent.validation.series_locate import validate_series_locate_plan
 from backend.agent.validation.seek_video import validate_seek_video_plan
 from backend.agent.validation.shared import validate_batch_tool_usage
 
@@ -26,8 +28,10 @@ PlanValidator = Callable[[AgentActionPlan], AgentActionPlan]
 
 PLAN_VALIDATORS: dict[IntentType, PlanValidator] = {
     IntentType.ANSWER_QUESTION: validate_answer_question_plan,
+    IntentType.SERIES_LOCATE: validate_series_locate_plan,
     IntentType.OPEN_TOOL: validate_open_tool_plan,
     IntentType.SEEK_VIDEO: validate_seek_video_plan,
+    IntentType.SAVE_NOTE: validate_save_note_plan,
     IntentType.GENERATE_OVERVIEW: validate_generate_overview_plan,
     IntentType.GENERATE_MINDMAP: validate_generate_mindmap_plan,
     IntentType.SERIES_ANSWER: validate_series_answer_plan,
@@ -120,6 +124,7 @@ def _validate_terminal_action_plan(
     if plan.intent_type not in {
         IntentType.OPEN_TOOL,
         IntentType.SEEK_VIDEO,
+        IntentType.SAVE_NOTE,
         IntentType.GENERATE_OVERVIEW,
         IntentType.GENERATE_MINDMAP,
     }:

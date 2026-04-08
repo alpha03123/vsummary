@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
-import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, Trash2 } from "lucide-react";
+import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, Trash2, FileText, PlayCircle } from "lucide-react";
+import { formatRange } from "../../../shared/lib/time";
 
 const WorkspaceMarkdownMessage = lazy(() =>
   import("./shared/WorkspaceMarkdownMessage").then((module) => ({
@@ -43,10 +44,14 @@ export function WorkspaceChatPanel({
   selectedToolId,
   tools,
   chatMessages = [],
+  chatSessions = [],
+  activeSessionId = null,
   chatPending = false,
   contextUsage = null,
   contextUsageLoading = false,
   onStartNewChat,
+  onSelectChatSession,
+  onOpenSeekReference,
   onClearChat,
   onSubmitChat,
 }) {
@@ -78,6 +83,10 @@ export function WorkspaceChatPanel({
 
     if (message.kind === "tool-trace") {
       return <WorkspaceToolTraceMessage message={message} />;
+    }
+
+    if (message.kind === "seek-reference") {
+      return <WorkspaceSeekReferenceMessage message={message} onOpenSeekReference={onOpenSeekReference} />;
     }
 
     if (!isAssistant) {
@@ -137,6 +146,25 @@ export function WorkspaceChatPanel({
 
       {/* Chat History Area */}
       <div className="flex-1 overflow-auto p-6 md:p-8 flex flex-col gap-6">
+        {chatSessions.length > 1 ? (
+          <div className="flex flex-wrap gap-2">
+            {chatSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                onClick={() => onSelectChatSession?.(session.id)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  session.id === activeSessionId
+                    ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950/30 dark:text-sky-300"
+                    : "border-stone-200/80 bg-white/80 text-stone-600 hover:border-sky-300 hover:text-sky-700 dark:border-stone-800 dark:bg-stone-950/80 dark:text-stone-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                }`}
+              >
+                {session.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           {suggestedPrompts.map((prompt) => (
             <button
@@ -166,6 +194,7 @@ export function WorkspaceChatPanel({
                 <div
                   className={
                     message.kind === "tool-trace"
+                      || message.kind === "seek-reference"
                       ? "w-full"
                       : isAssistant
                       ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
@@ -220,7 +249,7 @@ export function WorkspaceChatPanel({
           </div>
         </div>
         <p className="text-center text-xs text-stone-400 dark:text-stone-500 mt-4">
-          AI 已接入当前工作区上下文，可返回工具联动动作并自动切换右侧工具页。
+          AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作。
         </p>
       </div>
     </div>
@@ -361,6 +390,62 @@ function WorkspaceToolTraceMessage({ message }) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
+  const reference = message.seekReference ?? {};
+  const hasRange = typeof reference.seconds === "number";
+  const title = hasRange
+    ? `已定位到 ${formatRange(reference.seconds, reference.endSeconds ?? reference.seconds)}${reference.chapterTitle ? ` · ${reference.chapterTitle}` : ""}`
+    : "已找到相关转写片段";
+
+  return (
+    <details className="group rounded-[1.35rem] border border-sky-200/80 bg-sky-50/85 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+      <summary className="list-none cursor-pointer px-4 py-3.5">
+        <div className="flex items-center gap-3 text-sky-950 dark:text-sky-100">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            <FileText size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong className="text-[15px] font-semibold">{title}</strong>
+            </div>
+            <p className="mt-1 text-xs text-sky-800/80 dark:text-sky-200/80">
+              展开查看命中的转写片段，再决定是否跳到视频。
+            </p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 text-sky-500 transition-transform group-open:rotate-90" />
+        </div>
+      </summary>
+
+      <div className="border-t border-sky-200/80 px-4 py-4 dark:border-sky-900/60">
+        {reference.query ? (
+          <p className="text-xs font-medium text-sky-800/90 dark:text-sky-200/90">
+            检索问题：{reference.query}
+          </p>
+        ) : null}
+        {reference.matchedText ? (
+          <blockquote className="mt-3 rounded-2xl border border-sky-200/80 bg-white/80 px-4 py-3 text-sm leading-6 text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-100">
+            {reference.matchedText}
+          </blockquote>
+        ) : (
+          <p className="mt-3 text-sm text-sky-900/80 dark:text-sky-100/80">
+            当前没有返回完整命中原文，但已经定位到对应时间点。
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onOpenSeekReference?.(reference)}
+            className="inline-flex items-center gap-2 rounded-full border border-sky-300 bg-white/90 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:border-sky-400 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:border-sky-600 dark:hover:bg-sky-900/50"
+          >
+            <PlayCircle size={14} />
+            跳到视频定位
+          </button>
         </div>
       </div>
     </details>

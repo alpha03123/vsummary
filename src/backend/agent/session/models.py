@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
+from backend.agent.schemas.tool_calls import ToolExecutionResult
 
 
 class AgentSessionMessageEntry(BaseModel):
@@ -13,11 +14,18 @@ class AgentSessionMessageEntry(BaseModel):
     created_at: str
 
 
+class AgentSessionEvidenceEntry(BaseModel):
+    cache_key: str
+    tool_result: ToolExecutionResult
+    updated_at: str
+
+
 class AgentSessionSnapshot(BaseModel):
     session_id: str
     memory_key: str
     context: AgentContext
     messages: list[AgentSessionMessageEntry] = Field(default_factory=list)
+    evidence_entries: list[AgentSessionEvidenceEntry] = Field(default_factory=list)
     updated_at: str
 
     @property

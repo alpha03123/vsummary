@@ -51,6 +51,7 @@ class AgentSessionStore(Protocol):
         context: AgentContext,
         user_message: str,
         assistant_message: str,
+        tool_results: list[ToolExecutionResult],
     ) -> None:
         ...
 

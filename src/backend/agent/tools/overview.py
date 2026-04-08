@@ -9,12 +9,14 @@ from backend.agent.schemas.tool_calls import (
     ToolExecutionResult,
     ToolIntentTag,
     ToolName,
+    ToolPlane,
 )
 
 OPEN_OVERVIEW_TOOL = ToolDefinition(
     name=ToolName.OPEN_OVERVIEW,
     title="打开概况工具",
     description="切换到 AI 概况工具页。",
+    plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
     intents=(ToolIntentTag.OPEN_TOOL, ToolIntentTag.GENERATE_OVERVIEW),
 )
@@ -23,6 +25,7 @@ GENERATE_OVERVIEW_TOOL = ToolDefinition(
     name=ToolName.GENERATE_OVERVIEW,
     title="生成概况",
     description="当概况尚未生成时，触发生成 AI 概况。",
+    plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
     intents=(ToolIntentTag.GENERATE_OVERVIEW,),
 )

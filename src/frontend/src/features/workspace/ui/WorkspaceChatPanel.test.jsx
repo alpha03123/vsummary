@@ -21,9 +21,13 @@ describe("WorkspaceChatPanel", () => {
           },
         ]}
         chatPending={false}
+        chatSessions={[]}
+        activeSessionId={null}
         contextUsage={null}
         contextUsageLoading={false}
         onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={() => {}}
         onClearChat={() => {}}
         onSubmitChat={() => {}}
       />,
@@ -58,9 +62,13 @@ describe("WorkspaceChatPanel", () => {
           },
         ]}
         chatPending={false}
+        chatSessions={[]}
+        activeSessionId={null}
         contextUsage={null}
         contextUsageLoading={false}
         onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={() => {}}
         onClearChat={() => {}}
         onSubmitChat={onSubmitChat}
       />,
@@ -113,9 +121,13 @@ describe("WorkspaceChatPanel", () => {
           },
         ]}
         chatPending={false}
+        chatSessions={[]}
+        activeSessionId={null}
         contextUsage={null}
         contextUsageLoading={false}
         onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={() => {}}
         onClearChat={() => {}}
         onSubmitChat={() => {}}
       />,
@@ -173,9 +185,13 @@ describe("WorkspaceChatPanel", () => {
           },
         ]}
         chatPending={false}
+        chatSessions={[]}
+        activeSessionId={null}
         contextUsage={null}
         contextUsageLoading={false}
         onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={() => {}}
         onClearChat={() => {}}
         onSubmitChat={() => {}}
       />,
@@ -199,6 +215,8 @@ describe("WorkspaceChatPanel", () => {
         tools={null}
         chatMessages={[]}
         chatPending={false}
+        chatSessions={[]}
+        activeSessionId={null}
         contextUsage={{
           sessionId: "video|series-a|video-1|overview",
           scopeType: "video",
@@ -221,6 +239,8 @@ describe("WorkspaceChatPanel", () => {
         }}
         contextUsageLoading={false}
         onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={() => {}}
         onClearChat={() => {}}
         onSubmitChat={() => {}}
       />,
@@ -236,6 +256,7 @@ describe("WorkspaceChatPanel", () => {
   it("exposes new chat and clear chat actions", () => {
     const onStartNewChat = vi.fn();
     const onClearChat = vi.fn();
+    const onSelectChatSession = vi.fn();
 
     render(
       <WorkspaceChatPanel
@@ -246,10 +267,14 @@ describe("WorkspaceChatPanel", () => {
         selectedToolId="series-home"
         tools={null}
         chatMessages={[]}
+        chatSessions={[]}
+        activeSessionId={null}
         chatPending={false}
         contextUsage={null}
         contextUsageLoading={false}
         onStartNewChat={onStartNewChat}
+        onSelectChatSession={onSelectChatSession}
+        onOpenSeekReference={() => {}}
         onClearChat={onClearChat}
         onSubmitChat={() => {}}
       />,
@@ -260,5 +285,91 @@ describe("WorkspaceChatPanel", () => {
 
     expect(onStartNewChat).toHaveBeenCalled();
     expect(onClearChat).toHaveBeenCalled();
+    expect(onSelectChatSession).not.toHaveBeenCalled();
+  });
+
+  it("renders session chips and allows switching sessions", () => {
+    const onSelectChatSession = vi.fn();
+
+    render(
+      <WorkspaceChatPanel
+        workspaceTitle="Video Include"
+        activeSeries={{ id: "series-a", title: "Series A" }}
+        selectedVideo={null}
+        selectedContextType="series"
+        selectedToolId="series-home"
+        tools={null}
+        chatMessages={[]}
+        chatSessions={[
+          { id: "series|series-a|series-home", title: "当前对话" },
+          { id: "series|series-a|series-home::2", title: "JManus 是啥？" },
+        ]}
+        activeSessionId="series|series-a|series-home::2"
+        chatPending={false}
+        contextUsage={null}
+        contextUsageLoading={false}
+        onStartNewChat={() => {}}
+        onSelectChatSession={onSelectChatSession}
+        onOpenSeekReference={() => {}}
+        onClearChat={() => {}}
+        onSubmitChat={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "当前对话" }));
+    expect(onSelectChatSession).toHaveBeenCalledWith("series|series-a|series-home");
+    expect(screen.getByRole("button", { name: "JManus 是啥？" })).toBeInTheDocument();
+  });
+
+  it("renders a collapsible seek evidence card and opens preview on demand", () => {
+    const onOpenSeekReference = vi.fn();
+
+    render(
+      <WorkspaceChatPanel
+        workspaceTitle="Video Include"
+        activeSeries={{ id: "series-a", title: "Series A" }}
+        selectedVideo={{ id: "video-1", title: "Video 1" }}
+        selectedContextType="video"
+        selectedToolId="studio"
+        tools={null}
+        chatMessages={[
+          {
+            id: "seek-reference-1",
+            role: "assistant",
+            kind: "seek-reference",
+            content: "已找到相关视频片段",
+            seekReference: {
+              seconds: 377,
+              endSeconds: 392,
+              query: "文中提到的 SLF4J 是什么东西，再哪里被提到了",
+              matchedText: "AgentScope 它的日志采用的是 SLF4J 这个接口。",
+              chapterTitle: "AgentScope 依赖与日志接口",
+            },
+            meta: "Notebook Assistant • 证据定位",
+          },
+        ]}
+        chatSessions={[]}
+        activeSessionId={null}
+        chatPending={false}
+        contextUsage={null}
+        contextUsageLoading={false}
+        onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={onOpenSeekReference}
+        onClearChat={() => {}}
+        onSubmitChat={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("已定位到 06:17 - 06:32 · AgentScope 依赖与日志接口")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("已定位到 06:17 - 06:32 · AgentScope 依赖与日志接口"));
+    expect(screen.getByText("AgentScope 它的日志采用的是 SLF4J 这个接口。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "跳到视频定位" }));
+    expect(onOpenSeekReference).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seconds: 377,
+        endSeconds: 392,
+      }),
+    );
   });
 });

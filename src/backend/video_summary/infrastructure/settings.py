@@ -9,6 +9,13 @@ VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper"}
 VALID_THEMES = {"light", "dark"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
+DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
+DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
+DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
+DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
+DEFAULT_AGENT_BLOCKING_THRESHOLD_RATIO = 0.92
+DEFAULT_AGENT_KEEP_TAIL_MESSAGES = 6
+DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO = 0.08
 
 
 @dataclass(frozen=True)
@@ -48,11 +55,23 @@ class DebugSettings:
 
 
 @dataclass(frozen=True)
+class AgentContextSettings:
+    window_tokens: int
+    reserved_output_tokens: int
+    warning_threshold_ratio: float
+    compact_threshold_ratio: float
+    blocking_threshold_ratio: float
+    keep_tail_messages: int
+    projection_max_tokens_ratio: float
+
+
+@dataclass(frozen=True)
 class AppSettings:
     asr: AsrSettings
     openai: OpenAISettings
     workspace_ui: WorkspaceUiSettings
     debug: DebugSettings
+    agent_context: AgentContextSettings
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
@@ -100,12 +119,44 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     debug_settings = DebugSettings(
         mode=bool(debug_payload.get("mode", False)),
     )
+    agent_context_payload = payload.get("agent_context", {})
+    agent_context_settings = AgentContextSettings(
+        window_tokens=_normalize_positive_int(
+            agent_context_payload.get("window_tokens"),
+            default=DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS,
+        ),
+        reserved_output_tokens=_normalize_positive_int(
+            agent_context_payload.get("reserved_output_tokens"),
+            default=DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS,
+        ),
+        warning_threshold_ratio=_normalize_ratio(
+            agent_context_payload.get("warning_threshold_ratio"),
+            default=DEFAULT_AGENT_WARNING_THRESHOLD_RATIO,
+        ),
+        compact_threshold_ratio=_normalize_ratio(
+            agent_context_payload.get("compact_threshold_ratio"),
+            default=DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO,
+        ),
+        blocking_threshold_ratio=_normalize_ratio(
+            agent_context_payload.get("blocking_threshold_ratio"),
+            default=DEFAULT_AGENT_BLOCKING_THRESHOLD_RATIO,
+        ),
+        keep_tail_messages=_normalize_positive_int(
+            agent_context_payload.get("keep_tail_messages"),
+            default=DEFAULT_AGENT_KEEP_TAIL_MESSAGES,
+        ),
+        projection_max_tokens_ratio=_normalize_ratio(
+            agent_context_payload.get("projection_max_tokens_ratio"),
+            default=DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO,
+        ),
+    )
 
     return AppSettings(
         asr=asr_settings,
         openai=openai_settings,
         workspace_ui=workspace_ui_settings,
         debug=debug_settings,
+        agent_context=agent_context_settings,
     )
 
 
@@ -203,12 +254,35 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[debug]",
         f"mode = {_toml_bool(settings.debug.mode)}",
         "",
+        "[agent_context]",
+        f"window_tokens = {settings.agent_context.window_tokens}",
+        f"reserved_output_tokens = {settings.agent_context.reserved_output_tokens}",
+        f"warning_threshold_ratio = {settings.agent_context.warning_threshold_ratio}",
+        f"compact_threshold_ratio = {settings.agent_context.compact_threshold_ratio}",
+        f"blocking_threshold_ratio = {settings.agent_context.blocking_threshold_ratio}",
+        f"keep_tail_messages = {settings.agent_context.keep_tail_messages}",
+        f"projection_max_tokens_ratio = {settings.agent_context.projection_max_tokens_ratio}",
+        "",
     ]
     return "\n".join(lines)
 
 
 def _toml_bool(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _normalize_positive_int(value: object, *, default: int) -> int:
+    if isinstance(value, int) and value > 0:
+        return value
+    return default
+
+
+def _normalize_ratio(value: object, *, default: float) -> float:
+    if isinstance(value, (int, float)):
+        normalized = float(value)
+        if 0 < normalized < 1:
+            return normalized
+    return default
 
 
 @dataclass(frozen=True)

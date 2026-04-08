@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Protocol
 
 from backend.agent.memory.context import AgentContext
+from backend.agent.schemas.tool_calls import ToolExecutionResult
+from backend.agent.session.evidence_cache import build_cache_entries
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot, utc_now_iso
 
 
@@ -21,6 +23,7 @@ class AgentSessionStore(Protocol):
         context: AgentContext,
         user_message: str,
         assistant_message: str,
+        tool_results: list[ToolExecutionResult],
     ) -> None:
         ...
 
@@ -47,6 +50,7 @@ class FileAgentSessionStore:
         context: AgentContext,
         user_message: str,
         assistant_message: str,
+        tool_results: list[ToolExecutionResult],
     ) -> None:
         snapshot = self.get_snapshot(session_id)
         timestamp = utc_now_iso()
@@ -66,6 +70,11 @@ class FileAgentSessionStore:
                 AgentSessionMessageEntry(role="user", content=user_message, created_at=timestamp),
                 AgentSessionMessageEntry(role="assistant", content=assistant_message, created_at=timestamp),
             ]
+        )
+        snapshot.evidence_entries = build_cache_entries(
+            snapshot.evidence_entries,
+            tool_results,
+            updated_at=timestamp,
         )
         snapshot.updated_at = timestamp
         self._write_snapshot(snapshot)

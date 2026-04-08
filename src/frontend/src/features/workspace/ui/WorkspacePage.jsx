@@ -110,10 +110,14 @@ export function WorkspacePage({ page }) {
                  selectedToolId={state.selectedToolId}
                  tools={tools}
                  chatMessages={chat.messages}
+                 chatSessions={chat.sessions}
+                 activeSessionId={chat.activeSessionId}
                  chatPending={chat.pending}
                  contextUsage={chat.contextUsage}
                  contextUsageLoading={chat.contextUsageLoading}
                  onStartNewChat={chat.startNewChat}
+                 onSelectChatSession={chat.selectChatSession}
+                 onOpenSeekReference={chat.openSeekReference}
                  onClearChat={chat.clearChat}
                  onSubmitChat={chat.submit}
                />

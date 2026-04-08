@@ -35,28 +35,113 @@ export function buildChatScopeKey(selectedContextType, seriesId, videoId, select
 }
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
+const DEFAULT_CHAT_SESSION_TITLE = "当前对话";
+const NEW_CHAT_SESSION_TITLE_PREFIX = "新对话";
 
-export function loadChatSessionIdsByScope() {
+function createChatSessionMeta(sessionId, title, createdAt = Date.now(), updatedAt = createdAt) {
+  return {
+    id: sessionId,
+    title,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function normalizeChatSessionMeta(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : "";
+  if (!id) {
+    return null;
+  }
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : DEFAULT_CHAT_SESSION_TITLE;
+  const createdAt = typeof value.createdAt === "number" && Number.isFinite(value.createdAt) ? value.createdAt : Date.now();
+  const updatedAt = typeof value.updatedAt === "number" && Number.isFinite(value.updatedAt) ? value.updatedAt : createdAt;
+  return createChatSessionMeta(id, title, createdAt, updatedAt);
+}
+
+function loadChatSessionsState() {
   if (typeof window === "undefined") {
-    return {};
+    return {
+      activeSessionIdsByScope: {},
+      sessionListsByScope: {},
+    };
   }
   try {
     const rawValue = window.localStorage.getItem(CHAT_SESSION_STORAGE_KEY);
     if (!rawValue) {
-      return {};
+      return {
+        activeSessionIdsByScope: {},
+        sessionListsByScope: {},
+      };
     }
     const parsed = JSON.parse(rawValue);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        activeSessionIdsByScope: {},
+        sessionListsByScope: {},
+      };
+    }
+
+    const record = parsed;
+    const hasNewShape =
+      record.activeSessionIdsByScope &&
+      typeof record.activeSessionIdsByScope === "object" &&
+      !Array.isArray(record.activeSessionIdsByScope);
+
+    if (!hasNewShape) {
+      const activeSessionIdsByScope = Object.fromEntries(
+        Object.entries(record).filter(([, value]) => typeof value === "string" && value.trim()),
+      );
+      return {
+        activeSessionIdsByScope,
+        sessionListsByScope: {},
+      };
+    }
+
+    const activeSessionIdsByScope = Object.fromEntries(
+      Object.entries(record.activeSessionIdsByScope ?? {}).filter(([, value]) => typeof value === "string" && value.trim()),
+    );
+    const sessionListsByScope = Object.fromEntries(
+      Object.entries(record.sessionListsByScope ?? {}).map(([scopeKey, value]) => {
+        const list = Array.isArray(value)
+          ? value.map(normalizeChatSessionMeta).filter(Boolean)
+          : [];
+        return [scopeKey, list];
+      }),
+    );
+    return {
+      activeSessionIdsByScope,
+      sessionListsByScope,
+    };
   } catch {
-    return {};
+    return {
+      activeSessionIdsByScope: {},
+      sessionListsByScope: {},
+    };
   }
 }
 
-export function persistChatSessionIdsByScope(chatSessionIdsByScope) {
+export function loadChatSessionIdsByScope() {
+  return loadChatSessionsState().activeSessionIdsByScope;
+}
+
+export function loadChatSessionListsByScope() {
+  return loadChatSessionsState().sessionListsByScope;
+}
+
+export function persistChatSessionIdsByScope(chatSessionIdsByScope, chatSessionListsByScope = {}) {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(chatSessionIdsByScope ?? {}));
+  window.localStorage.setItem(
+    CHAT_SESSION_STORAGE_KEY,
+    JSON.stringify({
+      activeSessionIdsByScope: chatSessionIdsByScope ?? {},
+      sessionListsByScope: chatSessionListsByScope ?? {},
+    }),
+  );
 }
 
 export function getChatSessionIdForScope(chatSessionIdsByScope, scopeKey) {
@@ -74,6 +159,106 @@ export function setChatSessionIdForScope(chatSessionIdsByScope, scopeKey, sessio
     ...(chatSessionIdsByScope ?? {}),
     [scopeKey]: sessionId,
   };
+}
+
+export function getChatSessionListForScope(chatSessionListsByScope, scopeKey) {
+  if (!scopeKey) {
+    return [];
+  }
+  return Array.isArray(chatSessionListsByScope?.[scopeKey]) ? [...chatSessionListsByScope[scopeKey]] : [];
+}
+
+export function resolveChatSessionsForScope(chatSessionIdsByScope, chatSessionListsByScope, scopeKey) {
+  if (!scopeKey) {
+    return {
+      chatSessionIdsByScope: { ...(chatSessionIdsByScope ?? {}) },
+      chatSessionListsByScope: { ...(chatSessionListsByScope ?? {}) },
+      activeSessionId: null,
+      sessions: [],
+    };
+  }
+  const nextIds = { ...(chatSessionIdsByScope ?? {}) };
+  const nextLists = { ...(chatSessionListsByScope ?? {}) };
+  const existingList = getChatSessionListForScope(nextLists, scopeKey);
+  let sessions = existingList;
+  if (!sessions.length) {
+    const legacySessionId = typeof nextIds[scopeKey] === "string" && nextIds[scopeKey].trim()
+      ? nextIds[scopeKey].trim()
+      : scopeKey;
+    sessions = [createChatSessionMeta(legacySessionId, DEFAULT_CHAT_SESSION_TITLE)];
+    nextLists[scopeKey] = sessions;
+  }
+  const candidateActiveId = typeof nextIds[scopeKey] === "string" && nextIds[scopeKey].trim()
+    ? nextIds[scopeKey].trim()
+    : null;
+  const activeSessionId = sessions.some((session) => session.id === candidateActiveId)
+    ? candidateActiveId
+    : sessions[0].id;
+  nextIds[scopeKey] = activeSessionId;
+  return {
+    chatSessionIdsByScope: nextIds,
+    chatSessionListsByScope: nextLists,
+    activeSessionId,
+    sessions,
+  };
+}
+
+export function createNextChatSessionMeta(chatSessionListsByScope, scopeKey, sessionId) {
+  const existingSessions = getChatSessionListForScope(chatSessionListsByScope, scopeKey);
+  const title = `${NEW_CHAT_SESSION_TITLE_PREFIX} ${existingSessions.length + 1}`;
+  return createChatSessionMeta(sessionId, title);
+}
+
+export function appendChatSessionForScope(chatSessionListsByScope, scopeKey, sessionMeta) {
+  if (!scopeKey || !sessionMeta) {
+    return { ...(chatSessionListsByScope ?? {}) };
+  }
+  const nextLists = { ...(chatSessionListsByScope ?? {}) };
+  const existingSessions = getChatSessionListForScope(nextLists, scopeKey);
+  nextLists[scopeKey] = [sessionMeta, ...existingSessions];
+  return nextLists;
+}
+
+export function removeChatSessionForScope(chatSessionListsByScope, scopeKey, sessionId) {
+  if (!scopeKey || !sessionId) {
+    return { ...(chatSessionListsByScope ?? {}) };
+  }
+  const nextLists = { ...(chatSessionListsByScope ?? {}) };
+  const existingSessions = getChatSessionListForScope(nextLists, scopeKey);
+  nextLists[scopeKey] = existingSessions.filter((session) => session.id !== sessionId);
+  return nextLists;
+}
+
+export function updateChatSessionMetaForScope(chatSessionListsByScope, scopeKey, sessionId, update) {
+  if (!scopeKey || !sessionId) {
+    return { ...(chatSessionListsByScope ?? {}) };
+  }
+  const nextLists = { ...(chatSessionListsByScope ?? {}) };
+  const existingSessions = getChatSessionListForScope(nextLists, scopeKey);
+  nextLists[scopeKey] = existingSessions.map((session) =>
+    session.id !== sessionId
+      ? session
+      : {
+          ...session,
+          ...update,
+        },
+  );
+  return nextLists;
+}
+
+export function getChatSessionMetaForScope(chatSessionListsByScope, scopeKey, sessionId) {
+  return getChatSessionListForScope(chatSessionListsByScope, scopeKey).find((session) => session.id === sessionId) ?? null;
+}
+
+export function buildChatSessionTitleFromMessage(message) {
+  if (typeof message !== "string") {
+    return DEFAULT_CHAT_SESSION_TITLE;
+  }
+  const normalized = message.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return DEFAULT_CHAT_SESSION_TITLE;
+  }
+  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 }
 
 export function getChatMessagesForScope(chatThreads, scopeKey) {
@@ -110,6 +295,15 @@ export function setContextUsageForScope(contextUsageByScope, scopeKey, usage) {
   };
 }
 
+export function removeScopedValue(scopeValues, scopeKey) {
+  if (!scopeKey) {
+    return { ...(scopeValues ?? {}) };
+  }
+  const nextValues = { ...(scopeValues ?? {}) };
+  delete nextValues[scopeKey];
+  return nextValues;
+}
+
 export function hasRecoveredChatScope(chatRecoveryByScope, scopeKey) {
   if (!scopeKey) {
     return false;
@@ -129,6 +323,7 @@ export function setRecoveredChatScope(chatRecoveryByScope, scopeKey, recovered) 
 
 export function createInitialWorkspaceState() {
   const chatSessionIdsByScope = loadChatSessionIdsByScope();
+  const chatSessionListsByScope = loadChatSessionListsByScope();
   return {
     library: null,
     tools: null,
@@ -165,6 +360,7 @@ export function createInitialWorkspaceState() {
     chatScopeKey: null,
     chatBaseScopeKey: null,
     chatSessionIdsByScope,
+    chatSessionListsByScope,
     chatMessages: [],
     chatPending: false,
     chatRecoveryLoading: false,

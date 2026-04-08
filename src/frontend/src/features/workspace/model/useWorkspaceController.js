@@ -35,21 +35,30 @@ import {
   createMindmapLoadedState,
   createSummaryLoadedState,
   createWorkspaceLoadedState,
+  createNextChatSessionMeta,
   findSeriesById,
   findVideoById,
   getChatSessionIdForScope,
+  getChatSessionListForScope,
+  getChatSessionMetaForScope,
   getContextUsageForScope,
   getChatMessagesForScope,
   hasRecoveredChatScope,
   markVideoAsReady,
   normalizeUiSettings,
+  appendChatSessionForScope,
   persistChatSessionIdsByScope,
+  removeChatSessionForScope,
+  removeScopedValue,
   resetUiSettings,
   buildChatScopeKey,
+  buildChatSessionTitleFromMessage,
+  resolveChatSessionsForScope,
   setChatSessionIdForScope,
   setRecoveredChatScope,
   setContextUsageForScope,
   setChatMessagesForScope,
+  updateChatSessionMetaForScope,
 } from "./workspaceState";
 
 function workspaceReducer(state, action) {
@@ -118,7 +127,13 @@ function workspaceReducer(state, action) {
       };
     case "series_selected": {
       const chatBaseScopeKey = buildChatScopeKey("series", action.seriesId, null, "series-home");
-      const chatScopeKey = getChatSessionIdForScope(state.chatSessionIdsByScope, chatBaseScopeKey);
+      const chatSessionScope = resolveChatSessionsForScope(
+        state.chatSessionIdsByScope,
+        state.chatSessionListsByScope,
+        chatBaseScopeKey,
+      );
+      persistChatSessionIdsByScope(chatSessionScope.chatSessionIdsByScope, chatSessionScope.chatSessionListsByScope);
+      const chatScopeKey = chatSessionScope.activeSessionId;
       return {
         ...state,
         tools: null,
@@ -138,6 +153,8 @@ function workspaceReducer(state, action) {
         generationSnapshot: null,
         chatBaseScopeKey,
         chatScopeKey,
+        chatSessionIdsByScope: chatSessionScope.chatSessionIdsByScope,
+        chatSessionListsByScope: chatSessionScope.chatSessionListsByScope,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
         contextUsage: getContextUsageForScope(state.contextUsageByScope, chatScopeKey),
@@ -146,7 +163,13 @@ function workspaceReducer(state, action) {
     }
     case "video_selected": {
       const chatBaseScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
-      const chatScopeKey = getChatSessionIdForScope(state.chatSessionIdsByScope, chatBaseScopeKey);
+      const chatSessionScope = resolveChatSessionsForScope(
+        state.chatSessionIdsByScope,
+        state.chatSessionListsByScope,
+        chatBaseScopeKey,
+      );
+      persistChatSessionIdsByScope(chatSessionScope.chatSessionIdsByScope, chatSessionScope.chatSessionListsByScope);
+      const chatScopeKey = chatSessionScope.activeSessionId;
       return {
         ...state,
         selectedSeriesId: action.seriesId,
@@ -166,6 +189,8 @@ function workspaceReducer(state, action) {
         generationSnapshot: null,
         chatBaseScopeKey,
         chatScopeKey,
+        chatSessionIdsByScope: chatSessionScope.chatSessionIdsByScope,
+        chatSessionListsByScope: chatSessionScope.chatSessionListsByScope,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
         contextUsage: getContextUsageForScope(state.contextUsageByScope, chatScopeKey),
@@ -181,7 +206,13 @@ function workspaceReducer(state, action) {
       };
     case "series_context_selected": {
       const chatBaseScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");
-      const chatScopeKey = getChatSessionIdForScope(state.chatSessionIdsByScope, chatBaseScopeKey);
+      const chatSessionScope = resolveChatSessionsForScope(
+        state.chatSessionIdsByScope,
+        state.chatSessionListsByScope,
+        chatBaseScopeKey,
+      );
+      persistChatSessionIdsByScope(chatSessionScope.chatSessionIdsByScope, chatSessionScope.chatSessionListsByScope);
+      const chatScopeKey = chatSessionScope.activeSessionId;
       return {
         ...state,
         selectedContextType: "series",
@@ -200,6 +231,8 @@ function workspaceReducer(state, action) {
         generationSnapshot: null,
         chatBaseScopeKey,
         chatScopeKey,
+        chatSessionIdsByScope: chatSessionScope.chatSessionIdsByScope,
+        chatSessionListsByScope: chatSessionScope.chatSessionListsByScope,
         chatMessages: getChatMessagesForScope(state.chatThreads, chatScopeKey),
         chatPending: false,
         contextUsage: getContextUsageForScope(state.contextUsageByScope, chatScopeKey),
@@ -392,12 +425,28 @@ function workspaceReducer(state, action) {
         settingsPanelOpen: !state.settingsPanelOpen,
       };
     case "chat_request_started":
-      return appendChatThreadMessage(state, action.chatScopeKey, {
-        id: action.userMessageId,
-        role: "user",
-        content: action.message,
-        meta: "You • Just now",
-      }, true);
+      {
+        const nextState = appendChatThreadMessage(state, action.chatScopeKey, {
+          id: action.userMessageId,
+          role: "user",
+          content: action.message,
+          meta: "You • Just now",
+        }, true);
+        const nextSessionListsByScope = updateChatSessionMetaForScope(
+          nextState.chatSessionListsByScope,
+          nextState.chatBaseScopeKey,
+          action.chatScopeKey,
+          {
+            title: _resolveNextSessionTitle(nextState.chatSessionListsByScope, nextState.chatBaseScopeKey, action.chatScopeKey, action.message),
+            updatedAt: Date.now(),
+          },
+        );
+        persistChatSessionIdsByScope(nextState.chatSessionIdsByScope, nextSessionListsByScope);
+        return {
+          ...nextState,
+          chatSessionListsByScope: nextSessionListsByScope,
+        };
+      }
     case "chat_stream_event_received":
       return applyChatStreamEvent(state, action.chatScopeKey, action.requestId, action.event);
     case "chat_response_received":
@@ -531,10 +580,16 @@ function workspaceReducer(state, action) {
         action.chatBaseScopeKey,
         action.sessionId,
       );
-      persistChatSessionIdsByScope(chatSessionIdsByScope);
+      const chatSessionListsByScope = appendChatSessionForScope(
+        state.chatSessionListsByScope,
+        action.chatBaseScopeKey,
+        action.sessionMeta,
+      );
+      persistChatSessionIdsByScope(chatSessionIdsByScope, chatSessionListsByScope);
       return {
         ...state,
         chatSessionIdsByScope,
+        chatSessionListsByScope,
         chatBaseScopeKey: action.chatBaseScopeKey,
         chatScopeKey: action.sessionId,
         chatMessages: createWelcomeChatMessages(),
@@ -546,16 +601,56 @@ function workspaceReducer(state, action) {
         error: "",
       };
     }
-    case "chat_session_cleared":
+    case "chat_session_selected": {
+      const chatSessionIdsByScope = setChatSessionIdForScope(
+        state.chatSessionIdsByScope,
+        action.chatBaseScopeKey,
+        action.sessionId,
+      );
+      persistChatSessionIdsByScope(chatSessionIdsByScope, state.chatSessionListsByScope);
+      return {
+        ...state,
+        chatSessionIdsByScope,
+        chatBaseScopeKey: action.chatBaseScopeKey,
+        chatScopeKey: action.sessionId,
+        chatMessages: getChatMessagesForScope(state.chatThreads, action.sessionId),
+        chatPending: false,
+        chatRecoveryLoading: false,
+        contextUsage: getContextUsageForScope(state.contextUsageByScope, action.sessionId),
+        contextUsageLoading: false,
+      };
+    }
+    case "chat_session_removed": {
+      const nextSessionListsByScope = removeChatSessionForScope(
+        state.chatSessionListsByScope,
+        action.chatBaseScopeKey,
+        action.sessionId,
+      );
+      const nextChatThreads = removeScopedValue(state.chatThreads, action.sessionId);
+      const nextChatRecoveryByScope = removeScopedValue(state.chatRecoveryByScope, action.sessionId);
+      const nextContextUsageByScope = removeScopedValue(state.contextUsageByScope, action.sessionId);
+      const resolvedSessions = resolveChatSessionsForScope(
+        state.chatSessionIdsByScope,
+        nextSessionListsByScope,
+        action.chatBaseScopeKey,
+      );
+      persistChatSessionIdsByScope(resolvedSessions.chatSessionIdsByScope, resolvedSessions.chatSessionListsByScope);
       return {
         ...state,
         chatPending: false,
-        chatMessages: createWelcomeChatMessages(),
-        chatThreads: setChatMessagesForScope(state.chatThreads, action.sessionId, createWelcomeChatMessages()),
-        contextUsage: null,
+        chatSessionIdsByScope: resolvedSessions.chatSessionIdsByScope,
+        chatSessionListsByScope: resolvedSessions.chatSessionListsByScope,
+        chatScopeKey: resolvedSessions.activeSessionId,
+        chatMessages: getChatMessagesForScope(nextChatThreads, resolvedSessions.activeSessionId),
+        chatThreads: nextChatThreads,
+        chatRecoveryByScope: nextChatRecoveryByScope,
+        contextUsageByScope: nextContextUsageByScope,
+        contextUsage: getContextUsageForScope(nextContextUsageByScope, resolvedSessions.activeSessionId),
         contextUsageLoading: false,
+        chatRecoveryLoading: false,
         error: "",
       };
+    }
     case "context_usage_loading_started":
       return {
         ...state,
@@ -591,6 +686,19 @@ function appendChatThreadMessage(state, chatScopeKey, message, chatPending) {
   return applyChatThreadUpdate(state, chatScopeKey, [...currentMessages, message], chatPending);
 }
 
+function _resolveNextSessionTitle(chatSessionListsByScope, chatBaseScopeKey, sessionId, message) {
+  const currentMeta = getChatSessionMetaForScope(chatSessionListsByScope, chatBaseScopeKey, sessionId);
+  const currentTitle = currentMeta?.title ?? "";
+  if (
+    currentTitle &&
+    currentTitle !== "当前对话" &&
+    !currentTitle.startsWith("新对话")
+  ) {
+    return currentTitle;
+  }
+  return buildChatSessionTitleFromMessage(message);
+}
+
 function transformChatThreadMessages(state, chatScopeKey, transform, chatPending = state.chatPending) {
   const currentMessages = getChatMessagesForScope(state.chatThreads, chatScopeKey);
   return applyChatThreadUpdate(state, chatScopeKey, transform(currentMessages), chatPending);
@@ -621,8 +729,14 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
         upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, false)), true);
     case "tool_completed":
-      return transformChatThreadMessages(state, chatScopeKey, (messages) =>
-        upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, false)), true);
+      return transformChatThreadMessages(state, chatScopeKey, (messages) => {
+        const nextMessages = upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, false));
+        const seekReferenceMessage = buildSeekReferenceMessage(requestId, event);
+        if (seekReferenceMessage == null) {
+          return nextMessages;
+        }
+        return upsertChatMessage(nextMessages, seekReferenceMessage);
+      }, true);
     case "tool_chain_completed":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
         upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, true)), true);
@@ -819,6 +933,28 @@ function buildStatusMeta(label, durationMs) {
     return `Notebook Assistant • ${label}完成`;
   }
   return `Notebook Assistant • ${label}用时 ${durationLabel}`;
+}
+
+function buildSeekReferenceMessage(requestId, event) {
+  const payload = event?.payload?.payload ?? {};
+  if (typeof payload.seek_seconds !== "number") {
+    return null;
+  }
+  const toolCallId = typeof event?.payload?.tool_call_id === "string" ? event.payload.tool_call_id : "seek";
+  return {
+    id: `seek-reference-${requestId}-${toolCallId}`,
+    role: "assistant",
+    kind: "seek-reference",
+    content: "已找到相关视频片段",
+    seekReference: {
+      seconds: payload.seek_seconds,
+      endSeconds: typeof payload.match_end_seconds === "number" ? payload.match_end_seconds : null,
+      matchedText: typeof payload.matched_text === "string" ? payload.matched_text : "",
+      chapterTitle: typeof payload.chapter_title === "string" ? payload.chapter_title : "",
+      query: typeof payload.query === "string" ? payload.query : "",
+    },
+    meta: "Notebook Assistant • 证据定位",
+  };
 }
 
 export function useWorkspaceController() {
@@ -1617,9 +1753,22 @@ export function useWorkspaceController() {
       throw new Error("当前未处于 series 或 video 上下文，无法新建对话。");
     }
     const sessionId = `${chatBaseScopeKey}::${Date.now()}`;
+    const sessionMeta = createNextChatSessionMeta(state.chatSessionListsByScope, chatBaseScopeKey, sessionId);
     dispatch({
       type: "chat_session_started",
       chatBaseScopeKey,
+      sessionId,
+      sessionMeta,
+    });
+  }
+
+  function onSelectChatSession(sessionId) {
+    if (!state.chatBaseScopeKey || !sessionId) {
+      return;
+    }
+    dispatch({
+      type: "chat_session_selected",
+      chatBaseScopeKey: state.chatBaseScopeKey,
       sessionId,
     });
   }
@@ -1639,7 +1788,8 @@ export function useWorkspaceController() {
     try {
       await clearAgentSession(sessionId, context);
       dispatch({
-        type: "chat_session_cleared",
+        type: "chat_session_removed",
+        chatBaseScopeKey: state.chatBaseScopeKey,
         sessionId,
       });
     } catch (error) {
@@ -1648,6 +1798,22 @@ export function useWorkspaceController() {
         message: error instanceof Error ? error.message : "清空对话失败",
       });
     }
+  }
+
+  function onOpenSeekReference(reference) {
+    if (!reference || typeof reference.seconds !== "number") {
+      return;
+    }
+    dispatch({ type: "tool_selected", toolId: "preview" });
+    dispatch({
+      type: "preview_seek_requested",
+      seconds: reference.seconds,
+      endSeconds: typeof reference.endSeconds === "number" ? reference.endSeconds : null,
+      query: typeof reference.query === "string" ? reference.query : "",
+      matchedText: typeof reference.matchedText === "string" ? reference.matchedText : "",
+      chapterTitle: typeof reference.chapterTitle === "string" ? reference.chapterTitle : "",
+      requestId: `${Date.now()}-${reference.seconds}`,
+    });
   }
 
   async function applyAgentStreamSideEffects(event) {
@@ -1717,6 +1883,8 @@ export function useWorkspaceController() {
     previewUrl,
     previewSeekRequest: state.previewSeekRequest,
     chatMessages: state.chatMessages,
+    chatSessions: getChatSessionListForScope(state.chatSessionListsByScope, state.chatBaseScopeKey),
+    activeChatSessionId: state.chatScopeKey,
     chatPending: state.chatPending,
     chatRecoveryLoading: state.chatRecoveryLoading,
     contextUsage: state.contextUsage,
@@ -1736,6 +1904,8 @@ export function useWorkspaceController() {
     onOpenCard,
     onSubmitChat,
     onStartNewChat,
+    onSelectChatSession,
+    onOpenSeekReference,
     onClearChat,
     onGenerateVideo,
     onGenerateMindmap,
@@ -1820,7 +1990,7 @@ function normalizeAgentToolTraceStep(result) {
     case "video_seek":
       return createToolTraceStep(
         result.tool_name,
-        typeof payload.seek_seconds === "number" ? `跳转视频到 ${formatSeconds(payload.seek_seconds)}` : "跳转视频",
+        typeof payload.seek_seconds === "number" ? `定位到 ${formatSeconds(payload.seek_seconds)}` : "定位视频时间点",
       );
     case "generate_overview":
       return createToolTraceStep(result.tool_name, "生成 AI 概况");

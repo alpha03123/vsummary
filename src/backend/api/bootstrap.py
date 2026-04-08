@@ -8,7 +8,7 @@ from typing import Callable
 from backend.agent import AgentContextBudgetService, AgentService, FileAgentSessionStore, InMemoryAgentMemoryStore
 from backend.agent.context import AgentMemoryCompactionService
 from backend.agent.agent.execution import RegistryAgentToolExecutor
-from backend.agent.infrastructure import OpenAICompatibleChatGateway, WorkspaceAgentContextLoader
+from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
 from backend.agent.schemas.tool_calls import ToolName
 from backend.agent.tools.library_info import (
     create_get_video_summary_handler,
@@ -35,6 +35,7 @@ from backend.video_summary.infrastructure.in_memory_progress_tracker import InMe
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rule_based_knowledge_card_generator import RuleBasedKnowledgeCardGenerator
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
+from backend.video_summary.infrastructure.settings import load_settings
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
@@ -146,25 +147,41 @@ class LazyAgentRuntimeProvider:
         signature = self._load_signature()
         with self._lock:
             if self._cached_service is None or self._cached_signature != signature:
+                app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
                 self._cached_service = _build_agent_service(
                     root_dir=self._root_dir,
                     workspace=self._workspace,
                     context_loader=self._context_loader,
                     memory_store=self._memory_store,
                     session_store=self.session_store,
-                    memory_compaction_service=AgentMemoryCompactionService(memory_store=self._memory_store),
+                    app_settings=app_settings,
                 )
                 self._cached_context_budget_service = AgentContextBudgetService(
                     context_loader=self._context_loader,
                     memory_store=self._memory_store,
+                    window_tokens=app_settings.agent_context.window_tokens,
+                    reserved_output_tokens=app_settings.agent_context.reserved_output_tokens,
+                    warning_threshold_ratio=app_settings.agent_context.warning_threshold_ratio,
+                    compact_threshold_ratio=app_settings.agent_context.compact_threshold_ratio,
+                    blocking_threshold_ratio=app_settings.agent_context.blocking_threshold_ratio,
                 )
                 self._cached_signature = signature
             return self._cached_service
 
     def get_context_budget_service(self) -> AgentContextBudgetService:
-        self.get_agent_service()
-        assert self._cached_context_budget_service is not None
-        return self._cached_context_budget_service
+        with self._lock:
+            if self._cached_context_budget_service is None:
+                app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
+                self._cached_context_budget_service = AgentContextBudgetService(
+                    context_loader=self._context_loader,
+                    memory_store=self._memory_store,
+                    window_tokens=app_settings.agent_context.window_tokens,
+                    reserved_output_tokens=app_settings.agent_context.reserved_output_tokens,
+                    warning_threshold_ratio=app_settings.agent_context.warning_threshold_ratio,
+                    compact_threshold_ratio=app_settings.agent_context.compact_threshold_ratio,
+                    blocking_threshold_ratio=app_settings.agent_context.blocking_threshold_ratio,
+                )
+            return self._cached_context_budget_service
 
     def _load_signature(self) -> str:
         dotenv_path = self._root_dir / ".env"
@@ -180,7 +197,7 @@ def _build_agent_service(
     context_loader: WorkspaceAgentContextLoader,
     memory_store: InMemoryAgentMemoryStore,
     session_store: FileAgentSessionStore,
-    memory_compaction_service: AgentMemoryCompactionService,
+    app_settings,
 ) -> AgentService:
     list_series_videos = create_list_series_videos_handler(workspace)
     view_series_candidates = create_view_series_candidates_handler(workspace)
@@ -192,16 +209,27 @@ def _build_agent_service(
     get_video_tools = create_get_video_tools_handler(workspace)
     get_video_transcript = create_get_video_transcript_handler(workspace)
     env_settings = load_env_settings(root_dir)
+    gateway = LiteLLMChatGateway(
+        provider=env_settings.provider,
+        model=env_settings.model,
+        base_url=normalize_openai_base_url(env_settings.base_url),
+        api_key=env_settings.api_key,
+    )
     return AgentService(
-        gateway=OpenAICompatibleChatGateway(
-            model=env_settings.model,
-            base_url=normalize_openai_base_url(env_settings.base_url),
-            api_key=env_settings.api_key,
-        ),
+        gateway=gateway,
         context_loader=context_loader,
         memory_store=memory_store,
         session_store=session_store,
-        memory_compaction_service=memory_compaction_service,
+        memory_compaction_service=AgentMemoryCompactionService(
+            gateway=gateway,
+            memory_store=memory_store,
+            context_window_tokens=app_settings.agent_context.window_tokens,
+            compact_threshold_ratio=app_settings.agent_context.compact_threshold_ratio,
+            keep_tail_messages=app_settings.agent_context.keep_tail_messages,
+        ),
+        projection_max_tokens=int(
+            app_settings.agent_context.window_tokens * app_settings.agent_context.projection_max_tokens_ratio
+        ),
         tool_executor=RegistryAgentToolExecutor(
             registry={
                 ToolName.LIST_SERIES_VIDEOS: list_series_videos,

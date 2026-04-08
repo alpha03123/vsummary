@@ -59,6 +59,12 @@ fat tool 在当前项目里有几个明显问题：
 
 所以现在最自然的演进不是“做更胖的工具”，而是“让 Planner 输出受控的步骤序列”。
 
+补充说明：
+
+- 当前工具定义已经显式区分为 `business_read`、`ui_action`、`runtime_internal`
+- 其中 `runtime_internal` 不再进入模型可见工具面
+- 这意味着“模型可见工具”和“运行时内部状态操作”已经开始分层
+
 ## 4. 设计原则
 
 ### 4.1 工具保持 thin
@@ -154,6 +160,24 @@ Agent 后端只返回结构化动作，不直接承担整条 UI 工作流。
 
 这层工具不负责跳页面，只负责返回结构化信息。
 
+## 5.2.1 当前已落地的工具 plane
+
+当前代码已经把 plane 元信息直接写进了 `ToolDefinition`：
+
+- `business_read`
+- `ui_action`
+- `runtime_internal`
+
+配套脚本：
+
+- [run_tool_catalog_dump.py](/E:/gittools/self/video_include/scripts/run_tool_catalog_dump.py)
+
+该脚本会直接导出：
+
+- 每个 plane 下有哪些工具
+- 每个上下文下的完整工具面
+- 当前模型可见工具面
+
 ## 5.3 暂不引入第三层：超 fat workflow tool
 
 暂不推荐引入类似下面这种工具：
@@ -232,7 +256,7 @@ step 模型会更稳。
 1. Planner 输出顺序 steps
 2. Executor 逐步执行
 3. 每步生成 `step_result`
-4. 所有结果汇总给 responder
+4. 所有结果汇总给轻量回答层
 5. 前端只消费最终 `tool_results` 或 `step_results`
 
 ### 7.1 不做的事
@@ -250,7 +274,7 @@ step 模型会更稳。
 
 - 任一步失败则停止
 - 将失败写入响应
-- 由 responder 告知用户哪一步失败
+- 由回答层告知用户哪一步失败
 - 需要时由用户发起下一轮
 
 这比自动恢复更符合当前 Studio 的可控性。
@@ -327,7 +351,7 @@ class AgentChatResponse(BaseModel):
 
 1. `list_series_videos`
 2. 对每个视频调用 `get_video_summary`
-3. responder 聚合输出
+3. 由轻量回答层聚合输出
 
 注意：
 
@@ -412,6 +436,16 @@ class AgentChatResponse(BaseModel):
 - 黑盒 fat tool
 - 后端直接接管前端 UI 生命周期
 - Planner 执行到一半再次重规划
+
+## 13.1 当前仍未完成的事项
+
+虽然工具 plane 和 provider adapter 已经开始收口，但下面这些事还没有完成：
+
+- `runtime_internal` 工具已经从模型可见平面移除，但遗留执行链仍需继续清理
+- 证据路径已大幅下沉到代码策略，但 lane 粒度仍可继续优化
+- 回答层虽然已经轻量化，但还可以继续减少不必要的模型调用
+
+所以本文仍是“受控 tool chain 的过渡设计”，但当前默认主路径已经是 routed runtime，旧 planner-first 与 responder-first 都已经退出主代码。
 
 ## 14. 一句话总结
 

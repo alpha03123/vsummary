@@ -201,20 +201,27 @@ infrastructure
 路径：
 
 - `src/backend/agent/agent/service.py`
-- `src/backend/agent/agent/planner.py`
 - `src/backend/agent/agent/execution.py`
-- `src/backend/agent/agent/responder.py`
+- `src/backend/agent/runtime/assistant_runtime.py`
+- `src/backend/agent/runtime/tool_loop.py`
+- `src/backend/agent/runtime/lanes/*.py`
 
-这是 Agent 的核心编排层，实际扮演的是 application service 的角色。
+这里已经不再是“service + planner + responder”的旧结构。
+
+当前更准确的理解是：
+
+- `service.py` 是薄应用壳
+- `runtime/assistant_runtime.py` 承担主编排
+- `runtime/tool_loop.py` 承担工具批处理、上下文推进与终态收口
+- `runtime/lanes` 按业务语义拆分 command / evidence / note 等链路
 
 主流程大致是：
 
 1. 加载上下文
-2. 读取记忆
-3. 生成 action plan
-4. 执行工具
-5. 生成 assistant message
-6. 追加记忆
+2. 路由首轮请求
+3. 执行 runtime lane
+4. 生成最终回答
+5. 追加记忆
 
 `AgentService` 是 Agent 子系统的主入口。
 
@@ -247,7 +254,7 @@ infrastructure
 
 - `WorkspaceAgentContextLoader` 通过 `VideoWorkspace` 读取工作区状态
 - `WorkspaceTranscriptLookup` 通过工作区转写数据做检索
-- `OpenAICompatibleChatGateway` 负责调用 LLM
+- `LiteLLMChatGateway` 负责承接当前 provider adapter，并继续向 `ChatGateway` 端口提供文本 completion / stream 能力
 
 所以 Agent 并不直接依赖 `video_summary` 的生成实现，而是依赖它暴露出来的工作区能力。
 
@@ -274,7 +281,7 @@ infrastructure
 - `src/backend/agent/schemas/tool_calls.py`
 - `src/backend/agent/schemas/messages.py`
 
-这里装的不是“视频总结领域实体”，而是 Agent 协议对象，例如：
+这里装的不是“视频总结领域实体”，而是工作台交互协议对象，例如：
 
 - action plan
 - tool call
@@ -302,15 +309,26 @@ infrastructure
 
 这些函数负责把 plan 中的 tool call 变成结构化 tool result，供前端消费。
 
+当前 `tools` 已经显式拆成三个 plane：
+
+- `business_read`
+- `ui_action`
+- `runtime_internal`
+
+其中：
+
+- `business_read` 和 `ui_action` 属于模型可见面
+- `runtime_internal` 只保留给运行时使用，不再进入模型提示词
+
 ### 4.7 `validation`
 
 路径：
 
 - `src/backend/agent/validation/*.py`
 
-这是 Agent 的协议约束层。
+这是运行时动作协议约束层。
 
-它负责防止 Planner 输出不合法动作，确保：
+它负责防止 runtime 生成不合法动作，确保：
 
 - scope 合法
 - tool 调用参数合法
@@ -395,6 +413,8 @@ infrastructure   tools / validation / schemas / memory
 
 无论是 `video_summary/generation/ports.py`，还是 `agent/ports.py`，都表明核心流程已经有“依赖抽象而非依赖实现”的意识。
 
+当前 provider 层也已经从“直接绑 openai SDK”收敛到“通过 LiteLLM adapter 实现 `ChatGateway` 端口”。
+
 ### 7.3 `agent` 没有直接塞进 `video_summary`
 
 这避免了把交互编排逻辑污染到内容主域中。
@@ -435,6 +455,20 @@ infrastructure   tools / validation / schemas / memory
 
 `schemas` 这个名字太泛，后续容易继续长成大杂烩。
 
+### 8.2.1 planner-first 已删除，runtime/lane 成为唯一主路径
+
+当前主链已经变为：
+
+- `service.py` 只负责上下文加载、runtime 委托、消息持久化
+- `runtime/assistant_runtime.py` 负责 routed / event-driven 主循环
+- `runtime/tool_loop.py` 负责工具批处理与上下文推进
+
+这意味着：
+
+- `<<PLAN>>` 协议已经不在主代码中
+- 高价值请求统一进入 routed runtime，而不是先走 planner
+- 后续重点不再是“替换 planner”，而是继续精简 lane 和运行时边界
+
 ### 8.3 `video_summary` 中 `generation`、`library`、`usecases` 并存
 
 目前 `usecases` 目录几乎没有实质内容，说明该子系统的目录演化还没有完全收口。
@@ -468,6 +502,7 @@ infrastructure   tools / validation / schemas / memory
 3. 清理 `video_summary/usecases` 这类未完全收口的目录
 4. 将 `api/app.py` 按功能域拆分 router
 5. 持续保持“应用层依赖端口，基础设施实现端口”的方向
+6. 继续清理遗留过渡件，向更清晰的 runtime/lane 结构收敛
 
 ## 11. 一句话总结
 

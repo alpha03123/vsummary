@@ -86,6 +86,7 @@ class FakeAgentService:
                 context=context_override,
                 user_message=user_message,
                 assistant_message=f"已收到：{user_message}",
+                tool_results=[],
             )
         return AgentTurnResult(
             assistant_message=f"已收到：{user_message}",
@@ -115,6 +116,7 @@ class FakeAgentService:
                 context=context_override,
                 user_message=user_message,
                 assistant_message=f"已收到：{user_message}",
+                tool_results=[],
             )
         yield type("Event", (), {"type": "thinking_started", "payload": {"message": "正在分析当前问题"}})()
         yield type("Event", (), {"type": "thinking_completed", "payload": {"summary": f"session={session_id}", "duration_ms": 5}})()
@@ -659,7 +661,7 @@ show_takeaways = true
         self.assertEqual(payload["scope_type"], "video")
         self.assertEqual(payload["memory_key"], "video|series-a|advanced|overview")
         self.assertGreater(payload["estimated_total_tokens"], 0)
-        self.assertEqual(payload["window_tokens"], 200000)
+        self.assertEqual(payload["window_tokens"], 1000000)
         self.assertEqual(payload["reserved_output_tokens"], 20000)
         self.assertEqual(
             [source["id"] for source in payload["sources"]],

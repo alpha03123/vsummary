@@ -182,7 +182,6 @@ describe("useWorkspaceController", () => {
           status: "ok",
           duration_ms: 6,
           payload: {
-            selected_tool: "video",
             query: "百度地图 API Key",
             seek_seconds: 128,
             match_end_seconds: 146,
@@ -265,7 +264,7 @@ describe("useWorkspaceController", () => {
       },
       expect.any(Function),
     );
-    await waitFor(() => expect(result.current.state.selectedToolId).toBe("preview"));
+    expect(result.current.state.selectedToolId).toBe("studio");
     expect(result.current.previewSeekRequest).toEqual(
       expect.objectContaining({
         seconds: 128,
@@ -275,6 +274,16 @@ describe("useWorkspaceController", () => {
         chapterTitle: "准备工作",
       }),
     );
+    expect(result.current.chatMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "seek-reference",
+        seekReference: expect.objectContaining({
+          seconds: 128,
+          endSeconds: 146,
+          matchedText: "后续项目会用到百度地图 API，需要提前申请 API Key。",
+        }),
+      }),
+    ]));
     expect(result.current.chatMessages.at(-1)).toEqual(
       expect.objectContaining({
         role: "assistant",
@@ -367,6 +376,99 @@ describe("useWorkspaceController", () => {
     );
   });
 
+  it("opens preview only after the user clicks a seek reference", async () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+    act(() => {
+      result.current.onSelectVideo("series-a", "video-1");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("百度地图 API Key 在视频什么位置？");
+    });
+
+    const seekReference = result.current.chatMessages.find((message) => message.kind === "seek-reference")?.seekReference;
+    expect(result.current.state.selectedToolId).toBe("studio");
+
+    act(() => {
+      result.current.onOpenSeekReference(seekReference);
+    });
+
+    expect(result.current.state.selectedToolId).toBe("preview");
+    expect(result.current.previewSeekRequest).toEqual(
+      expect.objectContaining({
+        seconds: 128,
+        endSeconds: 146,
+      }),
+    );
+  });
+
+  it("restores the previously active chat session for the selected scope", async () => {
+    window.localStorage.setItem(
+      "video-include.chat-sessions",
+      JSON.stringify({
+        activeSessionIdsByScope: {
+          "series|series-a|series-home": "series|series-a|series-home::2",
+        },
+        sessionListsByScope: {
+          "series|series-a|series-home": [
+            {
+              id: "series|series-a|series-home::2",
+              title: "第二个问题",
+              createdAt: 2,
+              updatedAt: 3,
+            },
+            {
+              id: "series|series-a|series-home",
+              title: "当前对话",
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ],
+        },
+      }),
+    );
+    workspaceApi.loadAgentSessionRecovery.mockResolvedValueOnce({
+      sessionId: "series|series-a|series-home::2",
+      restored: true,
+      memoryKey: "series|series-a|series-home::2",
+      updatedAt: "2026-04-05T10:00:00Z",
+      messageCount: 2,
+      messages: [
+        {
+          id: "recovered-series|series-a|series-home::2-0",
+          role: "user",
+          content: "第二个问题",
+          meta: "You • 已恢复",
+        },
+        {
+          id: "recovered-series|series-a|series-home::2-1",
+          role: "assistant",
+          content: "第二个回答",
+          meta: "Notebook Assistant • 已恢复",
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await waitFor(() => expect(result.current.activeChatSessionId).toBe("series|series-a|series-home::2"));
+    await waitFor(() => expect(result.current.chatMessages.some((message) => message.content === "第二个回答")).toBe(true));
+    expect(result.current.chatSessions).toEqual([
+      expect.objectContaining({ id: "series|series-a|series-home::2", title: "第二个问题" }),
+      expect.objectContaining({ id: "series|series-a|series-home", title: "当前对话" }),
+    ]);
+  });
+
   it("starts a new chat session and clears the visible history", async () => {
     const { result } = renderHook(() => useWorkspaceController());
 
@@ -390,9 +492,77 @@ describe("useWorkspaceController", () => {
         role: "assistant",
       }),
     ]);
+    expect(result.current.chatSessions).toHaveLength(2);
+    expect(result.current.activeChatSessionId).toContain("::");
   });
 
-  it("clears the current chat session through the api", async () => {
+  it("switches between chat sessions within the same scope", async () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("第一个问题");
+    });
+    const firstSessionId = result.current.activeChatSessionId;
+
+    act(() => {
+      result.current.onStartNewChat();
+    });
+    const secondSessionId = result.current.activeChatSessionId;
+
+    await act(async () => {
+      await result.current.onSubmitChat("第二个问题");
+    });
+
+    act(() => {
+      result.current.onSelectChatSession(firstSessionId);
+    });
+
+    expect(firstSessionId).not.toBe(secondSessionId);
+    expect(result.current.chatMessages.some((message) => message.content === "第一个问题")).toBe(true);
+    expect(result.current.chatMessages.some((message) => message.content === "第二个问题")).toBe(false);
+  });
+
+  it("deletes only the active chat session", async () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("第一个问题");
+    });
+    const firstSessionId = result.current.activeChatSessionId;
+
+    act(() => {
+      result.current.onStartNewChat();
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("第二个问题");
+    });
+    const secondSessionId = result.current.activeChatSessionId;
+
+    await act(async () => {
+      await result.current.onClearChat();
+    });
+
+    expect(workspaceApi.clearAgentSession).toHaveBeenCalledWith(
+      secondSessionId,
+      expect.any(Object),
+    );
+    expect(result.current.chatSessions.some((session) => session.id === secondSessionId)).toBe(false);
+    expect(result.current.activeChatSessionId).toBe(firstSessionId);
+    expect(result.current.chatMessages.some((message) => message.content === "第一个问题")).toBe(true);
+  });
+
+  it("recreates a fresh default session when deleting the last chat session", async () => {
     const { result } = renderHook(() => useWorkspaceController());
 
     await waitFor(() => expect(result.current.state.loading).toBe(false));
@@ -403,22 +573,30 @@ describe("useWorkspaceController", () => {
     await act(async () => {
       await result.current.onSubmitChat("这个系列先看哪一节？");
     });
+    const deletedSessionId = result.current.state.chatScopeKey;
 
     await act(async () => {
       await result.current.onClearChat();
     });
 
     expect(workspaceApi.clearAgentSession).toHaveBeenCalledWith(
-      result.current.state.chatScopeKey,
+      deletedSessionId,
       {
         scope_type: "series",
         series_id: "series-a",
         series_title: "Series A",
         video_id: null,
         video_title: null,
-        selected_tool: "preview",
+        selected_tool: "series-home",
       },
     );
+    expect(result.current.chatSessions).toEqual([
+      expect.objectContaining({
+        id: "series|series-a|series-home",
+        title: "当前对话",
+      }),
+    ]);
+    expect(result.current.activeChatSessionId).toBe("series|series-a|series-home");
     expect(result.current.chatMessages).toEqual([
       expect.objectContaining({
         id: "assistant-welcome",

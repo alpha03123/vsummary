@@ -9,12 +9,14 @@ from backend.agent.schemas.tool_calls import (
     ToolExecutionResult,
     ToolIntentTag,
     ToolName,
+    ToolPlane,
 )
 
 OPEN_SERIES_HOME_TOOL = ToolDefinition(
     name=ToolName.OPEN_SERIES_HOME,
     title="打开系列首页",
     description="切换到当前 series 的主页工具页。",
+    plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.SERIES_DISCOVERY, ToolContextTag.SERIES_INSPECTION),
     intents=(ToolIntentTag.OPEN_TOOL,),
 )
@@ -23,6 +25,7 @@ OPEN_SERIES_OVERVIEW_TOOL = ToolDefinition(
     name=ToolName.OPEN_SERIES_OVERVIEW,
     title="打开系列概览",
     description="切换到当前 series 的概览页，用于查看整个系列的视频分布与覆盖范围。",
+    plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.SERIES_DISCOVERY, ToolContextTag.SERIES_INSPECTION),
     intents=(ToolIntentTag.OPEN_TOOL,),
 )
