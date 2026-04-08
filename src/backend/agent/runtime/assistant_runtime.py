@@ -50,12 +50,11 @@ class AssistantRuntime:
         cached_tool_results: list[ToolExecutionResult],
     ) -> RuntimeExecutionResult:
         del memory_key
-        initial_plan = validate_action_plan(generate_execution_plan(
-            gateway=self._gateway,
+        initial_plan = self._generate_valid_plan(
             context=context,
             user_message=user_message,
             observed_tool_results=cached_tool_results,
-        ), context, cached_tool_results)
+        )
         context, plan, tool_results = self._run_routed_loop(
             context=context,
             initial_plan=initial_plan,
@@ -88,12 +87,11 @@ class AssistantRuntime:
         cached_tool_results: list[ToolExecutionResult],
     ) -> Iterator[AgentStreamEvent]:
         del memory_key
-        initial_plan = validate_action_plan(generate_execution_plan(
-            gateway=self._gateway,
+        initial_plan = self._generate_valid_plan(
             context=context,
             user_message=user_message,
             observed_tool_results=cached_tool_results,
-        ), context, cached_tool_results)
+        )
         runtime_stream = self._stream_routed_loop(
             context=context,
             initial_plan=initial_plan,
@@ -194,12 +192,11 @@ class AssistantRuntime:
                     context = apply_tool_result_to_context(context, result)
 
             final_plan = current_plan
-            current_plan = validate_action_plan(generate_execution_plan(
-                gateway=self._gateway,
+            current_plan = self._generate_valid_plan(
                 context=context,
                 user_message=user_message,
                 observed_tool_results=observed_tool_results,
-            ), context, observed_tool_results)
+            )
 
         return finalize_context_after_turn(context, observed_tool_results), final_plan, observed_tool_results
 
@@ -285,12 +282,11 @@ class AssistantRuntime:
                     )
 
             final_plan = current_plan
-            current_plan = validate_action_plan(generate_execution_plan(
-                gateway=self._gateway,
+            current_plan = self._generate_valid_plan(
                 context=context,
                 user_message=user_message,
                 observed_tool_results=observed_tool_results,
-            ), context, observed_tool_results)
+            )
 
         if observed_tool_results:
             yield AgentStreamEvent(
@@ -302,6 +298,29 @@ class AssistantRuntime:
         )
         return finalize_context_after_turn(context, observed_tool_results), final_plan, observed_tool_results
 
+    def _generate_valid_plan(
+        self,
+        *,
+        context: AgentContext,
+        user_message: str,
+        observed_tool_results: list[ToolExecutionResult],
+    ) -> AgentActionPlan:
+        validation_error: str | None = None
+        for attempt in range(3):
+            plan = generate_execution_plan(
+                gateway=self._gateway,
+                context=context,
+                user_message=user_message,
+                observed_tool_results=observed_tool_results,
+                validation_error=validation_error,
+            )
+            try:
+                return validate_action_plan(plan, context, observed_tool_results)
+            except Exception as error:
+                validation_error = str(error)
+                if attempt == 2:
+                    raise
+        raise RuntimeError("未能生成有效计划。")
 
 def _describe_plan_reason(reason: str, plan: AgentActionPlan) -> str:
     if reason.strip():

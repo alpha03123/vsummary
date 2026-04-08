@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import ChatGateway
-from backend.agent.runtime.json_protocol import parse_json_completion
 from backend.agent.schemas.action_plan import AgentActionPlan, ScopeType
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
@@ -26,8 +25,10 @@ INITIAL_PLANNER_SYSTEM_PROMPT = (
     "   - 要直接回复：direct_response 非空\n"
     "   - 要基于现有证据回答：use_answerer=true\n"
     "7. 如果用户请求混合多个动作，可以在同一轮输出多个 tool_calls。\n"
-    "8. 只输出 JSON，不要输出代码块，不要解释。\n"
-    '9. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
+    "8. 在 series 上下文里，get_video_summary / get_video_transcript / get_video_tools 这类深层读取工具必须带明确 video_id；如果当前还无法确定 video_id，就不要调用这些工具，而是先 list_series_videos，或者直接用 direct_response 说明需要用户进一步明确。\n"
+    "9. open_* / generate_* / save_note 这类动作工具，只有当用户明确要求打开、生成、记录时才调用；普通问答不要调用页面切换工具。\n"
+    "10. 只输出 JSON，不要输出代码块，不要解释。\n"
+    '11. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
 )
 
 
@@ -59,6 +60,7 @@ def generate_execution_plan(
     context: AgentContext,
     user_message: str,
     observed_tool_results: list[ToolExecutionResult],
+    validation_error: str | None = None,
 ) -> AgentActionPlan:
     messages = [
         AgentChatMessage(role="system", content=INITIAL_PLANNER_SYSTEM_PROMPT),
@@ -104,6 +106,16 @@ def generate_execution_plan(
             ),
         ),
     ]
+    if validation_error:
+        messages.append(
+            AgentChatMessage(
+                role="user",
+                content=(
+                    "上一轮计划没有通过本地校验，请修正后重新输出。\n"
+                    f"校验错误：{validation_error}"
+                ),
+            )
+        )
     try:
         payload = gateway.create_structured_completion(messages, PlannerOutput)
         return _convert_planner_output(payload)

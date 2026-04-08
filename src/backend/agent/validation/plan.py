@@ -62,6 +62,10 @@ def _validate_plan_against_context(plan: AgentActionPlan, context: AgentContext)
             raise AgentPlanError(
                 f"{current_stage} 阶段不允许工具 {call.tool_name.value}。"
             )
+        if context.scope_type == "series" and tool_requires_video_id(call.tool_name):
+            video_id = getattr(call, "video_id", None)
+            if not isinstance(video_id, str) or not video_id.strip():
+                raise AgentPlanError(f"{call.tool_name.value} 在 series 上下文中必须提供明确的 video_id。")
         if context.scope_type == "video":
             continue
         if (

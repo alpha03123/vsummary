@@ -34,4 +34,3 @@ def _resolve_tool_context_tags(context: AgentContext) -> tuple[ToolContextTag, .
         ToolContextTag.SERIES_DISCOVERY,
         ToolContextTag.SERIES_INSPECTION,
     )
-
