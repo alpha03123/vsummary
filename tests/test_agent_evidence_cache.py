@@ -15,7 +15,7 @@ from backend.agent.agent.service import AgentService
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
@@ -39,8 +39,13 @@ class _CacheGateway:
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
         system_prompt = messages[0].content
-        if REQUEST_ROUTER_SYSTEM_PROMPT in system_prompt:
+        if INITIAL_PLANNER_SYSTEM_PROMPT in system_prompt:
             self.router_calls += 1
+            observed = messages[-1].content
+            if '"tool_name": "get_video_summary"' in observed or '"tool_name": "list_series_videos"' in observed:
+                if '"tool_name": "list_series_videos"' in observed and '"tool_name": "get_video_summary"' not in observed:
+                    return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"},{"tool_name":"get_video_summary","video_id":"video-2"}],"reason":"先批量读取系列概况。","direct_response":"","use_answerer":false}'
+                return '{"scope_type":"video","tool_calls":[],"reason":"已有足够证据。","direct_response":"","use_answerer":true}'
             return self._route_payload
         if ROUTED_ANSWERER_SYSTEM_PROMPT in system_prompt:
             self.answerer_calls += 1
@@ -51,7 +56,7 @@ class _CacheGateway:
 class AgentEvidenceCacheTests(unittest.TestCase):
     def test_video_summary_reuses_cached_summary_on_second_turn(self) -> None:
         gateway = _CacheGateway(
-            route_payload='{"kind":"video_summary","tool_name":null,"reason":"这是视频概括型问题。"}',
+            route_payload='{"scope_type":"video","tool_calls":[{"tool_name":"get_video_summary","series_id":"series-a","video_id":"video-1"}],"reason":"这是视频概括型问题。","direct_response":"","use_answerer":false}',
             answer_text="这是视频概括。",
         )
         summary_calls = 0
@@ -103,7 +108,7 @@ class AgentEvidenceCacheTests(unittest.TestCase):
 
     def test_series_summary_reuses_cached_list_and_summaries_on_second_turn(self) -> None:
         gateway = _CacheGateway(
-            route_payload='{"kind":"series_summary","tool_name":null,"reason":"这是系列概括型问题。"}',
+            route_payload='{"scope_type":"series","tool_calls":[{"tool_name":"list_series_videos","series_id":"series-a"}],"reason":"这是系列概括型问题。","direct_response":"","use_answerer":false}',
             answer_text="这是系列概括。",
         )
         list_calls = 0

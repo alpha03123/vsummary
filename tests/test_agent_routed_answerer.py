@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -14,7 +15,7 @@ from backend.agent.agent.service import AgentService
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
@@ -37,8 +38,14 @@ class _RoutedAnswerGateway:
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
         system_prompt = messages[0].content
-        if REQUEST_ROUTER_SYSTEM_PROMPT in system_prompt:
+        if INITIAL_PLANNER_SYSTEM_PROMPT in system_prompt:
             self.router_calls += 1
+            payload = json.loads(messages[-1].content)
+            observed = payload.get("observed_tool_results", [])
+            if any(item.get("tool_name") == "get_video_summary" for item in observed):
+                return '{"scope_type":"video","tool_calls":[],"reason":"证据已足够。","direct_response":"","use_answerer":true}'
+            if any(item.get("tool_name") == "list_series_videos" for item in observed):
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"},{"tool_name":"get_video_summary","video_id":"video-2"}],"reason":"先批量读取系列概况。","direct_response":"","use_answerer":false}'
             return self._route_payload
         if ROUTED_ANSWERER_SYSTEM_PROMPT in system_prompt:
             self.answerer_calls += 1
@@ -49,7 +56,7 @@ class _RoutedAnswerGateway:
 class AgentRoutedAnswererTests(unittest.TestCase):
     def test_video_summary_route_uses_lightweight_answerer(self) -> None:
         gateway = _RoutedAnswerGateway(
-            route_payload='{"kind":"video_summary","tool_name":null,"reason":"这是视频概括型问题。"}',
+            route_payload='{"scope_type":"video","tool_calls":[{"tool_name":"get_video_summary","series_id":"series-a","video_id":"video-1"}],"reason":"这是视频概括型问题。","direct_response":"","use_answerer":false}',
             answer_text="这个视频主要在讲百度地图 AK 的准备步骤，以及它为什么是后续能力接入的前置条件。",
         )
 
@@ -86,12 +93,12 @@ class AgentRoutedAnswererTests(unittest.TestCase):
         result = service.run("video|series-a|video-1|overview", "这个视频主要讲了什么？")
 
         self.assertEqual(result.assistant_message, gateway._answer_text)
-        self.assertEqual(gateway.router_calls, 1)
+        self.assertEqual(gateway.router_calls, 2)
         self.assertEqual(gateway.answerer_calls, 1)
 
     def test_series_summary_route_uses_lightweight_answerer_after_batch_reads(self) -> None:
         gateway = _RoutedAnswerGateway(
-            route_payload='{"kind":"series_summary","tool_name":null,"reason":"这是系列概括型问题。"}',
+            route_payload='{"scope_type":"series","tool_calls":[{"tool_name":"list_series_videos","series_id":"series-a"}],"reason":"这是系列概括型问题。","direct_response":"","use_answerer":false}',
             answer_text="这个系列先讲准备工作，再进入不同 Agent 框架的定位与能力差异。",
         )
 
@@ -147,7 +154,7 @@ class AgentRoutedAnswererTests(unittest.TestCase):
             [item.tool_name for item in result.tool_results],
             [ToolName.LIST_SERIES_VIDEOS, ToolName.GET_VIDEO_SUMMARY, ToolName.GET_VIDEO_SUMMARY],
         )
-        self.assertEqual(gateway.router_calls, 1)
+        self.assertEqual(gateway.router_calls, 3)
         self.assertEqual(gateway.answerer_calls, 1)
 
 

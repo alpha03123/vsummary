@@ -4,8 +4,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult, ToolName
-from backend.agent.tools import BUSINESS_READ_TOOL_DEFINITIONS, UI_ACTION_TOOL_DEFINITIONS
+from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult
 
 
 class IntentType(str, Enum):
@@ -25,37 +24,13 @@ class ScopeType(str, Enum):
     VIDEO = "video"
 
 
-PlannerToolName = Enum(
-    "PlannerToolName",
-    {
-        tool.name.name: tool.name.value
-        for tool in [
-            *BUSINESS_READ_TOOL_DEFINITIONS,
-            *UI_ACTION_TOOL_DEFINITIONS,
-        ]
-    },
-    type=str,
-)
-
-
-class PlannerToolCall(BaseModel):
-    tool_name: PlannerToolName
-    series_id: str | None = None
-    video_id: str | None = None
-    video_ids: list[str] = Field(default_factory=list)
-    seek_seconds: float | None = None
-    note_title: str | None = None
-    note_content: str | None = None
-    query: str | None = None
-    reason: str = ""
-
-
 class AgentActionPlan(BaseModel):
-    intent_type: IntentType
     scope_type: ScopeType
-    assistant_message: str = ""
     tool_calls: list[ToolCall] = Field(default_factory=list)
     reason: str = ""
+    direct_response: str = ""
+    use_answerer: bool = False
+    intent_type: IntentType | None = None
     out_of_scope_reason: str = ""
 
 

@@ -11,13 +11,14 @@ if str(SRC) not in sys.path:
 
 from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
 from backend.agent.runtime.model_visible_context import render_model_visible_context_json
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 
 
 class AgentPromptContractTests(unittest.TestCase):
-    def test_request_router_prompt_no_longer_mentions_planner_fallback(self) -> None:
-        self.assertNotIn("planner", REQUEST_ROUTER_SYSTEM_PROMPT.lower())
-        self.assertNotIn("fallback", REQUEST_ROUTER_SYSTEM_PROMPT.lower())
+    def test_initial_planner_prompt_describes_direct_plan_instead_of_route_labels(self) -> None:
+        self.assertNotIn("路由", INITIAL_PLANNER_SYSTEM_PROMPT)
+        self.assertNotIn("分类", INITIAL_PLANNER_SYSTEM_PROMPT)
+        self.assertIn("直接决定下一步", INITIAL_PLANNER_SYSTEM_PROMPT)
 
     def test_model_visible_context_json_hides_runtime_internal_state(self) -> None:
         rendered = render_model_visible_context_json(

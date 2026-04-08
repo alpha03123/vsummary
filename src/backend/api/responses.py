@@ -324,20 +324,16 @@ class ToolExecutionResultResponse(BaseModel):
 
 class AgentChatResponse(BaseModel):
     assistant_message: str
-    intent_type: str
     scope_type: str
     reason: str
-    out_of_scope_reason: str
     tool_results: list[ToolExecutionResultResponse]
 
     @classmethod
     def from_result(cls, result: AgentTurnResult) -> "AgentChatResponse":
         return cls(
             assistant_message=result.assistant_message,
-            intent_type=result.plan.intent_type.value,
             scope_type=result.plan.scope_type.value,
             reason=result.plan.reason,
-            out_of_scope_reason=result.plan.out_of_scope_reason,
             tool_results=[
                 ToolExecutionResultResponse(
                     tool_name=item.tool_name.value,

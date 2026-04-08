@@ -4,7 +4,6 @@ import json
 import re
 
 from backend.agent.memory.context import AgentContext
-from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
 
@@ -18,7 +17,6 @@ def build_prompt_projection(
     *,
     context: AgentContext,
     user_message: str,
-    plan: AgentActionPlan,
     tool_results: list[ToolExecutionResult],
     max_tokens: int | None = None,
 ) -> dict[str, object]:
@@ -27,7 +25,6 @@ def build_prompt_projection(
         "series_id": context.series_id,
         "video_id": context.video_id,
         "user_message": user_message,
-        "answer_goal": _describe_answer_goal(plan),
         "evidence": [
             _project_tool_result(user_message=user_message, result=result)
             for result in tool_results
@@ -42,14 +39,12 @@ def estimate_prompt_projection_tokens(
     *,
     context: AgentContext,
     user_message: str,
-    plan: AgentActionPlan,
     tool_results: list[ToolExecutionResult],
     max_tokens: int | None = None,
 ) -> int:
     payload = build_prompt_projection(
         context=context,
         user_message=user_message,
-        plan=plan,
         tool_results=tool_results,
         max_tokens=max_tokens,
     )
@@ -229,22 +224,6 @@ def _score_segment(text: str, query_terms: list[str]) -> int:
         if term in lowered or term in text:
             score += max(1, len(term))
     return score
-
-
-def _describe_answer_goal(plan: AgentActionPlan) -> str:
-    if plan.intent_type.value == "series_answer":
-        return "基于整个系列的证据，回答用户的系列级问题。"
-    if plan.intent_type.value == "series_locate":
-        return "指出系列里哪些视频提到用户关心的概念；如果 transcript 证据足够，尽量给出大致时间位置。"
-    if plan.intent_type.value == "answer_question":
-        return "基于当前视频证据，直接回答用户问题。"
-    if plan.intent_type.value == "seek_video":
-        return "先回答用户关心的内容，再补充它在视频中的时间位置和命中片段；除非用户明确只要时间点，否则不要只回复定位结果。"
-    if plan.intent_type.value == "save_note":
-        return "基于当前视频证据，说明笔记整理结果。"
-    return "基于当前证据，直接给出最终回答。"
-
-
 def _estimate_tokens(value: object) -> int:
     text = json.dumps(value, ensure_ascii=False, separators=(",", ":")).strip()
     if not text:

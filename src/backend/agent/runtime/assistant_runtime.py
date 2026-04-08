@@ -6,14 +6,7 @@ from time import perf_counter
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentToolExecutor, ChatGateway
-from backend.agent.runtime.evidence_policy import build_followup_plan
-from backend.agent.runtime.lanes import (
-    build_deterministic_assistant_message,
-    build_initial_route_plan,
-    build_save_note_followup_plan,
-    build_seek_followup_plan,
-    build_series_locate_followup_plan,
-)
+from backend.agent.runtime.planner import generate_execution_plan
 from backend.agent.runtime.routed_answerer import generate_routed_assistant_message, stream_routed_assistant_message
 from backend.agent.session.evidence_cache import build_cached_result_index, build_result_cache_key, filter_cached_tool_calls
 from backend.agent.runtime.tool_loop import (
@@ -25,6 +18,7 @@ from backend.agent.runtime.tool_loop import (
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.stream_events import AgentStreamEvent
 from backend.agent.schemas.tool_calls import ToolExecutionResult
+from backend.agent.validation.plan import validate_action_plan
 
 
 @dataclass(frozen=True)
@@ -56,13 +50,12 @@ class AssistantRuntime:
         cached_tool_results: list[ToolExecutionResult],
     ) -> RuntimeExecutionResult:
         del memory_key
-        initial_plan = build_initial_route_plan(
+        initial_plan = validate_action_plan(generate_execution_plan(
             gateway=self._gateway,
             context=context,
             user_message=user_message,
-            observed_tool_results=[],
-            last_tool_plan=None,
-        )
+            observed_tool_results=cached_tool_results,
+        ), context, cached_tool_results)
         context, plan, tool_results = self._run_routed_loop(
             context=context,
             initial_plan=initial_plan,
@@ -70,13 +63,12 @@ class AssistantRuntime:
             cached_tool_results=cached_tool_results,
         )
 
-        assistant_message = build_deterministic_assistant_message(plan, tool_results)
-        if assistant_message is None:
+        assistant_message = plan.direct_response.strip()
+        if not assistant_message:
             assistant_message = generate_routed_assistant_message(
                 gateway=self._gateway,
                 context=context,
                 user_message=user_message,
-                plan=plan,
                 tool_results=tool_results,
                 projection_max_tokens=self._projection_max_tokens,
             )
@@ -96,13 +88,12 @@ class AssistantRuntime:
         cached_tool_results: list[ToolExecutionResult],
     ) -> Iterator[AgentStreamEvent]:
         del memory_key
-        initial_plan = build_initial_route_plan(
+        initial_plan = validate_action_plan(generate_execution_plan(
             gateway=self._gateway,
             context=context,
             user_message=user_message,
-            observed_tool_results=[],
-            last_tool_plan=None,
-        )
+            observed_tool_results=cached_tool_results,
+        ), context, cached_tool_results)
         runtime_stream = self._stream_routed_loop(
             context=context,
             initial_plan=initial_plan,
@@ -118,8 +109,8 @@ class AssistantRuntime:
                 break
             yield event
 
-        assistant_message = build_deterministic_assistant_message(plan, tool_results)
-        if assistant_message is None:
+        assistant_message = plan.direct_response.strip()
+        if not assistant_message:
             answer_started_at = perf_counter()
             yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
             chunks: list[str] = []
@@ -127,7 +118,6 @@ class AssistantRuntime:
                 gateway=self._gateway,
                 context=context,
                 user_message=user_message,
-                plan=plan,
                 tool_results=tool_results,
                 projection_max_tokens=self._projection_max_tokens,
             ):
@@ -174,8 +164,15 @@ class AssistantRuntime:
         cached_result_index = build_cached_result_index(cached_tool_results)
         final_plan = initial_plan
         current_plan = initial_plan
+        planning_round = 0
 
         while True:
+            planning_round += 1
+            if planning_round > 8:
+                raise RuntimeError("Agent 计划轮次过多，可能出现了无法收敛的循环。")
+            if current_plan.direct_response.strip() or current_plan.use_answerer:
+                final_plan = current_plan
+                break
             for batch in partition_tool_calls(current_plan.tool_calls):
                 executable_calls = filter_cached_tool_calls(
                     batch,
@@ -197,15 +194,12 @@ class AssistantRuntime:
                     context = apply_tool_result_to_context(context, result)
 
             final_plan = current_plan
-            next_plan = self._build_followup_plan(
+            current_plan = validate_action_plan(generate_execution_plan(
+                gateway=self._gateway,
                 context=context,
                 user_message=user_message,
                 observed_tool_results=observed_tool_results,
-                last_tool_plan=current_plan,
-            )
-            if next_plan is None:
-                break
-            current_plan = next_plan
+            ), context, observed_tool_results)
 
         return finalize_context_after_turn(context, observed_tool_results), final_plan, observed_tool_results
 
@@ -224,6 +218,7 @@ class AssistantRuntime:
         overall_tool_started_at = perf_counter()
         tool_event_index = 0
         emitted_thinking_for_route = False
+        planning_round = 0
 
         while True:
             if not emitted_thinking_for_route:
@@ -237,6 +232,13 @@ class AssistantRuntime:
                     },
                 )
                 emitted_thinking_for_route = True
+
+            planning_round += 1
+            if planning_round > 8:
+                raise RuntimeError("Agent 计划轮次过多，可能出现了无法收敛的循环。")
+            if current_plan.direct_response.strip() or current_plan.use_answerer:
+                final_plan = current_plan
+                break
 
             for batch in partition_tool_calls(current_plan.tool_calls):
                 executable_calls = filter_cached_tool_calls(
@@ -283,15 +285,12 @@ class AssistantRuntime:
                     )
 
             final_plan = current_plan
-            next_plan = self._build_followup_plan(
+            current_plan = validate_action_plan(generate_execution_plan(
+                gateway=self._gateway,
                 context=context,
                 user_message=user_message,
                 observed_tool_results=observed_tool_results,
-                last_tool_plan=current_plan,
-            )
-            if next_plan is None:
-                break
-            current_plan = next_plan
+            ), context, observed_tool_results)
 
         if observed_tool_results:
             yield AgentStreamEvent(
@@ -300,50 +299,8 @@ class AssistantRuntime:
                     "count": len(observed_tool_results),
                     "duration_ms": _elapsed_ms(overall_tool_started_at),
                 },
-            )
+        )
         return finalize_context_after_turn(context, observed_tool_results), final_plan, observed_tool_results
-
-    def _build_followup_plan(
-        self,
-        *,
-        context: AgentContext,
-        user_message: str,
-        observed_tool_results: list[ToolExecutionResult],
-        last_tool_plan: AgentActionPlan,
-    ) -> AgentActionPlan | None:
-        next_plan = build_seek_followup_plan(
-            gateway=self._gateway,
-            user_message=user_message,
-            observed_tool_results=observed_tool_results,
-            last_tool_plan=last_tool_plan,
-        )
-        if next_plan is not None:
-            return next_plan
-
-        next_plan = build_series_locate_followup_plan(
-            gateway=self._gateway,
-            user_message=user_message,
-            observed_tool_results=observed_tool_results,
-            last_tool_plan=last_tool_plan,
-        )
-        if next_plan is not None:
-            return next_plan
-
-        next_plan = build_save_note_followup_plan(
-            gateway=self._gateway,
-            context=context,
-            user_message=user_message,
-            observed_tool_results=observed_tool_results,
-            last_tool_plan=last_tool_plan,
-        )
-        if next_plan is not None:
-            return next_plan
-
-        return build_followup_plan(
-            context=context,
-            observed_tool_results=observed_tool_results,
-            last_tool_plan=last_tool_plan,
-        )
 
 
 def _describe_plan_reason(reason: str, plan: AgentActionPlan) -> str:
@@ -351,6 +308,8 @@ def _describe_plan_reason(reason: str, plan: AgentActionPlan) -> str:
         return reason.strip()
     if plan.tool_calls:
         return "先执行工具链，再基于工具结果生成最终回答。"
+    if plan.direct_response.strip():
+        return "当前不需要继续调用工具，直接给出自然回复。"
     return "当前问题不需要调用工具，直接组织回答。"
 
 

@@ -631,7 +631,6 @@ show_takeaways = true
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["assistant_message"], "已收到：打开概况")
-        self.assertEqual(payload["intent_type"], "open_tool")
         self.assertEqual(payload["scope_type"], "video")
         self.assertEqual(payload["tool_results"][0]["tool_name"], "open_overview")
         self.assertEqual(payload["tool_results"][0]["payload"]["selected_tool"], "overview")

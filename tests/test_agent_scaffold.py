@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -15,10 +16,9 @@ from backend.agent.agent.service import _apply_tool_result_to_context
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
-from backend.agent.runtime.video_seek_locator import VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT
-from backend.agent.schemas.action_plan import AgentActionPlan, IntentType, ScopeType
+from backend.agent.schemas.action_plan import AgentActionPlan, ScopeType
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import GetVideoSummaryCall, ToolExecutionResult, ToolName
 from backend.agent.session.store import FileAgentSessionStore
@@ -36,18 +36,34 @@ class FakeGateway:
         system_prompt = messages[0].content if messages else ""
         user_message = messages[-1].content if messages else ""
 
-        if REQUEST_ROUTER_SYSTEM_PROMPT in system_prompt:
-            if '"scope_type": "series"' in user_message:
-                return '{"kind":"series_summary","tool_name":null,"reason":"这是系列概括型问题。"}'
-            if "原话" in user_message:
-                return '{"kind":"video_transcript","tool_name":null,"reason":"这是原话型问题。"}'
-            if "视频哪里" in user_message or "什么位置" in user_message:
-                return '{"kind":"video_seek","tool_name":null,"reason":"这是视频定位请求。"}'
-            if "打开概况" in user_message:
-                return '{"kind":"open_tool","tool_name":"open_overview","reason":"这是明确的打开概况请求。"}'
-            return '{"kind":"video_summary","tool_name":null,"reason":"这是概括型问题。"}'
-        if VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT in system_prompt:
-            return '{"seek_seconds":320,"match_end_seconds":null,"matched_text":"命中片段","chapter_title":"","reason":"根据 transcript 找到最相关时间点。"}'
+        if INITIAL_PLANNER_SYSTEM_PROMPT in system_prompt:
+            payload = json.loads(user_message)
+            observed = payload.get("observed_tool_results", [])
+            context = payload.get("context", {})
+            if any(item.get("tool_name") == "video_seek" for item in observed):
+                return '{"scope_type":"video","tool_calls":[],"reason":"动作已完成。","direct_response":"这是最终回答","use_answerer":false}'
+            if any(item.get("tool_name") == "open_overview" for item in observed):
+                return '{"scope_type":"video","tool_calls":[],"reason":"动作已完成。","direct_response":"这是最终回答","use_answerer":false}'
+            if any(item.get("tool_name") == "get_video_transcript" for item in observed):
+                if "视频哪里" in payload.get("user_message", "") or "什么位置" in payload.get("user_message", ""):
+                    return '{"scope_type":"video","tool_calls":[{"tool_name":"video_seek","seek_seconds":320}],"reason":"已经根据转写找到相关时间点。","direct_response":"","use_answerer":false}'
+                return '{"scope_type":"video","tool_calls":[],"reason":"证据已足够。","direct_response":"","use_answerer":true}'
+            if any(item.get("tool_name") == "get_video_summary" for item in observed):
+                return '{"scope_type":"video","tool_calls":[],"reason":"证据已足够。","direct_response":"","use_answerer":true}'
+            if any(item.get("tool_name") == "list_series_videos" for item in observed):
+                videos = payload.get("observed_tool_results", [{}])[-1].get("payload", {}).get("videos", [])
+                if len(videos) > 1:
+                    return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"},{"tool_name":"get_video_summary","video_id":"video-2"}],"reason":"先批量读取已列出视频的概况。","direct_response":"","use_answerer":false}'
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"}],"reason":"先读取视频概况。","direct_response":"","use_answerer":false}'
+            if context.get("scope_type") == "series":
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"list_series_videos","series_id":"series-a"}],"reason":"这是系列概括型问题。","direct_response":"","use_answerer":false}'
+            if "原话" in payload.get("user_message", ""):
+                return '{"scope_type":"video","tool_calls":[{"tool_name":"get_video_transcript","series_id":"series-a","video_id":"video-1"}],"reason":"这是原话型问题。","direct_response":"","use_answerer":false}'
+            if "视频哪里" in payload.get("user_message", "") or "什么位置" in payload.get("user_message", ""):
+                return '{"scope_type":"video","tool_calls":[{"tool_name":"video_seek","seek_seconds":320}],"reason":"已经根据转写找到相关时间点。","direct_response":"","use_answerer":false}'
+            if "打开概况" in payload.get("user_message", ""):
+                return '{"scope_type":"video","tool_calls":[{"tool_name":"open_overview"}],"reason":"这是明确的打开概况请求。","direct_response":"","use_answerer":false}'
+            return '{"scope_type":"video","tool_calls":[{"tool_name":"get_video_summary","series_id":"series-a","video_id":"video-1"}],"reason":"这是概括型问题。","direct_response":"","use_answerer":false}'
         if ROUTED_ANSWERER_SYSTEM_PROMPT in system_prompt:
             return "这是最终回答"
         return "这是最终回答"
@@ -139,7 +155,6 @@ class AgentScaffoldTests(unittest.TestCase):
 
         result = service.run("session-1", "这个内容在视频哪里？")
 
-        self.assertEqual(result.plan.intent_type, IntentType.SEEK_VIDEO)
         self.assertEqual(result.tool_results[-1].payload["seek_seconds"], 320)
         self.assertEqual(result.assistant_message, "这是最终回答")
 
@@ -176,7 +191,6 @@ class AgentScaffoldTests(unittest.TestCase):
 
         result = service.run("video|series-a|video-1|overview", "这个视频主要讲了什么？")
 
-        self.assertEqual(result.plan.intent_type, IntentType.ANSWER_QUESTION)
         self.assertEqual(executed_calls, ["get_video_summary:video-1"])
 
     def test_video_quote_question_uses_initial_transcript_evidence_plan(self) -> None:
@@ -212,7 +226,6 @@ class AgentScaffoldTests(unittest.TestCase):
 
         result = service.run("video|series-a|video-1|overview", "视频原话里是怎么说的？")
 
-        self.assertEqual(result.plan.intent_type, IntentType.ANSWER_QUESTION)
         self.assertEqual(executed_calls, ["get_video_transcript:video-1"])
 
     def test_executor_allows_video_read_tool_when_inspection_buffer_is_empty(self) -> None:
@@ -301,7 +314,6 @@ class AgentScaffoldTests(unittest.TestCase):
 
         result = service.run("series|series-a|series-home", "这个系列主要讲了哪些主题？")
 
-        self.assertEqual(result.plan.intent_type, IntentType.SERIES_ANSWER)
         self.assertEqual(executed_calls, ["list_series_videos:series-a", "get_video_summary:video-1"])
 
     def test_executor_guard_blocks_deep_tools_before_candidate_selection(self) -> None:
@@ -329,12 +341,11 @@ class AgentScaffoldTests(unittest.TestCase):
             validate_action_plan(
                 AgentActionPlan.model_validate(
                     {
-                        "intent_type": IntentType.SEEK_VIDEO,
+                        "use_answerer": True,
                         "scope_type": ScopeType.VIDEO,
-                        "assistant_message": "",
                         "tool_calls": [{"tool_name": "video_seek"}],
                         "reason": "",
-                        "out_of_scope_reason": "",
+                        "direct_response": "",
                     }
                 ),
                 AgentContext(

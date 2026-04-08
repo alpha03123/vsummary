@@ -241,10 +241,11 @@ class AgentValidationTests(unittest.TestCase):
     def test_open_tool_rejects_empty_first_round(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
-                "intent_type": "open_tool",
                 "scope_type": "video",
                 "tool_calls": [],
                 "reason": "直接结束。",
+                "direct_response": "",
+                "use_answerer": False,
             }
         )
 
@@ -262,10 +263,11 @@ class AgentValidationTests(unittest.TestCase):
     def test_open_tool_allows_empty_terminal_round_after_tool_result(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
-                "intent_type": "open_tool",
                 "scope_type": "video",
                 "tool_calls": [],
                 "reason": "工具已经执行完成，当前只需要回复。",
+                "direct_response": "我已经帮你打开知识卡片。",
+                "use_answerer": False,
             }
         )
 
@@ -286,7 +288,7 @@ class AgentValidationTests(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(validated.intent_type.value, "open_tool")
+        self.assertEqual(validated.direct_response, "我已经帮你打开知识卡片。")
 
 
 if __name__ == "__main__":

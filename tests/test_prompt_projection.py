@@ -11,7 +11,6 @@ if str(SRC) not in sys.path:
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.runtime.prompt_projection import build_prompt_projection
-from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
 
@@ -24,14 +23,6 @@ class PromptProjectionTests(unittest.TestCase):
                 series_id="series-a",
             ),
             user_message="这个系列里哪里讲过 Nacos 3？",
-            plan=AgentActionPlan.model_validate(
-                {
-                    "intent_type": "series_locate",
-                    "scope_type": "series",
-                    "tool_calls": [],
-                    "reason": "定位 Nacos 3",
-                }
-            ),
             tool_results=[
                 ToolExecutionResult(
                     tool_name=ToolName.GET_VIDEO_TRANSCRIPT,
@@ -66,14 +57,6 @@ class PromptProjectionTests(unittest.TestCase):
                 video_id="video-1",
             ),
             user_message="这个视频主要讲了什么？",
-            plan=AgentActionPlan.model_validate(
-                {
-                    "intent_type": "answer_question",
-                    "scope_type": "video",
-                    "tool_calls": [],
-                    "reason": "概括视频",
-                }
-            ),
             tool_results=[
                 ToolExecutionResult(
                     tool_name=ToolName.GET_VIDEO_SUMMARY,
@@ -111,14 +94,6 @@ class PromptProjectionTests(unittest.TestCase):
                 video_id="video-1",
             ),
             user_message="这个视频原话里 Nacos 3 是怎么说的？",
-            plan=AgentActionPlan.model_validate(
-                {
-                    "intent_type": "answer_question",
-                    "scope_type": "video",
-                    "tool_calls": [],
-                    "reason": "需要转写证据",
-                }
-            ),
             tool_results=[
                 ToolExecutionResult(
                     tool_name=ToolName.GET_VIDEO_SUMMARY,

@@ -9,7 +9,7 @@ from backend.agent.memory.runtime import load_runtime_context
 from backend.agent.memory.store import AgentMemoryStore
 from backend.agent.ports import AgentContextLoader
 from backend.agent.runtime.note_drafter import VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
 from backend.agent.runtime.series_locator import SERIES_LOCATOR_SYSTEM_PROMPT
 from backend.agent.runtime.video_seek_locator import VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT
@@ -76,7 +76,7 @@ class AgentContextBudgetService:
             context_override=context_override,
         )
         system_prompt_tokens = (
-            _estimate_tokens(REQUEST_ROUTER_SYSTEM_PROMPT)
+            _estimate_tokens(INITIAL_PLANNER_SYSTEM_PROMPT)
             + _estimate_tokens(ROUTED_ANSWERER_SYSTEM_PROMPT)
             + _estimate_tokens(VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT)
             + _estimate_tokens(SERIES_LOCATOR_SYSTEM_PROMPT)

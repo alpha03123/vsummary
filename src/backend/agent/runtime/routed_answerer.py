@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import ChatGateway
 from backend.agent.runtime.prompt_projection import build_prompt_projection
-from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult
 
@@ -29,14 +28,12 @@ def generate_routed_assistant_message(
     gateway: ChatGateway,
     context: AgentContext,
     user_message: str,
-    plan: AgentActionPlan,
     tool_results: list[ToolExecutionResult],
     projection_max_tokens: int | None = None,
 ) -> str:
     messages = build_routed_answer_messages(
         context=context,
         user_message=user_message,
-        plan=plan,
         tool_results=tool_results,
         projection_max_tokens=projection_max_tokens,
     )
@@ -48,14 +45,12 @@ def stream_routed_assistant_message(
     gateway: ChatGateway,
     context: AgentContext,
     user_message: str,
-    plan: AgentActionPlan,
     tool_results: list[ToolExecutionResult],
     projection_max_tokens: int | None = None,
 ) -> Iterator[str]:
     messages = build_routed_answer_messages(
         context=context,
         user_message=user_message,
-        plan=plan,
         tool_results=tool_results,
         projection_max_tokens=projection_max_tokens,
     )
@@ -66,14 +61,12 @@ def build_routed_answer_messages(
     *,
     context: AgentContext,
     user_message: str,
-    plan: AgentActionPlan,
     tool_results: list[ToolExecutionResult],
     projection_max_tokens: int | None = None,
 ) -> list[AgentChatMessage]:
     payload = build_prompt_projection(
         context=context,
         user_message=user_message,
-        plan=plan,
         tool_results=tool_results,
         max_tokens=projection_max_tokens,
     )

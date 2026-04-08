@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -13,7 +14,7 @@ from backend.agent.agent.service import AgentService
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext, ToolAvailability
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent.agent.execution import RegistryAgentToolExecutor
@@ -33,8 +34,20 @@ class _ActionGateway:
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
         self.text_completion_calls += 1
-        if REQUEST_ROUTER_SYSTEM_PROMPT in messages[0].content:
-            return '{"kind":"open_tool","tool_name":"open_overview","reason":"这是明确的打开概况请求。"}'
+        if INITIAL_PLANNER_SYSTEM_PROMPT in messages[0].content:
+            payload = json.loads(messages[-1].content)
+            observed = payload.get("observed_tool_results", [])
+            if any(item.get("tool_name") == "open_overview" for item in observed):
+                if any(item.get("tool_name") == "generate_overview" for item in observed):
+                    return '{"scope_type":"video","tool_calls":[],"reason":"动作已完成。","direct_response":"我已经开始帮你生成并打开概况工具。","use_answerer":false}'
+                return '{"scope_type":"video","tool_calls":[],"reason":"动作已完成。","direct_response":"我已经帮你打开概况工具。","use_answerer":false}'
+            if any(item.get("tool_name") == "generate_overview" for item in observed):
+                return '{"scope_type":"video","tool_calls":[{"tool_name":"open_overview"}],"reason":"概况已生成，继续打开。","direct_response":"","use_answerer":false}'
+            context = payload.get("context", {})
+            overview = context.get("overview", {})
+            if overview.get("generated") is False:
+                return '{"scope_type":"video","tool_calls":[{"tool_name":"generate_overview"},{"tool_name":"open_overview"}],"reason":"概况缺失，先生成再打开。","direct_response":"","use_answerer":false}'
+            return '{"scope_type":"video","tool_calls":[{"tool_name":"open_overview"}],"reason":"这是明确的打开概况请求。","direct_response":"","use_answerer":false}'
         raise AssertionError("动作类请求不应进入 responder completion。")
 
 
@@ -72,7 +85,7 @@ class AgentDirectActionResponseTests(unittest.TestCase):
         result = service.run("video|series-a|video-1|overview", "打开概况")
 
         self.assertEqual(result.assistant_message, "我已经帮你打开概况工具。")
-        self.assertEqual(gateway.text_completion_calls, 1)
+        self.assertEqual(gateway.text_completion_calls, 2)
 
     def test_open_overview_generates_when_overview_is_missing(self) -> None:
         gateway = _ActionGateway()
@@ -120,14 +133,24 @@ class AgentDirectActionResponseTests(unittest.TestCase):
 
         self.assertEqual(executed_tool_names, [ToolName.GENERATE_OVERVIEW, ToolName.OPEN_OVERVIEW])
         self.assertEqual(result.assistant_message, "我已经开始帮你生成并打开概况工具。")
-        self.assertEqual(gateway.text_completion_calls, 1)
+        self.assertEqual(gateway.text_completion_calls, 2)
 
     def test_open_mindmap_generates_when_mindmap_is_missing(self) -> None:
         class _MindmapGateway(_ActionGateway):
             def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
                 self.text_completion_calls += 1
-                if REQUEST_ROUTER_SYSTEM_PROMPT in messages[0].content:
-                    return '{"kind":"open_tool","tool_name":"open_mindmap","reason":"这是明确的打开思维导图请求。"}'
+                if INITIAL_PLANNER_SYSTEM_PROMPT in messages[0].content:
+                    payload = json.loads(messages[-1].content)
+                    observed = payload.get("observed_tool_results", [])
+                    if any(item.get("tool_name") == "open_mindmap" for item in observed):
+                        return '{"scope_type":"video","tool_calls":[],"reason":"动作已完成。","direct_response":"我已经开始帮你生成并打开思维导图。","use_answerer":false}'
+                    if any(item.get("tool_name") == "generate_mindmap" for item in observed):
+                        return '{"scope_type":"video","tool_calls":[{"tool_name":"open_mindmap"}],"reason":"导图已生成，继续打开。","direct_response":"","use_answerer":false}'
+                    context = payload.get("context", {})
+                    mindmap = context.get("mindmap", {})
+                    if mindmap.get("generated") is False:
+                        return '{"scope_type":"video","tool_calls":[{"tool_name":"generate_mindmap"},{"tool_name":"open_mindmap"}],"reason":"导图缺失，先生成再打开。","direct_response":"","use_answerer":false}'
+                    return '{"scope_type":"video","tool_calls":[{"tool_name":"open_mindmap"}],"reason":"这是明确的打开思维导图请求。","direct_response":"","use_answerer":false}'
                 raise AssertionError("动作类请求不应进入 responder completion。")
 
         gateway = _MindmapGateway()
@@ -175,7 +198,7 @@ class AgentDirectActionResponseTests(unittest.TestCase):
 
         self.assertEqual(executed_tool_names, [ToolName.GENERATE_MINDMAP, ToolName.OPEN_MINDMAP])
         self.assertEqual(result.assistant_message, "我已经开始帮你生成并打开思维导图。")
-        self.assertEqual(gateway.text_completion_calls, 1)
+        self.assertEqual(gateway.text_completion_calls, 2)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,7 @@ from backend.agent.agent.service import AgentService
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.note_drafter import VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
@@ -30,15 +29,19 @@ class _SaveNoteGateway:
         raise AssertionError("保存笔记主路径不应进入流式回答器。")
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
-        if REQUEST_ROUTER_SYSTEM_PROMPT in messages[0].content:
-            return '{"kind":"save_note","tool_name":null,"reason":"这是明确的记笔记请求。"}'
-        if VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT in messages[0].content:
-            return (
-                '{"note_title":"百度地图 AK 准备重点",'
-                '"note_content":"- 先准备百度地图 AK\\n- 这是后续能力接入的前置条件",'
-                '"reason":"概况已经足够支撑整理重点。"}'
-            )
-        raise AssertionError("保存笔记 routed path 不应退回旧 planner 或旧 responder。")
+        if INITIAL_PLANNER_SYSTEM_PROMPT in messages[0].content:
+            observed = messages[-1].content
+            if '"tool_name": "save_note"' in observed:
+                return '{"scope_type":"video","tool_calls":[],"reason":"笔记已保存。","direct_response":"我已经帮你记好这条笔记。","use_answerer":false}'
+            if '"tool_name": "get_video_summary"' in observed:
+                return (
+                    '{"scope_type":"video","tool_calls":[{"tool_name":"save_note",'
+                    '"note_title":"百度地图 AK 准备重点",'
+                    '"note_content":"- 先准备百度地图 AK\\n- 这是后续能力接入的前置条件"}],'
+                    '"reason":"概况已经足够支撑整理重点。","direct_response":"","use_answerer":false}'
+                )
+            return '{"scope_type":"video","tool_calls":[{"tool_name":"get_video_summary","series_id":"series-a","video_id":"video-1"}],"reason":"这是明确的记笔记请求。","direct_response":"","use_answerer":false}'
+        raise AssertionError("保存笔记主路径不应退回旧 planner 或旧 responder。")
 
 
 class AgentSaveNoteRouteTests(unittest.TestCase):
@@ -94,7 +97,6 @@ class AgentSaveNoteRouteTests(unittest.TestCase):
 
         result = service.run("video|series-a|video-1|studio", "帮我记一下这个视频的重点")
 
-        self.assertEqual(result.plan.intent_type.value, "save_note")
         self.assertEqual(
             [item.tool_name for item in result.tool_results],
             [ToolName.GET_VIDEO_SUMMARY, ToolName.SAVE_NOTE],

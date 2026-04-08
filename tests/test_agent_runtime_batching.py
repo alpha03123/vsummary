@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -16,14 +17,14 @@ from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
 
 class _BatchGateway:
     def _is_request_router_call(self, messages: list[AgentChatMessage]) -> bool:
-        return bool(messages) and REQUEST_ROUTER_SYSTEM_PROMPT in messages[0].content
+        return bool(messages) and INITIAL_PLANNER_SYSTEM_PROMPT in messages[0].content
 
     def create_structured_completion(self, messages, response_model):
         del messages, response_model
@@ -31,7 +32,13 @@ class _BatchGateway:
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
         if self._is_request_router_call(messages):
-            return '{"kind":"series_summary","tool_name":null,"reason":"这是系列概括型问题。"}'
+            payload = json.loads(messages[-1].content)
+            observed = payload.get("observed_tool_results", [])
+            if any(item.get("tool_name") == "get_video_summary" for item in observed):
+                return '{"scope_type":"series","tool_calls":[],"reason":"已有足够证据。","direct_response":"done","use_answerer":false}'
+            if any(item.get("tool_name") == "list_series_videos" for item in observed):
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"},{"tool_name":"get_video_summary","video_id":"video-2"}],"reason":"已拿到视频列表，继续并发读取概况。","direct_response":"","use_answerer":false}'
+            return '{"scope_type":"series","tool_calls":[{"tool_name":"list_series_videos","series_id":"series-a"}],"reason":"这是系列概括型问题。","direct_response":"","use_answerer":false}'
         return "done"
 
     def create_text_completion_stream(self, messages):

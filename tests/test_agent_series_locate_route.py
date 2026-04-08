@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -14,9 +15,8 @@ from backend.agent.agent.service import AgentService
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
-from backend.agent.runtime.series_locator import SERIES_LOCATOR_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
@@ -24,7 +24,6 @@ from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 class _SeriesLocateGateway:
     def __init__(self) -> None:
         self.router_calls = 0
-        self.selector_calls = 0
         self.answerer_calls = 0
 
     def create_structured_completion(self, messages, response_model):
@@ -37,12 +36,17 @@ class _SeriesLocateGateway:
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
         system_prompt = messages[0].content
-        if REQUEST_ROUTER_SYSTEM_PROMPT in system_prompt:
+        if INITIAL_PLANNER_SYSTEM_PROMPT in system_prompt:
             self.router_calls += 1
-            return '{"kind":"series_locate","tool_name":null,"reason":"这是系列定位类问题。"}'
-        if SERIES_LOCATOR_SYSTEM_PROMPT in system_prompt:
-            self.selector_calls += 1
-            return '{"video_ids":["video-2"],"reason":"video-2 的 summary 明确提到了 Nacos 3。"}'
+            payload = json.loads(messages[-1].content)
+            observed = payload.get("observed_tool_results", [])
+            if any(item.get("tool_name") == "get_video_transcript" for item in observed):
+                return '{"scope_type":"series","tool_calls":[],"reason":"转写证据已足够。","direct_response":"","use_answerer":true}'
+            if any(item.get("tool_name") == "get_video_summary" for item in observed):
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_transcript","video_id":"video-2"}],"reason":"video-2 的 summary 明确提到了 Nacos 3。","direct_response":"","use_answerer":false}'
+            if any(item.get("tool_name") == "list_series_videos" for item in observed):
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"},{"tool_name":"get_video_summary","video_id":"video-2"}],"reason":"先批量读取 summary。","direct_response":"","use_answerer":false}'
+            return '{"scope_type":"series","tool_calls":[{"tool_name":"list_series_videos","series_id":"series-a"}],"reason":"这是系列定位类问题。","direct_response":"","use_answerer":false}'
         if ROUTED_ANSWERER_SYSTEM_PROMPT in system_prompt:
             self.answerer_calls += 1
             return "在这个系列里，`Nacos 3` 主要出现在《1-5 准备工作：安装Nacos 3》中；从 transcript 看，相关说明集中在开头几分钟。"
@@ -117,13 +121,11 @@ class AgentSeriesLocateRouteTests(unittest.TestCase):
 
         result = service.run("series|series-a|series-home", "这个系列里哪里讲过 Nacos 3？")
 
-        self.assertEqual(result.plan.intent_type.value, "series_locate")
         self.assertEqual(
             [item.tool_name for item in result.tool_results],
             [ToolName.LIST_SERIES_VIDEOS, ToolName.GET_VIDEO_SUMMARY, ToolName.GET_VIDEO_SUMMARY, ToolName.GET_VIDEO_TRANSCRIPT],
         )
-        self.assertEqual(gateway.router_calls, 1)
-        self.assertEqual(gateway.selector_calls, 1)
+        self.assertEqual(gateway.router_calls, 4)
         self.assertEqual(gateway.answerer_calls, 1)
         self.assertIn("Nacos 3", result.assistant_message)
 

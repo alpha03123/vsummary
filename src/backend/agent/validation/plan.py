@@ -1,42 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from backend.agent.memory.context import AgentContext, InspectionStage
-from backend.agent.schemas.action_plan import AgentActionPlan, IntentType
+from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent.tools import tool_is_available_in_context, tool_requires_candidate_buffer, tool_requires_video_id
-from backend.agent.validation.answer import (
-    validate_answer_question_plan,
-    validate_series_answer_plan,
-)
 from backend.agent.validation.errors import AgentPlanError
-from backend.agent.validation.generate import (
-    validate_generate_mindmap_plan,
-    validate_generate_overview_plan,
-)
-from backend.agent.validation.open_tool import validate_open_tool_plan
-from backend.agent.validation.out_of_scope import validate_out_of_scope_plan
-from backend.agent.validation.save_note import validate_save_note_plan
-from backend.agent.validation.series_locate import validate_series_locate_plan
-from backend.agent.validation.seek_video import validate_seek_video_plan
-from backend.agent.validation.shared import validate_batch_tool_usage
-
-
-PlanValidator = Callable[[AgentActionPlan], AgentActionPlan]
-
-
-PLAN_VALIDATORS: dict[IntentType, PlanValidator] = {
-    IntentType.ANSWER_QUESTION: validate_answer_question_plan,
-    IntentType.SERIES_LOCATE: validate_series_locate_plan,
-    IntentType.OPEN_TOOL: validate_open_tool_plan,
-    IntentType.SEEK_VIDEO: validate_seek_video_plan,
-    IntentType.SAVE_NOTE: validate_save_note_plan,
-    IntentType.GENERATE_OVERVIEW: validate_generate_overview_plan,
-    IntentType.GENERATE_MINDMAP: validate_generate_mindmap_plan,
-    IntentType.SERIES_ANSWER: validate_series_answer_plan,
-    IntentType.OUT_OF_SCOPE: validate_out_of_scope_plan,
-}
+from backend.agent.validation.shared import validate_batch_tool_usage, validate_tool_call_arguments
 
 
 def validate_action_plan(
@@ -44,16 +13,25 @@ def validate_action_plan(
     context: AgentContext,
     observed_tool_results: list[ToolExecutionResult] | None = None,
 ) -> AgentActionPlan:
-    validator = PLAN_VALIDATORS.get(plan.intent_type)
-    if validator is None:
-        raise AgentPlanError(f"Unsupported intent_type: {plan.intent_type.value}")
     resolved_tool_results = observed_tool_results or []
-    validated_plan = validator(plan)
-    validate_batch_tool_usage(validated_plan)
-    _validate_plan_against_context(validated_plan, context)
-    _validate_plan_against_observations(validated_plan, context, resolved_tool_results)
-    _validate_terminal_action_plan(validated_plan, resolved_tool_results)
-    return validated_plan
+    _validate_response_mode(plan)
+    validate_batch_tool_usage(plan)
+    validate_tool_call_arguments(plan)
+    _validate_plan_against_context(plan, context)
+    _validate_plan_against_observations(plan, context, resolved_tool_results)
+    return plan
+
+
+def _validate_response_mode(plan: AgentActionPlan) -> None:
+    enabled_modes = sum(
+        (
+            1 if plan.tool_calls else 0,
+            1 if plan.direct_response.strip() else 0,
+            1 if plan.use_answerer else 0,
+        )
+    )
+    if enabled_modes != 1:
+        raise AgentPlanError("plan 必须且只能选择一种执行模式：tool_calls、direct_response、use_answerer。")
 
 
 def _validate_plan_against_observations(
@@ -113,22 +91,3 @@ def _extract_listed_video_ids(observed_tool_results: list[ToolExecutionResult]) 
         }
         return {video_id.strip() for video_id in resolved_ids}
     return set()
-
-
-def _validate_terminal_action_plan(
-    plan: AgentActionPlan,
-    observed_tool_results: list[ToolExecutionResult],
-) -> None:
-    if plan.tool_calls:
-        return
-    if plan.intent_type not in {
-        IntentType.OPEN_TOOL,
-        IntentType.SEEK_VIDEO,
-        IntentType.SAVE_NOTE,
-        IntentType.GENERATE_OVERVIEW,
-        IntentType.GENERATE_MINDMAP,
-    }:
-        return
-    if observed_tool_results:
-        return
-    raise AgentPlanError(f"{plan.intent_type.value} 首轮至少需要一个工具调用。")

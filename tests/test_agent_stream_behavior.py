@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -14,7 +15,7 @@ from backend.agent.agent.service import AgentService
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import InMemoryAgentMemoryStore
-from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
+from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
@@ -28,9 +29,15 @@ class _StreamGateway:
         raise NotImplementedError
 
     def create_text_completion(self, messages: list[AgentChatMessage]) -> str:
-        if REQUEST_ROUTER_SYSTEM_PROMPT in messages[0].content:
+        if INITIAL_PLANNER_SYSTEM_PROMPT in messages[0].content:
             self.router_calls += 1
-            return '{"kind":"series_summary","tool_name":null,"reason":"这是系列概括型问题。"}'
+            payload = json.loads(messages[-1].content)
+            observed = payload.get("observed_tool_results", [])
+            if any(item.get("tool_name") == "get_video_summary" for item in observed):
+                return '{"scope_type":"series","tool_calls":[],"reason":"已有足够证据。","direct_response":"done","use_answerer":false}'
+            if any(item.get("tool_name") == "list_series_videos" for item in observed):
+                return '{"scope_type":"series","tool_calls":[{"tool_name":"get_video_summary","video_id":"video-1"}],"reason":"继续读取已列出视频概况。","direct_response":"","use_answerer":false}'
+            return '{"scope_type":"series","tool_calls":[{"tool_name":"list_series_videos","series_id":"series-a"}],"reason":"这是系列概括型问题。","direct_response":"","use_answerer":false}'
         return "done"
 
     def create_text_completion_stream(self, messages):
@@ -86,7 +93,7 @@ class AgentStreamBehaviorTests(unittest.TestCase):
 
         self.assertEqual(event_types.count("thinking_started"), 1)
         self.assertEqual(event_types.count("thinking_completed"), 1)
-        self.assertEqual(gateway.router_calls, 1)
+        self.assertEqual(gateway.router_calls, 3)
 
 
 if __name__ == "__main__":
