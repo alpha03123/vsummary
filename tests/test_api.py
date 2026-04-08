@@ -91,12 +91,11 @@ class FakeAgentService:
         return AgentTurnResult(
             assistant_message=f"已收到：{user_message}",
             plan=AgentActionPlan(
-                intent_type="open_tool",
                 scope_type="video",
-                assistant_message="",
                 tool_calls=[],
                 reason=f"session={session_id}",
-                out_of_scope_reason="",
+                direct_response=f"已收到：{user_message}",
+                use_answerer=False,
             ),
             tool_results=[
                 ToolExecutionResult(

@@ -56,40 +56,6 @@ def apply_tool_result_to_context(context: AgentContext, result: ToolExecutionRes
     if tool_has_effect(result.tool_name, ToolEffectTag.MARK_VIDEO_INSPECTED):
         return _mark_video_as_inspected(next_context, payload.get("video_id"))
     return next_context
-
-
-def should_finish_after_deterministic_reads(
-    context: AgentContext,
-    last_tool_plan: AgentActionPlan | None,
-    observed_tool_results: list[ToolExecutionResult],
-) -> bool:
-    if last_tool_plan is None or not last_tool_plan.tool_calls:
-        return False
-    if context.scope_type not in {"series", "video"}:
-        return False
-    if last_tool_plan.intent_type.value == "seek_video":
-        return all(call.tool_name == ToolName.VIDEO_SEEK for call in last_tool_plan.tool_calls)
-    if last_tool_plan.intent_type.value == "series_locate":
-        return False
-    deterministic_tool_names = {
-        ToolName.GET_VIDEO_SUMMARY,
-        ToolName.GET_VIDEO_TRANSCRIPT,
-    }
-    if not all(call.tool_name in deterministic_tool_names for call in last_tool_plan.tool_calls):
-        return False
-
-    observed_pairs = {
-        (result.tool_name, str(result.payload.get("video_id", "")).strip())
-        for result in observed_tool_results
-        if result.tool_name in deterministic_tool_names
-    }
-    required_pairs = {
-        (call.tool_name, str(getattr(call, "video_id", "")).strip())
-        for call in last_tool_plan.tool_calls
-    }
-    return required_pairs.issubset(observed_pairs)
-
-
 def finalize_context_after_turn(
     context: AgentContext,
     tool_results: list[ToolExecutionResult],

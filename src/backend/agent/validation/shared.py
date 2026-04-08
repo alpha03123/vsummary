@@ -29,13 +29,6 @@ def require_empty_out_of_scope_reason(plan: AgentActionPlan) -> None:
 def require_scope_context(plan: AgentActionPlan) -> None:
     if plan.scope_type.value not in {"series", "video"}:
         raise AgentPlanError("当前意图要求 scope_type 必须是 series 或 video。")
-
-
-def require_tool_calls(plan: AgentActionPlan) -> None:
-    if not plan.tool_calls:
-        raise AgentPlanError("当前意图至少需要一个工具调用。")
-
-
 def require_max_tool_calls(plan: AgentActionPlan, maximum: int) -> None:
     if len(plan.tool_calls) > maximum:
         raise AgentPlanError(f"{plan.intent_type.value} 最多允许 {maximum} 个工具调用。")

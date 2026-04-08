@@ -322,10 +322,11 @@ class AgentScaffoldTests(unittest.TestCase):
             executor.execute_call(
                 AgentActionPlan.model_validate(
                     {
-                        "intent_type": "series_answer",
                         "scope_type": "series",
                         "tool_calls": [{"tool_name": "get_video_summary", "video_id": "video-1"}],
                         "reason": "错误读取",
+                        "direct_response": "",
+                        "use_answerer": False,
                     }
                 ).tool_calls[0],
                 AgentContext(
