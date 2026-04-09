@@ -306,6 +306,7 @@ class AssistantRuntime:
         observed_tool_results: list[ToolExecutionResult],
     ) -> AgentActionPlan:
         validation_error: str | None = None
+        previous_plan: AgentActionPlan | None = None
         for attempt in range(3):
             plan = generate_execution_plan(
                 gateway=self._gateway,
@@ -313,11 +314,13 @@ class AssistantRuntime:
                 user_message=user_message,
                 observed_tool_results=observed_tool_results,
                 validation_error=validation_error,
+                previous_plan=previous_plan,
             )
             try:
                 return validate_action_plan(plan, context, observed_tool_results)
             except Exception as error:
                 validation_error = str(error)
+                previous_plan = plan
                 if attempt == 2:
                     raise
         raise RuntimeError("未能生成有效计划。")

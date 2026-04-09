@@ -5,9 +5,10 @@ from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import ChatGateway
+from backend.agent.runtime.note_drafter import draft_video_note
 from backend.agent.schemas.action_plan import AgentActionPlan, ScopeType
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
+from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName, ToolPlane
 from backend.agent.tools import list_model_visible_tool_definitions_for_context
 
 
@@ -29,6 +30,8 @@ INITIAL_PLANNER_SYSTEM_PROMPT = (
     "9. open_* / generate_* / save_note 这类动作工具，只有当用户明确要求打开、生成、记录时才调用；普通问答不要调用页面切换工具。\n"
     "10. 只输出 JSON，不要输出代码块，不要解释。\n"
     '11. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
+    "12. 输入中如果包含 validation_error 或 previous_plan，说明上一轮计划未通过本地校验；你必须基于错误提示修正，并优先保持 previous_plan 的整体意图不变，只修正不合法的字段或工具选择。\n"
+    "13. series 上下文里如果 candidate_buffer 非空，则所有需要 video_id 的读取工具必须从 candidate_buffer 的 video_id 中选择；candidate_buffer 为空时，video_id 必须来自最近一次 list_series_videos 的返回。\n"
 )
 
 
@@ -61,6 +64,7 @@ def generate_execution_plan(
     user_message: str,
     observed_tool_results: list[ToolExecutionResult],
     validation_error: str | None = None,
+    previous_plan: AgentActionPlan | None = None,
 ) -> AgentActionPlan:
     messages = [
         AgentChatMessage(role="system", content=INITIAL_PLANNER_SYSTEM_PROMPT),
@@ -76,6 +80,20 @@ def generate_execution_plan(
                         "video_id": context.video_id,
                         "video_title": context.video_title,
                         "selected_tool": context.selected_tool,
+                        "inspection_stage": context.inspection_stage.value,
+                        "candidate_buffer": [
+                            {
+                                "video_id": entry.video_id,
+                                "title": entry.title,
+                                "processed": entry.processed,
+                                "status": entry.status,
+                                "reason": entry.reason,
+                            }
+                            for entry in context.candidate_buffer
+                        ],
+                        "inspected_video_ids": list(context.inspected_video_ids),
+                        "rejected_video_ids": list(context.rejected_video_ids),
+                        "chapter_titles": list(context.chapter_titles),
                         "overview": _dump_tool_state(context.overview),
                         "mindmap": _dump_tool_state(context.mindmap),
                         "knowledge_cards": _dump_tool_state(context.knowledge_cards),
@@ -83,15 +101,7 @@ def generate_execution_plan(
                         "preview": _dump_tool_state(context.preview),
                         "recent_messages": context.recent_messages,
                     },
-                    "available_tools": [
-                        {
-                            "name": tool.name.value,
-                            "title": tool.title,
-                            "description": tool.description,
-                            "arguments": tool.arguments,
-                        }
-                        for tool in list_model_visible_tool_definitions_for_context(context)
-                    ],
+                    "available_tools": _build_planner_visible_tools(context),
                     "observed_tool_results": [
                         {
                             "tool_name": result.tool_name.value,
@@ -100,28 +110,32 @@ def generate_execution_plan(
                         }
                         for result in observed_tool_results
                     ],
+                    "validation_error": validation_error,
+                    "previous_plan": previous_plan.model_dump(mode="json") if previous_plan else None,
                 },
                 ensure_ascii=False,
                 indent=2,
             ),
         ),
     ]
-    if validation_error:
-        messages.append(
-            AgentChatMessage(
-                role="user",
-                content=(
-                    "上一轮计划没有通过本地校验，请修正后重新输出。\n"
-                    f"校验错误：{validation_error}"
-                ),
-            )
-        )
     try:
         payload = gateway.create_structured_completion(messages, PlannerOutput)
-        return _convert_planner_output(payload)
+        return _convert_planner_output(
+            payload,
+            gateway=gateway,
+            context=context,
+            user_message=user_message,
+            observed_tool_results=observed_tool_results,
+        )
     except NotImplementedError:
         raw_output = gateway.create_text_completion(messages).strip()
-        return _parse_execution_plan(raw_output)
+        return _parse_execution_plan(
+            raw_output,
+            gateway=gateway,
+            context=context,
+            user_message=user_message,
+            observed_tool_results=observed_tool_results,
+        )
 
 
 def _dump_tool_state(value: object) -> dict[str, object]:
@@ -132,14 +146,34 @@ def _dump_tool_state(value: object) -> dict[str, object]:
     return {}
 
 
-def _parse_execution_plan(raw_output: str) -> AgentActionPlan:
+def _parse_execution_plan(
+    raw_output: str,
+    *,
+    gateway: ChatGateway,
+    context: AgentContext,
+    user_message: str,
+    observed_tool_results: list[ToolExecutionResult],
+) -> AgentActionPlan:
     payload = json.loads(raw_output)
     normalized = _normalize_plan_payload(payload)
-    return AgentActionPlan.model_validate(normalized)
+    return _convert_plan_payload(
+        normalized,
+        gateway=gateway,
+        context=context,
+        user_message=user_message,
+        observed_tool_results=observed_tool_results,
+    )
 
 
-def _convert_planner_output(payload: PlannerOutput) -> AgentActionPlan:
-    return AgentActionPlan.model_validate(
+def _convert_planner_output(
+    payload: PlannerOutput,
+    *,
+    gateway: ChatGateway,
+    context: AgentContext,
+    user_message: str,
+    observed_tool_results: list[ToolExecutionResult],
+) -> AgentActionPlan:
+    return _convert_plan_payload(
         {
             "scope_type": payload.scope_type,
             "reason": payload.reason,
@@ -149,7 +183,11 @@ def _convert_planner_output(payload: PlannerOutput) -> AgentActionPlan:
                 _planned_tool_call_to_payload(item)
                 for item in payload.tool_calls
             ],
-        }
+        },
+        gateway=gateway,
+        context=context,
+        user_message=user_message,
+        observed_tool_results=observed_tool_results,
     )
 
 
@@ -182,6 +220,24 @@ def _normalize_tool_call(value: object) -> dict[str, object]:
     }
 
 
+def _convert_plan_payload(
+    payload: dict[str, object],
+    *,
+    gateway: ChatGateway,
+    context: AgentContext,
+    user_message: str,
+    observed_tool_results: list[ToolExecutionResult],
+) -> AgentActionPlan:
+    repaired = _repair_plan_payload(
+        payload,
+        gateway=gateway,
+        context=context,
+        user_message=user_message,
+        observed_tool_results=observed_tool_results,
+    )
+    return AgentActionPlan.model_validate(repaired)
+
+
 def _planned_tool_call_to_payload(item: PlannedToolCall) -> dict[str, object]:
     payload: dict[str, object] = {
         "tool_name": item.name.value,
@@ -207,3 +263,104 @@ def _planned_tool_call_to_payload(item: PlannedToolCall) -> dict[str, object]:
     if item.note_content:
         payload["note_content"] = item.note_content
     return payload
+
+
+def _repair_plan_payload(
+    payload: dict[str, object],
+    *,
+    gateway: ChatGateway,
+    context: AgentContext,
+    user_message: str,
+    observed_tool_results: list[ToolExecutionResult],
+) -> dict[str, object]:
+    repaired = dict(payload)
+    raw_tool_calls = repaired.get("tool_calls", [])
+    if not isinstance(raw_tool_calls, list):
+        return repaired
+
+    evidence_result = _extract_latest_note_evidence(observed_tool_results)
+    next_tool_calls: list[dict[str, object]] = []
+    inserted_evidence_read = False
+
+    for item in raw_tool_calls:
+        if not isinstance(item, dict):
+            next_tool_calls.append(item)
+            continue
+        if str(item.get("tool_name", "")).strip() != ToolName.SAVE_NOTE.value:
+            next_tool_calls.append(item)
+            continue
+        title = str(item.get("note_title", "")).strip()
+        content = str(item.get("note_content", "")).strip()
+        if title and content:
+            next_tool_calls.append(item)
+            continue
+        if evidence_result is not None:
+            draft = draft_video_note(
+                gateway=gateway,
+                user_message=user_message,
+                evidence_result=evidence_result,
+            )
+            next_tool_calls.append(
+                {
+                    **item,
+                    "note_title": draft.note_title,
+                    "note_content": draft.note_content,
+                }
+            )
+            continue
+        if (
+            not inserted_evidence_read
+            and context.scope_type == "video"
+            and context.series_id
+            and context.video_id
+        ):
+            next_tool_calls.append(
+                {
+                    "tool_name": ToolName.GET_VIDEO_SUMMARY.value,
+                    "series_id": context.series_id,
+                    "video_id": context.video_id,
+                }
+            )
+            inserted_evidence_read = True
+        repaired["direct_response"] = ""
+        repaired["use_answerer"] = False
+
+    repaired["tool_calls"] = next_tool_calls
+    return repaired
+
+
+def _extract_latest_note_evidence(
+    observed_tool_results: list[ToolExecutionResult],
+) -> ToolExecutionResult | None:
+    for result in reversed(observed_tool_results):
+        if result.tool_name == ToolName.GET_VIDEO_SUMMARY and result.status == "ok":
+            return result
+        if result.tool_name == ToolName.GET_VIDEO_TRANSCRIPT and result.status == "ok":
+            return result
+    return None
+
+
+def _build_planner_visible_tools(context: AgentContext) -> list[dict[str, object]]:
+    tools = list_model_visible_tool_definitions_for_context(context)
+    tools.sort(
+        key=lambda tool: (
+            0 if tool.plane == ToolPlane.BUSINESS_READ else 1,
+            tool.name.value,
+        )
+    )
+    return [
+        {
+            # 保留 name 字段以兼容旧版 gateway stub。
+            "name": tool.name.value,
+            "title": tool.title,
+            "description": tool.description,
+            "arguments": tool.arguments,
+            "plane": tool.plane.value,
+            "batch_tag": tool.batch_tag,
+            "requires_video_id": tool.requires_video_id,
+            "requires_candidate_buffer": tool.requires_candidate_buffer,
+            "contexts": [tag.value for tag in tool.contexts],
+            "intents": [tag.value for tag in tool.intents],
+        }
+        for tool in tools
+    ]
