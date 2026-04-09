@@ -171,6 +171,7 @@ class AssistantRuntime:
             if current_plan.direct_response.strip() or current_plan.use_answerer:
                 final_plan = current_plan
                 break
+            executed_any = False
             for batch in partition_tool_calls(current_plan.tool_calls):
                 executable_calls = filter_cached_tool_calls(
                     batch,
@@ -179,6 +180,7 @@ class AssistantRuntime:
                 )
                 if not executable_calls:
                     continue
+                executed_any = True
                 results = execute_tool_batch(
                     tool_executor=self._tool_executor,
                     calls=executable_calls,
@@ -192,6 +194,15 @@ class AssistantRuntime:
                     context = apply_tool_result_to_context(context, result)
 
             final_plan = current_plan
+            if not executed_any:
+                current_plan = self._build_direct_response_fallback(
+                    context=context,
+                    user_message=user_message,
+                    observed_tool_results=observed_tool_results,
+                    previous_plan=current_plan,
+                    reason="上一轮计划不会产生任何新结果，请直接给用户自然回复或说明限制。",
+                )
+                continue
             current_plan = self._generate_valid_plan(
                 context=context,
                 user_message=user_message,
@@ -236,6 +247,7 @@ class AssistantRuntime:
             if current_plan.direct_response.strip() or current_plan.use_answerer:
                 final_plan = current_plan
                 break
+            executed_any = False
 
             for batch in partition_tool_calls(current_plan.tool_calls):
                 executable_calls = filter_cached_tool_calls(
@@ -245,6 +257,7 @@ class AssistantRuntime:
                 )
                 if not executable_calls:
                     continue
+                executed_any = True
                 batch_started_at = [perf_counter() for _ in executable_calls]
                 batch_tool_call_ids: list[str] = []
                 for call in executable_calls:
@@ -282,6 +295,15 @@ class AssistantRuntime:
                     )
 
             final_plan = current_plan
+            if not executed_any:
+                current_plan = self._build_direct_response_fallback(
+                    context=context,
+                    user_message=user_message,
+                    observed_tool_results=observed_tool_results,
+                    previous_plan=current_plan,
+                    reason="上一轮计划不会产生任何新结果，请直接给用户自然回复或说明限制。",
+                )
+                continue
             current_plan = self._generate_valid_plan(
                 context=context,
                 user_message=user_message,
@@ -307,23 +329,49 @@ class AssistantRuntime:
     ) -> AgentActionPlan:
         validation_error: str | None = None
         previous_plan: AgentActionPlan | None = None
-        for attempt in range(3):
-            plan = generate_execution_plan(
-                gateway=self._gateway,
-                context=context,
-                user_message=user_message,
-                observed_tool_results=observed_tool_results,
-                validation_error=validation_error,
-                previous_plan=previous_plan,
-            )
+        for attempt in range(5):
             try:
+                plan = generate_execution_plan(
+                    gateway=self._gateway,
+                    context=context,
+                    user_message=user_message,
+                    observed_tool_results=observed_tool_results,
+                    validation_error=validation_error,
+                    previous_plan=previous_plan,
+                )
                 return validate_action_plan(plan, context, observed_tool_results)
             except Exception as error:
                 validation_error = str(error)
                 previous_plan = plan
-                if attempt == 2:
-                    raise
+                if attempt == 4:
+                    return self._build_direct_response_fallback(
+                        context=context,
+                        user_message=user_message,
+                        observed_tool_results=observed_tool_results,
+                        previous_plan=previous_plan,
+                        reason=validation_error,
+                    )
         raise RuntimeError("未能生成有效计划。")
+
+    def _build_direct_response_fallback(
+        self,
+        *,
+        context: AgentContext,
+        user_message: str,
+        observed_tool_results: list[ToolExecutionResult],
+        previous_plan: AgentActionPlan | None,
+        reason: str,
+    ) -> AgentActionPlan:
+        plan = generate_execution_plan(
+            gateway=self._gateway,
+            context=context,
+            user_message=user_message,
+            observed_tool_results=observed_tool_results,
+            validation_error=reason,
+            previous_plan=previous_plan,
+            direct_response_only=True,
+        )
+        return validate_action_plan(plan, context, observed_tool_results)
 
 def _describe_plan_reason(reason: str, plan: AgentActionPlan) -> str:
     if reason.strip():

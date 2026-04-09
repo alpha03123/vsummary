@@ -20,18 +20,19 @@ INITIAL_PLANNER_SYSTEM_PROMPT = (
     "2. 如果还需要读取信息或执行动作，就填写 tool_calls。\n"
     "3. 如果已经拿到足够证据，应该交给回答器来组织自然回答，就设置 use_answerer=true，tool_calls 留空，direct_response 留空。\n"
     "4. 如果当前不需要工具也不需要回答器，例如问候、超范围拒绝、动作完成后的自然收口，请直接填写 direct_response。\n"
-    "5. direct_response 必须是自然中文回复，不要暴露 tool_name、payload、schema、规划这些内部实现词。\n"
-    "6. tool_calls、direct_response、use_answerer 三者只能激活一种：\n"
+    "5. 如果用户请求明显超出当前视频知识工作台范围，direct_response 应礼貌说明边界，并引导回到当前工作台支持的任务；不要继续承诺完成无关任务。\n"
+    "6. direct_response 必须是自然中文回复，不要暴露 tool_name、payload、schema、规划这些内部实现词。\n"
+    "7. tool_calls、direct_response、use_answerer 三者只能激活一种：\n"
     "   - 要继续工作：tool_calls 非空\n"
     "   - 要直接回复：direct_response 非空\n"
     "   - 要基于现有证据回答：use_answerer=true\n"
-    "7. 如果用户请求混合多个动作，可以在同一轮输出多个 tool_calls。\n"
-    "8. 在 series 上下文里，get_video_summary / get_video_transcript / get_video_tools 这类深层读取工具必须带明确 video_id；如果当前还无法确定 video_id，就不要调用这些工具，而是先 list_series_videos，或者直接用 direct_response 说明需要用户进一步明确。\n"
-    "9. open_* / generate_* / save_note 这类动作工具，只有当用户明确要求打开、生成、记录时才调用；普通问答不要调用页面切换工具。\n"
-    "10. 只输出 JSON，不要输出代码块，不要解释。\n"
-    '11. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
-    "12. 输入中如果包含 validation_error 或 previous_plan，说明上一轮计划未通过本地校验；你必须基于错误提示修正，并优先保持 previous_plan 的整体意图不变，只修正不合法的字段或工具选择。\n"
-    "13. series 上下文里如果 candidate_buffer 非空，则所有需要 video_id 的读取工具必须从 candidate_buffer 的 video_id 中选择；candidate_buffer 为空时，video_id 必须来自最近一次 list_series_videos 的返回。\n"
+    "8. 如果用户请求混合多个动作，可以在同一轮输出多个 tool_calls。\n"
+    "9. 在 series 上下文里，get_video_summary / get_video_transcript / get_video_tools 这类深层读取工具必须带明确 video_id；如果当前还无法确定 video_id，就不要调用这些工具，而是先 list_series_videos，或者直接用 direct_response 说明需要用户进一步明确。\n"
+    "10. open_* / generate_* / save_note 这类动作工具，只有当用户明确要求打开、生成、记录时才调用；普通问答不要调用页面切换工具。\n"
+    "11. 只输出 JSON，不要输出代码块，不要解释。\n"
+    '12. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
+    "13. 输入中如果包含 validation_error 或 previous_plan，说明上一轮计划未通过本地校验；你必须基于错误提示修正，并优先保持 previous_plan 的整体意图不变，只修正不合法的字段或工具选择。\n"
+    "14. series 上下文里如果 candidate_buffer 非空，则所有需要 video_id 的读取工具必须从 candidate_buffer 的 video_id 中选择；candidate_buffer 为空时，video_id 必须来自最近一次 list_series_videos 的返回。\n"
 )
 
 
@@ -65,9 +66,11 @@ def generate_execution_plan(
     observed_tool_results: list[ToolExecutionResult],
     validation_error: str | None = None,
     previous_plan: AgentActionPlan | None = None,
+    direct_response_only: bool = False,
 ) -> AgentActionPlan:
+    system_prompt = DIRECT_RESPONSE_ONLY_SYSTEM_PROMPT if direct_response_only else INITIAL_PLANNER_SYSTEM_PROMPT
     messages = [
-        AgentChatMessage(role="system", content=INITIAL_PLANNER_SYSTEM_PROMPT),
+        AgentChatMessage(role="system", content=system_prompt),
         AgentChatMessage(
             role="user",
             content=json.dumps(
@@ -136,6 +139,19 @@ def generate_execution_plan(
             user_message=user_message,
             observed_tool_results=observed_tool_results,
         )
+
+
+DIRECT_RESPONSE_ONLY_SYSTEM_PROMPT = (
+    "你是视频知识工作台中的执行计划器。\n"
+    "当前要求你不要再调用任何工具，只输出一条自然中文 direct_response。\n"
+    "规则：\n"
+    "1. tool_calls 必须为空。\n"
+    "2. use_answerer 必须为 false。\n"
+    "3. 如果用户请求明显超出当前视频知识工作台范围，要礼貌说明边界，并引导回到当前工作台支持的任务；不要继续承诺完成无关任务。\n"
+    "4. 如果只是信息不足，就礼貌说明限制并要求用户补充必要信息。\n"
+    "5. 不要暴露 tool_name、payload、schema、规划、校验失败这些内部实现词。\n"
+    '6. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[],"reason":"...","direct_response":"...","use_answerer":false}。\n'
+)
 
 
 def _dump_tool_state(value: object) -> dict[str, object]:
