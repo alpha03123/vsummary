@@ -13,7 +13,6 @@ from backend.agent.schemas.tool_calls import ToolPlane
 from backend.agent.tools import (
     ALL_TOOL_DEFINITIONS,
     BUSINESS_READ_TOOL_DEFINITIONS,
-    RUNTIME_INTERNAL_TOOL_DEFINITIONS,
     UI_ACTION_TOOL_DEFINITIONS,
     list_tool_definitions_for_plane,
 )
@@ -26,31 +25,11 @@ class AgentToolCatalogTests(unittest.TestCase):
             for tool in BUSINESS_READ_TOOL_DEFINITIONS
         } | {
             tool.name
-            for tool in RUNTIME_INTERNAL_TOOL_DEFINITIONS
-        } | {
-            tool.name
             for tool in UI_ACTION_TOOL_DEFINITIONS
         }
 
         self.assertEqual(grouped_names, {tool.name for tool in ALL_TOOL_DEFINITIONS})
         self.assertEqual(len(grouped_names), len(ALL_TOOL_DEFINITIONS))
-
-    def test_runtime_internal_tools_are_explicitly_marked(self) -> None:
-        runtime_internal_names = {
-            tool.name.value
-            for tool in list_tool_definitions_for_plane(ToolPlane.RUNTIME_INTERNAL)
-        }
-
-        self.assertEqual(
-            runtime_internal_names,
-            {
-                "view_series_candidates",
-                "add_series_candidates",
-                "remove_series_candidates",
-                "replace_series_candidates",
-                "clear_series_candidates",
-            },
-        )
 
     def test_ui_action_tools_do_not_mix_business_read_plane(self) -> None:
         ui_action_names = {

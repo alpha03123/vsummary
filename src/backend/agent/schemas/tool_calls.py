@@ -8,11 +8,6 @@ from pydantic import BaseModel, Field
 
 class ToolName(str, Enum):
     LIST_SERIES_VIDEOS = "list_series_videos"
-    VIEW_SERIES_CANDIDATES = "view_series_candidates"
-    ADD_SERIES_CANDIDATES = "add_series_candidates"
-    REMOVE_SERIES_CANDIDATES = "remove_series_candidates"
-    REPLACE_SERIES_CANDIDATES = "replace_series_candidates"
-    CLEAR_SERIES_CANDIDATES = "clear_series_candidates"
     GET_VIDEO_SUMMARY = "get_video_summary"
     GET_VIDEO_TOOLS = "get_video_tools"
     GET_VIDEO_TRANSCRIPT = "get_video_transcript"
@@ -46,15 +41,9 @@ class ToolIntentTag(str, Enum):
     GENERATE_MINDMAP = "generate_mindmap"
 
 
-class ToolEffectTag(str, Enum):
-    APPLY_CANDIDATE_BUFFER_PAYLOAD = "apply_candidate_buffer_payload"
-    MARK_VIDEO_INSPECTED = "mark_video_inspected"
-
-
 class ToolPlane(str, Enum):
     BUSINESS_READ = "business_read"
     UI_ACTION = "ui_action"
-    RUNTIME_INTERNAL = "runtime_internal"
 
 
 class ToolDefinition(BaseModel):
@@ -67,40 +56,12 @@ class ToolDefinition(BaseModel):
     batch_tag: str | None = None
     contexts: tuple[ToolContextTag, ...] = ()
     intents: tuple[ToolIntentTag, ...] = ()
-    effects: tuple[ToolEffectTag, ...] = ()
     requires_video_id: bool = False
-    requires_candidate_buffer: bool = False
 
 
 class ListSeriesVideosCall(BaseModel):
     tool_name: Literal[ToolName.LIST_SERIES_VIDEOS] = ToolName.LIST_SERIES_VIDEOS
     series_id: str | None = None
-
-
-class ViewSeriesCandidatesCall(BaseModel):
-    tool_name: Literal[ToolName.VIEW_SERIES_CANDIDATES] = ToolName.VIEW_SERIES_CANDIDATES
-
-
-class AddSeriesCandidatesCall(BaseModel):
-    tool_name: Literal[ToolName.ADD_SERIES_CANDIDATES] = ToolName.ADD_SERIES_CANDIDATES
-    video_ids: list[str] = Field(default_factory=list)
-    reason: str = ""
-
-
-class RemoveSeriesCandidatesCall(BaseModel):
-    tool_name: Literal[ToolName.REMOVE_SERIES_CANDIDATES] = ToolName.REMOVE_SERIES_CANDIDATES
-    video_ids: list[str] = Field(default_factory=list)
-    reason: str = ""
-
-
-class ReplaceSeriesCandidatesCall(BaseModel):
-    tool_name: Literal[ToolName.REPLACE_SERIES_CANDIDATES] = ToolName.REPLACE_SERIES_CANDIDATES
-    video_ids: list[str] = Field(default_factory=list)
-    reason: str = ""
-
-
-class ClearSeriesCandidatesCall(BaseModel):
-    tool_name: Literal[ToolName.CLEAR_SERIES_CANDIDATES] = ToolName.CLEAR_SERIES_CANDIDATES
 
 
 class GetVideoSummaryCall(BaseModel):
@@ -174,11 +135,6 @@ class SaveNoteCall(BaseModel):
 
 ToolCall = Annotated[
     ListSeriesVideosCall
-    | ViewSeriesCandidatesCall
-    | AddSeriesCandidatesCall
-    | RemoveSeriesCandidatesCall
-    | ReplaceSeriesCandidatesCall
-    | ClearSeriesCandidatesCall
     | GetVideoSummaryCall
     | GetVideoToolsCall
     | GetVideoTranscriptCall

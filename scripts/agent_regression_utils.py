@@ -98,23 +98,6 @@ def summarize_payload(tool_name: str, payload: object) -> str:
             return f"视频数={len(titles)}; titles={titles}"
         return ""
 
-    if tool_name in {"add_series_candidates", "replace_series_candidates", "view_series_candidates"}:
-        buffer_items = payload.get("candidate_buffer")
-        if isinstance(buffer_items, list):
-            video_ids = extract_video_ids(buffer_items)
-            return f"candidate_buffer={video_ids}"
-        return ""
-
-    if tool_name == "remove_series_candidates":
-        buffer_items = payload.get("candidate_buffer")
-        removed_items = payload.get("removed_videos")
-        next_ids = extract_video_ids(buffer_items)
-        removed_ids = extract_video_ids(removed_items)
-        return f"removed={removed_ids}; candidate_buffer={next_ids}"
-
-    if tool_name == "clear_series_candidates":
-        return "candidate_buffer=[]"
-
     if tool_name == "get_video_summary":
         title = str(payload.get("title", "")).strip()
         chapters = payload.get("chapters")
@@ -136,18 +119,6 @@ def summarize_payload(tool_name: str, payload: object) -> str:
         return f"seek_seconds={payload.get('seek_seconds', '')}"
 
     return json.dumps(payload, ensure_ascii=False)
-
-
-def extract_video_ids(raw_items: object) -> list[str]:
-    if not isinstance(raw_items, list):
-        return []
-    return [
-        str(item.get("video_id", "")).strip()
-        for item in raw_items
-        if isinstance(item, dict) and str(item.get("video_id", "")).strip()
-    ]
-
-
 def summarize_event_order(raw_events: list[dict[str, object]]) -> list[str]:
     order: list[str] = []
     for item in raw_events:

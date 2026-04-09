@@ -8,6 +8,7 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentToolExecutor, ChatGateway
 from backend.agent.runtime.planner import generate_execution_plan
 from backend.agent.runtime.routed_answerer import generate_routed_assistant_message, stream_routed_assistant_message
+from backend.agent.runtime.video_query_policy import build_video_query_policy_plan
 from backend.agent.session.evidence_cache import build_cached_result_index, build_result_cache_key, filter_cached_tool_calls
 from backend.agent.runtime.tool_loop import (
     apply_tool_result_to_context,
@@ -36,10 +37,12 @@ class AssistantRuntime:
         gateway: ChatGateway,
         tool_executor: AgentToolExecutor,
         projection_max_tokens: int | None = None,
+        planner_transport: str = "structured",
     ) -> None:
         self._gateway = gateway
         self._tool_executor = tool_executor
         self._projection_max_tokens = projection_max_tokens
+        self._planner_transport = planner_transport
 
     def run(
         self,
@@ -327,6 +330,14 @@ class AssistantRuntime:
         user_message: str,
         observed_tool_results: list[ToolExecutionResult],
     ) -> AgentActionPlan:
+        deterministic_plan = build_video_query_policy_plan(
+            context=context,
+            user_message=user_message,
+            observed_tool_results=observed_tool_results,
+        )
+        if deterministic_plan is not None:
+            return validate_action_plan(deterministic_plan, context, observed_tool_results)
+
         validation_error: str | None = None
         previous_plan: AgentActionPlan | None = None
         for attempt in range(5):
@@ -338,6 +349,7 @@ class AssistantRuntime:
                     observed_tool_results=observed_tool_results,
                     validation_error=validation_error,
                     previous_plan=previous_plan,
+                    planner_transport=self._planner_transport,
                 )
                 return validate_action_plan(plan, context, observed_tool_results)
             except Exception as error:
@@ -370,6 +382,7 @@ class AssistantRuntime:
             validation_error=reason,
             previous_plan=previous_plan,
             direct_response_only=True,
+            planner_transport=self._planner_transport,
         )
         return validate_action_plan(plan, context, observed_tool_results)
 

@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
+from backend.agent.memory.context import AgentContext, InspectionStage
 from backend.agent.schemas.tool_calls import ToolPlane
 from backend.agent.tools import (
     list_model_visible_tool_definitions_for_context,
@@ -47,7 +47,6 @@ def _print_context_catalogs() -> None:
             scope_type="series",
             series_id="agent-frameworks",
             inspection_stage=InspectionStage.VIDEO_INSPECTION,
-            candidate_buffer=[CandidateBufferEntry(video_id="video-1", title="Video 1")],
         ),
         "video": AgentContext(
             session_id="video|agent-frameworks|video-1|overview",

@@ -5,18 +5,13 @@ from collections.abc import Iterable
 from backend.agent.tools import get_tool_definition, tool_requires_video_id
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import (
-    AddSeriesCandidatesCall,
-    ClearSeriesCandidatesCall,
     GetVideoSummaryCall,
     GetVideoTranscriptCall,
     GetVideoToolsCall,
     ListSeriesVideosCall,
-    RemoveSeriesCandidatesCall,
-    ReplaceSeriesCandidatesCall,
     SaveNoteCall,
     ToolName,
     VideoSeekCall,
-    ViewSeriesCandidatesCall,
 )
 from backend.agent.validation.errors import AgentPlanError
 
@@ -67,18 +62,6 @@ def validate_tool_call_arguments(plan: AgentActionPlan) -> None:
             raise AgentPlanError("video_seek 的 match_end_seconds 不能早于 seek_seconds。")
         if isinstance(call, ListSeriesVideosCall) and call.series_id is not None and not call.series_id.strip():
             raise AgentPlanError("list_series_videos 的 series_id 不能为空字符串。")
-        if isinstance(call, ViewSeriesCandidatesCall):
-            continue
-        if isinstance(call, AddSeriesCandidatesCall | RemoveSeriesCandidatesCall | ReplaceSeriesCandidatesCall):
-            if not call.video_ids:
-                raise AgentPlanError(f"{call.tool_name.value} 至少需要一个 video_id。")
-            for video_id in call.video_ids:
-                if not isinstance(video_id, str) or not video_id.strip():
-                    raise AgentPlanError(f"{call.tool_name.value} 的 video_ids 不能包含空值。")
-                if _looks_like_unresolved_placeholder(video_id):
-                    raise AgentPlanError(f"{call.tool_name.value} 的 video_ids 不能使用未解析占位值。")
-        if isinstance(call, ClearSeriesCandidatesCall):
-            continue
         if isinstance(call, SaveNoteCall):
             if not call.note_title.strip():
                 raise AgentPlanError("save_note 的 note_title 不能为空。")

@@ -108,6 +108,17 @@ def main() -> int:
             continue
 
         duration = time.perf_counter() - started_case
+        event_order = summarize_event_order(result.raw_events)
+        thinking_summaries = result.thinking_summaries
+        tool_rows = result.tool_rows
+        final_answer = result.final_answer or ""
+        _print_case_outcome(
+            review_focus=case.review_focus,
+            event_order=event_order,
+            thinking_summaries=thinking_summaries,
+            tool_rows=tool_rows,
+            final_answer=final_answer,
+        )
         report_items.append(
             CaseReportItem(
                 case_id=case.case_id,
@@ -117,10 +128,10 @@ def main() -> int:
                 review_focus=case.review_focus,
                 status="ok",
                 duration_seconds=duration,
-                event_order=summarize_event_order(result.raw_events),
-                thinking_summaries=result.thinking_summaries,
-                tool_rows=result.tool_rows,
-                final_answer=result.final_answer or "",
+                event_order=event_order,
+                thinking_summaries=thinking_summaries,
+                tool_rows=tool_rows,
+                final_answer=final_answer,
                 raw_events=result.raw_events if args.show_raw_events else None,
                 error_type=None,
                 error_message=None,
@@ -223,6 +234,36 @@ def _build_cases() -> list[ActionCase]:
             review_focus="覆盖 generate_mindmap。",
         ),
     ]
+
+
+def _print_case_outcome(
+    *,
+    review_focus: str,
+    event_order: list[str],
+    thinking_summaries: list[str],
+    tool_rows: list[str],
+    final_answer: str,
+) -> None:
+    print("#### 当前用例输出概览")
+    print(f"- review_focus: {review_focus}")
+    print(f"- event_order: {event_order}")
+    print("- thinking_summaries:")
+    if thinking_summaries:
+        for index, summary in enumerate(thinking_summaries, start=1):
+            print(f"  - [{index}] {summary}")
+    else:
+        print("  - (无)")
+    print("- tool_rows:")
+    if tool_rows:
+        for row in tool_rows:
+            print(f"  {row}")
+    else:
+        print("  - (无)")
+    print("- final_answer:")
+    print("```")
+    print(final_answer or "(空)")
+    print("```")
+    print()
 
 
 if __name__ == "__main__":

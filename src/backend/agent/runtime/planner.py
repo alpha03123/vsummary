@@ -11,6 +11,9 @@ from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName, ToolPlane
 from backend.agent.tools import list_model_visible_tool_definitions_for_context
 
+PLANNER_TRANSPORT_STRUCTURED = "structured"
+PLANNER_TRANSPORT_STREAM_BUFFERED = "stream_buffered"
+
 
 INITIAL_PLANNER_SYSTEM_PROMPT = (
     "你是视频知识工作台中的执行计划器。\n"
@@ -32,7 +35,7 @@ INITIAL_PLANNER_SYSTEM_PROMPT = (
     "11. 只输出 JSON，不要输出代码块，不要解释。\n"
     '12. JSON 格式固定为 {"scope_type":"series或video","tool_calls":[...],"reason":"...","direct_response":"...","use_answerer":true或false}。\n'
     "13. 输入中如果包含 validation_error 或 previous_plan，说明上一轮计划未通过本地校验；你必须基于错误提示修正，并优先保持 previous_plan 的整体意图不变，只修正不合法的字段或工具选择。\n"
-    "14. series 上下文里如果 candidate_buffer 非空，则所有需要 video_id 的读取工具必须从 candidate_buffer 的 video_id 中选择；candidate_buffer 为空时，video_id 必须来自最近一次 list_series_videos 的返回。\n"
+    "14. series 上下文里，所有需要 video_id 的读取工具都必须使用最近一次 list_series_videos 返回的真实 video_id。\n"
 )
 
 
@@ -67,6 +70,7 @@ def generate_execution_plan(
     validation_error: str | None = None,
     previous_plan: AgentActionPlan | None = None,
     direct_response_only: bool = False,
+    planner_transport: str = PLANNER_TRANSPORT_STRUCTURED,
 ) -> AgentActionPlan:
     system_prompt = DIRECT_RESPONSE_ONLY_SYSTEM_PROMPT if direct_response_only else INITIAL_PLANNER_SYSTEM_PROMPT
     messages = [
@@ -84,18 +88,6 @@ def generate_execution_plan(
                         "video_title": context.video_title,
                         "selected_tool": context.selected_tool,
                         "inspection_stage": context.inspection_stage.value,
-                        "candidate_buffer": [
-                            {
-                                "video_id": entry.video_id,
-                                "title": entry.title,
-                                "processed": entry.processed,
-                                "status": entry.status,
-                                "reason": entry.reason,
-                            }
-                            for entry in context.candidate_buffer
-                        ],
-                        "inspected_video_ids": list(context.inspected_video_ids),
-                        "rejected_video_ids": list(context.rejected_video_ids),
                         "chapter_titles": list(context.chapter_titles),
                         "overview": _dump_tool_state(context.overview),
                         "mindmap": _dump_tool_state(context.mindmap),
@@ -121,6 +113,15 @@ def generate_execution_plan(
             ),
         ),
     ]
+    if planner_transport == PLANNER_TRANSPORT_STREAM_BUFFERED:
+        raw_output = _collect_streamed_planner_output(gateway, messages)
+        return _parse_execution_plan(
+            raw_output,
+            gateway=gateway,
+            context=context,
+            user_message=user_message,
+            observed_tool_results=observed_tool_results,
+        )
     try:
         payload = gateway.create_structured_completion(messages, PlannerOutput)
         return _convert_planner_output(
@@ -160,6 +161,17 @@ def _dump_tool_state(value: object) -> dict[str, object]:
     if isinstance(value, dict):
         return dict(value)
     return {}
+
+
+def _collect_streamed_planner_output(
+    gateway: ChatGateway,
+    messages: list[AgentChatMessage],
+) -> str:
+    chunks = list(gateway.create_text_completion_stream(messages))
+    raw_output = "".join(chunks).strip()
+    if raw_output:
+        return raw_output
+    return gateway.create_text_completion(messages).strip()
 
 
 def _parse_execution_plan(
@@ -374,7 +386,6 @@ def _build_planner_visible_tools(context: AgentContext) -> list[dict[str, object
             "plane": tool.plane.value,
             "batch_tag": tool.batch_tag,
             "requires_video_id": tool.requires_video_id,
-            "requires_candidate_buffer": tool.requires_candidate_buffer,
             "contexts": [tag.value for tag in tool.contexts],
             "intents": [tag.value for tag in tool.intents],
         }

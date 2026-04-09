@@ -8,7 +8,6 @@ from backend.agent.schemas.tool_calls import (
     ListSeriesVideosCall,
     ToolDefinition,
     ToolContextTag,
-    ToolEffectTag,
     ToolExecutionResult,
     ToolIntentTag,
     ToolName,
@@ -41,9 +40,7 @@ GET_VIDEO_SUMMARY_TOOL = ToolDefinition(
     },
     contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
     intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE, ToolIntentTag.SAVE_NOTE),
-    effects=(ToolEffectTag.MARK_VIDEO_INSPECTED,),
     requires_video_id=True,
-    requires_candidate_buffer=True,
 )
 
 GET_VIDEO_TOOLS_TOOL = ToolDefinition(
@@ -59,9 +56,7 @@ GET_VIDEO_TOOLS_TOOL = ToolDefinition(
     },
     contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
     intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE),
-    effects=(ToolEffectTag.MARK_VIDEO_INSPECTED,),
     requires_video_id=True,
-    requires_candidate_buffer=True,
 )
 
 GET_VIDEO_TRANSCRIPT_TOOL = ToolDefinition(
@@ -77,9 +72,7 @@ GET_VIDEO_TRANSCRIPT_TOOL = ToolDefinition(
     },
     contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
     intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE, ToolIntentTag.SEEK_VIDEO, ToolIntentTag.SAVE_NOTE),
-    effects=(ToolEffectTag.MARK_VIDEO_INSPECTED,),
     requires_video_id=True,
-    requires_candidate_buffer=True,
 )
 
 

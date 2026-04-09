@@ -6,7 +6,6 @@ from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent.tools import (
     list_model_visible_tool_definitions_for_context,
     tool_is_available_in_context,
-    tool_requires_candidate_buffer,
     tool_requires_video_id,
 )
 from backend.agent.validation.errors import AgentPlanError
@@ -45,7 +44,7 @@ def _validate_plan_against_observations(
     observed_tool_results: list[ToolExecutionResult],
 ) -> None:
     valid_video_ids = _extract_listed_video_ids(observed_tool_results)
-    if not valid_video_ids or context.candidate_buffer:
+    if not valid_video_ids:
         return
 
     for call in plan.tool_calls:
@@ -79,17 +78,6 @@ def _validate_plan_against_context(plan: AgentActionPlan, context: AgentContext)
                 raise AgentPlanError(f"{call.tool_name.value} 在 series 上下文中必须提供明确的 video_id。")
         if context.scope_type == "video":
             continue
-        if (
-            context.inspection_stage != InspectionStage.SERIES_DISCOVERY
-            and context.candidate_buffer
-            and tool_requires_candidate_buffer(call.tool_name)
-        ):
-            video_id = getattr(call, "video_id", None)
-            candidate_video_ids = {item.video_id for item in context.candidate_buffer}
-            if video_id is None or video_id not in candidate_video_ids:
-                raise AgentPlanError(
-                    f"{call.tool_name.value} 的 video_id 必须来自当前候选缓冲区。当前候选 video_id: {sorted(candidate_video_ids)}"
-                )
 
 
 def _extract_listed_video_ids(observed_tool_results: list[ToolExecutionResult]) -> set[str]:

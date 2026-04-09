@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
+from backend.agent.memory.context import AgentContext, InspectionStage
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent.validation.errors import AgentPlanError
@@ -19,19 +19,13 @@ from backend.agent.validation.plan import validate_action_plan
 def make_series_context(
     *,
     stage: InspectionStage = InspectionStage.SERIES_DISCOVERY,
-    candidate_ids: list[str] | None = None,
 ) -> AgentContext:
-    candidate_buffer = [
-        CandidateBufferEntry(video_id=video_id, title=video_id, processed=True, status="ready")
-        for video_id in (candidate_ids or [])
-    ]
     return AgentContext(
         session_id="series|agent-frameworks|series-home",
         scope_type="series",
         series_id="agent-frameworks",
         series_title="Agent Frameworks",
         inspection_stage=stage,
-        candidate_buffer=candidate_buffer,
     )
 
 
@@ -73,7 +67,7 @@ class AgentValidationTests(unittest.TestCase):
         with self.assertRaises(AgentPlanError):
             validate_action_plan(plan, make_series_context())
 
-    def test_video_inspection_allows_summary_only_for_candidate_buffer(self) -> None:
+    def test_video_inspection_allows_summary_after_series_listing(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
                 "scope_type": "series",
@@ -86,15 +80,19 @@ class AgentValidationTests(unittest.TestCase):
 
         validated = validate_action_plan(
             plan,
-            make_series_context(
-                stage=InspectionStage.VIDEO_INSPECTION,
-                candidate_ids=["video-1"],
-            ),
+            make_series_context(stage=InspectionStage.VIDEO_INSPECTION),
+            [
+                ToolExecutionResult(
+                    tool_name=ToolName.LIST_SERIES_VIDEOS,
+                    status="ok",
+                    payload={"videos": [{"video_id": "video-1", "title": "Video 1"}]},
+                )
+            ],
         )
 
         self.assertEqual(validated.tool_calls[0].tool_name.value, "get_video_summary")
 
-    def test_video_inspection_allows_batch_tagged_summary_calls_within_candidate_buffer(self) -> None:
+    def test_video_inspection_allows_batch_tagged_summary_calls_from_series_listing(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
                 "scope_type": "series",
@@ -114,16 +112,29 @@ class AgentValidationTests(unittest.TestCase):
 
         validated = validate_action_plan(
             plan,
-            make_series_context(
-                stage=InspectionStage.VIDEO_INSPECTION,
-                candidate_ids=["video-1", "video-2", "video-3", "video-4", "video-5", "video-6"],
-            ),
+            make_series_context(stage=InspectionStage.VIDEO_INSPECTION),
+            [
+                ToolExecutionResult(
+                    tool_name=ToolName.LIST_SERIES_VIDEOS,
+                    status="ok",
+                    payload={
+                        "videos": [
+                            {"video_id": "video-1", "title": "Video 1"},
+                            {"video_id": "video-2", "title": "Video 2"},
+                            {"video_id": "video-3", "title": "Video 3"},
+                            {"video_id": "video-4", "title": "Video 4"},
+                            {"video_id": "video-5", "title": "Video 5"},
+                            {"video_id": "video-6", "title": "Video 6"},
+                        ]
+                    },
+                )
+            ],
         )
 
         self.assertEqual(len(validated.tool_calls), 6)
         self.assertTrue(all(call.tool_name.value == "get_video_summary" for call in validated.tool_calls))
 
-    def test_video_inspection_rejects_summary_outside_candidate_buffer(self) -> None:
+    def test_video_inspection_rejects_summary_outside_last_series_listing(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
                 "scope_type": "series",
@@ -137,13 +148,17 @@ class AgentValidationTests(unittest.TestCase):
         with self.assertRaises(AgentPlanError):
             validate_action_plan(
                 plan,
-                make_series_context(
-                    stage=InspectionStage.VIDEO_INSPECTION,
-                    candidate_ids=["video-1"],
-                ),
+                make_series_context(stage=InspectionStage.VIDEO_INSPECTION),
+                [
+                    ToolExecutionResult(
+                        tool_name=ToolName.LIST_SERIES_VIDEOS,
+                        status="ok",
+                        payload={"videos": [{"video_id": "video-1", "title": "Video 1"}]},
+                    )
+                ],
             )
 
-    def test_video_inspection_allows_batch_tagged_transcript_calls_within_candidate_buffer(self) -> None:
+    def test_video_inspection_allows_batch_tagged_transcript_calls_from_series_listing(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
                 "scope_type": "series",
@@ -159,32 +174,23 @@ class AgentValidationTests(unittest.TestCase):
 
         validated = validate_action_plan(
             plan,
-            make_series_context(
-                stage=InspectionStage.VIDEO_INSPECTION,
-                candidate_ids=["video-1", "video-2"],
-            ),
+            make_series_context(stage=InspectionStage.VIDEO_INSPECTION),
+            [
+                ToolExecutionResult(
+                    tool_name=ToolName.LIST_SERIES_VIDEOS,
+                    status="ok",
+                    payload={
+                        "videos": [
+                            {"video_id": "video-1", "title": "Video 1"},
+                            {"video_id": "video-2", "title": "Video 2"},
+                        ]
+                    },
+                )
+            ],
         )
 
         self.assertEqual(len(validated.tool_calls), 2)
         self.assertTrue(all(call.tool_name.value == "get_video_transcript" for call in validated.tool_calls))
-
-    def test_series_discovery_accepts_candidate_buffer_management_tools(self) -> None:
-        plan = AgentActionPlan.model_validate(
-            {
-                "scope_type": "series",
-                "tool_calls": [
-                    {"tool_name": "list_series_videos"},
-                    {"tool_name": "add_series_candidates", "video_ids": ["video-1"], "reason": "先加入候选"},
-                ],
-                "reason": "先浏览列表，再收集候选",
-                "direct_response": "",
-                "use_answerer": False,
-            }
-        )
-
-        validated = validate_action_plan(plan, make_series_context())
-
-        self.assertEqual([call.tool_name.value for call in validated.tool_calls], ["list_series_videos", "add_series_candidates"])
 
     def test_series_discovery_rejects_repeated_non_batch_tool_calls(self) -> None:
         plan = AgentActionPlan.model_validate(
@@ -203,23 +209,7 @@ class AgentValidationTests(unittest.TestCase):
         with self.assertRaises(AgentPlanError):
             validate_action_plan(plan, make_series_context())
 
-    def test_series_discovery_rejects_placeholder_video_ids(self) -> None:
-        plan = AgentActionPlan.model_validate(
-            {
-                "scope_type": "series",
-                "tool_calls": [
-                    {"tool_name": "add_series_candidates", "video_ids": ["*pending_from_list_series_videos*"], "reason": "错误占位"}
-                ],
-                "reason": "不合法",
-                "direct_response": "",
-                "use_answerer": False,
-            }
-        )
-
-        with self.assertRaises(AgentPlanError):
-            validate_action_plan(plan, make_series_context())
-
-    def test_observed_list_is_only_fallback_when_candidate_buffer_is_empty(self) -> None:
+    def test_observed_list_is_used_to_validate_series_video_reads(self) -> None:
         plan = AgentActionPlan.model_validate(
             {
                 "scope_type": "series",

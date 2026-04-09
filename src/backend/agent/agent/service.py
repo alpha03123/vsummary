@@ -26,6 +26,7 @@ class AgentService:
         memory_compaction_service: AgentMemoryCompactionService | None = None,
         tool_executor: AgentToolExecutor | None = None,
         projection_max_tokens: int | None = None,
+        planner_transport: str = "structured",
     ) -> None:
         self._gateway = gateway
         self._context_loader = context_loader
@@ -39,6 +40,7 @@ class AgentService:
             gateway=gateway,
             tool_executor=self._tool_executor,
             projection_max_tokens=projection_max_tokens,
+            planner_transport=planner_transport,
         )
 
     def run(self, session_id: str, user_message: str) -> AgentTurnResult:

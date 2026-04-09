@@ -20,13 +20,6 @@ from backend.agent.tools.notes import execute_open_knowledge_cards, execute_open
 from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
 from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
 from backend.agent.tools.series import execute_open_series_home, execute_open_series_overview
-from backend.agent.tools.series_buffer import (
-    create_add_series_candidates_handler,
-    create_clear_series_candidates_handler,
-    create_remove_series_candidates_handler,
-    create_replace_series_candidates_handler,
-    create_view_series_candidates_handler,
-)
 from backend.agent.tools.video import execute_open_video, execute_video_seek
 from backend.api.settings_service import ApiSettingsService
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
@@ -198,13 +191,8 @@ def _build_agent_service(
     memory_store: InMemoryAgentMemoryStore,
     session_store: FileAgentSessionStore,
     app_settings,
-) -> AgentService:
+    ) -> AgentService:
     list_series_videos = create_list_series_videos_handler(workspace)
-    view_series_candidates = create_view_series_candidates_handler(workspace)
-    add_series_candidates = create_add_series_candidates_handler(workspace)
-    remove_series_candidates = create_remove_series_candidates_handler(workspace)
-    replace_series_candidates = create_replace_series_candidates_handler(workspace)
-    clear_series_candidates = create_clear_series_candidates_handler(workspace)
     get_video_summary = create_get_video_summary_handler(workspace)
     get_video_tools = create_get_video_tools_handler(workspace)
     get_video_transcript = create_get_video_transcript_handler(workspace)
@@ -220,6 +208,7 @@ def _build_agent_service(
         context_loader=context_loader,
         memory_store=memory_store,
         session_store=session_store,
+        planner_transport=app_settings.agent_context.planner_transport,
         memory_compaction_service=AgentMemoryCompactionService(
             gateway=gateway,
             memory_store=memory_store,
@@ -233,11 +222,6 @@ def _build_agent_service(
         tool_executor=RegistryAgentToolExecutor(
             registry={
                 ToolName.LIST_SERIES_VIDEOS: list_series_videos,
-                ToolName.VIEW_SERIES_CANDIDATES: view_series_candidates,
-                ToolName.ADD_SERIES_CANDIDATES: add_series_candidates,
-                ToolName.REMOVE_SERIES_CANDIDATES: remove_series_candidates,
-                ToolName.REPLACE_SERIES_CANDIDATES: replace_series_candidates,
-                ToolName.CLEAR_SERIES_CANDIDATES: clear_series_candidates,
                 ToolName.GET_VIDEO_SUMMARY: get_video_summary,
                 ToolName.GET_VIDEO_TOOLS: get_video_tools,
                 ToolName.GET_VIDEO_TRANSCRIPT: get_video_transcript,

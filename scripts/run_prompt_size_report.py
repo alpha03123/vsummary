@@ -11,7 +11,7 @@ if str(SRC) not in sys.path:
 
 from backend.agent.agent.prompt import build_agent_responder_prompt
 from backend.agent.context.budget import _estimate_tokens
-from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
+from backend.agent.memory.context import AgentContext, InspectionStage
 from backend.agent.runtime.note_drafter import VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT
 from backend.agent.runtime.request_router import REQUEST_ROUTER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
@@ -33,7 +33,6 @@ def main() -> int:
             scope_type="series",
             series_id="agent-frameworks",
             inspection_stage=InspectionStage.VIDEO_INSPECTION,
-            candidate_buffer=[CandidateBufferEntry(video_id="video-1", title="Video 1")],
         ),
         "video": AgentContext(
             session_id="video|agent-frameworks|video-1|overview",

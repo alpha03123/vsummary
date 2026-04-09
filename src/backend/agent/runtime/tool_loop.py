@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
+from backend.agent.memory.context import AgentContext, InspectionStage
 from backend.agent.ports import AgentToolExecutor
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import (
     SaveNoteCall,
     ToolCall,
-    ToolEffectTag,
     ToolExecutionResult,
     ToolName,
 )
-from backend.agent.tools import tool_has_effect, tool_is_concurrency_safe
+from backend.agent.tools import tool_is_concurrency_safe
 
 
 def execute_tool_batch(
@@ -50,12 +49,9 @@ def partition_tool_calls(calls: list[ToolCall]) -> list[list[ToolCall]]:
 def apply_tool_result_to_context(context: AgentContext, result: ToolExecutionResult) -> AgentContext:
     payload = result.payload
     next_context = _apply_selected_tool_payload(context, payload)
-    next_context = _apply_series_listing_stage(next_context, result)
-    if tool_has_effect(result.tool_name, ToolEffectTag.APPLY_CANDIDATE_BUFFER_PAYLOAD):
-        return _apply_candidate_buffer_payload(next_context, payload)
-    if tool_has_effect(result.tool_name, ToolEffectTag.MARK_VIDEO_INSPECTED):
-        return _mark_video_as_inspected(next_context, payload.get("video_id"))
-    return next_context
+    return _apply_series_listing_stage(next_context, result)
+
+
 def finalize_context_after_turn(
     context: AgentContext,
     tool_results: list[ToolExecutionResult],
@@ -76,7 +72,6 @@ def finalize_context_after_turn(
     return context.model_copy(
         update={
             "inspection_stage": InspectionStage.ANSWER_READY,
-            "candidate_buffer": [],
         }
     )
 
@@ -166,28 +161,3 @@ def _apply_series_listing_stage(context: AgentContext, result: ToolExecutionResu
     if not isinstance(videos, list) or not videos:
         return context
     return context.model_copy(update={"inspection_stage": InspectionStage.VIDEO_INSPECTION})
-
-
-def _apply_candidate_buffer_payload(context: AgentContext, payload: dict[str, object]) -> AgentContext:
-    raw_buffer = payload.get("candidate_buffer")
-    next_buffer = context.candidate_buffer
-    if isinstance(raw_buffer, list):
-        next_buffer = [
-            CandidateBufferEntry.model_validate(item)
-            for item in raw_buffer
-            if isinstance(item, dict)
-        ]
-    return context.model_copy(update={"candidate_buffer": next_buffer})
-
-
-def _mark_video_as_inspected(context: AgentContext, video_id: object) -> AgentContext:
-    if not isinstance(video_id, str) or not video_id.strip():
-        return context
-    normalized_video_id = video_id.strip()
-    if normalized_video_id in context.inspected_video_ids:
-        return context
-    return context.model_copy(
-        update={
-            "inspected_video_ids": [*context.inspected_video_ids, normalized_video_id],
-        }
-    )

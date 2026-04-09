@@ -7,7 +7,7 @@ from backend.agent.memory.context import AgentContext, InspectionStage
 from backend.agent.ports import AgentToolExecutor
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult, ToolName
-from backend.agent.tools import tool_is_available_in_context, tool_requires_candidate_buffer
+from backend.agent.tools import tool_is_available_in_context
 from backend.agent.validation.errors import AgentPlanError
 
 
@@ -37,8 +37,3 @@ def _guard_call_against_context(call: ToolCall, context: AgentContext) -> None:
         return
     if context.inspection_stage == InspectionStage.SERIES_DISCOVERY:
         return
-    if context.candidate_buffer and tool_requires_candidate_buffer(call.tool_name):
-        candidate_ids = {item.video_id for item in context.candidate_buffer}
-        video_id = getattr(call, "video_id", None)
-        if video_id is None or video_id not in candidate_ids:
-            raise AgentPlanError(f"{call.tool_name.value} 只能作用于当前候选缓冲区中的视频。")

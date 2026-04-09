@@ -17,14 +17,6 @@ class InspectionStage(str, Enum):
     ANSWER_READY = "answer_ready"
 
 
-class CandidateBufferEntry(BaseModel):
-    video_id: str
-    title: str
-    processed: bool = False
-    status: str = "idle"
-    reason: str = ""
-
-
 class AgentContext(BaseModel):
     session_id: str
     workspace_title: str = "Video Include"
@@ -40,8 +32,5 @@ class AgentContext(BaseModel):
     notes: ToolAvailability = Field(default_factory=ToolAvailability)
     preview: ToolAvailability = Field(default_factory=ToolAvailability)
     inspection_stage: InspectionStage = InspectionStage.SERIES_DISCOVERY
-    candidate_buffer: list[CandidateBufferEntry] = Field(default_factory=list)
-    inspected_video_ids: list[str] = Field(default_factory=list)
-    rejected_video_ids: list[str] = Field(default_factory=list)
     chapter_titles: list[str] = Field(default_factory=list)
     recent_messages: list[str] = Field(default_factory=list)

@@ -14,7 +14,7 @@ from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.agent.service import AgentService
 from backend.agent.agent.service import _apply_tool_result_to_context
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
-from backend.agent.memory.context import AgentContext, CandidateBufferEntry, InspectionStage
+from backend.agent.memory.context import AgentContext, InspectionStage, ToolAvailability
 from backend.agent.memory.store import InMemoryAgentMemoryStore
 from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
 from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
@@ -113,12 +113,11 @@ class AgentScaffoldTests(unittest.TestCase):
                     scope_type="series",
                     series_id="series-a",
                     inspection_stage=InspectionStage.VIDEO_INSPECTION,
-                    candidate_buffer=[CandidateBufferEntry(video_id="video-1", title="Video 1")],
                 )
             )
         }
 
-        self.assertIn("add_series_candidates", series_discovery_tools)
+        self.assertIn("list_series_videos", series_discovery_tools)
         self.assertNotIn("get_video_summary", series_discovery_tools)
         self.assertIn("get_video_summary", video_inspection_tools)
         self.assertIn("get_video_transcript", video_inspection_tools)
@@ -227,6 +226,74 @@ class AgentScaffoldTests(unittest.TestCase):
         result = service.run("video|series-a|video-1|overview", "视频原话里是怎么说的？")
 
         self.assertEqual(executed_calls, ["get_video_transcript:video-1"])
+
+    def test_video_tool_status_question_reads_structured_tool_status(self) -> None:
+        gateway = FakeGateway()
+        executed_calls: list[str] = []
+
+        def fake_get_video_tools(call, context):
+            del context
+            executed_calls.append(f"get_video_tools:{call.video_id}")
+            return ToolExecutionResult(
+                tool_name=ToolName.GET_VIDEO_TOOLS,
+                status="ok",
+                payload={
+                    "video_id": call.video_id,
+                    "overview": {"available": True, "generated": True, "status": "ready"},
+                    "mindmap": {"available": True, "generated": True, "status": "ready"},
+                    "knowledge_cards": {"available": True, "generated": False, "status": "available"},
+                    "notes": {"available": True, "generated": True, "status": "ready"},
+                    "preview": {"available": True, "generated": True, "status": "ready"},
+                },
+            )
+
+        service = AgentService(
+            gateway=gateway,
+            context_loader=StaticAgentContextLoader(
+                AgentContext(
+                    session_id="video|series-a|video-1|overview",
+                    scope_type="video",
+                    series_id="series-a",
+                    video_id="video-1",
+                    overview=ToolAvailability(available=True, generated=True, status="ready"),
+                    mindmap=ToolAvailability(available=True, generated=True, status="ready"),
+                    knowledge_cards=ToolAvailability(available=True, generated=False, status="available"),
+                    notes=ToolAvailability(available=True, generated=True, status="ready"),
+                    preview=ToolAvailability(available=True, generated=True, status="ready"),
+                )
+            ),
+            memory_store=InMemoryAgentMemoryStore(),
+            tool_executor=RegistryAgentToolExecutor(
+                registry={
+                    ToolName.GET_VIDEO_TOOLS: fake_get_video_tools,
+                }
+            ),
+        )
+
+        service.run("video|series-a|video-1|overview", "这个视频现在有哪些工具已经生成了？导图、知识卡片、笔记分别是什么状态？")
+
+        self.assertEqual(executed_calls, ["get_video_tools:video-1"])
+
+    def test_video_scope_boundary_question_guides_user_to_series_scope(self) -> None:
+        gateway = FakeGateway()
+
+        service = AgentService(
+            gateway=gateway,
+            context_loader=StaticAgentContextLoader(
+                AgentContext(
+                    session_id="video|series-a|video-1|overview",
+                    scope_type="video",
+                    series_id="series-a",
+                    video_id="video-1",
+                )
+            ),
+            memory_store=InMemoryAgentMemoryStore(),
+            tool_executor=RegistryAgentToolExecutor(registry={}),
+        )
+
+        result = service.run("video|series-a|video-1|overview", "当前这个视频讲的是 API Key，那后面哪一节最可能与它衔接？")
+
+        self.assertIn("系列", result.assistant_message)
 
     def test_executor_allows_video_read_tool_when_inspection_buffer_is_empty(self) -> None:
         executor = RegistryAgentToolExecutor(
@@ -408,8 +475,6 @@ class AgentScaffoldTests(unittest.TestCase):
         self.assertIsNotNone(snapshot)
         assert snapshot is not None
         self.assertEqual(snapshot.context.inspection_stage, InspectionStage.ANSWER_READY)
-        self.assertEqual(snapshot.context.candidate_buffer, [])
-        self.assertEqual(snapshot.context.inspected_video_ids, ["video-1"])
 
 
 if __name__ == "__main__":

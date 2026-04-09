@@ -9,6 +9,7 @@ VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper"}
 VALID_THEMES = {"light", "dark"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
+VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
@@ -63,6 +64,7 @@ class AgentContextSettings:
     blocking_threshold_ratio: float
     keep_tail_messages: int
     projection_max_tokens_ratio: float
+    planner_transport: str = "structured"
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,9 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         projection_max_tokens_ratio=_normalize_ratio(
             agent_context_payload.get("projection_max_tokens_ratio"),
             default=DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO,
+        ),
+        planner_transport=_normalize_planner_transport(
+            agent_context_payload.get("planner_transport")
         ),
     )
 
@@ -262,6 +267,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"blocking_threshold_ratio = {settings.agent_context.blocking_threshold_ratio}",
         f"keep_tail_messages = {settings.agent_context.keep_tail_messages}",
         f"projection_max_tokens_ratio = {settings.agent_context.projection_max_tokens_ratio}",
+        f'planner_transport = "{settings.agent_context.planner_transport}"',
         "",
     ]
     return "\n".join(lines)
@@ -283,6 +289,14 @@ def _normalize_ratio(value: object, *, default: float) -> float:
         if 0 < normalized < 1:
             return normalized
     return default
+
+
+def _normalize_planner_transport(value: object) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in VALID_PLANNER_TRANSPORTS:
+            return normalized
+    return "structured"
 
 
 @dataclass(frozen=True)

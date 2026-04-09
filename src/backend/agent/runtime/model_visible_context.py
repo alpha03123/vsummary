@@ -11,8 +11,5 @@ def render_model_visible_context_json(context: AgentContext) -> str:
 
 def build_model_visible_context(context: AgentContext) -> dict[str, object]:
     payload = context.model_dump(mode="json")
-    payload.pop("candidate_buffer", None)
-    payload.pop("inspected_video_ids", None)
-    payload.pop("rejected_video_ids", None)
     payload.pop("inspection_stage", None)
     return payload
