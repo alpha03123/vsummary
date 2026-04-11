@@ -5,10 +5,22 @@ from pathlib import Path
 from threading import Lock
 from typing import Callable
 
-from backend.agent import AgentContextBudgetService, AgentService, FileAgentSessionStore, InMemoryAgentMemoryStore
+import dspy
+
+from backend.agent import AgentContextBudgetService, FileAgentSessionStore, InMemoryAgentMemoryStore
 from backend.agent.context import AgentMemoryCompactionService
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
+from backend.agent_graph.action_dispatcher import ActionDispatcher
+from backend.agent_graph.graph import build_agent_graph
+from backend.agent_graph.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.program_loader import (
+    load_or_create_classifier_program,
+    load_or_create_decompose_program,
+    load_or_create_split_compare_program,
+)
+from backend.agent_graph.retrieval import MetaStateReader, SeriesRetrievalService
+from backend.agent_graph.service import AgentGraphService, SeriesAgentGraphService
 from backend.agent.schemas.tool_calls import ToolName
 from backend.agent.tools.library_info import (
     create_get_video_summary_handler,
@@ -71,7 +83,9 @@ class ApiContainer:
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     settings_service: ApiSettingsService
-    get_agent_service: Callable[[], AgentService]
+    get_agent_service: Callable[[], AgentGraphService]
+    get_agent_graph_service: Callable[[], AgentGraphService]
+    get_series_agent_graph_service: Callable[[], SeriesAgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
 
@@ -120,6 +134,8 @@ def build_api_container(
             faster_whisper_model_manager=model_manager,
         ),
         get_agent_service=agent_runtime.get_agent_service,
+        get_agent_graph_service=agent_runtime.get_agent_graph_service,
+        get_series_agent_graph_service=agent_runtime.get_series_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
     )
@@ -133,22 +149,26 @@ class LazyAgentRuntimeProvider:
         self.session_store = FileAgentSessionStore(root_dir / "data" / "agent_sessions")
         self._lock = Lock()
         self._cached_signature: str | None = None
-        self._cached_service: AgentService | None = None
+        self._cached_agent_graph_service: AgentGraphService | None = None
         self._cached_context_budget_service: AgentContextBudgetService | None = None
 
-    def get_agent_service(self) -> AgentService:
-        signature = self._load_signature()
+    def get_agent_service(self) -> AgentGraphService:
+        return self.get_agent_graph_service()
+
+    def get_agent_graph_service(self) -> AgentGraphService:
         with self._lock:
-            if self._cached_service is None or self._cached_signature != signature:
-                app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
-                self._cached_service = _build_agent_service(
-                    root_dir=self._root_dir,
-                    workspace=self._workspace,
-                    context_loader=self._context_loader,
-                    memory_store=self._memory_store,
-                    session_store=self.session_store,
-                    app_settings=app_settings,
+            if self._cached_agent_graph_service is None:
+                env_settings = load_env_settings(self._root_dir)
+                if not env_settings.api_key.strip():
+                    raise RuntimeError("缺少 API Key，无法调用 Agent 模型。")
+                dspy.configure(
+                    lm=ProxyStreamingLM(
+                        model=f"openai/{env_settings.model.strip()}",
+                        api_base=normalize_openai_base_url(env_settings.base_url),
+                        api_key=env_settings.api_key.strip(),
+                    )
                 )
+                app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
                 self._cached_context_budget_service = AgentContextBudgetService(
                     context_loader=self._context_loader,
                     memory_store=self._memory_store,
@@ -158,8 +178,47 @@ class LazyAgentRuntimeProvider:
                     compact_threshold_ratio=app_settings.agent_context.compact_threshold_ratio,
                     blocking_threshold_ratio=app_settings.agent_context.blocking_threshold_ratio,
                 )
-                self._cached_signature = signature
-            return self._cached_service
+                list_series_videos = create_list_series_videos_handler(self._workspace)
+                get_video_summary = create_get_video_summary_handler(self._workspace)
+                get_video_tools = create_get_video_tools_handler(self._workspace)
+                get_video_transcript = create_get_video_transcript_handler(self._workspace)
+                tool_executor = _build_tool_executor(
+                    list_series_videos=list_series_videos,
+                    get_video_summary=get_video_summary,
+                    get_video_tools=get_video_tools,
+                    get_video_transcript=get_video_transcript,
+                )
+                graph = build_agent_graph(
+                    decomposer_program=load_or_create_decompose_program(
+                        artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "decompose" / "program.json",
+                    ),
+                    classifier_program=load_or_create_classifier_program(
+                        artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "classifier" / "program.json",
+                    ),
+                    compare_split_program=load_or_create_split_compare_program(
+                        artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "split_compare" / "program.json",
+                    ),
+                    retrieval_service=SeriesRetrievalService(
+                        workspace=self._workspace,
+                        db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
+                        root_dir=self._root_dir,
+                    ),
+                    meta_state_reader=MetaStateReader(workspace=self._workspace),
+                    action_dispatcher=ActionDispatcher(tool_executor=tool_executor),
+                )
+                self._cached_agent_graph_service = AgentGraphService(
+                    context_loader=self._context_loader,
+                    graph=graph,
+                    session_store=self.session_store,
+                )
+            return self._cached_agent_graph_service
+
+    def get_series_agent_graph_service(self) -> SeriesAgentGraphService:
+        return SeriesAgentGraphService(
+            context_loader=self._context_loader,
+            graph=self.get_agent_graph_service().graph,
+            session_store=self.session_store,
+        )
 
     def get_context_budget_service(self) -> AgentContextBudgetService:
         with self._lock:
@@ -183,59 +242,29 @@ class LazyAgentRuntimeProvider:
         return dotenv_path.read_text(encoding="utf-8")
 
 
-def _build_agent_service(
+def _build_tool_executor(
     *,
-    root_dir: Path,
-    workspace: FileSystemVideoWorkspace,
-    context_loader: WorkspaceAgentContextLoader,
-    memory_store: InMemoryAgentMemoryStore,
-    session_store: FileAgentSessionStore,
-    app_settings,
-    ) -> AgentService:
-    list_series_videos = create_list_series_videos_handler(workspace)
-    get_video_summary = create_get_video_summary_handler(workspace)
-    get_video_tools = create_get_video_tools_handler(workspace)
-    get_video_transcript = create_get_video_transcript_handler(workspace)
-    env_settings = load_env_settings(root_dir)
-    gateway = LiteLLMChatGateway(
-        provider=env_settings.provider,
-        model=env_settings.model,
-        base_url=normalize_openai_base_url(env_settings.base_url),
-        api_key=env_settings.api_key,
-    )
-    return AgentService(
-        gateway=gateway,
-        context_loader=context_loader,
-        memory_store=memory_store,
-        session_store=session_store,
-        planner_transport=app_settings.agent_context.planner_transport,
-        memory_compaction_service=AgentMemoryCompactionService(
-            gateway=gateway,
-            memory_store=memory_store,
-            context_window_tokens=app_settings.agent_context.window_tokens,
-            compact_threshold_ratio=app_settings.agent_context.compact_threshold_ratio,
-            keep_tail_messages=app_settings.agent_context.keep_tail_messages,
-        ),
-        projection_max_tokens=int(
-            app_settings.agent_context.window_tokens * app_settings.agent_context.projection_max_tokens_ratio
-        ),
-        tool_executor=RegistryAgentToolExecutor(
-            registry={
-                ToolName.LIST_SERIES_VIDEOS: list_series_videos,
-                ToolName.GET_VIDEO_SUMMARY: get_video_summary,
-                ToolName.GET_VIDEO_TOOLS: get_video_tools,
-                ToolName.GET_VIDEO_TRANSCRIPT: get_video_transcript,
-                ToolName.OPEN_SERIES_HOME: execute_open_series_home,
-                ToolName.OPEN_SERIES_OVERVIEW: execute_open_series_overview,
-                ToolName.OPEN_OVERVIEW: execute_open_overview,
-                ToolName.OPEN_MINDMAP: execute_open_mindmap,
-                ToolName.OPEN_KNOWLEDGE_CARDS: execute_open_knowledge_cards,
-                ToolName.OPEN_NOTES: execute_open_notes,
-                ToolName.OPEN_VIDEO: execute_open_video,
-                ToolName.VIDEO_SEEK: execute_video_seek,
-                ToolName.GENERATE_OVERVIEW: execute_generate_overview,
-                ToolName.GENERATE_MINDMAP: execute_generate_mindmap,
-                ToolName.SAVE_NOTE: execute_save_note,
-            }
-        ),
+    list_series_videos,
+    get_video_summary,
+    get_video_tools,
+    get_video_transcript,
+) -> RegistryAgentToolExecutor:
+    return RegistryAgentToolExecutor(
+        registry={
+            ToolName.LIST_SERIES_VIDEOS: list_series_videos,
+            ToolName.GET_VIDEO_SUMMARY: get_video_summary,
+            ToolName.GET_VIDEO_TOOLS: get_video_tools,
+            ToolName.GET_VIDEO_TRANSCRIPT: get_video_transcript,
+            ToolName.OPEN_SERIES_HOME: execute_open_series_home,
+            ToolName.OPEN_SERIES_OVERVIEW: execute_open_series_overview,
+            ToolName.OPEN_OVERVIEW: execute_open_overview,
+            ToolName.OPEN_MINDMAP: execute_open_mindmap,
+            ToolName.OPEN_KNOWLEDGE_CARDS: execute_open_knowledge_cards,
+            ToolName.OPEN_NOTES: execute_open_notes,
+            ToolName.OPEN_VIDEO: execute_open_video,
+            ToolName.VIDEO_SEEK: execute_video_seek,
+            ToolName.GENERATE_OVERVIEW: execute_generate_overview,
+            ToolName.GENERATE_MINDMAP: execute_generate_mindmap,
+            ToolName.SAVE_NOTE: execute_save_note,
+        }
     )

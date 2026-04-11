@@ -6,9 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
-from backend.video_summary.bootstrap import load_video_summary_application
 from backend.video_summary.domain.models import SummaryDocument
 from backend.video_summary.generation.ports import ProgressReporter
+from backend.video_summary.infrastructure.application_builders import build_video_summary_application
 
 
 class ConfiguredVideoSummaryWorkflow:
@@ -48,7 +48,7 @@ class ConfiguredVideoSummaryWorkflow:
         )
         with self._application_lock:
             if self._cached_signature != signature or self._cached_application is None:
-                self._cached_application = load_video_summary_application(
+                self._cached_application = build_video_summary_application(
                     config_path=self._config_path,
                     root_dir=self._root_dir,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,

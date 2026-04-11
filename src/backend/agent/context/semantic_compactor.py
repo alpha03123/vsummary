@@ -5,7 +5,7 @@ import json
 from pydantic import BaseModel, Field
 
 from backend.agent.ports import ChatGateway
-from backend.agent.runtime.json_protocol import parse_json_completion
+from backend.agent.utils.json_protocol import parse_json_completion
 from backend.agent.schemas.messages import AgentChatMessage
 
 

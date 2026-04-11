@@ -54,34 +54,9 @@ def main() -> int:
         help="跳过工具目录导出。",
     )
     parser.add_argument(
-        "--skip-prompt-report",
+        "--skip-dspy-analysis",
         action="store_true",
-        help="跳过 prompt size report。",
-    )
-    parser.add_argument(
-        "--skip-evidence-policy",
-        action="store_true",
-        help="跳过 evidence policy cases。",
-    )
-    parser.add_argument(
-        "--skip-batch-probe",
-        action="store_true",
-        help="跳过 series batch probe。",
-    )
-    parser.add_argument(
-        "--skip-video-evidence",
-        action="store_true",
-        help="跳过 video evidence selector cases。",
-    )
-    parser.add_argument(
-        "--skip-series-evidence",
-        action="store_true",
-        help="跳过 series evidence selector cases。",
-    )
-    parser.add_argument(
-        "--skip-request-router",
-        action="store_true",
-        help="跳过 request router cases。",
+        help="跳过 DSPy analyze 脚本。",
     )
     args = parser.parse_args()
 
@@ -96,18 +71,10 @@ def main() -> int:
         steps.append(("provider-probe", [sys.executable, ".\\scripts\\run_agent_provider_probe.py"]))
     if not args.skip_tool_catalog:
         steps.append(("tool-catalog-dump", [sys.executable, ".\\scripts\\run_tool_catalog_dump.py"]))
-    if not args.skip_prompt_report:
-        steps.append(("prompt-size-report", [sys.executable, ".\\scripts\\run_prompt_size_report.py"]))
-    if not args.skip_evidence_policy:
-        steps.append(("evidence-policy-cases", [sys.executable, ".\\scripts\\run_evidence_policy_cases.py"]))
-    if not args.skip_batch_probe:
-        steps.append(("series-batch-probe", [sys.executable, ".\\scripts\\run_series_batch_probe.py"]))
-    if not args.skip_video_evidence:
-        steps.append(("video-evidence-selector-cases", [sys.executable, ".\\scripts\\run_video_evidence_selector_cases.py"]))
-    if not args.skip_series_evidence:
-        steps.append(("series-evidence-selector-cases", [sys.executable, ".\\scripts\\run_series_evidence_selector_cases.py"]))
-    if not args.skip_request_router:
-        steps.append(("request-router-cases", [sys.executable, ".\\scripts\\run_request_router_cases.py"]))
+    if not args.skip_dspy_analysis:
+        steps.append(("analyze-classifier", [sys.executable, ".\\scripts\\analyze_agent_graph_classifier.py", "--limit", "5"]))
+        steps.append(("analyze-decompose", [sys.executable, ".\\scripts\\analyze_agent_graph_decompose.py", "--limit", "5"]))
+        steps.append(("analyze-split-compare", [sys.executable, ".\\scripts\\analyze_agent_graph_split_compare.py", "--limit", "5"]))
     if mode == "live":
         live_command = [sys.executable, ".\\scripts\\run_agent_manual_cases.py", "--manual"]
         if args.cases:

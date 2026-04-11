@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock
 
-from backend.video_summary.bootstrap import load_mindmap_application
+from backend.video_summary.infrastructure.application_builders import build_mindmap_application
 
 
 class ConfiguredMindmapWorkflow:
@@ -31,7 +31,7 @@ class ConfiguredMindmapWorkflow:
         )
         with self._application_lock:
             if self._cached_application is None or self._cached_signature != signature:
-                self._cached_application = load_mindmap_application(
+                self._cached_application = build_mindmap_application(
                     config_path=self._config_path,
                     root_dir=self._root_dir,
                 )

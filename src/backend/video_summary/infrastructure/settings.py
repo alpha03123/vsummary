@@ -17,6 +17,10 @@ DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
 DEFAULT_AGENT_BLOCKING_THRESHOLD_RATIO = 0.92
 DEFAULT_AGENT_KEEP_TAIL_MESSAGES = 6
 DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO = 0.08
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "local_huggingface"
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-base-zh-v1.5"
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "gpu"
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE = 8
 
 
 @dataclass(frozen=True)
@@ -68,12 +72,21 @@ class AgentContextSettings:
 
 
 @dataclass(frozen=True)
+class AgentRetrievalSettings:
+    embedding_provider: str
+    embedding_model: str
+    embedding_device: str
+    embedding_batch_size: int
+
+
+@dataclass(frozen=True)
 class AppSettings:
     asr: AsrSettings
     openai: OpenAISettings
     workspace_ui: WorkspaceUiSettings
     debug: DebugSettings
     agent_context: AgentContextSettings
+    agent_retrieval: AgentRetrievalSettings
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
@@ -155,6 +168,24 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             agent_context_payload.get("planner_transport")
         ),
     )
+    agent_retrieval_payload = payload.get("agent_retrieval", {})
+    agent_retrieval_settings = AgentRetrievalSettings(
+        embedding_provider=_normalize_embedding_provider(
+            agent_retrieval_payload.get("embedding_provider")
+        ),
+        embedding_model=_normalize_non_empty_string(
+            agent_retrieval_payload.get("embedding_model"),
+            default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL,
+        ),
+        embedding_device=_normalize_non_empty_string(
+            agent_retrieval_payload.get("embedding_device"),
+            default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE,
+        ),
+        embedding_batch_size=_normalize_positive_int(
+            agent_retrieval_payload.get("embedding_batch_size"),
+            default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE,
+        ),
+    )
 
     return AppSettings(
         asr=asr_settings,
@@ -162,6 +193,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         workspace_ui=workspace_ui_settings,
         debug=debug_settings,
         agent_context=agent_context_settings,
+        agent_retrieval=agent_retrieval_settings,
     )
 
 
@@ -269,6 +301,12 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"projection_max_tokens_ratio = {settings.agent_context.projection_max_tokens_ratio}",
         f'planner_transport = "{settings.agent_context.planner_transport}"',
         "",
+        "[agent_retrieval]",
+        f'embedding_provider = "{settings.agent_retrieval.embedding_provider}"',
+        f'embedding_model = "{settings.agent_retrieval.embedding_model}"',
+        f'embedding_device = "{settings.agent_retrieval.embedding_device}"',
+        f"embedding_batch_size = {settings.agent_retrieval.embedding_batch_size}",
+        "",
     ]
     return "\n".join(lines)
 
@@ -297,6 +335,24 @@ def _normalize_planner_transport(value: object) -> str:
         if normalized in VALID_PLANNER_TRANSPORTS:
             return normalized
     return "structured"
+
+
+def _normalize_embedding_provider(value: object) -> str:
+    normalized = _normalize_non_empty_string(
+        value,
+        default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER,
+    )
+    if normalized != "local_huggingface":
+        raise ValueError(f"Unsupported agent_retrieval.embedding_provider: {normalized}")
+    return normalized
+
+
+def _normalize_non_empty_string(value: object, *, default: str) -> str:
+    if isinstance(value, str):
+        normalized = value.strip()
+        if normalized:
+            return normalized
+    return default
 
 
 @dataclass(frozen=True)

@@ -8,11 +8,12 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.memory.runtime import load_runtime_context
 from backend.agent.memory.store import AgentMemoryStore
 from backend.agent.ports import AgentContextLoader
-from backend.agent.runtime.note_drafter import VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT
-from backend.agent.runtime.planner import INITIAL_PLANNER_SYSTEM_PROMPT
-from backend.agent.runtime.routed_answerer import ROUTED_ANSWERER_SYSTEM_PROMPT
-from backend.agent.runtime.series_locator import SERIES_LOCATOR_SYSTEM_PROMPT
-from backend.agent.runtime.video_seek_locator import VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT
+
+GRAPH_RUNTIME_BASELINE = {
+    "graph": "agent_graph",
+    "nodes": ["classify", "split_compare", "retrieve", "read_meta_state", "dispatch_action", "answer"],
+    "programs": ["dspy_classify", "dspy_split_compare", "dspy_answer"],
+}
 
 DEFAULT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_RESERVED_OUTPUT_TOKENS = 20_000
@@ -75,13 +76,7 @@ class AgentContextBudgetService:
             session_id=session_id,
             context_override=context_override,
         )
-        system_prompt_tokens = (
-            _estimate_tokens(INITIAL_PLANNER_SYSTEM_PROMPT)
-            + _estimate_tokens(ROUTED_ANSWERER_SYSTEM_PROMPT)
-            + _estimate_tokens(VIDEO_NOTE_DRAFTER_SYSTEM_PROMPT)
-            + _estimate_tokens(SERIES_LOCATOR_SYSTEM_PROMPT)
-            + _estimate_tokens(VIDEO_SEEK_LOCATOR_SYSTEM_PROMPT)
-        )
+        system_prompt_tokens = _estimate_tokens(GRAPH_RUNTIME_BASELINE)
         recent_messages_tokens = _estimate_recent_messages_tokens(context.recent_messages)
         workspace_context_tokens = _estimate_workspace_context_tokens(context)
         tool_results_tokens = 0

@@ -65,19 +65,19 @@ transcription_mode = "fast"
             )
             workflow = workflow_module.ConfiguredVideoSummaryWorkflow(root)
             applications: list[FakeApplication] = []
-            original_loader = workflow_module.load_video_summary_application
+            original_loader = workflow_module.build_video_summary_application
 
             def fake_loader(**kwargs):
                 application = FakeApplication()
                 applications.append(application)
                 return application
 
-            workflow_module.load_video_summary_application = fake_loader
+            workflow_module.build_video_summary_application = fake_loader
             try:
                 first = asyncio.run(workflow.run(root / "videos" / "a.mp4", root / "workspace" / "a"))
                 second = asyncio.run(workflow.run(root / "videos" / "b.mp4", root / "workspace" / "b"))
             finally:
-                workflow_module.load_video_summary_application = original_loader
+                workflow_module.build_video_summary_application = original_loader
 
             self.assertEqual(len(applications), 1)
             self.assertEqual(first["title"], "a")
@@ -119,7 +119,7 @@ mode = true
                 encoding="utf-8",
             )
             workflow = workflow_module.ConfiguredVideoSummaryWorkflow(root)
-            original_loader = workflow_module.load_video_summary_application
+            original_loader = workflow_module.build_video_summary_application
 
             class FakeReporter:
                 def update(self, stage, progress=None, detail=None):
@@ -152,12 +152,12 @@ mode = true
                 application.use_case.run = run
                 return application
 
-            workflow_module.load_video_summary_application = fake_loader
+            workflow_module.build_video_summary_application = fake_loader
             try:
                 output_dir = root / "workspace" / "demo"
                 asyncio.run(workflow.run(root / "videos" / "demo.mp4", output_dir, progress_reporter=FakeReporter()))
             finally:
-                workflow_module.load_video_summary_application = original_loader
+                workflow_module.build_video_summary_application = original_loader
 
             log_text = (output_dir / "debug.log").read_text(encoding="utf-8")
             self.assertIn('"event": "run_started"', log_text)

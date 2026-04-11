@@ -69,7 +69,7 @@ class FakeMindmapGenerator:
         return payload
 
 
-class FakeAgentService:
+class FakeChatService:
     def __init__(self, session_store=None) -> None:
         self.last_context_override = None
         self.session_store = session_store
@@ -266,7 +266,7 @@ show_takeaways = true
             mindmap_generator=FakeMindmapGenerator(),
             faster_whisper_model_manager=FakeFasterWhisperModelManager(),
         )
-        self.fake_agent_service = FakeAgentService(api_module.CONTAINER.agent_session_store)
+        self.fake_agent_service = FakeChatService(api_module.CONTAINER.agent_session_store)
         api_module.CONTAINER = api_module.CONTAINER.__class__(**{
             **api_module.CONTAINER.__dict__,
             "get_agent_service": lambda: self.fake_agent_service,

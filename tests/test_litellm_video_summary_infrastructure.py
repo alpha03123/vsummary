@@ -15,6 +15,7 @@ from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.settings import (
     AgentContextSettings,
+    AgentRetrievalSettings,
     AppSettings,
     AsrSettings,
     DebugSettings,
@@ -230,6 +231,12 @@ class LiteLLMVideoSummaryInfrastructureTests(unittest.TestCase):
                 keep_tail_messages=6,
                 projection_max_tokens_ratio=0.08,
             ),
+            agent_retrieval=AgentRetrievalSettings(
+                embedding_provider="local_huggingface",
+                embedding_model="BAAI/bge-base-zh-v1.5",
+                embedding_device="cpu",
+                embedding_batch_size=8,
+            ),
         )
 
         next_settings = replace_workspace_ui_settings(
@@ -246,8 +253,9 @@ class LiteLLMVideoSummaryInfrastructureTests(unittest.TestCase):
         self.assertEqual(next_settings.asr.faster_whisper.model_size, "large-v3")
         self.assertEqual(next_settings.asr.faster_whisper.transcription_mode, "accurate")
         self.assertEqual(next_settings.openai.api_key, "secret")
+        self.assertEqual(next_settings.agent_retrieval.embedding_model, "BAAI/bge-base-zh-v1.5")
 
-    def test_mindmap_workflow_uses_bootstrap_loader(self) -> None:
+    def test_mindmap_workflow_uses_infrastructure_builder(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / "config").mkdir(parents=True)
@@ -283,7 +291,7 @@ transcription_mode = "fast"
             import backend.video_summary.infrastructure.mindmap_workflow as workflow_module
 
             captured: list[tuple[str, float]] = []
-            original_loader = workflow_module.load_mindmap_application
+            original_loader = workflow_module.build_mindmap_application
 
             class FakeUseCase:
                 async def run(self, *, title: str, duration_seconds: float, summary_data: dict[str, object], output_dir: Path):
@@ -293,7 +301,7 @@ transcription_mode = "fast"
             class FakeApplication:
                 use_case = FakeUseCase()
 
-            workflow_module.load_mindmap_application = lambda **kwargs: FakeApplication()
+            workflow_module.build_mindmap_application = lambda **kwargs: FakeApplication()
             try:
                 result = asyncio.run(
                     workflow.run(
@@ -303,7 +311,7 @@ transcription_mode = "fast"
                     )
                 )
             finally:
-                workflow_module.load_mindmap_application = original_loader
+                workflow_module.build_mindmap_application = original_loader
 
             self.assertEqual(result["title"], "demo")
             self.assertEqual(captured, [("demo", 42.0)])
