@@ -20,12 +20,18 @@ class AgentSessionEvidenceEntry(BaseModel):
     updated_at: str
 
 
+class AgentSessionSelectedVideoEntry(BaseModel):
+    video_id: str
+    reason_for_selection: str = ""
+
+
 class AgentSessionSnapshot(BaseModel):
     session_id: str
     memory_key: str
     context: AgentContext
     messages: list[AgentSessionMessageEntry] = Field(default_factory=list)
     evidence_entries: list[AgentSessionEvidenceEntry] = Field(default_factory=list)
+    selected_videos: list[AgentSessionSelectedVideoEntry] = Field(default_factory=list)
     updated_at: str
 
     @property

@@ -20,10 +20,16 @@ class _FakeGraph:
     def invoke(self, payload):
         history = payload.get("history_messages", [])
         history_summary = payload.get("history_summary", "")
+        history_selected_videos = payload.get("history_selected_videos", [])
         return {
             **payload,
-            "answer": f"hist={len(history)} summary={history_summary}",
+            "answer": f"hist={len(history)} summary={history_summary} selected={len(history_selected_videos)}",
             "history_summary_update": "本轮继续围绕 Jmanus 做比较。",
+            "query_plan": {
+                "selected_videos": [
+                    {"video_id": "1-6", "reason_for_selection": "上一轮选中的 JManus"}
+                ]
+            },
         }
 
 
@@ -57,10 +63,18 @@ class AgentGraphMemoryTests(unittest.TestCase):
             )
 
             self.assertIn("hist=2", result.assistant_message)
+            self.assertIn("selected=0", result.assistant_message)
             snapshot = store.get_snapshot("series|series-a|series-home")
             self.assertIsNotNone(snapshot)
             assert snapshot is not None
             self.assertEqual(snapshot.context.compact_summary, "本轮继续围绕 Jmanus 做比较。")
+            self.assertEqual(snapshot.selected_videos[0].video_id, "1-6")
+
+            result = service.run_turn(
+                session_id="series|series-a|series-home",
+                user_message="那 AgentScope 呢？",
+            )
+            self.assertIn("selected=1", result.assistant_message)
 
 
 if __name__ == "__main__":

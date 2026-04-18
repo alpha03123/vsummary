@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from backend.agent.schemas.action_plan import AgentTurnResult
+from backend.agent.schemas.action_plan import AgentTurnResult, CitationReference, CitationSlot, CitationSlotCandidate
 from backend.video_summary.library.views import (
     ChapterCardView,
     KnowledgeCardView,
@@ -322,11 +322,68 @@ class ToolExecutionResultResponse(BaseModel):
     payload: dict[str, object]
 
 
+class CitationSlotResponse(BaseModel):
+    slot: int
+    target_type: str
+    series_id: str | None = None
+    video_id: str | None = None
+    video_title: str | None = None
+    chapter_id: str | None = None
+    start_seconds: float | None = None
+    end_seconds: float | None = None
+    text: str | None = None
+    candidates: list["CitationSlotCandidateResponse"] = Field(default_factory=list)
+
+    @classmethod
+    def from_view(cls, slot: CitationSlot) -> "CitationSlotResponse":
+        return cls(
+            slot=slot.slot,
+            target_type=slot.target_type,
+            series_id=slot.series_id,
+            video_id=slot.video_id,
+            video_title=slot.video_title,
+            chapter_id=slot.chapter_id,
+            start_seconds=slot.start_seconds,
+            end_seconds=slot.end_seconds,
+            text=slot.text,
+            candidates=[CitationSlotCandidateResponse.from_view(item) for item in slot.candidates],
+        )
+
+
+class CitationSlotCandidateResponse(BaseModel):
+    start_seconds: float | None = None
+    end_seconds: float | None = None
+    text: str | None = None
+
+    @classmethod
+    def from_view(cls, candidate: CitationSlotCandidate) -> "CitationSlotCandidateResponse":
+        return cls(**candidate.model_dump(mode="json"))
+
+
+class CitationResponse(BaseModel):
+    id: str
+    label: str
+    source_type: str
+    search_scope: str
+    slots: list[CitationSlotResponse]
+
+    @classmethod
+    def from_view(cls, citation: CitationReference) -> "CitationResponse":
+        return cls(
+            id=citation.id,
+            label=citation.label,
+            source_type=citation.source_type,
+            search_scope=citation.search_scope,
+            slots=[CitationSlotResponse.from_view(slot) for slot in citation.slots],
+        )
+
+
 class AgentChatResponse(BaseModel):
     assistant_message: str
     scope_type: str
     reason: str
     tool_results: list[ToolExecutionResultResponse]
+    citations: list[CitationResponse] = Field(default_factory=list)
 
     @classmethod
     def from_result(cls, result: AgentTurnResult) -> "AgentChatResponse":
@@ -342,4 +399,5 @@ class AgentChatResponse(BaseModel):
                 )
                 for item in result.tool_results
             ],
+            citations=[CitationResponse.from_view(item) for item in result.citations],
         )

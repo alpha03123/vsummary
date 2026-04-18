@@ -38,6 +38,16 @@ class ClassifySeriesQuery(dspy.Signature):
     )
     series_id: str = dspy.InputField(desc="当前 series 标识。")
     video_id: str = dspy.InputField(desc="当前 video 标识；若 scope 是 series 则可能为空。")
+    history_summary: str = dspy.InputField(
+        desc="当前会话的压缩历史摘要；如果为空，说明没有可复用的历史。"
+    )
+    history_selected_videos: list[dict[str, object]] = dspy.InputField(
+        desc=(
+            "上一轮已经筛出的 selected_videos。"
+            "如果当前问题明显是在承接上一轮视频集，应优先输出 selection_mode=carry_forward，"
+            "并沿用这些 video_id，而不是重新从全集中胡乱猜。"
+        )
+    )
     goal: Literal["understand", "locate", "compare", "meta_state", "action"] = dspy.OutputField(
         desc=(
             "任务类型。只能输出 understand/locate/compare/meta_state/action 之一。"
@@ -63,6 +73,25 @@ class ClassifySeriesQuery(dspy.Signature):
         )
     )
     action_args: dict[str, object] = dspy.OutputField(desc="动作参数；非 action 时输出空对象 {}。")
+    candidate_video_ids: list[str] = dspy.OutputField(
+        desc="如果已经能确定目标视频集，输出 video_id 数组；否则可留空。"
+    )
+    selected_videos: list[dict[str, object]] = dspy.OutputField(
+        desc=(
+            "如果已经能确定目标视频集，输出 selected_videos。"
+            "每项包含 video_id、reason_for_selection、needs_probe。"
+        )
+    )
+    selection_mode: Literal["fresh", "carry_forward"] = dspy.OutputField(
+        desc="如果当前问题是在承接上一轮已选视频集，输出 carry_forward；否则 fresh。"
+    )
+    subplans: list[dict[str, object]] = dspy.OutputField(
+        desc=(
+            "可选。若你已经能明确执行结构，输出 subplans。"
+            "每项包含 target_video_ids、depth、query、needs_probe。"
+            "depth 只能是 series_meta/summary/video_graph。"
+        )
+    )
 
 
 class SplitCompareQuery(dspy.Signature):
@@ -112,12 +141,23 @@ class SeriesQueryClassifierProgram:
     def __init__(self, predictor: Callable[..., Any] | None = None) -> None:
         self._predictor = predictor or dspy.Predict(ClassifySeriesQuery)
 
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "") -> SeriesQueryDecision:
+    def run(
+        self,
+        *,
+        user_message: str,
+        scope_type: str,
+        series_id: str,
+        video_id: str = "",
+        history_summary: str = "",
+        history_selected_videos: list[dict[str, object]] | None = None,
+    ) -> SeriesQueryDecision:
         raw = self._predictor(
             user_message=user_message,
             scope_type=scope_type,
             series_id=series_id,
             video_id=video_id,
+            history_summary=history_summary,
+            history_selected_videos=history_selected_videos or [],
         )
         return normalize_classifier_prediction(raw)
 
@@ -224,6 +264,14 @@ def normalize_classifier_prediction(value: Any) -> SeriesQueryDecision:
         raise ValueError("DSPy classify 缺少 context_need。")
     if payload.get("action_args") is None:
         payload["action_args"] = {}
+    if payload.get("candidate_video_ids") is None:
+        payload["candidate_video_ids"] = []
+    if payload.get("selected_videos") is None:
+        payload["selected_videos"] = []
+    if payload.get("selection_mode") is None:
+        payload["selection_mode"] = "fresh"
+    if payload.get("subplans") is None:
+        payload["subplans"] = []
     return SeriesQueryDecision.model_validate(payload)
 
 

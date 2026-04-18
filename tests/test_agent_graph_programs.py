@@ -14,6 +14,7 @@ from backend.agent_graph.programs import (
     CompareSplitProgram,
     SeriesQueryClassifierProgram,
 )
+from backend.agent_graph.planning import build_structured_query_plan
 
 
 class AgentGraphProgramsTests(unittest.TestCase):
@@ -82,6 +83,66 @@ class AgentGraphProgramsTests(unittest.TestCase):
 
         self.assertEqual(answer, "资源状态已整理。")
         self.assertEqual(captured["meta_state"]["overview"]["status"], "ready")
+
+    def test_series_query_classifier_program_accepts_structured_planning_fields(self) -> None:
+        program = SeriesQueryClassifierProgram(
+            predictor=lambda **_: {
+                "goal": "locate",
+                "target_source": "transcript",
+                "context_need": "chunk",
+                "reason": "需要对目标视频下钻。",
+                "candidate_video_ids": ["1-5"],
+                "selected_videos": [
+                    {"video_id": "1-5", "reason_for_selection": "安装 Nacos 3 的目标视频。", "needs_probe": True}
+                ],
+                "selection_mode": "fresh",
+                "subplans": [
+                    {
+                        "target_video_ids": ["1-5"],
+                        "depth": "video_graph",
+                        "query": "定位讲 Docker 安装 Nacos 3 的时间点",
+                        "needs_probe": True,
+                    }
+                ],
+            }
+        )
+
+        result = program.run(
+            user_message="这个系列里哪里讲过 Nacos 3？",
+            scope_type="series",
+            series_id="agent-frameworks",
+        )
+
+        self.assertEqual(result.candidate_video_ids, ["1-5"])
+        self.assertEqual(result.selected_videos[0].video_id, "1-5")
+        self.assertEqual(result.subplans[0].depth.value, "video_graph")
+
+    def test_build_structured_query_plan_supports_carry_forward_previous_selection(self) -> None:
+        plan = build_structured_query_plan(
+            state={
+                "session_id": "series|agent-frameworks|series-home",
+                "scope_type": "series",
+                "series_id": "agent-frameworks",
+                "user_message": "继续比较它们的定位差异",
+                "history_selected_videos": [
+                    {"video_id": "1-6", "reason_for_selection": "上一轮框架课"},
+                    {"video_id": "1-7", "reason_for_selection": "上一轮框架课"},
+                ],
+            },
+            current_instruction="继续比较它们的定位差异",
+            decision_payload={
+                "goal": "understand",
+                "target_source": "summary",
+                "context_need": "chunk",
+                "reason": "承接上一轮视频集",
+                "selection_mode": "carry_forward",
+            },
+        )
+
+        self.assertEqual(plan["selection_mode"], "carry_forward")
+        self.assertEqual(plan["candidate_video_ids"], ["1-6", "1-7"])
+        self.assertEqual(plan["selected_videos"][0]["video_id"], "1-6")
+        self.assertEqual(plan["subplans"][0]["target_video_ids"], ["1-6", "1-7"])
 
 
 if __name__ == "__main__":

@@ -10,20 +10,41 @@ class SeriesQueryClassifierModule(dspy.Module):
         super().__init__()
         self.predict = dspy.Predict(ClassifySeriesQuery)
 
-    def forward(self, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
+    def forward(
+        self,
+        user_message: str,
+        scope_type: str,
+        series_id: str,
+        video_id: str = "",
+        history_summary: str = "",
+        history_selected_videos: list[dict[str, object]] | None = None,
+    ):
         return self.predict(
             user_message=user_message,
             scope_type=scope_type,
             series_id=series_id,
             video_id=video_id,
+            history_summary=history_summary,
+            history_selected_videos=history_selected_videos or [],
         )
 
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
+    def run(
+        self,
+        *,
+        user_message: str,
+        scope_type: str,
+        series_id: str,
+        video_id: str = "",
+        history_summary: str = "",
+        history_selected_videos: list[dict[str, object]] | None = None,
+    ):
         raw = self.forward(
             user_message=user_message,
             scope_type=scope_type,
             series_id=series_id,
             video_id=video_id,
+            history_summary=history_summary,
+            history_selected_videos=history_selected_videos,
         )
         return normalize_classifier_prediction(raw)
 

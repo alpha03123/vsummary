@@ -4,6 +4,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -21,6 +22,7 @@ class AgentRunResult:
     tool_rows: list[str]
     final_answer: str
     raw_events: list[dict[str, object]]
+    debug_trace: dict[str, object]
 
 
 def should_skip_manual_only_run(manual: bool, script_label: str) -> bool:
@@ -41,6 +43,7 @@ def run_agent_case(
     session_id: str,
     message: str,
     clear_session: bool = True,
+    debug_trace: bool = True,
 ) -> AgentRunResult:
     service = container.get_agent_service()
     if clear_session:
@@ -50,13 +53,22 @@ def run_agent_case(
     tool_rows: list[str] = []
     final_answer = ""
     raw_events: list[dict[str, object]] = []
+    trace_payload: dict[str, object] = {}
+    started_at = perf_counter()
 
     for event in service.stream_with_context(
         session_id=session_id,
         user_message=message,
         context_override=None,
+        debug_trace=trace_payload if debug_trace else None,
     ):
-        raw_events.append({"type": event.type, "payload": event.payload})
+        raw_events.append(
+            {
+                "type": event.type,
+                "payload": event.payload,
+                "elapsed_ms": int((perf_counter() - started_at) * 1000),
+            }
+        )
         if event.type == "thinking_completed":
             summary = str(event.payload.get("summary", "")).strip()
             if summary:
@@ -73,6 +85,7 @@ def run_agent_case(
         tool_rows=tool_rows,
         final_answer=final_answer,
         raw_events=raw_events,
+        debug_trace=trace_payload,
     )
 
 

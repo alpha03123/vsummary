@@ -26,8 +26,8 @@ class _Classifier:
     def __init__(self, decision: SeriesQueryDecision) -> None:
         self._decision = decision
 
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del user_message, scope_type, series_id, video_id
+    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
+        del user_message, scope_type, series_id, video_id, history_summary, history_selected_videos
         return self._decision
 
 
@@ -65,6 +65,42 @@ class _MetaStateReader:
             "overview": {"generated": True, "status": "ready"},
             "mindmap": {"generated": False, "status": "pending"},
         }
+
+
+class _PinpointService:
+    def locate(self, *, series_id: str, video_id: str, query: str):
+        return (
+            {
+                "video_id": video_id,
+                "title": "Video 1",
+                "query": query,
+                "matches": [
+                    {
+                        "start_seconds": 32.0,
+                        "end_seconds": 36.0,
+                        "text": "这里提到了 AK。",
+                    }
+                ],
+                "best_match": {
+                    "start_seconds": 32.0,
+                    "end_seconds": 36.0,
+                    "text": "这里提到了 AK。",
+                },
+                "transcript_missing": False,
+            },
+            [
+                {
+                    "tool_name": "get_video_transcript",
+                    "status": "ok",
+                    "payload": {"video_id": video_id, "title": "Video 1", "match_count": 1},
+                },
+                {
+                    "tool_name": "video_seek",
+                    "status": "ok",
+                    "payload": {"video_id": video_id, "seek_seconds": 32.0, "match_end_seconds": 36.0, "matched_text": "这里提到了 AK。"},
+                },
+            ],
+        )
 
 
 class _Answer:
@@ -111,7 +147,11 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
         )
 
         self.assertEqual(result["query_plan"]["goal"], "understand")
-        self.assertEqual(result["retrieval_results"][0]["source_type"], "summary")
+        self.assertEqual(result["query_plan"]["candidate_video_ids"], ["video-1"])
+        self.assertEqual(result["query_plan"]["selected_videos"][0]["video_id"], "video-1")
+        self.assertEqual(result["query_plan"]["subplans"][0]["depth"], "summary")
+        self.assertEqual(result["retrieval_results"][0]["depth"], "summary")
+        self.assertEqual(result["retrieval_results"][0]["items"][0]["source_type"], "summary")
         self.assertEqual(result["answer"], "answer:summary")
 
     def test_video_locate_flow_retrieves_transcript(self) -> None:
@@ -128,6 +168,7 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             meta_state_reader=_MetaStateReader(),
+            pinpoint_service=_PinpointService(),
             answer_program=_Answer(),
             memory_update_program=_MemoryUpdater(),
         )
@@ -142,8 +183,14 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result["retrieval_results"][0]["source_type"], "transcript_chunk")
+        self.assertEqual(result["retrieval_results"][0]["depth"], "video_graph")
+        self.assertEqual(result["retrieval_results"][0]["items"][0]["source_type"], "transcript_chunk")
+        self.assertEqual(result["query_plan"]["subplans"][0]["depth"], "video_graph")
+        self.assertEqual(result["query_plan"]["candidate_video_ids"], ["video-1"])
         self.assertEqual(result["answer"], "answer:transcript_chunk")
+        self.assertEqual(result["tool_results"][0]["tool_name"], "get_video_transcript")
+        self.assertEqual(result["tool_results"][1]["tool_name"], "video_seek")
+        self.assertEqual(result["tool_results"][1]["payload"]["seek_seconds"], 32.0)
 
     def test_video_meta_state_flow_reads_structured_state(self) -> None:
         graph = build_series_agent_graph(

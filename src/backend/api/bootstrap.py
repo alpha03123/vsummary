@@ -13,7 +13,12 @@ from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
 from backend.agent_graph.action_dispatcher import ActionDispatcher
 from backend.agent_graph.graph import build_agent_graph
+from backend.agent_graph.pinpoint import BGEReranker, VideoGraphPinpointService
+from backend.agent_graph.series_planner import LegacyStyleSeriesPlanner
+from backend.agent_graph.series_aggregator import LegacyStyleSeriesAggregator
+from backend.agent_graph.video_workflow import VideoWorkflowExtractor
 from backend.agent_graph.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.programs import AnswerSynthesisProgram, MemoryUpdateProgram
 from backend.agent_graph.program_loader import (
     load_or_create_classifier_program,
     load_or_create_decompose_program,
@@ -182,34 +187,77 @@ class LazyAgentRuntimeProvider:
                 get_video_summary = create_get_video_summary_handler(self._workspace)
                 get_video_tools = create_get_video_tools_handler(self._workspace)
                 get_video_transcript = create_get_video_transcript_handler(self._workspace)
+                decomposer_program = load_or_create_decompose_program(
+                    artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "decompose" / "program.json",
+                )
+                classifier_program = load_or_create_classifier_program(
+                    artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "classifier" / "program.json",
+                )
+                compare_split_program = load_or_create_split_compare_program(
+                    artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "split_compare" / "program.json",
+                )
+                planner_gateway = LiteLLMChatGateway(
+                    provider=env_settings.provider,
+                    model=env_settings.model,
+                    base_url=normalize_openai_base_url(env_settings.base_url),
+                    api_key=env_settings.api_key,
+                )
+                series_planner = LegacyStyleSeriesPlanner(
+                    workspace=self._workspace,
+                    gateway=planner_gateway,
+                )
+                series_aggregator = LegacyStyleSeriesAggregator(gateway=planner_gateway)
+                retrieval_service = SeriesRetrievalService(
+                    workspace=self._workspace,
+                    db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
+                    root_dir=self._root_dir,
+                )
+                pinpoint_service = VideoGraphPinpointService(
+                    workspace=self._workspace,
+                    semantic_scorer=BGEReranker(device=app_settings.agent_retrieval.embedding_device),
+                )
+                workflow_service = VideoWorkflowExtractor(
+                    workspace=self._workspace,
+                    semantic_scorer=BGEReranker(device=app_settings.agent_retrieval.embedding_device),
+                )
+                meta_state_reader = MetaStateReader(workspace=self._workspace)
+                answer_program = AnswerSynthesisProgram()
+                memory_update_program = MemoryUpdateProgram()
                 tool_executor = _build_tool_executor(
                     list_series_videos=list_series_videos,
                     get_video_summary=get_video_summary,
                     get_video_tools=get_video_tools,
                     get_video_transcript=get_video_transcript,
                 )
+                action_dispatcher = ActionDispatcher(tool_executor=tool_executor)
                 graph = build_agent_graph(
-                    decomposer_program=load_or_create_decompose_program(
-                        artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "decompose" / "program.json",
-                    ),
-                    classifier_program=load_or_create_classifier_program(
-                        artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "classifier" / "program.json",
-                    ),
-                    compare_split_program=load_or_create_split_compare_program(
-                        artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "split_compare" / "program.json",
-                    ),
-                    retrieval_service=SeriesRetrievalService(
-                        workspace=self._workspace,
-                        db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
-                        root_dir=self._root_dir,
-                    ),
-                    meta_state_reader=MetaStateReader(workspace=self._workspace),
-                    action_dispatcher=ActionDispatcher(tool_executor=tool_executor),
+                    decomposer_program=decomposer_program,
+                    classifier_program=classifier_program,
+                    compare_split_program=compare_split_program,
+                    series_planner=series_planner,
+                    retrieval_service=retrieval_service,
+                    pinpoint_service=pinpoint_service,
+                    workflow_service=workflow_service,
+                    meta_state_reader=meta_state_reader,
+                    action_dispatcher=action_dispatcher,
+                    answer_program=answer_program,
+                    series_aggregator=series_aggregator,
+                    memory_update_program=memory_update_program,
                 )
                 self._cached_agent_graph_service = AgentGraphService(
                     context_loader=self._context_loader,
                     graph=graph,
                     session_store=self.session_store,
+                    decomposer_program=decomposer_program,
+                    classifier_program=classifier_program,
+                    compare_split_program=compare_split_program,
+                    series_planner=series_planner,
+                    retrieval_service=retrieval_service,
+                    pinpoint_service=pinpoint_service,
+                    meta_state_reader=meta_state_reader,
+                    action_dispatcher=action_dispatcher,
+                    answer_program=answer_program,
+                    memory_update_program=memory_update_program,
                 )
             return self._cached_agent_graph_service
 

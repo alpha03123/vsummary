@@ -104,6 +104,23 @@ class FakeChatService:
                     payload={"selected_tool": "overview"},
                 )
             ],
+            citations=[
+                {
+                    "id": "1",
+                    "label": "Video 1",
+                    "source_type": "summary",
+                    "search_scope": "summary",
+                    "slots": [
+                        {
+                            "slot": 1,
+                            "target_type": "summary",
+                            "video_id": "advanced",
+                            "video_title": "advanced",
+                            "text": "已收到：打开概况",
+                        }
+                    ],
+                }
+            ],
         )
 
     def stream_with_context(self, *, session_id: str, user_message: str, context_override=None):
@@ -633,6 +650,8 @@ show_takeaways = true
         self.assertEqual(payload["scope_type"], "video")
         self.assertEqual(payload["tool_results"][0]["tool_name"], "open_overview")
         self.assertEqual(payload["tool_results"][0]["payload"]["selected_tool"], "overview")
+        self.assertEqual(payload["citations"][0]["id"], "1")
+        self.assertEqual(payload["citations"][0]["slots"][0]["video_id"], "advanced")
         self.assertIsNotNone(self.fake_agent_service.last_context_override)
         self.assertEqual(self.fake_agent_service.last_context_override.selected_tool, "overview")
         self.assertEqual(self.fake_agent_service.last_context_override.video_id, "advanced")

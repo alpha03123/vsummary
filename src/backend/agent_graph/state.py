@@ -11,10 +11,13 @@ class AgentGraphState(TypedDict):
     user_message: str
     history_messages: NotRequired[list[dict[str, object]]]
     history_summary: NotRequired[str]
+    history_selected_videos: NotRequired[list[dict[str, object]]]
     tasks: NotRequired[list[dict[str, object]]]
     current_task_index: NotRequired[int]
     current_task: NotRequired[dict[str, object]]
     current_task_context: NotRequired[dict[str, object]]
+    current_subplan_index: NotRequired[int]
+    current_subplan: NotRequired[dict[str, object]]
     task_outputs: NotRequired[list[dict[str, object]]]
     query_plan: NotRequired[dict[str, object]]
     retrieval_queries: NotRequired[list[str]]

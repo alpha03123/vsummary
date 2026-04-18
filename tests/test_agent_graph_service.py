@@ -24,6 +24,15 @@ class _FakeGraph:
         return {
             **payload,
             "answer": "graph answer",
+            "assistant_message": "graph finalized answer",
+            "retrieval_results": [
+                {
+                    "video_id": "video-1",
+                    "title": "Video 1",
+                    "source_type": "summary",
+                    "snippet": "这是摘要证据。",
+                }
+            ],
         }
 
 
@@ -45,7 +54,48 @@ class AgentGraphServiceTests(unittest.TestCase):
             user_message="这个系列主要讲了什么？",
         )
 
-        self.assertEqual(result.assistant_message, "graph answer")
+        self.assertEqual(result.assistant_message, "graph finalized answer")
+        self.assertEqual(result.citations[0].source_type, "summary")
+        self.assertEqual(result.citations[0].slots[0].video_id, "video-1")
+
+    def test_run_with_context_uses_context_override_for_graph_input(self) -> None:
+        captured = {}
+
+        class _CapturingGraph:
+            def invoke(self, payload):
+                captured.update(payload)
+                return {
+                    **payload,
+                    "assistant_message": "ok",
+                    "answer": "fallback",
+                }
+
+        service = SeriesAgentGraphService(
+            context_loader=StaticAgentContextLoader(
+                AgentContext(
+                    session_id="series|series-a|series-home",
+                    scope_type="series",
+                    series_id="series-a",
+                )
+            ),
+            graph=_CapturingGraph(),
+        )
+
+        result = service.run_with_context(
+            session_id="series|series-a|series-home",
+            user_message="这个系列主要讲了什么？",
+            context_override=AgentContext(
+                session_id="video|series-a|video-1|overview",
+                scope_type="video",
+                series_id="series-a",
+                video_id="video-1",
+                video_title="Video 1",
+            ),
+        )
+
+        self.assertEqual(result.assistant_message, "ok")
+        self.assertEqual(captured["scope_type"], "video")
+        self.assertEqual(captured["video_id"], "video-1")
 
     def test_bootstrap_can_build_series_agent_graph_service(self) -> None:
         with patch("backend.api.bootstrap.SeriesRetrievalService", return_value=object()):
@@ -56,6 +106,26 @@ class AgentGraphServiceTests(unittest.TestCase):
 
         self.assertIsNotNone(generic_service)
         self.assertIsNotNone(service)
+
+    def test_bootstrap_exposes_graph_components_for_profiling(self) -> None:
+        fake_retrieval_service = object()
+        fake_meta_state_reader = object()
+        fake_action_dispatcher = object()
+        with (
+            patch("backend.api.bootstrap.SeriesRetrievalService", return_value=fake_retrieval_service),
+            patch("backend.api.bootstrap.MetaStateReader", return_value=fake_meta_state_reader),
+            patch("backend.api.bootstrap.ActionDispatcher", return_value=fake_action_dispatcher),
+        ):
+            container = build_api_container(ROOT)
+            service = container.get_agent_graph_service()
+
+        self.assertTrue(hasattr(service, "_decomposer_program"))
+        self.assertTrue(hasattr(service, "_classifier_program"))
+        self.assertTrue(hasattr(service, "_compare_split_program"))
+        self.assertIs(service._retrieval_service, fake_retrieval_service)
+        self.assertTrue(hasattr(service, "_pinpoint_service"))
+        self.assertIs(service._meta_state_reader, fake_meta_state_reader)
+        self.assertIs(service._action_dispatcher, fake_action_dispatcher)
 
     def test_lazy_provider_loads_compiled_split_compare_program(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -75,10 +145,21 @@ class AgentGraphServiceTests(unittest.TestCase):
                     warning_threshold_ratio=0.7,
                     compact_threshold_ratio=0.8,
                     blocking_threshold_ratio=0.9,
-                )
+                ),
+                agent_retrieval=SimpleNamespace(
+                    embedding_device="cpu",
+                ),
             )
             with (
-                patch("backend.api.bootstrap.load_env_settings", return_value=SimpleNamespace(api_key="test-key", model="gpt-5.4", base_url="http://127.0.0.1:8317/v1")),
+                patch(
+                    "backend.api.bootstrap.load_env_settings",
+                    return_value=SimpleNamespace(
+                        provider="openai_compatible",
+                        api_key="test-key",
+                        model="gpt-5.4",
+                        base_url="http://127.0.0.1:8317/v1",
+                    ),
+                ),
                 patch("backend.api.bootstrap.normalize_openai_base_url", return_value="http://127.0.0.1:8317/v1"),
                 patch("backend.api.bootstrap.dspy.configure"),
                 patch("backend.api.bootstrap.ProxyStreamingLM"),
@@ -94,6 +175,7 @@ class AgentGraphServiceTests(unittest.TestCase):
                 patch("backend.api.bootstrap.load_or_create_decompose_program", return_value="decompose-program"),
                 patch("backend.api.bootstrap.load_or_create_classifier_program", return_value="classifier-program"),
                 patch("backend.api.bootstrap.load_or_create_split_compare_program", return_value="split-program") as split_loader,
+                patch("backend.api.bootstrap.LegacyStyleSeriesPlanner", return_value="series-planner"),
                 patch("backend.api.bootstrap.build_agent_graph", return_value=_FakeGraph()) as build_graph,
             ):
                 provider.get_agent_graph_service()
