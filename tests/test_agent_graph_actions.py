@@ -9,8 +9,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.graph import build_series_agent_graph
-from backend.agent_graph.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
+from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
 
 
 class _Decomposer:
@@ -26,8 +26,8 @@ class _Classifier:
     def __init__(self, decision: SeriesQueryDecision) -> None:
         self._decision = decision
 
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del user_message, scope_type, series_id, video_id
+    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
+        del user_message, scope_type, series_id, video_id, history_summary, history_selected_videos
         return self._decision
 
 

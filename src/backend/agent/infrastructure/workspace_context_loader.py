@@ -39,6 +39,7 @@ class WorkspaceAgentContextLoader:
                     for chapter in raw_chapters
                     if isinstance(chapter, dict) and str(chapter.get("title", "")).strip()
                 ]
+        evidence_history = _build_video_evidence_history(summary)
 
         return AgentContext(
             session_id=session_id,
@@ -55,6 +56,7 @@ class WorkspaceAgentContextLoader:
             notes=_map_tool_availability(None if tools is None else tools.notes),
             preview=_map_tool_availability(None if tools is None else tools.preview),
             chapter_titles=chapter_titles,
+            evidence_history=evidence_history,
         )
 
 
@@ -66,6 +68,19 @@ def _map_tool_availability(tool) -> ToolAvailability:
         generated=tool.generated,
         status=tool.status,
     )
+
+
+def _build_video_evidence_history(summary) -> dict[str, object]:
+    if summary is None:
+        return {}
+    return {
+        "video_summary": {
+            "series_id": summary.series_id,
+            "video_id": summary.video_id,
+            "title": summary.title,
+            "summary": summary.summary if isinstance(summary.summary, dict) else {},
+        }
+    }
 
 
 def _parse_session_id(session_id: str) -> tuple[str, str | None, str | None, str | None]:

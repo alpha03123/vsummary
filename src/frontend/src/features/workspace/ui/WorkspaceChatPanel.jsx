@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
-import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, Trash2, FileText, PlayCircle } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Sparkles, Plus, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, Trash2, FileText, PlayCircle } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 const WorkspaceMarkdownMessage = lazy(() =>
@@ -193,7 +194,8 @@ export function WorkspaceChatPanel({
               <div className={`flex flex-col gap-2 ${isAssistant ? "" : "items-end"}`}>
                 <div
                   className={
-                    message.kind === "tool-trace"
+                    message.kind === "thought-trace"
+                      || message.kind === "tool-trace"
                       || message.kind === "seek-reference"
                       ? "w-full"
                       : isAssistant
@@ -456,7 +458,86 @@ function WorkspaceThoughtTraceMessage({ message }) {
   const isRunning = message.thoughtTrace?.status === "running";
   const durationLabel = formatDurationLabel(message.thoughtTrace?.durationMs);
   const summary = typeof message.thoughtTrace?.summary === "string" ? message.thoughtTrace.summary : "";
+  const stages = Array.isArray(message.thoughtTrace?.stages) ? message.thoughtTrace.stages : [];
+  const hasStages = stages.length > 0;
   const displaySummary = summary || (isRunning ? "正在思考中..." : "本轮未返回思路摘要。");
+
+  if (hasStages) {
+    return (
+      <div className="rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">
+        <div className="px-4 py-3.5">
+          <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+              {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <strong className="text-[15px] font-semibold">{message.content}</strong>
+                {durationLabel ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                    <Clock3 size={12} />
+                    用时 {durationLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                {isRunning ? "当前按图节点顺序执行中" : "本轮图节点执行已完成"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
+          <div className="flex flex-col gap-3">
+            <AnimatePresence initial={false}>
+              {stages.map((stage) => {
+                const stageRunning = stage.status === "running";
+                const stageDurationLabel = formatDurationLabel(stage.durationMs);
+                return (
+                  <motion.div
+                    key={stage.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3.5 py-3 dark:border-stone-800 dark:bg-stone-900/70"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl ${
+                          stageRunning
+                            ? "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        }`}>
+                          {stageRunning ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-stone-800 dark:text-stone-100">{stage.label}</div>
+                          <div className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{stage.nodeId}</div>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          stageRunning
+                            ? "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        }`}>
+                          {stageRunning ? "执行中" : "已完成"}
+                        </span>
+                        {stageDurationLabel ? (
+                          <span className="text-xs text-stone-400 dark:text-stone-500">用时 {stageDurationLabel}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-[#151516]">

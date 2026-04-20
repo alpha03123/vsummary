@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from backend.agent_graph.nodes import (
+from backend.agent_graph.runtime.nodes import (
     build_advance_task_node,
     build_advance_subplan_node,
     build_answer_node,
@@ -11,21 +11,22 @@ from backend.agent_graph.nodes import (
     build_dispatch_action_node,
     build_execute_series_meta_node,
     build_execute_summary_node,
+    build_execute_video_rag_node,
     build_execute_video_graph_node,
     build_execute_video_workflow_node,
     build_finalize_node,
     build_read_meta_state_node,
     build_update_memory_node,
 )
-from backend.agent_graph.models import ExecutionDepth
-from backend.agent_graph.programs import (
+from backend.agent_graph.query.models import ExecutionDepth
+from backend.agent_graph.dspy.programs import (
     AnswerSynthesisProgram,
     CompareSplitProgram,
     MemoryUpdateProgram,
     SeriesQueryClassifierProgram,
     TaskDecomposerProgram,
 )
-from backend.agent_graph.state import AgentGraphState
+from backend.agent_graph.runtime.state import AgentGraphState
 
 
 def build_agent_graph(
@@ -76,6 +77,10 @@ def build_agent_graph(
         ),
     )
     graph.add_node(
+        "execute_video_rag",
+        build_execute_video_rag_node(retrieval_service=resolved_retrieval_service),
+    )
+    graph.add_node(
         "execute_video_workflow",
         build_execute_video_workflow_node(workflow_service=resolved_workflow_service),
     )
@@ -104,6 +109,7 @@ def build_agent_graph(
             "execute_series_meta": "execute_series_meta",
             "execute_summary": "execute_summary",
             "execute_video_graph": "execute_video_graph",
+            "execute_video_rag": "execute_video_rag",
             "execute_video_workflow": "execute_video_workflow",
             "answer": "answer",
         },
@@ -126,6 +132,14 @@ def build_agent_graph(
     )
     graph.add_conditional_edges(
         "execute_video_graph",
+        _route_after_subplan_execution,
+        {
+            "advance_subplan": "advance_subplan",
+            "answer": "answer",
+        },
+    )
+    graph.add_conditional_edges(
+        "execute_video_rag",
         _route_after_subplan_execution,
         {
             "advance_subplan": "advance_subplan",
@@ -258,6 +272,8 @@ def _route_after_advance_subplan(state: AgentGraphState) -> str:
         return "execute_summary"
     if depth == ExecutionDepth.VIDEO_GRAPH.value:
         return "execute_video_graph"
+    if depth == ExecutionDepth.VIDEO_RAG.value:
+        return "execute_video_rag"
     if depth == ExecutionDepth.VIDEO_WORKFLOW.value:
         return "execute_video_workflow"
     return "answer"

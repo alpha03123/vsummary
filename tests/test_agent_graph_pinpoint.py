@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.pinpoint import VideoGraphPinpointService
+from backend.agent_graph.evidence.pinpoint import VideoGraphPinpointService
 from backend.video_summary.library.views import TranscriptSegmentView, VideoTranscriptView
 
 

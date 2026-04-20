@@ -5,6 +5,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.shared.llm.json_mode import describe_validation_error, validate_json_response
 
 
@@ -110,6 +111,34 @@ class LiteLLMCompletionGateway:
             delta = _extract_stream_delta(chunk)
             if delta:
                 yield delta
+
+    def stream_text_with_metadata(
+        self,
+        messages: Sequence[dict[str, Any]],
+        *,
+        temperature: float = 0,
+        response_format: dict[str, Any] | type[BaseModel] | None = None,
+    ) -> Iterator[ChatCompletionStreamChunk]:
+        stream = self._completion(
+            model=self._model,
+            messages=_dump_messages(messages),
+            api_base=self._base_url,
+            api_key=self._api_key,
+            temperature=temperature,
+            stream=True,
+            stream_options={"include_usage": True},
+            response_format=response_format,
+        )
+        final_usage: dict[str, int] = {}
+        for chunk in stream:
+            delta = _extract_stream_delta(chunk)
+            usage = _extract_usage(chunk)
+            if usage:
+                final_usage = usage
+            if delta:
+                yield ChatCompletionStreamChunk(delta=delta)
+        if final_usage:
+            yield ChatCompletionStreamChunk(usage=final_usage)
 
     async def astream_text(
         self,
@@ -283,6 +312,18 @@ def _extract_stream_delta(chunk: Any) -> str:
         parts = [part for part in (_extract_text_part(item) for item in content) if part]
         return "".join(parts)
     return ""
+
+
+def _extract_usage(chunk: Any) -> dict[str, int]:
+    usage = _lookup(chunk, "usage")
+    if not isinstance(usage, Mapping):
+        return {}
+    normalized: dict[str, int] = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        value = usage.get(key)
+        if isinstance(value, int):
+            normalized[key] = value
+    return normalized
 
 
 def _extract_text_part(item: Any) -> str:

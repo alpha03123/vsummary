@@ -32,6 +32,7 @@ class ExecutionDepth(str, Enum):
     SUMMARY = "summary"
     VIDEO_GRAPH = "video_graph"
     VIDEO_WORKFLOW = "video_workflow"
+    VIDEO_RAG = "video_rag"
 
 
 class SelectedVideo(BaseModel):
@@ -45,6 +46,7 @@ class QuerySubplan(BaseModel):
     depth: ExecutionDepth
     query: str
     needs_probe: bool = False
+    retrieval_tags: list[str] = Field(default_factory=list)
 
 
 class StructuredQueryPlan(BaseModel):
@@ -57,6 +59,7 @@ class StructuredQueryPlan(BaseModel):
     candidate_video_ids: list[str] = Field(default_factory=list)
     selected_videos: list[SelectedVideo] = Field(default_factory=list)
     selection_mode: SelectionMode = SelectionMode.FRESH
+    retrieval_tags: list[str] = Field(default_factory=list)
     subplans: list[QuerySubplan] = Field(default_factory=list)
 
 
@@ -70,4 +73,5 @@ class SeriesQueryDecision(BaseModel):
     candidate_video_ids: list[str] = Field(default_factory=list)
     selected_videos: list[SelectedVideo] = Field(default_factory=list)
     selection_mode: SelectionMode = SelectionMode.FRESH
+    retrieval_tags: list[str] = Field(default_factory=list)
     subplans: list[QuerySubplan] = Field(default_factory=list)

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 
 from backend.agent.ports import ChatGateway
+from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent_graph.citations import build_citations_from_graph_result
+from backend.agent_graph.evidence.citations import build_citations_from_graph_result
 
 
 class LegacyStyleSeriesAggregator:
@@ -18,9 +20,54 @@ class LegacyStyleSeriesAggregator:
         query_plan: dict[str, object],
         execution_results: list[dict[str, object]],
         tool_results: list[dict[str, object]],
+        dialog_history: str = "",
         history_messages: list[dict[str, object]] | None = None,
         debug_trace: dict[str, object] | None = None,
     ) -> str:
+        messages = self.build_messages(
+            user_message=user_message,
+            query_plan=query_plan,
+            execution_results=execution_results,
+            tool_results=tool_results,
+            dialog_history=dialog_history,
+            history_messages=history_messages,
+            debug_trace=debug_trace,
+        )
+        return self._gateway.create_text_completion(messages).strip()
+
+    def stream(
+        self,
+        *,
+        user_message: str,
+        query_plan: dict[str, object],
+        execution_results: list[dict[str, object]],
+        tool_results: list[dict[str, object]],
+        dialog_history: str = "",
+        history_messages: list[dict[str, object]] | None = None,
+        debug_trace: dict[str, object] | None = None,
+    ) -> Iterator[ChatCompletionStreamChunk]:
+        messages = self.build_messages(
+            user_message=user_message,
+            query_plan=query_plan,
+            execution_results=execution_results,
+            tool_results=tool_results,
+            dialog_history=dialog_history,
+            history_messages=history_messages,
+            debug_trace=debug_trace,
+        )
+        return self._gateway.create_text_completion_stream_with_metadata(messages)
+
+    def build_messages(
+        self,
+        *,
+        user_message: str,
+        query_plan: dict[str, object],
+        execution_results: list[dict[str, object]],
+        tool_results: list[dict[str, object]],
+        dialog_history: str = "",
+        history_messages: list[dict[str, object]] | None = None,
+        debug_trace: dict[str, object] | None = None,
+    ) -> list[AgentChatMessage]:
         if not execution_results:
             raise RuntimeError("series query returned no evidence")
         curated_execution_results = _curate_execution_results(
@@ -28,13 +75,15 @@ class LegacyStyleSeriesAggregator:
             execution_results=execution_results,
         )
         citations = build_citations_from_graph_result({"retrieval_results": curated_execution_results})
-        history_lines = [
-            f"{str(item.get('role', '')).strip()}: {str(item.get('content', '')).strip()}"
-            for item in (history_messages or [])
-            if isinstance(item, dict) and str(item.get("content", "")).strip()
-        ][-6:]
         citation_block = _render_citation_briefs(citations)
         execution_block = _render_execution_results(curated_execution_results)
+        history_block = dialog_history.strip()
+        if not history_block and history_messages:
+            history_block = "\n".join(
+                f"{str(item.get('role', '')).strip()}: {str(item.get('content', '')).strip()}"
+                for item in history_messages
+                if isinstance(item, dict) and str(item.get("content", "")).strip()
+            ).strip()
         messages = [
             AgentChatMessage(
                 role="system",
@@ -52,7 +101,7 @@ class LegacyStyleSeriesAggregator:
             AgentChatMessage(
                 role="user",
                 content=(
-                    f"最近对话:\n{'\n'.join(history_lines) if history_lines else '(none)'}\n\n"
+                    f"对话记忆:\n{history_block or '(none)'}\n\n"
                     f"计划:\n{json.dumps(query_plan, ensure_ascii=False, indent=2)}\n\n"
                     f"执行结果:\n{execution_block}\n\n"
                     f"可用引用:\n{citation_block}\n\n"
@@ -67,7 +116,7 @@ class LegacyStyleSeriesAggregator:
                 "citations": [item.model_dump(mode="json") for item in citations],
                 "tool_results": tool_results,
             }
-        return self._gateway.create_text_completion(messages).strip()
+        return messages
 
 
 def _curate_execution_results(

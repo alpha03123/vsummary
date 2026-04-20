@@ -76,12 +76,19 @@ export function normalizeAgentToolTraceStep(result) {
   }
 }
 
-export function buildAssistantChatMeta(durationMs) {
+export function buildAssistantChatMeta(durationMs, usage = null) {
   const durationLabel = formatDurationLabel(durationMs);
-  if (!durationLabel) {
+  const tokenLabel = formatTokenUsageLabel(usage);
+  if (!durationLabel && !tokenLabel) {
     return "Notebook Assistant • Just now";
   }
-  return `Notebook Assistant • 用时 ${durationLabel}`;
+  if (durationLabel && tokenLabel) {
+    return `Notebook Assistant • 用时 ${durationLabel} • 消耗 ${tokenLabel}`;
+  }
+  if (durationLabel) {
+    return `Notebook Assistant • 用时 ${durationLabel}`;
+  }
+  return `Notebook Assistant • 消耗 ${tokenLabel}`;
 }
 
 export function formatDurationLabel(durationMs) {
@@ -92,6 +99,24 @@ export function formatDurationLabel(durationMs) {
     return `${durationMs}ms`;
   }
   return `${(durationMs / 1000).toFixed(1)}秒`;
+}
+
+export function formatTokenUsageLabel(usage) {
+  if (!usage || typeof usage !== "object") {
+    return "";
+  }
+  const totalTokens = typeof usage.total_tokens === "number"
+    ? usage.total_tokens
+    : typeof usage.totalTokens === "number"
+      ? usage.totalTokens
+      : null;
+  if (typeof totalTokens !== "number" || Number.isNaN(totalTokens) || totalTokens < 0) {
+    return "";
+  }
+  if (totalTokens >= 1000) {
+    return `${(totalTokens / 1000).toFixed(1)}k tokens`;
+  }
+  return `${Math.round(totalTokens)} tokens`;
 }
 
 function createToolTraceStep(toolName, label, target = "") {

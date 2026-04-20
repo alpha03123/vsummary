@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from backend.agent.schemas.tool_calls import ToolName
-from backend.agent_graph.pinpoint import SemanticScorer, _lexical_score, extract_query_terms
+from backend.agent_graph.evidence.pinpoint import SemanticScorer, _lexical_score, extract_query_terms
 
 
 class VideoWorkflowExtractor:

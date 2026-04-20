@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.graph import build_series_agent_graph
+from backend.agent_graph.runtime.graph import build_series_agent_graph
 
 
 class AgentGraphScaffoldTests(unittest.TestCase):

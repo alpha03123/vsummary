@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dspy
 
-from backend.agent_graph.programs import DecomposeUserTask, normalize_decompose_prediction
+from backend.agent_graph.dspy.programs import DecomposeUserTask, normalize_decompose_prediction
 
 
 class TaskDecomposerModule(dspy.Module):

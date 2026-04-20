@@ -204,6 +204,64 @@ describe("WorkspaceChatPanel", () => {
     expect(screen.queryByText("调用中")).not.toBeInTheDocument();
   });
 
+  it("renders graph stage cards with aliases and per-stage durations", () => {
+    render(
+      <WorkspaceChatPanel
+        workspaceTitle="Video Include"
+        activeSeries={{ id: "series-a", title: "Series A" }}
+        selectedVideo={null}
+        selectedContextType="series"
+        selectedToolId="series-home"
+        tools={null}
+        chatMessages={[
+          {
+            id: "thought-1",
+            role: "assistant",
+            kind: "thought-trace",
+            content: "执行完成",
+            thoughtTrace: {
+              status: "completed",
+              durationMs: 42,
+              stages: [
+                {
+                  id: "stage-1",
+                  nodeId: "decompose",
+                  label: "拆解任务",
+                  status: "completed",
+                  durationMs: 12,
+                },
+                {
+                  id: "stage-2",
+                  nodeId: "build_plan",
+                  label: "生成计划",
+                  status: "completed",
+                  durationMs: 30,
+                },
+              ],
+            },
+            meta: "Notebook Assistant • 执行用时 42ms",
+          },
+        ]}
+        chatPending={false}
+        chatSessions={[]}
+        activeSessionId={null}
+        contextUsage={null}
+        contextUsageLoading={false}
+        onStartNewChat={() => {}}
+        onSelectChatSession={() => {}}
+        onOpenSeekReference={() => {}}
+        onClearChat={() => {}}
+        onSubmitChat={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("执行完成")).toBeInTheDocument();
+    expect(screen.getByText("拆解任务")).toBeInTheDocument();
+    expect(screen.getByText("生成计划")).toBeInTheDocument();
+    expect(screen.getAllByText(/用时/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("已完成").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("renders context budget with source breakdown", () => {
     render(
       <WorkspaceChatPanel

@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.citations import build_citations_from_graph_result
+from backend.agent_graph.evidence.citations import build_citations_from_graph_result
 
 
 class AgentGraphCitationsTests(unittest.TestCase):

@@ -682,7 +682,7 @@ show_takeaways = true
         self.assertEqual(payload["reserved_output_tokens"], 20000)
         self.assertEqual(
             [source["id"] for source in payload["sources"]],
-            ["system_prompt", "recent_messages", "tool_results", "workspace_context"],
+            ["system_prompt", "dialog_history", "tool_results", "workspace_context"],
         )
 
     async def test_agent_chat_endpoint_returns_503_when_agent_is_not_configured(self) -> None:

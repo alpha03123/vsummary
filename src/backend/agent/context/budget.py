@@ -77,12 +77,12 @@ class AgentContextBudgetService:
             context_override=context_override,
         )
         system_prompt_tokens = _estimate_tokens(GRAPH_RUNTIME_BASELINE)
-        recent_messages_tokens = _estimate_recent_messages_tokens(context.recent_messages)
+        dialog_history_tokens = _estimate_dialog_history_tokens(context.dialog_history)
         workspace_context_tokens = _estimate_workspace_context_tokens(context)
         tool_results_tokens = 0
         estimated_total_tokens = (
             system_prompt_tokens
-            + recent_messages_tokens
+            + dialog_history_tokens
             + workspace_context_tokens
             + tool_results_tokens
         )
@@ -113,9 +113,9 @@ class AgentContextBudgetService:
                     estimated_tokens=system_prompt_tokens,
                 ),
                 AgentContextUsageSource(
-                    id="recent_messages",
-                    label="最近消息",
-                    estimated_tokens=recent_messages_tokens,
+                    id="dialog_history",
+                    label="对话记忆",
+                    estimated_tokens=dialog_history_tokens,
                 ),
                 AgentContextUsageSource(
                     id="tool_results",
@@ -133,14 +133,14 @@ class AgentContextBudgetService:
 
 def _estimate_workspace_context_tokens(context: AgentContext) -> int:
     payload = context.model_dump(mode="json")
-    payload["recent_messages"] = []
+    payload["dialog_history"] = ""
     return _estimate_tokens(payload)
 
 
-def _estimate_recent_messages_tokens(recent_messages: list[str]) -> int:
-    if not recent_messages:
+def _estimate_dialog_history_tokens(dialog_history: str) -> int:
+    if not dialog_history:
         return 0
-    return _estimate_tokens("\n".join(recent_messages))
+    return _estimate_tokens(dialog_history)
 
 
 def _estimate_tokens(value: object) -> int:

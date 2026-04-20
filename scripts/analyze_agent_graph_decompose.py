@@ -11,9 +11,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.decompose_compile import DecomposeMetric, TaskDecomposerModule
+from backend.agent_graph.dspy.decompose_compile import DecomposeMetric, TaskDecomposerModule
 from backend.agent_graph.decompose_dataset import build_decompose_devset
-from backend.agent_graph.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 
 

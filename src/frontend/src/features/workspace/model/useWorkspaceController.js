@@ -725,6 +725,7 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
             {
               ...event.payload,
               previous_summary: messages.find((message) => message.id === `thought-${requestId}`)?.thoughtTrace?.summary ?? "",
+              previous_stages: messages.find((message) => message.id === `thought-${requestId}`)?.thoughtTrace?.stages ?? [],
             },
             { status: "running" },
           ),
@@ -732,9 +733,26 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
     case "thinking_delta":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
         upsertChatMessage(messages, appendThinkingDelta(messages, requestId, event.payload?.delta)), true);
-    case "thinking_completed":
+    case "stage_started":
+    case "stage_completed":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
-        upsertChatMessage(messages, buildThinkingMessage(requestId, event.payload, { status: "completed" })), true);
+        upsertChatMessage(messages, appendThinkingStage(messages, requestId, event)), true);
+    case "thinking_completed":
+      return transformChatThreadMessages(state, chatScopeKey, (messages) => {
+        const currentThoughtTrace = messages.find((message) => message.id === `thought-${requestId}`)?.thoughtTrace ?? {};
+        return upsertChatMessage(
+          messages,
+          buildThinkingMessage(
+            requestId,
+            {
+              ...event.payload,
+              previous_summary: currentThoughtTrace.summary ?? "",
+              previous_stages: currentThoughtTrace.stages ?? [],
+            },
+            { status: "completed" },
+          ),
+        );
+      }, true);
     case "tool_started":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
         upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, false)), true);
@@ -752,7 +770,7 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
         upsertChatMessage(messages, buildToolTraceMessage(requestId, messages, event, true)), true);
     case "answer_started":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
-        upsertChatMessage(messages, buildStreamingAnswerMessage(requestId, "", "running", null)), true);
+        upsertChatMessage(messages, buildStreamingAnswerMessage(requestId, "", "running", null, null)), true);
     case "answer_delta":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>
         upsertChatMessage(messages, appendStreamingAnswerDelta(messages, requestId, event.payload?.delta)), true);
@@ -765,6 +783,7 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
             typeof event.payload?.message === "string" ? event.payload.message : getMessageContent(messages, `assistant-${requestId}`),
             "completed",
             event.payload?.duration_ms,
+            event.payload?.usage ?? null,
           ),
         ), false);
     default:
@@ -792,23 +811,28 @@ function getMessageContent(messages, messageId) {
 
 function buildThinkingMessage(requestId, payload, { status }) {
   const previousSummary = typeof payload?.previous_summary === "string" ? payload.previous_summary : "";
+  const previousStages = Array.isArray(payload?.previous_stages) ? payload.previous_stages : [];
   const durationMs = typeof payload?.duration_ms === "number" ? payload.duration_ms : null;
   const summary = typeof payload?.summary === "string" && payload.summary
     ? payload.summary
     : previousSummary;
+  const hasStages = previousStages.length > 0;
   return {
     id: `thought-${requestId}`,
     role: "assistant",
     kind: "thought-trace",
-    content: status === "running" ? "思考中" : "思路已完成",
+    content: hasStages
+      ? status === "running" ? "执行中" : "执行完成"
+      : status === "running" ? "思考中" : "思路已完成",
     thoughtTrace: {
       status,
       summary,
       durationMs,
+      stages: previousStages,
     },
     meta: status === "running"
-      ? "Notebook Assistant • 思考中"
-      : buildStatusMeta("思路", durationMs),
+      ? hasStages ? "Notebook Assistant • 执行中" : "Notebook Assistant • 思考中"
+      : buildStatusMeta(hasStages ? "执行" : "思路", durationMs),
   };
 }
 
@@ -902,11 +926,13 @@ function sumVisibleToolDurations(steps) {
 
 function appendStreamingAnswerDelta(messages, requestId, delta) {
   const currentContent = getMessageContent(messages, `assistant-${requestId}`);
+  const currentUsage = messages.find((message) => message.id === `assistant-${requestId}`)?.usage ?? null;
   return buildStreamingAnswerMessage(
     requestId,
     `${currentContent}${typeof delta === "string" ? delta : ""}`,
     "running",
     null,
+    currentUsage,
   );
 }
 
@@ -920,20 +946,64 @@ function appendThinkingDelta(messages, requestId, delta) {
     {
       summary: nextSummary,
       duration_ms: currentMessage?.thoughtTrace?.durationMs ?? null,
+      previous_stages: currentMessage?.thoughtTrace?.stages ?? [],
     },
     { status: "running" },
   );
 }
 
-function buildStreamingAnswerMessage(requestId, content, status, durationMs) {
+function appendThinkingStage(messages, requestId, event) {
+  const messageId = `thought-${requestId}`;
+  const currentMessage = messages.find((message) => message.id === messageId);
+  const currentStages = Array.isArray(currentMessage?.thoughtTrace?.stages) ? currentMessage.thoughtTrace.stages : [];
+  const nextStage = buildThinkingStage(event);
+  return buildThinkingMessage(
+    requestId,
+    {
+      summary: currentMessage?.thoughtTrace?.summary ?? "",
+      duration_ms: currentMessage?.thoughtTrace?.durationMs ?? null,
+      previous_stages: upsertThinkingStage(currentStages, nextStage),
+    },
+    { status: "running" },
+  );
+}
+
+function buildThinkingStage(event) {
+  const payload = event?.payload ?? {};
+  const nodeId = typeof payload.node_id === "string" ? payload.node_id : "unknown";
+  return {
+    id: typeof payload.stage_id === "string" ? payload.stage_id : `${nodeId}-stage`,
+    nodeId,
+    label: typeof payload.label === "string" && payload.label.trim() ? payload.label.trim() : nodeId,
+    status: event?.type === "stage_started" ? "running" : "completed",
+    durationMs: typeof payload.duration_ms === "number" ? payload.duration_ms : null,
+  };
+}
+
+function upsertThinkingStage(stages, nextStage) {
+  const nextStages = [...stages];
+  const index = nextStages.findIndex((stage) => stage.id === nextStage.id);
+  if (index === -1) {
+    nextStages.push(nextStage);
+    return nextStages;
+  }
+  nextStages[index] = {
+    ...nextStages[index],
+    ...nextStage,
+  };
+  return nextStages;
+}
+
+function buildStreamingAnswerMessage(requestId, content, status, durationMs, usage) {
   return {
     id: `assistant-${requestId}`,
     role: "assistant",
     content,
     streamingStatus: status,
+    usage,
     meta: status === "running"
       ? "Notebook Assistant • 输出中"
-      : buildAssistantChatMeta(durationMs),
+      : buildAssistantChatMeta(durationMs, usage),
   };
 }
 

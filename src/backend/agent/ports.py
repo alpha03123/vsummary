@@ -4,6 +4,7 @@ from typing import Iterator, Protocol, TypeVar
 
 from pydantic import BaseModel
 from backend.agent.memory.context import AgentContext
+from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.session.models import AgentSessionSnapshot
@@ -17,6 +18,12 @@ class ChatGateway(Protocol):
         ...
 
     def create_text_completion_stream(self, messages: list[AgentChatMessage]) -> Iterator[str]:
+        ...
+
+    def create_text_completion_stream_with_metadata(
+        self,
+        messages: list[AgentChatMessage],
+    ) -> Iterator[ChatCompletionStreamChunk]:
         ...
 
     def create_structured_completion(

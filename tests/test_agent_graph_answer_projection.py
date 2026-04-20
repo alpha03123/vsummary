@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.nodes import _project_answer_evidence
+from backend.agent_graph.runtime.nodes import _project_answer_evidence
 
 
 class AgentGraphAnswerProjectionTests(unittest.TestCase):

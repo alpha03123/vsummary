@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dspy
 
-from backend.agent_graph.programs import SplitCompareQuery, normalize_split_compare_prediction
+from backend.agent_graph.dspy.programs import SplitCompareQuery, normalize_split_compare_prediction
 
 
 class SplitCompareModule(dspy.Module):

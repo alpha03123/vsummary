@@ -9,6 +9,8 @@ class AgentGraphState(TypedDict):
     series_id: str
     video_id: NotRequired[str]
     user_message: str
+    dialog_history: NotRequired[str]
+    evidence_history: NotRequired[dict[str, object]]
     history_messages: NotRequired[list[dict[str, object]]]
     history_summary: NotRequired[str]
     history_selected_videos: NotRequired[list[dict[str, object]]]

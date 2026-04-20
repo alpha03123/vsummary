@@ -78,6 +78,35 @@ class LiteLLMChatGatewayTests(unittest.TestCase):
 
         self.assertEqual(chunks, ["你", "好", "！"])
 
+    def test_create_text_completion_stream_with_metadata_yields_usage(self) -> None:
+        def fake_completion(**kwargs):
+            self.assertTrue(kwargs["stream"])
+            self.assertEqual(kwargs["stream_options"], {"include_usage": True})
+            return iter(
+                [
+                    {"choices": [{"delta": {"content": "你"}}]},
+                    {"choices": [{"delta": {"content": "好"}}], "usage": {"total_tokens": 12, "completion_tokens": 2}},
+                ]
+            )
+
+        gateway = LiteLLMChatGateway(
+            provider="openai_compatible",
+            model="openai/gpt-5.4",
+            base_url="https://example.com/v1",
+            api_key="test-key",
+            completion_fn=fake_completion,
+            acompletion_fn=self._unused_acompletion,
+        )
+
+        chunks = list(
+            gateway.create_text_completion_stream_with_metadata(
+                [AgentChatMessage(role="user", content="你好")]
+            )
+        )
+
+        self.assertEqual([chunk.delta for chunk in chunks], ["你", "好", ""])
+        self.assertEqual(chunks[-1].usage["total_tokens"], 12)
+
     def test_create_text_completion_falls_back_to_stream_when_non_stream_content_is_empty(self) -> None:
         def fake_completion(**kwargs):
             if kwargs.get("stream"):

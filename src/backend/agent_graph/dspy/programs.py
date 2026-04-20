@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import dspy
 
-from backend.agent_graph.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
+from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
 
 
 class DecomposeUserTask(dspy.Signature):

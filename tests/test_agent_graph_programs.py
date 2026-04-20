@@ -9,12 +9,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.programs import (
+from backend.agent_graph.dspy.programs import (
     AnswerSynthesisProgram,
     CompareSplitProgram,
     SeriesQueryClassifierProgram,
 )
-from backend.agent_graph.planning import build_structured_query_plan
+from backend.agent_graph.query.planning import build_structured_query_plan
 
 
 class AgentGraphProgramsTests(unittest.TestCase):

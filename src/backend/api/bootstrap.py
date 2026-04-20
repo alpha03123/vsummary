@@ -9,23 +9,24 @@ import dspy
 
 from backend.agent import AgentContextBudgetService, FileAgentSessionStore, InMemoryAgentMemoryStore
 from backend.agent.context import AgentMemoryCompactionService
+from backend.agent.memory.dialog_history import DialogHistoryCompactor
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
-from backend.agent_graph.action_dispatcher import ActionDispatcher
-from backend.agent_graph.graph import build_agent_graph
-from backend.agent_graph.pinpoint import BGEReranker, VideoGraphPinpointService
-from backend.agent_graph.series_planner import LegacyStyleSeriesPlanner
-from backend.agent_graph.series_aggregator import LegacyStyleSeriesAggregator
-from backend.agent_graph.video_workflow import VideoWorkflowExtractor
-from backend.agent_graph.dspy_lm import ProxyStreamingLM
-from backend.agent_graph.programs import AnswerSynthesisProgram, MemoryUpdateProgram
-from backend.agent_graph.program_loader import (
+from backend.agent_graph.actions.action_dispatcher import ActionDispatcher
+from backend.agent_graph.runtime.graph import build_agent_graph
+from backend.agent_graph.evidence.pinpoint import BGEReranker, VideoGraphPinpointService
+from backend.agent_graph.query.series_planner import LegacyStyleSeriesPlanner
+from backend.agent_graph.query.series_aggregator import LegacyStyleSeriesAggregator
+from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
+from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.dspy.programs import AnswerSynthesisProgram, MemoryUpdateProgram
+from backend.agent_graph.dspy.program_loader import (
     load_or_create_classifier_program,
     load_or_create_decompose_program,
     load_or_create_split_compare_program,
 )
-from backend.agent_graph.retrieval import MetaStateReader, SeriesRetrievalService
-from backend.agent_graph.service import AgentGraphService, SeriesAgentGraphService
+from backend.agent_graph.evidence.retrieval import MetaStateReader, SeriesRetrievalService
+from backend.agent_graph.runtime.service import AgentGraphService, SeriesAgentGraphService
 from backend.agent.schemas.tool_calls import ToolName
 from backend.agent.tools.library_info import (
     create_get_video_summary_handler,
@@ -202,6 +203,11 @@ class LazyAgentRuntimeProvider:
                     base_url=normalize_openai_base_url(env_settings.base_url),
                     api_key=env_settings.api_key,
                 )
+                dialog_history_compactor = DialogHistoryCompactor(
+                    gateway=planner_gateway,
+                    context_window_tokens=app_settings.agent_context.window_tokens,
+                    compression_ratio=0.90,
+                )
                 series_planner = LegacyStyleSeriesPlanner(
                     workspace=self._workspace,
                     gateway=planner_gateway,
@@ -257,15 +263,34 @@ class LazyAgentRuntimeProvider:
                     meta_state_reader=meta_state_reader,
                     action_dispatcher=action_dispatcher,
                     answer_program=answer_program,
+                    series_aggregator=series_aggregator,
                     memory_update_program=memory_update_program,
+                    dialog_history_compactor=dialog_history_compactor,
+                    dialog_history_window_tokens=app_settings.agent_context.window_tokens,
+                    dialog_history_compression_ratio=0.90,
                 )
             return self._cached_agent_graph_service
 
     def get_series_agent_graph_service(self) -> SeriesAgentGraphService:
+        base_service = self.get_agent_graph_service()
         return SeriesAgentGraphService(
             context_loader=self._context_loader,
-            graph=self.get_agent_graph_service().graph,
+            graph=base_service.graph,
             session_store=self.session_store,
+            decomposer_program=base_service._decomposer_program,
+            classifier_program=base_service._classifier_program,
+            compare_split_program=base_service._compare_split_program,
+            series_planner=base_service._series_planner,
+            retrieval_service=base_service._retrieval_service,
+            pinpoint_service=base_service._pinpoint_service,
+            meta_state_reader=base_service._meta_state_reader,
+            action_dispatcher=base_service._action_dispatcher,
+            answer_program=base_service._answer_program,
+            series_aggregator=base_service._series_aggregator,
+            memory_update_program=base_service._memory_update_program,
+            dialog_history_compactor=base_service._dialog_history_compactor,
+            dialog_history_window_tokens=base_service._dialog_history_window_tokens,
+            dialog_history_compression_ratio=base_service._dialog_history_compression_ratio,
         )
 
     def get_context_budget_service(self) -> AgentContextBudgetService:

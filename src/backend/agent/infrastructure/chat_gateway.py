@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from backend.agent.ports import ChatGateway, StructuredResponseT
+from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.shared.llm import LiteLLMCompletionGateway
 
@@ -37,6 +38,12 @@ class LiteLLMChatGateway(ChatGateway):
 
     def create_text_completion_stream(self, messages: list[AgentChatMessage]) -> Iterator[str]:
         return self._gateway.stream_text(_dump_messages(messages))
+
+    def create_text_completion_stream_with_metadata(
+        self,
+        messages: list[AgentChatMessage],
+    ) -> Iterator[ChatCompletionStreamChunk]:
+        return self._gateway.stream_text_with_metadata(_dump_messages(messages))
 
     def create_structured_completion(
         self,

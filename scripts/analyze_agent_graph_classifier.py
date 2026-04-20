@@ -12,9 +12,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.dspy_compile import ClassifierMetric, SeriesQueryClassifierModule
+from backend.agent_graph.dspy.dspy_compile import ClassifierMetric, SeriesQueryClassifierModule
 from backend.agent_graph.dspy_dataset import build_classifier_devset
-from backend.agent_graph.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 
 

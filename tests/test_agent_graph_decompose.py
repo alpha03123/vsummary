@@ -9,9 +9,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.models import DecomposeDecision
-from backend.agent_graph.nodes import build_decompose_node
-from backend.agent_graph.programs import TaskDecomposerProgram
+from backend.agent_graph.query.models import DecomposeDecision
+from backend.agent_graph.runtime.nodes import build_decompose_node
+from backend.agent_graph.dspy.programs import TaskDecomposerProgram
 
 
 class AgentGraphDecomposeTests(unittest.TestCase):

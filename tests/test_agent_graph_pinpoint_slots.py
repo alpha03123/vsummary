@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.pinpoint import _build_probe_slots, extract_query_terms
+from backend.agent_graph.evidence.pinpoint import _build_probe_slots, extract_query_terms
 
 
 class AgentGraphPinpointSlotTests(unittest.TestCase):

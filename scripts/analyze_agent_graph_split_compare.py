@@ -11,8 +11,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.dspy_lm import ProxyStreamingLM
-from backend.agent_graph.split_compare_compile import SplitCompareMetric, SplitCompareModule
+from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.dspy.split_compare_compile import SplitCompareMetric, SplitCompareModule
 from backend.agent_graph.split_compare_dataset import build_split_compare_devset
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 

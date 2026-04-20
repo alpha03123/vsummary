@@ -44,6 +44,7 @@ class SeriesRetrievalService:
         video_id: str,
         query: str,
         target_source: str,
+        source_tags: list[str] | None = None,
         expand_context: bool,
         context_window_seconds: int,
         max_hits: int,
@@ -56,6 +57,7 @@ class SeriesRetrievalService:
                 series_id=series_id,
                 video_id=video_id,
                 target_source=target_source,
+                source_tags=source_tags or [],
             ),
         )
         nodes = retriever.retrieve(query)
@@ -89,6 +91,7 @@ class SeriesRetrievalService:
             "video_id": video_id,
             "query": query,
             "target_source": target_source,
+            "source_tags": list(source_tags or []),
             "hits": hits[:max_hits],
         }
 
@@ -196,17 +199,45 @@ def _build_filters(
     series_id: str,
     video_id: str,
     target_source: str,
+    source_tags: list[str],
 ) -> MetadataFilters:
     filters: list[MetadataFilter | MetadataFilters] = [
         MetadataFilter(key="series_id", value=series_id),
     ]
     if scope_type == "video":
         filters.append(MetadataFilter(key="video_id", value=video_id))
-    if target_source == "summary":
-        filters.append(MetadataFilter(key="source_family", value="summary"))
-    elif target_source == "transcript":
-        filters.append(MetadataFilter(key="source_family", value="transcript"))
+    family_filters = _build_source_family_filters(source_tags, target_source=target_source)
+    if family_filters:
+        if len(family_filters) == 1:
+            filters.append(family_filters[0])
+        else:
+            filters.append(MetadataFilters(filters=family_filters, condition=FilterCondition.OR))
     return MetadataFilters(filters=filters, condition=FilterCondition.AND)
+
+
+def _build_source_family_filters(
+    source_tags: list[str],
+    *,
+    target_source: str,
+) -> list[MetadataFilter]:
+    if source_tags:
+        families = []
+        for tag in source_tags:
+            if tag == "summary":
+                families.append("summary")
+            elif tag == "transcript":
+                families.append("transcript")
+            elif tag == "notes":
+                families.append("notes")
+            elif tag == "cards":
+                families.append("cards")
+        if families:
+            return [MetadataFilter(key="source_family", value=family) for family in dict.fromkeys(families)]
+    if target_source == "summary":
+        return [MetadataFilter(key="source_family", value="summary")]
+    if target_source == "transcript":
+        return [MetadataFilter(key="source_family", value="transcript")]
+    return []
 
 
 def _build_workspace_signature(workspace: VideoWorkspace) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -225,10 +256,16 @@ def _build_documents(workspace: VideoWorkspace) -> list[RetrievalDocument]:
         for video in series.videos:
             summary = workspace.get_video_summary(series.id, video.id)
             transcript = workspace.get_video_transcript(series.id, video.id)
+            notes = workspace.get_video_notes(series.id, video.id)
+            knowledge_cards = workspace.get_video_knowledge_cards(series.id, video.id)
             if summary is not None:
                 documents.extend(_build_summary_documents(summary))
             if transcript is not None:
                 documents.extend(_build_transcript_documents(transcript))
+            if notes is not None:
+                documents.extend(_build_notes_documents(notes))
+            if knowledge_cards is not None:
+                documents.extend(_build_knowledge_card_documents(knowledge_cards))
     return documents
 
 
@@ -311,6 +348,71 @@ def _build_transcript_documents(transcript) -> list[RetrievalDocument]:
                     "source_family": "transcript",
                     "start_seconds": segment.start_seconds,
                     "end_seconds": segment.end_seconds,
+                },
+            )
+        )
+    return docs
+
+
+def _build_notes_documents(notes) -> list[RetrievalDocument]:
+    docs: list[RetrievalDocument] = []
+    for note in notes.notes:
+        note_text = "\n".join(
+            part
+            for part in [
+                str(note.title).strip(),
+                str(note.content).strip(),
+            ]
+            if part
+        ).strip()
+        if not note_text:
+            continue
+        docs.append(
+            RetrievalDocument(
+                text=note_text,
+                metadata={
+                    "series_id": notes.series_id,
+                    "video_id": notes.video_id,
+                    "title": notes.title,
+                    "source_type": "note",
+                    "source_family": "notes",
+                    "note_id": note.id,
+                    "note_source": note.source,
+                },
+            )
+        )
+    return docs
+
+
+def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
+    docs: list[RetrievalDocument] = []
+    for card in cards.cards:
+        card_text = "\n".join(
+            part
+            for part in [
+                str(card.title).strip(),
+                str(card.summary).strip(),
+                str(card.details).strip(),
+                " ".join(keyword.strip() for keyword in card.keywords if isinstance(keyword, str) and keyword.strip()),
+            ]
+            if part
+        ).strip()
+        if not card_text:
+            continue
+        first_ref = card.source_refs[0] if card.source_refs else None
+        docs.append(
+            RetrievalDocument(
+                text=card_text,
+                metadata={
+                    "series_id": cards.series_id,
+                    "video_id": cards.video_id,
+                    "title": cards.title,
+                    "source_type": "knowledge_card",
+                    "source_family": "cards",
+                    "card_id": card.id,
+                    "card_kind": card.kind,
+                    "start_seconds": getattr(first_ref, "start_seconds", None),
+                    "end_seconds": getattr(first_ref, "end_seconds", None),
                 },
             )
         )

@@ -4,6 +4,7 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.memory.store import AgentMemoryStore
 from backend.agent.ports import AgentContextLoader, AgentSessionStore
 from backend.agent.schemas.messages import AgentChatMessage
+from backend.agent.memory.dialog_history import render_dialog_history
 
 
 def load_runtime_context(
@@ -24,7 +25,7 @@ def load_runtime_context(
     context = merge_context(context, context_override)
     memory_key = build_memory_key(context, session_id)
     history = memory_store.get_messages(memory_key)
-    return attach_recent_messages(context, history), memory_key, history
+    return attach_dialog_history(context, history), memory_key, history
 
 
 def merge_context(base_context: AgentContext, context_override: AgentContext | None) -> AgentContext:
@@ -41,11 +42,8 @@ def build_memory_key(context: AgentContext, session_id: str) -> str:
     return session_id
 
 
-def attach_recent_messages(
+def attach_dialog_history(
     context: AgentContext,
     history: list[AgentChatMessage],
-    *,
-    limit: int = 6,
 ) -> AgentContext:
-    recent_messages = [message.content for message in history[-limit:]]
-    return context.model_copy(update={"recent_messages": recent_messages})
+    return context.model_copy(update={"dialog_history": render_dialog_history(history)})

@@ -56,7 +56,7 @@ class FileAgentSessionStore:
     ) -> None:
         snapshot = self.get_snapshot(session_id)
         timestamp = utc_now_iso()
-        sanitized_context = context.model_copy(update={"recent_messages": []})
+        sanitized_context = context.model_copy()
         if snapshot is None:
             snapshot = AgentSessionSnapshot(
                 session_id=session_id,

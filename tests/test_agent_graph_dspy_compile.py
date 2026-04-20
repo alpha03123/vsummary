@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.dspy_compile import SeriesQueryClassifierModule
+from backend.agent_graph.dspy.dspy_compile import SeriesQueryClassifierModule
 
 
 class AgentGraphDspyCompileTests(unittest.TestCase):

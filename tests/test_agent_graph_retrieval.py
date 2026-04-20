@@ -13,8 +13,19 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.retrieval import SeriesRetrievalService, _build_default_embed_model
-from backend.video_summary.library.views import SeriesView, TranscriptSegmentView, VideoCardView, VideoSummaryView, VideoTranscriptView
+from backend.agent_graph.evidence.retrieval import SeriesRetrievalService, _build_default_embed_model
+from backend.video_summary.library.views import (
+    KnowledgeCardSourceRefView,
+    KnowledgeCardView,
+    SeriesView,
+    TranscriptSegmentView,
+    VideoCardView,
+    VideoNoteView,
+    VideoNotesView,
+    VideoSummaryView,
+    VideoTranscriptView,
+    VideoKnowledgeCardsView,
+)
 
 
 class _FakeWorkspace:
@@ -60,6 +71,56 @@ class _FakeWorkspace:
             ],
         )
 
+    def get_video_notes(self, series_id: str, video_id: str):
+        del series_id
+        if video_id != "video-1":
+            return None
+        return VideoNotesView(
+            series_id="series-a",
+            video_id="video-1",
+            title="Video 1",
+            notes=[
+                VideoNoteView(
+                    id="note-1",
+                    title="OpenManus 重点",
+                    content="这里提到 OpenManus 是开源框架。",
+                    source="agent",
+                    created_at="2026-04-19T00:00:00+00:00",
+                    updated_at="2026-04-19T00:00:00+00:00",
+                )
+            ],
+        )
+
+    def get_video_knowledge_cards(self, series_id: str, video_id: str):
+        del series_id
+        if video_id != "video-1":
+            return None
+        return VideoKnowledgeCardsView(
+            series_id="series-a",
+            video_id="video-1",
+            title="Video 1",
+            cards=[
+                KnowledgeCardView(
+                    id="card-1",
+                    title="OpenManus",
+                    kind="concept",
+                    summary="OpenManus 是开源框架。",
+                    details="Spring AI Alibaba 基于 OpenManus 的思路扩展。",
+                    tags=["framework"],
+                    keywords=["openmanus"],
+                    source_refs=[
+                        KnowledgeCardSourceRefView(
+                            chapter_id=None,
+                            start_seconds=10.0,
+                            end_seconds=20.0,
+                            quote="这里介绍 OpenManus。",
+                        )
+                    ],
+                    related_card_ids=[],
+                )
+            ],
+        )
+
 
 class AgentGraphRetrievalTests(unittest.TestCase):
     def test_default_embed_model_uses_local_huggingface_settings(self) -> None:
@@ -101,7 +162,7 @@ embedding_batch_size = 8
             )
             fake_embedding = object()
             with patch(
-                "backend.agent_graph.retrieval._build_local_huggingface_embedding",
+                "backend.agent_graph.evidence.retrieval._build_local_huggingface_embedding",
                 return_value=fake_embedding,
             ) as builder:
                 result = _build_default_embed_model(root)
@@ -154,6 +215,40 @@ embedding_batch_size = 8
 
             self.assertEqual(result["video_id"], "video-1")
             self.assertTrue(all(hit["video_id"] == "video-1" for hit in result["hits"]))
+
+    def test_video_retrieval_service_can_search_notes_and_cards_by_tags(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = SeriesRetrievalService(
+                workspace=_FakeWorkspace(),
+                db_uri=str(Path(temp_dir) / "lancedb"),
+                embed_model=MockEmbedding(embed_dim=32),
+            )
+
+            notes_result = service.search(
+                scope_type="video",
+                series_id="series-a",
+                video_id="video-1",
+                query="OpenManus 是什么",
+                target_source="all",
+                source_tags=["notes"],
+                expand_context=False,
+                context_window_seconds=120,
+                max_hits=5,
+            )
+            cards_result = service.search(
+                scope_type="video",
+                series_id="series-a",
+                video_id="video-1",
+                query="OpenManus 是什么",
+                target_source="all",
+                source_tags=["cards"],
+                expand_context=False,
+                context_window_seconds=120,
+                max_hits=5,
+            )
+
+            self.assertEqual(notes_result["hits"][0]["source_type"], "note")
+            self.assertEqual(cards_result["hits"][0]["source_type"], "knowledge_card")
 
 
 if __name__ == "__main__":

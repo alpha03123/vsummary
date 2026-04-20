@@ -9,8 +9,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.graph import build_series_agent_graph
-from backend.agent_graph.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
+from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
 
 
 class _Decomposer:
@@ -38,18 +38,25 @@ class _Splitter:
 
 
 class _Retrieval:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
     def search(self, **kwargs):
+        self.calls.append(dict(kwargs))
         return {
             "scope_type": kwargs["scope_type"],
             "series_id": kwargs["series_id"],
             "video_id": kwargs.get("video_id", ""),
             "query": kwargs["query"],
             "target_source": kwargs["target_source"],
+            "source_tags": list(kwargs.get("source_tags", [])),
             "hits": [
                 {
                     "video_id": kwargs.get("video_id", "video-1") or "video-1",
                     "title": "Video 1",
-                    "source_type": "transcript_chunk" if kwargs["target_source"] == "transcript" else "summary",
+                    "source_type": "transcript_chunk"
+                    if "transcript" in kwargs.get("source_tags", []) or kwargs["target_source"] == "transcript"
+                    else "summary",
                     "snippet": "这里是命中内容。",
                 }
             ],
@@ -108,7 +115,10 @@ class _Answer:
         del user_message
         if meta_state:
             return f"meta:{meta_state['overview']['status']}"
-        return f"answer:{retrieval_results[0]['source_type']}"
+        return "answer:" + ",".join(
+            str(item.get("source_type", ""))
+            for item in retrieval_results
+        )
 
 
 class _MemoryUpdater:
@@ -119,6 +129,7 @@ class _MemoryUpdater:
 
 class AgentGraphVideoFlowTests(unittest.TestCase):
     def test_video_summary_flow_retrieves_summary(self) -> None:
+        retrieval = _Retrieval()
         graph = build_series_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
@@ -130,7 +141,7 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
                 )
             ),
             compare_split_program=_Splitter(),
-            retrieval_service=_Retrieval(),
+            retrieval_service=retrieval,
             meta_state_reader=_MetaStateReader(),
             answer_program=_Answer(),
             memory_update_program=_MemoryUpdater(),
@@ -143,6 +154,18 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
                 "series_id": "series-a",
                 "video_id": "video-1",
                 "user_message": "这个视频主要讲了什么？",
+                "evidence_history": {
+                    "video_summary": {
+                        "video_id": "video-1",
+                        "title": "Video 1",
+                        "summary": {
+                            "one_sentence_summary": "这是当前视频的摘要。",
+                            "core_problem": "视频讲解 OpenManus。",
+                            "key_takeaways": ["OpenManus 是开源框架。"],
+                            "chapters": [],
+                        },
+                    }
+                },
             }
         )
 
@@ -153,22 +176,23 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
         self.assertEqual(result["retrieval_results"][0]["depth"], "summary")
         self.assertEqual(result["retrieval_results"][0]["items"][0]["source_type"], "summary")
         self.assertEqual(result["answer"], "answer:summary")
+        self.assertEqual(retrieval.calls, [])
 
-    def test_video_locate_flow_retrieves_transcript(self) -> None:
+    def test_video_content_flow_uses_unified_rag_tags_after_summary(self) -> None:
+        retrieval = _Retrieval()
         graph = build_series_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
                 SeriesQueryDecision(
-                    goal="locate",
-                    target_source="transcript",
+                    goal="understand",
+                    target_source="all",
                     context_need="chunk",
-                    reason="视频定位问题。",
+                    reason="视频内容问题，需要补充检索。",
                 )
             ),
             compare_split_program=_Splitter(),
-            retrieval_service=_Retrieval(),
+            retrieval_service=retrieval,
             meta_state_reader=_MetaStateReader(),
-            pinpoint_service=_PinpointService(),
             answer_program=_Answer(),
             memory_update_program=_MemoryUpdater(),
         )
@@ -179,18 +203,31 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
                 "scope_type": "video",
                 "series_id": "series-a",
                 "video_id": "video-1",
-                "user_message": "视频里哪里提到了 AK？",
+                "user_message": "OpenManus 是啥，它和当前视频里别的框架啥关系？",
+                "evidence_history": {
+                    "video_summary": {
+                        "video_id": "video-1",
+                        "title": "Video 1",
+                        "summary": {
+                            "one_sentence_summary": "这是当前视频的摘要。",
+                            "core_problem": "视频讲解 OpenManus。",
+                            "key_takeaways": ["OpenManus 是开源框架。"],
+                            "chapters": [],
+                        },
+                    }
+                },
             }
         )
 
-        self.assertEqual(result["retrieval_results"][0]["depth"], "video_graph")
-        self.assertEqual(result["retrieval_results"][0]["items"][0]["source_type"], "transcript_chunk")
-        self.assertEqual(result["query_plan"]["subplans"][0]["depth"], "video_graph")
+        self.assertEqual(result["query_plan"]["subplans"][0]["depth"], "summary")
+        self.assertEqual(result["query_plan"]["subplans"][1]["depth"], "video_rag")
+        self.assertEqual(result["query_plan"]["subplans"][1]["retrieval_tags"], ["summary", "transcript", "notes", "cards"])
         self.assertEqual(result["query_plan"]["candidate_video_ids"], ["video-1"])
-        self.assertEqual(result["answer"], "answer:transcript_chunk")
-        self.assertEqual(result["tool_results"][0]["tool_name"], "get_video_transcript")
-        self.assertEqual(result["tool_results"][1]["tool_name"], "video_seek")
-        self.assertEqual(result["tool_results"][1]["payload"]["seek_seconds"], 32.0)
+        self.assertEqual(result["retrieval_results"][0]["depth"], "summary")
+        self.assertEqual(result["retrieval_results"][1]["depth"], "video_rag")
+        self.assertEqual(result["retrieval_results"][1]["items"][0]["source_type"], "transcript_chunk")
+        self.assertEqual(result["answer"], "answer:summary,transcript_chunk")
+        self.assertEqual(retrieval.calls[0]["source_tags"], ["summary", "transcript", "notes", "cards"])
 
     def test_video_meta_state_flow_reads_structured_state(self) -> None:
         graph = build_series_agent_graph(

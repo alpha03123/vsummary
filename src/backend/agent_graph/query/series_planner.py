@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import ChatGateway
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent_graph.models import ExecutionDepth, SelectionMode
+from backend.agent_graph.query.models import ExecutionDepth, SelectionMode
 from backend.video_summary.library.ports import VideoWorkspace
 
 
@@ -40,6 +40,7 @@ class LegacyStyleSeriesPlanner:
         user_message: str,
         series_id: str,
         series_title: str = "",
+        dialog_history: str = "",
         history_messages: list[dict[str, object]] | None = None,
         previous_selected_videos: list[dict[str, object]] | None = None,
         debug_trace: dict[str, object] | None = None,
@@ -67,11 +68,6 @@ class LegacyStyleSeriesPlanner:
                 )
             )
 
-        history_lines = [
-            f"{str(item.get('role', '')).strip()}: {str(item.get('content', '')).strip()}"
-            for item in (history_messages or [])
-            if isinstance(item, dict) and str(item.get("content", "")).strip()
-        ][-6:]
         previous_selection_lines = [
             f"- video_id={str(item.get('video_id', '')).strip()}; reason_for_selection={str(item.get('reason_for_selection', '')).strip()}"
             for item in (previous_selected_videos or [])
@@ -87,7 +83,7 @@ class LegacyStyleSeriesPlanner:
                 series_title=series_title or series.title,
             ),
             catalog_lines=catalog_lines,
-            history_lines=history_lines,
+            dialog_history=dialog_history,
             previous_selection_lines=previous_selection_lines,
         )
         plan = self._create_contract_valid_plan(
@@ -208,10 +204,10 @@ def _build_planner_messages(
     user_message: str,
     context: AgentContext,
     catalog_lines: list[str],
-    history_lines: list[str],
+    dialog_history: str,
     previous_selection_lines: list[str],
 ) -> list[AgentChatMessage]:
-    history_block = "\n".join(history_lines) if history_lines else "(none)"
+    history_block = dialog_history.strip() or "(none)"
     catalog_block = "\n".join(catalog_lines) if catalog_lines else "(empty)"
     previous_selection_block = "\n".join(previous_selection_lines) if previous_selection_lines else "(none)"
     return [
@@ -248,7 +244,7 @@ def _build_planner_messages(
                 f"当前 scope: {context.scope_type}\n"
                 f"series_id: {context.series_id or ''}\n"
                 f"series_title: {context.series_title or ''}\n\n"
-                f"最近对话:\n{history_block}\n\n"
+                f"对话记忆:\n{history_block}\n\n"
                 f"上一轮已选视频:\n{previous_selection_block}\n\n"
                 f"系列目录:\n{catalog_block}\n\n"
                 f"当前用户问题:\n{user_message}"

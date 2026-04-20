@@ -33,5 +33,5 @@ class AgentContext(BaseModel):
     preview: ToolAvailability = Field(default_factory=ToolAvailability)
     inspection_stage: InspectionStage = InspectionStage.SERIES_DISCOVERY
     chapter_titles: list[str] = Field(default_factory=list)
-    recent_messages: list[str] = Field(default_factory=list)
-    compact_summary: str = ""
+    dialog_history: str = ""
+    evidence_history: dict[str, object] = Field(default_factory=dict)

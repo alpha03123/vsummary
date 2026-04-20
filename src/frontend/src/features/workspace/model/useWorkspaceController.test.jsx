@@ -1017,4 +1017,100 @@ describe("useWorkspaceController", () => {
       ]),
     );
   });
+
+  it("records graph stage cards with frontend aliases during chat streaming", async () => {
+    workspaceApi.streamAgentChat.mockImplementationOnce(async (_sessionId, _message, _context, listener) => {
+      listener({ type: "thinking_started", payload: { message: "正在执行图节点" } });
+      listener({
+        type: "stage_started",
+        payload: {
+          stage_id: "stage-1",
+          node_id: "decompose",
+          label: "拆解任务",
+        },
+      });
+      listener({
+        type: "stage_completed",
+        payload: {
+          stage_id: "stage-1",
+          node_id: "decompose",
+          label: "拆解任务",
+          duration_ms: 12,
+        },
+      });
+      listener({
+        type: "stage_started",
+        payload: {
+          stage_id: "stage-2",
+          node_id: "build_plan",
+          label: "生成计划",
+        },
+      });
+      listener({
+        type: "stage_completed",
+        payload: {
+          stage_id: "stage-2",
+          node_id: "build_plan",
+          label: "生成计划",
+          duration_ms: 18,
+        },
+      });
+      listener({ type: "thinking_completed", payload: { duration_ms: 30 } });
+      listener({ type: "answer_started", payload: { message: "正在组织回答" } });
+      listener({ type: "answer_delta", payload: { delta: "当前系列重点在 agent 编排。" } });
+      listener({
+        type: "answer_completed",
+        payload: {
+          message: "当前系列重点在 agent 编排。",
+          duration_ms: 36,
+          usage: { total_tokens: 15, prompt_tokens: 10, completion_tokens: 5 },
+        },
+      });
+    });
+
+    const { result } = renderHook(() => useWorkspaceController());
+
+    await waitFor(() => expect(result.current.state.loading).toBe(false));
+
+    act(() => {
+      result.current.onSelectSeries("series-a");
+    });
+
+    await act(async () => {
+      await result.current.onSubmitChat("这个系列主要讲了什么？");
+    });
+
+    await waitFor(() =>
+      expect(result.current.chatMessages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "thought-trace",
+            thoughtTrace: expect.objectContaining({
+              status: "completed",
+              stages: [
+                expect.objectContaining({
+                  id: "stage-1",
+                  nodeId: "decompose",
+                  label: "拆解任务",
+                  status: "completed",
+                  durationMs: 12,
+                }),
+                expect.objectContaining({
+                  id: "stage-2",
+                  nodeId: "build_plan",
+                  label: "生成计划",
+                  status: "completed",
+                  durationMs: 18,
+                }),
+              ],
+            }),
+          }),
+          expect.objectContaining({
+            role: "assistant",
+            content: "当前系列重点在 agent 编排。",
+            meta: "Notebook Assistant • 用时 36ms • 消耗 15 tokens",
+          }),
+        ]),
+      ));
+  });
 });

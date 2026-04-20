@@ -10,7 +10,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.dspy_lm import ProxyStreamingLM
+from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
 
 
 class _FakeResponse:

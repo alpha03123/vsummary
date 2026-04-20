@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dspy
 
-from backend.agent_graph.programs import ClassifySeriesQuery, normalize_classifier_prediction
+from backend.agent_graph.dspy.programs import ClassifySeriesQuery, normalize_classifier_prediction
 
 
 class SeriesQueryClassifierModule(dspy.Module):

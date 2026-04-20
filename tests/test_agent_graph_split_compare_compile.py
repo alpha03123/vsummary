@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.split_compare_compile import SplitCompareMetric, SplitCompareModule, compile_split_compare_program
+from backend.agent_graph.dspy.split_compare_compile import SplitCompareMetric, SplitCompareModule, compile_split_compare_program
 
 
 class _Optimizer:

@@ -9,9 +9,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.graph import build_series_agent_graph
-from backend.agent_graph.models import DecomposeDecision
-from backend.agent_graph.video_workflow import VideoWorkflowExtractor
+from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.query.models import DecomposeDecision
+from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
 from backend.video_summary.library.views import TranscriptSegmentView, VideoTranscriptView
 
 
@@ -103,8 +103,8 @@ class _WorkflowService:
 
 
 class _SeriesAggregator:
-    def run(self, *, user_message: str, query_plan: dict[str, object], execution_results: list[dict[str, object]], tool_results: list[dict[str, object]], history_messages=None, debug_trace=None):
-        del user_message, tool_results, history_messages, debug_trace
+    def run(self, *, user_message: str, query_plan: dict[str, object], execution_results: list[dict[str, object]], tool_results: list[dict[str, object]], dialog_history: str = "", history_messages=None, debug_trace=None):
+        del user_message, tool_results, dialog_history, history_messages, debug_trace
         return f"{query_plan['subplans'][0]['depth']}|{execution_results[0]['items'][0]['source_type']}"
 
 

@@ -14,7 +14,7 @@ from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.action_plan import AgentTurnResult
 from backend.agent.session.store import FileAgentSessionStore
-from backend.agent_graph.service import AgentGraphService
+from backend.agent_graph.runtime.service import AgentGraphService
 
 
 class _FakeGraph:

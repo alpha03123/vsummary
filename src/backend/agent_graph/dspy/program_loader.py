@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from backend.agent_graph.decompose_compile import TaskDecomposerModule
-from backend.agent_graph.dspy_compile import SeriesQueryClassifierModule
-from backend.agent_graph.split_compare_compile import SplitCompareModule
+from backend.agent_graph.dspy.decompose_compile import TaskDecomposerModule
+from backend.agent_graph.dspy.dspy_compile import SeriesQueryClassifierModule
+from backend.agent_graph.dspy.split_compare_compile import SplitCompareModule
 
 
 def load_or_create_classifier_program(

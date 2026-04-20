@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from backend.agent_graph.models import ExecutionDepth
-from backend.agent_graph.planning import backfill_query_plan_targets, build_structured_query_plan
-from backend.agent_graph.state import AgentGraphState
+from backend.agent_graph.query.models import ExecutionDepth
+from backend.agent_graph.query.planning import backfill_query_plan_targets, build_structured_query_plan
+from backend.agent_graph.runtime.state import AgentGraphState
 
 
 def build_decompose_node(*, decomposer_program) -> Callable[[AgentGraphState], AgentGraphState]:
@@ -53,6 +53,7 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
             query_plan = series_planner.create_plan(
                 user_message=current_instruction,
                 series_id=state["series_id"],
+                dialog_history=str(state.get("dialog_history", "")),
                 history_messages=list(state.get("history_messages", [])),
                 previous_selected_videos=list(state.get("history_selected_videos", [])),
             )
@@ -71,7 +72,7 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
             scope_type=state["scope_type"],
             series_id=state["series_id"],
             video_id=state.get("video_id", ""),
-            history_summary=str(state.get("history_summary", "")),
+            history_summary=str(state.get("dialog_history", state.get("history_summary", ""))),
             history_selected_videos=list(state.get("history_selected_videos", [])),
         )
         query_plan = build_structured_query_plan(
@@ -283,41 +284,45 @@ def build_execute_summary_node(*, retrieval_service) -> Callable[[AgentGraphStat
                 if isinstance(video_id, str) and str(video_id).strip()
             ]
 
-        responses: list[dict[str, object]] = []
-        if target_ids:
-            for video_id in target_ids:
+        items = _load_summary_items_from_state(state)
+        if not items:
+            responses: list[dict[str, object]] = []
+            if target_ids:
+                for video_id in target_ids:
+                    responses.append(
+                        retrieval_service.search(
+                            scope_type="video",
+                            series_id=state["series_id"],
+                            video_id=video_id,
+                            query=query,
+                            target_source="summary",
+                            source_tags=["summary"],
+                            expand_context=False,
+                            context_window_seconds=120,
+                            max_hits=5,
+                        )
+                    )
+            else:
                 responses.append(
                     retrieval_service.search(
-                        scope_type="video",
+                        scope_type=state["scope_type"],
                         series_id=state["series_id"],
-                        video_id=video_id,
+                        video_id=state.get("video_id", ""),
                         query=query,
                         target_source="summary",
+                        source_tags=["summary"],
                         expand_context=False,
                         context_window_seconds=120,
                         max_hits=5,
                     )
                 )
-        else:
-            responses.append(
-                retrieval_service.search(
-                    scope_type=state["scope_type"],
-                    series_id=state["series_id"],
-                    video_id=state.get("video_id", ""),
-                    query=query,
-                    target_source="summary",
-                    expand_context=False,
-                    context_window_seconds=120,
-                    max_hits=5,
-                )
-            )
 
-        items: list[dict[str, object]] = []
-        for response in responses:
-            hits = response.get("hits", [])
-            if not isinstance(hits, list):
-                continue
-            items.extend(hit for hit in hits if isinstance(hit, dict))
+            items = []
+            for response in responses:
+                hits = response.get("hits", [])
+                if not isinstance(hits, list):
+                    continue
+                items.extend(hit for hit in hits if isinstance(hit, dict))
 
         next_state = dict(state)
         next_state["retrieval_results"] = list(state.get("retrieval_results", [])) + [
@@ -335,6 +340,77 @@ def build_execute_summary_node(*, retrieval_service) -> Callable[[AgentGraphStat
         return next_state
 
     return execute_summary
+
+
+def build_execute_video_rag_node(*, retrieval_service) -> Callable[[AgentGraphState], AgentGraphState]:
+    def execute_video_rag(state: AgentGraphState) -> AgentGraphState:
+        current_subplan = dict(state.get("current_subplan", {}))
+        query = str(current_subplan.get("query", state["user_message"])).strip() or state["user_message"]
+        retrieval_tags = [
+            str(tag).strip()
+            for tag in current_subplan.get("retrieval_tags", [])
+            if isinstance(tag, str) and str(tag).strip()
+        ]
+        target_ids = [
+            str(video_id).strip()
+            for video_id in current_subplan.get("target_video_ids", [])
+            if isinstance(video_id, str) and str(video_id).strip()
+        ] or [str(state.get("video_id", "")).strip()]
+
+        responses: list[dict[str, object]] = []
+        for video_id in target_ids:
+            if not video_id:
+                continue
+            responses.append(
+                retrieval_service.search(
+                    scope_type="video",
+                    series_id=state["series_id"],
+                    video_id=video_id,
+                    query=query,
+                    target_source="all",
+                    source_tags=retrieval_tags,
+                    expand_context=True,
+                    context_window_seconds=120,
+                    max_hits=5,
+                )
+            )
+
+        items: list[dict[str, object]] = []
+        for response in responses:
+            hits = response.get("hits", [])
+            if not isinstance(hits, list):
+                continue
+            items.extend(hit for hit in hits if isinstance(hit, dict))
+
+        next_state = dict(state)
+        next_state["retrieval_results"] = list(state.get("retrieval_results", [])) + [
+            {
+                "depth": ExecutionDepth.VIDEO_RAG.value,
+                "query": query,
+                "retrieval_tags": retrieval_tags,
+                "items": items,
+            }
+        ]
+        next_state["tool_results"] = _merge_tool_results(
+            state,
+            [
+                {
+                    "tool_name": "get_video_transcript" if item.get("source_family") == "transcript" or item.get("source_type") == "transcript_chunk" else "get_video_summary",
+                    "status": "ok",
+                    "payload": {
+                        "series_id": state["series_id"],
+                        "video_id": item.get("video_id", ""),
+                        "title": item.get("title", ""),
+                        "retrieval_tags": retrieval_tags,
+                    },
+                }
+                for item in items
+            ],
+        )
+        backfill_query_plan_targets(next_state, items)
+        return next_state
+
+    return execute_video_rag
 
 
 def build_execute_video_graph_node(*, retrieval_service, pinpoint_service) -> Callable[[AgentGraphState], AgentGraphState]:
@@ -515,63 +591,91 @@ def build_dispatch_action_node(*, action_dispatcher) -> Callable[[AgentGraphStat
 
 def build_answer_node(*, answer_program, series_aggregator=None) -> Callable[[AgentGraphState], AgentGraphState]:
     def answer(state: AgentGraphState) -> AgentGraphState:
-        current_task = dict(state.get("current_task", {}))
-        current_instruction = str(current_task.get("instruction", state["user_message"]))
-        if _should_use_series_aggregator(state, series_aggregator):
-            answer_text = series_aggregator.run(
-                user_message=state["user_message"],
-                query_plan=dict(state.get("query_plan", {})),
-                execution_results=list(state.get("retrieval_results", [])),
-                tool_results=list(state.get("tool_results", [])),
-                history_messages=list(state.get("history_messages", [])),
-            )
-        else:
-            answer_text = answer_program.run(
-                user_message=current_instruction,
-                retrieval_results=_project_answer_evidence(list(state.get("retrieval_results", []))),
-                meta_state=state.get("meta_state"),
-            )
-        next_state = dict(state)
-        next_state["answer"] = answer_text
-        next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
-            {"task_id": current_task.get("task_id", ""), "kind": "answer", "value": answer_text}
-        ]
-        return next_state
+        answer_text = synthesize_answer_text(
+            state,
+            answer_program=answer_program,
+            series_aggregator=series_aggregator,
+        )
+        return append_answer_to_state(state, answer_text)
 
     return answer
 
 
 def build_finalize_node() -> Callable[[AgentGraphState], AgentGraphState]:
     def finalize(state: AgentGraphState) -> AgentGraphState:
-        outputs = list(state.get("task_outputs", []))
-        fragments: list[str] = []
-        for item in outputs:
-            if not isinstance(item, dict):
-                continue
-            value = str(item.get("value", "")).strip()
-            if value:
-                fragments.append(value)
-        next_state = dict(state)
-        next_state["assistant_message"] = "\n".join(fragments).strip()
-        if not next_state.get("answer"):
-            next_state["answer"] = next_state["assistant_message"]
-        return next_state
+        return finalize_state(state)
 
     return finalize
 
 
 def build_update_memory_node(*, memory_update_program) -> Callable[[AgentGraphState], AgentGraphState]:
     def update_memory(state: AgentGraphState) -> AgentGraphState:
-        next_state = dict(state)
-        next_state["history_summary_update"] = memory_update_program.run(
-            history_summary=str(state.get("history_summary", "")),
-            user_message=state["user_message"],
-            assistant_message=str(state.get("assistant_message", state.get("answer", ""))),
-            task_outputs=list(state.get("task_outputs", [])),
-        )
-        return next_state
+        return apply_memory_update(state, memory_update_program=memory_update_program)
 
     return update_memory
+
+
+def synthesize_answer_text(
+    state: AgentGraphState,
+    *,
+    answer_program,
+    series_aggregator=None,
+    debug_trace: dict[str, object] | None = None,
+) -> str:
+    current_task = dict(state.get("current_task", {}))
+    current_instruction = str(current_task.get("instruction", state["user_message"]))
+    if should_use_series_aggregator(state, series_aggregator):
+        return series_aggregator.run(
+            user_message=state["user_message"],
+            query_plan=dict(state.get("query_plan", {})),
+            execution_results=list(state.get("retrieval_results", [])),
+            tool_results=list(state.get("tool_results", [])),
+            dialog_history=str(state.get("dialog_history", "")),
+            history_messages=list(state.get("history_messages", [])),
+            debug_trace=debug_trace,
+        )
+    return answer_program.run(
+        user_message=current_instruction,
+        retrieval_results=_project_answer_evidence(list(state.get("retrieval_results", []))),
+        meta_state=state.get("meta_state"),
+    )
+
+
+def append_answer_to_state(state: AgentGraphState, answer_text: str) -> AgentGraphState:
+    current_task = dict(state.get("current_task", {}))
+    next_state = dict(state)
+    next_state["answer"] = answer_text
+    next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
+        {"task_id": current_task.get("task_id", ""), "kind": "answer", "value": answer_text}
+    ]
+    return next_state
+
+
+def finalize_state(state: AgentGraphState) -> AgentGraphState:
+    outputs = list(state.get("task_outputs", []))
+    fragments: list[str] = []
+    for item in outputs:
+        if not isinstance(item, dict):
+            continue
+        value = str(item.get("value", "")).strip()
+        if value:
+            fragments.append(value)
+    next_state = dict(state)
+    next_state["assistant_message"] = "\n".join(fragments).strip()
+    if not next_state.get("answer"):
+        next_state["answer"] = next_state["assistant_message"]
+    return next_state
+
+
+def apply_memory_update(state: AgentGraphState, *, memory_update_program) -> AgentGraphState:
+    next_state = dict(state)
+    next_state["history_summary_update"] = memory_update_program.run(
+        history_summary=str(state.get("history_summary", "")),
+        user_message=state["user_message"],
+        assistant_message=str(state.get("assistant_message", state.get("answer", ""))),
+        task_outputs=list(state.get("task_outputs", [])),
+    )
+    return next_state
 
 
 def _build_task_context(task: dict[str, object], task_outputs: list[dict[str, object]]) -> dict[str, object]:
@@ -592,7 +696,7 @@ def _build_task_context(task: dict[str, object], task_outputs: list[dict[str, ob
     }
 
 
-def _should_use_series_aggregator(state: AgentGraphState, series_aggregator) -> bool:
+def should_use_series_aggregator(state: AgentGraphState, series_aggregator) -> bool:
     if series_aggregator is None:
         return False
     if str(state.get("scope_type", "")).strip() != "series":
@@ -721,5 +825,54 @@ def _project_answer_evidence(results: list[dict[str, object]]) -> list[dict[str,
                             }
                         )
             continue
+        if depth == ExecutionDepth.VIDEO_RAG.value:
+            items = item.get("items", [])
+            if isinstance(items, list):
+                for rag_item in items:
+                    if isinstance(rag_item, dict):
+                        projected.append(rag_item)
+            continue
         projected.append(item)
     return projected
+
+
+def _load_summary_items_from_state(state: AgentGraphState) -> list[dict[str, object]]:
+    evidence_history = state.get("evidence_history", {})
+    if not isinstance(evidence_history, dict):
+        return []
+    video_summary = evidence_history.get("video_summary", {})
+    if not isinstance(video_summary, dict):
+        return []
+    summary_payload = video_summary.get("summary", {})
+    if not isinstance(summary_payload, dict):
+        return []
+    video_id = str(video_summary.get("video_id", "")).strip() or str(state.get("video_id", "")).strip()
+    title = str(video_summary.get("title", "")).strip()
+    items: list[dict[str, object]] = []
+    summary_text = "\n".join(
+        part
+        for part in [
+            str(summary_payload.get("one_sentence_summary", "")).strip(),
+            str(summary_payload.get("core_problem", "")).strip(),
+            "\n".join(
+                item.strip()
+                for item in summary_payload.get("key_takeaways", [])
+                if isinstance(item, str) and item.strip()
+            ),
+        ]
+        if part
+    ).strip()
+    if summary_text:
+        items.append(
+            {
+                "video_id": video_id,
+                "title": title,
+                "source_type": "summary",
+                "source_family": "summary",
+                "snippet": summary_text,
+                "one_sentence_summary": str(summary_payload.get("one_sentence_summary", "")).strip(),
+                "core_problem": str(summary_payload.get("core_problem", "")).strip(),
+                "key_takeaways": list(summary_payload.get("key_takeaways", [])),
+            }
+        )
+    return items

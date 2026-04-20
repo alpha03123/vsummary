@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
-from backend.agent_graph.service import SeriesAgentGraphService
+from backend.agent_graph.runtime.service import AgentGraphService, SeriesAgentGraphService
 from backend.api.bootstrap import LazyAgentRuntimeProvider, build_api_container
 from backend.agent.schemas.stream_events import AgentStreamEvent
 
@@ -34,6 +34,251 @@ class _FakeGraph:
                 }
             ],
         }
+
+    def stream(self, payload, *, stream_mode=None, **kwargs):
+        del kwargs
+        if stream_mode != "debug":
+            raise AssertionError("expected debug stream mode")
+        base = {
+            **payload,
+            "tasks": [
+                {
+                    "task_id": "task-1",
+                    "instruction": payload["user_message"],
+                    "depends_on": [],
+                    "kind_hint": "",
+                }
+            ],
+            "current_task_index": 0,
+            "current_task": {
+                "task_id": "task-1",
+                "instruction": payload["user_message"],
+                "depends_on": [],
+                "kind_hint": "",
+            },
+            "current_task_context": {"dependencies": [], "latest_answer": ""},
+            "task_outputs": [],
+        }
+        states = [
+            (
+                "decompose",
+                base,
+                "2026-04-18T07:00:00+00:00",
+                "2026-04-18T07:00:00.010000+00:00",
+            ),
+            (
+                "build_plan",
+                {
+                    **base,
+                    "query_plan": {"goal": "question", "subplans": []},
+                    "current_subplan_index": -1,
+                    "current_subplan": {},
+                    "tool_results": [],
+                    "retrieval_results": [
+                        {
+                            "video_id": "video-1",
+                            "title": "Video 1",
+                            "source_type": "summary",
+                            "snippet": "这是摘要证据。",
+                        }
+                    ],
+                },
+                "2026-04-18T07:00:00.010000+00:00",
+                "2026-04-18T07:00:00.030000+00:00",
+            ),
+            (
+                "answer",
+                {
+                    **base,
+                    "query_plan": {"goal": "question", "subplans": []},
+                    "current_subplan_index": -1,
+                    "current_subplan": {},
+                    "tool_results": [],
+                    "retrieval_results": [
+                        {
+                            "video_id": "video-1",
+                            "title": "Video 1",
+                            "source_type": "summary",
+                            "snippet": "这是摘要证据。",
+                        }
+                    ],
+                    "task_outputs": [
+                        {
+                            "task_id": "task-1",
+                            "kind": "answer",
+                            "value": "graph answer",
+                        }
+                    ],
+                    "answer": "graph answer",
+                },
+                "2026-04-18T07:00:00.030000+00:00",
+                "2026-04-18T07:00:00.050000+00:00",
+            ),
+            (
+                "finalize",
+                {
+                    **base,
+                    "query_plan": {"goal": "question", "subplans": []},
+                    "current_subplan_index": -1,
+                    "current_subplan": {},
+                    "tool_results": [],
+                    "retrieval_results": [
+                        {
+                            "video_id": "video-1",
+                            "title": "Video 1",
+                            "source_type": "summary",
+                            "snippet": "这是摘要证据。",
+                        }
+                    ],
+                    "task_outputs": [
+                        {
+                            "task_id": "task-1",
+                            "kind": "answer",
+                            "value": "graph answer",
+                        }
+                    ],
+                    "answer": "graph answer",
+                    "assistant_message": "graph finalized answer",
+                },
+                "2026-04-18T07:00:00.050000+00:00",
+                "2026-04-18T07:00:00.060000+00:00",
+            ),
+            (
+                "update_memory",
+                {
+                    **base,
+                    "query_plan": {"goal": "question", "subplans": []},
+                    "current_subplan_index": -1,
+                    "current_subplan": {},
+                    "tool_results": [],
+                    "retrieval_results": [
+                        {
+                            "video_id": "video-1",
+                            "title": "Video 1",
+                            "source_type": "summary",
+                            "snippet": "这是摘要证据。",
+                        }
+                    ],
+                    "task_outputs": [
+                        {
+                            "task_id": "task-1",
+                            "kind": "answer",
+                            "value": "graph answer",
+                        }
+                    ],
+                    "answer": "graph answer",
+                    "assistant_message": "graph finalized answer",
+                    "history_summary_update": "memory updated",
+                },
+                "2026-04-18T07:00:00.060000+00:00",
+                "2026-04-18T07:00:00.070000+00:00",
+            ),
+        ]
+        for index, (node_name, result_state, start_ts, end_ts) in enumerate(states, start=1):
+            stage_id = f"stage-{index}"
+            yield {
+                "step": index,
+                "timestamp": start_ts,
+                "type": "task",
+                "payload": {
+                    "id": stage_id,
+                    "name": node_name,
+                    "input": payload,
+                },
+            }
+            yield {
+                "step": index,
+                "timestamp": end_ts,
+                "type": "task_result",
+                "payload": {
+                    "id": stage_id,
+                    "name": node_name,
+                    "error": None,
+                    "result": result_state,
+                    "interrupts": [],
+                },
+            }
+
+
+class _InterruptBeforeAnswerGraph:
+    def invoke(self, payload, interrupt_before=None):
+        if interrupt_before == ["answer"]:
+            return {
+                **payload,
+                "tasks": [
+                    {
+                        "task_id": "task-1",
+                        "instruction": payload["user_message"],
+                        "depends_on": [],
+                        "kind_hint": "",
+                    }
+                ],
+                "current_task_index": 0,
+                "current_task": {
+                    "task_id": "task-1",
+                    "instruction": payload["user_message"],
+                    "depends_on": [],
+                    "kind_hint": "",
+                },
+                "current_task_context": {"dependencies": [], "latest_answer": ""},
+                "query_plan": {"goal": "question", "subplans": []},
+                "retrieval_results": [
+                    {
+                        "video_id": "video-1",
+                        "title": "Video 1",
+                        "source_type": "summary",
+                        "snippet": "这是摘要证据。",
+                    }
+                ],
+                "tool_results": [],
+                "task_outputs": [],
+                "history_messages": [],
+            }
+        return {
+            **payload,
+            "answer": "graph answer",
+            "assistant_message": "graph finalized answer",
+        }
+
+    def stream(self, payload, *, stream_mode=None, interrupt_before=None, **kwargs):
+        del kwargs
+        if stream_mode != "debug":
+            raise AssertionError("expected debug stream mode")
+        base = self.invoke(payload, interrupt_before=interrupt_before)
+        states = [
+            ("decompose", base, "2026-04-18T07:00:00+00:00", "2026-04-18T07:00:00.010000+00:00"),
+            ("build_plan", base, "2026-04-18T07:00:00.010000+00:00", "2026-04-18T07:00:00.030000+00:00"),
+        ]
+        for index, (node_name, result_state, start_ts, end_ts) in enumerate(states, start=1):
+            stage_id = f"pre-answer-stage-{index}"
+            yield {
+                "step": index,
+                "timestamp": start_ts,
+                "type": "task",
+                "payload": {"id": stage_id, "name": node_name, "input": payload},
+            }
+            yield {
+                "step": index,
+                "timestamp": end_ts,
+                "type": "task_result",
+                "payload": {"id": stage_id, "name": node_name, "error": None, "result": result_state, "interrupts": []},
+            }
+
+
+class _StreamingAggregator:
+    def stream(self, **kwargs):
+        del kwargs
+        from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
+
+        yield ChatCompletionStreamChunk(delta="这是")
+        yield ChatCompletionStreamChunk(delta="真实流式回答。")
+        yield ChatCompletionStreamChunk(usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15})
+
+
+class _MemoryUpdateProgram:
+    def run(self, **kwargs):
+        del kwargs
+        return "memory updated"
 
 
 class AgentGraphServiceTests(unittest.TestCase):
@@ -206,7 +451,56 @@ class AgentGraphServiceTests(unittest.TestCase):
         )
 
         self.assertTrue(all(isinstance(event, AgentStreamEvent) for event in events))
+        self.assertIn("stage_started", [event.type for event in events])
+        self.assertIn("stage_completed", [event.type for event in events])
+        self.assertIn("answer_delta", [event.type for event in events])
         self.assertIn("answer_completed", [event.type for event in events])
+        self.assertEqual(
+            events[1].payload,
+            {
+                "stage_id": "stage-1",
+                "node_id": "decompose",
+                "label": "拆解任务",
+            },
+        )
+
+    def test_graph_service_streams_true_series_answer_with_usage(self) -> None:
+        service = AgentGraphService(
+            context_loader=StaticAgentContextLoader(
+                AgentContext(
+                    session_id="series|series-a|series-home",
+                    scope_type="series",
+                    series_id="series-a",
+                )
+            ),
+            graph=_InterruptBeforeAnswerGraph(),
+            series_aggregator=_StreamingAggregator(),
+            memory_update_program=_MemoryUpdateProgram(),
+        )
+
+        events = list(
+            service.stream_with_context(
+                session_id="series|series-a|series-home",
+                user_message="这个系列主要讲了什么？",
+                context_override=None,
+            )
+        )
+
+        self.assertIn(
+            {
+                "stage_id": "stage-answer",
+                "node_id": "answer",
+                "label": "生成回答",
+            },
+            [event.payload for event in events if event.type == "stage_started"],
+        )
+        self.assertEqual(
+            [event.payload["delta"] for event in events if event.type == "answer_delta"],
+            ["这是", "真实流式回答。"],
+        )
+        answer_completed = next(event for event in events if event.type == "answer_completed")
+        self.assertEqual(answer_completed.payload["message"], "这是真实流式回答。")
+        self.assertEqual(answer_completed.payload["usage"]["total_tokens"], 15)
 
 
 if __name__ == "__main__":
