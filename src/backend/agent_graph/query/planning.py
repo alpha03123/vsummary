@@ -211,6 +211,7 @@ def _normalize_subplans(value: object) -> list[dict[str, object]]:
             ExecutionDepth.SERIES_META.value,
             ExecutionDepth.SUMMARY.value,
             ExecutionDepth.VIDEO_GRAPH.value,
+            ExecutionDepth.VIDEO_WORKFLOW.value,
             ExecutionDepth.VIDEO_RAG.value,
         }:
             continue

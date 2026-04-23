@@ -1,8 +1,8 @@
 from backend.agent.context import AgentContextBudgetService, AgentContextUsage, AgentContextUsageSource
 from backend.agent.memory.context import AgentContext
-from backend.agent.memory.store import InMemoryAgentMemoryStore
 from backend.agent.ports import AgentContextLoader, AgentSessionStore, AgentToolExecutor, ChatGateway
-from backend.agent.session import AgentSessionMessageEntry, AgentSessionSnapshot, FileAgentSessionStore
+from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot
+from backend.agent.session.store import FileAgentSessionStore
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult
 
 __all__ = [
@@ -19,5 +19,4 @@ __all__ = [
     "AgentTurnResult",
     "ChatGateway",
     "FileAgentSessionStore",
-    "InMemoryAgentMemoryStore",
 ]

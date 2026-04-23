@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
-from backend.agent_graph.runtime.service import AgentGraphService, SeriesAgentGraphService
+from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.bootstrap import LazyAgentRuntimeProvider, build_api_container
 from backend.agent.schemas.stream_events import AgentStreamEvent
 
@@ -281,9 +281,56 @@ class _MemoryUpdateProgram:
         return "memory updated"
 
 
+class _VideoGraph:
+    def invoke(self, payload):
+        return {
+            **payload,
+            "answer": "video answer",
+            "assistant_message": "video finalized answer",
+            "retrieval_results": [
+                {
+                    "depth": "summary",
+                    "items": [
+                        {
+                            "video_id": payload.get("video_id", "video-1"),
+                            "title": "Video 1",
+                            "source_type": "summary",
+                            "snippet": "这是视频摘要。",
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def stream(self, payload, *, stream_mode=None, **kwargs):
+        del kwargs
+        if stream_mode != "debug":
+            raise AssertionError("expected debug stream mode")
+        states = [
+            ("route_video_request", self.invoke(payload), "2026-04-18T07:00:00+00:00", "2026-04-18T07:00:00.010000+00:00"),
+            ("load_video_summary", self.invoke(payload), "2026-04-18T07:00:00.010000+00:00", "2026-04-18T07:00:00.020000+00:00"),
+            ("answer", self.invoke(payload), "2026-04-18T07:00:00.020000+00:00", "2026-04-18T07:00:00.030000+00:00"),
+            ("finalize", self.invoke(payload), "2026-04-18T07:00:00.030000+00:00", "2026-04-18T07:00:00.040000+00:00"),
+        ]
+        for index, (node_name, result_state, start_ts, end_ts) in enumerate(states, start=1):
+            stage_id = f"video-stage-{index}"
+            yield {
+                "step": index,
+                "timestamp": start_ts,
+                "type": "task",
+                "payload": {"id": stage_id, "name": node_name, "input": payload},
+            }
+            yield {
+                "step": index,
+                "timestamp": end_ts,
+                "type": "task_result",
+                "payload": {"id": stage_id, "name": node_name, "error": None, "result": result_state, "interrupts": []},
+            }
+
+
 class AgentGraphServiceTests(unittest.TestCase):
-    def test_series_agent_graph_service_runs_graph_with_loaded_context(self) -> None:
-        service = SeriesAgentGraphService(
+    def test_agent_graph_service_runs_graph_with_loaded_context(self) -> None:
+        service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
                     session_id="series|series-a|series-home",
@@ -315,7 +362,7 @@ class AgentGraphServiceTests(unittest.TestCase):
                     "answer": "fallback",
                 }
 
-        service = SeriesAgentGraphService(
+        service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
                     session_id="series|series-a|series-home",
@@ -342,14 +389,12 @@ class AgentGraphServiceTests(unittest.TestCase):
         self.assertEqual(captured["scope_type"], "video")
         self.assertEqual(captured["video_id"], "video-1")
 
-    def test_bootstrap_can_build_series_agent_graph_service(self) -> None:
+    def test_bootstrap_can_build_agent_graph_service(self) -> None:
         with patch("backend.api.bootstrap.SeriesRetrievalService", return_value=object()):
             container = build_api_container(ROOT)
 
-            generic_service = container.get_agent_graph_service()
-            service = container.get_series_agent_graph_service()
+            service = container.get_agent_graph_service()
 
-        self.assertIsNotNone(generic_service)
         self.assertIsNotNone(service)
 
     def test_bootstrap_exposes_graph_components_for_profiling(self) -> None:
@@ -431,7 +476,7 @@ class AgentGraphServiceTests(unittest.TestCase):
             self.assertEqual(build_graph.call_args.kwargs["compare_split_program"], "split-program")
 
     def test_graph_service_streams_basic_events(self) -> None:
-        service = SeriesAgentGraphService(
+        service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
                     session_id="series|series-a|series-home",
@@ -501,6 +546,31 @@ class AgentGraphServiceTests(unittest.TestCase):
         answer_completed = next(event for event in events if event.type == "answer_completed")
         self.assertEqual(answer_completed.payload["message"], "这是真实流式回答。")
         self.assertEqual(answer_completed.payload["usage"]["total_tokens"], 15)
+
+    def test_graph_service_uses_video_graph_for_video_scope_stream(self) -> None:
+        service = AgentGraphService(
+            context_loader=StaticAgentContextLoader(
+                AgentContext(
+                    session_id="video|series-a|video-1|overview",
+                    scope_type="video",
+                    series_id="series-a",
+                    video_id="video-1",
+                )
+            ),
+            graph=_FakeGraph(),
+            video_graph=_VideoGraph(),
+        )
+
+        events = list(
+            service.stream_with_context(
+                session_id="video|series-a|video-1|overview",
+                user_message="这个视频主要讲了什么？",
+            )
+        )
+
+        stage_nodes = [event.payload["node_id"] for event in events if event.type == "stage_started"]
+        self.assertEqual(stage_nodes[:2], ["route_video_request", "load_video_summary"])
+        self.assertNotIn("decompose", stage_nodes)
 
 
 if __name__ == "__main__":

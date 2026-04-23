@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from pathlib import Path
 
 from llama_index.core import Document, StorageContext, VectorStoreIndex
@@ -13,6 +15,23 @@ from backend.video_summary.infrastructure.settings import (
     load_settings,
 )
 from backend.video_summary.library.ports import VideoWorkspace
+
+INDEX_SCHEMA_VERSION = 3
+INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
+COMMON_METADATA_DEFAULTS: dict[str, object] = {
+    "series_id": "",
+    "video_id": "",
+    "title": "",
+    "source_type": "",
+    "source_family": "",
+    "chapter_title": None,
+    "start_seconds": None,
+    "end_seconds": None,
+    "note_id": None,
+    "note_source": None,
+    "card_id": None,
+    "card_kind": None,
+}
 
 
 @dataclass(frozen=True)
@@ -106,7 +125,7 @@ class SeriesRetrievalService:
         ]
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
-            table_name="agent_graph_evidence",
+            table_name=INDEX_TABLE_NAME,
             mode="overwrite",
         )
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
@@ -246,8 +265,36 @@ def _build_workspace_signature(workspace: VideoWorkspace) -> tuple[tuple[str, ..
     for series in workspace.list_series():
         series_parts.append(series.id)
         for video in series.videos:
-            video_parts.append(f"{series.id}:{video.id}:{video.status}:{int(video.processed)}")
+            summary = workspace.get_video_summary(series.id, video.id)
+            transcript = workspace.get_video_transcript(series.id, video.id)
+            notes = workspace.get_video_notes(series.id, video.id)
+            cards = workspace.get_video_knowledge_cards(series.id, video.id)
+            summary_hash = _artifact_fingerprint(summary)
+            transcript_hash = _artifact_fingerprint(transcript)
+            notes_hash = _artifact_fingerprint(notes)
+            cards_hash = _artifact_fingerprint(cards)
+            video_parts.append(
+                f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:"
+                f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}"
+            )
     return tuple(sorted(series_parts)), tuple(sorted(video_parts))
+
+
+def _artifact_fingerprint(value: object) -> str:
+    if value is None:
+        return "0"
+    if hasattr(value, "model_dump"):
+        payload = value.model_dump(mode="json")
+    else:
+        payload = value
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha1(encoded).hexdigest()
 
 
 def _build_documents(workspace: VideoWorkspace) -> list[RetrievalDocument]:
@@ -289,13 +336,15 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
         docs.append(
             RetrievalDocument(
                 text=summary_text,
-                metadata={
+                metadata=_with_common_metadata(
+                    {
                     "series_id": summary.series_id,
                     "video_id": summary.video_id,
                     "title": summary.title,
                     "source_type": "summary",
                     "source_family": "summary",
-                },
+                    }
+                ),
             )
         )
     for chapter in payload.get("chapters", []):
@@ -319,7 +368,8 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
         docs.append(
             RetrievalDocument(
                 text=chapter_text,
-                metadata={
+                metadata=_with_common_metadata(
+                    {
                     "series_id": summary.series_id,
                     "video_id": summary.video_id,
                     "title": summary.title,
@@ -328,7 +378,8 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
                     "chapter_title": str(chapter.get("title", "")).strip(),
                     "start_seconds": chapter.get("start_seconds"),
                     "end_seconds": chapter.get("end_seconds"),
-                },
+                    }
+                ),
             )
         )
     return docs
@@ -340,7 +391,8 @@ def _build_transcript_documents(transcript) -> list[RetrievalDocument]:
         docs.append(
             RetrievalDocument(
                 text=segment.text,
-                metadata={
+                metadata=_with_common_metadata(
+                    {
                     "series_id": transcript.series_id,
                     "video_id": transcript.video_id,
                     "title": transcript.title,
@@ -348,7 +400,8 @@ def _build_transcript_documents(transcript) -> list[RetrievalDocument]:
                     "source_family": "transcript",
                     "start_seconds": segment.start_seconds,
                     "end_seconds": segment.end_seconds,
-                },
+                    }
+                ),
             )
         )
     return docs
@@ -370,7 +423,8 @@ def _build_notes_documents(notes) -> list[RetrievalDocument]:
         docs.append(
             RetrievalDocument(
                 text=note_text,
-                metadata={
+                metadata=_with_common_metadata(
+                    {
                     "series_id": notes.series_id,
                     "video_id": notes.video_id,
                     "title": notes.title,
@@ -378,7 +432,8 @@ def _build_notes_documents(notes) -> list[RetrievalDocument]:
                     "source_family": "notes",
                     "note_id": note.id,
                     "note_source": note.source,
-                },
+                    }
+                ),
             )
         )
     return docs
@@ -403,7 +458,8 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
         docs.append(
             RetrievalDocument(
                 text=card_text,
-                metadata={
+                metadata=_with_common_metadata(
+                    {
                     "series_id": cards.series_id,
                     "video_id": cards.video_id,
                     "title": cards.title,
@@ -413,10 +469,17 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
                     "card_kind": card.kind,
                     "start_seconds": getattr(first_ref, "start_seconds", None),
                     "end_seconds": getattr(first_ref, "end_seconds", None),
-                },
+                    }
+                ),
             )
         )
     return docs
+
+
+def _with_common_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    merged = dict(COMMON_METADATA_DEFAULTS)
+    merged.update(metadata)
+    return merged
 
 
 def _expand_transcript_hit(

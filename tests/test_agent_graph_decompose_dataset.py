@@ -9,7 +9,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.decompose_dataset import build_decompose_devset, build_decompose_trainset, load_decompose_records
+from backend.agent_graph.dspy.decompose_dataset import (
+    build_decompose_devset,
+    build_decompose_trainset,
+    load_decompose_records,
+)
 
 
 class AgentGraphDecomposeDatasetTests(unittest.TestCase):

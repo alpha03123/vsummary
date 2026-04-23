@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.dspy_opt import DspyCompiler, DspyEvaluator
+from backend.agent_graph.dspy.dspy_opt import DspyCompiler, DspyEvaluator
 
 
 class _Optimizer:

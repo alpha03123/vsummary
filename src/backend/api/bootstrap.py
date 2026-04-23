@@ -7,13 +7,12 @@ from typing import Callable
 
 import dspy
 
-from backend.agent import AgentContextBudgetService, FileAgentSessionStore, InMemoryAgentMemoryStore
-from backend.agent.context import AgentMemoryCompactionService
+from backend.agent import AgentContextBudgetService, FileAgentSessionStore
 from backend.agent.memory.dialog_history import DialogHistoryCompactor
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
 from backend.agent_graph.actions.action_dispatcher import ActionDispatcher
-from backend.agent_graph.runtime.graph import build_agent_graph
+from backend.agent_graph.runtime.graph import build_agent_graph, build_video_agent_graph
 from backend.agent_graph.evidence.pinpoint import BGEReranker, VideoGraphPinpointService
 from backend.agent_graph.query.series_planner import LegacyStyleSeriesPlanner
 from backend.agent_graph.query.series_aggregator import LegacyStyleSeriesAggregator
@@ -26,7 +25,7 @@ from backend.agent_graph.dspy.program_loader import (
     load_or_create_split_compare_program,
 )
 from backend.agent_graph.evidence.retrieval import MetaStateReader, SeriesRetrievalService
-from backend.agent_graph.runtime.service import AgentGraphService, SeriesAgentGraphService
+from backend.agent_graph.runtime.service import AgentGraphService
 from backend.agent.schemas.tool_calls import ToolName
 from backend.agent.tools.library_info import (
     create_get_video_summary_handler,
@@ -91,7 +90,6 @@ class ApiContainer:
     settings_service: ApiSettingsService
     get_agent_service: Callable[[], AgentGraphService]
     get_agent_graph_service: Callable[[], AgentGraphService]
-    get_series_agent_graph_service: Callable[[], SeriesAgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
 
@@ -141,7 +139,6 @@ def build_api_container(
         ),
         get_agent_service=agent_runtime.get_agent_service,
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
-        get_series_agent_graph_service=agent_runtime.get_series_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
     )
@@ -151,10 +148,8 @@ class LazyAgentRuntimeProvider:
         self._root_dir = root_dir
         self._workspace = workspace
         self._context_loader = WorkspaceAgentContextLoader(workspace)
-        self._memory_store = InMemoryAgentMemoryStore()
         self.session_store = FileAgentSessionStore(root_dir / "data" / "agent_sessions")
         self._lock = Lock()
-        self._cached_signature: str | None = None
         self._cached_agent_graph_service: AgentGraphService | None = None
         self._cached_context_budget_service: AgentContextBudgetService | None = None
 
@@ -177,7 +172,7 @@ class LazyAgentRuntimeProvider:
                 app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
                 self._cached_context_budget_service = AgentContextBudgetService(
                     context_loader=self._context_loader,
-                    memory_store=self._memory_store,
+                    session_store=self.session_store,
                     window_tokens=app_settings.agent_context.window_tokens,
                     reserved_output_tokens=app_settings.agent_context.reserved_output_tokens,
                     warning_threshold_ratio=app_settings.agent_context.warning_threshold_ratio,
@@ -250,9 +245,19 @@ class LazyAgentRuntimeProvider:
                     series_aggregator=series_aggregator,
                     memory_update_program=memory_update_program,
                 )
+                video_graph = build_video_agent_graph(
+                    classifier_program=classifier_program,
+                    compare_split_program=compare_split_program,
+                    retrieval_service=retrieval_service,
+                    meta_state_reader=meta_state_reader,
+                    action_dispatcher=action_dispatcher,
+                    answer_program=answer_program,
+                    memory_update_program=memory_update_program,
+                )
                 self._cached_agent_graph_service = AgentGraphService(
                     context_loader=self._context_loader,
                     graph=graph,
+                    video_graph=video_graph,
                     session_store=self.session_store,
                     decomposer_program=decomposer_program,
                     classifier_program=classifier_program,
@@ -271,35 +276,13 @@ class LazyAgentRuntimeProvider:
                 )
             return self._cached_agent_graph_service
 
-    def get_series_agent_graph_service(self) -> SeriesAgentGraphService:
-        base_service = self.get_agent_graph_service()
-        return SeriesAgentGraphService(
-            context_loader=self._context_loader,
-            graph=base_service.graph,
-            session_store=self.session_store,
-            decomposer_program=base_service._decomposer_program,
-            classifier_program=base_service._classifier_program,
-            compare_split_program=base_service._compare_split_program,
-            series_planner=base_service._series_planner,
-            retrieval_service=base_service._retrieval_service,
-            pinpoint_service=base_service._pinpoint_service,
-            meta_state_reader=base_service._meta_state_reader,
-            action_dispatcher=base_service._action_dispatcher,
-            answer_program=base_service._answer_program,
-            series_aggregator=base_service._series_aggregator,
-            memory_update_program=base_service._memory_update_program,
-            dialog_history_compactor=base_service._dialog_history_compactor,
-            dialog_history_window_tokens=base_service._dialog_history_window_tokens,
-            dialog_history_compression_ratio=base_service._dialog_history_compression_ratio,
-        )
-
     def get_context_budget_service(self) -> AgentContextBudgetService:
         with self._lock:
             if self._cached_context_budget_service is None:
                 app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
                 self._cached_context_budget_service = AgentContextBudgetService(
                     context_loader=self._context_loader,
-                    memory_store=self._memory_store,
+                    session_store=self.session_store,
                     window_tokens=app_settings.agent_context.window_tokens,
                     reserved_output_tokens=app_settings.agent_context.reserved_output_tokens,
                     warning_threshold_ratio=app_settings.agent_context.warning_threshold_ratio,
@@ -307,13 +290,6 @@ class LazyAgentRuntimeProvider:
                     blocking_threshold_ratio=app_settings.agent_context.blocking_threshold_ratio,
                 )
             return self._cached_context_budget_service
-
-    def _load_signature(self) -> str:
-        dotenv_path = self._root_dir / ".env"
-        if not dotenv_path.exists():
-            return ""
-        return dotenv_path.read_text(encoding="utf-8")
-
 
 def _build_tool_executor(
     *,

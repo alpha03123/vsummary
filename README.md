@@ -56,6 +56,21 @@ vsummary/
 - `settings.toml`：转写设备、模型质量，以及前端工作区设置
 - `.env`：`OPENAI_API_KEY` 等敏感凭证
 
+## 后端环境
+
+- 后端命令统一使用项目虚拟环境里的 [`.venv\Scripts\python.exe`](E:/gittools/self/video_include/.venv/Scripts/python.exe)
+- 想进入一个已经修正好 `python` 和 `rg` 的 PowerShell，可执行：
+
+```powershell
+powershell -NoExit -ExecutionPolicy Bypass -File .\scripts\project-shell.ps1
+```
+
+- 只想临时执行一条 Python 命令，也可以走项目入口脚本：
+
+```powershell
+.\scripts\python.ps1 -V
+```
+
 ## 前端开发
 
 - 前端工程位于 [src/frontend](E:/gittools/self/video_include/src/frontend)
@@ -103,29 +118,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 - 运行后端快速测试组：
 
 ```powershell
-python .\scripts\run_backend_tests.py
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py
 ```
 
 - 查看所有后端测试分组：
 
 ```powershell
-python .\scripts\run_backend_tests.py --list
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py --list
 ```
 
 - 按职责运行指定测试组：
 
 ```powershell
-python .\scripts\run_backend_tests.py agent
-python .\scripts\run_backend_tests.py api
-python .\scripts\run_backend_tests.py summary
-python .\scripts\run_backend_tests.py workspace
-python .\scripts\run_backend_tests.py all
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py agent
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py api
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py summary
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py workspace
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py all
 ```
 
 ```powershell
-python .\scripts\run_backend_tests.py tests.test_api
-python .\scripts\run_backend_tests.py agent workspace
-python .\scripts\run_backend_tests.py tests\test_generate_summary.py
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py tests.test_api
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py agent workspace
+.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py tests\test_generate_summary.py
 ```
 
 推荐约定：
@@ -153,8 +168,8 @@ python .\scripts\run_backend_tests.py tests\test_generate_summary.py
 手动确认要跑时，再显式追加 `--manual`：
 
 ```powershell
-python .\scripts\run_agent_series_reply.py --manual
-python .\scripts\run_agent_manual_cases.py --manual
+.\.venv\Scripts\python.exe .\scripts\run_agent_series_reply.py --manual
+.\.venv\Scripts\python.exe .\scripts\run_agent_manual_cases.py --manual
 ```
 
 ## 当前 API

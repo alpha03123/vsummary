@@ -3,33 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Protocol
 
+from backend.agent.ports import AgentSessionStore
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.tool_calls import ToolExecutionResult
 from backend.agent.session.evidence_cache import build_cache_entries
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSelectedVideoEntry, AgentSessionSnapshot, utc_now_iso
-
-
-class AgentSessionStore(Protocol):
-    def get_snapshot(self, session_id: str) -> AgentSessionSnapshot | None:
-        ...
-
-    def append_turn(
-        self,
-        *,
-        session_id: str,
-        memory_key: str,
-        context: AgentContext,
-        user_message: str,
-        assistant_message: str,
-        tool_results: list[ToolExecutionResult],
-        selected_videos: list[AgentSessionSelectedVideoEntry] | None = None,
-    ) -> None:
-        ...
-
-    def clear_snapshot(self, session_id: str) -> None:
-        ...
 
 
 class FileAgentSessionStore:

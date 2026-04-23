@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import tempfile
 import sys
 import unittest
@@ -13,7 +14,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.evidence.retrieval import SeriesRetrievalService, _build_default_embed_model
+from backend.agent_graph.evidence.retrieval import (
+    SeriesRetrievalService,
+    _build_default_embed_model,
+    _build_workspace_signature,
+)
 from backend.video_summary.library.views import (
     KnowledgeCardSourceRefView,
     KnowledgeCardView,
@@ -120,6 +125,30 @@ class _FakeWorkspace:
                 )
             ],
         )
+
+
+class _MutableWorkspace(_FakeWorkspace):
+    def __init__(self) -> None:
+        self.summary_text = "这一节介绍 Nacos 3 的用途。"
+        self.transcript_text = "这里介绍 Nacos 3 的安装。"
+
+    def get_video_summary(self, series_id: str, video_id: str):
+        summary = super().get_video_summary(series_id, video_id)
+        if summary is None:
+            return None
+        payload = dict(summary.summary)
+        payload["one_sentence_summary"] = self.summary_text
+        return replace(summary, summary=payload)
+
+    def get_video_transcript(self, series_id: str, video_id: str):
+        transcript = super().get_video_transcript(series_id, video_id)
+        if transcript is None:
+            return None
+        segments = [
+            replace(segment, text=self.transcript_text)
+            for segment in transcript.segments
+        ]
+        return replace(transcript, segments=segments)
 
 
 class AgentGraphRetrievalTests(unittest.TestCase):
@@ -249,6 +278,24 @@ embedding_batch_size = 8
 
             self.assertEqual(notes_result["hits"][0]["source_type"], "note")
             self.assertEqual(cards_result["hits"][0]["source_type"], "knowledge_card")
+
+    def test_workspace_signature_changes_when_summary_changes(self) -> None:
+        workspace = _MutableWorkspace()
+        before = _build_workspace_signature(workspace)
+
+        workspace.summary_text = "这一节详细解释 Nacos 3 的服务发现链路。"
+        after = _build_workspace_signature(workspace)
+
+        self.assertNotEqual(before, after)
+
+    def test_workspace_signature_changes_when_transcript_changes(self) -> None:
+        workspace = _MutableWorkspace()
+        before = _build_workspace_signature(workspace)
+
+        workspace.transcript_text = "这里开始讲 Spring AI Alibaba 的接入流程。"
+        after = _build_workspace_signature(workspace)
+
+        self.assertNotEqual(before, after)
 
 
 if __name__ == "__main__":

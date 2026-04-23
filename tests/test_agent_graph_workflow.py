@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.query.models import DecomposeDecision
 from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
 from backend.video_summary.library.views import TranscriptSegmentView, VideoTranscriptView
@@ -146,7 +146,7 @@ class _Workspace:
 
 class AgentGraphWorkflowTests(unittest.TestCase):
     def test_series_workflow_subplan_routes_to_workflow_executor(self) -> None:
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_ExplodingClassifier(),
             compare_split_program=_Splitter(),

@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.runtime.graph import build_video_agent_graph
 from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
 
 
@@ -130,8 +130,7 @@ class _MemoryUpdater:
 class AgentGraphVideoFlowTests(unittest.TestCase):
     def test_video_summary_flow_retrieves_summary(self) -> None:
         retrieval = _Retrieval()
-        graph = build_series_agent_graph(
-            decomposer_program=_Decomposer(),
+        graph = build_video_agent_graph(
             classifier_program=_Classifier(
                 SeriesQueryDecision(
                     goal="understand",
@@ -180,8 +179,7 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
 
     def test_video_content_flow_uses_unified_rag_tags_after_summary(self) -> None:
         retrieval = _Retrieval()
-        graph = build_series_agent_graph(
-            decomposer_program=_Decomposer(),
+        graph = build_video_agent_graph(
             classifier_program=_Classifier(
                 SeriesQueryDecision(
                     goal="understand",
@@ -230,8 +228,7 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
         self.assertEqual(retrieval.calls[0]["source_tags"], ["summary", "transcript", "notes", "cards"])
 
     def test_video_meta_state_flow_reads_structured_state(self) -> None:
-        graph = build_series_agent_graph(
-            decomposer_program=_Decomposer(),
+        graph = build_video_agent_graph(
             classifier_program=_Classifier(
                 SeriesQueryDecision(
                     goal="meta_state",
@@ -259,6 +256,7 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
 
         self.assertEqual(result["meta_state"]["overview"]["status"], "ready")
         self.assertEqual(result["answer"], "meta:ready")
+        self.assertEqual(result["assistant_message"], "meta:ready")
 
 
 if __name__ == "__main__":

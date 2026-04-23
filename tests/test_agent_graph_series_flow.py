@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
 
 
@@ -161,7 +161,7 @@ class _MemoryUpdater:
 
 class AgentGraphSeriesFlowTests(unittest.TestCase):
     def test_series_locate_flow_runs_classify_then_retrieve_then_answer(self) -> None:
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_Classifier(),
             compare_split_program=_Splitter(),
@@ -191,7 +191,7 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
         self.assertEqual(result["tool_results"][1]["tool_name"], "video_seek")
 
     def test_series_locate_flow_keeps_classifier_supplied_structured_plan(self) -> None:
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_ClassifierWithStructuredPlan(),
             compare_split_program=_Splitter(),
@@ -216,7 +216,7 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
 
     def test_build_plan_passes_history_selection_context_to_classifier(self) -> None:
         classifier = _CapturingClassifier()
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=classifier,
             compare_split_program=_Splitter(),
@@ -273,7 +273,7 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
                     ],
                 }
 
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_ExplodingClassifier(),
             compare_split_program=_Splitter(),
@@ -327,7 +327,7 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
                     ],
                 }
 
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_ExplodingClassifier(),
             compare_split_program=_Splitter(),
@@ -378,7 +378,7 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
                     ],
                 }
 
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_ExplodingClassifier(),
             compare_split_program=_Splitter(),

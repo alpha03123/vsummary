@@ -26,6 +26,7 @@ class AgentGraphService:
         *,
         context_loader: AgentContextLoader,
         graph,
+        video_graph=None,
         session_store=None,
         decomposer_program=None,
         classifier_program=None,
@@ -44,6 +45,7 @@ class AgentGraphService:
     ) -> None:
         self._context_loader = context_loader
         self._graph = graph
+        self._video_graph = video_graph
         self._session_store = session_store
         self._decomposer_program = decomposer_program
         self._classifier_program = classifier_program
@@ -64,6 +66,10 @@ class AgentGraphService:
     def graph(self):
         return self._graph
 
+    @property
+    def video_graph(self):
+        return self._video_graph
+
     def _build_graph_input(
         self,
         *,
@@ -74,6 +80,7 @@ class AgentGraphService:
         context = context_override or self._context_loader.load(session_id)
         history_messages: list[dict[str, object]] = []
         dialog_history = str(getattr(context, "dialog_history", "") or "").strip()
+        history_summary = str(getattr(context, "history_summary", "") or "").strip()
         evidence_history = dict(getattr(context, "evidence_history", {}) or {})
         history_selected_videos: list[dict[str, object]] = []
         if self._session_store is not None:
@@ -84,6 +91,7 @@ class AgentGraphService:
                     for item in snapshot.messages
                 ]
                 dialog_history = str(getattr(snapshot.context, "dialog_history", "") or "").strip()
+                history_summary = str(getattr(snapshot.context, "history_summary", "") or "").strip()
                 evidence_history = dict(getattr(snapshot.context, "evidence_history", {}) or {})
                 history_selected_videos = [
                     {
@@ -101,7 +109,7 @@ class AgentGraphService:
             "dialog_history": dialog_history,
             "evidence_history": evidence_history,
             "history_messages": history_messages,
-            "history_summary": dialog_history,
+            "history_summary": history_summary,
             "history_selected_videos": history_selected_videos,
         }
         return context, graph_input
@@ -130,13 +138,19 @@ class AgentGraphService:
     def _invoke_graph(
         self,
         *,
+        graph,
         graph_input: dict[str, object],
         debug_trace: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        result = self._graph.invoke(graph_input)
+        result = graph.invoke(graph_input)
         if debug_trace is not None:
             debug_trace["graph_result"] = result
         return result
+
+    def _resolve_graph_for_scope(self, scope_type: str):
+        if scope_type == "video" and self._video_graph is not None:
+            return self._video_graph
+        return self._graph
 
     def _build_turn_result(
         self,
@@ -197,6 +211,7 @@ class AgentGraphService:
                     current=dict(getattr(context, "evidence_history", {}) or {}),
                     result=result,
                 ),
+                "history_summary": str(result.get("history_summary_update") or getattr(context, "history_summary", "") or ""),
             }
         )
         self._session_store.append_turn(
@@ -272,8 +287,9 @@ class AgentGraphService:
             user_message=user_message,
             context_override=context_override,
         )
+        graph = self._resolve_graph_for_scope(str(graph_input["scope_type"]))
         self._record_debug_input(debug_trace=debug_trace, graph_input=graph_input)
-        result = self._invoke_graph(graph_input=graph_input, debug_trace=debug_trace)
+        result = self._invoke_graph(graph=graph, graph_input=graph_input, debug_trace=debug_trace)
         turn_result = self._build_turn_result(
             context=context,
             result=result,
@@ -301,9 +317,10 @@ class AgentGraphService:
             user_message=user_message,
             context_override=context_override,
         )
+        graph = self._resolve_graph_for_scope(str(graph_input["scope_type"]))
         self._record_debug_input(debug_trace=debug_trace, graph_input=graph_input)
 
-        if not hasattr(self._graph, "stream"):
+        if not hasattr(graph, "stream"):
             turn_result = self.run_turn(
                 session_id=session_id,
                 user_message=user_message,
@@ -336,11 +353,11 @@ class AgentGraphService:
         final_result: dict[str, object] | None = None
         answer_usage: dict[str, int] = {}
 
-        interrupt_before = ["answer"] if self._series_aggregator is not None else None
+        interrupt_before = ["answer"] if self._series_aggregator is not None and str(graph_input["scope_type"]) == "series" else None
 
         yield AgentStreamEvent(type="thinking_started", payload={"message": "正在执行图节点"})
 
-        for raw_event in self._graph.stream(
+        for raw_event in graph.stream(
             graph_input,
             stream_mode="debug",
             interrupt_before=interrupt_before,
@@ -404,7 +421,7 @@ class AgentGraphService:
         if debug_trace is not None:
             debug_trace["graph_stream_debug"] = raw_debug_events
 
-        result = final_result or self._invoke_graph(graph_input=graph_input, debug_trace=debug_trace)
+        result = final_result or self._invoke_graph(graph=graph, graph_input=graph_input, debug_trace=debug_trace)
         should_stream_answer = (
             isinstance(result, dict)
             and not str(result.get("assistant_message", "")).strip()
@@ -510,7 +527,7 @@ class AgentGraphService:
             if not str(result.get("assistant_message", "")).strip():
                 if debug_trace is not None:
                     debug_trace["graph_result"] = result
-                result = self._invoke_graph(graph_input=graph_input, debug_trace=debug_trace)
+                result = self._invoke_graph(graph=graph, graph_input=graph_input, debug_trace=debug_trace)
             yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
             assistant_message = str(
                 result.get("assistant_message")
@@ -519,6 +536,7 @@ class AgentGraphService:
             ).strip()
             for delta in _chunk_text(assistant_message):
                 yield AgentStreamEvent(type="answer_delta", payload={"delta": delta})
+            stream_finished_at = _current_time_like(stream_started_at)
 
         if debug_trace is not None:
             debug_trace["graph_result"] = result
@@ -562,10 +580,6 @@ class AgentGraphService:
     ) -> None:
         if self._session_store is not None:
             self._session_store.clear_snapshot(session_id)
-
-
-class SeriesAgentGraphService(AgentGraphService):
-    pass
 
 
 def _build_tool_results(result: dict[str, object]) -> list[ToolExecutionResult]:

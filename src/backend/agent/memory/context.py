@@ -35,3 +35,4 @@ class AgentContext(BaseModel):
     chapter_titles: list[str] = Field(default_factory=list)
     dialog_history: str = ""
     evidence_history: dict[str, object] = Field(default_factory=dict)
+    history_summary: str = ""

@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.runtime.graph import build_series_agent_graph
+from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
 
 
@@ -83,7 +83,7 @@ class _MemoryUpdater:
 
 class AgentGraphActionsTests(unittest.TestCase):
     def test_action_flow_dispatches_ui_action_without_answer_node(self) -> None:
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
                 SeriesQueryDecision(
@@ -117,7 +117,7 @@ class AgentGraphActionsTests(unittest.TestCase):
         self.assertEqual(result["tool_results"][0]["tool_name"], "open_overview")
 
     def test_action_flow_dispatches_save_note(self) -> None:
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
                 SeriesQueryDecision(
@@ -151,7 +151,7 @@ class AgentGraphActionsTests(unittest.TestCase):
         self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "重点")
 
     def test_action_flow_dispatches_video_seek(self) -> None:
-        graph = build_series_agent_graph(
+        graph = build_agent_graph(
             decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
                 SeriesQueryDecision(

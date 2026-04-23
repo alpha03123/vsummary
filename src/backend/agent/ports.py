@@ -7,7 +7,7 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent.session.models import AgentSessionSnapshot
+from backend.agent.session.models import AgentSessionSelectedVideoEntry, AgentSessionSnapshot
 from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult
 
 StructuredResponseT = TypeVar("StructuredResponseT", bound=BaseModel)
@@ -59,6 +59,7 @@ class AgentSessionStore(Protocol):
         user_message: str,
         assistant_message: str,
         tool_results: list[ToolExecutionResult],
+        selected_videos: list[AgentSessionSelectedVideoEntry] | None = None,
     ) -> None:
         ...
 

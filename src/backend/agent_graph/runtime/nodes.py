@@ -93,9 +93,6 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
                 }
                 for query in queries
             ]
-            if not state.get("retrieval_queries"):
-                state["retrieval_queries"] = queries
-
         next_state = dict(state)
         next_state["query_plan"] = query_plan
         next_state["current_subplan_index"] = -1
@@ -104,6 +101,8 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
         next_state["meta_state"] = {}
         next_state["tool_results"] = []
         next_state["direct_response"] = ""
+        if not state.get("retrieval_queries") and query_plan.get("goal") == "compare":
+            next_state["retrieval_queries"] = queries
         return next_state
 
     return build_plan
@@ -151,41 +150,6 @@ def build_advance_subplan_node() -> Callable[[AgentGraphState], AgentGraphState]
 
     return advance_subplan
 
-
-def build_classify_node(*, classifier_program) -> Callable[[AgentGraphState], AgentGraphState]:
-    def classify(state: AgentGraphState) -> AgentGraphState:
-        current_task = dict(state.get("current_task", {}))
-        current_instruction = str(current_task.get("instruction", state["user_message"]))
-        decision = classifier_program.run(
-            user_message=current_instruction,
-            scope_type=state["scope_type"],
-            series_id=state["series_id"],
-            video_id=state.get("video_id", ""),
-        )
-        next_state = dict(state)
-        next_state["query_plan"] = build_structured_query_plan(
-            state=state,
-            current_instruction=current_instruction,
-            decision_payload=decision.model_dump(mode="json"),
-        )
-        return next_state
-
-    return classify
-
-
-def build_split_compare_node(*, compare_split_program) -> Callable[[AgentGraphState], AgentGraphState]:
-    def split_compare(state: AgentGraphState) -> AgentGraphState:
-        plan = dict(state.get("query_plan", {}))
-        if plan.get("goal") != "compare":
-            next_state = dict(state)
-            next_state["retrieval_queries"] = [state["user_message"]]
-            return next_state
-        split = compare_split_program.run(user_message=state["user_message"])
-        next_state = dict(state)
-        next_state["retrieval_queries"] = list(split.queries)
-        return next_state
-
-    return split_compare
 
 
 def build_retrieve_node(*, retrieval_service) -> Callable[[AgentGraphState], AgentGraphState]:
@@ -413,6 +377,7 @@ def build_execute_video_rag_node(*, retrieval_service) -> Callable[[AgentGraphSt
     return execute_video_rag
 
 
+
 def build_execute_video_graph_node(*, retrieval_service, pinpoint_service) -> Callable[[AgentGraphState], AgentGraphState]:
     def execute_video_graph(state: AgentGraphState) -> AgentGraphState:
         current_subplan = dict(state.get("current_subplan", {}))
@@ -547,10 +512,7 @@ def build_read_meta_state_node(*, meta_state_reader) -> Callable[[AgentGraphStat
         )
         next_state = dict(state)
         next_state["meta_state"] = meta_state
-        next_state["retrieval_results"] = [meta_state]
-        next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
-            {"task_id": dict(state.get("current_task", {})).get("task_id", ""), "kind": "meta_state", "value": meta_state}
-        ]
+        next_state["retrieval_results"] = []
         return next_state
 
     return read_meta_state
@@ -561,11 +523,13 @@ def build_dispatch_action_node(*, action_dispatcher) -> Callable[[AgentGraphStat
         plan = dict(state.get("query_plan", {}))
         task_context = dict(state.get("current_task_context", {}))
         action_args = dict(plan.get("action_args", {})) if isinstance(plan.get("action_args", {}), dict) else {}
-        if str(plan.get("action_name", "")) == "save_note" and task_context.get("latest_answer"):
-            action_args = {
-                "note_title": action_args.get("note_title", "总结"),
-                "note_content": action_args.get("note_content", task_context["latest_answer"]),
-            }
+        if str(plan.get("action_name", "")) == "save_note":
+            latest_answer = task_context.get("latest_answer") or str(state.get("answer", "")).strip()
+            if latest_answer:
+                action_args = {
+                    "note_title": action_args.get("note_title", "总结"),
+                    "note_content": action_args.get("note_content", latest_answer),
+                }
         result = action_dispatcher.dispatch(
             scope_type=state["scope_type"],
             series_id=state["series_id"],

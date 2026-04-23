@@ -5,14 +5,33 @@ from math import ceil
 from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
-from backend.agent.memory.runtime import load_runtime_context
-from backend.agent.memory.store import AgentMemoryStore
-from backend.agent.ports import AgentContextLoader
+from backend.agent.ports import AgentContextLoader, AgentSessionStore
 
 GRAPH_RUNTIME_BASELINE = {
     "graph": "agent_graph",
-    "nodes": ["classify", "split_compare", "retrieve", "read_meta_state", "dispatch_action", "answer"],
-    "programs": ["dspy_classify", "dspy_split_compare", "dspy_answer"],
+    "nodes": [
+        "decompose",
+        "advance_task",
+        "build_plan",
+        "advance_subplan",
+        "execute_series_meta",
+        "execute_summary",
+        "execute_video_graph",
+        "execute_video_rag",
+        "execute_video_workflow",
+        "read_meta_state",
+        "dispatch_action",
+        "answer",
+        "finalize",
+        "update_memory",
+    ],
+    "programs": [
+        "dspy_decompose",
+        "dspy_classify",
+        "dspy_split_compare",
+        "dspy_answer",
+        "dspy_memory_update",
+    ],
 }
 
 DEFAULT_CONTEXT_WINDOW_TOKENS = 1_000_000
@@ -49,7 +68,7 @@ class AgentContextBudgetService:
         self,
         *,
         context_loader: AgentContextLoader,
-        memory_store: AgentMemoryStore,
+        session_store: AgentSessionStore | None = None,
         window_tokens: int = DEFAULT_CONTEXT_WINDOW_TOKENS,
         reserved_output_tokens: int = DEFAULT_RESERVED_OUTPUT_TOKENS,
         warning_threshold_ratio: float = DEFAULT_WARNING_THRESHOLD_RATIO,
@@ -57,7 +76,7 @@ class AgentContextBudgetService:
         blocking_threshold_ratio: float = DEFAULT_BLOCKING_THRESHOLD_RATIO,
     ) -> None:
         self._context_loader = context_loader
-        self._memory_store = memory_store
+        self._session_store = session_store
         self._window_tokens = window_tokens
         self._reserved_output_tokens = reserved_output_tokens
         self._warning_threshold_tokens = int(window_tokens * warning_threshold_ratio)
@@ -70,12 +89,13 @@ class AgentContextBudgetService:
         session_id: str,
         context_override: AgentContext | None,
     ) -> AgentContextUsage:
-        context, memory_key, _history = load_runtime_context(
-            context_loader=self._context_loader,
-            memory_store=self._memory_store,
-            session_id=session_id,
-            context_override=context_override,
-        )
+        context = self._context_loader.load(session_id)
+        if self._session_store is not None:
+            snapshot = self._session_store.get_snapshot(session_id)
+            if snapshot is not None:
+                context = _merge_context(context, snapshot.context)
+        context = _merge_context(context, context_override)
+        memory_key = session_id
         system_prompt_tokens = _estimate_tokens(GRAPH_RUNTIME_BASELINE)
         dialog_history_tokens = _estimate_dialog_history_tokens(context.dialog_history)
         workspace_context_tokens = _estimate_workspace_context_tokens(context)
@@ -135,6 +155,15 @@ def _estimate_workspace_context_tokens(context: AgentContext) -> int:
     payload = context.model_dump(mode="json")
     payload["dialog_history"] = ""
     return _estimate_tokens(payload)
+
+
+def _merge_context(base_context: AgentContext, context_override: AgentContext | None) -> AgentContext:
+    if context_override is None:
+        return base_context
+
+    override_payload = context_override.model_dump(exclude_unset=True)
+    override_payload.pop("session_id", None)
+    return base_context.model_copy(update=override_payload)
 
 
 def _estimate_dialog_history_tokens(dialog_history: str) -> int:

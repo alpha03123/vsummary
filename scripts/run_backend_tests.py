@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = Path(__file__).resolve()
+PROJECT_PYTHON_REEXEC_ENV = "VSUMMARY_PROJECT_PYTHON_REEXEC"
 
 TEST_GROUPS: dict[str, list[str]] = {
     "agent": [
-        "tests.test_agent_context_compaction",
         "tests.test_agent_context_loader",
         "tests.test_agent_tool_catalog",
         "tests.test_agent_library_info_tools",
@@ -50,7 +52,6 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_video_summary_workflow",
     ],
     "fast": [
-        "tests.test_agent_context_compaction",
         "tests.test_agent_context_loader",
         "tests.test_agent_tool_catalog",
         "tests.test_agent_library_info_tools",
@@ -81,7 +82,6 @@ TEST_GROUPS: dict[str, list[str]] = {
         "tests.test_agent_graph_program_loader",
     ],
     "all": [
-        "tests.test_agent_context_compaction",
         "tests.test_agent_context_loader",
         "tests.test_agent_tool_catalog",
         "tests.test_agent_library_info_tools",
@@ -136,7 +136,37 @@ def _resolve_modules(targets: list[str]) -> list[str]:
     return resolved
 
 
+def resolve_project_python(
+    *,
+    root_dir: Path | None = None,
+    current_executable: str | None = None,
+) -> Path:
+    resolved_root = root_dir or ROOT
+    project_python = resolved_root / ".venv" / "Scripts" / "python.exe"
+    if project_python.exists():
+        return project_python
+    return Path(current_executable or sys.executable).resolve()
+
+
+def _should_reexec_with_project_python(*, project_python: Path) -> bool:
+    if not project_python.exists():
+        return False
+    if os.environ.get(PROJECT_PYTHON_REEXEC_ENV) == "1":
+        return False
+    current_python = Path(sys.executable).resolve()
+    return current_python != project_python.resolve()
+
+
 def main() -> int:
+    project_python = resolve_project_python()
+    if _should_reexec_with_project_python(project_python=project_python):
+        env = dict(os.environ)
+        env[PROJECT_PYTHON_REEXEC_ENV] = "1"
+        command = [str(project_python), str(SCRIPT_PATH), *sys.argv[1:]]
+        print(f"Re-entering project Python: {project_python}")
+        completed = subprocess.run(command, cwd=ROOT, env=env)
+        return completed.returncode
+
     parser = argparse.ArgumentParser(
         description="按职责或指定模块运行后端 unittest，避免每次都跑整套测试。",
     )
