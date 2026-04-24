@@ -10,23 +10,34 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.agent_graph.runtime.graph import build_agent_graph
-from backend.agent_graph.query.models import DecomposeDecision
 from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
 from backend.video_summary.library.views import TranscriptSegmentView, VideoTranscriptView
 
 
-class _Decomposer:
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del scope_type, series_id, video_id
-        return DecomposeDecision(
-            tasks=[{"task_id": "task-1", "instruction": user_message, "depends_on": [], "kind_hint": ""}],
-            reason="单任务。",
+class _Classifier:
+    def __init__(self) -> None:
+        self.called = False
+
+    def run(self, **kwargs):
+        del kwargs
+        self.called = True
+        from backend.agent_graph.query.models import StructuredQueryPlan
+
+        return StructuredQueryPlan(
+            goal="understand",
+            target_source="all",
+            context_need="continuous",
+            reason="workflow",
         )
 
 
 class _SeriesPlanner:
+    def __init__(self) -> None:
+        self.called = False
+
     def create_plan(self, **kwargs):
         del kwargs
+        self.called = True
         return {
             "goal": "series_content",
             "target_source": "all",
@@ -40,15 +51,9 @@ class _SeriesPlanner:
                     "target_video_ids": ["1-6"],
                     "depth": "video_workflow",
                     "query": "JManus 那节里，老师演示的完整任务到底是什么？系统创建了哪几个 Agent，各自负责什么，最后文件被保存到了哪里？请尽量按视频里的执行顺序说。",
-                    "needs_probe": True,
                 }
             ],
         }
-
-
-class _ExplodingClassifier:
-    def run(self, **kwargs):
-        raise AssertionError(f"classifier should not run for workflow series path: {kwargs}")
 
 
 class _Splitter:
@@ -146,16 +151,16 @@ class _Workspace:
 
 class AgentGraphWorkflowTests(unittest.TestCase):
     def test_series_workflow_subplan_routes_to_workflow_executor(self) -> None:
+        classifier = _Classifier()
+        planner = _SeriesPlanner()
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
-            classifier_program=_ExplodingClassifier(),
+            classifier_program=classifier,
             compare_split_program=_Splitter(),
-            series_planner=_SeriesPlanner(),
+            series_planner=planner,
             pinpoint_service=_ExplodingPinpoint(),
             workflow_service=_WorkflowService(),
             series_aggregator=_SeriesAggregator(),
             answer_program=_ExplodingAnswer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -167,6 +172,8 @@ class AgentGraphWorkflowTests(unittest.TestCase):
             }
         )
 
+        self.assertTrue(classifier.called)
+        self.assertTrue(planner.called)
         self.assertEqual(result["retrieval_results"][0]["depth"], "video_workflow")
         self.assertEqual(result["retrieval_results"][0]["items"][0]["source_type"], "workflow_window")
         self.assertEqual(result["answer"], "video_workflow|workflow_window")

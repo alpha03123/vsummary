@@ -10,22 +10,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.agent_graph.runtime.graph import build_agent_graph
-from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
-
-
-class _Decomposer:
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del scope_type, series_id, video_id
-        return DecomposeDecision(
-            tasks=[{"task_id": "task-1", "instruction": user_message, "depends_on": [], "kind_hint": ""}],
-            reason="单任务。",
-        )
+from backend.agent_graph.query.models import CompareSplitDecision, StructuredQueryPlan
 
 
 class _Classifier:
     def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
         del user_message, scope_type, series_id, video_id, history_summary, history_selected_videos
-        return SeriesQueryDecision(
+        return StructuredQueryPlan(
             goal="locate",
             target_source="transcript",
             context_need="chunk",
@@ -36,21 +27,20 @@ class _Classifier:
 class _ClassifierWithStructuredPlan:
     def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
         del user_message, scope_type, series_id, video_id, history_summary, history_selected_videos
-        return SeriesQueryDecision(
+        return StructuredQueryPlan(
             goal="locate",
             target_source="transcript",
             context_need="chunk",
             reason="定位问题。",
             candidate_video_ids=["1-5"],
             selected_videos=[
-                {"video_id": "1-5", "reason_for_selection": "安装 Nacos 3 的目标视频。", "needs_probe": True}
+                {"video_id": "1-5", "reason_for_selection": "安装 Nacos 3 的目标视频。"}
             ],
             subplans=[
                 {
                     "target_video_ids": ["1-5"],
                     "depth": "video_graph",
                     "query": "定位 Docker 安装 Nacos 3 的时间点",
-                    "needs_probe": True,
                 }
             ],
         )
@@ -62,12 +52,22 @@ class _CapturingClassifier:
 
     def run(self, **kwargs):
         self.kwargs = kwargs
-        return SeriesQueryDecision(
+        return StructuredQueryPlan(
             goal="understand",
             target_source="summary",
             context_need="chunk",
             reason="capture",
         )
+
+
+class _CapturingSeriesPlanner:
+    def __init__(self, plan: dict[str, object]) -> None:
+        self.plan = plan
+        self.kwargs = None
+
+    def create_plan(self, **kwargs):
+        self.kwargs = kwargs
+        return self.plan
 
 
 class _Splitter:
@@ -138,7 +138,7 @@ class _Answer:
 class _ExplodingAnswer:
     def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
         raise AssertionError(
-            f"legacy series content path should not call generic answer program: "
+            f"series content path should not call generic answer program: "
             f"user_message={user_message}, retrieval_results={retrieval_results}, meta_state={meta_state}"
         )
 
@@ -153,6 +153,15 @@ class _SeriesAggregator:
         )
 
 
+class _ActionDispatcher:
+    def dispatch(self, *, scope_type: str, series_id: str, video_id: str, action_name: str, action_args: dict[str, object]):
+        del scope_type, series_id, video_id, action_args
+        return {
+            "direct_response": "已打开笔记",
+            "tool_results": [{"tool_name": action_name, "status": "ok", "payload": {}}],
+        }
+
+
 class _MemoryUpdater:
     def run(self, *, history_summary: str, user_message: str, assistant_message: str, task_outputs: list[dict[str, object]]):
         del history_summary, user_message, assistant_message, task_outputs
@@ -162,13 +171,11 @@ class _MemoryUpdater:
 class AgentGraphSeriesFlowTests(unittest.TestCase):
     def test_series_locate_flow_runs_classify_then_retrieve_then_answer(self) -> None:
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=_Classifier(),
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             pinpoint_service=_PinpointService(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -192,13 +199,11 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
 
     def test_series_locate_flow_keeps_classifier_supplied_structured_plan(self) -> None:
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=_ClassifierWithStructuredPlan(),
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             pinpoint_service=_PinpointService(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -217,13 +222,11 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
     def test_build_plan_passes_history_selection_context_to_classifier(self) -> None:
         classifier = _CapturingClassifier()
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=classifier,
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             pinpoint_service=_PinpointService(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         graph.invoke(
@@ -244,44 +247,47 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
         self.assertEqual(classifier.kwargs["history_summary"], "前一轮已经筛出了框架课视频。")
         self.assertEqual(len(classifier.kwargs["history_selected_videos"]), 2)
 
-    def test_series_content_flow_prefers_series_planner_over_classifier(self) -> None:
-        class _ExplodingClassifier:
+    def test_series_content_flow_uses_planner_after_classifier_labels_content(self) -> None:
+        class _ContentClassifier:
             def run(self, **kwargs):
-                raise AssertionError(f"classifier should not run for series content path: {kwargs}")
-
-        class _SeriesPlanner:
-            def create_plan(self, **kwargs):
                 del kwargs
-                return {
-                    "goal": "understand",
-                    "target_source": "summary",
-                    "context_need": "chunk",
-                    "reason": "legacy series planner",
-                    "candidate_video_ids": ["1-4", "1-5"],
-                    "selected_videos": [
-                        {"video_id": "1-4", "reason_for_selection": "AK 准备"},
-                        {"video_id": "1-5", "reason_for_selection": "Nacos 安装"},
-                    ],
-                    "selection_mode": "fresh",
-                    "subplans": [
-                        {
-                            "target_video_ids": ["1-4", "1-5"],
-                            "depth": "summary",
-                            "query": "按顺序说明这两节准备了什么",
-                            "needs_probe": False,
-                        }
-                    ],
-                }
+                return StructuredQueryPlan(
+                    goal="understand",
+                    target_source="summary",
+                    context_need="chunk",
+                    reason="classifier",
+                )
+
+        classifier = _ContentClassifier()
+        planner = _CapturingSeriesPlanner(
+            {
+                "goal": "series_content",
+                "target_source": "all",
+                "context_need": "chunk",
+                "reason": "planner",
+                "candidate_video_ids": ["1-4", "1-5"],
+                "selected_videos": [
+                    {"video_id": "1-4", "reason_for_selection": "AK 准备"},
+                    {"video_id": "1-5", "reason_for_selection": "Nacos 安装"},
+                ],
+                "selection_mode": "fresh",
+                "subplans": [
+                    {
+                        "target_video_ids": ["1-4", "1-5"],
+                        "depth": "summary",
+                        "query": "按顺序说明这两节准备了什么",
+                    }
+                ],
+            }
+        )
 
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
-            classifier_program=_ExplodingClassifier(),
+            classifier_program=classifier,
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             pinpoint_service=_PinpointService(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
-            series_planner=_SeriesPlanner(),
+            series_planner=planner,
         )
 
         result = graph.invoke(
@@ -293,49 +299,36 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
             }
         )
 
+        self.assertIsNotNone(planner.kwargs)
+        self.assertEqual(planner.kwargs["series_id"], "series-a")
         self.assertEqual(result["query_plan"]["candidate_video_ids"], ["1-4", "1-5"])
         self.assertEqual(result["query_plan"]["selected_videos"][1]["video_id"], "1-5")
         self.assertEqual(result["query_plan"]["subplans"][0]["target_video_ids"], ["1-4", "1-5"])
 
-    def test_series_content_flow_does_not_keep_excluded_video_in_selected_videos(self) -> None:
-        class _ExplodingClassifier:
+    def test_series_action_flow_uses_classifier_directly(self) -> None:
+        class _ContentClassifier:
             def run(self, **kwargs):
-                raise AssertionError(f"classifier should not run for series content path: {kwargs}")
-
-        class _SeriesPlanner:
-            def create_plan(self, **kwargs):
                 del kwargs
-                return {
-                    "goal": "series_content",
-                    "target_source": "all",
-                    "context_need": "chunk",
-                    "reason": "legacy series planner",
-                    "candidate_video_ids": ["1-4", "1-5", "1-6"],
-                    "selected_videos": [
-                        {"video_id": "1-4", "reason_for_selection": "AK 准备"},
-                        {"video_id": "1-5", "reason_for_selection": "Nacos 安装"},
-                        {"video_id": "1-6", "reason_for_selection": "JManus 初始化"},
-                    ],
-                    "selection_mode": "fresh",
-                    "subplans": [
-                        {
-                            "target_video_ids": ["1-4", "1-5", "1-6"],
-                            "depth": "summary",
-                            "query": "按顺序说明这几节准备了什么",
-                            "needs_probe": False,
-                        }
-                    ],
-                }
+                return StructuredQueryPlan(
+                    goal="action",
+                    target_source="all",
+                    context_need="chunk",
+                    reason="动作请求",
+                    action_name="open_notes",
+                )
+
+        planner = _CapturingSeriesPlanner(
+            {"goal": "series_content", "target_source": "all", "context_need": "chunk", "subplans": []}
+        )
 
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
-            classifier_program=_ExplodingClassifier(),
+            classifier_program=_ContentClassifier(),
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             pinpoint_service=_PinpointService(),
+            action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
-            series_planner=_SeriesPlanner(),
+            series_planner=planner,
         )
 
         result = graph.invoke(
@@ -343,50 +336,91 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
                 "session_id": "series|series-a|home",
                 "scope_type": "series",
                 "series_id": "series-a",
-                "user_message": "把准备工作的视频找出来，并按顺序说每节在准备什么",
+                "user_message": "打开笔记",
             }
         )
 
-        self.assertNotIn("1-7", result["query_plan"]["candidate_video_ids"])
-        self.assertEqual([item["video_id"] for item in result["query_plan"]["selected_videos"]], ["1-4", "1-5", "1-6"])
+        self.assertIsNone(planner.kwargs)
+        self.assertEqual(result["direct_response"], "已打开笔记")
+        self.assertEqual(result["tool_results"][0]["tool_name"], "open_notes")
 
-    def test_series_content_flow_uses_legacy_style_aggregator_instead_of_generic_answer_program(self) -> None:
-        class _ExplodingClassifier:
+    def test_series_meta_state_flow_uses_classifier_directly(self) -> None:
+        class _Classifier:
             def run(self, **kwargs):
-                raise AssertionError(f"classifier should not run for series content path: {kwargs}")
-
-        class _SeriesPlanner:
-            def create_plan(self, **kwargs):
                 del kwargs
-                return {
-                    "goal": "series_content",
-                    "target_source": "all",
-                    "context_need": "chunk",
-                    "reason": "legacy series planner",
-                    "candidate_video_ids": ["1-5"],
-                    "selected_videos": [
+                return StructuredQueryPlan(
+                    goal="meta_state",
+                    target_source="all",
+                    context_need="chunk",
+                    reason="状态请求",
+                )
+
+        class _MetaStateReader:
+            def read(self, **kwargs):
+                del kwargs
+                return {"video_count": 7}
+
+        class _MetaAnswer:
+            def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
+                del user_message, retrieval_results
+                return f"视频数 {meta_state['video_count']}"
+
+        planner = _CapturingSeriesPlanner(
+            {"goal": "series_content", "target_source": "all", "context_need": "chunk", "subplans": []}
+        )
+
+        graph = build_agent_graph(
+            classifier_program=_Classifier(),
+            compare_split_program=_Splitter(),
+            retrieval_service=_Retrieval(),
+            pinpoint_service=_PinpointService(),
+            meta_state_reader=_MetaStateReader(),
+            answer_program=_MetaAnswer(),
+            series_planner=planner,
+        )
+
+        result = graph.invoke(
+            {
+                "session_id": "series|series-a|home",
+                "scope_type": "series",
+                "series_id": "series-a",
+                "user_message": "这个系列一共有多少视频？",
+            }
+        )
+
+        self.assertIsNone(planner.kwargs)
+        self.assertEqual(result["meta_state"]["video_count"], 7)
+        self.assertEqual(result["answer"], "视频数 7")
+
+    def test_series_content_flow_uses_series_aggregator_instead_of_generic_answer_program(self) -> None:
+        class _Classifier:
+            def run(self, **kwargs):
+                del kwargs
+                return StructuredQueryPlan(
+                    goal="understand",
+                    target_source="all",
+                    context_need="chunk",
+                    reason="classifier",
+                    candidate_video_ids=["1-5"],
+                    selected_videos=[
                         {"video_id": "1-5", "reason_for_selection": "Nacos 安装"},
                     ],
-                    "selection_mode": "fresh",
-                    "subplans": [
+                    selection_mode="fresh",
+                    subplans=[
                         {
                             "target_video_ids": ["1-5"],
                             "depth": "video_graph",
                             "query": "定位安装、端口、登录信息",
-                            "needs_probe": True,
                         }
                     ],
-                }
+                )
 
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
-            classifier_program=_ExplodingClassifier(),
+            classifier_program=_Classifier(),
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             pinpoint_service=_PinpointService(),
             answer_program=_ExplodingAnswer(),
-            memory_update_program=_MemoryUpdater(),
-            series_planner=_SeriesPlanner(),
             series_aggregator=_SeriesAggregator(),
         )
 

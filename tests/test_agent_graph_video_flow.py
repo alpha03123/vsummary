@@ -9,21 +9,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.agent_graph.runtime.graph import build_video_agent_graph
-from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
-
-
-class _Decomposer:
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del scope_type, series_id, video_id
-        return DecomposeDecision(
-            tasks=[{"task_id": "task-1", "instruction": user_message, "depends_on": [], "kind_hint": ""}],
-            reason="单任务。",
-        )
+from backend.agent_graph.runtime.graph import build_agent_graph
+from backend.agent_graph.query.models import CompareSplitDecision, StructuredQueryPlan
 
 
 class _Classifier:
-    def __init__(self, decision: SeriesQueryDecision) -> None:
+    def __init__(self, decision: StructuredQueryPlan) -> None:
         self._decision = decision
 
     def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
@@ -130,9 +121,9 @@ class _MemoryUpdater:
 class AgentGraphVideoFlowTests(unittest.TestCase):
     def test_video_summary_flow_retrieves_summary(self) -> None:
         retrieval = _Retrieval()
-        graph = build_video_agent_graph(
+        graph = build_agent_graph(
             classifier_program=_Classifier(
-                SeriesQueryDecision(
+                StructuredQueryPlan(
                     goal="understand",
                     target_source="summary",
                     context_need="chunk",
@@ -143,7 +134,6 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
             retrieval_service=retrieval,
             meta_state_reader=_MetaStateReader(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -179,9 +169,9 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
 
     def test_video_content_flow_uses_unified_rag_tags_after_summary(self) -> None:
         retrieval = _Retrieval()
-        graph = build_video_agent_graph(
+        graph = build_agent_graph(
             classifier_program=_Classifier(
-                SeriesQueryDecision(
+                StructuredQueryPlan(
                     goal="understand",
                     target_source="all",
                     context_need="chunk",
@@ -192,7 +182,6 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
             retrieval_service=retrieval,
             meta_state_reader=_MetaStateReader(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -228,9 +217,9 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
         self.assertEqual(retrieval.calls[0]["source_tags"], ["summary", "transcript", "notes", "cards"])
 
     def test_video_meta_state_flow_reads_structured_state(self) -> None:
-        graph = build_video_agent_graph(
+        graph = build_agent_graph(
             classifier_program=_Classifier(
-                SeriesQueryDecision(
+                StructuredQueryPlan(
                     goal="meta_state",
                     target_source="all",
                     context_need="chunk",
@@ -241,7 +230,6 @@ class AgentGraphVideoFlowTests(unittest.TestCase):
             retrieval_service=_Retrieval(),
             meta_state_reader=_MetaStateReader(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(

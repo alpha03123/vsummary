@@ -37,12 +37,6 @@ class _FakeSessionStore:
         return None
 
 
-class _FakeDecomposer:
-    def run(self, **kwargs):
-        del kwargs
-        return {"tasks": [{"task_id": "task-1", "instruction": "任务", "depends_on": [], "kind_hint": ""}], "reason": ""}
-
-
 class _FakeClassifier:
     def run(self, **kwargs):
         del kwargs
@@ -61,27 +55,13 @@ class _FakeAnswer:
         return "graph answer"
 
 
-class _FakeMemoryUpdater:
-    def run(self, **kwargs):
-        del kwargs
-        return "memory summary"
-
-
 class _FakeGraph:
-    def __init__(self, *, decomposer, classifier, retriever, answer, memory_updater) -> None:
-        self._decomposer = decomposer
+    def __init__(self, *, classifier, retriever, answer) -> None:
         self._classifier = classifier
         self._retriever = retriever
         self._answer = answer
-        self._memory_updater = memory_updater
 
     def invoke(self, payload):
-        self._decomposer.run(
-            user_message=payload["user_message"],
-            scope_type=payload["scope_type"],
-            series_id=payload["series_id"],
-            video_id=payload.get("video_id", ""),
-        )
         query_plan = self._classifier.run(
             user_message=payload["user_message"],
             scope_type=payload["scope_type"],
@@ -103,29 +83,20 @@ class _FakeGraph:
             retrieval_results=retrieval["hits"],
             meta_state={},
         )
-        history_summary_update = self._memory_updater.run(
-            history_summary=payload.get("history_summary", ""),
-            user_message=payload["user_message"],
-            assistant_message=answer,
-            task_outputs=[],
-        )
         return {
             **payload,
             "query_plan": query_plan,
             "retrieval_results": retrieval["hits"],
             "answer": answer,
-            "history_summary_update": history_summary_update,
         }
 
 
 class AgentGraphSpeedProfileTests(unittest.TestCase):
     def test_attach_service_profiling_collects_graph_stage_spans(self) -> None:
         module = _load_script_module()
-        decomposer = _FakeDecomposer()
         classifier = _FakeClassifier()
         retriever = _FakeRetriever()
         answer = _FakeAnswer()
-        memory_updater = _FakeMemoryUpdater()
         service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
@@ -135,18 +106,11 @@ class AgentGraphSpeedProfileTests(unittest.TestCase):
                 )
             ),
             graph=_FakeGraph(
-                decomposer=decomposer,
                 classifier=classifier,
                 retriever=retriever,
                 answer=answer,
-                memory_updater=memory_updater,
             ),
             session_store=_FakeSessionStore(),
-            decomposer_program=decomposer,
-            classifier_program=classifier,
-            retrieval_service=retriever,
-            answer_program=answer,
-            memory_update_program=memory_updater,
         )
 
         profiler = module.Profiler()
@@ -162,11 +126,6 @@ class AgentGraphSpeedProfileTests(unittest.TestCase):
         self.assertIn("context_loader.load", span_names)
         self.assertIn("session_store.get_snapshot", span_names)
         self.assertIn("graph.invoke", span_names)
-        self.assertIn("decomposer.run", span_names)
-        self.assertIn("classifier.run", span_names)
-        self.assertIn("retrieval.search", span_names)
-        self.assertIn("answer_program.run", span_names)
-        self.assertIn("memory_update.run", span_names)
         self.assertIn("session_store.append_turn", span_names)
 
 

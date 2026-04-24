@@ -10,16 +10,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.agent_graph.runtime.graph import build_agent_graph
-from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
-
-
-class _Decomposer:
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del scope_type, series_id, video_id
-        return DecomposeDecision(
-            tasks=[{"task_id": "task-1", "instruction": user_message, "depends_on": [], "kind_hint": "understand"}],
-            reason="单轮总结。",
-        )
+from backend.agent_graph.query.models import CompareSplitDecision, StructuredQueryPlan
 
 
 class _Classifier:
@@ -34,7 +25,7 @@ class _Classifier:
         history_selected_videos=None,
     ):
         del user_message, scope_type, series_id, video_id, history_summary, history_selected_videos
-        return SeriesQueryDecision(goal="understand", target_source="summary", context_need="chunk", reason="概括。")
+        return StructuredQueryPlan(goal="understand", target_source="summary", context_need="chunk", reason="概括。")
 
 
 class _Splitter:
@@ -76,14 +67,12 @@ class _MemoryUpdater:
 class AgentGraphMemoryFlowTests(unittest.TestCase):
     def test_finalize_then_update_memory_node_produces_summary_update(self) -> None:
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=_Classifier(),
             compare_split_program=_Splitter(),
             retrieval_service=_Retrieval(),
             meta_state_reader=_MetaStateReader(),
             action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(

@@ -10,20 +10,11 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from backend.agent_graph.runtime.graph import build_agent_graph
-from backend.agent_graph.query.models import CompareSplitDecision, DecomposeDecision, SeriesQueryDecision
-
-
-class _Decomposer:
-    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = ""):
-        del scope_type, series_id, video_id
-        return DecomposeDecision(
-            tasks=[{"task_id": "task-1", "instruction": user_message, "depends_on": [], "kind_hint": ""}],
-            reason="单任务。",
-        )
+from backend.agent_graph.query.models import CompareSplitDecision, StructuredQueryPlan
 
 
 class _Classifier:
-    def __init__(self, decision: SeriesQueryDecision) -> None:
+    def __init__(self, decision: StructuredQueryPlan) -> None:
         self._decision = decision
 
     def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
@@ -39,8 +30,17 @@ class _Splitter:
 
 class _Retrieval:
     def search(self, **kwargs):
-        del kwargs
-        return {"hits": []}
+        return {
+            "hits": [
+                {
+                    "video_id": kwargs.get("video_id", "video-1"),
+                    "title": "Video 1",
+                    "source_type": "summary",
+                    "source_family": "summary",
+                    "snippet": "这是摘要内容",
+                }
+            ]
+        }
 
 
 class _MetaStateReader:
@@ -84,9 +84,8 @@ class _MemoryUpdater:
 class AgentGraphActionsTests(unittest.TestCase):
     def test_action_flow_dispatches_ui_action_without_answer_node(self) -> None:
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
-                SeriesQueryDecision(
+                StructuredQueryPlan(
                     goal="action",
                     target_source="all",
                     context_need="chunk",
@@ -100,7 +99,6 @@ class AgentGraphActionsTests(unittest.TestCase):
             meta_state_reader=_MetaStateReader(),
             action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -118,9 +116,8 @@ class AgentGraphActionsTests(unittest.TestCase):
 
     def test_action_flow_dispatches_save_note(self) -> None:
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
-                SeriesQueryDecision(
+                StructuredQueryPlan(
                     goal="action",
                     target_source="all",
                     context_need="chunk",
@@ -134,7 +131,6 @@ class AgentGraphActionsTests(unittest.TestCase):
             meta_state_reader=_MetaStateReader(),
             action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
@@ -150,11 +146,82 @@ class AgentGraphActionsTests(unittest.TestCase):
         self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
         self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "重点")
 
+    def test_action_flow_uses_answer_node_output_when_save_note_lacks_note_fields(self) -> None:
+        graph = build_agent_graph(
+            classifier_program=_Classifier(
+                StructuredQueryPlan(
+                    goal="action",
+                    target_source="all",
+                    context_need="chunk",
+                    reason="明确记笔记请求。",
+                    action_name="save_note",
+                    action_args={"content_type": "key_points"},
+                )
+            ),
+            compare_split_program=_Splitter(),
+            retrieval_service=_Retrieval(),
+            meta_state_reader=_MetaStateReader(),
+            action_dispatcher=_ActionDispatcher(),
+            answer_program=_Answer(),
+        )
+
+        result = graph.invoke(
+            {
+                "session_id": "video|series-a|video-1|overview",
+                "scope_type": "video",
+                "series_id": "series-a",
+                "video_id": "video-1",
+                "user_message": "帮我把重点记下来",
+                "answer": "这是已经生成的回答",
+            }
+        )
+
+        self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
+        self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "总结")
+        self.assertEqual(result["tool_results"][0]["payload"]["note_content"], "unused")
+
+    def test_action_flow_generates_content_before_save_note_when_note_fields_missing(self) -> None:
+        class _Answer:
+            def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
+                del user_message, meta_state
+                return f"总结：{retrieval_results[0]['snippet']}"
+
+        graph = build_agent_graph(
+            classifier_program=_Classifier(
+                StructuredQueryPlan(
+                    goal="action",
+                    target_source="all",
+                    context_need="chunk",
+                    reason="明确记笔记请求。",
+                    action_name="save_note",
+                    action_args={"note_type": "key_points"},
+                )
+            ),
+            compare_split_program=_Splitter(),
+            retrieval_service=_Retrieval(),
+            meta_state_reader=_MetaStateReader(),
+            action_dispatcher=_ActionDispatcher(),
+            answer_program=_Answer(),
+        )
+
+        result = graph.invoke(
+            {
+                "session_id": "video|series-a|video-1|overview",
+                "scope_type": "video",
+                "series_id": "series-a",
+                "video_id": "video-1",
+                "user_message": "帮我把重点记下来",
+            }
+        )
+
+        self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
+        self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "总结")
+        self.assertEqual(result["tool_results"][0]["payload"]["note_content"], "总结：这是摘要内容")
+
     def test_action_flow_dispatches_video_seek(self) -> None:
         graph = build_agent_graph(
-            decomposer_program=_Decomposer(),
             classifier_program=_Classifier(
-                SeriesQueryDecision(
+                StructuredQueryPlan(
                     goal="action",
                     target_source="all",
                     context_need="chunk",
@@ -168,7 +235,6 @@ class AgentGraphActionsTests(unittest.TestCase):
             meta_state_reader=_MetaStateReader(),
             action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
-            memory_update_program=_MemoryUpdater(),
         )
 
         result = graph.invoke(
