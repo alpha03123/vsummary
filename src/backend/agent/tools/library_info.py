@@ -9,7 +9,6 @@ from backend.agent.schemas.tool_calls import (
     ToolDefinition,
     ToolContextTag,
     ToolExecutionResult,
-    ToolIntentTag,
     ToolName,
     ToolPlane,
 )
@@ -21,10 +20,8 @@ LIST_SERIES_VIDEOS_TOOL = ToolDefinition(
     title="读取系列视频列表",
     description="读取当前系列下的视频列表与处理状态，用于系列级总结和跨视频检索。",
     plane=ToolPlane.BUSINESS_READ,
-    concurrency_safe=True,
     arguments={"series_id": "可选，目标系列 ID；不填则默认当前系列"},
-    contexts=(ToolContextTag.SERIES_DISCOVERY, ToolContextTag.SERIES_INSPECTION),
-    intents=(ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE),
+    contexts=(ToolContextTag.SERIES,),
 )
 
 GET_VIDEO_SUMMARY_TOOL = ToolDefinition(
@@ -32,15 +29,11 @@ GET_VIDEO_SUMMARY_TOOL = ToolDefinition(
     title="读取视频概况",
     description="读取指定视频的概况内容，用于系列级聚合回答。",
     plane=ToolPlane.BUSINESS_READ,
-    concurrency_safe=True,
-    batch_tag="series_videos",
     arguments={
         "series_id": "可选，目标系列 ID；不填则默认当前系列",
         "video_id": "可选，目标视频 ID；不填则默认当前视频",
     },
-    contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
-    intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE, ToolIntentTag.SAVE_NOTE),
-    requires_video_id=True,
+    contexts=(ToolContextTag.SERIES, ToolContextTag.VIDEO),
 )
 
 GET_VIDEO_TOOLS_TOOL = ToolDefinition(
@@ -48,15 +41,11 @@ GET_VIDEO_TOOLS_TOOL = ToolDefinition(
     title="读取视频工具状态",
     description="读取指定视频的概况、导图、知识卡片和笔记等工具状态。",
     plane=ToolPlane.BUSINESS_READ,
-    concurrency_safe=True,
-    batch_tag="series_videos",
     arguments={
         "series_id": "可选，目标系列 ID；不填则默认当前系列",
         "video_id": "可选，目标视频 ID；不填则默认当前视频",
     },
-    contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
-    intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE),
-    requires_video_id=True,
+    contexts=(ToolContextTag.SERIES, ToolContextTag.VIDEO),
 )
 
 GET_VIDEO_TRANSCRIPT_TOOL = ToolDefinition(
@@ -64,26 +53,12 @@ GET_VIDEO_TRANSCRIPT_TOOL = ToolDefinition(
     title="读取视频转写全文",
     description="读取指定视频的完整转写分段，包含时间轴与原文。",
     plane=ToolPlane.BUSINESS_READ,
-    concurrency_safe=True,
-    batch_tag="series_videos",
     arguments={
         "series_id": "可选，目标系列 ID；不填则默认当前系列",
         "video_id": "可选，目标视频 ID；不填则默认当前视频",
     },
-    contexts=(ToolContextTag.SERIES_INSPECTION, ToolContextTag.VIDEO),
-    intents=(ToolIntentTag.ANSWER_QUESTION, ToolIntentTag.SERIES_ANSWER, ToolIntentTag.SERIES_LOCATE, ToolIntentTag.SEEK_VIDEO, ToolIntentTag.SAVE_NOTE),
-    requires_video_id=True,
+    contexts=(ToolContextTag.SERIES, ToolContextTag.VIDEO),
 )
-
-
-def list_library_info_tool_definitions() -> list[ToolDefinition]:
-    return [
-        LIST_SERIES_VIDEOS_TOOL,
-        GET_VIDEO_SUMMARY_TOOL,
-        GET_VIDEO_TOOLS_TOOL,
-        GET_VIDEO_TRANSCRIPT_TOOL,
-    ]
-
 
 def create_list_series_videos_handler(workspace: VideoWorkspace):
     def execute_list_series_videos(call: ListSeriesVideosCall, context: AgentContext) -> ToolExecutionResult:

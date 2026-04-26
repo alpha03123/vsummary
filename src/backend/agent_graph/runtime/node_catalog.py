@@ -2,8 +2,6 @@ from __future__ import annotations
 
 
 NODE_ALIASES: dict[str, str] = {
-    "decompose": "拆解任务",
-    "advance_task": "推进任务",
     "build_plan": "生成计划",
     "advance_subplan": "推进子计划",
     "execute_series_meta": "读取系列元信息",

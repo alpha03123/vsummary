@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from backend.agent.schemas.tool_calls import (
     ToolDefinition,
-    ToolIntentTag,
     ToolName,
     ToolPlane,
 )
@@ -63,15 +62,3 @@ def list_tool_definitions_for_plane(plane: ToolPlane) -> list[ToolDefinition]:
 
 def tool_is_model_visible(tool_name: ToolName) -> bool:
     return get_tool_definition(tool_name).plane in MODEL_VISIBLE_TOOL_PLANES
-
-
-def list_tool_names_for_intent(intent_tag: ToolIntentTag) -> set[ToolName]:
-    return {tool.name for tool in ALL_TOOL_DEFINITIONS if intent_tag in tool.intents}
-
-
-def tool_requires_video_id(tool_name: ToolName) -> bool:
-    return get_tool_definition(tool_name).requires_video_id
-
-
-def tool_is_concurrency_safe(tool_name: ToolName) -> bool:
-    return get_tool_definition(tool_name).concurrency_safe

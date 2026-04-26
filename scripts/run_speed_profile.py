@@ -158,15 +158,6 @@ def _attach_service_profiling(stack: ExitStack, service, profiler: Profiler) -> 
         stack.enter_context(_wrap_method(graph, "invoke", profiler, "graph.invoke"))
 
     component_specs = [
-        ("_decomposer_program", "run", "decomposer.run"),
-        ("_classifier_program", "run", "classifier.run"),
-        ("_compare_split_program", "run", "compare_split.run"),
-        ("_series_planner", "create_plan", "series_planner.create_plan"),
-        ("_retrieval_service", "search", "retrieval.search"),
-        ("_pinpoint_service", "locate", "pinpoint.locate"),
-        ("_meta_state_reader", "read", "meta_state.read"),
-        ("_action_dispatcher", "dispatch", "action_dispatcher.dispatch"),
-        ("_answer_program", "run", "answer_program.run"),
         ("_memory_update_program", "run", "memory_update.run"),
     ]
     for attr_name, method_name, span_name in component_specs:

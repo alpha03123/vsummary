@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { LoaderCircle, PencilLine, Trash2 } from "lucide-react";
+import { LoaderCircle, PencilLine, Trash2, Plus, ChevronLeft, Calendar } from "lucide-react";
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
 
 export function WorkspaceNotesView({
   notes,
@@ -11,11 +12,19 @@ export function WorkspaceNotesView({
   onUpdateNote,
   onDeleteNote,
 }) {
+  const [viewState, setViewState] = useState("list"); // "list" | "create" | "detail"
+  const [selectedNoteId, setSelectedNoteId] = useState(null);
+
+  // 新建笔记状态
   const [draftTitle, setDraftTitle] = useState("");
   const [draftContent, setDraftContent] = useState("");
-  const [editingNoteId, setEditingNoteId] = useState(null);
+
+  // 编辑笔记状态 (在详情页内编辑)
+  const [isEditing, setIsEditing] = useState(false);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingContent, setEditingContent] = useState("");
+
+  const selectedNote = notes?.notes?.find((n) => n.id === selectedNoteId);
 
   function handleCreateNote() {
     if (!draftTitle.trim() || !draftContent.trim() || savingNote) {
@@ -28,29 +37,45 @@ export function WorkspaceNotesView({
     });
     setDraftTitle("");
     setDraftContent("");
+    setViewState("list");
   }
 
-  function handleStartEdit(note) {
-    setEditingNoteId(note.id);
-    setEditingTitle(note.title);
-    setEditingContent(note.content);
+  function openDetail(note) {
+    setSelectedNoteId(note.id);
+    setViewState("detail");
+    setIsEditing(false);
+  }
+
+  function handleStartEdit() {
+    if (!selectedNote) return;
+    setIsEditing(true);
+    setEditingTitle(selectedNote.title);
+    setEditingContent(selectedNote.content);
   }
 
   function handleCancelEdit() {
-    setEditingNoteId(null);
+    setIsEditing(false);
     setEditingTitle("");
     setEditingContent("");
   }
 
   function handleSaveEdit() {
-    if (!editingNoteId || !editingTitle.trim() || !editingContent.trim() || savingNote) {
+    if (!selectedNoteId || !editingTitle.trim() || !editingContent.trim() || savingNote) {
       return;
     }
-    onUpdateNote(editingNoteId, {
+    onUpdateNote(selectedNoteId, {
       title: editingTitle,
       content: editingContent,
     });
-    handleCancelEdit();
+    setIsEditing(false);
+  }
+
+  function handleDeleteNote(id) {
+    onDeleteNote(id);
+    if (viewState === "detail" && selectedNoteId === id) {
+      setViewState("list");
+      setSelectedNoteId(null);
+    }
   }
 
   if (notesLoading) {
@@ -64,126 +89,190 @@ export function WorkspaceNotesView({
     );
   }
 
-  return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.92fr_1.08fr]">
-      <section className="workspace-muted-panel rounded-[2rem] border p-6">
-        <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">New Note</p>
-        <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">手动记一条笔记</h3>
-        <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
-          你可以自己记，也可以在左侧对话里直接让 Agent “帮我记一下”，它会自动落到这里。
-        </p>
-        <div className="mt-6 flex flex-col gap-4">
+  // ========== 新建视图 ==========
+  if (viewState === "create") {
+    return (
+      <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex items-center justify-between px-2">
+          <button 
+            onClick={() => setViewState("list")} 
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            <ChevronLeft size={16} /> 返回列表
+          </button>
+          <h2 className="text-sm font-bold tracking-widest text-stone-400 uppercase dark:text-stone-500">新建笔记</h2>
+          <div className="w-[88px]" /> {/* 占位符以居中标题 */}
+        </div>
+        
+        <section className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
           <input
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
-            placeholder="笔记标题"
-            className="rounded-2xl border border-stone-200/80 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
+            placeholder="输入标题..."
+            className="w-full bg-transparent text-xl font-bold text-stone-900 placeholder:text-stone-300 outline-none transition focus:placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-700"
           />
+          <div className="my-4 h-px w-full bg-stone-100 dark:bg-stone-800/60" />
           <textarea
             value={draftContent}
             onChange={(event) => setDraftContent(event.target.value)}
-            placeholder="记录要点、结论或待办..."
-            className="min-h-[180px] rounded-3xl border border-stone-200/80 bg-white px-4 py-4 text-sm leading-relaxed text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
+            placeholder="记录重要细节、结论或待办事项..."
+            className="min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-stone-700 placeholder:text-stone-400/80 outline-none dark:text-stone-300 dark:placeholder:text-stone-600"
           />
-          <button
-            type="button"
-            onClick={handleCreateNote}
-            disabled={savingNote || !draftTitle.trim() || !draftContent.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0070f3] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={handleCreateNote}
+              disabled={savingNote || !draftTitle.trim() || !draftContent.trim()}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0070f3] hover:shadow-md hover:shadow-blue-500/20 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-[#0070f3] dark:hover:text-white"
+            >
+              {savingNote ? <LoaderCircle size={16} className="animate-spin" /> : <PencilLine size={16} />}
+              保存笔记
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // ========== 详情/编辑视图 ==========
+  if (viewState === "detail" && selectedNote) {
+    return (
+      <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex items-center justify-between px-2">
+          <button 
+            onClick={() => { setViewState("list"); setIsEditing(false); }} 
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
           >
-            {savingNote ? <LoaderCircle size={16} className="animate-spin" /> : <PencilLine size={16} />}
-            保存笔记
+            <ChevronLeft size={16} /> 返回列表
           </button>
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleCancelEdit}
+                  className="rounded-full border border-stone-200 px-4 py-1.5 text-xs font-bold text-stone-600 transition hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={savingNote || !editingTitle.trim() || !editingContent.trim()}
+                  className="rounded-full bg-stone-900 px-4 py-1.5 text-xs font-bold text-white transition hover:bg-[#0070f3] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+                >
+                  保存修改
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleStartEdit}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                  title="编辑"
+                >
+                  <PencilLine size={15} />
+                </button>
+                <button
+                  onClick={() => handleDeleteNote(selectedNote.id)}
+                  disabled={savingNote}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-red-50 hover:text-red-600 dark:text-stone-400 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                  title="删除"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </section>
 
-      <section className="flex flex-col gap-4">
+        <article className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
+          {isEditing ? (
+            <div className="flex flex-col gap-4">
+              <input
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                placeholder="笔记标题"
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-lg font-bold text-stone-900 outline-none focus:border-[#0070f3] focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
+              />
+              <textarea
+                value={editingContent}
+                onChange={(e) => setEditingContent(e.target.value)}
+                placeholder="笔记内容"
+                className="min-h-[240px] w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900 outline-none focus:border-[#0070f3] focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                  {selectedNote.source === "agent" ? "🤖 Agent Note" : "✍️ Manual Note"}
+                </span>
+                <span className="text-xs font-medium text-stone-400 dark:text-stone-500">
+                  {selectedNote.createdAt.replace("T", " ").replace("Z", "").substring(0, 16)}
+                  {selectedNote.updatedAt !== selectedNote.createdAt && " (已编辑)"}
+                </span>
+              </div>
+              <h1 className="mt-4 text-2xl font-bold text-stone-900 dark:text-stone-100">{selectedNote.title}</h1>
+              <div className="my-5 h-px w-full bg-stone-100 dark:bg-stone-800/60" />
+              <div className="markdown-body mt-2 text-sm text-stone-700 dark:text-stone-300">
+                <WorkspaceMarkdownMessage content={selectedNote.content} />
+              </div>
+            </>
+          )}
+        </article>
+      </div>
+    );
+  }
+
+  // ========== 列表视图 (默认) ==========
+  return (
+    <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-left-4 duration-300">
+      <div className="flex items-center justify-between px-2">
+        <div>
+          <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">全部笔记</h2>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
+        </div>
+        <button 
+          onClick={() => setViewState("create")} 
+          className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0070f3] hover:shadow-md hover:shadow-blue-500/20 dark:bg-white dark:text-black dark:hover:bg-[#0070f3] dark:hover:text-white"
+        >
+          <Plus size={16} /> 记笔记
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3">
         {(notes?.notes ?? []).length ? (
-          notes.notes.map((note) => {
-            const isEditing = editingNoteId === note.id;
-            return (
-              <article key={note.id} className="workspace-elevated-panel rounded-[2rem] border p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
-                      {note.source === "agent" ? "Agent Note" : "Manual Note"}
-                    </p>
-                    {isEditing ? (
-                      <input
-                        value={editingTitle}
-                        onChange={(event) => setEditingTitle(event.target.value)}
-                        className="mt-2 w-full rounded-2xl border border-stone-200/80 bg-white px-4 py-3 text-base font-semibold text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
-                      />
-                    ) : (
-                      <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{note.title}</h3>
-                    )}
-                    <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-                      创建于 {note.createdAt.replace("T", " ").replace("Z", "")}
-                      {note.updatedAt !== note.createdAt ? ` · 更新于 ${note.updatedAt.replace("T", " ").replace("Z", "")}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isEditing ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleSaveEdit}
-                          disabled={savingNote || !editingTitle.trim() || !editingContent.trim()}
-                          className="rounded-2xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0070f3] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black"
-                        >
-                          保存
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelEdit}
-                          className="rounded-2xl border border-stone-200/80 px-3 py-2 text-xs font-semibold text-stone-600 transition hover:bg-stone-50 dark:border-stone-800 dark:text-stone-300 dark:hover:bg-stone-900"
-                        >
-                          取消
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(note)}
-                          className="rounded-2xl border border-stone-200/80 px-3 py-2 text-xs font-semibold text-stone-600 transition hover:bg-stone-50 dark:border-stone-800 dark:text-stone-300 dark:hover:bg-stone-900"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteNote(note.id)}
-                          disabled={savingNote}
-                          className="rounded-2xl border border-red-200/80 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/70 dark:text-red-300 dark:hover:bg-red-950/30"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {isEditing ? (
-                  <textarea
-                    value={editingContent}
-                    onChange={(event) => setEditingContent(event.target.value)}
-                    className="mt-4 min-h-[160px] w-full rounded-3xl border border-stone-200/80 bg-white px-4 py-4 text-sm leading-relaxed text-stone-900 outline-none transition focus:border-[#0070f3] dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100"
-                  />
-                ) : (
-                  <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-stone-700 dark:text-stone-300">{note.content}</p>
-                )}
-              </article>
-            );
-          })
+          notes.notes.map((note) => (
+            <article 
+              key={note.id} 
+              onClick={() => openDetail(note)}
+              className="group cursor-pointer rounded-2xl border border-stone-200/60 bg-white p-5 transition-all hover:border-[#0070f3]/40 hover:shadow-md hover:shadow-blue-500/5 dark:border-stone-800/60 dark:bg-stone-950 dark:hover:border-[#0070f3]/40"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                  {note.source === "agent" ? "🤖 Agent" : "✍️ Manual"}
+                </span>
+              </div>
+              <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+                {note.content}
+              </p>
+              <div className="mt-4 flex items-center text-xs font-medium text-stone-400 dark:text-stone-500">
+                <Calendar size={12} className="mr-1.5" />
+                {note.createdAt.replace("T", " ").substring(0, 16)}
+              </div>
+            </article>
+          ))
         ) : (
-          <WorkspaceStateBlock
-            eyebrow="Notes"
-            title="这里还没有笔记"
-            description="可以手动新增，也可以直接对 Agent 说“帮我记一下这个视频的重点”。"
-            dashed
-          />
+          <div className="mt-4">
+            <WorkspaceStateBlock
+              eyebrow="Notes"
+              title="暂无笔记"
+              description="点击右上角手动记录，或在左侧对话框中让 Agent 为你总结重点。"
+              dashed
+            />
+          </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }

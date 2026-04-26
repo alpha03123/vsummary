@@ -17,8 +17,11 @@ if str(SRC) not in sys.path:
 from backend.agent_graph.evidence.retrieval import (
     SeriesRetrievalService,
     _build_default_embed_model,
+    _build_filters,
+    _with_common_metadata,
     _build_workspace_signature,
 )
+from llama_index.core.vector_stores import FilterOperator
 from backend.video_summary.library.views import (
     KnowledgeCardSourceRefView,
     KnowledgeCardView,
@@ -278,6 +281,40 @@ embedding_batch_size = 8
 
             self.assertEqual(notes_result["hits"][0]["source_type"], "note")
             self.assertEqual(cards_result["hits"][0]["source_type"], "knowledge_card")
+
+    def test_build_filters_uses_single_in_filter_for_multiple_source_families(self) -> None:
+        filters = _build_filters(
+            scope_type="video",
+            series_id="series-a",
+            video_id="video-1",
+            target_source="all",
+            source_tags=["summary", "transcript", "notes", "cards"],
+        )
+
+        self.assertEqual(len(filters.filters), 3)
+        source_family_filter = filters.filters[-1]
+        self.assertEqual(source_family_filter.key, "source_family")
+        self.assertEqual(source_family_filter.operator, FilterOperator.IN)
+        self.assertEqual(source_family_filter.value, ["summary", "transcript", "notes", "cards"])
+
+    def test_with_common_metadata_normalizes_optional_string_fields(self) -> None:
+        metadata = _with_common_metadata(
+            {
+                "series_id": "series-a",
+                "video_id": "video-1",
+                "note_id": None,
+                "note_source": None,
+                "card_id": None,
+                "card_kind": None,
+                "chapter_title": None,
+            }
+        )
+
+        self.assertEqual(metadata["note_id"], "")
+        self.assertEqual(metadata["note_source"], "")
+        self.assertEqual(metadata["card_id"], "")
+        self.assertEqual(metadata["card_kind"], "")
+        self.assertEqual(metadata["chapter_title"], "")
 
     def test_workspace_signature_changes_when_summary_changes(self) -> None:
         workspace = _MutableWorkspace()

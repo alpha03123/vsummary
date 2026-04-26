@@ -7,49 +7,22 @@ from backend.agent_graph.query.planning import backfill_query_plan_targets, buil
 from backend.agent_graph.runtime.state import AgentGraphState
 
 
-def build_decompose_node(*, decomposer_program) -> Callable[[AgentGraphState], AgentGraphState]:
-    def decompose(state: AgentGraphState) -> AgentGraphState:
-        decision = decomposer_program.run(
-            user_message=state["user_message"],
+def build_plan_node(*, classifier_program, compare_split_program, series_planner=None) -> Callable[[AgentGraphState], AgentGraphState]:
+    def build_plan(state: AgentGraphState) -> AgentGraphState:
+        current_instruction = str(state["user_message"])
+        decision = classifier_program.run(
+            user_message=current_instruction,
             scope_type=state["scope_type"],
             series_id=state["series_id"],
             video_id=state.get("video_id", ""),
+            history_summary=str(state.get("dialog_history", state.get("history_summary", ""))),
+            history_selected_videos=list(state.get("history_selected_videos", [])),
         )
-        next_state = dict(state)
-        task_payloads = [task.model_dump(mode="json") for task in decision.tasks]
-        if not task_payloads:
-            task_payloads = [
-                {
-                    "task_id": "task-1",
-                    "instruction": state["user_message"],
-                    "depends_on": [],
-                    "kind_hint": "",
-                }
-            ]
-        if _should_collapse_to_single_task(state, task_payloads):
-            task_payloads = [
-                {
-                    "task_id": "task-1",
-                    "instruction": state["user_message"],
-                    "depends_on": [],
-                    "kind_hint": "",
-                }
-            ]
-        next_state["tasks"] = task_payloads
-        next_state["current_task_index"] = 0
-        next_state["current_task"] = _select_next_ready_task(task_payloads, [])
-        next_state["current_task_context"] = _build_task_context(next_state["current_task"], [])
-        next_state["task_outputs"] = []
-        return next_state
-
-    return decompose
-
-
-def build_plan_node(*, classifier_program, compare_split_program, series_planner=None) -> Callable[[AgentGraphState], AgentGraphState]:
-    def build_plan(state: AgentGraphState) -> AgentGraphState:
-        current_task = dict(state.get("current_task", {}))
-        current_instruction = str(current_task.get("instruction", state["user_message"]))
-        if state.get("scope_type") == "series" and series_planner is not None:
+        if (
+            state.get("scope_type") == "series"
+            and series_planner is not None
+            and str(getattr(decision, "goal", "")).strip() not in {"action", "meta_state"}
+        ):
             query_plan = series_planner.create_plan(
                 user_message=current_instruction,
                 series_id=state["series_id"],
@@ -64,17 +37,8 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
             next_state["retrieval_results"] = []
             next_state["meta_state"] = {}
             next_state["tool_results"] = []
-            next_state["direct_response"] = ""
+            next_state["generated_content"] = ""
             return next_state
-
-        decision = classifier_program.run(
-            user_message=current_instruction,
-            scope_type=state["scope_type"],
-            series_id=state["series_id"],
-            video_id=state.get("video_id", ""),
-            history_summary=str(state.get("dialog_history", state.get("history_summary", ""))),
-            history_selected_videos=list(state.get("history_selected_videos", [])),
-        )
         query_plan = build_structured_query_plan(
             state=state,
             current_instruction=current_instruction,
@@ -89,7 +53,6 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
                     "target_video_ids": list(query_plan.get("candidate_video_ids", [])),
                     "depth": depth,
                     "query": query,
-                    "needs_probe": depth == ExecutionDepth.VIDEO_GRAPH.value,
                 }
                 for query in queries
             ]
@@ -100,39 +63,10 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
         next_state["retrieval_results"] = []
         next_state["meta_state"] = {}
         next_state["tool_results"] = []
-        next_state["direct_response"] = ""
-        if not state.get("retrieval_queries") and query_plan.get("goal") == "compare":
-            next_state["retrieval_queries"] = queries
+        next_state["generated_content"] = ""
         return next_state
 
     return build_plan
-
-
-def build_advance_task_node() -> Callable[[AgentGraphState], AgentGraphState]:
-    def advance_task(state: AgentGraphState) -> AgentGraphState:
-        tasks = list(state.get("tasks", []))
-        outputs = list(state.get("task_outputs", []))
-        completed_ids = [
-            str(item.get("task_id", "")).strip()
-            for item in outputs
-            if isinstance(item, dict) and str(item.get("task_id", "")).strip()
-        ]
-        next_task = _select_next_ready_task(tasks, completed_ids)
-        next_state = dict(state)
-        if next_task:
-            next_state["current_task"] = next_task
-            next_state["current_task_index"] = _task_index(tasks, next_task)
-            next_state["current_task_context"] = _build_task_context(next_task, outputs)
-            next_state["query_plan"] = {}
-            next_state["retrieval_queries"] = []
-            next_state["retrieval_results"] = []
-            next_state["meta_state"] = {}
-            next_state["direct_response"] = ""
-        else:
-            next_state["current_task"] = {}
-        return next_state
-
-    return advance_task
 
 
 def build_advance_subplan_node() -> Callable[[AgentGraphState], AgentGraphState]:
@@ -150,86 +84,6 @@ def build_advance_subplan_node() -> Callable[[AgentGraphState], AgentGraphState]
 
     return advance_subplan
 
-
-
-def build_retrieve_node(*, retrieval_service) -> Callable[[AgentGraphState], AgentGraphState]:
-    def retrieve(state: AgentGraphState) -> AgentGraphState:
-        plan = dict(state.get("query_plan", {}))
-        subplans = plan.get("subplans", [])
-        active_query = state["user_message"]
-        if isinstance(subplans, list) and subplans:
-            first_subplan = subplans[0]
-            if isinstance(first_subplan, dict):
-                active_query = str(first_subplan.get("query", "")).strip() or active_query
-        queries = list(state.get("retrieval_queries", [])) or [active_query]
-        responses = [
-            retrieval_service.search(
-                scope_type=state["scope_type"],
-                series_id=state["series_id"],
-                video_id=state.get("video_id", ""),
-                query=query,
-                target_source=str(plan.get("target_source", "all")),
-                expand_context=str(plan.get("context_need", "chunk")) != "continuous",
-                context_window_seconds=120,
-                max_hits=5,
-            )
-            for query in queries
-        ]
-        results: list[dict[str, object]] = []
-        for response in responses:
-            hits = response.get("hits", [])
-            if not isinstance(hits, list):
-                continue
-            for hit in hits:
-                if isinstance(hit, dict):
-                    results.append(dict(hit))
-        next_state = dict(state)
-        next_state["retrieval_results"] = results
-        backfill_query_plan_targets(next_state, results)
-        return next_state
-
-    return retrieve
-
-
-def build_pinpoint_node(*, pinpoint_service) -> Callable[[AgentGraphState], AgentGraphState]:
-    def pinpoint(state: AgentGraphState) -> AgentGraphState:
-        current_task = dict(state.get("current_task", {}))
-        current_instruction = str(current_task.get("instruction", state["user_message"]))
-        seen_video_ids: list[str] = []
-        for item in state.get("retrieval_results", []):
-            if not isinstance(item, dict):
-                continue
-            video_id = str(item.get("video_id", "")).strip()
-            if video_id and video_id not in seen_video_ids:
-                seen_video_ids.append(video_id)
-        if state.get("scope_type") == "video":
-            current_video_id = str(state.get("video_id", "")).strip()
-            if current_video_id and current_video_id not in seen_video_ids:
-                seen_video_ids.insert(0, current_video_id)
-
-        pinpoint_results: list[dict[str, object]] = []
-        tool_results = list(state.get("tool_results", [])) if isinstance(state.get("tool_results"), list) else []
-        for video_id in seen_video_ids[:3]:
-            item, item_tool_results = pinpoint_service.locate(
-                series_id=state["series_id"],
-                video_id=video_id,
-                query=current_instruction,
-            )
-            if isinstance(item, dict):
-                if "source_type" not in item:
-                    item = {**item, "source_type": "transcript_chunk"}
-                pinpoint_results.append(item)
-            if isinstance(item_tool_results, list):
-                tool_results.extend(item_tool_results)
-
-        next_state = dict(state)
-        if pinpoint_results:
-            next_state["retrieval_results"] = pinpoint_results
-        next_state["tool_results"] = tool_results
-        backfill_query_plan_targets(next_state, pinpoint_results)
-        return next_state
-
-    return pinpoint
 
 
 def build_execute_summary_node(*, retrieval_service) -> Callable[[AgentGraphState], AgentGraphState]:
@@ -357,19 +211,11 @@ def build_execute_video_rag_node(*, retrieval_service) -> Callable[[AgentGraphSt
         ]
         next_state["tool_results"] = _merge_tool_results(
             state,
-            [
-                {
-                    "tool_name": "get_video_transcript" if item.get("source_family") == "transcript" or item.get("source_type") == "transcript_chunk" else "get_video_summary",
-                    "status": "ok",
-                    "payload": {
-                        "series_id": state["series_id"],
-                        "video_id": item.get("video_id", ""),
-                        "title": item.get("title", ""),
-                        "retrieval_tags": retrieval_tags,
-                    },
-                }
-                for item in items
-            ],
+            _build_video_rag_tool_results(
+                series_id=state["series_id"],
+                retrieval_tags=retrieval_tags,
+                items=items,
+            ),
         )
         backfill_query_plan_targets(next_state, items)
         return next_state
@@ -521,15 +367,9 @@ def build_read_meta_state_node(*, meta_state_reader) -> Callable[[AgentGraphStat
 def build_dispatch_action_node(*, action_dispatcher) -> Callable[[AgentGraphState], AgentGraphState]:
     def dispatch_action(state: AgentGraphState) -> AgentGraphState:
         plan = dict(state.get("query_plan", {}))
-        task_context = dict(state.get("current_task_context", {}))
         action_args = dict(plan.get("action_args", {})) if isinstance(plan.get("action_args", {}), dict) else {}
         if str(plan.get("action_name", "")) == "save_note":
-            latest_answer = task_context.get("latest_answer") or str(state.get("answer", "")).strip()
-            if latest_answer:
-                action_args = {
-                    "note_title": action_args.get("note_title", "总结"),
-                    "note_content": action_args.get("note_content", latest_answer),
-                }
+            action_args = _resolve_save_note_action_args(state=state, action_args=action_args)
         result = action_dispatcher.dispatch(
             scope_type=state["scope_type"],
             series_id=state["series_id"],
@@ -538,23 +378,39 @@ def build_dispatch_action_node(*, action_dispatcher) -> Callable[[AgentGraphStat
             action_args=action_args,
         )
         next_state = dict(state)
-        next_state["direct_response"] = str(result.get("direct_response", "")).strip()
+        action_message = str(result.get("message", "")).strip()
         tool_results = result.get("tool_results", [])
-        next_state["tool_results"] = list(tool_results) if isinstance(tool_results, list) else []
-        next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
-            {
-                "task_id": dict(state.get("current_task", {})).get("task_id", ""),
-                "kind": "action",
-                "value": next_state["direct_response"],
-            }
-        ]
+        next_state["tool_results"] = _merge_tool_results(
+            state,
+            list(tool_results) if isinstance(tool_results, list) else [],
+        )
+        if str(plan.get("goal", "")).strip() != "action_after_content":
+            next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
+                {
+                    "kind": "action",
+                    "value": action_message,
+                }
+            ]
         return next_state
 
     return dispatch_action
 
 
-def build_answer_node(*, answer_program, series_aggregator=None) -> Callable[[AgentGraphState], AgentGraphState]:
+def build_answer_node(*, answer_program, note_program, action_reply_program, series_aggregator=None) -> Callable[[AgentGraphState], AgentGraphState]:
     def answer(state: AgentGraphState) -> AgentGraphState:
+        goal = str(dict(state.get("query_plan", {})).get("goal", "")).strip()
+        if goal == "action_after_content":
+            generated_content = synthesize_note_content_text(
+                state,
+                note_program=note_program,
+            )
+            reply_text = synthesize_action_after_content_reply_text(
+                state,
+                generated_content=generated_content,
+                action_reply_program=action_reply_program,
+            )
+            next_state = append_generated_content_to_state(state, generated_content)
+            return append_answer_to_state(next_state, reply_text)
         answer_text = synthesize_answer_text(
             state,
             answer_program=answer_program,
@@ -564,21 +420,6 @@ def build_answer_node(*, answer_program, series_aggregator=None) -> Callable[[Ag
 
     return answer
 
-
-def build_finalize_node() -> Callable[[AgentGraphState], AgentGraphState]:
-    def finalize(state: AgentGraphState) -> AgentGraphState:
-        return finalize_state(state)
-
-    return finalize
-
-
-def build_update_memory_node(*, memory_update_program) -> Callable[[AgentGraphState], AgentGraphState]:
-    def update_memory(state: AgentGraphState) -> AgentGraphState:
-        return apply_memory_update(state, memory_update_program=memory_update_program)
-
-    return update_memory
-
-
 def synthesize_answer_text(
     state: AgentGraphState,
     *,
@@ -586,8 +427,6 @@ def synthesize_answer_text(
     series_aggregator=None,
     debug_trace: dict[str, object] | None = None,
 ) -> str:
-    current_task = dict(state.get("current_task", {}))
-    current_instruction = str(current_task.get("instruction", state["user_message"]))
     if should_use_series_aggregator(state, series_aggregator):
         return series_aggregator.run(
             user_message=state["user_message"],
@@ -599,19 +438,24 @@ def synthesize_answer_text(
             debug_trace=debug_trace,
         )
     return answer_program.run(
-        user_message=current_instruction,
+        user_message=state["user_message"],
         retrieval_results=_project_answer_evidence(list(state.get("retrieval_results", []))),
         meta_state=state.get("meta_state"),
     )
 
 
 def append_answer_to_state(state: AgentGraphState, answer_text: str) -> AgentGraphState:
-    current_task = dict(state.get("current_task", {}))
     next_state = dict(state)
     next_state["answer"] = answer_text
     next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
-        {"task_id": current_task.get("task_id", ""), "kind": "answer", "value": answer_text}
+        {"kind": "answer", "value": answer_text}
     ]
+    return next_state
+
+
+def append_generated_content_to_state(state: AgentGraphState, generated_content: str) -> AgentGraphState:
+    next_state = dict(state)
+    next_state["generated_content"] = generated_content
     return next_state
 
 
@@ -626,38 +470,21 @@ def finalize_state(state: AgentGraphState) -> AgentGraphState:
             fragments.append(value)
     next_state = dict(state)
     next_state["assistant_message"] = "\n".join(fragments).strip()
-    if not next_state.get("answer"):
+    goal = str(dict(state.get("query_plan", {})).get("goal", "")).strip()
+    if goal != "action_after_content" and not next_state.get("answer"):
         next_state["answer"] = next_state["assistant_message"]
     return next_state
 
 
-def apply_memory_update(state: AgentGraphState, *, memory_update_program) -> AgentGraphState:
+def apply_memory_update(state: AgentGraphState, **_) -> AgentGraphState:
+    user_message = str(state.get("user_message", "")).strip()
+    assistant_message = str(state.get("assistant_message", state.get("answer", ""))).strip()
+    prior = str(state.get("history_summary", "")).strip()
+    turn = f"User: {user_message}\nAssistant: {assistant_message}".strip()
+    updated = f"{prior}\n\n{turn}".strip() if prior else turn
     next_state = dict(state)
-    next_state["history_summary_update"] = memory_update_program.run(
-        history_summary=str(state.get("history_summary", "")),
-        user_message=state["user_message"],
-        assistant_message=str(state.get("assistant_message", state.get("answer", ""))),
-        task_outputs=list(state.get("task_outputs", [])),
-    )
+    next_state["history_summary_update"] = updated
     return next_state
-
-
-def _build_task_context(task: dict[str, object], task_outputs: list[dict[str, object]]) -> dict[str, object]:
-    depends_on = task.get("depends_on", [])
-    if not isinstance(depends_on, list):
-        return {}
-    related = [item for item in task_outputs if isinstance(item, dict) and item.get("task_id") in depends_on]
-    latest_answer = ""
-    if related:
-        for item in reversed(related):
-            if str(item.get("kind", "")) == "answer":
-                latest_answer = str(item.get("value", "")).strip()
-                if latest_answer:
-                    break
-    return {
-        "dependencies": related,
-        "latest_answer": latest_answer,
-    }
 
 
 def should_use_series_aggregator(state: AgentGraphState, series_aggregator) -> bool:
@@ -669,41 +496,29 @@ def should_use_series_aggregator(state: AgentGraphState, series_aggregator) -> b
     return goal not in {"action", "meta_state"}
 
 
-def _should_collapse_to_single_task(state: AgentGraphState, task_payloads: list[dict[str, object]]) -> bool:
-    if state.get("scope_type") != "series":
-        return False
-    if len(task_payloads) <= 1:
-        return False
-    actionish_hints = {"action"}
-    for task in task_payloads:
-        hint = str(task.get("kind_hint", "")).strip()
-        if hint in actionish_hints:
-            return False
-    return True
+def synthesize_note_content_text(
+    state: AgentGraphState,
+    *,
+    note_program,
+) -> str:
+    return note_program.run(
+        user_message=state["user_message"],
+        retrieval_results=_project_answer_evidence(list(state.get("retrieval_results", []))),
+        meta_state=state.get("meta_state"),
+    )
 
 
-def _select_next_ready_task(tasks: list[dict[str, object]], completed_ids: list[str]) -> dict[str, object]:
-    completed = set(completed_ids)
-    for task in tasks:
-        if not isinstance(task, dict):
-            continue
-        task_id = str(task.get("task_id", "")).strip()
-        if not task_id or task_id in completed:
-            continue
-        depends_on = task.get("depends_on", [])
-        if not isinstance(depends_on, list):
-            depends_on = []
-        if all(str(dep).strip() in completed for dep in depends_on):
-            return task
-    return {}
-
-
-def _task_index(tasks: list[dict[str, object]], target: dict[str, object]) -> int:
-    target_id = str(target.get("task_id", "")).strip()
-    for index, task in enumerate(tasks):
-        if str(task.get("task_id", "")).strip() == target_id:
-            return index
-    return 0
+def synthesize_action_after_content_reply_text(
+    state: AgentGraphState,
+    *,
+    generated_content: str,
+    action_reply_program,
+) -> str:
+    return action_reply_program.run(
+        user_message=state["user_message"],
+        action_name=str(dict(state.get("query_plan", {})).get("action_name", "")).strip(),
+        generated_content=generated_content,
+    )
 
 
 def _build_summary_tool_results(series_id: str, items: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -728,6 +543,55 @@ def _build_summary_tool_results(series_id: str, items: list[dict[str, object]]) 
             }
         )
     return tool_results
+
+
+def _build_video_rag_tool_results(
+    *,
+    series_id: str,
+    retrieval_tags: list[str],
+    items: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    if not items:
+        return []
+
+    transcript_hits = [
+        item for item in items
+        if item.get("source_family") == "transcript" or item.get("source_type") == "transcript_chunk"
+    ]
+    summary_hits = [
+        item for item in items
+        if item.get("source_family") == "summary" or item.get("source_type") == "summary"
+    ]
+    selected_hits = transcript_hits or summary_hits or items
+    first = selected_hits[0]
+    tool_name = "get_video_transcript" if transcript_hits else "get_video_summary"
+    return [
+        {
+            "tool_name": tool_name,
+            "status": "ok",
+            "payload": {
+                "series_id": series_id,
+                "video_id": first.get("video_id", ""),
+                "title": first.get("title", ""),
+                "retrieval_tags": retrieval_tags,
+                "result_count": len(selected_hits),
+            },
+        }
+    ]
+
+
+def _resolve_save_note_action_args(*, state: AgentGraphState, action_args: dict[str, object]) -> dict[str, object]:
+    note_title = str(action_args.get("note_title", "")).strip()
+    note_content = str(action_args.get("note_content", "")).strip()
+    if note_title and note_content:
+        return action_args
+    generated_content = str(state.get("generated_content", "")).strip()
+    if generated_content:
+        return {
+            "note_title": note_title or "总结",
+            "note_content": note_content or generated_content,
+        }
+    raise ValueError("save_note 缺少 note_content，且当前状态中没有 generated_content。")
 
 
 def _merge_tool_results(state: AgentGraphState, additional: list[dict[str, object]]) -> list[dict[str, object]]:

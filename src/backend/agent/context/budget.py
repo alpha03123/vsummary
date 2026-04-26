@@ -10,8 +10,6 @@ from backend.agent.ports import AgentContextLoader, AgentSessionStore
 GRAPH_RUNTIME_BASELINE = {
     "graph": "agent_graph",
     "nodes": [
-        "decompose",
-        "advance_task",
         "build_plan",
         "advance_subplan",
         "execute_series_meta",
@@ -26,7 +24,6 @@ GRAPH_RUNTIME_BASELINE = {
         "update_memory",
     ],
     "programs": [
-        "dspy_decompose",
         "dspy_classify",
         "dspy_split_compare",
         "dspy_answer",

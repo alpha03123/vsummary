@@ -32,7 +32,7 @@ class _ActionDispatcher:
     def dispatch(self, *, scope_type: str, series_id: str, video_id: str, action_name: str, action_args: dict[str, object]):
         del scope_type, series_id, video_id, action_args
         self.calls.append(action_name)
-        return {"direct_response": action_name, "tool_results": [{"tool_name": action_name, "status": "ok", "payload": {}}]}
+        return {"message": action_name, "tool_results": [{"tool_name": action_name, "status": "ok", "payload": {}}]}
 
 
 class _Answer:

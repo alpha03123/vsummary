@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from backend.agent.memory.context import AgentContext, InspectionStage
+from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentToolExecutor
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult, ToolName
@@ -31,9 +31,5 @@ class RegistryAgentToolExecutor(AgentToolExecutor):
 
 def _guard_call_against_context(call: ToolCall, context: AgentContext) -> None:
     if not tool_is_available_in_context(call.tool_name, context):
-        current_stage = context.scope_type if context.scope_type == "video" else context.inspection_stage.value
+        current_stage = context.scope_type
         raise AgentPlanError(f"{current_stage} 阶段不能直接执行 {call.tool_name.value}。")
-    if context.scope_type == "video":
-        return
-    if context.inspection_stage == InspectionStage.SERIES_DISCOVERY:
-        return

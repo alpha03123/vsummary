@@ -26,49 +26,19 @@ class AgentGraphService:
         *,
         context_loader: AgentContextLoader,
         graph,
-        video_graph=None,
         session_store=None,
-        decomposer_program=None,
-        classifier_program=None,
-        compare_split_program=None,
-        series_planner=None,
-        retrieval_service=None,
-        pinpoint_service=None,
-        meta_state_reader=None,
-        action_dispatcher=None,
-        answer_program=None,
         series_aggregator=None,
-        memory_update_program=None,
         dialog_history_compactor: DialogHistoryCompactor | None = None,
-        dialog_history_window_tokens: int = 1_000_000,
-        dialog_history_compression_ratio: float = 0.90,
     ) -> None:
         self._context_loader = context_loader
         self._graph = graph
-        self._video_graph = video_graph
         self._session_store = session_store
-        self._decomposer_program = decomposer_program
-        self._classifier_program = classifier_program
-        self._compare_split_program = compare_split_program
-        self._series_planner = series_planner
-        self._retrieval_service = retrieval_service
-        self._pinpoint_service = pinpoint_service
-        self._meta_state_reader = meta_state_reader
-        self._action_dispatcher = action_dispatcher
-        self._answer_program = answer_program
         self._series_aggregator = series_aggregator
-        self._memory_update_program = memory_update_program
         self._dialog_history_compactor = dialog_history_compactor
-        self._dialog_history_window_tokens = dialog_history_window_tokens
-        self._dialog_history_compression_ratio = dialog_history_compression_ratio
 
     @property
     def graph(self):
         return self._graph
-
-    @property
-    def video_graph(self):
-        return self._video_graph
 
     def _build_graph_input(
         self,
@@ -147,11 +117,6 @@ class AgentGraphService:
             debug_trace["graph_result"] = result
         return result
 
-    def _resolve_graph_for_scope(self, scope_type: str):
-        if scope_type == "video" and self._video_graph is not None:
-            return self._video_graph
-        return self._graph
-
     def _build_turn_result(
         self,
         *,
@@ -161,7 +126,6 @@ class AgentGraphService:
     ) -> AgentTurnResult:
         assistant_message = str(
             result.get("assistant_message")
-            or result.get("direct_response")
             or result.get("answer", "")
         ).strip()
         tool_results = _build_tool_results(result)
@@ -172,8 +136,7 @@ class AgentGraphService:
                 scope_type=ScopeType(context.scope_type),
                 tool_calls=[],
                 reason=str(result.get("query_plan", {})),
-                direct_response=str(result.get("direct_response", "")),
-                use_answerer=not bool(result.get("direct_response")),
+                use_answerer=bool(str(result.get("answer", "")).strip()),
             ),
             tool_results=tool_results,
             citations=citations,
@@ -256,24 +219,6 @@ class AgentGraphService:
             return self._dialog_history_compactor.compact_if_needed(messages)
         return render_dialog_history(messages)
 
-    def run_with_context(
-        self,
-        *,
-        session_id: str,
-        user_message: str,
-        context_override=None,
-        debug_trace: dict[str, object] | None = None,
-    ) -> AgentTurnResult:
-        return self.run_turn(
-            session_id=session_id,
-            user_message=user_message,
-            context_override=context_override,
-            debug_trace=debug_trace,
-        )
-
-    def run(self, session_id: str, user_message: str) -> AgentTurnResult:  # type: ignore[override]
-        return self.run_turn(session_id=session_id, user_message=user_message)
-
     def run_turn(
         self,
         *,
@@ -287,9 +232,8 @@ class AgentGraphService:
             user_message=user_message,
             context_override=context_override,
         )
-        graph = self._resolve_graph_for_scope(str(graph_input["scope_type"]))
         self._record_debug_input(debug_trace=debug_trace, graph_input=graph_input)
-        result = self._invoke_graph(graph=graph, graph_input=graph_input, debug_trace=debug_trace)
+        result = self._invoke_graph(graph=self._graph, graph_input=graph_input, debug_trace=debug_trace)
         turn_result = self._build_turn_result(
             context=context,
             result=result,
@@ -317,10 +261,9 @@ class AgentGraphService:
             user_message=user_message,
             context_override=context_override,
         )
-        graph = self._resolve_graph_for_scope(str(graph_input["scope_type"]))
         self._record_debug_input(debug_trace=debug_trace, graph_input=graph_input)
 
-        if not hasattr(graph, "stream"):
+        if not hasattr(self._graph, "stream"):
             turn_result = self.run_turn(
                 session_id=session_id,
                 user_message=user_message,
@@ -357,7 +300,7 @@ class AgentGraphService:
 
         yield AgentStreamEvent(type="thinking_started", payload={"message": "正在执行图节点"})
 
-        for raw_event in graph.stream(
+        for raw_event in self._graph.stream(
             graph_input,
             stream_mode="debug",
             interrupt_before=interrupt_before,
@@ -421,7 +364,7 @@ class AgentGraphService:
         if debug_trace is not None:
             debug_trace["graph_stream_debug"] = raw_debug_events
 
-        result = final_result or self._invoke_graph(graph=graph, graph_input=graph_input, debug_trace=debug_trace)
+        result = final_result or self._invoke_graph(graph=self._graph, graph_input=graph_input, debug_trace=debug_trace)
         should_stream_answer = (
             isinstance(result, dict)
             and not str(result.get("assistant_message", "")).strip()
@@ -500,38 +443,34 @@ class AgentGraphService:
                 },
             )
 
-            if self._memory_update_program is not None:
-                memory_started_at = _current_time_like(finalize_finished_at)
-                yield AgentStreamEvent(
-                    type="stage_started",
-                    payload={
-                        "stage_id": "stage-update-memory",
-                        "node_id": "update_memory",
-                        "label": get_node_alias("update_memory"),
-                    },
-                )
-                result = apply_memory_update(result, memory_update_program=self._memory_update_program)
-                stream_finished_at = _current_time_like(memory_started_at)
-                yield AgentStreamEvent(
-                    type="stage_completed",
-                    payload={
-                        "stage_id": "stage-update-memory",
-                        "node_id": "update_memory",
-                        "label": get_node_alias("update_memory"),
-                        "duration_ms": _duration_ms(memory_started_at, stream_finished_at),
-                    },
-                )
-            else:
-                stream_finished_at = finalize_finished_at
+            memory_started_at = _current_time_like(finalize_finished_at)
+            yield AgentStreamEvent(
+                type="stage_started",
+                payload={
+                    "stage_id": "stage-update-memory",
+                    "node_id": "update_memory",
+                    "label": get_node_alias("update_memory"),
+                },
+            )
+            result = apply_memory_update(result)
+            stream_finished_at = _current_time_like(memory_started_at)
+            yield AgentStreamEvent(
+                type="stage_completed",
+                payload={
+                    "stage_id": "stage-update-memory",
+                    "node_id": "update_memory",
+                    "label": get_node_alias("update_memory"),
+                    "duration_ms": _duration_ms(memory_started_at, stream_finished_at),
+                },
+            )
         else:
             if not str(result.get("assistant_message", "")).strip():
                 if debug_trace is not None:
                     debug_trace["graph_result"] = result
-                result = self._invoke_graph(graph=graph, graph_input=graph_input, debug_trace=debug_trace)
+                result = self._invoke_graph(graph=self._graph, graph_input=graph_input, debug_trace=debug_trace)
             yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
             assistant_message = str(
                 result.get("assistant_message")
-                or result.get("direct_response")
                 or result.get("answer", "")
             ).strip()
             for delta in _chunk_text(assistant_message):

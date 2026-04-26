@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.agent.memory.context import AgentContext, InspectionStage
+from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.tool_calls import ToolContextTag, ToolDefinition, ToolName
 
 from backend.agent.tools.catalog import (
@@ -28,9 +28,4 @@ def tool_is_available_in_context(tool_name: ToolName, context: AgentContext) -> 
 def _resolve_tool_context_tags(context: AgentContext) -> tuple[ToolContextTag, ...]:
     if context.scope_type == "video":
         return (ToolContextTag.VIDEO,)
-    if context.inspection_stage == InspectionStage.SERIES_DISCOVERY:
-        return (ToolContextTag.SERIES_DISCOVERY,)
-    return (
-        ToolContextTag.SERIES_DISCOVERY,
-        ToolContextTag.SERIES_INSPECTION,
-    )
+    return (ToolContextTag.SERIES,)

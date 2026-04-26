@@ -49,7 +49,7 @@ class _MetaStateReader:
 class _ActionDispatcher:
     def dispatch(self, **kwargs):
         del kwargs
-        return {"direct_response": "", "tool_results": []}
+        return {"message": "", "tool_results": []}
 
 
 class _Answer:

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -29,7 +30,7 @@ class SeriesPlannerOutput(BaseModel):
     reason: str = ""
 
 
-class LegacyStyleSeriesPlanner:
+class SeriesPlanner:
     def __init__(self, *, workspace: VideoWorkspace, gateway: ChatGateway) -> None:
         self._workspace = workspace
         self._gateway = gateway
@@ -151,9 +152,7 @@ class LegacyStyleSeriesPlanner:
             "subplans": subplans,
         }
         if debug_trace is not None:
-            debug_trace["legacy_series_planner"] = {
-                "final_plan": result,
-            }
+            debug_trace["series_planner"] = {"final_plan": result}
         return result
 
     def _create_contract_valid_plan(
@@ -191,12 +190,12 @@ class LegacyStyleSeriesPlanner:
                 }
             )
             if debug_trace is not None:
-                debug_trace["legacy_series_planner_attempts"] = attempts
+                debug_trace["series_planner_attempts"] = attempts
             if contract_error is None:
                 return plan
             if attempt_index == retries:
-                raise RuntimeError(f"legacy-style series planner returned invalid contract: {contract_error}")
-        raise RuntimeError("legacy-style series planner returned invalid contract")
+                raise RuntimeError(f"series planner returned invalid contract: {contract_error}")
+        raise RuntimeError("series planner returned invalid contract")
 
 
 def _build_planner_messages(
@@ -236,6 +235,7 @@ def _build_planner_messages(
                 "如果需要跨视频概括、筛选、比较或归纳，优先用 summary。"
                 "如果问题明显要求细粒度时间点、单点原话或单个事实定位，用 video_graph。"
                 "如果问题要求按视频顺序还原一个演示案例、执行过程、Agent 协作流程或最终产物落点，用 video_workflow。"
+                "selected_videos 中的每个 video_id 必须与系列目录中列出的 video_id 字段完全一致，禁止使用序号、位置编号或任何自行构造的格式。"
             ),
         ),
         AgentChatMessage(
@@ -353,17 +353,17 @@ def _resolve_selected_videos(
             if str(item.get("video_id", "")).strip() in all_video_ids
         ]
 
-    normalized_selected_videos: list[dict[str, object]] = []
-    seen_video_ids: set[str] = set()
+    normalized: list[dict[str, object]] = []
+    seen: set[str] = set()
     for item in selected_videos:
-        if item.video_id not in all_video_ids or item.video_id in seen_video_ids:
+        if item.video_id not in all_video_ids or item.video_id in seen:
             continue
-        seen_video_ids.add(item.video_id)
-        normalized_selected_videos.append(
+        seen.add(item.video_id)
+        normalized.append(
             {
                 "video_id": item.video_id,
                 "reason_for_selection": item.reason_for_selection.strip(),
                 "needs_probe": item.needs_probe,
             }
         )
-    return normalized_selected_videos
+    return normalized

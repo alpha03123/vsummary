@@ -157,7 +157,7 @@ class _ActionDispatcher:
     def dispatch(self, *, scope_type: str, series_id: str, video_id: str, action_name: str, action_args: dict[str, object]):
         del scope_type, series_id, video_id, action_args
         return {
-            "direct_response": "已打开笔记",
+            "message": "已打开笔记",
             "tool_results": [{"tool_name": action_name, "status": "ok", "payload": {}}],
         }
 
@@ -341,7 +341,7 @@ class AgentGraphSeriesFlowTests(unittest.TestCase):
         )
 
         self.assertIsNone(planner.kwargs)
-        self.assertEqual(result["direct_response"], "已打开笔记")
+        self.assertEqual(result["assistant_message"], "已打开笔记")
         self.assertEqual(result["tool_results"][0]["tool_name"], "open_notes")
 
     def test_series_meta_state_flow_uses_classifier_directly(self) -> None:

@@ -15,6 +15,7 @@ if str(SRC) not in sys.path:
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.stream_events import AgentStreamEvent
+from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.bootstrap import LazyAgentRuntimeProvider, build_api_container
 
@@ -226,6 +227,98 @@ class _StreamingAggregator:
         yield ChatCompletionStreamChunk(delta="这是")
         yield ChatCompletionStreamChunk(delta="真实流式回答。")
         yield ChatCompletionStreamChunk(usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15})
+
+
+class _SaveNoteClassifier:
+    def run(self, *, user_message: str, scope_type: str, series_id: str, video_id: str = "", history_summary: str = "", history_selected_videos=None):
+        del user_message, scope_type, series_id, video_id, history_summary, history_selected_videos
+        from backend.agent_graph.query.models import StructuredQueryPlan
+
+        return StructuredQueryPlan(
+            goal="action",
+            target_source="all",
+            context_need="chunk",
+            reason="需要先总结再记笔记。",
+            action_name="save_note",
+            action_args={"note_type": "key_points"},
+        )
+
+
+class _NoopSplitCompare:
+    def run(self, *, user_message: str):
+        del user_message
+        from backend.agent_graph.query.models import CompareSplitDecision
+
+        return CompareSplitDecision(queries=[])
+
+
+class _SummaryAndTranscriptRetrieval:
+    def search(self, **kwargs):
+        target_source = kwargs["target_source"]
+        video_id = kwargs.get("video_id", "video-1")
+        if target_source == "summary":
+            return {
+                "hits": [
+                    {
+                        "video_id": video_id,
+                        "title": "Video 1",
+                        "source_type": "summary",
+                        "source_family": "summary",
+                        "snippet": "这是摘要证据。",
+                    }
+                ]
+            }
+        return {
+            "hits": [
+                {
+                    "video_id": video_id,
+                    "title": "Video 1",
+                    "source_type": "transcript_chunk",
+                    "source_family": "transcript",
+                    "snippet": "命中片段一",
+                },
+                {
+                    "video_id": video_id,
+                    "title": "Video 1",
+                    "source_type": "transcript_chunk",
+                    "source_family": "transcript",
+                    "snippet": "命中片段二",
+                },
+            ]
+        }
+
+
+class _SaveNoteActionDispatcher:
+    def dispatch(self, *, scope_type: str, series_id: str, video_id: str, action_name: str, action_args: dict[str, object]):
+        del scope_type, series_id, video_id
+        return {
+            "message": "我已经帮你记好这条笔记。",
+            "tool_results": [
+                {
+                    "tool_name": action_name,
+                    "status": "ok",
+                    "payload": dict(action_args),
+                }
+            ],
+        }
+
+
+class _SummaryAnswer:
+    def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
+        del user_message, meta_state
+        return f"总结：{retrieval_results[0]['snippet']}"
+
+
+class _NoteProgram:
+    def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
+        del user_message, meta_state
+        return f"## 重点\n- {retrieval_results[0]['snippet']}"
+
+
+class _ActionReplyProgram:
+    def run(self, *, user_message: str, action_name: str, generated_content: str):
+        del user_message, action_name, generated_content
+        return "已记录当前视频重点，主要涉及摘要里的核心结论。"
 
 
 class AgentGraphServiceTests(unittest.TestCase):
@@ -452,6 +545,48 @@ class AgentGraphServiceTests(unittest.TestCase):
 
         stage_nodes = [event.payload["node_id"] for event in events if event.type == "stage_started"]
         self.assertEqual(stage_nodes[0], "build_plan")
+
+    def test_graph_service_streams_single_rag_tool_and_visible_save_note_action(self) -> None:
+        graph = build_agent_graph(
+            classifier_program=_SaveNoteClassifier(),
+            compare_split_program=_NoopSplitCompare(),
+            retrieval_service=_SummaryAndTranscriptRetrieval(),
+            action_dispatcher=_SaveNoteActionDispatcher(),
+            answer_program=_SummaryAnswer(),
+            note_program=_NoteProgram(),
+            action_reply_program=_ActionReplyProgram(),
+        )
+        service = AgentGraphService(
+            context_loader=StaticAgentContextLoader(
+                AgentContext(
+                    session_id="video|series-a|video-1|overview",
+                    scope_type="video",
+                    series_id="series-a",
+                    video_id="video-1",
+                    video_title="Video 1",
+                )
+            ),
+            graph=graph,
+        )
+
+        events = list(
+            service.stream_with_context(
+                session_id="video|series-a|video-1|overview",
+                user_message="帮我记一下这个视频的重点",
+            )
+        )
+
+        tool_completed = [event.payload for event in events if event.type == "tool_completed"]
+        self.assertEqual(
+            [payload["tool_name"] for payload in tool_completed],
+            ["get_video_summary", "get_video_transcript", "save_note"],
+        )
+        self.assertEqual(tool_completed[1]["payload"]["result_count"], 2)
+        self.assertEqual(tool_completed[2]["payload"]["note_content"], "## 重点\n- 这是摘要证据。")
+        answer_completed = next(event for event in events if event.type == "answer_completed")
+        self.assertEqual(answer_completed.payload["message"], "已记录当前视频重点，主要涉及摘要里的核心结论。")
+        chain_completed = next(event for event in events if event.type == "tool_chain_completed")
+        self.assertEqual(chain_completed.payload["count"], 3)
 
 
 if __name__ == "__main__":

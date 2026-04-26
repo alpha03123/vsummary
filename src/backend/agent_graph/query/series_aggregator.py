@@ -9,7 +9,7 @@ from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent_graph.evidence.citations import build_citations_from_graph_result
 
 
-class LegacyStyleSeriesAggregator:
+class SeriesAggregator:
     def __init__(self, *, gateway: ChatGateway) -> None:
         self._gateway = gateway
 

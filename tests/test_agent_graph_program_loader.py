@@ -12,7 +12,6 @@ if str(SRC) not in sys.path:
 
 from backend.agent_graph.dspy.program_loader import (
     load_or_create_classifier_program,
-    load_or_create_decompose_program,
     load_or_create_split_compare_program,
 )
 
@@ -40,19 +39,6 @@ class AgentGraphProgramLoaderTests(unittest.TestCase):
 
             self.assertIs(result, program)
             self.assertEqual(program.loaded_path["metadata"], {})
-
-    def test_load_or_create_decompose_program_returns_fresh_program_when_artifact_missing(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            artifact = Path(temp_dir) / "missing.json"
-            program = _FakeProgram()
-
-            result = load_or_create_decompose_program(
-                artifact_path=artifact,
-                program_factory=lambda: program,
-            )
-
-            self.assertIs(result, program)
-            self.assertIsNone(program.loaded_path)
 
     def test_load_or_create_split_compare_program_loads_existing_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

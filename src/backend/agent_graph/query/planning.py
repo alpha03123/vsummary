@@ -3,6 +3,8 @@ from __future__ import annotations
 from backend.agent_graph.query.models import ExecutionDepth, SelectionMode, StructuredQueryPlan
 from backend.agent_graph.runtime.state import AgentGraphState
 
+CONTENT_DEPENDENT_ACTIONS = {"save_note"}
+
 
 def build_structured_query_plan(
     *,
@@ -17,6 +19,8 @@ def build_structured_query_plan(
     action_args = decision_payload.get("action_args", {})
     if not isinstance(action_args, dict):
         action_args = {}
+    if action_name in CONTENT_DEPENDENT_ACTIONS and not str(action_args.get("note_content", "")).strip():
+        goal = "action_after_content"
 
     candidate_video_ids = _normalize_video_ids(decision_payload.get("candidate_video_ids"))
     selected_videos = _normalize_selected_videos(decision_payload.get("selected_videos"))
@@ -35,7 +39,6 @@ def build_structured_query_plan(
                     {
                         "video_id": video_id,
                         "reason_for_selection": "当前 video scope",
-                        "needs_probe": target_source == "transcript",
                     }
                 ]
         if goal not in {"action", "meta_state"}:
@@ -43,11 +46,19 @@ def build_structured_query_plan(
                 "target_video_ids": [video_id] if video_id else [],
                 "depth": ExecutionDepth.SUMMARY.value,
                 "query": current_instruction,
-                "needs_probe": False,
                 "retrieval_tags": ["summary"],
             }
             if target_source == "summary":
                 subplans = [summary_subplan]
+            elif target_source == "transcript":
+                subplans = [
+                    {
+                        "target_video_ids": [video_id] if video_id else [],
+                        "depth": ExecutionDepth.VIDEO_RAG.value,
+                        "query": current_instruction,
+                        "retrieval_tags": _normalize_retrieval_tags(None, target_source=target_source),
+                    }
+                ]
             else:
                 rag_tags = retrieval_tags or _normalize_retrieval_tags(None, target_source=target_source)
                 subplans = [
@@ -56,7 +67,6 @@ def build_structured_query_plan(
                         "target_video_ids": [video_id] if video_id else [],
                         "depth": ExecutionDepth.VIDEO_RAG.value,
                         "query": current_instruction,
-                        "needs_probe": False,
                         "retrieval_tags": rag_tags,
                     },
                 ]
@@ -80,25 +90,23 @@ def build_structured_query_plan(
                     "target_video_ids": list(candidate_video_ids),
                     "depth": depth,
                     "query": current_instruction,
-                    "needs_probe": target_source == "transcript",
                     "retrieval_tags": retrieval_tags,
                 }
             ]
 
-    if goal not in {"action", "meta_state"} and not subplans:
+    if goal not in {"action", "action_after_content", "meta_state"} and not subplans:
         if target_source == "transcript":
             depth = ExecutionDepth.VIDEO_GRAPH.value
         else:
             depth = ExecutionDepth.SUMMARY.value
         subplans = [
-            {
-                "target_video_ids": list(candidate_video_ids),
-                "depth": depth,
-                "query": current_instruction,
-                "needs_probe": target_source == "transcript",
-                "retrieval_tags": retrieval_tags,
-            }
-        ]
+                {
+                    "target_video_ids": list(candidate_video_ids),
+                    "depth": depth,
+                    "query": current_instruction,
+                    "retrieval_tags": retrieval_tags,
+                }
+            ]
 
     return StructuredQueryPlan.model_validate(
         {
@@ -141,7 +149,6 @@ def backfill_query_plan_targets(state: AgentGraphState, results: list[dict[str, 
             {
                 "video_id": video_id,
                 "reason_for_selection": "retrieval 命中",
-                "needs_probe": str(query_plan.get("target_source", "")).strip() == "transcript",
             }
             for video_id in video_ids
         ]
@@ -184,7 +191,6 @@ def _normalize_selected_videos(value: object) -> list[dict[str, object]]:
             {
                 "video_id": video_id,
                 "reason_for_selection": str(item.get("reason_for_selection", "")).strip(),
-                "needs_probe": bool(item.get("needs_probe", False)),
             }
         )
     return normalized
@@ -223,7 +229,6 @@ def _normalize_subplans(value: object) -> list[dict[str, object]]:
                 "target_video_ids": target_video_ids,
                 "depth": depth,
                 "query": query,
-                "needs_probe": bool(item.get("needs_probe", False)),
                 "retrieval_tags": _normalize_retrieval_tags(item.get("retrieval_tags"), target_source="all"),
             }
         )

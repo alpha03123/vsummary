@@ -8,7 +8,6 @@ from backend.agent.schemas.tool_calls import (
     ToolDefinition,
     ToolContextTag,
     ToolExecutionResult,
-    ToolIntentTag,
     ToolName,
     ToolPlane,
 )
@@ -19,7 +18,6 @@ OPEN_KNOWLEDGE_CARDS_TOOL = ToolDefinition(
     description="切换到知识卡片工具页。",
     plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.OPEN_TOOL,),
 )
 
 OPEN_NOTES_TOOL = ToolDefinition(
@@ -28,7 +26,6 @@ OPEN_NOTES_TOOL = ToolDefinition(
     description="切换到笔记工具页。",
     plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.OPEN_TOOL,),
 )
 
 SAVE_NOTE_TOOL = ToolDefinition(
@@ -41,7 +38,6 @@ SAVE_NOTE_TOOL = ToolDefinition(
         "note_content": "笔记正文",
     },
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.SAVE_NOTE,),
 )
 
 

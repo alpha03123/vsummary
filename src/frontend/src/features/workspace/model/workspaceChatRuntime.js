@@ -70,7 +70,11 @@ export function normalizeAgentToolTraceStep(result) {
     case "save_note":
       return createToolTraceStep(result.tool_name, "保存笔记", payload.note_title);
     case "get_video_transcript":
-      return createToolTraceStep(result.tool_name, "读取视频转写全文", payload.title ?? payload.video_id);
+      return createToolTraceStep(
+        result.tool_name,
+        typeof payload.result_count === "number" ? "读取转写证据片段" : "读取视频转写全文",
+        payload.title ?? payload.video_id,
+      );
     default:
       return createToolTraceStep(result?.tool_name ?? "unknown_tool", "执行工作流步骤");
   }

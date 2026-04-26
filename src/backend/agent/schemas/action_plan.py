@@ -16,7 +16,6 @@ class AgentActionPlan(BaseModel):
     scope_type: ScopeType
     tool_calls: list[ToolCall] = Field(default_factory=list)
     reason: str = ""
-    direct_response: str = ""
     use_answerer: bool = False
 
 

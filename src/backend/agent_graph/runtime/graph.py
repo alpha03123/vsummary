@@ -3,35 +3,32 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from backend.agent_graph.runtime.nodes import (
-    build_advance_task_node,
     build_advance_subplan_node,
     build_answer_node,
-    build_plan_node,
-    build_decompose_node,
     build_dispatch_action_node,
     build_execute_series_meta_node,
     build_execute_summary_node,
-    build_execute_video_rag_node,
     build_execute_video_graph_node,
+    build_execute_video_rag_node,
     build_execute_video_workflow_node,
-    build_finalize_node,
+    build_plan_node,
     build_read_meta_state_node,
-    build_update_memory_node,
+    apply_memory_update,
+    finalize_state,
 )
 from backend.agent_graph.query.models import ExecutionDepth
 from backend.agent_graph.dspy.programs import (
+    ActionAfterContentReplyProgram,
     AnswerSynthesisProgram,
     CompareSplitProgram,
-    MemoryUpdateProgram,
+    NoteSynthesisProgram,
     SeriesQueryClassifierProgram,
-    TaskDecomposerProgram,
 )
 from backend.agent_graph.runtime.state import AgentGraphState
 
 
 def build_agent_graph(
     *,
-    decomposer_program=None,
     classifier_program=None,
     compare_split_program=None,
     series_planner=None,
@@ -41,10 +38,10 @@ def build_agent_graph(
     meta_state_reader=None,
     action_dispatcher=None,
     answer_program=None,
+    note_program=None,
+    action_reply_program=None,
     series_aggregator=None,
-    memory_update_program=None,
 ):
-    resolved_decomposer_program = decomposer_program or TaskDecomposerProgram()
     resolved_classifier_program = classifier_program or SeriesQueryClassifierProgram()
     resolved_compare_split_program = compare_split_program or CompareSplitProgram()
     resolved_retrieval_service = retrieval_service or _MissingRetrievalService()
@@ -53,11 +50,10 @@ def build_agent_graph(
     resolved_meta_state_reader = meta_state_reader or _MissingMetaStateReader()
     resolved_action_dispatcher = action_dispatcher or _MissingActionDispatcher()
     resolved_answer_program = answer_program or AnswerSynthesisProgram()
-    resolved_memory_update_program = memory_update_program or MemoryUpdateProgram()
+    resolved_note_program = note_program or NoteSynthesisProgram()
+    resolved_action_reply_program = action_reply_program or ActionAfterContentReplyProgram()
 
     graph = StateGraph(AgentGraphState)
-    graph.add_node("decompose", build_decompose_node(decomposer_program=resolved_decomposer_program))
-    graph.add_node("advance_task", build_advance_task_node())
     graph.add_node(
         "build_plan",
         build_plan_node(
@@ -86,12 +82,18 @@ def build_agent_graph(
     )
     graph.add_node("read_meta_state", build_read_meta_state_node(meta_state_reader=resolved_meta_state_reader))
     graph.add_node("dispatch_action", build_dispatch_action_node(action_dispatcher=resolved_action_dispatcher))
-    graph.add_node("answer", build_answer_node(answer_program=resolved_answer_program, series_aggregator=series_aggregator))
-    graph.add_node("finalize", build_finalize_node())
-    graph.add_node("update_memory", build_update_memory_node(memory_update_program=resolved_memory_update_program))
-    graph.add_edge(START, "decompose")
-    graph.add_edge("decompose", "advance_task")
-    graph.add_edge("advance_task", "build_plan")
+    graph.add_node(
+        "answer",
+        build_answer_node(
+            answer_program=resolved_answer_program,
+            note_program=resolved_note_program,
+            action_reply_program=resolved_action_reply_program,
+            series_aggregator=series_aggregator,
+        ),
+    )
+    graph.add_node("finalize", finalize_state)
+    graph.add_node("update_memory", apply_memory_update)
+    graph.add_edge(START, "build_plan")
     graph.add_conditional_edges(
         "build_plan",
         _route_after_build_plan,
@@ -99,7 +101,6 @@ def build_agent_graph(
             "dispatch_action": "dispatch_action",
             "read_meta_state": "read_meta_state",
             "advance_subplan": "advance_subplan",
-            "answer": "answer",
         },
     )
     graph.add_conditional_edges(
@@ -154,112 +155,15 @@ def build_agent_graph(
             "answer": "answer",
         },
     )
-    graph.add_conditional_edges(
-        "read_meta_state",
-        lambda state: "answer",
-        {"answer": "answer"},
-    )
-    graph.add_conditional_edges(
-        "dispatch_action",
-        _route_after_completed_task,
-        {
-            "advance_task": "advance_task",
-            "finalize": "finalize",
-        },
-    )
+    graph.add_edge("read_meta_state", "answer")
+    graph.add_edge("dispatch_action", "finalize")
     graph.add_conditional_edges(
         "answer",
-        _route_after_completed_task,
-        {
-            "advance_task": "advance_task",
-            "finalize": "finalize",
-        },
-    )
-    graph.add_edge("finalize", "update_memory")
-    graph.add_edge("update_memory", END)
-    return graph.compile()
-
-
-
-def build_video_agent_graph(
-    *,
-    classifier_program=None,
-    compare_split_program=None,
-    retrieval_service=None,
-    meta_state_reader=None,
-    action_dispatcher=None,
-    answer_program=None,
-    memory_update_program=None,
-):
-    resolved_classifier_program = classifier_program or SeriesQueryClassifierProgram()
-    resolved_compare_split_program = compare_split_program or CompareSplitProgram()
-    resolved_retrieval_service = retrieval_service or _MissingRetrievalService()
-    resolved_meta_state_reader = meta_state_reader or _MissingMetaStateReader()
-    resolved_action_dispatcher = action_dispatcher or _MissingActionDispatcher()
-    resolved_answer_program = answer_program or AnswerSynthesisProgram()
-    resolved_memory_update_program = memory_update_program or MemoryUpdateProgram()
-
-    graph = StateGraph(AgentGraphState)
-    graph.add_node(
-        "route_video_request",
-        build_plan_node(
-            classifier_program=resolved_classifier_program,
-            compare_split_program=resolved_compare_split_program,
-            series_planner=None,
-        ),
-    )
-    graph.add_node("advance_subplan", build_advance_subplan_node())
-    graph.add_node("execute_summary", build_execute_summary_node(retrieval_service=resolved_retrieval_service))
-    graph.add_node("execute_video_rag", build_execute_video_rag_node(retrieval_service=resolved_retrieval_service))
-    graph.add_node("read_meta_state", build_read_meta_state_node(meta_state_reader=resolved_meta_state_reader))
-    graph.add_node("dispatch_action", build_dispatch_action_node(action_dispatcher=resolved_action_dispatcher))
-    graph.add_node("answer", build_answer_node(answer_program=resolved_answer_program, series_aggregator=None))
-    graph.add_node("finalize", build_finalize_node())
-    graph.add_node("update_memory", build_update_memory_node(memory_update_program=resolved_memory_update_program))
-
-    graph.add_edge(START, "route_video_request")
-    graph.add_conditional_edges(
-        "route_video_request",
-        _route_after_video_request,
+        _route_after_answer,
         {
             "dispatch_action": "dispatch_action",
-            "read_meta_state": "read_meta_state",
-            "advance_subplan": "advance_subplan",
+            "finalize": "finalize",
         },
-    )
-    graph.add_conditional_edges(
-        "advance_subplan",
-        _route_after_video_advance_subplan,
-        {
-            "execute_summary": "execute_summary",
-            "execute_video_rag": "execute_video_rag",
-            "answer": "answer",
-        },
-    )
-    graph.add_conditional_edges(
-        "execute_summary",
-        _route_after_subplan_execution,
-        {"advance_subplan": "advance_subplan", "answer": "answer"},
-    )
-    graph.add_conditional_edges(
-        "execute_video_rag",
-        _route_after_subplan_execution,
-        {"advance_subplan": "advance_subplan", "answer": "answer"},
-    )
-    graph.add_conditional_edges(
-        "read_meta_state",
-        lambda state: "answer",
-        {"answer": "answer"},
-    )
-    graph.add_conditional_edges(
-        "dispatch_action",
-        lambda state: "finalize",
-        {"finalize": "finalize"},
-    )
-    graph.add_conditional_edges(
-        "answer",
-        lambda state: "finalize",
-        {"finalize": "finalize"},
     )
     graph.add_edge("finalize", "update_memory")
     graph.add_edge("update_memory", END)
@@ -312,10 +216,7 @@ def _route_after_build_plan(state: AgentGraphState) -> str:
         return "dispatch_action"
     if goal == "meta_state":
         return "read_meta_state"
-    subplans = list(state.get("query_plan", {}).get("subplans", []))
-    if subplans:
-        return "advance_subplan"
-    return "answer"
+    return "advance_subplan"
 
 
 def _route_after_advance_subplan(state: AgentGraphState) -> str:
@@ -342,27 +243,8 @@ def _route_after_subplan_execution(state: AgentGraphState) -> str:
     return "answer"
 
 
-def _route_after_completed_task(state: AgentGraphState) -> str:
-    tasks = list(state.get("tasks", []))
-    index = int(state.get("current_task_index", 0))
-    if index + 1 < len(tasks):
-        return "advance_task"
-    return "finalize"
-
-
-def _route_after_video_request(state: AgentGraphState) -> str:
+def _route_after_answer(state: AgentGraphState) -> str:
     goal = str(state.get("query_plan", {}).get("goal", "")).strip()
-    if goal == "action":
+    if goal == "action_after_content":
         return "dispatch_action"
-    if goal == "meta_state":
-        return "read_meta_state"
-    return "advance_subplan"
-
-
-def _route_after_video_advance_subplan(state: AgentGraphState) -> str:
-    depth = str(dict(state.get("current_subplan", {})).get("depth", "")).strip()
-    if depth == ExecutionDepth.SUMMARY.value:
-        return "execute_summary"
-    if depth == ExecutionDepth.VIDEO_RAG.value:
-        return "execute_video_rag"
-    return "answer"
+    return "finalize"

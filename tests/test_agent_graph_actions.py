@@ -58,7 +58,7 @@ class _ActionDispatcher:
         }
         message, payload = mapping[action_name]
         return {
-            "direct_response": message,
+            "message": message,
             "tool_results": [
                 {
                     "tool_name": action_name,
@@ -73,6 +73,24 @@ class _Answer:
     def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
         del user_message, retrieval_results, meta_state
         return "unused"
+
+
+class _NoteProgram:
+    def __init__(self, content: str = "## 笔记\n- 这是摘要内容") -> None:
+        self.content = content
+
+    def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
+        del user_message, retrieval_results, meta_state
+        return self.content
+
+
+class _ActionReplyProgram:
+    def __init__(self, reply: str = "已记录当前视频重点。") -> None:
+        self.reply = reply
+
+    def run(self, *, user_message: str, action_name: str, generated_content: str):
+        del user_message, action_name, generated_content
+        return self.reply
 
 
 class _MemoryUpdater:
@@ -111,7 +129,7 @@ class AgentGraphActionsTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result["direct_response"], "我已经帮你打开概况工具。")
+        self.assertEqual(result["assistant_message"], "我已经帮你打开概况工具。")
         self.assertEqual(result["tool_results"][0]["tool_name"], "open_overview")
 
     def test_action_flow_dispatches_save_note(self) -> None:
@@ -143,8 +161,8 @@ class AgentGraphActionsTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
-        self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "重点")
+        self.assertEqual(result["tool_results"][-1]["tool_name"], "save_note")
+        self.assertEqual(result["tool_results"][-1]["payload"]["note_title"], "重点")
 
     def test_action_flow_uses_answer_node_output_when_save_note_lacks_note_fields(self) -> None:
         graph = build_agent_graph(
@@ -163,6 +181,8 @@ class AgentGraphActionsTests(unittest.TestCase):
             meta_state_reader=_MetaStateReader(),
             action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
+            note_program=_NoteProgram("## 笔记\n- 独立笔记正文"),
+            action_reply_program=_ActionReplyProgram("已记录为独立笔记。"),
         )
 
         result = graph.invoke(
@@ -172,20 +192,17 @@ class AgentGraphActionsTests(unittest.TestCase):
                 "series_id": "series-a",
                 "video_id": "video-1",
                 "user_message": "帮我把重点记下来",
-                "answer": "这是已经生成的回答",
+                "answer": "这是已有回答，不应该被复用",
             }
         )
 
-        self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
-        self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "总结")
-        self.assertEqual(result["tool_results"][0]["payload"]["note_content"], "unused")
+        self.assertEqual(result["generated_content"], "## 笔记\n- 独立笔记正文")
+        self.assertEqual(result["answer"], "已记录为独立笔记。")
+        self.assertEqual(result["tool_results"][-1]["tool_name"], "save_note")
+        self.assertEqual(result["tool_results"][-1]["payload"]["note_title"], "总结")
+        self.assertEqual(result["tool_results"][-1]["payload"]["note_content"], "## 笔记\n- 独立笔记正文")
 
     def test_action_flow_generates_content_before_save_note_when_note_fields_missing(self) -> None:
-        class _Answer:
-            def run(self, *, user_message: str, retrieval_results: list[dict[str, object]], meta_state=None):
-                del user_message, meta_state
-                return f"总结：{retrieval_results[0]['snippet']}"
-
         graph = build_agent_graph(
             classifier_program=_Classifier(
                 StructuredQueryPlan(
@@ -202,6 +219,8 @@ class AgentGraphActionsTests(unittest.TestCase):
             meta_state_reader=_MetaStateReader(),
             action_dispatcher=_ActionDispatcher(),
             answer_program=_Answer(),
+            note_program=_NoteProgram("## 当前视频重点\n- 这是摘要内容"),
+            action_reply_program=_ActionReplyProgram("已记录当前视频重点，主要是摘要内容。"),
         )
 
         result = graph.invoke(
@@ -214,9 +233,11 @@ class AgentGraphActionsTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
-        self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "总结")
-        self.assertEqual(result["tool_results"][0]["payload"]["note_content"], "总结：这是摘要内容")
+        self.assertEqual(result["generated_content"], "## 当前视频重点\n- 这是摘要内容")
+        self.assertEqual(result["answer"], "已记录当前视频重点，主要是摘要内容。")
+        self.assertEqual(result["tool_results"][-1]["tool_name"], "save_note")
+        self.assertEqual(result["tool_results"][-1]["payload"]["note_title"], "总结")
+        self.assertEqual(result["tool_results"][-1]["payload"]["note_content"], "## 当前视频重点\n- 这是摘要内容")
 
     def test_action_flow_dispatches_video_seek(self) -> None:
         graph = build_agent_graph(

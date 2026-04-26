@@ -37,7 +37,7 @@ class ActionDispatcher:
         )
         result = self._tool_executor.execute_call(call, context)
         return {
-            "direct_response": _default_action_response(action_name),
+            "message": _default_action_response(action_name),
             "tool_results": [
                 {
                     "tool_name": result.tool_name.value,

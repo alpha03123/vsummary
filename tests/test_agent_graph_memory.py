@@ -111,8 +111,6 @@ class AgentGraphMemoryTests(unittest.TestCase):
                 graph=_FakeGraph(),
                 session_store=store,
                 dialog_history_compactor=compactor,
-                dialog_history_window_tokens=1000,
-                dialog_history_compression_ratio=0.90,
             )
 
             service.run_turn(

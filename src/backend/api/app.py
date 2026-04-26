@@ -407,7 +407,7 @@ def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
     context_override = _build_agent_context_override(request.session_id, request.context)
 
     try:
-        result = CONTAINER.get_agent_service().run_with_context(
+        result = CONTAINER.get_agent_service().run_turn(
             session_id=request.session_id,
             user_message=request.message,
             context_override=context_override,

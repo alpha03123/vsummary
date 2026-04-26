@@ -7,7 +7,6 @@ from backend.agent.schemas.tool_calls import (
     ToolDefinition,
     ToolContextTag,
     ToolExecutionResult,
-    ToolIntentTag,
     ToolName,
     ToolPlane,
 )
@@ -18,7 +17,6 @@ OPEN_MINDMAP_TOOL = ToolDefinition(
     description="切换到思维导图工具页。",
     plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.OPEN_TOOL, ToolIntentTag.GENERATE_MINDMAP),
 )
 
 GENERATE_MINDMAP_TOOL = ToolDefinition(
@@ -27,7 +25,6 @@ GENERATE_MINDMAP_TOOL = ToolDefinition(
     description="切换到思维导图工具，并在需要时触发生成。",
     plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.GENERATE_MINDMAP,),
 )
 
 

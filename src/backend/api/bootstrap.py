@@ -12,16 +12,19 @@ from backend.agent.memory.dialog_history import DialogHistoryCompactor
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
 from backend.agent_graph.actions.action_dispatcher import ActionDispatcher
-from backend.agent_graph.runtime.graph import build_agent_graph, build_video_agent_graph
+from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.evidence.pinpoint import BGEReranker, VideoGraphPinpointService
-from backend.agent_graph.query.series_planner import LegacyStyleSeriesPlanner
-from backend.agent_graph.query.series_aggregator import LegacyStyleSeriesAggregator
+from backend.agent_graph.query.series_aggregator import SeriesAggregator
+from backend.agent_graph.query.series_planner import SeriesPlanner
 from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
 from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
-from backend.agent_graph.dspy.programs import AnswerSynthesisProgram, MemoryUpdateProgram
+from backend.agent_graph.dspy.programs import (
+    ActionAfterContentReplyProgram,
+    AnswerSynthesisProgram,
+    NoteSynthesisProgram,
+)
 from backend.agent_graph.dspy.program_loader import (
     load_or_create_classifier_program,
-    load_or_create_decompose_program,
     load_or_create_split_compare_program,
 )
 from backend.agent_graph.evidence.retrieval import MetaStateReader, SeriesRetrievalService
@@ -183,9 +186,6 @@ class LazyAgentRuntimeProvider:
                 get_video_summary = create_get_video_summary_handler(self._workspace)
                 get_video_tools = create_get_video_tools_handler(self._workspace)
                 get_video_transcript = create_get_video_transcript_handler(self._workspace)
-                decomposer_program = load_or_create_decompose_program(
-                    artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "decompose" / "program.json",
-                )
                 classifier_program = load_or_create_classifier_program(
                     artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "classifier" / "program.json",
                 )
@@ -203,11 +203,8 @@ class LazyAgentRuntimeProvider:
                     context_window_tokens=app_settings.agent_context.window_tokens,
                     compression_ratio=0.90,
                 )
-                series_planner = LegacyStyleSeriesPlanner(
-                    workspace=self._workspace,
-                    gateway=planner_gateway,
-                )
-                series_aggregator = LegacyStyleSeriesAggregator(gateway=planner_gateway)
+                series_aggregator = SeriesAggregator(gateway=planner_gateway)
+                series_planner = SeriesPlanner(workspace=self._workspace, gateway=planner_gateway)
                 retrieval_service = SeriesRetrievalService(
                     workspace=self._workspace,
                     db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
@@ -223,7 +220,8 @@ class LazyAgentRuntimeProvider:
                 )
                 meta_state_reader = MetaStateReader(workspace=self._workspace)
                 answer_program = AnswerSynthesisProgram()
-                memory_update_program = MemoryUpdateProgram()
+                note_program = NoteSynthesisProgram()
+                action_reply_program = ActionAfterContentReplyProgram()
                 tool_executor = _build_tool_executor(
                     list_series_videos=list_series_videos,
                     get_video_summary=get_video_summary,
@@ -232,7 +230,6 @@ class LazyAgentRuntimeProvider:
                 )
                 action_dispatcher = ActionDispatcher(tool_executor=tool_executor)
                 graph = build_agent_graph(
-                    decomposer_program=decomposer_program,
                     classifier_program=classifier_program,
                     compare_split_program=compare_split_program,
                     series_planner=series_planner,
@@ -242,37 +239,16 @@ class LazyAgentRuntimeProvider:
                     meta_state_reader=meta_state_reader,
                     action_dispatcher=action_dispatcher,
                     answer_program=answer_program,
+                    note_program=note_program,
+                    action_reply_program=action_reply_program,
                     series_aggregator=series_aggregator,
-                    memory_update_program=memory_update_program,
-                )
-                video_graph = build_video_agent_graph(
-                    classifier_program=classifier_program,
-                    compare_split_program=compare_split_program,
-                    retrieval_service=retrieval_service,
-                    meta_state_reader=meta_state_reader,
-                    action_dispatcher=action_dispatcher,
-                    answer_program=answer_program,
-                    memory_update_program=memory_update_program,
                 )
                 self._cached_agent_graph_service = AgentGraphService(
                     context_loader=self._context_loader,
                     graph=graph,
-                    video_graph=video_graph,
                     session_store=self.session_store,
-                    decomposer_program=decomposer_program,
-                    classifier_program=classifier_program,
-                    compare_split_program=compare_split_program,
-                    series_planner=series_planner,
-                    retrieval_service=retrieval_service,
-                    pinpoint_service=pinpoint_service,
-                    meta_state_reader=meta_state_reader,
-                    action_dispatcher=action_dispatcher,
-                    answer_program=answer_program,
                     series_aggregator=series_aggregator,
-                    memory_update_program=memory_update_program,
                     dialog_history_compactor=dialog_history_compactor,
-                    dialog_history_window_tokens=app_settings.agent_context.window_tokens,
-                    dialog_history_compression_ratio=0.90,
                 )
             return self._cached_agent_graph_service
 

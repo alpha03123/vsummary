@@ -74,10 +74,11 @@ class FakeChatService:
         self.last_context_override = None
         self.session_store = session_store
 
-    def run_with_context(self, *, session_id: str, user_message: str, context_override=None):
+    def run_turn(self, *, session_id: str, user_message: str, context_override=None, debug_trace=None):
         from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult
         from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 
+        del debug_trace
         self.last_context_override = context_override
         if self.session_store is not None and context_override is not None:
             self.session_store.append_turn(
@@ -94,8 +95,7 @@ class FakeChatService:
                 scope_type="video",
                 tool_calls=[],
                 reason=f"session={session_id}",
-                direct_response=f"已收到：{user_message}",
-                use_answerer=False,
+                use_answerer=True,
             ),
             tool_results=[
                 ToolExecutionResult(

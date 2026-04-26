@@ -1,4 +1,4 @@
-from backend.agent.schemas.tool_calls import ToolIntentTag, ToolName, ToolPlane
+from backend.agent.schemas.tool_calls import ToolName, ToolPlane
 from backend.agent.tools.catalog import (
     ALL_TOOL_DEFINITIONS,
     BUSINESS_READ_TOOL_DEFINITIONS,
@@ -6,10 +6,7 @@ from backend.agent.tools.catalog import (
     UI_ACTION_TOOL_DEFINITIONS,
     get_tool_definition,
     list_tool_definitions_for_plane,
-    list_tool_names_for_intent,
-    tool_is_concurrency_safe,
     tool_is_model_visible,
-    tool_requires_video_id,
 )
 from backend.agent.tools.context_access import (
     list_model_visible_tool_definitions_for_context,
@@ -43,11 +40,8 @@ __all__ = [
     "list_model_visible_tool_definitions_for_context",
     "list_tool_definitions_for_plane",
     "list_tool_definitions_for_context",
-    "list_tool_names_for_intent",
     "MODEL_VISIBLE_TOOL_PLANES",
     "tool_is_available_in_context",
-    "tool_is_concurrency_safe",
     "tool_is_model_visible",
-    "tool_requires_video_id",
     "UI_ACTION_TOOL_DEFINITIONS",
 ]

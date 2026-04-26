@@ -1,16 +1,12 @@
-from backend.agent_graph.query.models import AgentTask, CompareSplitDecision, DecomposeDecision, ExecutionDepth, SeriesQueryDecision
+from backend.agent_graph.query.models import CompareSplitDecision, ExecutionDepth, StructuredQueryPlan
 from backend.agent_graph.query.planning import backfill_query_plan_targets, build_structured_query_plan
-from backend.agent_graph.query.series_aggregator import LegacyStyleSeriesAggregator
-from backend.agent_graph.query.series_planner import LegacyStyleSeriesPlanner
+from backend.agent_graph.query.series_aggregator import SeriesAggregator
 
 __all__ = [
-    "AgentTask",
     "CompareSplitDecision",
-    "DecomposeDecision",
     "ExecutionDepth",
-    "LegacyStyleSeriesAggregator",
-    "LegacyStyleSeriesPlanner",
-    "SeriesQueryDecision",
+    "SeriesAggregator",
+    "StructuredQueryPlan",
     "backfill_query_plan_targets",
     "build_structured_query_plan",
 ]

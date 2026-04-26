@@ -5,9 +5,10 @@ import hashlib
 import json
 from pathlib import Path
 
+import lancedb
 from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.embeddings import MockEmbedding
-from llama_index.core.vector_stores import FilterCondition, MetadataFilter, MetadataFilters
+from llama_index.core.vector_stores import FilterCondition, FilterOperator, MetadataFilter, MetadataFilters
 from llama_index.vector_stores.lancedb import LanceDBVectorStore
 
 from backend.video_summary.infrastructure.settings import (
@@ -24,13 +25,13 @@ COMMON_METADATA_DEFAULTS: dict[str, object] = {
     "title": "",
     "source_type": "",
     "source_family": "",
-    "chapter_title": None,
+    "chapter_title": "",
     "start_seconds": None,
     "end_seconds": None,
-    "note_id": None,
-    "note_source": None,
-    "card_id": None,
-    "card_kind": None,
+    "note_id": "",
+    "note_source": "",
+    "card_id": "",
+    "card_kind": "",
 }
 
 
@@ -123,6 +124,7 @@ class SeriesRetrievalService:
             Document(text=document.text, metadata=document.metadata)
             for document in _build_documents(self._workspace)
         ]
+        _reset_lancedb_table(self._db_uri, INDEX_TABLE_NAME)
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
@@ -251,7 +253,16 @@ def _build_source_family_filters(
             elif tag == "cards":
                 families.append("cards")
         if families:
-            return [MetadataFilter(key="source_family", value=family) for family in dict.fromkeys(families)]
+            unique_families = list(dict.fromkeys(families))
+            if len(unique_families) == 1:
+                return [MetadataFilter(key="source_family", value=unique_families[0])]
+            return [
+                MetadataFilter(
+                    key="source_family",
+                    value=unique_families,
+                    operator=FilterOperator.IN,
+                )
+            ]
     if target_source == "summary":
         return [MetadataFilter(key="source_family", value="summary")]
     if target_source == "transcript":
@@ -479,7 +490,19 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
 def _with_common_metadata(metadata: dict[str, object]) -> dict[str, object]:
     merged = dict(COMMON_METADATA_DEFAULTS)
     merged.update(metadata)
+    for key in ("chapter_title", "note_id", "note_source", "card_id", "card_kind"):
+        if merged.get(key) is None:
+            merged[key] = ""
     return merged
+
+
+def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
+    connection = lancedb.connect(db_uri)
+    try:
+        connection.drop_table(table_name)
+    except Exception:
+        # table 不存在时直接忽略，后续会重建
+        pass
 
 
 def _expand_transcript_hit(

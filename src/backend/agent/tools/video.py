@@ -6,7 +6,6 @@ from backend.agent.schemas.tool_calls import (
     ToolDefinition,
     ToolContextTag,
     ToolExecutionResult,
-    ToolIntentTag,
     ToolName,
     ToolPlane,
     VideoSeekCall,
@@ -18,7 +17,6 @@ OPEN_VIDEO_TOOL = ToolDefinition(
     description="切换到视频预览工具页。",
     plane=ToolPlane.UI_ACTION,
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.OPEN_TOOL,),
 )
 
 VIDEO_SEEK_TOOL = ToolDefinition(
@@ -28,7 +26,6 @@ VIDEO_SEEK_TOOL = ToolDefinition(
     plane=ToolPlane.UI_ACTION,
     arguments={"seek_seconds": "需要跳转到的视频秒数"},
     contexts=(ToolContextTag.VIDEO,),
-    intents=(ToolIntentTag.SEEK_VIDEO,),
 )
 
 

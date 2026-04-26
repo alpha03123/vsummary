@@ -25,20 +25,8 @@ class ToolName(str, Enum):
 
 
 class ToolContextTag(str, Enum):
-    SERIES_DISCOVERY = "series_discovery"
-    SERIES_INSPECTION = "series_inspection"
+    SERIES = "series"
     VIDEO = "video"
-
-
-class ToolIntentTag(str, Enum):
-    ANSWER_QUESTION = "answer_question"
-    SERIES_ANSWER = "series_answer"
-    SERIES_LOCATE = "series_locate"
-    OPEN_TOOL = "open_tool"
-    SEEK_VIDEO = "seek_video"
-    SAVE_NOTE = "save_note"
-    GENERATE_OVERVIEW = "generate_overview"
-    GENERATE_MINDMAP = "generate_mindmap"
 
 
 class ToolPlane(str, Enum):
@@ -51,12 +39,8 @@ class ToolDefinition(BaseModel):
     title: str
     description: str
     plane: ToolPlane
-    concurrency_safe: bool = False
     arguments: dict[str, str] = Field(default_factory=dict)
-    batch_tag: str | None = None
     contexts: tuple[ToolContextTag, ...] = ()
-    intents: tuple[ToolIntentTag, ...] = ()
-    requires_video_id: bool = False
 
 
 class ListSeriesVideosCall(BaseModel):
