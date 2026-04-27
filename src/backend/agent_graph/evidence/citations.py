@@ -98,18 +98,16 @@ def _append_summary_items(citations: list[CitationReference], items: object, nex
     for item in items:
         if not isinstance(item, dict):
             continue
-        source_type = str(item.get("source_type", "")).strip() or "summary"
-        if source_type != "summary":
-            continue
         video_id = str(item.get("video_id", "")).strip()
         title = str(item.get("title", "")).strip() or video_id
         if not video_id:
             continue
+        source_type = str(item.get("source_type", "")).strip() or "summary"
         citations.append(
             CitationReference(
                 id=str(next_id),
                 label=title,
-                source_type="summary",
+                source_type=source_type,
                 search_scope="summary",
                 slots=[
                     CitationSlot(

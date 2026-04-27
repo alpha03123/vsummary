@@ -38,7 +38,6 @@ export function WorkspacePreviewView({ previewSource, previewSeekRequest }) {
     <div className="flex flex-col gap-4">
       <div className="workspace-muted-panel rounded-3xl border p-4">
         <p className="mb-2 text-xs font-bold uppercase text-stone-500 dark:text-stone-400">Video Preview</p>
-        <p className="text-sm text-stone-600 dark:text-stone-400">你可以从聊天中的证据卡片跳到这里，并直接定位到对应时间点。</p>
         {previewSeekRequest ? (
           <div className="mt-3 rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
             <p className="font-semibold">

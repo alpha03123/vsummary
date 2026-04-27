@@ -56,6 +56,11 @@ class SeriesRetrievalService:
         self._index: VectorStoreIndex | None = None
         self._signature: tuple[tuple[str, ...], tuple[str, ...]] | None = None
 
+    def invalidate(self) -> None:
+        self._index = None
+        self._signature = None
+        _reset_lancedb_table(self._db_uri, INDEX_TABLE_NAME)
+
     def search(
         self,
         *,

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useWorkspaceController } from "./features/workspace/model/useWorkspaceController";
 import { WorkspacePage } from "./features/workspace/ui/WorkspacePage";
 import { buildWorkspacePageModel } from "./features/workspace/ui/workspacePageModel";
-import { MotionShowcase } from "./tests/MotionShowcase";
+import { MotionShowcase } from "./dev/MotionShowcase";
 
 export function App() {
   const controller = useWorkspaceController();

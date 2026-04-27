@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "src").exists() and (parent / "scripts").exists()
+)
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
@@ -145,3 +149,4 @@ def summarize_event_order(raw_events: list[dict[str, object]]) -> list[str]:
             continue
         order.append(event_type)
     return order
+

@@ -7,6 +7,8 @@
 @layer base {
   :root {
     color-scheme: light;
+    --workspace-accent-color: 24 24 27;
+    /* zinc-900 */
     --workspace-shell-bg:
       radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 28%),
       radial-gradient(circle at top right, rgba(37, 99, 235, 0.06), transparent 24%),
@@ -30,24 +32,37 @@
 
   .dark {
     color-scheme: dark;
-    --workspace-shell-bg:
-      linear-gradient(180deg, #000000 0%, #050505 100%);
-    --workspace-panel-bg: rgba(10, 10, 10, 0.92);
-    --workspace-panel-border: rgba(255, 255, 255, 0.08);
-    --workspace-panel-shadow: 0 0 0 rgba(0, 0, 0, 0);
-    --workspace-muted-bg: rgba(20, 20, 20, 0.96);
-    --workspace-muted-border: rgba(255, 255, 255, 0.08);
-    --workspace-toolbar-bg: rgba(8, 8, 8, 0.92);
-    --workspace-hero-bg: linear-gradient(180deg, rgba(18, 18, 18, 0.96), rgba(10, 10, 10, 0.96));
-    --workspace-elevated-bg: rgba(28, 28, 28, 0.96);
-    --workspace-input-bg: rgba(20, 20, 20, 0.98);
-    --workspace-accent-bg: linear-gradient(180deg, rgba(20, 20, 20, 0.98), rgba(16, 16, 16, 0.98));
-    --workspace-accent-border: rgba(0, 112, 243, 0.48);
-    --workspace-glow: 0 0 0 rgba(0, 0, 0, 0);
+    --workspace-accent-color: 99 102 241;
+    /* indigo-500, similar to Linear's #5E6AD2 */
+    --workspace-shell-bg: #0F0F10;
+    --workspace-panel-bg: #151516;
+    --workspace-panel-border: rgba(255, 255, 255, 0.06);
+    --workspace-panel-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    --workspace-muted-bg: #111112;
+    --workspace-muted-border: rgba(255, 255, 255, 0.04);
+    --workspace-toolbar-bg: rgba(21, 21, 22, 0.95);
+    --workspace-hero-bg: #0F0F10;
+    --workspace-elevated-bg: #1A1A1C;
+    --workspace-input-bg: #0B0B0C;
+    --workspace-accent-bg: #1E1E24;
+    --workspace-accent-border: rgba(99, 102, 241, 0.2);
+    --workspace-glow: none;
   }
 }
 
 @layer base {
+
+  html,
+  body,
+  #root {
+    transition:
+      background-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   body {
     @apply text-stone-900 font-sans antialiased overflow-hidden m-0;
     background: var(--workspace-shell-bg);
@@ -60,12 +75,14 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
   }
+
   #root {
     @apply h-screen flex flex-col relative z-0;
   }
-  
+
   /* Reset button and input fonts to inherit */
-  button, input {
+  button,
+  input {
     font: inherit;
   }
 
@@ -110,9 +127,41 @@
     background: rgba(148, 163, 184, 0.32);
     background-clip: padding-box;
   }
+
+  .theme-transitioning,
+  .theme-transitioning *,
+  .theme-transitioning *::before,
+  .theme-transitioning *::after {
+    transition:
+      background-color 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      color 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      border-color 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      background 520ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      fill 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      stroke 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      opacity 320ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  }
 }
 
 @layer components {
+
+  .workspace-panel,
+  .workspace-muted-panel,
+  .workspace-toolbar-surface,
+  .workspace-hero-surface,
+  .workspace-elevated-panel,
+  .workspace-accent-panel,
+  .workspace-input-surface {
+    transition:
+      background-color 260ms ease,
+      border-color 260ms ease,
+      color 260ms ease,
+      box-shadow 260ms ease,
+      backdrop-filter 260ms ease,
+      background 320ms ease;
+  }
+
   .workspace-panel {
     background: var(--workspace-panel-bg);
     border-color: var(--workspace-panel-border);
@@ -199,22 +248,18 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.5),
-      transparent
-    );
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.5),
+        transparent);
     animation: workspace-shimmer 1.3s linear infinite;
   }
 
   .dark .motion-shimmer::after {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.08),
-      transparent
-    );
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.08),
+        transparent);
   }
 }
 
@@ -223,6 +268,7 @@
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -234,6 +280,7 @@
     opacity: 0;
     transform: translateY(6px) scale(0.985);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -245,6 +292,7 @@
     opacity: 0;
     transform: translateX(12px) translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0) translateY(0);
@@ -255,9 +303,11 @@
   0% {
     transform: scale(1);
   }
+
   40% {
     transform: scale(0.97);
   }
+
   100% {
     transform: scale(1);
   }
@@ -270,6 +320,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .motion-fade-up,
   .motion-fade-scale,
   .motion-slide-in,
@@ -321,7 +372,7 @@
   padding-left: 36px;
 }
 
-.css-tree > ul > li {
+.css-tree>ul>li {
   padding-left: 0;
 }
 
@@ -332,7 +383,8 @@
   top: 50%;
   width: 36px;
   height: 2px;
-  background: #d6d3d1; /* stone-300 */
+  background: #d6d3d1;
+  /* stone-300 */
   transform: translateY(-50%);
 }
 
@@ -342,7 +394,7 @@
   background: #44403c;
 }
 
-.css-tree > ul > li::before {
+.css-tree>ul>li::before {
   display: none;
 }
 
@@ -364,7 +416,7 @@
   bottom: 50%;
 }
 
-.css-tree > ul > li::after {
+.css-tree>ul>li::after {
   display: none;
 }
 
@@ -385,7 +437,7 @@
   transform: translateY(-50%);
 }
 
-.css-tree li:not(:has(> ul)) > .css-tree-node-wrapper::before {
+.css-tree li:not(:has(> ul))>.css-tree-node-wrapper::before {
   display: none;
 }
 
@@ -393,11 +445,11 @@
   line-height: 1.75;
 }
 
-.markdown-body > *:first-child {
+.markdown-body>*:first-child {
   margin-top: 0;
 }
 
-.markdown-body > *:last-child {
+.markdown-body>*:last-child {
   margin-bottom: 0;
 }
 
@@ -437,7 +489,7 @@
   padding-left: 1.3rem;
 }
 
-.markdown-body li + li {
+.markdown-body li+li {
   margin-top: 0.3rem;
 }
 

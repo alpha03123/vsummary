@@ -39,6 +39,9 @@ class GenerateVideoSummaryFromLibrary:
             )
             reporter.completed("AI 概况已生成")
             return self._workspace.get_video_summary(series_id, video_id)
-        except Exception as error:
+        except RuntimeError as error:
             reporter.failed(str(error))
             raise
+        except Exception as error:
+            reporter.failed(str(error))
+            raise RuntimeError(str(error)) from error

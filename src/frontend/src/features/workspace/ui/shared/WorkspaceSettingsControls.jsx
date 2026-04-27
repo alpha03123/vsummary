@@ -14,8 +14,8 @@ export function WorkspaceToggleSwitch({ checked, onChange }) {
   return (
     <button
       type="button"
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0070f3]/50 focus-visible:ring-offset-2 ${
-        checked ? "bg-[#0b6bff]" : "bg-stone-300 dark:bg-stone-600"
+      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 ${
+        checked ? "bg-accent" : "bg-stone-300 dark:bg-stone-600"
       }`}
       onClick={onChange}
       aria-pressed={checked}
@@ -66,7 +66,7 @@ export function WorkspaceTextInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className={`rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-[#0b6bff] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
+      className={`rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     />
   );
 }

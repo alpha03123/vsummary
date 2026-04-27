@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import dspy
 
-from backend.agent_graph.dspy.programs import ClassifySeriesQuery, normalize_classifier_prediction
+from backend.agent_graph.dspy.programs import (
+    ClassifySeriesQuery,
+    _render_available_actions_for_classifier,
+    normalize_classifier_prediction,
+)
+from backend.agent.memory.context import AgentContext
 
 
 class SeriesQueryClassifierModule(dspy.Module):
@@ -19,6 +24,13 @@ class SeriesQueryClassifierModule(dspy.Module):
         history_summary: str = "",
         history_selected_videos: list[dict[str, object]] | None = None,
     ):
+        context = AgentContext(
+            session_id=f"{scope_type}|{series_id or 'unknown'}|classifier",
+            scope_type=scope_type,
+            series_id=series_id or None,
+            video_id=video_id or None,
+        )
+        available_actions = _render_available_actions_for_classifier(context)
         return self.predict(
             user_message=user_message,
             scope_type=scope_type,
@@ -26,6 +38,7 @@ class SeriesQueryClassifierModule(dspy.Module):
             video_id=video_id,
             history_summary=history_summary,
             history_selected_videos=history_selected_videos or [],
+            available_actions=available_actions,
         )
 
     def run(

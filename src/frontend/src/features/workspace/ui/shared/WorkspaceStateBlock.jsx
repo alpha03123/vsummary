@@ -25,7 +25,7 @@ export function WorkspaceStateBlock({
     >
       <div className={`${centered ? "max-w-md" : "w-full"}`}>
         {loading ? (
-          <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 text-[#0070f3] shadow-sm dark:bg-stone-950/90">
+          <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 text-accent shadow-sm dark:bg-stone-950/90">
             <LoaderCircle size={20} strokeWidth={2.2} className="animate-spin" />
           </div>
         ) : null}

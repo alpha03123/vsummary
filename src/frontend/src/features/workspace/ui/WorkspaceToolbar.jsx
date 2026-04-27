@@ -46,7 +46,7 @@ export function WorkspaceToolbar({
         </button>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white text-black shadow-sm dark:bg-[#111111] dark:text-white border border-stone-200 dark:border-white/10">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10">
             <BookOpenText size={20} strokeWidth={2.1} />
           </div>
           <div>
@@ -58,7 +58,7 @@ export function WorkspaceToolbar({
       <div className="flex items-center gap-3">
         <button
           ref={settingsButtonRef}
-          className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-500 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-[#1c1c1c] hover:text-stone-900 dark:hover:text-white"}`}
+          className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-500 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"}`}
           onClick={onToggleSettingsPanel}
           title="Open Settings"
           aria-label="打开界面设置"

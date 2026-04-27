@@ -68,7 +68,10 @@ class GenerateVideoSummary:
         if self._transcript_enhancer is not None:
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
-            transcript = await self._transcript_enhancer.enhance(video, transcript)
+            try:
+                transcript = await self._transcript_enhancer.enhance(video, transcript)
+            except Exception as error:
+                raise RuntimeError(_build_llm_stage_error("AI 内容增强", error)) from error
             await self._artifact_store.save_enhanced_transcript(
                 transcript=transcript,
                 output_dir=output_dir,
@@ -82,6 +85,32 @@ class GenerateVideoSummary:
 
         if progress_reporter is not None:
             progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
-        summary_document = await self._summarizer.summarize(video, transcript)
+        try:
+            summary_document = await self._summarizer.summarize(video, transcript)
+        except Exception as error:
+            raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=output_dir)
         return summary_document
+
+
+def _build_llm_stage_error(stage_label: str, error: Exception) -> str:
+    if _contains_connection_failure(error):
+        return f"{stage_label}失败：无法连接到模型网关，请检查模型服务是否已启动，以及 provider settings 中的 Base URL 是否可用。"
+    return f"{stage_label}失败：{error}"
+
+
+def _contains_connection_failure(error: BaseException) -> bool:
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        message = str(current).lower()
+        if (
+            "connection refused" in message
+            or "connect call failed" in message
+            or "cannot connect to host" in message
+            or "connection error" in message
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False

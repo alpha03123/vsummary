@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useReducer } from "react";
 
 import {
+  checkBackendHealth,
   clearAgentSession,
   cancelFasterWhisperModelDownload,
   createVideoNote,
+  deleteSeries,
+  deleteVideoSource,
   deleteVideoNote,
   downloadFasterWhisperModel,
   generateVideoKnowledgeCards,
@@ -22,11 +25,18 @@ import {
   loadWorkspaceSettings,
   loadVideoTools,
   loadWorkspaceLibrary,
+  importLocalPlaygroundVideos,
+  importLocalSeries,
+  importLocalSeriesVideos,
   subscribeFasterWhisperModelDownloadProgress,
   subscribeVideoGenerationProgress,
   updateVideoNote,
   updateProviderSettings,
   updateWorkspaceSettings,
+  resolveBilibiliSeries,
+  resolveBilibiliVideo,
+  startVideoDownload,
+  subscribeVideoDownloadProgress,
 } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
 import {
@@ -69,10 +79,19 @@ import {
   updateChatSessionMetaForScope,
 } from "./workspaceState";
 
+const PLAYGROUND_SERIES_ID = "__playground__";
+const BACKEND_HEALTH_RETRY_DELAY_MS = 1000;
+
 function workspaceReducer(state, action) {
   switch (action.type) {
     case "workspace_loaded":
       return createWorkspaceLoadedState(action.library, state);
+    case "backend_health_ready":
+      return {
+        ...state,
+        backendReady: true,
+        error: "",
+      };
     case "library_home_selected":
       return createLibraryHomeState(state.library, state);
     case "workspace_settings_loaded":
@@ -129,11 +148,18 @@ function workspaceReducer(state, action) {
         generatingMindmapKey: null,
         generationProgress: null,
         generationSnapshot: null,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
         downloadingModelId: null,
         modelDownloadProgress: null,
         contextUsageLoading: false,
         error: action.message,
         fasterWhisperModelsLoading: false,
+      };
+    case "error_cleared":
+      return {
+        ...state,
+        error: "",
       };
     case "series_selected": {
       const chatBaseScopeKey = buildChatScopeKey("series", action.seriesId, null, "series-home");
@@ -171,6 +197,34 @@ function workspaceReducer(state, action) {
         contextUsageLoading: false,
       };
     }
+    case "playground_selected":
+      return {
+        ...state,
+        selectedSeriesId: PLAYGROUND_SERIES_ID,
+        selectedVideoId: null,
+        selectedContextType: "playground",
+        selectedToolId: "studio",
+        tools: null,
+        summary: null,
+        mindmap: null,
+        knowledgeCards: null,
+        knowledgeCardsFeedback: null,
+        notes: null,
+        selectedChapterId: null,
+        selectedNodeId: null,
+        previewSeekRequest: null,
+        generationProgress: null,
+        generationSnapshot: null,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
+        chatBaseScopeKey: null,
+        chatScopeKey: null,
+        chatMessages: [],
+        chatPending: false,
+        chatRecoveryLoading: false,
+        contextUsage: null,
+        contextUsageLoading: false,
+      };
     case "video_selected": {
       const chatBaseScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
       const chatSessionScope = resolveChatSessionsForScope(
@@ -197,6 +251,8 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
         chatBaseScopeKey,
         chatScopeKey,
         chatSessionIdsByScope: chatSessionScope.chatSessionIdsByScope,
@@ -239,6 +295,8 @@ function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
         chatBaseScopeKey,
         chatScopeKey,
         chatSessionIdsByScope: chatSessionScope.chatSessionIdsByScope,
@@ -316,20 +374,20 @@ function workspaceReducer(state, action) {
           action.feedbackMessage == null
             ? state.knowledgeCardsFeedback
             : {
-                tone: action.feedbackTone ?? "success",
-                message: action.feedbackMessage,
-              },
+              tone: action.feedbackTone ?? "success",
+              message: action.feedbackMessage,
+            },
         tools: state.tools == null
           ? state.tools
           : {
-              ...state.tools,
-              knowledgeCards: {
-                ...state.tools.knowledgeCards,
-                available: true,
-                generated: true,
-                status: "ready",
-              },
+            ...state.tools,
+            knowledgeCards: {
+              ...state.tools.knowledgeCards,
+              available: true,
+              generated: true,
+              status: "ready",
             },
+          },
       };
     case "knowledge_cards_cleared":
       return {
@@ -374,15 +432,15 @@ function workspaceReducer(state, action) {
         savingNote: false,
         notes: state.notes == null
           ? {
-              seriesId: action.seriesId,
-              videoId: action.videoId,
-              title: action.videoTitle,
-              notes: [action.note],
-            }
+            seriesId: action.seriesId,
+            videoId: action.videoId,
+            title: action.videoTitle,
+            notes: [action.note],
+          }
           : {
-              ...state.notes,
-              notes: [action.note, ...state.notes.notes],
-            },
+            ...state.notes,
+            notes: [action.note, ...state.notes.notes],
+          },
       };
     case "note_updated":
       return {
@@ -391,9 +449,9 @@ function workspaceReducer(state, action) {
         notes: state.notes == null
           ? state.notes
           : {
-              ...state.notes,
-              notes: state.notes.notes.map((note) => (note.id === action.note.id ? action.note : note)),
-            },
+            ...state.notes,
+            notes: state.notes.notes.map((note) => (note.id === action.note.id ? action.note : note)),
+          },
       };
     case "note_deleted":
       return {
@@ -402,9 +460,9 @@ function workspaceReducer(state, action) {
         notes: state.notes == null
           ? state.notes
           : {
-              ...state.notes,
-              notes: state.notes.notes.filter((note) => note.id !== action.noteId),
-            },
+            ...state.notes,
+            notes: state.notes.notes.filter((note) => note.id !== action.noteId),
+          },
       };
     case "chapter_selected":
       return {
@@ -516,29 +574,66 @@ function workspaceReducer(state, action) {
         tools: state.tools == null
           ? state.tools
           : {
-              ...state.tools,
-              overview: {
-                ...state.tools.overview,
-                generated: true,
-                status: "ready",
-              },
-              mindmap: {
-                ...state.tools.mindmap,
-                available: true,
-                generated: false,
-                status: "available",
-              },
-              knowledgeCards: {
-                ...state.tools.knowledgeCards,
-                available: true,
-                generated: false,
-                status: "available",
-              },
+            ...state.tools,
+            overview: {
+              ...state.tools.overview,
+              generated: true,
+              status: "ready",
             },
+            mindmap: {
+              ...state.tools.mindmap,
+              available: true,
+              generated: false,
+              status: "available",
+            },
+            knowledgeCards: {
+              ...state.tools.knowledgeCards,
+              available: true,
+              generated: false,
+              status: "available",
+            },
+          },
         generatingVideoKey: null,
         generationProgress: null,
         generationSnapshot: null,
       });
+    case "video_download_started":
+      return {
+        ...state,
+        downloadingVideoKey: buildVideoKey(action.seriesId, action.videoId),
+        videoDownloadProgress: 0,
+        library: updateVideoCardInLibrary(
+          state.library,
+          action.seriesId,
+          action.videoId,
+          (video) => ({
+            ...video,
+            status: "downloading",
+          }),
+        ),
+        error: "",
+      };
+    case "video_download_progress_updated":
+      return state.downloadingVideoKey !== buildVideoKey(action.seriesId, action.videoId)
+        ? state
+        : {
+            ...state,
+            videoDownloadProgress:
+              action.progress == null ? state.videoDownloadProgress : Math.max(0, Math.min(100, action.progress)),
+          };
+    case "video_download_completed":
+      return {
+        ...state,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
+        library: action.library,
+      };
+    case "video_download_failed":
+      return {
+        ...state,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
+      };
     case "mindmap_generation_started":
       return {
         ...state,
@@ -551,14 +646,14 @@ function workspaceReducer(state, action) {
         tools: state.tools == null
           ? state.tools
           : {
-              ...state.tools,
-              mindmap: {
-                ...state.tools.mindmap,
-                available: true,
-                generated: true,
-                status: "ready",
-              },
+            ...state.tools,
+            mindmap: {
+              ...state.tools.mindmap,
+              available: true,
+              generated: true,
+              status: "ready",
             },
+          },
         generatingMindmapKey: null,
       });
     case "chat_pending_cleared":
@@ -696,6 +791,24 @@ function appendChatThreadMessage(state, chatScopeKey, message, chatPending) {
   return applyChatThreadUpdate(state, chatScopeKey, [...currentMessages, message], chatPending);
 }
 
+function updateVideoCardInLibrary(library, seriesId, videoId, updater) {
+  if (!library) {
+    return library;
+  }
+
+  return {
+    ...library,
+    series: library.series.map((series) =>
+      series.id !== seriesId
+        ? series
+        : {
+            ...series,
+            videos: series.videos.map((video) => (video.id === videoId ? updater(video) : video)),
+          },
+    ),
+  };
+}
+
 function _resolveNextSessionTitle(chatSessionListsByScope, chatBaseScopeKey, sessionId, message) {
   const currentMeta = getChatSessionMetaForScope(chatSessionListsByScope, chatBaseScopeKey, sessionId);
   const currentTitle = currentMeta?.title ?? "";
@@ -784,6 +897,7 @@ function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
             "completed",
             event.payload?.duration_ms,
             event.payload?.usage ?? null,
+            Array.isArray(event.payload?.citations) ? event.payload.citations : null,
           ),
         ), false);
     default:
@@ -927,12 +1041,14 @@ function sumVisibleToolDurations(steps) {
 function appendStreamingAnswerDelta(messages, requestId, delta) {
   const currentContent = getMessageContent(messages, `assistant-${requestId}`);
   const currentUsage = messages.find((message) => message.id === `assistant-${requestId}`)?.usage ?? null;
+  const currentCitations = messages.find((message) => message.id === `assistant-${requestId}`)?.citations ?? null;
   return buildStreamingAnswerMessage(
     requestId,
     `${currentContent}${typeof delta === "string" ? delta : ""}`,
     "running",
     null,
     currentUsage,
+    currentCitations,
   );
 }
 
@@ -994,13 +1110,14 @@ function upsertThinkingStage(stages, nextStage) {
   return nextStages;
 }
 
-function buildStreamingAnswerMessage(requestId, content, status, durationMs, usage) {
+function buildStreamingAnswerMessage(requestId, content, status, durationMs, usage, citations = null) {
   return {
     id: `assistant-${requestId}`,
     role: "assistant",
     content,
     streamingStatus: status,
     usage,
+    citations,
     meta: status === "running"
       ? "Notebook Assistant • 输出中"
       : buildAssistantChatMeta(durationMs, usage),
@@ -1042,6 +1159,38 @@ export function useWorkspaceController() {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId = null;
+
+    const pollBackendHealth = async () => {
+      try {
+        await checkBackendHealth();
+        if (!cancelled) {
+          dispatch({ type: "backend_health_ready" });
+        }
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        timeoutId = window.setTimeout(pollBackendHealth, BACKEND_HEALTH_RETRY_DELAY_MS);
+      }
+    };
+
+    pollBackendHealth();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+
+    let cancelled = false;
 
     loadWorkspaceLibrary()
       .then((library) => {
@@ -1061,9 +1210,13 @@ export function useWorkspaceController() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [state.backendReady]);
 
   useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+
     let cancelled = false;
     dispatch({ type: "faster_whisper_models_loading_started" });
     loadFasterWhisperModels()
@@ -1084,9 +1237,13 @@ export function useWorkspaceController() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [state.backendReady]);
 
   useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+
     let cancelled = false;
 
     loadWorkspaceSettings()
@@ -1107,10 +1264,10 @@ export function useWorkspaceController() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [state.backendReady]);
 
   useEffect(() => {
-    if (!state.settingsPanelOpen) {
+    if (!state.backendReady || !state.settingsPanelOpen) {
       return;
     }
 
@@ -1139,7 +1296,23 @@ export function useWorkspaceController() {
     if (typeof document === "undefined") {
       return;
     }
-    document.documentElement.classList.toggle("dark", state.ui.theme === "dark");
+    const root = document.documentElement;
+    const shouldAnimate = root.dataset.workspaceThemeReady === "true";
+    if (shouldAnimate) {
+      root.classList.add("theme-transitioning");
+    }
+    root.classList.toggle("dark", state.ui.theme === "dark");
+    root.dataset.workspaceThemeReady = "true";
+    if (!shouldAnimate) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      root.classList.remove("theme-transitioning");
+    }, 560);
+    return () => {
+      window.clearTimeout(timeoutId);
+      root.classList.remove("theme-transitioning");
+    };
   }, [state.ui.theme]);
 
   useEffect(() => {
@@ -1425,6 +1598,10 @@ export function useWorkspaceController() {
     : null;
 
   function onSelectSeries(seriesId) {
+    if (seriesId === PLAYGROUND_SERIES_ID) {
+      dispatch({ type: "playground_selected" });
+      return;
+    }
     dispatch({ type: "series_selected", seriesId });
   }
 
@@ -1437,6 +1614,10 @@ export function useWorkspaceController() {
   }
 
   function onSelectSeriesContext() {
+    if (state.selectedSeriesId === PLAYGROUND_SERIES_ID) {
+      dispatch({ type: "playground_selected" });
+      return;
+    }
     dispatch({ type: "series_context_selected" });
   }
 
@@ -1943,6 +2124,167 @@ export function useWorkspaceController() {
     }
   }
 
+  async function onResolveLinkedSeries(url) {
+    try {
+      const rawSeries = await resolveBilibiliSeries(url);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      return rawSeries;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析 Bilibili URL 失败" });
+      throw error;
+    }
+  }
+
+  async function onResolvePlaygroundVideo(url) {
+    try {
+      const rawVideo = await resolveBilibiliVideo(url);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      return rawVideo;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析 Bilibili 视频失败" });
+      throw error;
+    }
+  }
+
+  async function onResolveSeriesVideo(url, seriesId) {
+    try {
+      const rawVideo = await resolveBilibiliVideo(url, seriesId);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      return rawVideo;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列添加外链视频失败" });
+      throw error;
+    }
+  }
+
+  async function onImportLocalSeries(seriesTitle, files) {
+    try {
+      const rawSeries = await importLocalSeries(seriesTitle, files);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      return rawSeries;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入本地系列失败" });
+      throw error;
+    }
+  }
+
+  async function onImportLocalPlaygroundVideos(files) {
+    try {
+      const rawVideos = await importLocalPlaygroundVideos(files);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      return rawVideos;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入 Playground 视频失败" });
+      throw error;
+    }
+  }
+
+  async function onImportSeriesVideos(seriesId, files) {
+    try {
+      const rawVideos = await importLocalSeriesVideos(seriesId, files);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      return rawVideos;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列导入视频失败" });
+      throw error;
+    }
+  }
+
+  async function onDeleteSeries() {
+    const seriesId = state.selectedSeriesId;
+    if (!seriesId) {
+      return;
+    }
+    try {
+      await deleteSeries(seriesId);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      dispatch({ type: "library_home_selected" });
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "删除系列失败" });
+    }
+  }
+
+  async function onDeleteCurrentVideo() {
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    if (!seriesId || !videoId) {
+      return;
+    }
+    try {
+      await deleteVideoSource(seriesId, videoId);
+      const library = await loadWorkspaceLibrary();
+      dispatch({ type: "workspace_loaded", library });
+      if (seriesId === PLAYGROUND_SERIES_ID) {
+        const nextSeries = findSeriesById(library, PLAYGROUND_SERIES_ID);
+        const nextVideo = nextSeries?.videos?.[0] ?? null;
+        if (nextVideo) {
+          dispatch({ type: "video_selected", seriesId: PLAYGROUND_SERIES_ID, videoId: nextVideo.id });
+        } else {
+          dispatch({ type: "playground_selected" });
+        }
+        return;
+      }
+      dispatch({ type: "series_context_selected" });
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "删除视频失败" });
+    }
+  }
+
+  async function onDownloadVideo(video) {
+    if (!state.selectedSeriesId || !video?.id) {
+      return;
+    }
+
+    const seriesId = state.selectedSeriesId;
+    const videoId = video.id;
+    dispatch({ type: "video_download_started", seriesId, videoId });
+
+    try {
+      await startVideoDownload(seriesId, videoId);
+      const unsubscribe = subscribeVideoDownloadProgress(seriesId, videoId, async (snapshot) => {
+        if (snapshot.status === "running" || snapshot.status === "completed") {
+          dispatch({
+            type: "video_download_progress_updated",
+            seriesId,
+            videoId,
+            progress: snapshot.progress,
+          });
+        }
+
+        if (snapshot.status === "completed") {
+          unsubscribe();
+          const library = await loadWorkspaceLibrary();
+          dispatch({ type: "video_download_completed", seriesId, videoId, library });
+        }
+
+        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+          unsubscribe();
+          dispatch({ type: "video_download_failed", seriesId, videoId });
+          if (snapshot.status === "failed") {
+            dispatch({
+              type: "load_failed",
+              message: snapshot.error ?? "视频下载失败",
+            });
+          }
+        }
+      });
+    } catch (error) {
+      dispatch({ type: "video_download_failed", seriesId, videoId });
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "视频下载失败" });
+    }
+  }
+
+  function onClearError() {
+    dispatch({ type: "error_cleared" });
+  }
+
   return {
     state,
     ui: state.ui,
@@ -1999,6 +2341,16 @@ export function useWorkspaceController() {
     onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload,
     onResetSettings,
+    onClearError,
+    onResolveLinkedSeries,
+    onResolvePlaygroundVideo,
+    onResolveSeriesVideo,
+    onImportLocalSeries,
+    onImportLocalPlaygroundVideos,
+    onImportSeriesVideos,
+    onDeleteSeries,
+    onDeleteCurrentVideo,
+    onDownloadVideo,
   };
 }
 

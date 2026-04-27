@@ -42,6 +42,8 @@ from backend.agent.tools.overview import execute_generate_overview, execute_open
 from backend.agent.tools.series import execute_open_series_home, execute_open_series_overview
 from backend.agent.tools.video import execute_open_video, execute_video_seek
 from backend.api.settings_service import ApiSettingsService
+from backend.bilibili.bilibili_downloader import BilibiliDownloader
+from backend.bilibili.bilibili_meta_service import BilibiliMetaService
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -95,6 +97,11 @@ class ApiContainer:
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
+    bilibili_meta_service: BilibiliMetaService
+    bilibili_downloader: BilibiliDownloader
+    video_download_progress_tracker: InMemoryProgressTracker
+    video_workspace: FileSystemVideoWorkspace
+    invalidate_agent_workspace_indexes: Callable[[], None]
 
 
 def build_api_container(
@@ -144,6 +151,11 @@ def build_api_container(
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
+        bilibili_meta_service=BilibiliMetaService(),
+        bilibili_downloader=BilibiliDownloader(),
+        video_download_progress_tracker=InMemoryProgressTracker(),
+        video_workspace=workspace,
+        invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
     )
 
 class LazyAgentRuntimeProvider:
@@ -155,6 +167,7 @@ class LazyAgentRuntimeProvider:
         self._lock = Lock()
         self._cached_agent_graph_service: AgentGraphService | None = None
         self._cached_context_budget_service: AgentContextBudgetService | None = None
+        self._cached_retrieval_service: SeriesRetrievalService | None = None
 
     def get_agent_service(self) -> AgentGraphService:
         return self.get_agent_graph_service()
@@ -210,6 +223,7 @@ class LazyAgentRuntimeProvider:
                     db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
                     root_dir=self._root_dir,
                 )
+                self._cached_retrieval_service = retrieval_service
                 pinpoint_service = VideoGraphPinpointService(
                     workspace=self._workspace,
                     semantic_scorer=BGEReranker(device=app_settings.agent_retrieval.embedding_device),
@@ -251,6 +265,11 @@ class LazyAgentRuntimeProvider:
                     dialog_history_compactor=dialog_history_compactor,
                 )
             return self._cached_agent_graph_service
+
+    def invalidate_workspace_indexes(self) -> None:
+        with self._lock:
+            if self._cached_retrieval_service is not None:
+                self._cached_retrieval_service.invalidate()
 
     def get_context_budget_service(self) -> AgentContextBudgetService:
         with self._lock:

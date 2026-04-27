@@ -18,7 +18,7 @@ export function createWelcomeChatMessages() {
       id: "assistant-welcome",
       role: "assistant",
       content:
-        "你好！我已经准备好当前知识库。你可以问我视频在讲什么、某个知识点在哪个时间点，或者让我打开概况、导图和视频工具。",
+        "你好！你可以询问视频有关内容，也可以让我替你记录笔记",
       meta: "Notebook Assistant • Just now",
     },
   ];
@@ -342,6 +342,8 @@ export function createInitialWorkspaceState() {
     generatingMindmapKey: null,
     generationProgress: null,
     generationSnapshot: null,
+    downloadingVideoKey: null,
+    videoDownloadProgress: null,
     downloadingModelId: null,
     modelDownloadProgress: null,
     toolsLoading: false,
@@ -368,6 +370,7 @@ export function createInitialWorkspaceState() {
     contextUsage: null,
     contextUsageLoading: false,
     settingsPanelOpen: false,
+    backendReady: false,
     error: "",
     loading: true,
   };

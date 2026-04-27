@@ -16,6 +16,8 @@ class SeriesView:
     id: str
     title: str
     videos: list["VideoCardView"]
+    is_linked: bool = False
+    source_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,10 @@ class VideoCardView:
     source_name: str
     processed: bool
     status: str
+    is_linked: bool = False
+    bilibili_bvid: str = ""
+    bilibili_page: int = 0
+    source_url: str = ""
 
 
 @dataclass(frozen=True)

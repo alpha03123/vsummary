@@ -51,7 +51,7 @@ export function WorkspaceKnowledgeCardsView({
         <button
           type="button"
           onClick={onGenerateKnowledgeCards}
-          className="inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0070f3] dark:bg-white dark:text-black"
+          className="inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent dark:bg-white dark:text-black"
         >
           <BrainCircuit size={16} strokeWidth={2.2} />
           生成知识卡片

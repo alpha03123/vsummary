@@ -1,186 +1,112 @@
 # vsummary
 
-一个面向 BYOK 场景的开源智能总结工具，聚焦音视频内容的本地转写、结构化总结与后续多模态扩展。
+一个本地视频知识库工具。把视频放进来，自动转写成文字、生成 AI 概况，然后可以对着视频内容提问、做笔记、生成思维导图和知识卡片。
 
-## 方向
+---
 
-- 本地优先，用户自带模型或 API Key
+## 核心特性
+
+- **完全本地化转写**：使用 `faster-whisper` 在本地进行视频转写，隐私安全，无需消耗 API 流量。
+- **AI 知识增强**：基于转写文本生成思维导图、知识卡片和多维度的 AI 总结。
+- **对话式检索**：直接对着视频库提问，系统会根据视频内容精准定位并回答。
+- **B 站合集导入**：支持一键解析并下载 Bilibili 合集视频。
+
+---
+
+##  准备环境
+
+在启动之前，请确保已安装以下工具：
+
+| 工具 | 用途 | 下载地址 |
+|------|------|----------|
+| Python 3.11 | 运行后端服务 | https://python.org |
+| Node.js 18+ | 运行前端界面 | https://nodejs.org |
+| FFmpeg | 视频音频提取 | https://ffmpeg.org（需加入系统 PATH） |
 
 
-## 目录结构
+---
 
-```text
-vsummary/
-├─ config/         公开配置
-├─ data/           本地运行数据，不提交到 Git
-├─ docs/           项目文档、设计草图、调研记录
-├─ scripts/        构建、开发、样例执行脚本
-├─ videos/         本地视频输入，按 series 分组，不提交到 Git
-├─ workspace/      本地处理中间产物与总结结果，不提交到 Git
-├─ src/
-│  ├─ backend/
-│  │  ├─ api/                  FastAPI 入口与组装
-│  │  └─ video_summary/        视频总结主能力
-│  │     ├─ domain/            领域模型
-│  │     ├─ generation/        转写与总结生成流程
-│  │     ├─ library/           series / videos 浏览与生成流程
-│  │     └─ infrastructure/    外部依赖实现与文件系统适配
-│  └─ frontend/                Vite + React 前端工程
-├─ tests/          测试代码
-└─ sample/         历史样例目录，已不作为主工作流
-```
+##  快速开始
 
-## 架构说明
+### 1. 安装依赖
 
-- `src/backend/video_summary/domain` 只放视频总结领域模型
-- `src/backend/video_summary/generation` 负责转写与总结生成
-- `src/backend/video_summary/library` 负责 series 浏览、视频选择与生成入口
-- `src/backend/video_summary/infrastructure` 实现 ffmpeg、faster-whisper、OpenAI 与文件系统适配
-- `src/backend/api` 是后端对外入口与依赖组装层
-- `src/frontend` 保持为独立前端工程，不和后端实现细节混放
+在项目根目录下执行：
 
-## 模型与依赖
+```bat
+# 创建并激活虚拟环境
+python -m venv .venv
+.venv\Scripts\activate
 
-- 本地模型统一放在 `data/models/`
-- 该目录不会进入版本控制
-- `faster-whisper` 模型下载到 `data/models/faster-whisper/<model_id>/`
+# 安装后端依赖 (包含 yt-dlp, faster-whisper 等)
+pip install -r requirements.txt
 
-## 配置约定
-
-- [config/settings.toml](E:/gittools/self/video_include/config/settings.toml) 用于保存公开配置和工作区设置
-- `.env` 用于保存本地密钥，不提交到 Git
-- [.env.example](E:/gittools/self/video_include/.env.example) 只提供环境变量模板
-
-推荐分工：
-
-- `settings.toml`：转写设备、模型质量，以及前端工作区设置
-- `.env`：`OPENAI_API_KEY` 等敏感凭证
-
-## 后端环境
-
-- 后端命令统一使用项目虚拟环境里的 [`.venv\Scripts\python.exe`](E:/gittools/self/video_include/.venv/Scripts/python.exe)
-- 想进入一个已经修正好 `python` 和 `rg` 的 PowerShell，可执行：
-
-```powershell
-powershell -NoExit -ExecutionPolicy Bypass -File .\scripts\project-shell.ps1
-```
-
-- 只想临时执行一条 Python 命令，也可以走项目入口脚本：
-
-```powershell
-.\scripts\python.ps1 -V
-```
-
-## 前端开发
-
-- 前端工程位于 [src/frontend](E:/gittools/self/video_include/src/frontend)
-- 首次进入前端目录后安装依赖：
-
-```powershell
-cd src/frontend
+# 安装前端依赖
+cd src\frontend
 npm install
+cd ..\..
 ```
 
-- 本地开发：
+### 2. 配置说明
 
-```powershell
+项目包含两个核心配置文件：
+
+#### A. 密钥配置 (`.env`)
+复制并重命名 `.env.example` 为 `.env`，填入你的 AI 模型信息（用于对话和总结）：
+```dotenv
+OPENAI_API_KEY=sk-你的密钥
+OPENAI_PROVIDER=openai_compatible
+OPENAI_BASE_URL=https://你的供应商地址/v1
+OPENAI_MODEL=gpt-4o
+```
+
+#### B. 运行配置 (`config/settings.toml`)
+该文件控制本地转写模型的行为（初次运行会自动生成默认配置）：
+- **GPU 加速**：若有 NVIDIA 显卡，将 `[asr.faster_whisper]` 下的 `device` 改为 `"cuda"`。
+- **模型大小**：默认为 `large-v3-turbo`（约 1.5GB），若配置较低可改为 `small` 或 `base`。
+
+### 3. 一键启动
+
+直接双击根目录下的 `start.bat`。
+
+启动后，访问浏览器：**[http://127.0.0.1:4173](http://127.0.0.1:4173)**
+
+---
+
+## 手动启动方法 
+
+如果 `start.bat` 无法运行，请分别在两个终端执行：
+
+**启动后端：**
+```bat
+.venv\Scripts\activate
+cd src
+python -m uvicorn backend.api.app:app --host 127.0.0.1 --port 8001
+```
+
+**启动前端：**
+```bat
+cd src\frontend
 npm run dev
 ```
 
-- 生产构建：
+---
 
-```powershell
-npm run build
-```
+## 数据
 
-## 联调开发
+- **视频文件**：放在 `videos/` 目录下。
+- **处理结果**：所有的转写、总结、笔记都存储在 `workspace/` 目录下。
+- **本地模型**：自动下载的模型文件存储在 `data/models/` 目录下。
+- **隐私说明**：除了向 LLM 提供商发送文本进行总结/对话外，所有音频处理和原始数据均保留在本地。
 
-- 一键同时启动前后端：
+---
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
-```
+## 常见问题
 
-- 如果当前就在 `scripts/` 目录中：
+**Q: 第一次运行生成概况很慢？**
+A: 首次运行需要下载约 1.5GB 的转写模型，取决于网速。下载完成后，后续转写速度将大幅提升。
 
-```powershell
-.\dev.cmd
-```
+**Q: 前端页面显示“连接后端失败”？**
+A: 请检查后端终端窗口是否有红色报错。通常是因为端口 8001 被占用或 `.env` 里的 API Key 格式不正确。
 
-- 前端开发服务器默认地址：
-  - `http://127.0.0.1:4173`
-- 后端开发接口默认地址：
-  - `http://127.0.0.1:8001`
-
-## 测试
-
-- 常规后端回归只跑 `unittest` 测试组，不包含真实模型对话脚本
-- 运行后端快速测试组：
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py
-```
-
-- 查看所有后端测试分组：
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py --list
-```
-
-- 按职责运行指定测试组：
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py agent
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py api
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py summary
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py workspace
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py all
-```
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py tests.test_api
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py agent workspace
-.\.venv\Scripts\python.exe .\scripts\run_backend_tests.py tests\test_generate_summary.py
-```
-
-推荐约定：
-
-- 日常改 Agent：跑 `agent`
-- 改文件系统、状态跟踪：跑 `workspace`
-- 改总结生成流程：跑 `summary`
-- 改 FastAPI 接口或组装：跑 `api`
-- 只改某一个测试文件：直接传 `tests.test_xxx` 或 `tests\test_xxx.py`
-- 一次涉及多个职责：把多个目标并列传进去
-- 提交前做一次完整检查：跑 `all`
-
-## 真实 Agent 对话回归
-
-- `scripts/run_agent_series_reply.py`
-- `scripts/run_agent_manual_cases.py`
-
-这两类脚本会真实调用模型，耗时和成本都更高，因此项目里将它们视为：
-
-- 低优先级回归
-- 仅手动触发
-- 不纳入默认日常测试
-- 不纳入提交前常规检查
-
-手动确认要跑时，再显式追加 `--manual`：
-
-```powershell
-.\.venv\Scripts\python.exe .\scripts\run_agent_series_reply.py --manual
-.\.venv\Scripts\python.exe .\scripts\run_agent_manual_cases.py --manual
-```
-
-## 当前 API
-
-- `GET /api/health`
-- `GET /api/videos`
-- `GET /api/videos/{series_id}/{video_id}/summary`
-- `POST /api/videos/{series_id}/{video_id}/generate`
-
-## 使用方式
-
-- 把视频放进 `videos/<series>/`
-- 前端会把 `videos` 下的一级目录识别为 series
-- 选择某个视频后，如果还没有处理结果，可以点击 `Generate Video`
+**Q: 如何更换转写语言？**
+A: 修改 `config/settings.toml` 中的 `language = "zh"` 为你需要的语言代码。

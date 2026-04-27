@@ -28,6 +28,10 @@ class VideoCardResponse(BaseModel):
     source_name: str
     processed: bool
     status: str
+    is_linked: bool = False
+    bilibili_bvid: str = ""
+    bilibili_page: int = 0
+    source_url: str = ""
 
     @classmethod
     def from_view(cls, video: VideoCardView) -> "VideoCardResponse":
@@ -37,6 +41,10 @@ class VideoCardResponse(BaseModel):
             source_name=video.source_name,
             processed=video.processed,
             status=video.status,
+            is_linked=video.is_linked,
+            bilibili_bvid=video.bilibili_bvid,
+            bilibili_page=video.bilibili_page,
+            source_url=video.source_url,
         )
 
 
@@ -44,6 +52,8 @@ class SeriesResponse(BaseModel):
     id: str
     title: str
     videos: list[VideoCardResponse]
+    is_linked: bool = False
+    source_url: str = ""
 
 
 class WorkspaceResponse(BaseModel):
@@ -67,10 +77,21 @@ class VideoLibraryResponse(BaseModel):
                     id=series.id,
                     title=series.title,
                     videos=[VideoCardResponse.from_view(video) for video in series.videos],
+                    is_linked=series.is_linked,
+                    source_url=series.source_url,
                 )
                 for series in library.series
             ],
         )
+
+
+class ResolveBilibiliSeriesRequest(BaseModel):
+    url: str
+
+
+class ResolveBilibiliVideoRequest(BaseModel):
+    url: str
+    target_series_id: str | None = None
 
 
 class WorkspaceToolResponse(BaseModel):

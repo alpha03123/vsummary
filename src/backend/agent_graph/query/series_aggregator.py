@@ -90,9 +90,14 @@ class SeriesAggregator:
                 content=(
                     "你是学习助手。请严格基于执行结果和计划里的 selected_videos 回答。"
                     "不要编造不存在的视频、时间点或课程内容。"
-                    "如果证据不足，要明确说明不足。"
                     "优先直接回答用户问题，语气自然，不要写成检索器回执。"
-                    "如果提供了 citations，请在需要引用证据的句子后用 [1]、[2] 这种递增编号标注。"
+                    "只回答用户明确问到的层级，不要主动扩展到未被询问的课程编排、后续章节、进阶/入门划分或证据边界说明。"
+                    "除非用户明确追问证据不足、推断边界或排除原因，否则不要主动补充“当前证据不足以继续推断”“不能再往下判断”这类元说明。"
+                    "如果提供了 citations，正文里每个关键判断句都必须在句末标注对应的 [n]。"
+                    "不要把所有引用集中放到段尾、文末或最后一句。"
+                    "只有真正使用了哪条证据，才标对应编号。"
+                    "如果一句话同时依赖多条证据，可以连续标注如 [1][2]。"
+                    "请优先模仿下面这种格式：JManus 更偏入门演示型框架 [1]，AgentScope 在核心架构能力上更强 [2]。"
                     "不要在正文直接输出 video_id、start_seconds、end_seconds、matched_text 这类内部字段。"
                     "只有在用户明确追问边界时，才解释哪些内容被排除以及原因。"
                     "可以引用 citation 对应的证据，但把具体跳转细节留给 citations 元数据，不要写进正文。"
@@ -104,7 +109,7 @@ class SeriesAggregator:
                     f"对话记忆:\n{history_block or '(none)'}\n\n"
                     f"计划:\n{json.dumps(query_plan, ensure_ascii=False, indent=2)}\n\n"
                     f"执行结果:\n{execution_block}\n\n"
-                    f"可用引用:\n{citation_block}\n\n"
+                    f"引用目录（回答中只能使用这些编号，并按示例格式内联到句子里）:\n{citation_block}\n\n"
                     f"用户问题:\n{user_message}"
                 ),
             ),
@@ -292,14 +297,13 @@ def _render_citation_briefs(citations: list[object]) -> str:
         target_type = getattr(slot_one, "target_type", "")
         if target_type == "video":
             lines.append(
-                f"[{getattr(citation, 'id', '')}] transcript | label={getattr(citation, 'label', '')} | "
-                f"time={getattr(slot_one, 'start_seconds', None)}-{getattr(slot_one, 'end_seconds', None)} | "
-                f"text={_first_slot_text(slots)}"
+                f"[{getattr(citation, 'id', '')}] {getattr(citation, 'label', '')}："
+                f"{_first_slot_text(slots)}"
             )
             continue
         lines.append(
-            f"[{getattr(citation, 'id', '')}] {getattr(citation, 'source_type', '')} | "
-            f"label={getattr(citation, 'label', '')} | text={getattr(slot_one, 'text', '') or ''}"
+            f"[{getattr(citation, 'id', '')}] {getattr(citation, 'label', '')}："
+            f"{getattr(slot_one, 'text', '') or ''}"
         )
     return "\n".join(lines) if lines else "(none)"
 

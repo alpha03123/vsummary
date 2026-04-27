@@ -4,12 +4,14 @@ Thumbs.db
 .idea/
 .vscode/
 .claude/
+.python-version
 
 # Python
 __pycache__/
 *.pyc
 .venv/
 venv/
+.pytest_cache/
 
 # Node
 node_modules/
@@ -21,13 +23,24 @@ build/
 tmp/
 /temp/
 /sample/
+
+# Local data (user videos, workspace products, models)
 /videos/
 /workspace/
+/data/
 .worktrees/
 
-# Local data
-/data/
+# Tests (local dev only)
+/tests/
+
+# Local dev scripts (environment-specific)
+/scripts/
+
+# Frontend tests
+src/frontend/src/**/*.test.jsx
+src/frontend/src/**/*.test.js
 
 # Local env
 .env
 .env.*
+!.env.example

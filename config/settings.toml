@@ -10,7 +10,7 @@ compute_type = "float16"
 transcription_mode = "accurate"
 
 [workspace_ui]
-theme = "light"
+theme = "dark"
 show_takeaways = true
 
 [debug]
@@ -31,4 +31,3 @@ embedding_provider = "local_huggingface"
 embedding_model = "BAAI/bge-base-zh-v1.5"
 embedding_device = "cuda"
 embedding_batch_size = 8
-

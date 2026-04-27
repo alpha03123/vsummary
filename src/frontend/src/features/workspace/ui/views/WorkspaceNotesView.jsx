@@ -123,7 +123,7 @@ export function WorkspaceNotesView({
               type="button"
               onClick={handleCreateNote}
               disabled={savingNote || !draftTitle.trim() || !draftContent.trim()}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0070f3] hover:shadow-md hover:shadow-blue-500/20 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-[#0070f3] dark:hover:text-white"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white"
             >
               {savingNote ? <LoaderCircle size={16} className="animate-spin" /> : <PencilLine size={16} />}
               保存笔记
@@ -157,7 +157,7 @@ export function WorkspaceNotesView({
                 <button
                   onClick={handleSaveEdit}
                   disabled={savingNote || !editingTitle.trim() || !editingContent.trim()}
-                  className="rounded-full bg-stone-900 px-4 py-1.5 text-xs font-bold text-white transition hover:bg-[#0070f3] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+                  className="rounded-full bg-stone-900 px-4 py-1.5 text-xs font-bold text-white transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
                 >
                   保存修改
                 </button>
@@ -191,13 +191,13 @@ export function WorkspaceNotesView({
                 value={editingTitle}
                 onChange={(e) => setEditingTitle(e.target.value)}
                 placeholder="笔记标题"
-                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-lg font-bold text-stone-900 outline-none focus:border-[#0070f3] focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-lg font-bold text-stone-900 outline-none focus:border-accent focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
               />
               <textarea
                 value={editingContent}
                 onChange={(e) => setEditingContent(e.target.value)}
                 placeholder="笔记内容"
-                className="min-h-[240px] w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900 outline-none focus:border-[#0070f3] focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
+                className="min-h-[240px] w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900 outline-none focus:border-accent focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
               />
             </div>
           ) : (
@@ -233,7 +233,7 @@ export function WorkspaceNotesView({
         </div>
         <button 
           onClick={() => setViewState("create")} 
-          className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0070f3] hover:shadow-md hover:shadow-blue-500/20 dark:bg-white dark:text-black dark:hover:bg-[#0070f3] dark:hover:text-white"
+          className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white"
         >
           <Plus size={16} /> 记笔记
         </button>
@@ -245,7 +245,7 @@ export function WorkspaceNotesView({
             <article 
               key={note.id} 
               onClick={() => openDetail(note)}
-              className="group cursor-pointer rounded-2xl border border-stone-200/60 bg-white p-5 transition-all hover:border-[#0070f3]/40 hover:shadow-md hover:shadow-blue-500/5 dark:border-stone-800/60 dark:bg-stone-950 dark:hover:border-[#0070f3]/40"
+              className="group cursor-pointer rounded-2xl border border-stone-200/60 bg-white p-5 transition-all hover:border-accent/40 hover:shadow-md hover:shadow-accent/5 dark:border-stone-800/60 dark:bg-stone-950 dark:hover:border-accent/40"
             >
               <div className="flex items-center justify-between gap-4">
                 <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>

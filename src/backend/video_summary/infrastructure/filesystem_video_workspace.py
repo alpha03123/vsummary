@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -27,6 +28,10 @@ from backend.video_summary.library.views import (
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 
+PLAYGROUND_SERIES_ID = "__playground__"
+LINKED_SERIES_META_FILE = "linked_series.json"
+SERIES_META_FILE = "series_meta.json"
+
 
 class FileSystemVideoWorkspace:
     def __init__(self, root_dir: Path) -> None:
@@ -42,18 +47,50 @@ class FileSystemVideoWorkspace:
         )
 
     def list_series(self) -> list[SeriesView]:
-        if not self._videos_dir.exists():
-            return []
+        local_series: dict[str, SeriesView] = {}
 
-        return [
-            SeriesView(
-                id=series_dir.name,
-                title=_to_title(series_dir.name),
-                videos=self._list_videos_for_series(series_dir),
+        if self._videos_dir.exists():
+            for series_dir in sorted(self._videos_dir.iterdir()):
+                if not series_dir.is_dir():
+                    continue
+                series_title = self._read_series_title(series_dir.name) or _to_title(series_dir.name)
+                local_series[series_dir.name] = SeriesView(
+                    id=series_dir.name,
+                    title=series_title,
+                    videos=self._list_videos_for_series(series_dir),
+                )
+
+        if self._workspace_dir.exists():
+            for ws_dir in sorted(self._workspace_dir.iterdir()):
+                if not ws_dir.is_dir():
+                    continue
+                meta_path = ws_dir / LINKED_SERIES_META_FILE
+                if not meta_path.exists():
+                    continue
+                series_id = ws_dir.name
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                local_series[series_id] = SeriesView(
+                    id=series_id,
+                    title=str(meta.get("title", _to_title(series_id))),
+                    videos=self._list_videos_for_linked_series(
+                        series_id=series_id,
+                        linked_meta=meta,
+                        local_video_dir=self._videos_dir / series_id,
+                    ),
+                    is_linked=series_id != PLAYGROUND_SERIES_ID,
+                    source_url=str(meta.get("source_url", "")),
+                )
+
+        if PLAYGROUND_SERIES_ID not in local_series:
+            local_series[PLAYGROUND_SERIES_ID] = SeriesView(
+                id=PLAYGROUND_SERIES_ID,
+                title="Playground",
+                videos=[],
+                is_linked=False,
+                source_url="",
             )
-            for series_dir in sorted(self._videos_dir.iterdir())
-            if series_dir.is_dir()
-        ]
+
+        return list(local_series.values())
 
     def get_video_source(self, series_id: str, video_id: str) -> VideoSourceView | None:
         series_dir = self._videos_dir / series_id
@@ -327,6 +364,48 @@ class FileSystemVideoWorkspace:
             ai_todo="当前已支持 AI 切换概况、知识卡片、笔记和视频预览，并可定位时间点或整理笔记。",
         )
 
+    def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> SeriesView:
+        series_id = _normalize_series_id(title)
+        if series_id == PLAYGROUND_SERIES_ID:
+            raise ValueError("Playground 请使用单独的“添加 Playground 视频”入口。")
+        series_dir = self._videos_dir / series_id
+        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if series_dir.exists() or linked_meta_path.exists():
+            raise ValueError(f"系列已存在：{series_id}")
+
+        try:
+            series_dir.mkdir(parents=True, exist_ok=False)
+            self._write_series_title(series_id, title.strip())
+            self._copy_video_streams(series_dir=series_dir, files=files)
+            return SeriesView(
+                id=series_id,
+                title=title.strip(),
+                videos=self._list_videos_for_series(series_dir),
+            )
+        except Exception:
+            if series_dir.exists():
+                shutil.rmtree(series_dir)
+            meta_path = self._workspace_dir / series_id / SERIES_META_FILE
+            if meta_path.exists():
+                meta_path.unlink()
+            raise
+
+    def import_local_playground_videos(self, *, files: list[tuple[str, object]]) -> list[VideoCardView]:
+        series_dir = self._videos_dir / PLAYGROUND_SERIES_ID
+        series_dir.mkdir(parents=True, exist_ok=True)
+        imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
+        return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
+
+    def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[VideoCardView]:
+        if series_id == PLAYGROUND_SERIES_ID:
+            return self.import_local_playground_videos(files=files)
+        if not self._series_exists(series_id):
+            raise ValueError(f"系列不存在：{series_id}")
+        series_dir = self._videos_dir / series_id
+        series_dir.mkdir(parents=True, exist_ok=True)
+        imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
+        return [self._build_local_video_card(series_id, path) for path in imported_paths]
+
     def _list_videos_for_series(self, series_dir: Path) -> list[VideoCardView]:
         videos = [path for path in sorted(series_dir.iterdir()) if _is_video_file(path)]
         stems = [path.stem for path in videos]
@@ -336,18 +415,201 @@ class FileSystemVideoWorkspace:
                 f"Series '{series_dir.name}' contains duplicate video stems: {', '.join(duplicate_stems)}"
             )
 
-        return [
-            VideoCardView(
-                id=video_path.stem,
-                title=video_path.stem,
-                source_name=video_path.name,
-                processed=(self._workspace_dir / series_dir.name / video_path.stem / "summary.json").exists(),
-                status="ready"
-                if (self._workspace_dir / series_dir.name / video_path.stem / "summary.json").exists()
-                else "pending",
+        return [self._build_local_video_card(series_dir.name, video_path) for video_path in videos]
+
+    def _list_videos_for_linked_series(
+        self,
+        *,
+        series_id: str,
+        linked_meta: dict[str, object],
+        local_video_dir: Path,
+    ) -> list[VideoCardView]:
+        cards: list[VideoCardView] = []
+        consumed_video_ids: set[str] = set()
+        local_paths_by_stem = {
+            path.stem: path
+            for path in sorted(local_video_dir.iterdir())
+            if local_video_dir.exists() and _is_video_file(path)
+        } if local_video_dir.exists() else {}
+        for item in linked_meta.get("videos", []):
+            if not isinstance(item, dict):
+                continue
+            bvid = str(item.get("bvid", "")).strip()
+            if not bvid:
+                continue
+            page = int(item.get("page", 1) or 1)
+            title = str(item.get("title", bvid))
+            source_url = str(item.get("source_url", ""))
+            video_id = bvid if page == 1 else f"{bvid}_p{page}"
+            consumed_video_ids.add(video_id)
+
+            local_file = local_paths_by_stem.get(video_id)
+
+            if local_file is None:
+                cards.append(
+                    VideoCardView(
+                        id=video_id,
+                        title=title,
+                        source_name=f"{video_id}.mp4",
+                        processed=False,
+                        status="linked",
+                        is_linked=True,
+                        bilibili_bvid=bvid,
+                        bilibili_page=page,
+                        source_url=source_url,
+                    )
+                )
+                continue
+
+            summary_exists = (self._workspace_dir / series_id / video_id / "summary.json").exists()
+            cards.append(
+                VideoCardView(
+                    id=video_id,
+                    title=title,
+                    source_name=local_file.name,
+                    processed=summary_exists,
+                    status="ready" if summary_exists else "pending",
+                    is_linked=False,
+                    bilibili_bvid=bvid,
+                    bilibili_page=page,
+                    source_url=source_url,
+                )
             )
-            for video_path in videos
-        ]
+        for video_id, local_path in local_paths_by_stem.items():
+            if video_id in consumed_video_ids:
+                continue
+            cards.append(self._build_local_video_card(series_id, local_path))
+        return cards
+
+    def _build_local_video_card(self, series_id: str, video_path: Path) -> VideoCardView:
+        processed = (self._workspace_dir / series_id / video_path.stem / "summary.json").exists()
+        return VideoCardView(
+            id=video_path.stem,
+            title=video_path.stem,
+            source_name=video_path.name,
+            processed=processed,
+            status="ready" if processed else "pending",
+        )
+
+    def _copy_video_streams(self, *, series_dir: Path, files: list[tuple[str, object]]) -> list[Path]:
+        normalized_files = _normalize_import_files(files)
+        existing_stems = {path.stem for path in series_dir.iterdir() if _is_video_file(path)} if series_dir.exists() else set()
+        incoming_stems = [Path(filename).stem for filename, _ in normalized_files]
+        duplicate_stems = sorted({stem for stem in incoming_stems if incoming_stems.count(stem) > 1})
+        if duplicate_stems:
+            raise ValueError(f"导入文件存在重复视频名：{', '.join(duplicate_stems)}")
+        conflicting_stems = sorted(existing_stems.intersection(incoming_stems))
+        if conflicting_stems:
+            raise ValueError(f"目标目录中已存在同名视频：{', '.join(conflicting_stems)}")
+
+        copied_paths: list[Path] = []
+        for filename, stream in normalized_files:
+            target_path = series_dir / filename
+            if target_path.exists():
+                raise ValueError(f"目标目录中已存在文件：{filename}")
+            if hasattr(stream, "seek"):
+                stream.seek(0)
+            with target_path.open("wb") as handle:
+                shutil.copyfileobj(stream, handle)
+            copied_paths.append(target_path)
+        return copied_paths
+
+    def save_linked_series_meta(self, series_id: str, meta: dict[str, object]) -> None:
+        output_dir = self._workspace_dir / series_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / LINKED_SERIES_META_FILE).write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def get_linked_series_meta(self, series_id: str) -> dict[str, object] | None:
+        meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if not meta_path.exists():
+            return None
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+
+    def delete_linked_series(self, series_id: str, *, delete_videos: bool = False) -> None:
+        meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if meta_path.exists():
+            meta_path.unlink()
+        if delete_videos:
+            local_dir = self._videos_dir / series_id
+            if local_dir.exists():
+                shutil.rmtree(local_dir)
+
+    def delete_series(self, series_id: str) -> bool:
+        if series_id == PLAYGROUND_SERIES_ID:
+            raise ValueError("Playground 不能整体删除，请按视频删除。")
+
+        removed = False
+        local_dir = self._videos_dir / series_id
+        workspace_dir = self._workspace_dir / series_id
+
+        if local_dir.exists():
+            shutil.rmtree(local_dir)
+            removed = True
+
+        if workspace_dir.exists():
+            shutil.rmtree(workspace_dir)
+            removed = True
+
+        return removed
+
+    def delete_video(self, series_id: str, video_id: str) -> bool:
+        removed = False
+        local_dir = self._videos_dir / series_id
+        if local_dir.exists():
+            matches = [path for path in local_dir.iterdir() if _is_video_file(path) and path.stem == video_id]
+            for match in matches:
+                match.unlink()
+                removed = True
+
+        linked_meta = self.get_linked_series_meta(series_id)
+        if linked_meta is not None:
+            original_videos = linked_meta.get("videos", [])
+            if isinstance(original_videos, list):
+                remaining_videos = [
+                    item
+                    for item in original_videos
+                    if not (
+                        isinstance(item, dict)
+                        and (
+                            item.get("bvid") if int(item.get("page", 1) or 1) == 1 else f"{item.get('bvid')}_p{int(item.get('page', 1) or 1)}"
+                        ) == video_id
+                    )
+                ]
+                if len(remaining_videos) != len(original_videos):
+                    linked_meta["videos"] = remaining_videos
+                    self.save_linked_series_meta(series_id, linked_meta)
+                    removed = True
+
+        output_dir = self._workspace_dir / series_id / video_id
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+            removed = True
+
+        return removed
+
+    def _series_exists(self, series_id: str) -> bool:
+        return (self._videos_dir / series_id).exists() or (self._workspace_dir / series_id).exists()
+
+    def _read_series_title(self, series_id: str) -> str | None:
+        meta_path = self._workspace_dir / series_id / SERIES_META_FILE
+        if not meta_path.exists():
+            return None
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        title = payload.get("title")
+        if not isinstance(title, str) or not title.strip():
+            return None
+        return title.strip()
+
+    def _write_series_title(self, series_id: str, title: str) -> None:
+        output_dir = self._workspace_dir / series_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / SERIES_META_FILE).write_text(
+            json.dumps({"title": title}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     def _get_video_output_dir(self, series_id: str, video_id: str) -> Path:
         return self._workspace_dir / series_id / video_id
@@ -389,6 +651,44 @@ class FileSystemVideoWorkspace:
 
 def _is_video_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
+
+
+def _normalize_series_id(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("系列名称不能为空。")
+    if normalized in {".", ".."}:
+        raise ValueError("系列名称不合法。")
+    if any(char in normalized for char in '<>:"/\\|?*'):
+        raise ValueError('系列名称不能包含 <>:"/\\\\|?* 这些字符。')
+    if normalized.endswith(" ") or normalized.endswith("."):
+        raise ValueError("系列名称不能以空格或句点结尾。")
+    reserved = {
+        "con", "prn", "aux", "nul",
+        *(f"com{index}" for index in range(1, 10)),
+        *(f"lpt{index}" for index in range(1, 10)),
+    }
+    if normalized.lower() in reserved:
+        raise ValueError("系列名称不能使用系统保留字。")
+    return normalized
+
+
+def _normalize_import_files(files: list[tuple[str, object]]) -> list[tuple[str, object]]:
+    if not files:
+        raise ValueError("至少选择一个视频文件。")
+    normalized: list[tuple[str, object]] = []
+    for filename, stream in files:
+        path = Path(filename or "")
+        if not path.name:
+            raise ValueError("存在缺少文件名的导入项。")
+        if not _is_video_suffix(path.suffix):
+            raise ValueError(f"不支持的视频格式：{path.name}")
+        normalized.append((path.name, stream))
+    return normalized
+
+
+def _is_video_suffix(suffix: str) -> bool:
+    return suffix.lower() in VIDEO_SUFFIXES
 
 
 def _to_title(raw_value: str) -> str:

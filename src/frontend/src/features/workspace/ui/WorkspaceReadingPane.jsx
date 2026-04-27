@@ -41,16 +41,13 @@ const WorkspaceSeriesHomeView = lazy(() =>
     default: module.WorkspaceSeriesHomeView,
   })),
 );
-const WorkspaceSeriesOverviewView = lazy(() =>
-  import("./views/WorkspaceSeriesOverviewView").then((module) => ({
-    default: module.WorkspaceSeriesOverviewView,
+
+const WorkspaceChatManagementView = lazy(() =>
+  import("./views/WorkspaceChatManagementView").then((module) => ({
+    default: module.WorkspaceChatManagementView,
   })),
 );
-const WorkspaceSeriesProgressView = lazy(() =>
-  import("./views/WorkspaceSeriesProgressView").then((module) => ({
-    default: module.WorkspaceSeriesProgressView,
-  })),
-);
+
 const WorkspaceStudioHomeView = lazy(() =>
   import("./views/WorkspaceStudioHomeView").then((module) => ({
     default: module.WorkspaceStudioHomeView,
@@ -60,6 +57,7 @@ const WorkspaceStudioHomeView = lazy(() =>
 export function WorkspaceReadingPane({
   ui,
   tools,
+  chat,
   summary,
   mindmap,
   knowledgeCards,
@@ -93,6 +91,7 @@ export function WorkspaceReadingPane({
 }) {
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
+  const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
 
@@ -107,38 +106,19 @@ export function WorkspaceReadingPane({
           />
         ) : (
           <div key={`${selectedContextType}:${selectedToolId}:${selectedVideo?.id ?? activeSeries.id}`} className="motion-fade-scale flex h-full min-h-0 flex-col">
-            <header className="mb-5 flex shrink-0 flex-col gap-5 border-b border-stone-200/80 pb-5 dark:border-stone-800">
+            <header className="mb-5 flex shrink-0 flex-col gap-5 border-b border-stone-200/80 pb-5 dark:border-white/5">
               {isStudioHome ? (
                 <WorkspaceHomeHeader
                   eyebrow="Studio"
-                  title={summary?.title ?? selectedVideo?.title}
-                  description="选择一个工具进入专门页面，进入后会隐藏其他卡片。"
-                >
-                  <WorkspaceToolGrid
-                    items={Object.entries(TOOL_TILES).map(([toolId, meta]) => ({
-                      id: toolId,
-                      meta,
-                      disabled: getToolState(tools, toolId)?.available === false,
-                      hint: describeToolState(toolId, getToolState(tools, toolId)),
-                    }))}
-                    onSelect={onSelectTool}
-                  />
-                </WorkspaceHomeHeader>
+                  title={isPlaygroundHome ? activeSeries.title : summary?.title ?? selectedVideo?.title}
+                  description={isPlaygroundHome ? "从左侧选择一个视频，进入对应的单视频工具页。" : "选择下方任意卡片进入独立工具页"}
+                />
               ) : isSeriesHome ? (
                 <WorkspaceHomeHeader
                   eyebrow="Series Home"
                   title={activeSeries.title}
-                  description="你现在看的不是某条视频，而是整个 series。先选系列工具，再决定是否切到单视频。"
-                >
-                  <WorkspaceToolGrid
-                    items={Object.entries(SERIES_TOOL_TILES).map(([toolId, meta]) => ({
-                      id: toolId,
-                      meta,
-                      hint: "series 级工具",
-                    }))}
-                    onSelect={onSelectTool}
-                  />
-                </WorkspaceHomeHeader>
+                  description="你可以在当前对话栏询问关于整个系列的问题。"
+                />
               ) : (
                 <WorkspaceToolHeader
                   meta={currentToolMeta}
@@ -147,7 +127,7 @@ export function WorkspaceReadingPane({
               )}
             </header>
 
-            <div className="relative min-h-0 flex-1">
+            <div className="relative min-h-0 flex-1 overflow-y-auto">
               {toolsLoading ? (
                 <WorkspaceStateBlock
                   title="读取工具状态"
@@ -158,10 +138,49 @@ export function WorkspaceReadingPane({
 
               {!toolsLoading ? (
                 <Suspense fallback={<WorkspaceToolLoadingState toolName={currentToolMeta.label} />}>
-                  {isSeriesHome ? <WorkspaceSeriesHomeView activeSeries={activeSeries} /> : null}
-                  {selectedToolId === "series-overview" ? <WorkspaceSeriesOverviewView activeSeries={activeSeries} /> : null}
-                  {selectedToolId === "series-progress" ? <WorkspaceSeriesProgressView activeSeries={activeSeries} /> : null}
-                  {isStudioHome ? <WorkspaceStudioHomeView /> : null}
+                  {isSeriesHome ? (
+                    <div className="flex flex-col gap-6">
+                      <WorkspaceToolGrid
+                        items={Object.entries(SERIES_TOOL_TILES).map(([toolId, meta]) => ({
+                          id: toolId,
+                          meta,
+                          hint: "series 级工具",
+                        }))}
+                        onSelect={onSelectTool}
+                      />
+                      <WorkspaceSeriesHomeView activeSeries={activeSeries} />
+                    </div>
+                  ) : null}
+                  {selectedToolId === "series-mindmap" ? (
+                    <WorkspaceStateBlock
+                      eyebrow="Coming Soon"
+                      title="全局思维导图"
+                      description="Constructing..."
+                      dashed
+                    />
+                  ) : null}
+                  {isStudioHome ? (
+                    <div className="pb-8 pt-2">
+                      {isPlaygroundHome ? (
+                        <WorkspaceStateBlock
+                          eyebrow="Playground"
+                          title="选择一个 Playground 视频"
+                          description="Playground 不提供 series 级工具。左侧每个视频都会作为一次独立的单视频分析进入。"
+                          dashed
+                        />
+                      ) : (
+                        <WorkspaceToolGrid
+                          items={Object.entries(TOOL_TILES).map(([toolId, meta]) => ({
+                            id: toolId,
+                            meta,
+                            disabled: getToolState(tools, toolId)?.available === false,
+                            hint: describeToolState(toolId, getToolState(tools, toolId)),
+                          }))}
+                          onSelect={onSelectTool}
+                        />
+                      )}
+                    </div>
+                  ) : null}
                   {selectedToolId === "overview" ? (
                     <WorkspaceOverviewView
                       ui={ui}
@@ -194,6 +213,9 @@ export function WorkspaceReadingPane({
                       onGenerateKnowledgeCards={onGenerateKnowledgeCards}
                       onOpenCard={onOpenCard}
                     />
+                  ) : null}
+                  {selectedToolId === "chat-management" || selectedToolId === "series-chat-management" ? (
+                    <WorkspaceChatManagementView chat={chat} />
                   ) : null}
                   {selectedToolId === "notes" ? (
                     <WorkspaceNotesView

@@ -14,6 +14,14 @@ export async function loadWorkspaceLibrary() {
   return toWorkspaceLibrary(await fetchJson("/api/videos"));
 }
 
+export async function checkBackendHealth() {
+  const response = await fetch("/api/health");
+  if (!response.ok) {
+    throw new Error(`health check failed: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function loadWorkspaceSettings() {
   const payload = await fetchJson("/api/settings");
   return {
@@ -278,14 +286,14 @@ export async function loadAgentSessionRecovery(sessionId, context) {
     messageCount: typeof payload.message_count === "number" ? payload.message_count : 0,
     messages: Array.isArray(payload.messages)
       ? payload.messages.map((message, index) => ({
-          id: `recovered-${payload.session_id}-${index}`,
-          role: typeof message.role === "string" ? message.role : "assistant",
-          content: typeof message.content === "string" ? message.content : "",
-          meta: buildRecoveredMeta(
-            typeof message.role === "string" ? message.role : "assistant",
-            typeof message.created_at === "string" ? message.created_at : "",
-          ),
-        }))
+        id: `recovered-${payload.session_id}-${index}`,
+        role: typeof message.role === "string" ? message.role : "assistant",
+        content: typeof message.content === "string" ? message.content : "",
+        meta: buildRecoveredMeta(
+          typeof message.role === "string" ? message.role : "assistant",
+          typeof message.created_at === "string" ? message.created_at : "",
+        ),
+      }))
       : [],
   };
 }
@@ -462,4 +470,107 @@ function buildRecoveredMeta(role, createdAt) {
   const actor = role === "user" ? "You" : "Notebook Assistant";
   const suffix = createdAt ? "已恢复" : "恢复记录";
   return `${actor} • ${suffix}`;
+}
+
+export async function resolveBilibiliSeries(url) {
+  return fetchJson("/api/linked/bilibili/resolve/series", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
+
+export async function resolveBilibiliVideo(url, targetSeriesId = null) {
+  return fetchJson("/api/linked/bilibili/resolve/video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, target_series_id: targetSeriesId }),
+  });
+}
+
+export async function importLocalSeries(seriesTitle, files) {
+  const payload = new FormData();
+  payload.append("series_title", seriesTitle);
+  for (const file of files) {
+    payload.append("files", file);
+  }
+  return fetchJson("/api/import/local/series", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function importLocalPlaygroundVideos(files) {
+  const payload = new FormData();
+  for (const file of files) {
+    payload.append("files", file);
+  }
+  return fetchJson("/api/import/local/playground", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function importLocalSeriesVideos(seriesId, files) {
+  const payload = new FormData();
+  for (const file of files) {
+    payload.append("files", file);
+  }
+  return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteSeries(seriesId) {
+  return fetchJson(`/api/series/${encodeURIComponent(seriesId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteVideoSource(seriesId, videoId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function startVideoDownload(seriesId, videoId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
+    method: "POST",
+  });
+}
+
+export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
+  const source = new EventSource(
+    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/progress`,
+  );
+  let terminal = false;
+
+  source.onmessage = (event) => {
+    const snapshot = parseProgressMessage(event.data);
+    listener(snapshot);
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      terminal = true;
+      source.close();
+    }
+  };
+
+  source.onerror = () => {
+    if (terminal) {
+      return;
+    }
+    listener({
+      status: "failed",
+      stage: "failed",
+      progress: null,
+      detail: null,
+      error: "视频下载进度连接已中断",
+    });
+    source.close();
+  };
+
+  return () => {
+    terminal = true;
+    source.close();
+  };
 }

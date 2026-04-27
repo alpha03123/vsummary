@@ -14,7 +14,7 @@ export function WorkspaceSeriesOverviewView({ activeSeries }) {
             <div key={video.id} className="workspace-elevated-panel rounded-2xl border px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <strong className="text-sm font-semibold text-stone-900 dark:text-stone-100">{video.title}</strong>
-                <span className={`text-xs font-semibold ${video.processed ? "text-[#0070f3] dark:text-[#4da3ff]" : "text-stone-500"}`}>
+                <span className={`text-xs font-semibold ${video.processed ? "text-accent dark:text-accent" : "text-stone-500"}`}>
                   {video.processed ? "已处理" : "未处理"}
                 </span>
               </div>

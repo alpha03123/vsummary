@@ -11,7 +11,7 @@ export function WorkspaceToolGrid({ items, onSelect }) {
             type="button"
             onClick={() => onSelect(id)}
             disabled={disabled}
-            className={`motion-stagger group rounded-[1.5rem] p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-white dark:hover:bg-[#1f1f1f] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:hover:shadow-[0_10px_24px_rgba(0,0,0,0.26)] ${meta.palette} ${
+            className={`motion-stagger group rounded-[1.5rem] p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-white dark:hover:bg-neutral-800 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:hover:shadow-[0_10px_24px_rgba(0,0,0,0.26)] ${meta.palette} ${
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
             }`}
             style={{ "--stagger-index": index }}

@@ -43,6 +43,7 @@ export function buildWorkspacePageModel(controller) {
       modelDownloadProgress: controller.modelDownloadProgress,
       progress: controller.state.generationProgress,
       snapshot: controller.state.generationSnapshot,
+      videoDownloadProgress: controller.state.videoDownloadProgress ?? null,
     },
     actions: {
       selectSeries: controller.onSelectSeries,
@@ -64,6 +65,16 @@ export function buildWorkspacePageModel(controller) {
       downloadFasterWhisperModel: controller.onDownloadFasterWhisperModel,
       cancelFasterWhisperModelDownload: controller.onCancelFasterWhisperModelDownload,
       resetSettings: controller.onResetSettings,
+      clearError: controller.onClearError,
+      resolveLinkedSeries: controller.onResolveLinkedSeries,
+      resolvePlaygroundVideo: controller.onResolvePlaygroundVideo,
+      resolveSeriesVideo: controller.onResolveSeriesVideo,
+      importLocalSeries: controller.onImportLocalSeries,
+      importLocalPlaygroundVideos: controller.onImportLocalPlaygroundVideos,
+      importSeriesVideos: controller.onImportSeriesVideos,
+      deleteSeries: controller.onDeleteSeries,
+      deleteCurrentVideo: controller.onDeleteCurrentVideo,
+      downloadVideo: controller.onDownloadVideo,
     },
   };
 }

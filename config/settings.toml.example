@@ -1,0 +1,62 @@
+# 语音转写设置 (Automatic Speech Recognition)
+[asr]
+# 转写引擎，目前支持: "faster_whisper"
+provider = "faster_whisper"
+# 默认转写语言，中文为 "zh", 英文为 "en"
+language = "zh"
+# 是否启用转写增强（使用 AI 对转写文本进行语义修正和分段）
+transcript_enhancement_enabled = true
+
+# Faster-Whisper 转写引擎具体配置
+[asr.faster_whisper]
+# 运行设备: "auto" (自动选择), "cuda" (显卡加速), "cpu" (纯 CPU 运行)
+device = "auto"
+# 模型大小: "tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"
+# 推荐使用 "large-v3-turbo" (约 1.5GB)，权衡了速度和准确度
+model_size = "large-v3-turbo"
+# 计算精度: "float16" (显卡加速推荐), "int8" (CPU 运行推荐)
+compute_type = "float16"
+# 转写策略: "fast" (最快), "balanced" (平衡), "accurate" (最准)
+transcription_mode = "accurate"
+
+# 前端界面显示设置
+[workspace_ui]
+# 主题颜色: "dark" (暗黑模式), "light" (明亮模式)
+theme = "dark"
+# 是否在视频详情页默认显示“关键结论”
+show_takeaways = true
+
+# 调试模式设置
+[debug]
+# 开启后会在后端控制台输出更详细的逻辑追踪日志
+mode = false
+
+# AI Agent 对话上下文管理 (针对 LLM 窗口)
+[agent_context]
+# 对话上下文的最大 Token 限制
+window_tokens = 1000000
+# 预留给 AI 输出的 Token 数量
+reserved_output_tokens = 20000
+# 触发警告的上下文占用比例 (0.6 表示占用 60% 时警告)
+warning_threshold_ratio = 0.6
+# 触发历史记录压缩的占用比例
+compact_threshold_ratio = 0.8
+# 触发硬阻断（拒绝进一步对话）的占用比例
+blocking_threshold_ratio = 0.92
+# 压缩时最少保留的最近消息条数
+keep_tail_messages = 6
+# 投影/相关内容在上下文中占用的最大 Token 比例
+projection_max_tokens_ratio = 0.08
+# 规划器的传输模式: "structured" (结构化响应), "stream_buffered" (流式缓冲)
+planner_transport = "structured"
+
+# AI Agent 向量检索设置 (RAG)
+[agent_retrieval]
+# 向量化模型供应商: "local_huggingface" (本地运行)
+embedding_provider = "local_huggingface"
+# 使用的向量模型路径或 HuggingFace ID
+embedding_model = "BAAI/bge-base-zh-v1.5"
+# 向量化运行设备: "cuda" 或 "cpu"
+embedding_device = "cuda"
+# 批量向量化的批次大小
+embedding_batch_size = 8

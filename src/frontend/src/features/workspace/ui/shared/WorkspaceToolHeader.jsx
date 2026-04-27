@@ -11,7 +11,7 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
       <button
         type="button"
         onClick={onBack}
-        className="workspace-elevated-panel inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 transition-all hover:border-stone-300 dark:hover:border-white/16 hover:bg-white dark:hover:bg-[#1f1f1f] hover:text-stone-900 dark:hover:text-stone-100 hover:-translate-y-0.5"
+        className="workspace-elevated-panel inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 transition-all hover:border-stone-300 dark:hover:border-white/16 hover:bg-white dark:hover:bg-neutral-800 hover:text-stone-900 dark:hover:text-stone-100 hover:-translate-y-0.5"
       >
         <ArrowLeft size={16} />
         {backLabel}

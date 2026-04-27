@@ -503,6 +503,7 @@ class AgentGraphService:
         answer_completed_payload: dict[str, object] = {
             "message": turn_result.assistant_message,
             "duration_ms": total_duration_ms,
+            "citations": [item.model_dump(mode="json") for item in turn_result.citations],
         }
         if answer_usage:
             answer_completed_payload["usage"] = answer_usage

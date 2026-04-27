@@ -16,7 +16,7 @@ export function WorkspaceSeriesProgressView({ activeSeries }) {
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
                   video.processed
-                    ? "bg-stone-100 text-stone-900 dark:bg-[#111111] dark:text-white border border-stone-200 dark:border-white/10"
+                    ? "bg-stone-100 text-stone-900 dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10"
                     : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-300"
                 }`}>
                   {video.processed ? "已完成" : "待处理"}
