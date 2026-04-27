@@ -98,7 +98,7 @@ export function WorkspaceGenerationOverlay({ generationProgress, generationSnaps
                     isCurrent
                       ? "border-accent/30 bg-accent/8"
                       : isDone
-                        ? "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                        ? "border-success/30 bg-success-subtle"
                         : "border-stone-200/70 bg-stone-50/70 dark:border-white/8 dark:bg-white/[0.03]"
                   }`}
                 >

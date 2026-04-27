@@ -116,8 +116,8 @@ export function WorkspaceChatPanel({
       {/* Header */}
       <div className="workspace-toolbar-surface shrink-0 flex items-center justify-between px-6 py-4 border-b border-stone-200/80 dark:border-stone-800">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-sky-50 dark:bg-sky-950/25 flex items-center justify-center border border-sky-100 dark:border-sky-900/60">
-            <Sparkles size={16} className="text-sky-700 dark:text-sky-300" />
+          <div className="w-9 h-9 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
+            <Sparkles size={16} className="text-accent" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -134,10 +134,10 @@ export function WorkspaceChatPanel({
 
 
       {chatLocked ? (
-        <div className="border-b border-amber-200/80 bg-amber-50/90 px-6 py-3 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+        <div className="border-b border-warning/30 bg-warning-subtle px-6 py-3 text-sm text-stone-800 dark:text-stone-100">
           <div className="font-semibold">请先生成 AI 概况后再开始对话</div>
-          <p className="mt-1 text-xs text-amber-800/90 dark:text-amber-200/85">
-            当前视频还没有完成概况处理。先在右侧生成 AI 概况，聊天助手才能基于内容回答问题。
+          <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+            当前视频还没有完成概况处理。先生成 AI 概况，才能基于内容回答问题。
           </p>
         </div>
       ) : null}
@@ -203,7 +203,7 @@ export function WorkspaceChatPanel({
                       ? "w-full"
                       : isAssistant
                         ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
-                        : "px-5 py-3 rounded-[1.5rem] rounded-tr-sm bg-slate-800 dark:bg-slate-800/92 border border-slate-700/80 dark:border-slate-700 text-slate-50 shadow-sm"
+                        : "px-5 py-3 rounded-[1.5rem] rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm"
                   }
                 >
                   {renderMessageContent(message, isAssistant)}
@@ -334,7 +334,7 @@ function WorkspaceToolTraceMessage({ message }) {
     <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-warning-subtle text-warning">
             <Wrench size={16} />
           </div>
           <div className="min-w-0 flex-1">
@@ -347,7 +347,7 @@ function WorkspaceToolTraceMessage({ message }) {
                 </span>
               ) : null}
               {isRunning ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning-subtle px-2 py-0.5 text-[11px] font-medium text-warning">
                   <LoaderCircle size={12} className="animate-spin" />
                   调用中
                 </span>
@@ -378,8 +378,8 @@ function WorkspaceToolTraceMessage({ message }) {
                 </code>
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{step.label}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.status === "running"
-                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  ? "bg-warning-subtle text-warning"
+                  : "bg-success-subtle text-success"
                   }`}>
                   {step.status === "running" ? "进行中" : "已完成"}
                 </span>
@@ -406,36 +406,36 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
     : "已找到相关转写片段";
 
   return (
-    <details className="group rounded-[1.35rem] border border-sky-200/80 bg-sky-50/85 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+    <details className="group rounded-[1.35rem] border border-info/20 bg-info-subtle shadow-sm dark:border-info/10 dark:bg-info-subtle">
       <summary className="list-none cursor-pointer px-4 py-3.5">
-        <div className="flex items-center gap-3 text-sky-950 dark:text-sky-100">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+        <div className="flex items-center gap-3 text-stone-800 dark:text-stone-100">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-accent dark:bg-accent/10 dark:text-accent">
             <FileText size={16} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-[15px] font-semibold">{title}</strong>
             </div>
-            <p className="mt-1 text-xs text-sky-800/80 dark:text-sky-200/80">
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               展开查看命中的转写片段，再决定是否跳到视频。
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-sky-500 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
         </div>
       </summary>
 
-      <div className="border-t border-sky-200/80 px-4 py-4 dark:border-sky-900/60">
+      <div className="border-t border-info/20 px-4 py-4 dark:border-info/10">
         {reference.query ? (
-          <p className="text-xs font-medium text-sky-800/90 dark:text-sky-200/90">
+          <p className="text-xs font-medium text-stone-500 dark:text-stone-400">
             检索问题：{reference.query}
           </p>
         ) : null}
         {reference.matchedText ? (
-          <blockquote className="mt-3 rounded-2xl border border-sky-200/80 bg-white/80 px-4 py-3 text-sm leading-6 text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-100">
+          <blockquote className="mt-3 rounded-2xl border border-stone-200/60 bg-white/80 px-4 py-3 text-sm leading-6 text-stone-800 dark:border-stone-700/60 dark:bg-stone-900 dark:text-stone-100">
             {reference.matchedText}
           </blockquote>
         ) : (
-          <p className="mt-3 text-sm text-sky-900/80 dark:text-sky-100/80">
+          <p className="mt-3 text-sm text-stone-700 dark:text-stone-300">
             当前没有返回完整命中原文，但已经定位到对应时间点。
           </p>
         )}
@@ -443,7 +443,7 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
           <button
             type="button"
             onClick={() => onOpenSeekReference?.(reference)}
-            className="inline-flex items-center gap-2 rounded-full border border-sky-300 bg-white/90 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:border-sky-400 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:border-sky-600 dark:hover:bg-sky-900/50"
+            className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-accent transition hover:border-accent/50 hover:bg-accent/5 dark:hover:bg-accent/10"
           >
             <PlayCircle size={14} />
             跳到视频定位
@@ -467,7 +467,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
       <div className="rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
         <div className="px-4 py-3.5">
           <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
               {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
             </div>
             <div className="min-w-0 flex-1">
@@ -505,8 +505,8 @@ function WorkspaceThoughtTraceMessage({ message }) {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl ${stageRunning
-                          ? "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          ? "bg-info-subtle text-info"
+                          : "bg-success-subtle text-success"
                           }`}>
                           {stageRunning ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                         </div>
@@ -517,8 +517,8 @@ function WorkspaceThoughtTraceMessage({ message }) {
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${stageRunning
-                          ? "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          ? "bg-info-subtle text-info"
+                          : "bg-success-subtle text-success"
                           }`}>
                           {stageRunning ? "执行中" : "已完成"}
                         </span>
@@ -541,7 +541,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
     <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
             {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
           </div>
           <div className="min-w-0 flex-1">
@@ -595,26 +595,26 @@ function formatTokenCount(value) {
 
 function resolveUsageToneClass(level) {
   if (level === "blocking") {
-    return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+    return "bg-danger-subtle text-danger";
   }
   if (level === "compact") {
-    return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+    return "bg-warning-subtle text-warning";
   }
   if (level === "warning") {
-    return "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
+    return "bg-warning-subtle text-warning-muted";
   }
-  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+  return "bg-success-subtle text-success";
 }
 
 function resolveUsageBarClass(level) {
   if (level === "blocking") {
-    return "bg-red-500";
+    return "bg-danger-muted";
   }
   if (level === "compact") {
-    return "bg-amber-500";
+    return "bg-warning-muted";
   }
   if (level === "warning") {
-    return "bg-orange-500";
+    return "bg-warning";
   }
-  return "bg-emerald-500";
+  return "bg-success-muted";
 }

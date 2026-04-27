@@ -76,7 +76,7 @@ function PanelFooter({
             <button
               type="button"
               onClick={onAddPlaygroundVideo}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-4 py-2.5 text-sm font-semibold text-accent shadow-none transition-colors hover:bg-accent/14 hover:border-accent/60"
             >
               <ArrowDown size={16} strokeWidth={2.5} />
               添加 Playground 视频
@@ -85,7 +85,7 @@ function PanelFooter({
               <button
                 type="button"
                 onClick={() => onRequestDeleteCurrentVideo?.()}
-                className="inline-flex items-center justify-center w-11 h-11 rounded-2xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/45"
+                className="btn-danger-ghost inline-flex items-center justify-center w-11 h-11 rounded-2xl"
                 title="删除当前视频"
               >
                 <Trash2 size={16} />
@@ -129,7 +129,7 @@ function PanelFooter({
         <div className="flex gap-2">
           <button
             type="button"
-            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm bg-stone-900 text-white hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 shadow-sm active:scale-[0.98] transition-all"
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm bg-accent text-white hover:bg-accent/90 shadow-sm active:scale-[0.98] transition-all"
             onClick={() => onDownloadVideo?.(selectedVideo)}
           >
             <ArrowDown size={16} strokeWidth={2.5} />
@@ -149,7 +149,7 @@ function PanelFooter({
           <button
             type="button"
             onClick={() => onRequestDeleteCurrentVideo?.()}
-            className="inline-flex items-center justify-center w-10 h-10 rounded-2xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/45"
+            className="btn-danger-ghost inline-flex items-center justify-center w-10 h-10 rounded-2xl"
             title="删除当前视频"
           >
             <Trash2 size={15} />
@@ -167,9 +167,9 @@ function PanelFooter({
           <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">{selectedVideo.title}</h3>
         </div>
-        <div className="w-full bg-stone-200 dark:bg-stone-700 rounded-full h-2.5 mb-1.5">
+        <div className="w-full bg-stone-200 dark:bg-neutral-800 rounded-full h-2.5 mb-1.5">
           <div
-            className="bg-stone-900 dark:bg-stone-100 h-2.5 rounded-full transition-all duration-300"
+            className="bg-accent h-2.5 rounded-full transition-all duration-300"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -208,7 +208,7 @@ function PanelFooter({
       <button
         type="button"
         onClick={() => onRequestDeleteCurrentVideo?.()}
-        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/45"
+        className="btn-danger-ghost mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
       >
         <Trash2 size={15} />
         删除当前视频
@@ -263,7 +263,7 @@ export function WorkspaceLibraryPanel({
             <button
               type="button"
               onClick={() => onAddSeriesVideo?.()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
+              className="inline-flex items-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/14 hover:border-accent/60"
             >
               <ArrowDown size={14} />
               添加视频
@@ -271,7 +271,7 @@ export function WorkspaceLibraryPanel({
             <button
               type="button"
               onClick={() => onRequestDeleteSeries?.()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/45"
+              className="btn-danger-ghost inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold"
             >
               <Trash2 size={14} />
               删除整个系列
@@ -298,23 +298,23 @@ export function WorkspaceLibraryPanel({
           <button
             type="button"
             onClick={onSelectSeriesContext}
-            className={`text-left flex flex-col gap-2 p-4 rounded-[1.5rem] border transition-all duration-200 outline-none shadow-sm bg-stone-950 border-stone-900 text-white dark:bg-white dark:border-stone-200 dark:text-stone-950 z-10 relative
+            className={`text-left flex flex-col gap-2 p-4 rounded-[1.5rem] border transition-all duration-200 outline-none shadow-sm bg-accent/10 border-accent/30 text-stone-900 dark:text-stone-100 z-10 relative
               ${selectedContextType === "series"
-                ? "ring-[2px] ring-stone-950/20 dark:ring-white/30"
-                : "hover:bg-black hover:border-black dark:hover:bg-stone-50 dark:hover:border-stone-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:hover:shadow-[0_10px_24px_rgba(0,0,0,0.2)] cursor-pointer"
+                ? "ring-[2px] ring-accent/20"
+                : "hover:bg-accent/15 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] cursor-pointer"
               }`}
           >
             <div className="flex justify-between items-start w-full gap-2">
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white dark:bg-stone-100 dark:border-stone-200 dark:text-stone-700">
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-accent">
                 <FolderKanban size={12} />
                 当前系列
               </span>
             </div>
             <div className="flex flex-col gap-0.5 mt-1">
-              <strong className="text-base font-semibold line-clamp-2 tracking-[-0.01em] text-white dark:text-stone-950">
+              <strong className="text-base font-semibold line-clamp-2 tracking-[-0.01em] text-stone-900 dark:text-stone-100">
                 {activeSeries?.title}
               </strong>
-              <span className="text-xs truncate text-stone-300 dark:text-stone-600">
+              <span className="text-xs truncate text-stone-500 dark:text-stone-400">
                 聚焦整个 series，供 AI 和工具使用系列级上下文
               </span>
             </div>

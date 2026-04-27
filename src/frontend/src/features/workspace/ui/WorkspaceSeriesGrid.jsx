@@ -27,7 +27,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
           <button
             type="button"
             onClick={onAddSeries}
-            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-indigo-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-600"
+            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90"
           >
             <Link2 size={15} /> 添加系列
           </button>
@@ -58,7 +58,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
             <button
               type="button"
               onClick={onAddSeries}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-500 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-600"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90"
             >
               <Link2 size={15} /> 添加系列
             </button>

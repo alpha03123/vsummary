@@ -174,7 +174,7 @@ export function WorkspaceNotesView({
                 <button
                   onClick={() => handleDeleteNote(selectedNote.id)}
                   disabled={savingNote}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-red-50 hover:text-red-600 dark:text-stone-400 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400"
                   title="删除"
                 >
                   <Trash2 size={15} />
@@ -203,7 +203,7 @@ export function WorkspaceNotesView({
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
                   {selectedNote.source === "agent" ? "🤖 Agent Note" : "✍️ Manual Note"}
                 </span>
                 <span className="text-xs font-medium text-stone-400 dark:text-stone-500">
@@ -249,7 +249,7 @@ export function WorkspaceNotesView({
             >
               <div className="flex items-center justify-between gap-4">
                 <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
                   {note.source === "agent" ? "🤖 Agent" : "✍️ Manual"}
                 </span>
               </div>

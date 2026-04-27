@@ -46,7 +46,7 @@ export function WorkspaceSettingsPanel({
       {/* Sidebar */}
       <div className="w-[250px] shrink-0 bg-stone-50/50 dark:bg-neutral-900 border-r border-stone-200/80 dark:border-white/5 p-6 flex flex-col relative z-20">
         <div className="mb-8 mt-2 px-2">
-          <p className="text-[10px] font-bold text-sky-600 dark:text-sky-400 tracking-widest uppercase mb-1">Preferences</p>
+          <p className="text-[10px] font-bold text-accent tracking-widest uppercase mb-1">Preferences</p>
           <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 tracking-tight">控制中心</h2>
         </div>
         <div className="flex flex-col gap-1.5 flex-1">
@@ -58,7 +58,7 @@ export function WorkspaceSettingsPanel({
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
-                  ? "bg-white dark:bg-stone-800/80 text-accent dark:text-sky-400 shadow-sm border border-stone-200/60 dark:border-stone-700/60"
+                  ? "bg-white dark:bg-stone-800/80 text-accent shadow-sm border border-stone-200/60 dark:border-stone-700/60"
                   : "text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800/40 hover:text-stone-900 dark:hover:text-stone-200 border border-transparent"
                   }`}
               >
@@ -192,7 +192,7 @@ export function WorkspaceSettingsPanel({
                           <div
                             key={model.id}
                             className={`rounded-2xl border p-4 transition-colors ${isCurrent
-                              ? "border-accent/40 bg-sky-50 dark:bg-sky-950/20"
+                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
                               : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
@@ -259,7 +259,7 @@ export function WorkspaceSettingsPanel({
                                     setConfirmDownloadModelId(model.id);
                                   }}
                                   className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${needsConfirm
-                                    ? "bg-amber-500 text-white hover:bg-amber-600"
+                                    ? "bg-warning text-white hover:opacity-85"
                                     : "bg-stone-900 text-white hover:bg-black dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                                     }`}
                                 >
@@ -325,7 +325,7 @@ export function WorkspaceSettingsPanel({
                   <div className="w-[340px] rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className={`text-sm font-semibold ${hasApiKey ? "text-emerald-600 dark:text-emerald-400" : "text-stone-500 dark:text-stone-400"}`}>
+                        <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-500 dark:text-stone-400"}`}>
                           {hasApiKey ? "已配置" : "未配置"}
                         </p>
                         {apiKeyStatus ? (
@@ -399,7 +399,7 @@ export function WorkspaceSettingsPanel({
                     onResetSettings();
                     setShowResetConfirm(false);
                   }}
-                  className="flex-1 py-2.5 rounded-xl text-[13px] font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors"
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-bold btn-danger shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   确认恢复
                 </button>

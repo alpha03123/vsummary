@@ -51,7 +51,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
         <motion.div variants={blurVariant} className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200 dark:border-white/5 w-fit shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+              <span className="w-2 h-2 rounded-full bg-success-muted shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Workspace Active</span>
             </div>
 
@@ -82,7 +82,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
                   initial={{ width: 0 }}
                   animate={{ width: `${progressPercentage}%` }}
                   transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-0 left-0 h-full bg-stone-900 dark:bg-zinc-100 rounded-full"
+                  className="absolute top-0 left-0 h-full bg-accent rounded-full"
                 />
               </div>
               <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-500 dark:text-zinc-500">
@@ -141,7 +141,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
 
           {/* Playground Card (Spans 5 cols) */}
           <motion.article variants={blurVariant} className="md:col-span-5 workspace-muted-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-200/20 dark:bg-indigo-500/[0.05] rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+            <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 dark:bg-accent/[0.06] rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
             <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500 mb-4 relative z-10">Playground</p>
             <div className="relative z-10 flex flex-col gap-4 flex-1">
               <div>
@@ -160,7 +160,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
                     initial={{ width: 0 }}
                     animate={{ width: `${playgroundProgressPercentage}%` }}
                     transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute top-0 left-0 h-full bg-stone-900 dark:bg-zinc-100 rounded-full"
+                    className="absolute top-0 left-0 h-full bg-accent rounded-full"
                   />
                 </div>
                 <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-500 dark:text-zinc-500">
@@ -174,7 +174,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
               <button
                 type="button"
                 onClick={() => onSelectSeries(playgroundSeries.id)}
-                className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-sm font-bold shadow-sm transition-colors dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
+                className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-2xl bg-accent hover:bg-accent/90 text-white text-sm font-bold shadow-sm transition-colors"
               >
                 <PlusCircle size={15} /> 进入 Playground 工作区
               </button>

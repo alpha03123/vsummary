@@ -78,7 +78,7 @@ export function WorkspaceMarkdownMessage({ content, citations = null }) {
                     {...props}
                     href={href}
                     onClick={(event) => event.preventDefault()}
-                    className="font-semibold text-sky-600 hover:text-sky-700 hover:underline focus:text-sky-700 focus:outline-none dark:text-sky-300 dark:hover:text-sky-200 dark:focus:text-sky-200"
+                    className="font-semibold text-accent hover:text-accent/80 hover:underline focus:text-accent/80 focus:outline-none"
                   >
                     [{children}]
                   </a>
@@ -105,7 +105,7 @@ export function WorkspaceMarkdownMessage({ content, citations = null }) {
                 href={href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-sky-600 hover:text-sky-700 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
+                className="text-accent hover:text-accent/80 hover:underline"
               >
                 {children}
               </a>

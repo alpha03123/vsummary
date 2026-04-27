@@ -39,16 +39,16 @@ export function WorkspacePreviewView({ previewSource, previewSeekRequest }) {
       <div className="workspace-muted-panel rounded-3xl border p-4">
         <p className="mb-2 text-xs font-bold uppercase text-stone-500 dark:text-stone-400">Video Preview</p>
         {previewSeekRequest ? (
-          <div className="mt-3 rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-100">
+          <div className="mt-3 rounded-2xl border border-info/20 bg-info-subtle px-4 py-3 text-sm text-stone-800 dark:text-stone-100">
             <p className="font-semibold">
               已定位到 {formatRange(previewSeekRequest.seconds, previewSeekRequest.endSeconds ?? previewSeekRequest.seconds)}
               {previewSeekRequest.chapterTitle ? ` · ${previewSeekRequest.chapterTitle}` : ""}
             </p>
             {previewSeekRequest.query ? (
-              <p className="mt-1 text-sky-800/90 dark:text-sky-200/90">检索问题：{previewSeekRequest.query}</p>
+              <p className="mt-1 text-stone-600 dark:text-stone-300">检索问题：{previewSeekRequest.query}</p>
             ) : null}
             {previewSeekRequest.matchedText ? (
-              <p className="mt-2 line-clamp-3 text-sky-900/90 dark:text-sky-100/90">{previewSeekRequest.matchedText}</p>
+              <p className="mt-2 line-clamp-3 text-stone-700 dark:text-stone-200">{previewSeekRequest.matchedText}</p>
             ) : null}
           </div>
         ) : null}

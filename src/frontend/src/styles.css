@@ -7,33 +7,95 @@
 @layer base {
   :root {
     color-scheme: light;
-    --workspace-accent-color: 24 24 27;
-    /* zinc-900 */
-    --workspace-shell-bg:
-      radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 28%),
-      radial-gradient(circle at top right, rgba(37, 99, 235, 0.06), transparent 24%),
-      linear-gradient(180deg, #f4f7fb 0%, #edf2f7 100%);
-    --workspace-panel-bg: rgba(255, 255, 255, 0.94);
-    --workspace-panel-border: rgba(218, 226, 237, 0.96);
+
+    /* ── Accent (indigo-500 / #6366f1) ── */
+    --workspace-accent-color: 99 102 241;
+
+    /* ══════════════════════════════════════════════════════
+       LIGHT MODE DESIGN PHILOSOPHY
+       ─ Cold base: slate-50/100 (no warm tint)
+       ─ Pure white cards + layered shadows for depth
+       ─ Ambient tinting: all semantic colors carry
+         a subtle indigo hue shift for visual cohesion
+    ══════════════════════════════════════════════════════ */
+
+    /* ── Shell & panel surfaces ── */
+    /* slate-100 (#f1f5f9): clean, cold, neutral gray base */
+    --workspace-shell-bg: #f1f5f9;
+
+    /* Pure white cards — contrast against slate base creates depth */
+    --workspace-panel-bg: #ffffff;
+    --workspace-panel-border: rgba(148, 163, 184, 0.28); /* slate-400/28 */
     --workspace-panel-shadow:
-      0 12px 32px rgba(15, 23, 42, 0.05),
-      0 2px 8px rgba(15, 23, 42, 0.03);
-    --workspace-muted-bg: rgba(255, 255, 255, 0.96);
-    --workspace-muted-border: rgba(221, 229, 240, 0.96);
-    --workspace-toolbar-bg: rgba(255, 255, 255, 0.9);
-    --workspace-hero-bg:
-      linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 252, 0.96));
-    --workspace-elevated-bg: rgba(255, 255, 255, 0.985);
-    --workspace-input-bg: rgba(255, 255, 255, 0.98);
-    --workspace-accent-bg: linear-gradient(145deg, rgba(236, 253, 245, 0.96), rgba(224, 242, 254, 0.92));
-    --workspace-accent-border: rgba(94, 234, 212, 0.4);
-    --workspace-glow: 0 0 0 rgba(37, 99, 235, 0);
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 4px 12px rgba(15, 23, 42, 0.06),
+      0 0 0 1px rgba(148, 163, 184, 0.10);
+
+    /* Muted: slate-50 — one step lighter than shell */
+    --workspace-muted-bg: #f8fafc;
+    --workspace-muted-border: rgba(148, 163, 184, 0.20);
+
+    /* Toolbar: white with strong blur */
+    --workspace-toolbar-bg: rgba(255, 255, 255, 0.88);
+
+    /* Hero: pure white */
+    --workspace-hero-bg: #ffffff;
+
+    /* Elevated: white + stronger shadow to float above panel */
+    --workspace-elevated-bg: #ffffff;
+    --workspace-elevated-shadow:
+      0 2px 4px rgba(15, 23, 42, 0.05),
+      0 8px 24px rgba(15, 23, 42, 0.08),
+      0 0 0 1px rgba(148, 163, 184, 0.12);
+
+    /* Input: white */
+    --workspace-input-bg: #ffffff;
+
+    /* Accent tinted panel */
+    --workspace-accent-bg: rgba(99, 102, 241, 0.06);
+    --workspace-accent-border: rgba(99, 102, 241, 0.22);
+
+    /* Subtle indigo glow for accent panels */
+    --workspace-glow:
+      0 4px 24px rgba(99, 102, 241, 0.10),
+      0 1px 4px rgba(99, 102, 241, 0.06);
+
+    /* ── Semantic colors (light) — ambient indigo tinting ──
+       Each color is shifted ~5-8% toward indigo's hue (260°)
+       so all UI elements feel lit by the same cool light source.
+    ── */
+
+    /* danger: warm red → "cool crimson" (hue pulled toward 350° from 0°) */
+    --color-danger:        208 35 48;   /* #D02330 — cooler, slight magenta shift */
+    --color-danger-bg:     254 236 238; /* #FEEDEE — cool blush, not warm pink */
+    --color-danger-border: 242 148 158; /* #F2949E — indigo-cooled red-300 */
+    --color-danger-muted:  225 50 68;   /* #E13244 — mid cool red */
+
+    /* warning: amber → "cool amber" (hue pulled from 38° toward 30°) */
+    --color-warning:        202 112 8;   /* #CA7008 — less orange, more golden */
+    --color-warning-bg:     254 246 220; /* #FEF6DC — pale gold, no warm orange */
+    --color-warning-border: 240 195 78;  /* #F0C34E — cool amber-300 */
+    --color-warning-muted:  218 145 12;  /* #DA910C — cool amber-500 */
+
+    /* success: emerald → "teal-shifted emerald" (hue pulled from 160° toward 170°) */
+    --color-success:        4 142 100;   /* #048E64 — blue-leaning teal-green */
+    --color-success-bg:     229 252 243; /* #E5FCF3 — cool mint, not warm green */
+    --color-success-border: 82 218 163;  /* #52DAA3 — teal-tinted emerald-300 */
+    --color-success-muted:  10 172 118;  /* #0AAC76 — cool emerald-500 */
+
+    /* info = accent (pure indigo) */
+    --color-info:        99 102 241;   /* indigo-500 */
+    --color-info-bg:     238 242 255;  /* indigo-50  */
+    --color-info-border: 165 180 252;  /* indigo-300 */
   }
 
   .dark {
     color-scheme: dark;
-    --workspace-accent-color: 99 102 241;
-    /* indigo-500, similar to Linear's #5E6AD2 */
+
+    /* ── Accent (indigo-400 / #818cf8, slightly lighter for dark bg) ── */
+    --workspace-accent-color: 129 140 248;
+
+    /* ── Shell & panel surfaces ── */
     --workspace-shell-bg: #0F0F10;
     --workspace-panel-bg: #151516;
     --workspace-panel-border: rgba(255, 255, 255, 0.06);
@@ -44,9 +106,29 @@
     --workspace-hero-bg: #0F0F10;
     --workspace-elevated-bg: #1A1A1C;
     --workspace-input-bg: #0B0B0C;
-    --workspace-accent-bg: #1E1E24;
-    --workspace-accent-border: rgba(99, 102, 241, 0.2);
+    --workspace-accent-bg: rgba(129, 140, 248, 0.08);
+    --workspace-accent-border: rgba(129, 140, 248, 0.2);
     --workspace-glow: none;
+
+    /* ── Semantic colors (dark) ── */
+    --color-danger:        252 165 165; /* red-300   */
+    --color-danger-bg:     28 8 8;      /* red-950   */
+    --color-danger-border: 153 27 27;   /* red-800   */
+    --color-danger-muted:  239 68 68;   /* red-500   */
+
+    --color-warning:        252 211 77;  /* amber-300 */
+    --color-warning-bg:     28 20 4;     /* amber-950 */
+    --color-warning-border: 146 64 14;   /* amber-800 */
+    --color-warning-muted:  245 158 11;  /* amber-500 */
+
+    --color-success:        110 231 183; /* emerald-300 */
+    --color-success-bg:     2 26 17;     /* emerald-950 */
+    --color-success-border: 6 78 59;     /* emerald-900 */
+    --color-success-muted:  16 185 129;  /* emerald-500 */
+
+    --color-info:        129 140 248;  /* indigo-400 (= accent) */
+    --color-info-bg:     16 14 38;     /* indigo-950 */
+    --color-info-border: 67 56 202;    /* indigo-700 */
   }
 }
 
@@ -64,8 +146,10 @@
   }
 
   body {
-    @apply text-stone-900 font-sans antialiased overflow-hidden m-0;
+    /* slate-900 (#0f172a): cold blue-black, harmonizes with indigo accent */
+    @apply text-slate-900 font-sans antialiased overflow-hidden m-0;
     background: var(--workspace-shell-bg);
+
     transition:
       background-color 220ms ease,
       color 220ms ease,
@@ -166,12 +250,20 @@
     background: var(--workspace-panel-bg);
     border-color: var(--workspace-panel-border);
     box-shadow: var(--workspace-panel-shadow);
+    /* Light: real white card on slate base — no blur needed */
+    /* Dark: glass effect with blur */
+  }
+  .dark .workspace-panel {
     backdrop-filter: blur(16px);
   }
 
   .workspace-muted-panel {
     background: var(--workspace-muted-bg);
     border-color: var(--workspace-muted-border);
+    /* Light: slate-50 inset — lower than panel, no shadow */
+    box-shadow: none;
+  }
+  .dark .workspace-muted-panel {
     box-shadow: var(--workspace-glow);
   }
 
@@ -179,6 +271,11 @@
     background: var(--workspace-toolbar-bg);
     border-color: var(--workspace-panel-border);
     backdrop-filter: blur(14px);
+    /* Light: white toolbar with gentle bottom shadow */
+    box-shadow: 0 1px 0 rgba(148, 163, 184, 0.20);
+  }
+  .dark .workspace-toolbar-surface {
+    box-shadow: none;
   }
 
   .workspace-hero-surface {
@@ -190,6 +287,10 @@
   .workspace-elevated-panel {
     background: var(--workspace-elevated-bg);
     border-color: var(--workspace-muted-border);
+    /* Light: stronger shadow than panel to float higher */
+    box-shadow: var(--workspace-elevated-shadow, var(--workspace-panel-shadow));
+  }
+  .dark .workspace-elevated-panel {
     box-shadow: var(--workspace-panel-shadow);
   }
 
@@ -202,8 +303,81 @@
   .workspace-input-surface {
     background: var(--workspace-input-bg);
     border-color: var(--workspace-panel-border);
+    /* Light: subtle inset shadow for depth */
+    box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .dark .workspace-input-surface {
     box-shadow: var(--workspace-glow);
   }
+
+  /* ============================================================
+     SEMANTIC COLOR UTILITIES
+     Use these instead of hardcoded Tailwind color classes.
+     Each semantic group: bg / text / border / muted variants.
+  ============================================================ */
+
+  /* danger (replaces red-*) */
+  .bg-danger        { background-color: rgb(var(--color-danger)); }
+  .bg-danger-subtle { background-color: rgb(var(--color-danger-bg)); }
+  .text-danger      { color: rgb(var(--color-danger)); }
+  .border-danger    { border-color: rgb(var(--color-danger-border)); }
+  .text-danger-muted { color: rgb(var(--color-danger-muted)); }
+
+  /* warning (replaces amber-*) */
+  .bg-warning        { background-color: rgb(var(--color-warning)); }
+  .bg-warning-subtle { background-color: rgb(var(--color-warning-bg)); }
+  .text-warning      { color: rgb(var(--color-warning)); }
+  .border-warning    { border-color: rgb(var(--color-warning-border)); }
+  .text-warning-muted { color: rgb(var(--color-warning-muted)); }
+
+  /* success (replaces emerald-*) */
+  .bg-success        { background-color: rgb(var(--color-success)); }
+  .bg-success-subtle { background-color: rgb(var(--color-success-bg)); }
+  .text-success      { color: rgb(var(--color-success)); }
+  .border-success    { border-color: rgb(var(--color-success-border)); }
+  .text-success-muted { color: rgb(var(--color-success-muted)); }
+
+  /* info (replaces sky-* in non-accent contexts) */
+  .bg-info        { background-color: rgb(var(--color-info)); }
+  .bg-info-subtle { background-color: rgb(var(--color-info-bg)); }
+  .text-info      { color: rgb(var(--color-info)); }
+  .border-info    { border-color: rgb(var(--color-info-border)); }
+
+  /* primary button: solid accent */
+  .btn-primary {
+    background-color: rgb(var(--workspace-accent-color));
+    color: #fff;
+    transition: opacity 150ms ease, transform 100ms ease;
+  }
+  .btn-primary:hover  { opacity: 0.9; }
+  .btn-primary:active { transform: scale(0.98); }
+
+  /* secondary / ghost button */
+  .btn-secondary {
+    background-color: transparent;
+    border: 1px solid rgb(var(--workspace-accent-color) / 0.3);
+    color: rgb(var(--workspace-accent-color));
+    transition: background-color 150ms ease;
+  }
+  .btn-secondary:hover { background-color: rgb(var(--workspace-accent-color) / 0.06); }
+
+  /* danger button */
+  .btn-danger {
+    background-color: rgb(var(--color-danger));
+    color: #fff;
+    transition: opacity 150ms ease, transform 100ms ease;
+  }
+  .btn-danger:hover  { opacity: 0.88; }
+  .btn-danger:active { transform: scale(0.98); }
+
+  /* danger ghost */
+  .btn-danger-ghost {
+    background-color: rgb(var(--color-danger-bg));
+    color: rgb(var(--color-danger));
+    border: 1px solid rgb(var(--color-danger-border));
+    transition: background-color 150ms ease;
+  }
+  .btn-danger-ghost:hover { opacity: 0.85; }
 
   .motion-fade-up {
     animation: workspace-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;

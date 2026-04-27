@@ -65,7 +65,7 @@ export function WorkspaceConfirmDialog({
               disabled={pending}
               className={`rounded-2xl px-5 py-2.5 text-sm font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 destructive
-                  ? "bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+                  ? "btn-danger"
                   : "bg-stone-900 hover:bg-black dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
               }`}
             >

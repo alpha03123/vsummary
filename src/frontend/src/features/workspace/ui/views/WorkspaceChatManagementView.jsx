@@ -10,16 +10,15 @@ export function WorkspaceChatManagementView({ chat }) {
       <div className="flex items-center justify-between mb-2 border-b border-stone-200/80 pb-6 dark:border-stone-800">
         <div>
           <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 flex items-center gap-2">
-            <MessageSquare size={20} className="text-sky-600 dark:text-sky-400" />
+            <MessageSquare size={20} className="text-accent" />
             对话与历史管理
           </h2>
-
         </div>
         <div className="flex gap-3">
           <button
             type="button"
             onClick={startNewChat}
-            className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 hover:border-sky-300 dark:border-sky-900/40 dark:bg-sky-900/20 dark:text-sky-300 dark:hover:bg-sky-900/40 shadow-sm"
+            className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/15 shadow-sm"
           >
             <Plus size={16} />
             新建话题
@@ -27,7 +26,7 @@ export function WorkspaceChatManagementView({ chat }) {
           <button
             type="button"
             onClick={clearChat}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-100 hover:border-red-300 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-900/40 shadow-sm"
+            className="btn-danger-ghost inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm"
           >
             <Trash2 size={16} />
             清空当前对话
@@ -52,23 +51,23 @@ export function WorkspaceChatManagementView({ chat }) {
                 type="button"
                 onClick={() => selectChatSession?.(session.id)}
                 className={`group relative flex flex-col items-start gap-4 rounded-3xl border p-5 text-left transition-all ${session.id === activeSessionId
-                    ? "border-sky-300 bg-sky-50 dark:border-sky-800/50 dark:bg-sky-900/20 shadow-sm ring-1 ring-sky-300/50"
+                    ? "border-accent/40 bg-accent/5 dark:border-accent/30 dark:bg-accent/10 shadow-sm ring-1 ring-accent/20"
                     : "border-stone-200/80 bg-white hover:border-stone-300 hover:shadow-md dark:border-white/5 dark:bg-[#1a1a1a] dark:hover:border-white/10"
                   }`}
               >
                 <div className="flex items-center justify-between w-full">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${session.id === activeSessionId
-                      ? "bg-sky-100 text-sky-600 dark:bg-sky-900/50 dark:text-sky-300"
-                      : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400 group-hover:bg-sky-50 group-hover:text-sky-600 dark:group-hover:bg-sky-900/30 dark:group-hover:text-sky-400"
+                      ? "bg-accent/15 text-accent"
+                      : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400 group-hover:bg-accent/10 group-hover:text-accent"
                     } transition-colors`}>
                     <MessageSquare size={18} />
                   </div>
                   {session.id === activeSessionId && (
-                    <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-600 dark:bg-sky-900/40 dark:text-sky-400">当前对话</span>
+                    <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-bold text-accent">当前对话</span>
                   )}
                 </div>
                 <h4 className={`text-[15px] font-bold leading-snug line-clamp-2 ${session.id === activeSessionId
-                    ? "text-sky-900 dark:text-sky-100"
+                    ? "text-stone-900 dark:text-stone-100"
                     : "text-stone-700 dark:text-stone-200 group-hover:text-stone-900 dark:group-hover:text-white"
                   }`}>
                   {session.title || "新话题"}

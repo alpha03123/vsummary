@@ -24,7 +24,7 @@ export function WorkspaceKnowledgeCardsView({
         loading
       >
         <div className="mt-6 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800">
-          <div className="h-full w-1/2 animate-pulse rounded-full bg-amber-500" />
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-accent" />
         </div>
         <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">生成完成后会自动展示结果。</p>
       </WorkspaceStateBlock>
@@ -102,7 +102,7 @@ export function WorkspaceKnowledgeCardsView({
                 <button
                   type="button"
                   onClick={() => onOpenCard(card)}
-                  className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-200"
+                  className="rounded-2xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition hover:bg-accent/15"
                 >
                   {formatRange(card.sourceRefs[0].startSeconds, card.sourceRefs[0].endSeconds ?? card.sourceRefs[0].startSeconds)}
                 </button>
@@ -115,7 +115,7 @@ export function WorkspaceKnowledgeCardsView({
                 {card.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
+                    className="rounded-full border border-stone-200/70 bg-stone-100/80 px-3 py-1 text-[11px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
                   >
                     {tag}
                   </span>

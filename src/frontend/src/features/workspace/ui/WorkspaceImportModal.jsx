@@ -129,7 +129,7 @@ export function WorkspaceImportModal({
         >
           <div className="flex items-center justify-between border-b border-stone-200/80 p-6 dark:border-stone-800">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-200 bg-indigo-100 text-indigo-600 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
                 {sourceType === "local" ? <FolderUp size={18} /> : <Link2 size={18} />}
               </div>
               <div>
@@ -153,7 +153,7 @@ export function WorkspaceImportModal({
                 onClick={() => setSourceType("local")}
                 className={`rounded-2xl border px-4 py-3 text-left transition ${
                   sourceType === "local"
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300"
+                    ? "border-accent bg-accent/10 text-accent dark:border-accent/50 dark:bg-accent/10 dark:text-accent"
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
                 }`}
               >
@@ -168,7 +168,7 @@ export function WorkspaceImportModal({
                 onClick={() => setSourceType("external")}
                 className={`rounded-2xl border px-4 py-3 text-left transition ${
                   sourceType === "external"
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300"
+                    ? "border-accent bg-accent/10 text-accent dark:border-accent/50 dark:bg-accent/10 dark:text-accent"
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
                 }`}
               >
@@ -193,7 +193,7 @@ export function WorkspaceImportModal({
                       onChange={(event) => setSeriesTitle(event.target.value)}
                       placeholder="例如：Agent Frameworks"
                       disabled={status === "loading"}
-                      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/50 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500"
+                      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
                       autoFocus
                     />
                   </div>
@@ -203,7 +203,7 @@ export function WorkspaceImportModal({
                   <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
                     选择视频文件
                   </label>
-                  <label className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 transition hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/20">
+                  <label className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 transition hover:border-accent hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900">
                     <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
                       <Film size={16} />
                       {selectedFileSummary}
@@ -235,7 +235,7 @@ export function WorkspaceImportModal({
                     onKeyDown={handleKeyDown}
                     placeholder={placeholder}
                     disabled={status === "loading"}
-                    className="flex-1 rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/50 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500 dark:focus:border-indigo-500"
+                    className="flex-1 rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
                     autoFocus
                   />
                 </div>
@@ -249,12 +249,12 @@ export function WorkspaceImportModal({
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-700/40 dark:bg-emerald-950/25"
+                className="flex items-center gap-4 rounded-2xl border border-success bg-success-subtle p-4"
               >
-                <CheckCircle2 size={20} className="shrink-0 text-emerald-500" />
+                <CheckCircle2 size={20} className="shrink-0 text-success" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-emerald-900 dark:text-emerald-200">{preview.title}</p>
-                  <p className="mt-0.5 text-xs text-emerald-700/70 dark:text-emerald-400/70">
+                  <p className="truncate text-sm font-bold text-stone-900 dark:text-stone-100">{preview.title}</p>
+                  <p className="mt-0.5 text-xs text-success">
                     共 {preview.videoCount} 个视频 · 已导入
                   </p>
                 </div>
@@ -265,10 +265,10 @@ export function WorkspaceImportModal({
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-700/40 dark:bg-red-950/25"
+                className="flex items-start gap-3 rounded-2xl border border-danger bg-danger-subtle p-4"
               >
                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-500" />
-                <p className="text-sm font-medium text-red-700 dark:text-red-300">{errorMsg}</p>
+                <p className="text-sm font-medium text-danger">{errorMsg}</p>
               </motion.div>
             ) : null}
           </div>
@@ -287,7 +287,7 @@ export function WorkspaceImportModal({
               type="button"
               onClick={handleSubmit}
               disabled={submitDisabled}
-              className="inline-flex items-center gap-2 rounded-2xl bg-indigo-500 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : null}
               {actionLabel}
