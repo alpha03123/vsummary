@@ -16,6 +16,7 @@ export function WorkspaceSettingsPanel({
   downloadingModelId,
   modelDownloadProgress,
   onChangeSetting,
+  onSaveApiKey,
   onDownloadFasterWhisperModel,
   onCancelFasterWhisperModelDownload,
   onResetSettings,
@@ -350,6 +351,16 @@ export function WorkspaceSettingsPanel({
                       placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
                       className="mt-3 w-full dark:bg-stone-950"
                     />
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={onSaveApiKey}
+                        disabled={!ui.openaiApiKey.trim()}
+                        className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
+                      >
+                        保存 Key
+                      </button>
+                    </div>
                   </div>
                 </WorkspaceSettingRow>
               </>

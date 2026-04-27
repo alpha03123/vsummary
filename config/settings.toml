@@ -1,7 +1,7 @@
 [asr]
 provider = "faster_whisper"
 language = "zh"
-transcript_enhancement_enabled = true
+transcript_enhancement_enabled = false
 
 [asr.faster_whisper]
 device = "auto"

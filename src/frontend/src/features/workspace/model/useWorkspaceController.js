@@ -1701,8 +1701,12 @@ export function useWorkspaceController() {
     });
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
+    if (key === "openaiApiKey") {
+      return;
+    }
+
     try {
-      if (key === "llmProvider" || key === "openaiBaseUrl" || key === "openaiModel" || key === "openaiApiKey") {
+      if (key === "llmProvider" || key === "openaiBaseUrl" || key === "openaiModel") {
         const savedProviderSettings = await updateProviderSettings(nextUi);
         dispatch({
           type: "workspace_settings_loaded",
@@ -1728,6 +1732,29 @@ export function useWorkspaceController() {
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "设置保存失败",
+      });
+    }
+  }
+
+  async function onSaveApiKey() {
+    const nextUi = normalizeUiSettings(state.ui);
+    if (!nextUi.openaiApiKey.trim()) {
+      return;
+    }
+    try {
+      const savedProviderSettings = await updateProviderSettings(nextUi);
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...nextUi,
+          ...savedProviderSettings,
+          openaiApiKey: "",
+        },
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "API Key 保存失败",
       });
     }
   }
@@ -2338,6 +2365,7 @@ export function useWorkspaceController() {
     onToggleSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,
+    onSaveApiKey,
     onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload,
     onResetSettings,

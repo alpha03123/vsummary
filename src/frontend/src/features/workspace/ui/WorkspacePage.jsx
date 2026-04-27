@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
+import { X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
@@ -51,20 +52,6 @@ export function WorkspacePage({ page }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
-
-  useEffect(() => {
-    if (!state.error || typeof actions.clearError !== "function") {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      actions.clearError();
-    }, 3000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [state.error, actions]);
 
   if (state.loading && !summary) {
     const waitingForBackend = !state.backendReady;
@@ -160,8 +147,21 @@ export function WorkspacePage({ page }) {
         />
 
         {state.error && (
-          <div className="mx-6 mt-4 p-4 rounded-2xl bg-red-50/90 dark:bg-red-950/40 text-red-800 dark:text-red-200 border border-red-100 dark:border-red-900/70 text-sm flex-shrink-0 relative z-20">
-            {state.error}
+          <div className="mx-6 mt-4 flex items-start justify-between gap-4 rounded-2xl border border-red-100 bg-red-50/90 p-4 text-sm text-red-800 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200 flex-shrink-0 relative z-20">
+            <div className="min-w-0 flex-1 break-words">
+              {state.error}
+            </div>
+            {typeof actions.clearError === "function" ? (
+              <button
+                type="button"
+                onClick={actions.clearError}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-950/50 dark:hover:text-red-100"
+                title="关闭错误提示"
+                aria-label="关闭错误提示"
+              >
+                <X size={16} />
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -290,6 +290,7 @@ export function WorkspacePage({ page }) {
                   downloadingModelId={generation.downloadingModelId}
                   modelDownloadProgress={generation.modelDownloadProgress}
                   onChangeSetting={actions.changeSetting}
+                  onSaveApiKey={actions.saveApiKey}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onCancelFasterWhisperModelDownload={actions.cancelFasterWhisperModelDownload}
                   onResetSettings={actions.resetSettings}
