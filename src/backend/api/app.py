@@ -44,6 +44,7 @@ from backend.agent.memory.context import AgentContext
 from backend.video_summary.infrastructure.settings import (
     load_settings,
 )
+from backend.video_summary.infrastructure.runtime import AsrModelNotReadyError
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTAINER = build_api_container(ROOT)
@@ -402,6 +403,8 @@ async def generate_video_summary(
                 None if request is None else request.transcript_enhancement_enabled
             ),
         )
+    except AsrModelNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     if video_summary is None:

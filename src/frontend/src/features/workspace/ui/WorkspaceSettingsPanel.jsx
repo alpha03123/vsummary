@@ -184,10 +184,11 @@ export function WorkspaceSettingsPanel({
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
                         const isDownloading = downloadingModelId === model.id;
+                        const isReady = model.downloaded === true;
                         const statusText = model.downloaded
                           ? "已下载到本地"
                           : isCurrent
-                            ? "当前配置使用该模型，尚未下载到项目目录"
+                            ? "当前默认模型，需先下载"
                             : "尚未下载";
                         return (
                           <div
@@ -229,7 +230,7 @@ export function WorkspaceSettingsPanel({
                                 >
                                   取消
                                 </button>
-                              ) : model.current ? (
+                              ) : isCurrent && isReady ? (
                                 <button
                                   type="button"
                                   disabled
@@ -237,7 +238,7 @@ export function WorkspaceSettingsPanel({
                                 >
                                   使用中
                                 </button>
-                              ) : model.downloaded ? (
+                              ) : isReady ? (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -265,7 +266,7 @@ export function WorkspaceSettingsPanel({
                                     }`}
                                 >
                                   <Download size={14} />
-                                  {needsConfirm ? "确认下载?" : "使用"}
+                                  {needsConfirm ? "确认下载?" : (isCurrent ? "下载并使用" : "下载")}
                                 </button>
                               )}
                             </div>

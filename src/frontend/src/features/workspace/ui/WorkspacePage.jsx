@@ -52,6 +52,7 @@ export function WorkspacePage({ page }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
+  const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
 
   if (state.loading && !summary) {
     const waitingForBackend = !state.backendReady;
@@ -123,6 +124,7 @@ export function WorkspacePage({ page }) {
                 });
               }}
               downloadProgress={generation.videoDownloadProgress}
+              currentAsrModel={currentAsrModel}
             />
           ) : (
             <WorkspaceSeriesGrid

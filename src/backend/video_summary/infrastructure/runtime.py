@@ -27,6 +27,10 @@ class VideoSummaryRuntime:
     asr: AsrRuntimeInfo
 
 
+class AsrModelNotReadyError(RuntimeError):
+    pass
+
+
 def build_litellm_completion_gateway(settings: AppSettings) -> LiteLLMCompletionGateway:
     return LiteLLMCompletionGateway(
         provider=settings.openai.provider,
@@ -54,6 +58,10 @@ def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeIn
     provider = settings.asr.provider
     if provider == "faster_whisper":
         model_manager = FasterWhisperModelManager(settings.asr.faster_whisper.models_dir)
+        if not model_manager.is_downloaded(settings.asr.faster_whisper.model_size):
+            raise AsrModelNotReadyError(
+                "当前语音模型尚未下载，请先到设置中下载后再生成 AI 概况。"
+            )
         return (
             FasterWhisperTranscriber(
                 model_size=model_manager.resolve_model_source(settings.asr.faster_whisper.model_size),

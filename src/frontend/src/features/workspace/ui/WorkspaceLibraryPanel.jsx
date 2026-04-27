@@ -53,6 +53,7 @@ function PanelFooter({
   selectedVideo,
   isGeneratingSelectedVideo,
   activeSeries,
+  currentAsrModel,
   downloadProgress,
   onGenerateVideo,
   onDownloadVideo,
@@ -60,6 +61,7 @@ function PanelFooter({
   onRequestDeleteCurrentVideo,
 }) {
   const isPlayground = activeSeries?.id === "__playground__";
+  const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -184,6 +186,11 @@ function PanelFooter({
         <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
         <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate" title={selectedVideo.title}>{selectedVideo.title}</h3>
       </div>
+      {modelNeedsDownload ? (
+        <div className="mb-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+          当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概况。
+        </div>
+      ) : null}
       <button
         type="button"
         className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${isGeneratingSelectedVideo
@@ -191,12 +198,17 @@ function PanelFooter({
           : "bg-accent text-white hover:bg-accent/90 shadow-sm active:scale-[0.98]"
           }`}
         onClick={onGenerateVideo}
-        disabled={isGeneratingSelectedVideo}
+        disabled={isGeneratingSelectedVideo || modelNeedsDownload}
       >
         {isGeneratingSelectedVideo ? (
           <>
             <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin text-stone-500" />
             正在生成 AI 概况...
+          </>
+        ) : modelNeedsDownload ? (
+          <>
+            <ArrowDown size={16} strokeWidth={2.5} />
+            先下载语音模型
           </>
         ) : (
           <>
@@ -221,6 +233,7 @@ export function WorkspaceLibraryPanel({
   selectedContextType,
   selectedVideo,
   isGeneratingSelectedVideo,
+  currentAsrModel,
   onEnterLibraryHome,
   onSelectSeriesContext,
   onSelectVideo,
@@ -362,6 +375,7 @@ export function WorkspaceLibraryPanel({
         selectedVideo={selectedVideo}
         isGeneratingSelectedVideo={isGeneratingSelectedVideo}
         activeSeries={activeSeries}
+        currentAsrModel={currentAsrModel}
         downloadProgress={downloadProgress}
         onGenerateVideo={onGenerateVideo}
         onDownloadVideo={onDownloadVideo}
