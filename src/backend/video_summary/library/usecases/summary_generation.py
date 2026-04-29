@@ -25,20 +25,18 @@ class GenerateVideoSummaryFromLibrary:
         video_id: str,
         transcript_enhancement_enabled: bool | None = None,
     ) -> VideoSummaryDTO | None:
-        video = self._workspace.get_video_source(series_id, video_id)
-        if video is None:
-            return None
-
         reporter = self._progress_tracker.create_reporter(f"{series_id}/{video_id}")
         try:
             await self._generator.run(
-                video.source_path,
-                video.output_dir,
+                series_id=series_id,
+                video_id=video_id,
                 progress_reporter=reporter,
                 transcript_enhancement_enabled=transcript_enhancement_enabled,
             )
             reporter.completed("AI 概况已生成")
             return self._workspace.get_video_summary(series_id, video_id)
+        except LookupError:
+            return None
         except RuntimeError as error:
             reporter.failed(str(error))
             raise

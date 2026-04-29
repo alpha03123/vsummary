@@ -565,17 +565,12 @@ class FileSystemVideoWorkspace:
             ],
         )
 
-    def delete_linked_series(self, series_id: str, *, delete_videos: bool = False) -> bool:
+    def delete_linked_series(self, series_id: str) -> bool:
         removed = False
         meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
         if meta_path.exists():
             meta_path.unlink()
             removed = True
-        if delete_videos:
-            local_dir = self._videos_dir / series_id
-            if local_dir.exists():
-                shutil.rmtree(local_dir)
-                removed = True
         return removed
 
     def delete_series(self, series_id: str) -> bool:

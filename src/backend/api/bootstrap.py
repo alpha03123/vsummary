@@ -50,6 +50,10 @@ from backend.bilibili.bilibili_meta_service import BilibiliMetaService
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.infrastructure.library_generation_adapters import (
+    WorkspaceBackedVideoMindmapGenerator,
+    WorkspaceBackedVideoSummaryGenerator,
+)
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rule_based_knowledge_card_generator import RuleBasedKnowledgeCardGenerator
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
@@ -138,8 +142,14 @@ def build_api_container(
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
     )
-    resolved_generator = generator or ConfiguredVideoSummaryWorkflow(root_dir)
-    resolved_mindmap_generator = mindmap_generator or ConfiguredMindmapWorkflow(root_dir)
+    resolved_generator = generator or WorkspaceBackedVideoSummaryGenerator(
+        workspace=workspace,
+        workflow=ConfiguredVideoSummaryWorkflow(root_dir),
+    )
+    resolved_mindmap_generator = mindmap_generator or WorkspaceBackedVideoMindmapGenerator(
+        workspace=workspace,
+        workflow=ConfiguredMindmapWorkflow(root_dir),
+    )
     resolved_knowledge_card_generator = knowledge_card_generator or RuleBasedKnowledgeCardGenerator()
     agent_runtime = LazyAgentRuntimeProvider(root_dir=root_dir, workspace=workspace)
     invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)

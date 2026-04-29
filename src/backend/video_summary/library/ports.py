@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Protocol
 
 from backend.video_summary.generation.ports import ProgressReporter
-from backend.video_summary.domain.models import SummaryDocument
 from backend.video_summary.library.models import (
     BilibiliUrlInfoDTO,
     KnowledgeCardDTO,
@@ -111,23 +109,30 @@ class VideoWorkspace(Protocol):
     def get_linked_series(self, series_id: str) -> LinkedSeries | None:
         ...
 
-    def delete_linked_series(self, series_id: str, *, delete_videos: bool = False) -> bool:
+    def delete_linked_series(self, series_id: str) -> bool:
         ...
 
 
 class VideoSummaryGenerator(Protocol):
     async def run(
         self,
-        source_path: Path,
-        output_dir: Path,
+        *,
+        series_id: str,
+        video_id: str,
         progress_reporter: ProgressReporter | None = None,
         transcript_enhancement_enabled: bool | None = None,
-    ) -> SummaryDocument:
+    ) -> None:
         ...
 
 
 class VideoMindmapGenerator(Protocol):
-    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+    async def run(
+        self,
+        *,
+        series_id: str,
+        video_id: str,
+        summary_data: dict[str, object],
+    ) -> None:
         ...
 
 

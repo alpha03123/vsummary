@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
-from backend.video_summary.domain.models import SummaryDocument
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_video_summary_application
 
@@ -26,7 +25,7 @@ class ConfiguredVideoSummaryWorkflow:
         output_dir: Path,
         progress_reporter: ProgressReporter | None = None,
         transcript_enhancement_enabled: bool | None = None,
-    ) -> SummaryDocument:
+    ) -> None:
         application = self._get_application(transcript_enhancement_enabled)
         resolved_progress_reporter = progress_reporter
         if progress_reporter is not None and application.settings.debug.mode:
@@ -34,7 +33,7 @@ class ConfiguredVideoSummaryWorkflow:
                 wrapped=progress_reporter,
                 log_path=output_dir / "debug.log",
             )
-        return await application.use_case.run(
+        await application.use_case.run(
             video_path=source_path,
             output_dir=output_dir,
             progress_reporter=resolved_progress_reporter,

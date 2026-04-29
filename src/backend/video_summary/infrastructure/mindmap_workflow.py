@@ -15,9 +15,9 @@ class ConfiguredMindmapWorkflow:
         self._cached_signature: tuple[str, str] | None = None
         self._cached_application = None
 
-    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> dict[str, object]:
+    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> None:
         application = self._get_application()
-        return await application.use_case.run(
+        await application.use_case.run(
             title=source_path.stem,
             duration_seconds=_resolve_duration_seconds(summary_data),
             summary_data=summary_data,

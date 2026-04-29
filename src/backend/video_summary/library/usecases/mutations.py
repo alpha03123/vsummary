@@ -48,7 +48,7 @@ class DeleteLinkedSeries:
         self._invalidator = invalidator
 
     def run(self, series_id: str) -> DeleteSeriesResult:
-        deleted = self._workspace.delete_linked_series(series_id, delete_videos=False)
+        deleted = self._workspace.delete_linked_series(series_id)
         if not deleted:
             raise LookupError(f"linked series not found: {series_id}")
         self._invalidator.invalidate()

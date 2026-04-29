@@ -10,13 +10,16 @@ class GenerateVideoMindmapFromLibrary:
         self._generator = generator
 
     async def run(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
-        video = self._workspace.get_video_source(series_id, video_id)
-        if video is None:
-            return None
-
         summary = self._workspace.get_video_summary(series_id, video_id)
         if summary is None:
             return None
 
-        await self._generator.run(video.source_path, video.output_dir, summary.summary)
+        try:
+            await self._generator.run(
+                series_id=series_id,
+                video_id=video_id,
+                summary_data=summary.summary,
+            )
+        except LookupError:
+            return None
         return self._workspace.get_video_mindmap(series_id, video_id)
