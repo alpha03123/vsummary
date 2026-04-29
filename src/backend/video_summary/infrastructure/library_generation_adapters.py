@@ -3,11 +3,11 @@ from __future__ import annotations
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
-from backend.video_summary.library.ports import VideoMindmapGenerator, VideoSummaryGenerator, VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader, VideoMindmapGenerator, VideoSummaryGenerator
 
 
 class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
-    def __init__(self, workspace: VideoWorkspace, workflow: ConfiguredVideoSummaryWorkflow) -> None:
+    def __init__(self, workspace: VideoLibraryReader, workflow: ConfiguredVideoSummaryWorkflow) -> None:
         self._workspace = workspace
         self._workflow = workflow
 
@@ -29,7 +29,7 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
 
 
 class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
-    def __init__(self, workspace: VideoWorkspace, workflow: ConfiguredMindmapWorkflow) -> None:
+    def __init__(self, workspace: VideoLibraryReader, workflow: ConfiguredMindmapWorkflow) -> None:
         self._workspace = workspace
         self._workflow = workflow
 
@@ -44,7 +44,7 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
         await self._workflow.run(video.source_path, video.output_dir, summary_data)
 
 
-def _require_video_source(workspace: VideoWorkspace, series_id: str, video_id: str):
+def _require_video_source(workspace: VideoLibraryReader, series_id: str, video_id: str):
     video = workspace.get_video_source(series_id, video_id)
     if video is None:
         raise LookupError(f"video not found '{series_id}/{video_id}'")

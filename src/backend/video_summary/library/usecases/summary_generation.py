@@ -3,15 +3,15 @@ from __future__ import annotations
 from backend.video_summary.library.models import VideoSummaryDTO
 from backend.video_summary.library.ports import (
     VideoGenerationProgressTracker,
+    VideoLibraryReader,
     VideoSummaryGenerator,
-    VideoWorkspace,
 )
 
 
 class GenerateVideoSummaryFromLibrary:
     def __init__(
         self,
-        workspace: VideoWorkspace,
+        workspace: VideoLibraryReader,
         generator: VideoSummaryGenerator,
         progress_tracker: VideoGenerationProgressTracker,
     ) -> None:

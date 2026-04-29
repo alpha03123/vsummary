@@ -14,7 +14,8 @@ from backend.video_summary.library.ports import (
     BilibiliUrlParser,
     LinkedVideoDownloadStarter,
     LinkedVideoResolver,
-    VideoWorkspace,
+    LinkedSeriesResolverWorkspace,
+    LinkedSeriesStore,
     WorkspaceIndexInvalidator,
 )
 
@@ -27,7 +28,7 @@ class StartLinkedVideoDownloadResult:
 class ResolveBilibiliSeries:
     def __init__(
         self,
-        workspace: VideoWorkspace,
+        workspace: LinkedSeriesStore,
         resolver: LinkedVideoResolver,
         invalidator: WorkspaceIndexInvalidator,
         parser: BilibiliUrlParser | None = None,
@@ -58,7 +59,7 @@ class ResolveBilibiliSeries:
 class ResolveBilibiliVideo:
     def __init__(
         self,
-        workspace: VideoWorkspace,
+        workspace: LinkedSeriesResolverWorkspace,
         resolver: LinkedVideoResolver,
         invalidator: WorkspaceIndexInvalidator,
         parser: BilibiliUrlParser | None = None,
@@ -102,7 +103,7 @@ class ResolveBilibiliVideo:
 
 
 class StartLinkedVideoDownload:
-    def __init__(self, workspace: VideoWorkspace, starter: LinkedVideoDownloadStarter) -> None:
+    def __init__(self, workspace: LinkedSeriesStore, starter: LinkedVideoDownloadStarter) -> None:
         self._workspace = workspace
         self._starter = starter
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 from backend.agent.schemas.tool_calls import ToolName
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 
 
 class SemanticScorer:
@@ -36,7 +36,7 @@ class BGEReranker(SemanticScorer):
 
 
 class VideoGraphPinpointService:
-    def __init__(self, *, workspace: VideoWorkspace, semantic_scorer: SemanticScorer | None = None) -> None:
+    def __init__(self, *, workspace: VideoLibraryReader, semantic_scorer: SemanticScorer | None = None) -> None:
         self._workspace = workspace
         self._semantic_scorer = semantic_scorer
 

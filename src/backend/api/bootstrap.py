@@ -46,7 +46,7 @@ from backend.agent.tools.video import execute_open_video, execute_video_seek
 from backend.bilibili.download_starter import BackgroundBilibiliDownloadStarter
 from backend.bilibili.bilibili_downloader import BilibiliDownloader
 from backend.bilibili.bilibili_meta_service import BilibiliMetaService
-from backend.shared.settings import SettingsService
+from backend.shared.settings import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -120,7 +120,7 @@ class ApiContainer:
     delete_linked_series: DeleteLinkedSeries
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
-    settings_service: SettingsService
+    settings_service: SettingsServicePort
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore

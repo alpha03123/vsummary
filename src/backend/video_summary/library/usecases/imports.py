@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
-from backend.video_summary.library.ports import VideoWorkspace, WorkspaceIndexInvalidator
+from backend.video_summary.library.ports import VideoImportStore, WorkspaceIndexInvalidator
 
 
 class ImportLocalSeries:
-    def __init__(self, workspace: VideoWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+    def __init__(self, workspace: VideoImportStore, invalidator: WorkspaceIndexInvalidator) -> None:
         self._workspace = workspace
         self._invalidator = invalidator
 
@@ -16,7 +16,7 @@ class ImportLocalSeries:
 
 
 class ImportLocalPlaygroundVideos:
-    def __init__(self, workspace: VideoWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+    def __init__(self, workspace: VideoImportStore, invalidator: WorkspaceIndexInvalidator) -> None:
         self._workspace = workspace
         self._invalidator = invalidator
 
@@ -27,7 +27,7 @@ class ImportLocalPlaygroundVideos:
 
 
 class ImportLocalSeriesVideos:
-    def __init__(self, workspace: VideoWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+    def __init__(self, workspace: VideoImportStore, invalidator: WorkspaceIndexInvalidator) -> None:
         self._workspace = workspace
         self._invalidator = invalidator
 

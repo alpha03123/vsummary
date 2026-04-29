@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.video_summary.library.ports import VideoWorkspace, WorkspaceIndexInvalidator
+from backend.video_summary.library.ports import LinkedSeriesStore, VideoMutationStore, WorkspaceIndexInvalidator
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class DeleteVideoResult:
 
 
 class DeleteSeries:
-    def __init__(self, workspace: VideoWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+    def __init__(self, workspace: VideoMutationStore, invalidator: WorkspaceIndexInvalidator) -> None:
         self._workspace = workspace
         self._invalidator = invalidator
 
@@ -30,7 +30,7 @@ class DeleteSeries:
 
 
 class DeleteVideoSource:
-    def __init__(self, workspace: VideoWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+    def __init__(self, workspace: VideoMutationStore, invalidator: WorkspaceIndexInvalidator) -> None:
         self._workspace = workspace
         self._invalidator = invalidator
 
@@ -43,7 +43,7 @@ class DeleteVideoSource:
 
 
 class DeleteLinkedSeries:
-    def __init__(self, workspace: VideoWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+    def __init__(self, workspace: LinkedSeriesStore, invalidator: WorkspaceIndexInvalidator) -> None:
         self._workspace = workspace
         self._invalidator = invalidator
 

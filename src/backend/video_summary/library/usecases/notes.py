@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from backend.video_summary.library.models import VideoNoteDTO, VideoNotesDTO
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoNotesStore
 
 
 class GetVideoNotes:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoNotesStore) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
@@ -13,7 +13,7 @@ class GetVideoNotes:
 
 
 class CreateVideoNote:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoNotesStore) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str, *, title: str, content: str, source: str) -> VideoNoteDTO | None:
@@ -27,7 +27,7 @@ class CreateVideoNote:
 
 
 class UpdateVideoNote:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoNotesStore) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str, note_id: str, *, title: str, content: str) -> VideoNoteDTO | None:
@@ -41,7 +41,7 @@ class UpdateVideoNote:
 
 
 class DeleteVideoNote:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoNotesStore) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str, note_id: str) -> bool | None:

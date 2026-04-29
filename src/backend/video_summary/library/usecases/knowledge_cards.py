@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from backend.video_summary.library.models import VideoKnowledgeCardsDTO
-from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoWorkspace
+from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoKnowledgeCardStore
 
 
 class GenerateVideoKnowledgeCards:
-    def __init__(self, workspace: VideoWorkspace, generator: KnowledgeCardGenerator) -> None:
+    def __init__(self, workspace: VideoKnowledgeCardStore, generator: KnowledgeCardGenerator) -> None:
         self._workspace = workspace
         self._generator = generator
 

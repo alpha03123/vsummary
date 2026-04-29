@@ -15,7 +15,7 @@ from backend.video_summary.infrastructure.settings import (
     AgentRetrievalSettings,
     load_settings,
 )
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 
 INDEX_SCHEMA_VERSION = 3
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
@@ -45,7 +45,7 @@ class SeriesRetrievalService:
     def __init__(
         self,
         *,
-        workspace: VideoWorkspace,
+        workspace: VideoLibraryReader,
         db_uri: str,
         embed_model=None,
         root_dir: Path | None = None,
@@ -147,7 +147,7 @@ class SeriesRetrievalService:
 
 
 class MetaStateReader:
-    def __init__(self, *, workspace: VideoWorkspace) -> None:
+    def __init__(self, *, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def read(self, *, scope_type: str, series_id: str, video_id: str) -> dict[str, object]:
@@ -275,7 +275,7 @@ def _build_source_family_filters(
     return []
 
 
-def _build_workspace_signature(workspace: VideoWorkspace) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _build_workspace_signature(workspace: VideoLibraryReader) -> tuple[tuple[str, ...], tuple[str, ...]]:
     series_parts: list[str] = []
     video_parts: list[str] = []
     for series in workspace.list_series():
@@ -313,7 +313,7 @@ def _artifact_fingerprint(value: object) -> str:
     return hashlib.sha1(encoded).hexdigest()
 
 
-def _build_documents(workspace: VideoWorkspace) -> list[RetrievalDocument]:
+def _build_documents(workspace: VideoLibraryReader) -> list[RetrievalDocument]:
     documents: list[RetrievalDocument] = []
     for series in workspace.list_series():
         for video in series.videos:
@@ -512,7 +512,7 @@ def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
 
 def _expand_transcript_hit(
     *,
-    workspace: VideoWorkspace,
+    workspace: VideoLibraryReader,
     series_id: str,
     video_id: str,
     hit: dict[str, object],

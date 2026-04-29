@@ -10,11 +10,11 @@ from backend.video_summary.library.models import (
     VideoTranscriptDTO,
     VideoWorkspaceToolsDTO,
 )
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 
 
 class ListVideoLibrary:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self) -> VideoLibraryDTO:
@@ -22,7 +22,7 @@ class ListVideoLibrary:
 
 
 class GetVideoSummary:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
@@ -30,7 +30,7 @@ class GetVideoSummary:
 
 
 class GetVideoSource:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
@@ -38,7 +38,7 @@ class GetVideoSource:
 
 
 class GetVideoTranscript:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
@@ -46,7 +46,7 @@ class GetVideoTranscript:
 
 
 class GetVideoMindmap:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
@@ -54,7 +54,7 @@ class GetVideoMindmap:
 
 
 class GetVideoChapterCards:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoChapterCardsDTO | None:
@@ -62,7 +62,7 @@ class GetVideoChapterCards:
 
 
 class GetVideoKnowledgeCards:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
@@ -70,7 +70,7 @@ class GetVideoKnowledgeCards:
 
 
 class GetVideoWorkspaceTools:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def run(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:

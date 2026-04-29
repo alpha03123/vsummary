@@ -22,7 +22,7 @@ from backend.video_summary.library.models import (
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 
-class VideoWorkspace(Protocol):
+class VideoLibraryReader(Protocol):
     def get_workspace(self) -> WorkspaceDTO:
         ...
 
@@ -47,6 +47,14 @@ class VideoWorkspace(Protocol):
     def get_video_knowledge_cards(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         ...
 
+    def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
+        ...
+
+    def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
+        ...
+
+
+class VideoKnowledgeCardWriter(Protocol):
     def save_video_knowledge_cards(
         self,
         series_id: str,
@@ -57,6 +65,11 @@ class VideoWorkspace(Protocol):
     ) -> None:
         ...
 
+class VideoKnowledgeCardStore(VideoLibraryReader, VideoKnowledgeCardWriter, Protocol):
+    pass
+
+
+class VideoNotesStore(Protocol):
     def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
         ...
 
@@ -85,9 +98,7 @@ class VideoWorkspace(Protocol):
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
         ...
 
-    def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
-        ...
-
+class VideoImportStore(Protocol):
     def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
         ...
 
@@ -97,12 +108,16 @@ class VideoWorkspace(Protocol):
     def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
         ...
 
+
+class VideoMutationStore(Protocol):
     def delete_series(self, series_id: str) -> bool:
         ...
 
     def delete_video(self, series_id: str, video_id: str) -> bool:
         ...
 
+
+class LinkedSeriesStore(Protocol):
     def save_linked_series(self, series: LinkedSeries) -> None:
         ...
 
@@ -111,6 +126,10 @@ class VideoWorkspace(Protocol):
 
     def delete_linked_series(self, series_id: str) -> bool:
         ...
+
+
+class LinkedSeriesResolverWorkspace(VideoLibraryReader, LinkedSeriesStore, Protocol):
+    pass
 
 
 class VideoSummaryGenerator(Protocol):

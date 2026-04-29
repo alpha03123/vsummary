@@ -7,7 +7,7 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.ports import ChatGateway
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent_graph.query.models import ExecutionDepth, SelectionMode
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 
 
 class PlannerSubplanOutput(BaseModel):
@@ -31,7 +31,7 @@ class SeriesPlannerOutput(BaseModel):
 
 
 class SeriesPlanner:
-    def __init__(self, *, workspace: VideoWorkspace, gateway: ChatGateway) -> None:
+    def __init__(self, *, workspace: VideoLibraryReader, gateway: ChatGateway) -> None:
         self._workspace = workspace
         self._gateway = gateway
 

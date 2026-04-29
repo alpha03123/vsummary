@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from backend.video_summary.library.models import VideoMindmapDTO
-from backend.video_summary.library.ports import VideoMindmapGenerator, VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader, VideoMindmapGenerator
 
 
 class GenerateVideoMindmapFromLibrary:
-    def __init__(self, workspace: VideoWorkspace, generator: VideoMindmapGenerator) -> None:
+    def __init__(self, workspace: VideoLibraryReader, generator: VideoMindmapGenerator) -> None:
         self._workspace = workspace
         self._generator = generator
 

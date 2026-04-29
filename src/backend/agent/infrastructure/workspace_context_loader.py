@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from backend.agent.memory.context import AgentContext, ToolAvailability
 from backend.agent.ports import AgentContextLoader
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 
 
 class WorkspaceAgentContextLoader:
-    def __init__(self, workspace: VideoWorkspace) -> None:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
     def load(self, session_id: str) -> AgentContext:

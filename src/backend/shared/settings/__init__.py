@@ -1,17 +1,15 @@
 from backend.shared.settings.service import (
     ProviderSettings,
-    ProviderSettingsUpdate,
+    SettingsServicePort,
     SettingsService,
     SettingsValidationError,
     WorkspaceSettings,
-    WorkspaceSettingsUpdate,
 )
 
 __all__ = [
     "ProviderSettings",
-    "ProviderSettingsUpdate",
     "SettingsService",
+    "SettingsServicePort",
     "SettingsValidationError",
     "WorkspaceSettings",
-    "WorkspaceSettingsUpdate",
 ]

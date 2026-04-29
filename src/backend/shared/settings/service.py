@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.settings import (
@@ -35,14 +36,6 @@ class ProviderSettings:
 
 
 @dataclass(frozen=True)
-class ProviderSettingsUpdate:
-    llm_provider: str
-    openai_base_url: str
-    openai_model: str
-    openai_api_key: str | None
-
-
-@dataclass(frozen=True)
 class WorkspaceSettings:
     theme: str
     show_takeaways: bool
@@ -51,13 +44,33 @@ class WorkspaceSettings:
     transcription_mode: str
 
 
-@dataclass(frozen=True)
-class WorkspaceSettingsUpdate:
-    theme: str
-    show_takeaways: bool
-    transcript_enhancement_enabled: bool
-    asr_model_quality: str
-    transcription_mode: str
+class SettingsServicePort(Protocol):
+    def get_workspace_settings(self) -> WorkspaceSettings:
+        ...
+
+    def update_workspace_settings(
+        self,
+        *,
+        theme: str,
+        show_takeaways: bool,
+        transcript_enhancement_enabled: bool,
+        asr_model_quality: str,
+        transcription_mode: str,
+    ) -> WorkspaceSettings:
+        ...
+
+    def get_provider_settings(self) -> ProviderSettings:
+        ...
+
+    def update_provider_settings(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_model: str,
+        openai_api_key: str | None,
+    ) -> ProviderSettings:
+        ...
 
 
 class SettingsService:
@@ -82,33 +95,41 @@ class SettingsService:
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
         )
 
-    def update_workspace_settings(self, request: WorkspaceSettingsUpdate) -> WorkspaceSettings:
-        if request.theme not in VALID_THEMES:
-            raise SettingsValidationError(f"unsupported theme '{request.theme}'")
-        if not self._faster_whisper_model_manager.is_supported(request.asr_model_quality):
-            raise SettingsValidationError(f"unsupported asr model '{request.asr_model_quality}'")
-        if request.transcription_mode not in VALID_TRANSCRIPTION_MODES:
-            raise SettingsValidationError(f"unsupported transcription mode '{request.transcription_mode}'")
+    def update_workspace_settings(
+        self,
+        *,
+        theme: str,
+        show_takeaways: bool,
+        transcript_enhancement_enabled: bool,
+        asr_model_quality: str,
+        transcription_mode: str,
+    ) -> WorkspaceSettings:
+        if theme not in VALID_THEMES:
+            raise SettingsValidationError(f"unsupported theme '{theme}'")
+        if not self._faster_whisper_model_manager.is_supported(asr_model_quality):
+            raise SettingsValidationError(f"unsupported asr model '{asr_model_quality}'")
+        if transcription_mode not in VALID_TRANSCRIPTION_MODES:
+            raise SettingsValidationError(f"unsupported transcription mode '{transcription_mode}'")
 
         current_settings = load_settings(self._config_path, self._root_dir)
         next_settings = replace_workspace_ui_settings(
             current_settings,
             WorkspaceUiSettings(
-                theme=request.theme,
-                show_takeaways=request.show_takeaways,
+                theme=theme,
+                show_takeaways=show_takeaways,
             ),
         )
-        next_settings = replace_transcript_enhancement_enabled(next_settings, request.transcript_enhancement_enabled)
-        next_settings = replace_faster_whisper_model_size(next_settings, request.asr_model_quality)
-        next_settings = replace_faster_whisper_transcription_mode(next_settings, request.transcription_mode)
+        next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
+        next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
+        next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
         save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
-            theme=request.theme,
-            show_takeaways=request.show_takeaways,
-            transcript_enhancement_enabled=request.transcript_enhancement_enabled,
-            asr_model_quality=request.asr_model_quality,
-            transcription_mode=request.transcription_mode,
+            theme=theme,
+            show_takeaways=show_takeaways,
+            transcript_enhancement_enabled=transcript_enhancement_enabled,
+            asr_model_quality=asr_model_quality,
+            transcription_mode=transcription_mode,
         )
 
     def get_provider_settings(self) -> ProviderSettings:
@@ -121,22 +142,45 @@ class SettingsService:
             openai_api_key_masked=_mask_api_key(env_settings.api_key),
         )
 
-    def update_provider_settings(self, request: ProviderSettingsUpdate) -> ProviderSettings:
+    def update_provider_settings(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_model: str,
+        openai_api_key: str | None,
+    ) -> ProviderSettings:
         provider_settings = self._validate_provider_settings(
-            llm_provider=request.llm_provider,
-            openai_base_url=request.openai_base_url,
-            openai_model=request.openai_model,
-            openai_api_key=request.openai_api_key,
+            llm_provider=llm_provider,
+            openai_base_url=openai_base_url,
+            openai_model=openai_model,
+            openai_api_key=openai_api_key,
         )
         self._save_provider_settings(
-            ProviderSettingsUpdate(
-                llm_provider=provider_settings.llm_provider,
-                openai_base_url=provider_settings.openai_base_url,
-                openai_model=provider_settings.openai_model,
-                openai_api_key=self._resolve_openai_api_key(request.openai_api_key),
-            )
+            llm_provider=provider_settings.llm_provider,
+            openai_base_url=provider_settings.openai_base_url,
+            openai_model=provider_settings.openai_model,
+            openai_api_key=self._resolve_openai_api_key(openai_api_key),
         )
         return provider_settings
+
+    def _save_provider_settings(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_model: str,
+        openai_api_key: str,
+    ) -> None:
+        save_env_settings(
+            self._root_dir,
+            EnvSettings(
+                provider=llm_provider,
+                base_url=openai_base_url,
+                model=openai_model,
+                api_key=openai_api_key,
+            ),
+        )
 
     def _validate_provider_settings(
         self,
@@ -163,17 +207,6 @@ class SettingsService:
             openai_model=normalized_model,
             has_openai_api_key=bool(self._resolve_openai_api_key(openai_api_key)),
             openai_api_key_masked=_mask_api_key(self._resolve_openai_api_key(openai_api_key)),
-        )
-
-    def _save_provider_settings(self, provider_settings: ProviderSettingsUpdate) -> None:
-        save_env_settings(
-            self._root_dir,
-            EnvSettings(
-                provider=provider_settings.llm_provider,
-                base_url=provider_settings.openai_base_url,
-                model=provider_settings.openai_model,
-                api_key=provider_settings.openai_api_key,
-            ),
         )
 
     def _resolve_openai_api_key(self, openai_api_key: str | None) -> str:

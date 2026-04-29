@@ -12,7 +12,6 @@ from backend.api.contracts import (
     WorkspaceSettingsResponse,
 )
 from backend.api.sse import stream_progress_events
-from backend.shared.settings import ProviderSettingsUpdate, SettingsValidationError, WorkspaceSettingsUpdate
 from backend.video_summary.infrastructure.settings import load_settings
 
 router = APIRouter()
@@ -37,15 +36,13 @@ def update_workspace_settings(
 ) -> WorkspaceSettingsResponse:
     try:
         settings = container.settings_service.update_workspace_settings(
-            WorkspaceSettingsUpdate(
-                theme=request.theme,
-                show_takeaways=request.show_takeaways,
-                transcript_enhancement_enabled=request.transcript_enhancement_enabled,
-                asr_model_quality=request.asr_model_quality,
-                transcription_mode=request.transcription_mode,
-            )
+            theme=request.theme,
+            show_takeaways=request.show_takeaways,
+            transcript_enhancement_enabled=request.transcript_enhancement_enabled,
+            asr_model_quality=request.asr_model_quality,
+            transcription_mode=request.transcription_mode,
         )
-    except SettingsValidationError as error:
+    except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     return WorkspaceSettingsResponse(
@@ -76,14 +73,12 @@ def update_provider_settings(
 ) -> ProviderSettingsResponse:
     try:
         env_settings = container.settings_service.update_provider_settings(
-            ProviderSettingsUpdate(
-                llm_provider=request.llm_provider,
-                openai_base_url=request.openai_base_url,
-                openai_model=request.openai_model,
-                openai_api_key=request.openai_api_key,
-            )
+            llm_provider=request.llm_provider,
+            openai_base_url=request.openai_base_url,
+            openai_model=request.openai_model,
+            openai_api_key=request.openai_api_key,
         )
-    except SettingsValidationError as error:
+    except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     return ProviderSettingsResponse(

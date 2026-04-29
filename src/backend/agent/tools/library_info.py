@@ -12,7 +12,7 @@ from backend.agent.schemas.tool_calls import (
     ToolName,
     ToolPlane,
 )
-from backend.video_summary.library.ports import VideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 
 
 LIST_SERIES_VIDEOS_TOOL = ToolDefinition(
@@ -60,7 +60,7 @@ GET_VIDEO_TRANSCRIPT_TOOL = ToolDefinition(
     contexts=(ToolContextTag.SERIES, ToolContextTag.VIDEO),
 )
 
-def create_list_series_videos_handler(workspace: VideoWorkspace):
+def create_list_series_videos_handler(workspace: VideoLibraryReader):
     def execute_list_series_videos(call: ListSeriesVideosCall, context: AgentContext) -> ToolExecutionResult:
         resolved_series_id = _resolve_series_id(call.series_id, context)
         series = next((item for item in workspace.list_series() if item.id == resolved_series_id), None)
@@ -92,7 +92,7 @@ def create_list_series_videos_handler(workspace: VideoWorkspace):
     return execute_list_series_videos
 
 
-def create_get_video_summary_handler(workspace: VideoWorkspace):
+def create_get_video_summary_handler(workspace: VideoLibraryReader):
     def execute_get_video_summary(call: GetVideoSummaryCall, context: AgentContext) -> ToolExecutionResult:
         resolved_target = _resolve_video_target(call.series_id, call.video_id, context)
         if resolved_target is None:
@@ -154,7 +154,7 @@ def create_get_video_summary_handler(workspace: VideoWorkspace):
     return execute_get_video_summary
 
 
-def create_get_video_tools_handler(workspace: VideoWorkspace):
+def create_get_video_tools_handler(workspace: VideoLibraryReader):
     def execute_get_video_tools(call: GetVideoToolsCall, context: AgentContext) -> ToolExecutionResult:
         resolved_target = _resolve_video_target(call.series_id, call.video_id, context)
         if resolved_target is None:
@@ -192,7 +192,7 @@ def create_get_video_tools_handler(workspace: VideoWorkspace):
     return execute_get_video_tools
 
 
-def create_get_video_transcript_handler(workspace: VideoWorkspace):
+def create_get_video_transcript_handler(workspace: VideoLibraryReader):
     def execute_get_video_transcript(call: GetVideoTranscriptCall, context: AgentContext) -> ToolExecutionResult:
         resolved_target = _resolve_video_target(call.series_id, call.video_id, context)
         if resolved_target is None:
