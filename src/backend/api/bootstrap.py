@@ -117,7 +117,6 @@ class ApiContainer:
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     settings_service: ApiSettingsService
-    get_agent_service: Callable[[], AgentGraphService]
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
@@ -201,7 +200,6 @@ def build_api_container(
             root_dir=root_dir,
             faster_whisper_model_manager=model_manager,
         ),
-        get_agent_service=agent_runtime.get_agent_service,
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
@@ -227,9 +225,6 @@ class LazyAgentRuntimeProvider:
         self._cached_agent_graph_service: AgentGraphService | None = None
         self._cached_context_budget_service: AgentContextBudgetService | None = None
         self._cached_retrieval_service: SeriesRetrievalService | None = None
-
-    def get_agent_service(self) -> AgentGraphService:
-        return self.get_agent_graph_service()
 
     def get_agent_graph_service(self) -> AgentGraphService:
         with self._lock:
