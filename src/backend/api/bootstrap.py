@@ -43,10 +43,10 @@ from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_m
 from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
 from backend.agent.tools.series import execute_open_series_home, execute_open_series_overview
 from backend.agent.tools.video import execute_open_video, execute_video_seek
-from backend.api.settings_service import ApiSettingsService
 from backend.bilibili.download_starter import BackgroundBilibiliDownloadStarter
 from backend.bilibili.bilibili_downloader import BilibiliDownloader
 from backend.bilibili.bilibili_meta_service import BilibiliMetaService
+from backend.shared.settings import SettingsService
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -120,7 +120,7 @@ class ApiContainer:
     delete_linked_series: DeleteLinkedSeries
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
-    settings_service: ApiSettingsService
+    settings_service: SettingsService
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
@@ -205,7 +205,7 @@ def build_api_container(
         delete_linked_series=DeleteLinkedSeries(workspace, invalidator),
         generation_progress_tracker=progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
-        settings_service=ApiSettingsService(
+        settings_service=SettingsService(
             config_path=config_path,
             root_dir=root_dir,
             faster_whisper_model_manager=model_manager,

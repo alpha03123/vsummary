@@ -9,9 +9,9 @@ from backend.video_summary.infrastructure.settings import (
     VALID_THEMES,
     VALID_TRANSCRIPTION_MODES,
     WorkspaceUiSettings,
-    normalize_openai_base_url,
     load_env_settings,
     load_settings,
+    normalize_openai_base_url,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
@@ -60,7 +60,7 @@ class WorkspaceSettingsUpdate:
     transcription_mode: str
 
 
-class ApiSettingsService:
+class SettingsService:
     def __init__(
         self,
         *,

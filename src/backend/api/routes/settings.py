@@ -11,8 +11,8 @@ from backend.api.contracts import (
     UpdateWorkspaceSettingsRequest,
     WorkspaceSettingsResponse,
 )
-from backend.api.settings_service import ProviderSettingsUpdate, SettingsValidationError, WorkspaceSettingsUpdate
 from backend.api.sse import stream_progress_events
+from backend.shared.settings import ProviderSettingsUpdate, SettingsValidationError, WorkspaceSettingsUpdate
 from backend.video_summary.infrastructure.settings import load_settings
 
 router = APIRouter()
