@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
+from backend.agent.tools.context_access import render_model_visible_actions_for_scope
 from backend.agent_graph.runtime.nodes import (
     build_advance_subplan_node,
     build_answer_node,
@@ -42,7 +43,9 @@ def build_agent_graph(
     action_reply_program=None,
     series_aggregator=None,
 ):
-    resolved_classifier_program = classifier_program or SeriesQueryClassifierProgram()
+    resolved_classifier_program = classifier_program or SeriesQueryClassifierProgram(
+        available_actions_resolver=render_model_visible_actions_for_scope,
+    )
     resolved_compare_split_program = compare_split_program or CompareSplitProgram()
     resolved_retrieval_service = retrieval_service or _MissingRetrievalService()
     resolved_pinpoint_service = pinpoint_service or _MissingPinpointService()

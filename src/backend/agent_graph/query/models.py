@@ -10,6 +10,14 @@ class CompareSplitDecision(BaseModel):
     reason: str = ""
 
 
+class QueryPlanningInput(BaseModel):
+    scope_type: str
+    series_id: str = ""
+    video_id: str = ""
+    user_message: str = ""
+    history_selected_videos: list[dict[str, object]] = Field(default_factory=list)
+
+
 class SelectionMode(str, Enum):
     FRESH = "fresh"
     CARRY_FORWARD = "carry_forward"

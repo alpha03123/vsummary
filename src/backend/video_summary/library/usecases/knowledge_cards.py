@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from backend.video_summary.library.models import VideoKnowledgeCardsDTO
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoWorkspace
-from backend.video_summary.library.views import VideoKnowledgeCardsView
 
 
 class GenerateVideoKnowledgeCards:
@@ -9,7 +9,7 @@ class GenerateVideoKnowledgeCards:
         self._workspace = workspace
         self._generator = generator
 
-    def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsView | None:
+    def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         if self._workspace.get_video_source(series_id, video_id) is None:
             return None
 

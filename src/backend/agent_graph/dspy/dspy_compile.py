@@ -3,17 +3,24 @@ from __future__ import annotations
 import dspy
 
 from backend.agent_graph.dspy.programs import (
+    AvailableActionsResolver,
     ClassifySeriesQuery,
-    _render_available_actions_for_classifier,
     normalize_classifier_prediction,
 )
-from backend.agent.memory.context import AgentContext
 
 
 class SeriesQueryClassifierModule(dspy.Module):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        available_actions_resolver: AvailableActionsResolver | None = None,
+    ) -> None:
         super().__init__()
         self.predict = dspy.Predict(ClassifySeriesQuery)
+        self._available_actions_resolver = available_actions_resolver or _default_available_actions_resolver
+
+    def set_available_actions_resolver(self, resolver: AvailableActionsResolver) -> None:
+        self._available_actions_resolver = resolver
 
     def forward(
         self,
@@ -24,13 +31,11 @@ class SeriesQueryClassifierModule(dspy.Module):
         history_summary: str = "",
         history_selected_videos: list[dict[str, object]] | None = None,
     ):
-        context = AgentContext(
-            session_id=f"{scope_type}|{series_id or 'unknown'}|classifier",
+        available_actions = self._available_actions_resolver(
             scope_type=scope_type,
-            series_id=series_id or None,
-            video_id=video_id or None,
+            series_id=series_id,
+            video_id=video_id,
         )
-        available_actions = _render_available_actions_for_classifier(context)
         return self.predict(
             user_message=user_message,
             scope_type=scope_type,
@@ -112,3 +117,8 @@ def _lookup(source, key: str):
         except Exception:
             pass
     return getattr(source, key, None)
+
+
+def _default_available_actions_resolver(*, scope_type: str, series_id: str, video_id: str) -> str:
+    del scope_type, series_id, video_id
+    return "(none)"

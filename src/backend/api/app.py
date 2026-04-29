@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 
 from backend.api.bootstrap import build_api_container
+from backend.bilibili.download_starter import build_video_download_task_id
 from backend.api.settings_service import ProviderSettingsUpdate, SettingsValidationError, WorkspaceSettingsUpdate
 from backend.api.responses import (
     AgentChatRequest,
@@ -22,11 +23,7 @@ from backend.api.responses import (
     AgentSessionRecoveryResponse,
     AgentSessionClearRequest,
     HealthResponse,
-    VideoChapterCardsResponse,
-    VideoKnowledgeCardsResponse,
-    VideoLibraryResponse,
-    VideoNoteResponse,
-    VideoNotesResponse,
+    LinkedVideoDownloadResponse,
     ResolveBilibiliSeriesRequest,
     ResolveBilibiliVideoRequest,
     SeriesResponse,
@@ -38,8 +35,6 @@ from backend.api.responses import (
     VideoNotesResponse,
     VideoWorkspaceToolsResponse,
 )
-from backend.bilibili.bilibili_url_parser import parse_bilibili_url, BilibiliUrlParseError
-from backend.video_summary.infrastructure.filesystem_video_workspace import PLAYGROUND_SERIES_ID
 from backend.agent.memory.context import AgentContext
 from backend.video_summary.infrastructure.settings import (
     load_settings,
@@ -100,7 +95,7 @@ def health() -> HealthResponse:
 @app.get("/api/videos", response_model=VideoLibraryResponse)
 def list_videos() -> VideoLibraryResponse:
     library = CONTAINER.list_video_library.run()
-    return VideoLibraryResponse.from_view(library)
+    return VideoLibraryResponse.from_model(library)
 
 
 @app.get("/api/settings", response_model=WorkspaceSettingsResponse)
@@ -283,7 +278,7 @@ def get_video_cards(series_id: str, video_id: str) -> VideoChapterCardsResponse:
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"cards not found for video '{series_id}/{video_id}'")
 
-    return VideoChapterCardsResponse.from_view(video_cards)
+    return VideoChapterCardsResponse.from_model(video_cards)
 
 
 @app.get("/api/videos/{series_id}/{video_id}/knowledge-cards", response_model=VideoKnowledgeCardsResponse)
@@ -293,7 +288,7 @@ def get_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowledgeCa
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"knowledge cards not found for video '{series_id}/{video_id}'")
 
-    return VideoKnowledgeCardsResponse.from_view(video_cards)
+    return VideoKnowledgeCardsResponse.from_model(video_cards)
 
 
 @app.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate", response_model=VideoKnowledgeCardsResponse)
@@ -302,7 +297,7 @@ def generate_video_knowledge_cards(series_id: str, video_id: str) -> VideoKnowle
     video_cards = CONTAINER.generate_video_cards.run(series_id, video_id)
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
-    return VideoKnowledgeCardsResponse.from_view(video_cards)
+    return VideoKnowledgeCardsResponse.from_model(video_cards)
 
 
 @app.get("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNotesResponse)
@@ -311,7 +306,7 @@ def get_video_notes(series_id: str, video_id: str) -> VideoNotesResponse:
     if video_notes is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
 
-    return VideoNotesResponse.from_view(video_notes)
+    return VideoNotesResponse.from_model(video_notes)
 
 
 @app.post("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNoteResponse)
@@ -333,7 +328,7 @@ def create_video_note(
 
     if note is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
-    return VideoNoteResponse.from_view(note)
+    return VideoNoteResponse.from_model(note)
 
 
 @app.put("/api/videos/{series_id}/{video_id}/notes/{note_id}", response_model=VideoNoteResponse)
@@ -358,7 +353,7 @@ def update_video_note(
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     if note is None:
         raise HTTPException(status_code=404, detail=f"note not found '{note_id}'")
-    return VideoNoteResponse.from_view(note)
+    return VideoNoteResponse.from_model(note)
 
 
 @app.delete("/api/videos/{series_id}/{video_id}/notes/{note_id}")
@@ -377,7 +372,7 @@ def get_video_tools(series_id: str, video_id: str) -> VideoWorkspaceToolsRespons
     if video_tools is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
 
-    return VideoWorkspaceToolsResponse.from_view(video_tools)
+    return VideoWorkspaceToolsResponse.from_model(video_tools)
 
 
 @app.get("/api/videos/{series_id}/{video_id}/preview")
@@ -425,22 +420,21 @@ async def generate_video_mindmap(series_id: str, video_id: str) -> dict[str, obj
 @app.delete("/api/series/{series_id}")
 def delete_series(series_id: str) -> dict[str, object]:
     try:
-        deleted = CONTAINER.video_workspace.delete_series(series_id)
+        deleted = CONTAINER.delete_series.run(series_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"series not found '{series_id}'")
-    CONTAINER.invalidate_agent_workspace_indexes()
-    return {"status": "deleted", "series_id": series_id}
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"status": "deleted", "series_id": deleted.series_id}
 
 
 @app.delete("/api/videos/{series_id}/{video_id}")
 def delete_video_source(series_id: str, video_id: str) -> dict[str, object]:
-    deleted = CONTAINER.video_workspace.delete_video(series_id, video_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
-    CONTAINER.invalidate_agent_workspace_indexes()
-    return {"status": "deleted", "series_id": series_id, "video_id": video_id}
+    try:
+        deleted = CONTAINER.delete_video_source.run(series_id, video_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"status": "deleted", "series_id": deleted.series_id, "video_id": deleted.video_id}
 
 
 @app.post("/api/import/local/series", response_model=SeriesResponse)
@@ -449,54 +443,45 @@ async def import_local_series(
     files: list[UploadFile] = File(...),
 ) -> SeriesResponse:
     try:
-        series = CONTAINER.video_workspace.import_local_series(
+        series = CONTAINER.import_local_series.run(
             title=series_title,
             files=[(file.filename or "", file.file) for file in files],
         )
-        CONTAINER.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     finally:
         await asyncio.gather(*(file.close() for file in files), return_exceptions=True)
 
-    return SeriesResponse(
-        id=series.id,
-        title=series.title,
-        videos=[VideoCardResponse.from_view(video) for video in series.videos],
-        is_linked=series.is_linked,
-        source_url=series.source_url,
-    )
+    return SeriesResponse.from_model(series)
 
 
 @app.post("/api/import/local/playground", response_model=list[VideoCardResponse])
 async def import_local_playground_videos(files: list[UploadFile] = File(...)) -> list[VideoCardResponse]:
     try:
-        videos = CONTAINER.video_workspace.import_local_playground_videos(
+        videos = CONTAINER.import_local_playground_videos.run(
             files=[(file.filename or "", file.file) for file in files],
         )
-        CONTAINER.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     finally:
         await asyncio.gather(*(file.close() for file in files), return_exceptions=True)
 
-    return [VideoCardResponse.from_view(video) for video in videos]
+    return [VideoCardResponse.from_model(video) for video in videos]
 
 
 @app.post("/api/import/local/series/{series_id}", response_model=list[VideoCardResponse])
 async def import_local_series_videos(series_id: str, files: list[UploadFile] = File(...)) -> list[VideoCardResponse]:
     try:
-        videos = CONTAINER.video_workspace.import_local_series_videos(
+        videos = CONTAINER.import_local_series_videos.run(
             series_id=series_id,
             files=[(file.filename or "", file.file) for file in files],
         )
-        CONTAINER.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     finally:
         await asyncio.gather(*(file.close() for file in files), return_exceptions=True)
 
-    return [VideoCardResponse.from_view(video) for video in videos]
+    return [VideoCardResponse.from_model(video) for video in videos]
 
 
 @app.post("/api/agent/chat", response_model=AgentChatResponse)
@@ -697,155 +682,41 @@ def _encode_sse_event(event_type: str, payload: dict[str, object]) -> str:
 
 @app.post("/api/linked/bilibili/resolve/series", response_model=SeriesResponse)
 async def resolve_bilibili_series(request: ResolveBilibiliSeriesRequest) -> SeriesResponse:
-    """解析 Bilibili 合集或多 P 视频 URL，写入 linked_series.json，并返回 series 数据。"""
     try:
-        url_info = parse_bilibili_url(request.url)
-    except BilibiliUrlParseError as exc:
+        series = await CONTAINER.resolve_bilibili_series.run(url=request.url)
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    if url_info.url_type == "video":
-        # 单视频会先走 resolve_single_video，再包装成单视频系列。
-        meta_single = await CONTAINER.bilibili_meta_service.resolve_single_video(url_info)
-        from backend.bilibili.bilibili_meta_service import LinkedSeriesMeta
-        meta = LinkedSeriesMeta(
-            series_id=f"bilibili-video-{url_info.bvid}",
-            title=meta_single.title,
-            cover_url=meta_single.cover_url,
-            source_url=meta_single.source_url,
-            videos=[meta_single],
-        )
-    else:
-        meta = await CONTAINER.bilibili_meta_service.resolve_series(url_info)
-
-    # 序列化并落盘元数据
-    meta_dict = {
-        "title": meta.title,
-        "cover_url": meta.cover_url,
-        "source_url": meta.source_url,
-        "videos": [
-            {
-                "bvid": v.bvid,
-                "page": v.page,
-                "title": v.title,
-                "cover_url": v.cover_url,
-                "duration_seconds": v.duration_seconds,
-                "source_url": v.source_url,
-            }
-            for v in meta.videos
-        ],
-    }
-    CONTAINER.video_workspace.save_linked_series_meta(meta.series_id, meta_dict)
-
-    # 刷新 library 并返回新 series
-    library = CONTAINER.list_video_library.run()
-    for series in library.series:
-        if series.id == meta.series_id:
-            from backend.api.responses import VideoCardResponse
-            return SeriesResponse(
-                id=series.id,
-                title=series.title,
-                videos=[VideoCardResponse.from_view(v) for v in series.videos],
-                is_linked=series.is_linked,
-                source_url=series.source_url,
-            )
-    raise HTTPException(status_code=500, detail="解析成功，但无法在 library 中找到对应的 series。")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return SeriesResponse.from_model(series)
 
 
 @app.post("/api/linked/bilibili/resolve/video", response_model=VideoCardResponse)
 async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest) -> VideoCardResponse:
-    """解析单个 Bilibili 视频 URL，加入 Playground 或指定系列，并返回 video card。"""
     try:
-        url_info = parse_bilibili_url(request.url)
-    except BilibiliUrlParseError as exc:
+        card = await CONTAINER.resolve_bilibili_video.run(
+            url=request.url,
+            target_series_id=request.target_series_id,
+        )
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if url_info.url_type != "video":
-        raise HTTPException(status_code=422, detail="该端点只接受单视频 URL；合集请使用 /resolve/series。")
-
-    meta = await CONTAINER.bilibili_meta_service.resolve_single_video(url_info)
-    target_series_id = request.target_series_id or PLAYGROUND_SERIES_ID
-    if target_series_id == PLAYGROUND_SERIES_ID:
-        default_title = "Playground"
-    else:
-        library = CONTAINER.list_video_library.run()
-        target_series = next((item for item in library.series if item.id == target_series_id), None)
-        if target_series is None:
-            raise HTTPException(status_code=404, detail=f"series not found '{target_series_id}'")
-        default_title = target_series.title
-
-    existing = CONTAINER.video_workspace.get_linked_series_meta(target_series_id) or {
-        "title": default_title,
-        "cover_url": "",
-        "source_url": "",
-        "videos": [],
-    }
-    # 避免重复追加
-    existing_ids = {(v["bvid"], v["page"]) for v in existing["videos"]}
-    if (meta.bvid, meta.page) not in existing_ids:
-        existing["videos"].append({
-            "bvid": meta.bvid,
-            "page": meta.page,
-            "title": meta.title,
-            "cover_url": meta.cover_url,
-            "duration_seconds": meta.duration_seconds,
-            "source_url": meta.source_url,
-        })
-        CONTAINER.video_workspace.save_linked_series_meta(target_series_id, existing)
-        CONTAINER.invalidate_agent_workspace_indexes()
-
-    from backend.video_summary.library.views import VideoCardView
-    video_id = meta.bvid if meta.page == 1 else f"{meta.bvid}_p{meta.page}"
-    card = VideoCardView(
-        id=video_id,
-        title=meta.title,
-        source_name=f"{video_id}.mp4",
-        processed=False,
-        status="linked",
-        is_linked=True,
-        bilibili_bvid=meta.bvid,
-        bilibili_page=meta.page,
-        source_url=meta.source_url,
-    )
-    return VideoCardResponse.from_view(card)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return VideoCardResponse.from_model(card)
 
 
-@app.post("/api/videos/{series_id}/{video_id}/download")
-async def start_video_download(series_id: str, video_id: str) -> dict[str, object]:
-    """使用 yt-dlp 异步下载一个 linked Bilibili 视频。"""
-    # 从 linked_series.json 中找到对应的 bvid/page
-    meta = CONTAINER.video_workspace.get_linked_series_meta(series_id)
-    if meta is None:
-        raise HTTPException(status_code=404, detail=f"linked series not found: {series_id}")
-
-    video_entry = next(
-        (
-            v for v in meta.get("videos", [])
-            if (v["bvid"] if v.get("page", 1) == 1 else f"{v['bvid']}_p{v['page']}") == video_id
-        ),
-        None,
-    )
-    if video_entry is None:
-        raise HTTPException(status_code=404, detail=f"video not found in linked series: {video_id}")
-
-    bvid = video_entry["bvid"]
-    page = int(video_entry.get("page", 1))
-    task_id = _build_video_download_task_id(series_id, video_id)
-    dest_dir = CONTAINER.root_dir / "videos" / series_id
-
-    reporter = CONTAINER.video_download_progress_tracker.create_reporter(task_id)
-
-    async def _run():
-        try:
-            await CONTAINER.bilibili_downloader.download_async(bvid, page, dest_dir, reporter)
-        except Exception as exc:
-            LOGGER.error("Bilibili download failed: %s/%s -> %s", series_id, video_id, exc)
-
-    asyncio.create_task(_run())
-    return {"status": "started", "task_id": task_id}
+@app.post("/api/videos/{series_id}/{video_id}/download", response_model=LinkedVideoDownloadResponse)
+async def start_video_download(series_id: str, video_id: str) -> LinkedVideoDownloadResponse:
+    try:
+        result = CONTAINER.start_linked_video_download.run(series_id=series_id, video_id=video_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return LinkedVideoDownloadResponse.started(result.task_id)
 
 
 @app.get("/api/videos/{series_id}/{video_id}/download/progress")
 async def stream_video_download_progress(series_id: str, video_id: str) -> StreamingResponse:
-    task_id = _build_video_download_task_id(series_id, video_id)
+    task_id = build_video_download_task_id(series_id, video_id)
     return StreamingResponse(
         _stream_progress_events(
             tracker=CONTAINER.video_download_progress_tracker,
@@ -859,13 +730,8 @@ async def stream_video_download_progress(series_id: str, video_id: str) -> Strea
 
 @app.delete("/api/linked/{series_id}")
 def delete_linked_series(series_id: str) -> dict[str, object]:
-    """删除 Linked Series 元数据；默认不删除已下载视频。"""
-    meta = CONTAINER.video_workspace.get_linked_series_meta(series_id)
-    if meta is None:
-        raise HTTPException(status_code=404, detail=f"linked series not found: {series_id}")
-    CONTAINER.video_workspace.delete_linked_series(series_id, delete_videos=False)
-    return {"status": "deleted", "series_id": series_id}
-
-
-def _build_video_download_task_id(series_id: str, video_id: str) -> str:
-    return f"download/{series_id}/{video_id}"
+    try:
+        deleted = CONTAINER.delete_linked_series.run(series_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"status": "deleted", "series_id": deleted.series_id}

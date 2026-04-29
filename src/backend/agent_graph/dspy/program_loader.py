@@ -11,8 +11,13 @@ def load_or_create_classifier_program(
     *,
     artifact_path: Path,
     program_factory=None,
+    available_actions_resolver=None,
 ):
-    program = (program_factory or SeriesQueryClassifierModule)()
+    factory = program_factory or SeriesQueryClassifierModule
+    if available_actions_resolver is None:
+        program = factory()
+    else:
+        program = factory(available_actions_resolver=available_actions_resolver)
     if artifact_path.exists():
         _load_program_state(program, artifact_path)
     return program

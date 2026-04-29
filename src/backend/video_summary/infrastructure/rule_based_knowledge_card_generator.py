@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from backend.video_summary.library.views import (
-    KnowledgeCardSourceRefView,
-    KnowledgeCardView,
+from backend.video_summary.library.models import (
+    KnowledgeCardDTO,
+    KnowledgeCardSourceRefDTO,
 )
 
 
 class RuleBasedKnowledgeCardGenerator:
-    def run(self, *, title: str, summary_data: dict[str, object]) -> list[KnowledgeCardView]:
-        cards: list[KnowledgeCardView] = []
+    def run(self, *, title: str, summary_data: dict[str, object]) -> list[KnowledgeCardDTO]:
+        cards: list[KnowledgeCardDTO] = []
         chapters = summary_data.get("chapters", [])
         if isinstance(chapters, list):
             for chapter_index, chapter in enumerate(chapters, start=1):
@@ -24,7 +24,7 @@ class RuleBasedKnowledgeCardGenerator:
                 if points:
                     for point_index, point in enumerate(points, start=1):
                         cards.append(
-                            KnowledgeCardView(
+                            KnowledgeCardDTO(
                                 id=f"kc-{chapter_index}-{point_index}",
                                 title=point,
                                 kind=_infer_kind(point),
@@ -39,7 +39,7 @@ class RuleBasedKnowledgeCardGenerator:
                     continue
 
                 cards.append(
-                    KnowledgeCardView(
+                    KnowledgeCardDTO(
                         id=f"kc-{chapter_index}-summary",
                         title=chapter_title,
                         kind="concept",
@@ -59,7 +59,7 @@ class RuleBasedKnowledgeCardGenerator:
                 if takeaway_text is None:
                     continue
                 cards.append(
-                    KnowledgeCardView(
+                    KnowledgeCardDTO(
                         id=f"kc-takeaway-{index}",
                         title=takeaway_text,
                         kind="conclusion",
@@ -75,9 +75,9 @@ class RuleBasedKnowledgeCardGenerator:
         return _attach_related_card_ids(cards)
 
 
-def _build_source_ref(*, chapter: dict[str, object], quote: str) -> KnowledgeCardSourceRefView:
+def _build_source_ref(*, chapter: dict[str, object], quote: str) -> KnowledgeCardSourceRefDTO:
     chapter_id = chapter.get("id")
-    return KnowledgeCardSourceRefView(
+    return KnowledgeCardSourceRefDTO(
         chapter_id=chapter_id.strip() if isinstance(chapter_id, str) and chapter_id.strip() else None,
         start_seconds=_as_seconds(chapter.get("start_seconds")),
         end_seconds=_as_seconds(chapter.get("end_seconds")),
@@ -96,14 +96,14 @@ def _collect_points(value: object) -> list[str]:
     return points
 
 
-def _attach_related_card_ids(cards: list[KnowledgeCardView]) -> list[KnowledgeCardView]:
+def _attach_related_card_ids(cards: list[KnowledgeCardDTO]) -> list[KnowledgeCardDTO]:
     tag_index: dict[str, list[str]] = {}
     for card in cards:
         for tag in card.tags:
             tag_index.setdefault(tag, []).append(card.id)
 
     return [
-        KnowledgeCardView(
+        KnowledgeCardDTO(
             id=card.id,
             title=card.title,
             kind=card.kind,

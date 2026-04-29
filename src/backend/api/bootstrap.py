@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Callable
+import logging
 
 import dspy
 
@@ -36,12 +37,14 @@ from backend.agent.tools.library_info import (
     create_get_video_tools_handler,
     create_list_series_videos_handler,
 )
+from backend.agent.tools.context_access import render_model_visible_actions_for_scope
 from backend.agent.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
 from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
 from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
 from backend.agent.tools.series import execute_open_series_home, execute_open_series_overview
 from backend.agent.tools.video import execute_open_video, execute_video_seek
 from backend.api.settings_service import ApiSettingsService
+from backend.bilibili.download_starter import BackgroundBilibiliDownloadStarter
 from backend.bilibili.bilibili_downloader import BilibiliDownloader
 from backend.bilibili.bilibili_meta_service import BilibiliMetaService
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
@@ -52,8 +55,12 @@ from backend.video_summary.infrastructure.rule_based_knowledge_card_generator im
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 from backend.video_summary.infrastructure.settings import load_settings
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
+from backend.video_summary.library.parsers import DefaultBilibiliUrlParser
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
+    DeleteLinkedSeries,
+    DeleteSeries,
+    DeleteVideoSource,
     GenerateVideoKnowledgeCards,
     GenerateVideoMindmapFromLibrary,
     GenerateVideoSummaryFromLibrary,
@@ -64,11 +71,19 @@ from backend.video_summary.library.usecases import (
     GetVideoSource,
     GetVideoSummary,
     GetVideoWorkspaceTools,
+    ImportLocalPlaygroundVideos,
+    ImportLocalSeries,
+    ImportLocalSeriesVideos,
     ListVideoLibrary,
     CreateVideoNote,
     DeleteVideoNote,
+    ResolveBilibiliSeries,
+    ResolveBilibiliVideo,
+    StartLinkedVideoDownload,
     UpdateVideoNote,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -90,6 +105,15 @@ class ApiContainer:
     get_video_workspace_tools: GetVideoWorkspaceTools
     generate_video_summary: GenerateVideoSummaryFromLibrary
     generate_video_mindmap: GenerateVideoMindmapFromLibrary
+    delete_series: DeleteSeries
+    delete_video_source: DeleteVideoSource
+    import_local_series: ImportLocalSeries
+    import_local_playground_videos: ImportLocalPlaygroundVideos
+    import_local_series_videos: ImportLocalSeriesVideos
+    resolve_bilibili_series: ResolveBilibiliSeries
+    resolve_bilibili_video: ResolveBilibiliVideo
+    start_linked_video_download: StartLinkedVideoDownload
+    delete_linked_series: DeleteLinkedSeries
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     settings_service: ApiSettingsService
@@ -97,10 +121,7 @@ class ApiContainer:
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
-    bilibili_meta_service: BilibiliMetaService
-    bilibili_downloader: BilibiliDownloader
     video_download_progress_tracker: InMemoryProgressTracker
-    video_workspace: FileSystemVideoWorkspace
     invalidate_agent_workspace_indexes: Callable[[], None]
 
 
@@ -122,6 +143,17 @@ def build_api_container(
     resolved_mindmap_generator = mindmap_generator or ConfiguredMindmapWorkflow(root_dir)
     resolved_knowledge_card_generator = knowledge_card_generator or RuleBasedKnowledgeCardGenerator()
     agent_runtime = LazyAgentRuntimeProvider(root_dir=root_dir, workspace=workspace)
+    invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
+    bilibili_meta_service = BilibiliMetaService()
+    bilibili_downloader = BilibiliDownloader()
+    video_download_progress_tracker = InMemoryProgressTracker()
+    bilibili_url_parser = DefaultBilibiliUrlParser()
+    bilibili_download_starter = BackgroundBilibiliDownloadStarter(
+        root_dir=root_dir,
+        downloader=bilibili_downloader,
+        progress_tracker=video_download_progress_tracker,
+        logger=LOGGER,
+    )
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
@@ -140,6 +172,28 @@ def build_api_container(
         get_video_workspace_tools=GetVideoWorkspaceTools(workspace),
         generate_video_summary=GenerateVideoSummaryFromLibrary(workspace, resolved_generator, progress_tracker),
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
+        delete_series=DeleteSeries(workspace, invalidator),
+        delete_video_source=DeleteVideoSource(workspace, invalidator),
+        import_local_series=ImportLocalSeries(workspace, invalidator),
+        import_local_playground_videos=ImportLocalPlaygroundVideos(workspace, invalidator),
+        import_local_series_videos=ImportLocalSeriesVideos(workspace, invalidator),
+        resolve_bilibili_series=ResolveBilibiliSeries(
+            workspace=workspace,
+            resolver=bilibili_meta_service,
+            invalidator=invalidator,
+            parser=bilibili_url_parser,
+        ),
+        resolve_bilibili_video=ResolveBilibiliVideo(
+            workspace=workspace,
+            resolver=bilibili_meta_service,
+            invalidator=invalidator,
+            parser=bilibili_url_parser,
+        ),
+        start_linked_video_download=StartLinkedVideoDownload(
+            workspace=workspace,
+            starter=bilibili_download_starter,
+        ),
+        delete_linked_series=DeleteLinkedSeries(workspace, invalidator),
         generation_progress_tracker=progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
         settings_service=ApiSettingsService(
@@ -151,12 +205,17 @@ def build_api_container(
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
-        bilibili_meta_service=BilibiliMetaService(),
-        bilibili_downloader=BilibiliDownloader(),
-        video_download_progress_tracker=InMemoryProgressTracker(),
-        video_workspace=workspace,
+        video_download_progress_tracker=video_download_progress_tracker,
         invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
     )
+
+
+class _WorkspaceIndexInvalidator:
+    def __init__(self, invalidate: Callable[[], None]) -> None:
+        self._invalidate = invalidate
+
+    def invalidate(self) -> None:
+        self._invalidate()
 
 class LazyAgentRuntimeProvider:
     def __init__(self, *, root_dir: Path, workspace: FileSystemVideoWorkspace) -> None:
@@ -201,6 +260,7 @@ class LazyAgentRuntimeProvider:
                 get_video_transcript = create_get_video_transcript_handler(self._workspace)
                 classifier_program = load_or_create_classifier_program(
                     artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "classifier" / "program.json",
+                    available_actions_resolver=render_model_visible_actions_for_scope,
                 )
                 compare_split_program = load_or_create_split_compare_program(
                     artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "split_compare" / "program.json",

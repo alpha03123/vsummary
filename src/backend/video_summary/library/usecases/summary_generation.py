@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from backend.video_summary.library.models import VideoSummaryDTO
 from backend.video_summary.library.ports import (
     VideoGenerationProgressTracker,
     VideoSummaryGenerator,
     VideoWorkspace,
 )
-from backend.video_summary.library.views import VideoSummaryView
 
 
 class GenerateVideoSummaryFromLibrary:
@@ -24,7 +24,7 @@ class GenerateVideoSummaryFromLibrary:
         series_id: str,
         video_id: str,
         transcript_enhancement_enabled: bool | None = None,
-    ) -> VideoSummaryView | None:
+    ) -> VideoSummaryDTO | None:
         video = self._workspace.get_video_source(series_id, video_id)
         if video is None:
             return None

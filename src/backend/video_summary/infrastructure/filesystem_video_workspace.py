@@ -6,29 +6,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from backend.video_summary.library.views import (
-    ChapterCardView,
-    KnowledgeCardView,
-    KnowledgeCardSourceRefView,
-    SeriesView,
-    TranscriptSegmentView,
-    VideoCardView,
-    VideoChapterCardsView,
-    VideoKnowledgeCardsView,
-    VideoMindmapView,
-    VideoNoteView,
-    VideoNotesView,
-    VideoSourceView,
-    VideoSummaryView,
-    VideoTranscriptView,
-    VideoWorkspaceToolsView,
-    WorkspaceToolView,
-    WorkspaceView,
+from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.library.models import (
+    ChapterCardDTO as ChapterCardDTO,
+    KnowledgeCardDTO as KnowledgeCardDTO,
+    KnowledgeCardSourceRefDTO as KnowledgeCardSourceRefDTO,
+    LibrarySeriesDTO as LibrarySeriesDTO,
+    LibraryVideoCardDTO as LibraryVideoCardDTO,
+    TranscriptSegmentDTO as TranscriptSegmentDTO,
+    VideoChapterCardsDTO as VideoChapterCardsDTO,
+    VideoKnowledgeCardsDTO as VideoKnowledgeCardsDTO,
+    VideoMindmapDTO as VideoMindmapDTO,
+    VideoNoteDTO as VideoNoteDTO,
+    VideoNotesDTO as VideoNotesDTO,
+    VideoSourceDTO as VideoSourceDTO,
+    VideoSummaryDTO as VideoSummaryDTO,
+    VideoTranscriptDTO as VideoTranscriptDTO,
+    VideoWorkspaceToolsDTO as VideoWorkspaceToolsDTO,
+    WorkspaceDTO as WorkspaceDTO,
+    WorkspaceToolDTO as WorkspaceToolDTO,
 )
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 
-PLAYGROUND_SERIES_ID = "__playground__"
 LINKED_SERIES_META_FILE = "linked_series.json"
 SERIES_META_FILE = "series_meta.json"
 
@@ -39,22 +40,22 @@ class FileSystemVideoWorkspace:
         self._videos_dir = root_dir / "videos"
         self._workspace_dir = root_dir / "workspace"
 
-    def get_workspace(self) -> WorkspaceView:
+    def get_workspace(self) -> WorkspaceDTO:
         workspace_id = self._root_dir.name
-        return WorkspaceView(
+        return WorkspaceDTO(
             id=workspace_id,
             title=_to_title(workspace_id),
         )
 
-    def list_series(self) -> list[SeriesView]:
-        local_series: dict[str, SeriesView] = {}
+    def list_series(self) -> list[LibrarySeriesDTO]:
+        local_series: dict[str, LibrarySeriesDTO] = {}
 
         if self._videos_dir.exists():
             for series_dir in sorted(self._videos_dir.iterdir()):
                 if not series_dir.is_dir():
                     continue
                 series_title = self._read_series_title(series_dir.name) or _to_title(series_dir.name)
-                local_series[series_dir.name] = SeriesView(
+                local_series[series_dir.name] = LibrarySeriesDTO(
                     id=series_dir.name,
                     title=series_title,
                     videos=self._list_videos_for_series(series_dir),
@@ -69,7 +70,7 @@ class FileSystemVideoWorkspace:
                     continue
                 series_id = ws_dir.name
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                local_series[series_id] = SeriesView(
+                local_series[series_id] = LibrarySeriesDTO(
                     id=series_id,
                     title=str(meta.get("title", _to_title(series_id))),
                     videos=self._list_videos_for_linked_series(
@@ -82,7 +83,7 @@ class FileSystemVideoWorkspace:
                 )
 
         if PLAYGROUND_SERIES_ID not in local_series:
-            local_series[PLAYGROUND_SERIES_ID] = SeriesView(
+            local_series[PLAYGROUND_SERIES_ID] = LibrarySeriesDTO(
                 id=PLAYGROUND_SERIES_ID,
                 title="Playground",
                 videos=[],
@@ -92,7 +93,7 @@ class FileSystemVideoWorkspace:
 
         return list(local_series.values())
 
-    def get_video_source(self, series_id: str, video_id: str) -> VideoSourceView | None:
+    def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         series_dir = self._videos_dir / series_id
         if not series_dir.exists() or not series_dir.is_dir():
             return None
@@ -105,7 +106,7 @@ class FileSystemVideoWorkspace:
 
         video_path = matches[0]
         output_dir = self._workspace_dir / series_id / video_id
-        return VideoSourceView(
+        return VideoSourceDTO(
             series_id=series_id,
             video_id=video_id,
             title=video_path.stem,
@@ -115,7 +116,7 @@ class FileSystemVideoWorkspace:
             processed=(output_dir / "summary.json").exists(),
         )
 
-    def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryView | None:
+    def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -128,14 +129,14 @@ class FileSystemVideoWorkspace:
         transcript = _load_transcript_segments(self._workspace_dir / series_id / video_id / "transcript.cleaned.json")
         summary = _attach_chapter_transcript(summary, transcript)
         title = str(summary.get("title", video.title)).strip() or video.title
-        return VideoSummaryView(
+        return VideoSummaryDTO(
             series_id=series_id,
             video_id=video_id,
             title=title,
             summary=summary,
         )
 
-    def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptView | None:
+    def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -146,13 +147,13 @@ class FileSystemVideoWorkspace:
 
         payload = json.loads(transcript_path.read_text(encoding="utf-8"))
         title = str(payload.get("title", video.title)).strip() or video.title
-        return VideoTranscriptView(
+        return VideoTranscriptDTO(
             series_id=series_id,
             video_id=video_id,
             title=title,
             duration_seconds=_as_seconds(payload.get("duration_seconds")),
             segments=[
-                TranscriptSegmentView(
+                TranscriptSegmentDTO(
                     start_seconds=segment["start_seconds"],
                     end_seconds=segment["end_seconds"],
                     text=segment["text"],
@@ -161,7 +162,7 @@ class FileSystemVideoWorkspace:
             ],
         )
 
-    def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapView | None:
+    def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -172,26 +173,26 @@ class FileSystemVideoWorkspace:
 
         summary = self.get_video_summary(series_id, video_id)
         title = summary.title if summary is not None else video.title
-        return VideoMindmapView(
+        return VideoMindmapDTO(
             series_id=series_id,
             video_id=video_id,
             title=title,
             mindmap=json.loads(mindmap_path.read_text(encoding="utf-8")),
         )
 
-    def get_video_chapter_cards(self, series_id: str, video_id: str) -> VideoChapterCardsView | None:
+    def get_video_chapter_cards(self, series_id: str, video_id: str) -> VideoChapterCardsDTO | None:
         summary = self.get_video_summary(series_id, video_id)
         if summary is None:
             return None
 
-        return VideoChapterCardsView(
+        return VideoChapterCardsDTO(
             series_id=series_id,
             video_id=video_id,
             title=summary.title,
             cards=_build_chapter_cards(summary.summary),
         )
 
-    def get_video_knowledge_cards(self, series_id: str, video_id: str) -> VideoKnowledgeCardsView | None:
+    def get_video_knowledge_cards(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -205,7 +206,7 @@ class FileSystemVideoWorkspace:
         if not isinstance(cards, list):
             raise ValueError("knowledge_cards.json 格式错误：cards 必须是数组。")
 
-        return VideoKnowledgeCardsView(
+        return VideoKnowledgeCardsDTO(
             series_id=series_id,
             video_id=video_id,
             title=str(payload.get("title", video.title)).strip() or video.title,
@@ -218,7 +219,7 @@ class FileSystemVideoWorkspace:
         video_id: str,
         *,
         title: str,
-        cards: list[KnowledgeCardView],
+        cards: list[KnowledgeCardDTO],
     ) -> None:
         cards_payload = {
             "title": title,
@@ -231,13 +232,13 @@ class FileSystemVideoWorkspace:
             encoding="utf-8",
         )
 
-    def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesView | None:
+    def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
 
         notes_payload = self._read_notes_payload(series_id, video_id)
-        return VideoNotesView(
+        return VideoNotesDTO(
             series_id=series_id,
             video_id=video_id,
             title=video.title,
@@ -255,7 +256,7 @@ class FileSystemVideoWorkspace:
         title: str,
         content: str,
         source: str,
-    ) -> VideoNoteView | None:
+    ) -> VideoNoteDTO | None:
         if self.get_video_source(series_id, video_id) is None:
             return None
 
@@ -284,7 +285,7 @@ class FileSystemVideoWorkspace:
         *,
         title: str,
         content: str,
-    ) -> VideoNoteView | None:
+    ) -> VideoNoteDTO | None:
         if self.get_video_source(series_id, video_id) is None:
             return None
 
@@ -313,7 +314,7 @@ class FileSystemVideoWorkspace:
         self._write_notes_payload(series_id, video_id, {"notes": remaining_notes})
         return True
 
-    def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsView | None:
+    def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -322,38 +323,38 @@ class FileSystemVideoWorkspace:
         knowledge_cards_exists = (video.output_dir / "knowledge_cards.json").exists()
         mindmap_exists = (video.output_dir / "mindmap.json").exists()
         preview_url = f"/api/videos/{series_id}/{video_id}/preview"
-        return VideoWorkspaceToolsView(
+        return VideoWorkspaceToolsDTO(
             series_id=series_id,
             video_id=video_id,
-            overview=WorkspaceToolView(
+            overview=WorkspaceToolDTO(
                 id="overview",
                 title="AI概况",
                 available=True,
                 generated=summary_exists,
                 status="ready" if summary_exists else "pending",
             ),
-            knowledge_cards=WorkspaceToolView(
+            knowledge_cards=WorkspaceToolDTO(
                 id="knowledge-cards",
                 title="知识卡片",
                 available=summary_exists,
                 generated=knowledge_cards_exists,
                 status="ready" if knowledge_cards_exists else ("available" if summary_exists else "blocked"),
             ),
-            mindmap=WorkspaceToolView(
+            mindmap=WorkspaceToolDTO(
                 id="mindmap",
                 title="思维导图",
                 available=summary_exists,
                 generated=mindmap_exists,
                 status="ready" if mindmap_exists else ("available" if summary_exists else "blocked"),
             ),
-            notes=WorkspaceToolView(
+            notes=WorkspaceToolDTO(
                 id="notes",
                 title="笔记",
                 available=True,
                 generated=True,
                 status="ready",
             ),
-            preview=WorkspaceToolView(
+            preview=WorkspaceToolDTO(
                 id="preview",
                 title="视频预览",
                 available=True,
@@ -364,7 +365,7 @@ class FileSystemVideoWorkspace:
             ai_todo="当前已支持 AI 切换概况、知识卡片、笔记和视频预览，并可定位时间点或整理笔记。",
         )
 
-    def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> SeriesView:
+    def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
         series_id = _normalize_series_id(title)
         if series_id == PLAYGROUND_SERIES_ID:
             raise ValueError("Playground 请使用单独的“添加 Playground 视频”入口。")
@@ -377,7 +378,7 @@ class FileSystemVideoWorkspace:
             series_dir.mkdir(parents=True, exist_ok=False)
             self._write_series_title(series_id, title.strip())
             self._copy_video_streams(series_dir=series_dir, files=files)
-            return SeriesView(
+            return LibrarySeriesDTO(
                 id=series_id,
                 title=title.strip(),
                 videos=self._list_videos_for_series(series_dir),
@@ -390,13 +391,13 @@ class FileSystemVideoWorkspace:
                 meta_path.unlink()
             raise
 
-    def import_local_playground_videos(self, *, files: list[tuple[str, object]]) -> list[VideoCardView]:
+    def import_local_playground_videos(self, *, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
         series_dir = self._videos_dir / PLAYGROUND_SERIES_ID
         series_dir.mkdir(parents=True, exist_ok=True)
         imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
         return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
 
-    def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[VideoCardView]:
+    def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
         if series_id == PLAYGROUND_SERIES_ID:
             return self.import_local_playground_videos(files=files)
         if not self._series_exists(series_id):
@@ -406,7 +407,7 @@ class FileSystemVideoWorkspace:
         imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
         return [self._build_local_video_card(series_id, path) for path in imported_paths]
 
-    def _list_videos_for_series(self, series_dir: Path) -> list[VideoCardView]:
+    def _list_videos_for_series(self, series_dir: Path) -> list[LibraryVideoCardDTO]:
         videos = [path for path in sorted(series_dir.iterdir()) if _is_video_file(path)]
         stems = [path.stem for path in videos]
         duplicate_stems = sorted({stem for stem in stems if stems.count(stem) > 1})
@@ -423,8 +424,8 @@ class FileSystemVideoWorkspace:
         series_id: str,
         linked_meta: dict[str, object],
         local_video_dir: Path,
-    ) -> list[VideoCardView]:
-        cards: list[VideoCardView] = []
+    ) -> list[LibraryVideoCardDTO]:
+        cards: list[LibraryVideoCardDTO] = []
         consumed_video_ids: set[str] = set()
         local_paths_by_stem = {
             path.stem: path
@@ -447,7 +448,7 @@ class FileSystemVideoWorkspace:
 
             if local_file is None:
                 cards.append(
-                    VideoCardView(
+                    LibraryVideoCardDTO(
                         id=video_id,
                         title=title,
                         source_name=f"{video_id}.mp4",
@@ -463,7 +464,7 @@ class FileSystemVideoWorkspace:
 
             summary_exists = (self._workspace_dir / series_id / video_id / "summary.json").exists()
             cards.append(
-                VideoCardView(
+                LibraryVideoCardDTO(
                     id=video_id,
                     title=title,
                     source_name=local_file.name,
@@ -481,9 +482,9 @@ class FileSystemVideoWorkspace:
             cards.append(self._build_local_video_card(series_id, local_path))
         return cards
 
-    def _build_local_video_card(self, series_id: str, video_path: Path) -> VideoCardView:
+    def _build_local_video_card(self, series_id: str, video_path: Path) -> LibraryVideoCardDTO:
         processed = (self._workspace_dir / series_id / video_path.stem / "summary.json").exists()
-        return VideoCardView(
+        return LibraryVideoCardDTO(
             id=video_path.stem,
             title=video_path.stem,
             source_name=video_path.name,
@@ -514,7 +515,24 @@ class FileSystemVideoWorkspace:
             copied_paths.append(target_path)
         return copied_paths
 
-    def save_linked_series_meta(self, series_id: str, meta: dict[str, object]) -> None:
+    def save_linked_series(self, series: LinkedSeries) -> None:
+        meta = {
+            "title": series.title,
+            "cover_url": series.cover_url,
+            "source_url": series.source_url,
+            "videos": [
+                {
+                    "bvid": video.bvid,
+                    "page": video.page,
+                    "title": video.title,
+                    "cover_url": video.cover_url,
+                    "duration_seconds": video.duration_seconds,
+                    "source_url": video.source_url,
+                }
+                for video in series.videos
+            ],
+        }
+        series_id = series.series_id
         output_dir = self._workspace_dir / series_id
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / LINKED_SERIES_META_FILE).write_text(
@@ -522,20 +540,43 @@ class FileSystemVideoWorkspace:
             encoding="utf-8",
         )
 
-    def get_linked_series_meta(self, series_id: str) -> dict[str, object] | None:
+    def get_linked_series(self, series_id: str) -> LinkedSeries | None:
         meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
         if not meta_path.exists():
             return None
-        return json.loads(meta_path.read_text(encoding="utf-8"))
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        videos = payload.get("videos", [])
+        return LinkedSeries(
+            series_id=series_id,
+            title=str(payload.get("title", _to_title(series_id))),
+            cover_url=str(payload.get("cover_url", "")),
+            source_url=str(payload.get("source_url", "")),
+            videos=[
+                LinkedVideo(
+                    bvid=str(item.get("bvid", "")).strip(),
+                    page=int(item.get("page", 1) or 1),
+                    title=str(item.get("title", "")),
+                    cover_url=str(item.get("cover_url", "")),
+                    duration_seconds=int(item.get("duration_seconds", 0) or 0),
+                    source_url=str(item.get("source_url", "")),
+                )
+                for item in videos
+                if isinstance(item, dict) and str(item.get("bvid", "")).strip()
+            ],
+        )
 
-    def delete_linked_series(self, series_id: str, *, delete_videos: bool = False) -> None:
+    def delete_linked_series(self, series_id: str, *, delete_videos: bool = False) -> bool:
+        removed = False
         meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
         if meta_path.exists():
             meta_path.unlink()
+            removed = True
         if delete_videos:
             local_dir = self._videos_dir / series_id
             if local_dir.exists():
                 shutil.rmtree(local_dir)
+                removed = True
+        return removed
 
     def delete_series(self, series_id: str) -> bool:
         if series_id == PLAYGROUND_SERIES_ID:
@@ -564,24 +605,23 @@ class FileSystemVideoWorkspace:
                 match.unlink()
                 removed = True
 
-        linked_meta = self.get_linked_series_meta(series_id)
-        if linked_meta is not None:
-            original_videos = linked_meta.get("videos", [])
-            if isinstance(original_videos, list):
-                remaining_videos = [
-                    item
-                    for item in original_videos
-                    if not (
-                        isinstance(item, dict)
-                        and (
-                            item.get("bvid") if int(item.get("page", 1) or 1) == 1 else f"{item.get('bvid')}_p{int(item.get('page', 1) or 1)}"
-                        ) == video_id
+        linked_series = self.get_linked_series(series_id)
+        if linked_series is not None:
+            remaining_videos = [
+                item for item in linked_series.videos
+                if item.video_id != video_id
+            ]
+            if len(remaining_videos) != len(linked_series.videos):
+                self.save_linked_series(
+                    LinkedSeries(
+                        series_id=linked_series.series_id,
+                        title=linked_series.title,
+                        cover_url=linked_series.cover_url,
+                        source_url=linked_series.source_url,
+                        videos=remaining_videos,
                     )
-                ]
-                if len(remaining_videos) != len(original_videos):
-                    linked_meta["videos"] = remaining_videos
-                    self.save_linked_series_meta(series_id, linked_meta)
-                    removed = True
+                )
+                removed = True
 
         output_dir = self._workspace_dir / series_id / video_id
         if output_dir.exists():
@@ -790,8 +830,8 @@ def _as_seconds(value: object) -> float | None:
     return None
 
 
-def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardView]:
-    cards: list[ChapterCardView] = []
+def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardDTO]:
+    cards: list[ChapterCardDTO] = []
 
     chapters = summary.get("chapters", [])
     if isinstance(chapters, list):
@@ -809,7 +849,7 @@ def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardView]:
                 continue
             key_points = chapter.get("key_points", [])
             cards.append(
-                ChapterCardView(
+                ChapterCardDTO(
                     id=chapter_id,
                     title=title.strip(),
                     summary=chapter_summary.strip(),
@@ -830,7 +870,7 @@ def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardView]:
             if not isinstance(takeaway, str) or not takeaway.strip():
                 continue
             cards.append(
-                ChapterCardView(
+                ChapterCardDTO(
                     id=f"takeaway-{index}",
                     title=f"关键结论 {index}",
                     summary=takeaway.strip(),
@@ -844,7 +884,7 @@ def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardView]:
     return cards
 
 
-def _serialize_knowledge_card(card: KnowledgeCardView) -> dict[str, object]:
+def _serialize_knowledge_card(card: KnowledgeCardDTO) -> dict[str, object]:
     return {
         "id": card.id,
         "title": card.title,
@@ -858,7 +898,7 @@ def _serialize_knowledge_card(card: KnowledgeCardView) -> dict[str, object]:
     }
 
 
-def _serialize_source_ref(source_ref: KnowledgeCardSourceRefView) -> dict[str, object]:
+def _serialize_source_ref(source_ref: KnowledgeCardSourceRefDTO) -> dict[str, object]:
     return {
         "chapter_id": source_ref.chapter_id,
         "start_seconds": source_ref.start_seconds,
@@ -867,10 +907,10 @@ def _serialize_source_ref(source_ref: KnowledgeCardSourceRefView) -> dict[str, o
     }
 
 
-def _to_knowledge_card_view(card_record: dict[str, object]) -> KnowledgeCardView:
+def _to_knowledge_card_view(card_record: dict[str, object]) -> KnowledgeCardDTO:
     if not isinstance(card_record, dict):
         raise ValueError("knowledge_cards.json 格式错误：card 必须是对象。")
-    return KnowledgeCardView(
+    return KnowledgeCardDTO(
         id=_require_note_text(card_record.get("id"), "id"),
         title=_require_note_text(card_record.get("title"), "title"),
         kind=_require_knowledge_card_kind(card_record.get("kind")),
@@ -883,12 +923,12 @@ def _to_knowledge_card_view(card_record: dict[str, object]) -> KnowledgeCardView
     )
 
 
-def _to_source_ref_views(value: object) -> list[KnowledgeCardSourceRefView]:
+def _to_source_ref_views(value: object) -> list[KnowledgeCardSourceRefDTO]:
     if value is None:
         return []
     if not isinstance(value, list):
         raise ValueError("knowledge_cards.json 格式错误：source_refs 必须是数组。")
-    result: list[KnowledgeCardSourceRefView] = []
+    result: list[KnowledgeCardSourceRefDTO] = []
     for item in value:
         if not isinstance(item, dict):
             raise ValueError("knowledge_cards.json 格式错误：source_ref 必须是对象。")
@@ -899,7 +939,7 @@ def _to_source_ref_views(value: object) -> list[KnowledgeCardSourceRefView]:
         if not isinstance(quote, str):
             raise ValueError("knowledge_cards.json 格式错误：source_ref.quote 不合法。")
         result.append(
-            KnowledgeCardSourceRefView(
+            KnowledgeCardSourceRefDTO(
                 chapter_id=chapter_id.strip() if isinstance(chapter_id, str) else None,
                 start_seconds=_as_seconds(item.get("start_seconds")),
                 end_seconds=_as_seconds(item.get("end_seconds")),
@@ -929,8 +969,8 @@ def _require_knowledge_card_kind(value: object) -> str:
     return value
 
 
-def _to_note_view(note_record: dict[str, str]) -> VideoNoteView:
-    return VideoNoteView(
+def _to_note_view(note_record: dict[str, str]) -> VideoNoteDTO:
+    return VideoNoteDTO(
         id=note_record["id"],
         title=note_record["title"],
         content=note_record["content"],
@@ -954,3 +994,4 @@ def _require_note_source(value: object) -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+

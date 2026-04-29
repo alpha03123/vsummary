@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from backend.agent_graph.query.models import ExecutionDepth
+from backend.agent_graph.query.models import ExecutionDepth, QueryPlanningInput
 from backend.agent_graph.query.planning import backfill_query_plan_targets, build_structured_query_plan
 from backend.agent_graph.runtime.state import AgentGraphState
 
@@ -40,7 +40,7 @@ def build_plan_node(*, classifier_program, compare_split_program, series_planner
             next_state["generated_content"] = ""
             return next_state
         query_plan = build_structured_query_plan(
-            state=state,
+            planning_input=QueryPlanningInput.model_validate(state),
             current_instruction=current_instruction,
             decision_payload=decision.model_dump(mode="json"),
         )

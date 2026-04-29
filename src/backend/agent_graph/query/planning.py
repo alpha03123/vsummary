@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from backend.agent_graph.query.models import ExecutionDepth, SelectionMode, StructuredQueryPlan
-from backend.agent_graph.runtime.state import AgentGraphState
+from backend.agent_graph.query.models import ExecutionDepth, QueryPlanningInput, SelectionMode, StructuredQueryPlan
 
 CONTENT_DEPENDENT_ACTIONS = {"save_note"}
 
 
 def build_structured_query_plan(
     *,
-    state: AgentGraphState,
+    planning_input: QueryPlanningInput,
     current_instruction: str,
     decision_payload: dict[str, object],
 ) -> dict[str, object]:
@@ -27,10 +26,10 @@ def build_structured_query_plan(
     selection_mode = _normalize_selection_mode(decision_payload.get("selection_mode"))
     subplans = _normalize_subplans(decision_payload.get("subplans"))
     retrieval_tags = _normalize_retrieval_tags(decision_payload.get("retrieval_tags"), target_source=target_source)
-    history_selected_videos = _normalize_selected_videos(state.get("history_selected_videos"))
+    history_selected_videos = _normalize_selected_videos(planning_input.history_selected_videos)
 
-    if state.get("scope_type") == "video":
-        video_id = str(state.get("video_id", "")).strip()
+    if planning_input.scope_type == "video":
+        video_id = planning_input.video_id.strip()
         if video_id:
             if not candidate_video_ids:
                 candidate_video_ids = [video_id]
@@ -72,7 +71,7 @@ def build_structured_query_plan(
                 ]
 
     if (
-        state.get("scope_type") == "series"
+        planning_input.scope_type == "series"
         and selection_mode == SelectionMode.CARRY_FORWARD.value
         and history_selected_videos
     ):
@@ -125,7 +124,7 @@ def build_structured_query_plan(
     ).model_dump(mode="json")
 
 
-def backfill_query_plan_targets(state: AgentGraphState, results: list[dict[str, object]]) -> None:
+def backfill_query_plan_targets(state: dict[str, object], results: list[dict[str, object]]) -> None:
     query_plan = dict(state.get("query_plan", {}))
     if not query_plan:
         return

@@ -2,26 +2,28 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
-class WorkspaceView:
-    id: str
-    title: str
+class BilibiliUrlInfoDTO:
+    url_type: Literal["season", "series", "video"]
+    uid: int | None = None
+    sid: int | None = None
+    bvid: str | None = None
 
 
 @dataclass(frozen=True)
-class SeriesView:
+class LibrarySeriesDTO:
     id: str
     title: str
-    videos: list["VideoCardView"]
+    videos: list["LibraryVideoCardDTO"]
     is_linked: bool = False
     source_url: str = ""
 
 
 @dataclass(frozen=True)
-class VideoCardView:
+class LibraryVideoCardDTO:
     id: str
     title: str
     source_name: str
@@ -34,13 +36,31 @@ class VideoCardView:
 
 
 @dataclass(frozen=True)
-class VideoLibraryView:
-    workspace: WorkspaceView
-    series: list[SeriesView]
+class WorkspaceDTO:
+    id: str
+    title: str
 
 
 @dataclass(frozen=True)
-class VideoSummaryView:
+class VideoLibraryDTO:
+    workspace: WorkspaceDTO
+    series: list[LibrarySeriesDTO]
+
+
+@dataclass(frozen=True)
+class VideoSourceDTO:
+    series_id: str
+    video_id: str
+    title: str
+    source_name: str
+    source_path: Path
+    output_dir: Path
+    processed: bool
+    duration_seconds: float | None = None
+
+
+@dataclass(frozen=True)
+class VideoSummaryDTO:
     series_id: str
     video_id: str
     title: str
@@ -48,23 +68,23 @@ class VideoSummaryView:
 
 
 @dataclass(frozen=True)
-class TranscriptSegmentView:
+class TranscriptSegmentDTO:
     start_seconds: float
     end_seconds: float
     text: str
 
 
 @dataclass(frozen=True)
-class VideoTranscriptView:
+class VideoTranscriptDTO:
     series_id: str
     video_id: str
     title: str
     duration_seconds: float | None
-    segments: list[TranscriptSegmentView]
+    segments: list[TranscriptSegmentDTO]
 
 
 @dataclass(frozen=True)
-class VideoMindmapView:
+class VideoMindmapDTO:
     series_id: str
     video_id: str
     title: str
@@ -72,7 +92,7 @@ class VideoMindmapView:
 
 
 @dataclass(frozen=True)
-class ChapterCardView:
+class ChapterCardDTO:
     id: str
     title: str
     summary: str
@@ -83,15 +103,15 @@ class ChapterCardView:
 
 
 @dataclass(frozen=True)
-class VideoChapterCardsView:
+class VideoChapterCardsDTO:
     series_id: str
     video_id: str
     title: str
-    cards: list[ChapterCardView]
+    cards: list[ChapterCardDTO]
 
 
 @dataclass(frozen=True)
-class KnowledgeCardSourceRefView:
+class KnowledgeCardSourceRefDTO:
     chapter_id: str | None
     start_seconds: float | None
     end_seconds: float | None
@@ -99,7 +119,7 @@ class KnowledgeCardSourceRefView:
 
 
 @dataclass(frozen=True)
-class KnowledgeCardView:
+class KnowledgeCardDTO:
     id: str
     title: str
     kind: str
@@ -107,20 +127,20 @@ class KnowledgeCardView:
     details: str
     tags: list[str]
     keywords: list[str]
-    source_refs: list[KnowledgeCardSourceRefView]
+    source_refs: list[KnowledgeCardSourceRefDTO]
     related_card_ids: list[str]
 
 
 @dataclass(frozen=True)
-class VideoKnowledgeCardsView:
+class VideoKnowledgeCardsDTO:
     series_id: str
     video_id: str
     title: str
-    cards: list[KnowledgeCardView]
+    cards: list[KnowledgeCardDTO]
 
 
 @dataclass(frozen=True)
-class VideoNoteView:
+class VideoNoteDTO:
     id: str
     title: str
     content: str
@@ -130,15 +150,15 @@ class VideoNoteView:
 
 
 @dataclass(frozen=True)
-class VideoNotesView:
+class VideoNotesDTO:
     series_id: str
     video_id: str
     title: str
-    notes: list[VideoNoteView]
+    notes: list[VideoNoteDTO]
 
 
 @dataclass(frozen=True)
-class WorkspaceToolView:
+class WorkspaceToolDTO:
     id: str
     title: str
     available: bool
@@ -148,24 +168,13 @@ class WorkspaceToolView:
 
 
 @dataclass(frozen=True)
-class VideoWorkspaceToolsView:
+class VideoWorkspaceToolsDTO:
     series_id: str
     video_id: str
-    overview: WorkspaceToolView
-    knowledge_cards: WorkspaceToolView
-    mindmap: WorkspaceToolView
-    notes: WorkspaceToolView
-    preview: WorkspaceToolView
+    overview: WorkspaceToolDTO
+    knowledge_cards: WorkspaceToolDTO
+    mindmap: WorkspaceToolDTO
+    notes: WorkspaceToolDTO
+    preview: WorkspaceToolDTO
     ai_todo: str
 
-
-@dataclass(frozen=True)
-class VideoSourceView:
-    series_id: str
-    video_id: str
-    title: str
-    source_name: str
-    source_path: Path
-    output_dir: Path
-    processed: bool
-    duration_seconds: float | None = None

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import dspy
 
-from backend.agent.memory.context import AgentContext
-from backend.agent.tools import list_model_visible_tool_definitions_for_context
 from backend.agent_graph.query.models import CompareSplitDecision, StructuredQueryPlan
+
+
+class AvailableActionsResolver(Protocol):
+    def __call__(self, *, scope_type: str, series_id: str, video_id: str) -> str:
+        ...
 
 
 class ClassifySeriesQuery(dspy.Signature):
@@ -137,8 +140,17 @@ class SynthesizeActionAfterContentReply(dspy.Signature):
 
 
 class SeriesQueryClassifierProgram:
-    def __init__(self, predictor: Callable[..., Any] | None = None) -> None:
+    def __init__(
+        self,
+        predictor: Callable[..., Any] | None = None,
+        *,
+        available_actions_resolver: AvailableActionsResolver | None = None,
+    ) -> None:
         self._predictor = predictor or dspy.Predict(ClassifySeriesQuery)
+        self._available_actions_resolver = available_actions_resolver or _default_available_actions_resolver
+
+    def set_available_actions_resolver(self, resolver: AvailableActionsResolver) -> None:
+        self._available_actions_resolver = resolver
 
     def run(
         self,
@@ -150,13 +162,11 @@ class SeriesQueryClassifierProgram:
         history_summary: str = "",
         history_selected_videos: list[dict[str, object]] | None = None,
     ) -> StructuredQueryPlan:
-        context = AgentContext(
-            session_id=f"{scope_type}|{series_id or 'unknown'}|classifier",
+        available_actions = self._available_actions_resolver(
             scope_type=scope_type,
-            series_id=series_id or None,
-            video_id=video_id or None,
+            series_id=series_id,
+            video_id=video_id,
         )
-        available_actions = _render_available_actions_for_classifier(context)
         raw = self._predictor(
             user_message=user_message,
             scope_type=scope_type,
@@ -296,12 +306,6 @@ def normalize_split_compare_prediction(value: Any) -> CompareSplitDecision:
     return CompareSplitDecision.model_validate(payload)
 
 
-def _render_available_actions_for_classifier(context: AgentContext) -> str:
-    visible_tools = list_model_visible_tool_definitions_for_context(context)
-    action_tools = [tool for tool in visible_tools if tool.plane.value == "ui_action"]
-    if not action_tools:
-        return "(none)"
-    return "\n".join(
-        f"- {tool.name.value}: {tool.title}。{tool.description}"
-        for tool in action_tools
-    )
+def _default_available_actions_resolver(*, scope_type: str, series_id: str, video_id: str) -> str:
+    del scope_type, series_id, video_id
+    return "(none)"

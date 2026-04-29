@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from backend.video_summary.library.models import VideoMindmapDTO
 from backend.video_summary.library.ports import VideoMindmapGenerator, VideoWorkspace
-from backend.video_summary.library.views import VideoMindmapView
 
 
 class GenerateVideoMindmapFromLibrary:
@@ -9,7 +9,7 @@ class GenerateVideoMindmapFromLibrary:
         self._workspace = workspace
         self._generator = generator
 
-    async def run(self, series_id: str, video_id: str) -> VideoMindmapView | None:
+    async def run(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
         video = self._workspace.get_video_source(series_id, video_id)
         if video is None:
             return None

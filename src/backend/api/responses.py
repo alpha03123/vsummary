@@ -3,18 +3,20 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from backend.agent.schemas.action_plan import AgentTurnResult, CitationReference, CitationSlot, CitationSlotCandidate
-from backend.video_summary.library.views import (
-    ChapterCardView,
-    KnowledgeCardView,
-    KnowledgeCardSourceRefView,
-    VideoChapterCardsView,
-    VideoCardView,
-    VideoKnowledgeCardsView,
-    VideoLibraryView,
-    VideoNoteView,
-    VideoNotesView,
-    VideoWorkspaceToolsView,
-    WorkspaceToolView,
+from backend.video_summary.library.models import (
+    ChapterCardDTO,
+    KnowledgeCardDTO,
+    KnowledgeCardSourceRefDTO,
+    LibrarySeriesDTO,
+    LibraryVideoCardDTO,
+    VideoChapterCardsDTO,
+    VideoKnowledgeCardsDTO,
+    VideoLibraryDTO,
+    VideoNoteDTO,
+    VideoNotesDTO,
+    VideoWorkspaceToolsDTO,
+    WorkspaceDTO,
+    WorkspaceToolDTO,
 )
 
 
@@ -34,7 +36,7 @@ class VideoCardResponse(BaseModel):
     source_url: str = ""
 
     @classmethod
-    def from_view(cls, video: VideoCardView) -> "VideoCardResponse":
+    def from_model(cls, video: LibraryVideoCardDTO) -> "VideoCardResponse":
         return cls(
             id=video.id,
             title=video.title,
@@ -47,7 +49,6 @@ class VideoCardResponse(BaseModel):
             source_url=video.source_url,
         )
 
-
 class SeriesResponse(BaseModel):
     id: str
     title: str
@@ -55,10 +56,23 @@ class SeriesResponse(BaseModel):
     is_linked: bool = False
     source_url: str = ""
 
+    @classmethod
+    def from_model(cls, series: LibrarySeriesDTO) -> "SeriesResponse":
+        return cls(
+            id=series.id,
+            title=series.title,
+            videos=[VideoCardResponse.from_model(video) for video in series.videos],
+            is_linked=series.is_linked,
+            source_url=series.source_url,
+        )
 
 class WorkspaceResponse(BaseModel):
     id: str
     title: str
+
+    @classmethod
+    def from_model(cls, workspace: WorkspaceDTO) -> "WorkspaceResponse":
+        return cls(id=workspace.id, title=workspace.title)
 
 
 class VideoLibraryResponse(BaseModel):
@@ -66,22 +80,10 @@ class VideoLibraryResponse(BaseModel):
     series: list[SeriesResponse]
 
     @classmethod
-    def from_view(cls, library: VideoLibraryView) -> "VideoLibraryResponse":
+    def from_model(cls, library: VideoLibraryDTO) -> "VideoLibraryResponse":
         return cls(
-            workspace=WorkspaceResponse(
-                id=library.workspace.id,
-                title=library.workspace.title,
-            ),
-            series=[
-                SeriesResponse(
-                    id=series.id,
-                    title=series.title,
-                    videos=[VideoCardResponse.from_view(video) for video in series.videos],
-                    is_linked=series.is_linked,
-                    source_url=series.source_url,
-                )
-                for series in library.series
-            ],
+            workspace=WorkspaceResponse.from_model(library.workspace),
+            series=[SeriesResponse.from_model(series) for series in library.series],
         )
 
 
@@ -94,6 +96,15 @@ class ResolveBilibiliVideoRequest(BaseModel):
     target_series_id: str | None = None
 
 
+class LinkedVideoDownloadResponse(BaseModel):
+    status: str
+    task_id: str
+
+    @classmethod
+    def started(cls, task_id: str) -> "LinkedVideoDownloadResponse":
+        return cls(status="started", task_id=task_id)
+
+
 class WorkspaceToolResponse(BaseModel):
     id: str
     title: str
@@ -103,7 +114,7 @@ class WorkspaceToolResponse(BaseModel):
     preview_url: str | None = None
 
     @classmethod
-    def from_view(cls, tool: WorkspaceToolView) -> "WorkspaceToolResponse":
+    def from_model(cls, tool: WorkspaceToolDTO) -> "WorkspaceToolResponse":
         return cls(
             id=tool.id,
             title=tool.title,
@@ -125,15 +136,15 @@ class VideoWorkspaceToolsResponse(BaseModel):
     ai_todo: str
 
     @classmethod
-    def from_view(cls, tools: VideoWorkspaceToolsView) -> "VideoWorkspaceToolsResponse":
+    def from_model(cls, tools: VideoWorkspaceToolsDTO) -> "VideoWorkspaceToolsResponse":
         return cls(
             series_id=tools.series_id,
             video_id=tools.video_id,
-            overview=WorkspaceToolResponse.from_view(tools.overview),
-            knowledge_cards=WorkspaceToolResponse.from_view(tools.knowledge_cards),
-            mindmap=WorkspaceToolResponse.from_view(tools.mindmap),
-            notes=WorkspaceToolResponse.from_view(tools.notes),
-            preview=WorkspaceToolResponse.from_view(tools.preview),
+            overview=WorkspaceToolResponse.from_model(tools.overview),
+            knowledge_cards=WorkspaceToolResponse.from_model(tools.knowledge_cards),
+            mindmap=WorkspaceToolResponse.from_model(tools.mindmap),
+            notes=WorkspaceToolResponse.from_model(tools.notes),
+            preview=WorkspaceToolResponse.from_model(tools.preview),
             ai_todo=tools.ai_todo,
         )
 
@@ -148,7 +159,7 @@ class ChapterCardResponse(BaseModel):
     kind: str
 
     @classmethod
-    def from_view(cls, card: ChapterCardView) -> "ChapterCardResponse":
+    def from_model(cls, card: ChapterCardDTO) -> "ChapterCardResponse":
         return cls(
             id=card.id,
             title=card.title,
@@ -167,12 +178,12 @@ class VideoChapterCardsResponse(BaseModel):
     cards: list[ChapterCardResponse]
 
     @classmethod
-    def from_view(cls, cards: VideoChapterCardsView) -> "VideoChapterCardsResponse":
+    def from_model(cls, cards: VideoChapterCardsDTO) -> "VideoChapterCardsResponse":
         return cls(
             series_id=cards.series_id,
             video_id=cards.video_id,
             title=cards.title,
-            cards=[ChapterCardResponse.from_view(card) for card in cards.cards],
+            cards=[ChapterCardResponse.from_model(card) for card in cards.cards],
         )
 
 
@@ -183,7 +194,7 @@ class KnowledgeCardSourceRefResponse(BaseModel):
     quote: str
 
     @classmethod
-    def from_view(cls, source_ref: KnowledgeCardSourceRefView) -> "KnowledgeCardSourceRefResponse":
+    def from_model(cls, source_ref: KnowledgeCardSourceRefDTO) -> "KnowledgeCardSourceRefResponse":
         return cls(
             chapter_id=source_ref.chapter_id,
             start_seconds=source_ref.start_seconds,
@@ -204,7 +215,7 @@ class KnowledgeCardResponse(BaseModel):
     related_card_ids: list[str]
 
     @classmethod
-    def from_view(cls, card: KnowledgeCardView) -> "KnowledgeCardResponse":
+    def from_model(cls, card: KnowledgeCardDTO) -> "KnowledgeCardResponse":
         return cls(
             id=card.id,
             title=card.title,
@@ -213,7 +224,7 @@ class KnowledgeCardResponse(BaseModel):
             details=card.details,
             tags=card.tags,
             keywords=card.keywords,
-            source_refs=[KnowledgeCardSourceRefResponse.from_view(item) for item in card.source_refs],
+            source_refs=[KnowledgeCardSourceRefResponse.from_model(item) for item in card.source_refs],
             related_card_ids=card.related_card_ids,
         )
 
@@ -225,12 +236,12 @@ class VideoKnowledgeCardsResponse(BaseModel):
     cards: list[KnowledgeCardResponse]
 
     @classmethod
-    def from_view(cls, cards: VideoKnowledgeCardsView) -> "VideoKnowledgeCardsResponse":
+    def from_model(cls, cards: VideoKnowledgeCardsDTO) -> "VideoKnowledgeCardsResponse":
         return cls(
             series_id=cards.series_id,
             video_id=cards.video_id,
             title=cards.title,
-            cards=[KnowledgeCardResponse.from_view(card) for card in cards.cards],
+            cards=[KnowledgeCardResponse.from_model(card) for card in cards.cards],
         )
 
 
@@ -243,7 +254,7 @@ class VideoNoteResponse(BaseModel):
     updated_at: str
 
     @classmethod
-    def from_view(cls, note: VideoNoteView) -> "VideoNoteResponse":
+    def from_model(cls, note: VideoNoteDTO) -> "VideoNoteResponse":
         return cls(
             id=note.id,
             title=note.title,
@@ -261,12 +272,12 @@ class VideoNotesResponse(BaseModel):
     notes: list[VideoNoteResponse]
 
     @classmethod
-    def from_view(cls, notes: VideoNotesView) -> "VideoNotesResponse":
+    def from_model(cls, notes: VideoNotesDTO) -> "VideoNotesResponse":
         return cls(
             series_id=notes.series_id,
             video_id=notes.video_id,
             title=notes.title,
-            notes=[VideoNoteResponse.from_view(note) for note in notes.notes],
+            notes=[VideoNoteResponse.from_model(note) for note in notes.notes],
         )
 
 
@@ -356,7 +367,7 @@ class CitationSlotResponse(BaseModel):
     candidates: list["CitationSlotCandidateResponse"] = Field(default_factory=list)
 
     @classmethod
-    def from_view(cls, slot: CitationSlot) -> "CitationSlotResponse":
+    def from_model(cls, slot: CitationSlot) -> "CitationSlotResponse":
         return cls(
             slot=slot.slot,
             target_type=slot.target_type,
@@ -367,7 +378,7 @@ class CitationSlotResponse(BaseModel):
             start_seconds=slot.start_seconds,
             end_seconds=slot.end_seconds,
             text=slot.text,
-            candidates=[CitationSlotCandidateResponse.from_view(item) for item in slot.candidates],
+            candidates=[CitationSlotCandidateResponse.from_model(item) for item in slot.candidates],
         )
 
 
@@ -377,7 +388,7 @@ class CitationSlotCandidateResponse(BaseModel):
     text: str | None = None
 
     @classmethod
-    def from_view(cls, candidate: CitationSlotCandidate) -> "CitationSlotCandidateResponse":
+    def from_model(cls, candidate: CitationSlotCandidate) -> "CitationSlotCandidateResponse":
         return cls(**candidate.model_dump(mode="json"))
 
 
@@ -389,13 +400,13 @@ class CitationResponse(BaseModel):
     slots: list[CitationSlotResponse]
 
     @classmethod
-    def from_view(cls, citation: CitationReference) -> "CitationResponse":
+    def from_model(cls, citation: CitationReference) -> "CitationResponse":
         return cls(
             id=citation.id,
             label=citation.label,
             source_type=citation.source_type,
             search_scope=citation.search_scope,
-            slots=[CitationSlotResponse.from_view(slot) for slot in citation.slots],
+            slots=[CitationSlotResponse.from_model(slot) for slot in citation.slots],
         )
 
 
@@ -420,5 +431,5 @@ class AgentChatResponse(BaseModel):
                 )
                 for item in result.tool_results
             ],
-            citations=[CitationResponse.from_view(item) for item in result.citations],
+            citations=[CitationResponse.from_model(item) for item in result.citations],
         )
