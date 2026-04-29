@@ -43,22 +43,6 @@ class AgentGraphService:
             series_aggregator=series_aggregator,
         )
 
-    @property
-    def graph(self):
-        return self._graph
-
-    @property
-    def input_builder(self) -> AgentGraphInputBuilder:
-        return self._input_builder
-
-    @property
-    def session_recorder(self) -> AgentGraphSessionRecorder:
-        return self._session_recorder
-
-    @property
-    def stream_orchestrator(self) -> AgentGraphStreamOrchestrator:
-        return self._stream_orchestrator
-
     def _record_debug_input(
         self,
         *,
@@ -151,7 +135,5 @@ class AgentGraphService:
         self,
         *,
         session_id: str,
-        context_override=None,
     ) -> None:
-        del context_override
         self._session_recorder.clear_session(session_id)

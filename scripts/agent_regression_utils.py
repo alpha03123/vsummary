@@ -49,9 +49,9 @@ def run_agent_case(
     clear_session: bool = True,
     debug_trace: bool = True,
 ) -> AgentRunResult:
-    service = container.get_agent_service()
+    service = container.get_agent_graph_service()
     if clear_session:
-        service.clear_session(session_id=session_id, context_override=None)
+        service.clear_session(session_id=session_id)
 
     thinking_summaries: list[str] = []
     tool_rows: list[str] = []

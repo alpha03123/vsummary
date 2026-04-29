@@ -128,11 +128,7 @@ def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiCo
 
 @router.post("/api/agent/session/clear")
 def clear_agent_session(request: AgentSessionClearRequest, container: ApiContainerDep) -> dict[str, object]:
-    context_override = _build_agent_context_override(request.session_id, request.context)
-    container.get_agent_graph_service().clear_session(
-        session_id=request.session_id,
-        context_override=context_override,
-    )
+    container.get_agent_graph_service().clear_session(session_id=request.session_id)
     return {"status": "cleared", "session_id": request.session_id}
 
 
