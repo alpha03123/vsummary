@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentContextLoader, AgentSessionStore
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult, ScopeType
-from backend.agent.schemas.tool_calls import ToolExecutionResult
+from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent_graph.evidence.citations import build_citations_from_graph_result
 from backend.agent_graph.runtime.state import AgentGraphState
 

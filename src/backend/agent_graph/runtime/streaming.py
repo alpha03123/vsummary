@@ -5,7 +5,12 @@ from datetime import datetime
 
 from backend.agent.schemas.stream_events import AgentStreamEvent
 from backend.agent_graph.runtime.node_catalog import get_node_alias
-from backend.agent_graph.runtime.nodes import should_use_series_aggregator
+from backend.agent_graph.runtime.nodes import (
+    append_answer_to_state,
+    apply_memory_update,
+    finalize_state,
+    should_use_series_aggregator,
+)
 from backend.agent_graph.runtime.turns import build_tool_results
 
 
@@ -365,35 +370,7 @@ def _chunk_text(text: str, *, max_chars: int = 24) -> Iterator[str]:
 def _materialize_stream_result(result: dict[str, object], *, answer_text: str) -> dict[str, object]:
     next_result = dict(result)
     if answer_text:
-        next_result["answer"] = answer_text
-
-    task_outputs = [
-        item
-        for item in list(result.get("task_outputs", []))
-        if isinstance(item, dict)
-    ]
-    if answer_text:
-        task_outputs = task_outputs + [{"kind": "answer", "value": answer_text}]
-    if task_outputs:
-        next_result["task_outputs"] = task_outputs
-
-    fragments: list[str] = []
-    for item in task_outputs:
-        value = str(item.get("value", "")).strip()
-        if value:
-            fragments.append(value)
-    assistant_message = "\n".join(fragments).strip()
-    if not assistant_message:
-        assistant_message = str(next_result.get("assistant_message", next_result.get("answer", ""))).strip()
-    if assistant_message:
-        next_result["assistant_message"] = assistant_message
-
-    goal = str(dict(next_result.get("query_plan", {})).get("goal", "")).strip()
-    if goal != "action_after_content" and not str(next_result.get("answer", "")).strip():
-        next_result["answer"] = assistant_message
-
-    user_message = str(next_result.get("user_message", "")).strip()
-    prior = str(next_result.get("history_summary", "")).strip()
-    turn = f"User: {user_message}\nAssistant: {assistant_message}".strip()
-    next_result["history_summary_update"] = f"{prior}\n\n{turn}".strip() if prior else turn
+        next_result = append_answer_to_state(next_result, answer_text)
+    next_result = finalize_state(next_result)
+    next_result = apply_memory_update(next_result)
     return next_result
