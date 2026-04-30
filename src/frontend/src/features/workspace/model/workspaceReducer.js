@@ -61,6 +61,14 @@ export function workspaceReducer(state, action) {
         ...state,
         ui: normalizeUiSettings(action.settings),
       };
+    case "provider_settings_loaded":
+      return {
+        ...state,
+        ui: normalizeUiSettings({
+          ...state.ui,
+          ...action.settings,
+        }),
+      };
     case "faster_whisper_models_loading_started":
       return {
         ...state,

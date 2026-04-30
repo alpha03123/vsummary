@@ -137,7 +137,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
     loadProviderSettings()
       .then((settings) => {
         if (!cancelled) {
-          dispatch({ type: "workspace_settings_loaded", settings: { ...state.ui, ...settings } });
+          dispatch({ type: "provider_settings_loaded", settings });
         }
       })
       .catch((error) => {
@@ -152,7 +152,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, state.backendReady, state.settingsPanelOpen, state.ui]);
+  }, [dispatch, state.backendReady, state.settingsPanelOpen]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
