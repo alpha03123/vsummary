@@ -11,7 +11,7 @@ from backend.agent_graph.runtime.nodes import (
     finalize_state,
     should_use_series_aggregator,
 )
-from backend.agent_graph.runtime.turns import build_tool_results
+from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_tool_results
 
 
 class AgentGraphStreamOrchestrator:
@@ -131,7 +131,7 @@ class AgentGraphStreamOrchestrator:
             result = payload.get("result")
             if isinstance(result, dict):
                 final_result = result
-                current_tool_results = build_tool_results(result)
+                current_tool_results = extract_tool_results(result)
                 new_tool_results = current_tool_results[emitted_tool_count:]
                 for index, tool_result in enumerate(new_tool_results, start=emitted_tool_count + 1):
                     yield _build_tool_completed_event(tool_result, index=index)
@@ -167,7 +167,7 @@ class AgentGraphStreamOrchestrator:
                 type="tool_chain_completed",
                 payload={
                     "count": emitted_tool_count,
-                    "duration_ms": _sum_tool_durations(build_tool_results(result)),
+                    "duration_ms": _sum_tool_durations(extract_tool_results(result)),
                 },
             )
 
@@ -264,10 +264,7 @@ class AgentGraphStreamOrchestrator:
                     debug_trace=debug_trace,
                 )
             yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
-            assistant_message = str(
-                result.get("assistant_message")
-                or result.get("answer", "")
-            ).strip()
+            assistant_message = extract_assistant_message(result)
             for delta in _chunk_text(assistant_message):
                 yield AgentStreamEvent(type="answer_delta", payload={"delta": delta})
             stream_finished_at = _current_time_like(stream_started_at)

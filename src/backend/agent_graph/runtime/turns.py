@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentContextLoader, AgentSessionStore
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult, ScopeType
-from backend.agent.schemas.tool_calls import ToolExecutionResult, ToolName
 from backend.agent_graph.evidence.citations import build_citations_from_graph_result
+from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_tool_results
 from backend.agent_graph.runtime.state import AgentGraphState
 
 
@@ -89,11 +89,8 @@ class AgentGraphTurnBuilder:
         result: dict[str, object],
         debug_trace: dict[str, object] | None = None,
     ) -> AgentTurnResult:
-        assistant_message = str(
-            result.get("assistant_message")
-            or result.get("answer", "")
-        ).strip()
-        tool_results = build_tool_results(result)
+        assistant_message = extract_assistant_message(result)
+        tool_results = extract_tool_results(result)
         citations = build_citations_from_graph_result(result)
         turn_result = AgentTurnResult(
             assistant_message=assistant_message,
@@ -115,22 +112,3 @@ class AgentGraphTurnBuilder:
                 "reason": turn_result.plan.reason,
             }
         return turn_result
-
-
-def build_tool_results(result: dict[str, object]) -> list[ToolExecutionResult]:
-    explicit_tool_results = result.get("tool_results")
-    if isinstance(explicit_tool_results, list) and explicit_tool_results:
-        normalized: list[ToolExecutionResult] = []
-        for item in explicit_tool_results:
-            if not isinstance(item, dict):
-                continue
-            normalized.append(
-                ToolExecutionResult(
-                    tool_name=ToolName(str(item.get("tool_name"))),
-                    status=str(item.get("status", "ok")),
-                    payload=dict(item.get("payload", {})) if isinstance(item.get("payload", {}), dict) else {},
-                )
-                )
-        if normalized:
-            return normalized
-    return []

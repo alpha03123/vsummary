@@ -6,6 +6,11 @@ from backend.agent.ports import AgentSessionStore
 from backend.agent.schemas.action_plan import AgentTurnResult
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.session.models import AgentSessionSelectedVideoEntry
+from backend.agent_graph.runtime.outcome import (
+    extract_history_summary_update,
+    extract_selected_videos,
+    merge_evidence_history,
+)
 
 
 class AgentGraphSessionRecorder:
@@ -41,11 +46,14 @@ class AgentGraphSessionRecorder:
         persisted_context = context.model_copy(
             update={
                 "dialog_history": dialog_history,
-                "evidence_history": _merge_evidence_history(
+                "evidence_history": merge_evidence_history(
                     current=dict(getattr(context, "evidence_history", {}) or {}),
                     result=result,
                 ),
-                "history_summary": str(result.get("history_summary_update") or getattr(context, "history_summary", "") or ""),
+                "history_summary": extract_history_summary_update(
+                    result,
+                    fallback=str(getattr(context, "history_summary", "") or ""),
+                ),
             }
         )
         self._session_store.append_turn(
@@ -60,7 +68,7 @@ class AgentGraphSessionRecorder:
                     video_id=str(item.get("video_id", "")).strip(),
                     reason_for_selection=str(item.get("reason_for_selection", "")).strip(),
                 )
-                for item in _extract_selected_videos(result)
+                for item in extract_selected_videos(result)
                 if str(item.get("video_id", "")).strip()
             ],
         )
@@ -93,21 +101,3 @@ class AgentGraphSessionRecorder:
         if self._dialog_history_compactor is not None:
             return self._dialog_history_compactor.compact_if_needed(messages)
         return render_dialog_history(messages)
-
-
-def _extract_selected_videos(result: dict[str, object]) -> list[dict[str, object]]:
-    query_plan = result.get("query_plan", {})
-    if not isinstance(query_plan, dict):
-        return []
-    selected_videos = query_plan.get("selected_videos", [])
-    if not isinstance(selected_videos, list):
-        return []
-    return [item for item in selected_videos if isinstance(item, dict) and str(item.get("video_id", "")).strip()]
-
-
-def _merge_evidence_history(*, current: dict[str, object], result: dict[str, object]) -> dict[str, object]:
-    merged = dict(current)
-    evidence_history = result.get("evidence_history", {})
-    if isinstance(evidence_history, dict):
-        merged.update(evidence_history)
-    return merged
