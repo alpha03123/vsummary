@@ -1,0 +1,47 @@
+[importlinter]
+root_packages =
+    backend
+include_external_packages = false
+exclude_type_checking_imports = true
+
+[importlinter:contract:backend_top_level_acyclic]
+name = backend top-level siblings must be acyclic
+type = acyclic_siblings
+ancestors =
+    backend
+depth = 1
+
+[importlinter:contract:shared_must_not_read_video_summary_infra]
+name = shared must not depend on video_summary infrastructure
+type = forbidden
+source_modules =
+    backend.shared
+forbidden_modules =
+    backend.video_summary.infrastructure
+
+[importlinter:contract:agent_graph_must_not_read_video_summary_infra]
+name = agent_graph must not depend on video_summary infrastructure
+type = forbidden
+source_modules =
+    backend.agent_graph
+forbidden_modules =
+    backend.video_summary.infrastructure
+
+[importlinter:contract:domain_must_not_depend_on_infra_or_api]
+name = video_summary domain must not depend on api or infrastructure
+type = forbidden
+source_modules =
+    backend.video_summary.domain
+forbidden_modules =
+    backend.api
+    backend.video_summary.infrastructure
+
+[importlinter:contract:video_summary_layers]
+name = video_summary package must keep inward dependency direction
+type = layers
+containers =
+    backend.video_summary
+layers =
+    infrastructure
+    library:generation
+    domain

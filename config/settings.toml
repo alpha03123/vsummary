@@ -10,7 +10,7 @@ compute_type = "float16"
 transcription_mode = "accurate"
 
 [workspace_ui]
-theme = "dark"
+theme = "light"
 show_takeaways = true
 
 [debug]

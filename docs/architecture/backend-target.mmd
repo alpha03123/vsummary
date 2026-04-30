@@ -1,0 +1,41 @@
+flowchart LR
+    subgraph delivery["Delivery / Frameworks"]
+        api["backend.api"]
+    end
+
+    subgraph app["Application / Use Cases"]
+        agent_graph["backend.agent_graph"]
+        agent["backend.agent"]
+        bilibili["backend.bilibili"]
+        shared["backend.shared"]
+        vs_library["backend.video_summary.library"]
+        vs_generation["backend.video_summary.generation"]
+    end
+
+    subgraph core["Core Domain"]
+        vs_domain["backend.video_summary.domain"]
+    end
+
+    subgraph infra["Infrastructure / Adapters"]
+        vs_infra["backend.video_summary.infrastructure"]
+    end
+
+    api --> agent_graph
+    api --> bilibili
+    api --> shared
+    api --> vs_library
+    api --> vs_generation
+
+    agent_graph --> agent
+    agent_graph --> vs_library
+
+    bilibili --> vs_library
+
+    vs_infra --> vs_library
+    vs_infra --> vs_generation
+
+    vs_library --> vs_domain
+    vs_generation --> vs_domain
+
+    shared -. "forbidden" .-> vs_infra
+    agent_graph -. "forbidden" .-> vs_infra

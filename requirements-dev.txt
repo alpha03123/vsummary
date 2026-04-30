@@ -1,0 +1,2 @@
+import-linter>=2.5,<3
+grimp>=3.13,<4
