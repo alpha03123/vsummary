@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Callable
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment
+
+_CUDA_DLL_HANDLES: list[object] = []
+_CUDA_DLL_DIRS_READY = False
 
 
 class FasterWhisperTranscriber:
@@ -16,6 +21,7 @@ class FasterWhisperTranscriber:
         language: str = "zh",
     ) -> None:
         try:
+            _ensure_windows_cuda_dll_dirs()
             from faster_whisper import WhisperModel
         except ImportError as error:
             raise RuntimeError("faster-whisper is not installed.") from error
@@ -84,6 +90,36 @@ def _is_nvidia_gpu_available() -> bool:
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
     return "NVIDIA-SMI" in result.stdout
+
+
+def _ensure_windows_cuda_dll_dirs() -> None:
+    global _CUDA_DLL_DIRS_READY
+
+    if _CUDA_DLL_DIRS_READY or sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
+        return
+
+    candidates = [
+        Path(sys.prefix) / "Lib" / "site-packages" / "nvidia" / "cublas" / "bin",
+        Path(sys.prefix) / "Lib" / "site-packages" / "nvidia" / "cudnn" / "bin",
+        Path(sys.prefix) / "Lib" / "site-packages" / "nvidia" / "cuda_nvrtc" / "bin",
+    ]
+
+    existing_path_entries = os.environ.get("PATH", "").split(os.pathsep)
+    prepended_entries: list[str] = []
+
+    for path in candidates:
+        if not path.exists():
+            continue
+
+        resolved = str(path)
+        _CUDA_DLL_HANDLES.append(os.add_dll_directory(resolved))
+        if resolved not in existing_path_entries and resolved not in prepended_entries:
+            prepended_entries.append(resolved)
+
+    if prepended_entries:
+        os.environ["PATH"] = os.pathsep.join([*prepended_entries, *existing_path_entries])
+
+    _CUDA_DLL_DIRS_READY = True
 
 
 def _build_decode_options(transcription_mode: str) -> dict[str, object]:
