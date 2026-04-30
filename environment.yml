@@ -1,0 +1,12 @@
+name: vsummary
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - ffmpeg          # managed by conda, no manual PATH setup needed
+  - pip
+  - pip:
+    - -r requirements.txt
+    - nvidia-cublas-cu12  # GPU加速库，默认安装
+    - nvidia-cudnn-cu12   # GPU加速库，默认安装
