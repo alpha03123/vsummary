@@ -19,13 +19,17 @@ router = APIRouter()
 
 @router.get("/api/settings", response_model=WorkspaceSettingsResponse)
 def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsResponse:
-    settings = container.settings_service.get_workspace_settings()
+    try:
+        settings = container.settings_service.get_workspace_settings()
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceSettingsResponse(
         theme=settings.theme,
         show_takeaways=settings.show_takeaways,
         transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
+        rag_embedding_device=settings.rag_embedding_device,
     )
 
 
@@ -41,6 +45,7 @@ def update_workspace_settings(
             transcript_enhancement_enabled=request.transcript_enhancement_enabled,
             asr_model_quality=request.asr_model_quality,
             transcription_mode=request.transcription_mode,
+            rag_embedding_device=request.rag_embedding_device,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -51,18 +56,23 @@ def update_workspace_settings(
         transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
+        rag_embedding_device=settings.rag_embedding_device,
     )
 
 
 @router.get("/api/provider-settings", response_model=ProviderSettingsResponse)
 def get_provider_settings(container: ApiContainerDep) -> ProviderSettingsResponse:
-    env_settings = container.settings_service.get_provider_settings()
+    try:
+        env_settings = container.settings_service.get_provider_settings()
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return ProviderSettingsResponse(
         llm_provider=env_settings.llm_provider,
         openai_base_url=env_settings.openai_base_url,
         openai_model=env_settings.openai_model,
         has_openai_api_key=env_settings.has_openai_api_key,
         openai_api_key_masked=env_settings.openai_api_key_masked,
+        hf_endpoint=env_settings.hf_endpoint,
     )
 
 
@@ -77,6 +87,7 @@ def update_provider_settings(
             openai_base_url=request.openai_base_url,
             openai_model=request.openai_model,
             openai_api_key=request.openai_api_key,
+            hf_endpoint=request.hf_endpoint,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -87,12 +98,16 @@ def update_provider_settings(
         openai_model=env_settings.openai_model,
         has_openai_api_key=env_settings.has_openai_api_key,
         openai_api_key_masked=env_settings.openai_api_key_masked,
+        hf_endpoint=env_settings.hf_endpoint,
     )
 
 
 @router.get("/api/asr/faster-whisper/models", response_model=list[FasterWhisperModelResponse])
 def list_faster_whisper_models(container: ApiContainerDep) -> list[FasterWhisperModelResponse]:
-    settings = load_settings(container.config_path, container.root_dir)
+    try:
+        settings = load_settings(container.config_path, container.root_dir)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return [
         FasterWhisperModelResponse(
             id=model.id,

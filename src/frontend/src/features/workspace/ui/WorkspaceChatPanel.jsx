@@ -331,7 +331,7 @@ function WorkspaceToolTraceMessage({ message }) {
   const isIdle = message.toolTrace?.status === "idle";
 
   return (
-    <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-warning-subtle text-warning">
@@ -464,8 +464,8 @@ function WorkspaceThoughtTraceMessage({ message }) {
 
   if (hasStages) {
     return (
-      <div className="rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
-        <div className="px-4 py-3.5">
+      <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+        <summary className="list-none cursor-pointer px-4 py-3.5">
           <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
               {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
@@ -484,8 +484,9 @@ function WorkspaceThoughtTraceMessage({ message }) {
                 {isRunning ? "当前按图节点顺序执行中" : "本轮图节点执行已完成"}
               </p>
             </div>
+            <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
           </div>
-        </div>
+        </summary>
 
         <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
           <div className="flex flex-col gap-3">
@@ -533,12 +534,12 @@ function WorkspaceThoughtTraceMessage({ message }) {
             </AnimatePresence>
           </div>
         </div>
-      </div>
+      </details>
     );
   }
 
   return (
-    <details open={isRunning} className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">

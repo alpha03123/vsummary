@@ -24,6 +24,7 @@ class WorkspaceSettingsResponse(BaseModel):
     transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
+    rag_embedding_device: str
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -32,6 +33,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
+    rag_embedding_device: str
 
 
 class ProviderSettingsResponse(BaseModel):
@@ -40,6 +42,7 @@ class ProviderSettingsResponse(BaseModel):
     openai_model: str
     has_openai_api_key: bool
     openai_api_key_masked: str
+    hf_endpoint: str
 
 
 class UpdateProviderSettingsRequest(BaseModel):
@@ -47,6 +50,7 @@ class UpdateProviderSettingsRequest(BaseModel):
     openai_base_url: str
     openai_model: str
     openai_api_key: str | None = None
+    hf_endpoint: str | None = None
 
 
 class FasterWhisperModelResponse(BaseModel):

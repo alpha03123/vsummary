@@ -33,6 +33,7 @@ export function buildWorkspacePageModel(controller) {
     },
     generation: {
       isGeneratingSummary: controller.isGeneratingSelectedVideo,
+      isGeneratingSeries: controller.isGeneratingSelectedSeries,
       isGeneratingMindmap: controller.isGeneratingMindmapSelectedVideo,
       knowledgeCardsLoading: controller.knowledgeCardsLoading,
       notesLoading: controller.notesLoading,
@@ -54,6 +55,8 @@ export function buildWorkspacePageModel(controller) {
       focusNode: controller.onFocusNode,
       openCard: controller.onOpenCard,
       generateVideo: controller.onGenerateVideo,
+      generateSeries: controller.onGenerateSeries,
+      cancelGeneration: controller.onCancelGeneration,
       generateMindmap: controller.onGenerateMindmap,
       generateKnowledgeCards: controller.onGenerateKnowledgeCards,
       createNote: controller.onCreateNote,

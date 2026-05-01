@@ -30,6 +30,7 @@ export async function loadWorkspaceSettings() {
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
+    ragEmbeddingDevice: payload.rag_embedding_device,
   };
 }
 
@@ -41,6 +42,7 @@ export async function loadProviderSettings() {
     openaiModel: payload.openai_model,
     hasOpenaiApiKey: payload.has_openai_api_key,
     openaiApiKeyMasked: payload.openai_api_key_masked,
+    hfEndpoint: payload.hf_endpoint,
     openaiApiKey: "",
   };
 }
@@ -57,6 +59,7 @@ export async function updateWorkspaceSettings(settings) {
       transcript_enhancement_enabled: settings.transcriptEnhancementEnabled,
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
+      rag_embedding_device: settings.ragEmbeddingDevice,
     }),
   });
   return {
@@ -65,6 +68,7 @@ export async function updateWorkspaceSettings(settings) {
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
+    ragEmbeddingDevice: payload.rag_embedding_device,
   };
 }
 
@@ -79,6 +83,7 @@ export async function updateProviderSettings(settings) {
       openai_base_url: settings.openaiBaseUrl,
       openai_model: settings.openaiModel,
       openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
+      hf_endpoint: settings.hfEndpoint,
     }),
   });
   return {
@@ -87,6 +92,7 @@ export async function updateProviderSettings(settings) {
     openaiModel: payload.openai_model,
     hasOpenaiApiKey: payload.has_openai_api_key,
     openaiApiKeyMasked: payload.openai_api_key_masked,
+    hfEndpoint: payload.hf_endpoint,
     openaiApiKey: "",
   };
 }
@@ -228,6 +234,33 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
       }),
     }),
   );
+}
+
+export async function cancelVideoSummary(seriesId, videoId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function generateSeriesSummaries(seriesId, options = {}) {
+  return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      transcript_enhancement_enabled:
+        typeof options.transcriptEnhancementEnabled === "boolean"
+          ? options.transcriptEnhancementEnabled
+          : undefined,
+    }),
+  });
+}
+
+export async function cancelSeriesSummaries(seriesId) {
+  return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate/cancel`, {
+    method: "POST",
+  });
 }
 
 export async function generateVideoMindmap(seriesId, videoId) {
@@ -374,7 +407,7 @@ export function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
   eventSource.onmessage = (event) => {
     const snapshot = parseProgressMessage(event.data);
     listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed") {
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       terminal = true;
       eventSource.close();
     }
@@ -390,6 +423,41 @@ export function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
       progress: null,
       detail: null,
       error: "生成进度连接已中断",
+    });
+    eventSource.close();
+  };
+
+  return () => {
+    terminal = true;
+    eventSource.close();
+  };
+}
+
+export function subscribeSeriesGenerationProgress(seriesId, listener) {
+  const eventSource = new EventSource(
+    `/api/series/${encodeURIComponent(seriesId)}/generate/progress`,
+  );
+  let terminal = false;
+
+  eventSource.onmessage = (event) => {
+    const snapshot = parseProgressMessage(event.data);
+    listener(snapshot);
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      terminal = true;
+      eventSource.close();
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (terminal) {
+      return;
+    }
+    listener({
+      status: "failed",
+      stage: "failed",
+      progress: null,
+      detail: null,
+      error: "系列生成进度连接已中断",
     });
     eventSource.close();
   };

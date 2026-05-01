@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
@@ -10,6 +10,12 @@ import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { blurVariant } from "../../../lib/animations";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
+import {
+  clampMiddleWidth,
+  clampSidebarWidth,
+  loadWorkspaceLayout,
+  persistWorkspaceLayout,
+} from "./workspaceLayout";
 
 const WorkspaceLibraryHomePane = lazy(() =>
   import("./WorkspaceLibraryHomePane").then((module) => ({
@@ -48,11 +54,66 @@ export function WorkspacePage({ page }) {
     selectedContextType,
   } = shell;
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [layout, setLayout] = useState(loadWorkspaceLayout);
   const [importModalState, setImportModalState] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
+  const containerRef = useRef(null);
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
+  const hasRightPane = Boolean(activeSeries);
+
+  useEffect(() => {
+    persistWorkspaceLayout(layout);
+  }, [layout]);
+
+  function beginResize(type, startEvent) {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const startX = startEvent.clientX;
+    const startSidebarWidth = layout.sidebarWidth;
+    const startMiddleWidth = layout.middleWidth;
+    const containerWidth = container.getBoundingClientRect().width;
+
+    function handlePointerMove(event) {
+      const deltaX = event.clientX - startX;
+      if (type === "sidebar") {
+        setLayout((current) => ({
+          ...current,
+          sidebarWidth: clampSidebarWidth({
+            proposedWidth: startSidebarWidth + deltaX,
+            containerWidth,
+            hasRightPane,
+          }),
+        }));
+        return;
+      }
+
+      setLayout((current) => ({
+        ...current,
+        middleWidth: clampMiddleWidth({
+          proposedWidth: startMiddleWidth + deltaX,
+          containerWidth,
+          sidebarWidth: isSidebarOpen ? current.sidebarWidth : 0,
+        }),
+      }));
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+  }
 
   if (state.loading && !summary) {
     const waitingForBackend = !state.backendReady;
@@ -74,22 +135,30 @@ export function WorkspacePage({ page }) {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden p-4 gap-4 text-stone-900 dark:text-stone-100 transition-colors">
+    <div ref={containerRef} className="flex h-screen w-full overflow-hidden p-4 gap-4 text-stone-900 dark:text-stone-100 transition-colors">
       {/* Left Sidebar (Sources) */}
       <aside
-        className={`workspace-panel shrink-0 flex flex-col rounded-[2rem] border overflow-hidden relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? (activeSeries ? "w-[320px] xl:w-[340px] opacity-100 mr-1" : "w-[380px] xl:w-[420px] opacity-100 mr-1") : "w-0 opacity-0 border-0 m-0"}`}
+        style={
+          isSidebarOpen
+            ? { width: `${layout.sidebarWidth}px` }
+            : undefined
+        }
+        className={`workspace-panel shrink-0 flex flex-col rounded-[2rem] border overflow-hidden relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? "opacity-100 mr-1" : "w-0 opacity-0 border-0 m-0"}`}
       >
-        <div className={`${activeSeries ? "w-[320px] xl:w-[340px]" : "w-[380px] xl:w-[420px]"} h-full flex flex-col`}>
+        <div className="h-full flex flex-col">
           {activeSeries ? (
             <WorkspaceLibraryPanel
               activeSeries={activeSeries}
               selectedContextType={selectedContextType}
               selectedVideo={selectedVideo}
               isGeneratingSelectedVideo={generation.isGeneratingSummary}
+              isGeneratingSeries={generation.isGeneratingSeries}
               onEnterLibraryHome={actions.enterLibraryHome}
               onSelectSeriesContext={actions.selectSeriesContext}
               onSelectVideo={actions.selectVideo}
               onGenerateVideo={actions.generateVideo}
+              onGenerateSeries={actions.generateSeries}
+              onCancelGeneration={actions.cancelGeneration}
               onDownloadVideo={actions.downloadVideo}
               onAddPlaygroundVideo={() => setImportModalState({ mode: "playground" })}
               onAddSeriesVideo={() => {
@@ -125,6 +194,7 @@ export function WorkspacePage({ page }) {
               }}
               downloadProgress={generation.videoDownloadProgress}
               currentAsrModel={currentAsrModel}
+              onOpenSettings={actions.toggleSettingsPanel}
             />
           ) : (
             <WorkspaceSeriesGrid
@@ -136,6 +206,17 @@ export function WorkspacePage({ page }) {
           )}
         </div>
       </aside>
+      {isSidebarOpen ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整来源列表宽度"
+          onPointerDown={(event) => beginResize("sidebar", event)}
+          className="group relative hidden w-2 shrink-0 cursor-col-resize rounded-full md:block"
+        >
+          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-stone-200 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
+        </div>
+      ) : null}
 
       {/* Main Studio Area */}
       <main className="workspace-panel flex-1 min-w-0 flex flex-col relative rounded-[2rem] border overflow-hidden z-10">
@@ -169,7 +250,10 @@ export function WorkspacePage({ page }) {
 
         <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
           {activeSeries && !isPlaygroundHome ? (
-            <section className="flex-1 min-w-[380px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
+            <section
+              style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
+              className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
+            >
               <WorkspaceChatPanel
                 workspaceTitle={library?.workspace?.title}
                 activeSeries={activeSeries}
@@ -190,7 +274,7 @@ export function WorkspacePage({ page }) {
             </section>
           ) : null}
           {isPlaygroundHome ? (
-            <section className="flex-1 min-w-[380px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
+            <section className="flex-1 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
               <div className="flex h-full items-center justify-center p-8">
                 <WorkspaceStateBlock
                   eyebrow="Playground"
@@ -214,12 +298,21 @@ export function WorkspacePage({ page }) {
               </Suspense>
             </AnimatePresence>
           ) : (
-            <AnimatePresence mode="wait">
+            <>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="调整对话与工具页宽度"
+                onPointerDown={(event) => beginResize("middle", event)}
+                className="group relative hidden w-2 shrink-0 cursor-col-resize md:block"
+              >
+                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-stone-200 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
+              </div>
               <motion.section
                 key={`${selectedContextType}:${selectedVideo?.id ?? "series"}:${state.selectedToolId}:pane`}
                 variants={blurVariant}
                 initial="initial" animate="animate" exit="exit"
-                className="w-[45vw] xl:w-[760px] shrink-0 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all"
+                className="min-w-[320px] flex-1 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all"
               >
                 <WorkspaceReadingPane
                   ui={ui}
@@ -258,16 +351,19 @@ export function WorkspacePage({ page }) {
                   onDeleteNote={actions.deleteNote}
                 />
               </motion.section>
-            </AnimatePresence>
+            </>
           )}
 
           {/* Loading Overlay when generating AI Summary */}
           <AnimatePresence>
-            {activeSeries && generation.isGeneratingSummary && (
+            {activeSeries && (generation.isGeneratingSummary || generation.isGeneratingSeries) && (
               <Suspense fallback={null}>
                 <WorkspaceGenerationOverlay
                   generationProgress={generation.progress}
                   generationSnapshot={generation.snapshot}
+                  title={generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
+                  onCancel={actions.cancelGeneration}
+                  cancelLabel={generation.isGeneratingSeries ? "取消整个系列" : "取消本次生成"}
                 />
               </Suspense>
             )}
@@ -357,7 +453,7 @@ export function WorkspacePage({ page }) {
 
 function WorkspaceSidePaneLoadingState({ title }) {
   return (
-    <section className="w-[45vw] xl:w-[760px] shrink-0 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all">
+    <section className="w-[clamp(320px,38vw,720px)] shrink-0 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all">
       <div className="flex h-full p-8">
         <WorkspaceStateBlock title={title} description="界面资源按需加载中。" loading />
       </div>

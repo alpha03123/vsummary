@@ -13,6 +13,7 @@ from llama_index.vector_stores.lancedb import LanceDBVectorStore
 
 from backend.video_summary.infrastructure.settings import (
     AgentRetrievalSettings,
+    apply_runtime_env_overrides,
     load_settings,
 )
 from backend.video_summary.library.ports import VideoLibraryReader
@@ -188,6 +189,7 @@ class MetaStateReader:
 def _build_default_embed_model(root_dir: Path | None):
     if root_dir is None:
         return MockEmbedding(embed_dim=32)
+    apply_runtime_env_overrides(root_dir)
     settings = load_settings(root_dir / "config" / "settings.toml", root_dir)
     return _build_embed_model_from_settings(
         retrieval_settings=settings.agent_retrieval,
@@ -212,11 +214,53 @@ def _build_local_huggingface_embedding(
             "缺少本地 embedding 依赖。请安装 `llama-index-embeddings-huggingface` 和 `sentence-transformers`。"
         ) from exc
 
-    return HuggingFaceEmbedding(
-        model_name=retrieval_settings.embedding_model,
-        device=retrieval_settings.embedding_device,
-        embed_batch_size=retrieval_settings.embedding_batch_size,
-    )
+    resolved_device = _resolve_embedding_device(retrieval_settings.embedding_device)
+    try:
+        return HuggingFaceEmbedding(
+            model_name=retrieval_settings.embedding_model,
+            device=resolved_device,
+            embed_batch_size=retrieval_settings.embedding_batch_size,
+        )
+    except Exception as exc:
+        if resolved_device != "cpu" and _looks_like_torch_cuda_error(exc):
+            raise RuntimeError(
+                "当前向量检索配置为 GPU，但当前 PyTorch 环境未启用 CUDA。"
+                "请安装支持 CUDA 的 PyTorch，或将 config/settings.toml 中"
+                " [agent_retrieval].embedding_device 改为 \"cpu\"。"
+            ) from exc
+        raise
+
+
+def _resolve_embedding_device(device: str) -> str:
+    normalized = (device or "cpu").strip().lower()
+    if normalized == "auto":
+        return "cuda" if _torch_cuda_available() else "cpu"
+    if normalized == "gpu":
+        return "cuda"
+    return normalized
+
+
+def _torch_cuda_available() -> bool:
+    try:
+        import torch
+    except Exception:
+        return False
+    try:
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def _looks_like_torch_cuda_error(error: BaseException) -> bool:
+    message = str(error).lower()
+    if "torch not compiled with cuda enabled" in message:
+        return True
+    if "cuda" in message and "not available" in message:
+        return True
+    current = error.__cause__ or error.__context__
+    if current is not None and current is not error:
+        return _looks_like_torch_cuda_error(current)
+    return False
 
 
 def _build_filters(

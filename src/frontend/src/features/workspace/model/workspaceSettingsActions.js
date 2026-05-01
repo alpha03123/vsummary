@@ -29,7 +29,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
 
     try {
-      if (key === "llmProvider" || key === "openaiBaseUrl" || key === "openaiModel") {
+      if (key === "llmProvider" || key === "openaiBaseUrl" || key === "openaiModel" || key === "hfEndpoint") {
         const savedProviderSettings = await updateProviderSettings(nextUi);
         dispatch({
           type: "workspace_settings_loaded",

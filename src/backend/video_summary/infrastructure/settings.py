@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import os
 from pathlib import Path
+import re
 import tomllib
+from urllib.parse import urlparse
 
 
 VALID_DEVICES = {"auto", "cpu", "gpu"}
@@ -19,8 +22,9 @@ DEFAULT_AGENT_KEEP_TAIL_MESSAGES = 6
 DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO = 0.08
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "local_huggingface"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-base-zh-v1.5"
-DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "gpu"
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "cpu"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE = 8
+SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
 @dataclass(frozen=True)
@@ -99,9 +103,11 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         raise ValueError(f"Unsupported asr.provider: {provider}")
 
     faster_payload = asr_payload["faster_whisper"]
-    faster_device = faster_payload["device"].lower()
-    if faster_device not in VALID_DEVICES:
-        raise ValueError(f"Unsupported faster_whisper.device: {faster_device}")
+    faster_device = _normalize_device(
+        faster_payload.get("device"),
+        field_name="faster_whisper.device",
+        default="auto",
+    )
 
     faster_settings = FasterWhisperSettings(
         device=faster_device,
@@ -177,8 +183,9 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             agent_retrieval_payload.get("embedding_model"),
             default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL,
         ),
-        embedding_device=_normalize_non_empty_string(
+        embedding_device=_normalize_device(
             agent_retrieval_payload.get("embedding_device"),
+            field_name="agent_retrieval.embedding_device",
             default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE,
         ),
         embedding_batch_size=_normalize_positive_int(
@@ -230,6 +237,21 @@ def replace_faster_whisper_transcription_mode(settings: AppSettings, transcripti
     )
 
 
+def replace_agent_retrieval_embedding_device(settings: AppSettings, embedding_device: str) -> AppSettings:
+    normalized_device = _normalize_device(
+        embedding_device,
+        field_name="agent_retrieval.embedding_device",
+        default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE,
+    )
+    return replace(
+        settings,
+        agent_retrieval=replace(
+            settings.agent_retrieval,
+            embedding_device=normalized_device,
+        ),
+    )
+
+
 def replace_openai_settings(
     settings: AppSettings,
     *,
@@ -264,11 +286,32 @@ def _normalize_transcription_mode(value: object) -> str:
 
 def normalize_openai_base_url(value: str) -> str:
     normalized = value.strip().rstrip("/")
+    if not normalized:
+        return normalized
     if normalized.endswith("/chat/completions"):
-        return normalized[: -len("/chat/completions")]
+        normalized = normalized[: -len("/chat/completions")]
     if normalized.endswith("/responses"):
-        return normalized[: -len("/responses")]
-    return normalized
+        normalized = normalized[: -len("/responses")]
+    if normalized.endswith("/completions"):
+        normalized = normalized[: -len("/completions")]
+
+    parsed = urlparse(normalized)
+    if not parsed.scheme or not parsed.netloc:
+        return normalized
+
+    path = parsed.path.rstrip("/")
+    if not re.search(r"/v\d+$", path):
+        path = f"{path}/v1" if path else "/v1"
+
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
+def apply_runtime_env_overrides(root_dir: Path) -> None:
+    values = _load_dotenv(root_dir / ".env")
+    for key in SUPPORTED_HUGGINGFACE_ENV_KEYS:
+        value = values.get(key, "").strip()
+        if value:
+            os.environ[key] = value
 
 
 def _render_settings_toml(settings: AppSettings) -> str:
@@ -347,6 +390,29 @@ def _normalize_embedding_provider(value: object) -> str:
     return normalized
 
 
+def _normalize_device(
+    value: object,
+    *,
+    field_name: str,
+    default: str,
+) -> str:
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ValueError(
+            f"Unsupported {field_name}: {value!r}. Supported values: auto, cpu, gpu"
+        )
+
+    normalized = value.strip().lower()
+    if normalized == "cuda":
+        return "gpu"
+    if normalized in VALID_DEVICES:
+        return normalized
+    raise ValueError(
+        f"Unsupported {field_name}: {value!r}. Supported values: auto, cpu, gpu"
+    )
+
+
 def _normalize_non_empty_string(value: object, *, default: str) -> str:
     if isinstance(value, str):
         normalized = value.strip()
@@ -361,6 +427,7 @@ class EnvSettings:
     base_url: str
     model: str
     api_key: str
+    hf_endpoint: str = ""
 
 
 def load_env_settings(root_dir: Path) -> EnvSettings:
@@ -370,6 +437,7 @@ def load_env_settings(root_dir: Path) -> EnvSettings:
         base_url=normalize_openai_base_url(values.get("OPENAI_BASE_URL", "").strip()),
         model=values.get("OPENAI_MODEL", "").strip(),
         api_key=values.get("OPENAI_API_KEY", "").strip(),
+        hf_endpoint=values.get("HF_ENDPOINT", "").strip(),
     )
 
 
@@ -381,6 +449,7 @@ def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
         "OPENAI_BASE_URL": normalize_openai_base_url(settings.base_url),
         "OPENAI_MODEL": settings.model,
         "OPENAI_API_KEY": settings.api_key,
+        "HF_ENDPOINT": settings.hf_endpoint.strip(),
     }
     next_lines: list[str] = []
     seen_keys: set[str] = set()

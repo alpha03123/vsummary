@@ -4,9 +4,11 @@ export const defaultUiSettings = {
   transcriptEnhancementEnabled: true,
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
+  ragEmbeddingDevice: "cpu",
   llmProvider: "openai_compatible",
   openaiBaseUrl: "http://127.0.0.1:8317/v1",
   openaiModel: "gpt-5.4",
+  hfEndpoint: "https://hf-mirror.com",
   openaiApiKey: "",
   hasOpenaiApiKey: false,
   openaiApiKeyMasked: "",
@@ -339,6 +341,8 @@ export function createInitialWorkspaceState() {
     selectedNodeId: null,
     previewSeekRequest: null,
     generatingVideoKey: null,
+    generatingSeriesId: null,
+    generationMode: null,
     generatingMindmapKey: null,
     generationProgress: null,
     generationSnapshot: null,
@@ -521,6 +525,10 @@ export function normalizeUiSettings(value) {
       record.transcriptionMode === "accurate" || record.transcriptionMode === "balanced"
         ? record.transcriptionMode
         : "fast",
+    ragEmbeddingDevice:
+      record.ragEmbeddingDevice === "gpu" || record.ragEmbeddingDevice === "auto"
+        ? record.ragEmbeddingDevice
+        : "cpu",
     llmProvider: record.llmProvider === "openai_compatible" ? record.llmProvider : "openai_compatible",
     openaiBaseUrl:
       typeof record.openaiBaseUrl === "string" && record.openaiBaseUrl.trim()
@@ -530,6 +538,10 @@ export function normalizeUiSettings(value) {
       typeof record.openaiModel === "string" && record.openaiModel.trim()
         ? record.openaiModel.trim()
         : "gpt-5.4",
+    hfEndpoint:
+      typeof record.hfEndpoint === "string" && record.hfEndpoint.trim()
+        ? record.hfEndpoint.trim()
+        : "https://hf-mirror.com",
     openaiApiKey: typeof record.openaiApiKey === "string" ? record.openaiApiKey : "",
     hasOpenaiApiKey: typeof record.hasOpenaiApiKey === "boolean" ? record.hasOpenaiApiKey : false,
     openaiApiKeyMasked: typeof record.openaiApiKeyMasked === "string" ? record.openaiApiKeyMasked : "",

@@ -4,10 +4,11 @@ channels:
   - defaults
 dependencies:
   - python=3.11
-  - ffmpeg          # managed by conda, no manual PATH setup needed
+  - ffmpeg
   - pip
   - pip:
     - -r requirements.txt
-    - nvidia-cublas-cu12  # GPU加速库，默认安装
-    - nvidia-cuda-runtime-cu12  # CUDA runtime，提供 cudart64_12.dll
-    - nvidia-cudnn-cu12   # GPU加速库，默认安装
+    - nvidia-cublas-cu12 
+    - nvidia-cuda-runtime-cu12
+    - nvidia-cuda-nvrtc-cu12
+    - nvidia-cudnn-cu12

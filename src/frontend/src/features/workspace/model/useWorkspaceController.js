@@ -33,11 +33,13 @@ export function useWorkspaceController() {
   const isGeneratingSelectedVideo =
     state.generatingVideoKey != null &&
     state.generatingVideoKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
+  const isGeneratingSelectedSeries = state.generatingSeriesId != null && state.generatingSeriesId === state.selectedSeriesId;
   const isGeneratingMindmapSelectedVideo =
     state.generatingMindmapKey != null &&
     state.generatingMindmapKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
+  const selectedVideoIsLinked = selectedVideo?.isLinked === true || selectedVideo?.status === "linked";
   const previewUrl = state.selectedSeriesId && state.selectedVideoId
-    ? getVideoPreviewUrl(state.selectedSeriesId, state.selectedVideoId)
+    ? (selectedVideoIsLinked ? null : getVideoPreviewUrl(state.selectedSeriesId, state.selectedVideoId))
     : null;
 
   const contentActions = createWorkspaceContentActions({
@@ -151,6 +153,7 @@ export function useWorkspaceController() {
     contextUsageLoading: state.contextUsageLoading,
     isGeneratingMindmapSelectedVideo,
     isGeneratingSelectedVideo,
+    isGeneratingSelectedSeries,
     knowledgeCardsLoading: state.knowledgeCardsLoading,
     notesLoading: state.notesLoading,
     savingNote: state.savingNote,
@@ -169,6 +172,8 @@ export function useWorkspaceController() {
     onClearChat: chatActions.onClearChat,
     onGenerateVideo: contentActions.onGenerateVideo,
     onGenerateMindmap: contentActions.onGenerateMindmap,
+    onGenerateSeries: contentActions.onGenerateSeries,
+    onCancelGeneration: contentActions.onCancelGeneration,
     onGenerateKnowledgeCards: contentActions.onGenerateKnowledgeCards,
     onCreateNote: contentActions.onCreateNote,
     onUpdateNote: contentActions.onUpdateNote,

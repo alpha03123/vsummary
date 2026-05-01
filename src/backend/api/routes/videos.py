@@ -191,11 +191,57 @@ async def generate_video_summary(
         )
     except AsrModelNotReadyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     if video_summary is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     return video_summary.summary
+
+
+@router.post("/api/videos/{series_id}/{video_id}/generate/cancel")
+def cancel_video_summary_generation(
+    series_id: str,
+    video_id: str,
+    container: ApiContainerDep,
+) -> dict[str, object]:
+    container.generation_progress_tracker.request_cancel(_build_task_id(series_id, video_id))
+    return {"status": "cancelled", "task_id": _build_task_id(series_id, video_id)}
+
+
+@router.post("/api/series/{series_id}/generate")
+async def generate_series_summaries(
+    series_id: str,
+    request: GenerateVideoSummaryRequest | None = None,
+    container: ApiContainerDep = None,
+) -> dict[str, object]:
+    try:
+        result = await container.generate_series_summaries.run(
+            series_id,
+            transcript_enhancement_enabled=(None if request is None else request.transcript_enhancement_enabled),
+        )
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return {
+        "series_id": result.series_id,
+        "completed_videos": result.completed_videos,
+        "skipped_videos": result.skipped_videos,
+        "cancelled_video_id": result.cancelled_video_id,
+    }
+
+
+@router.post("/api/series/{series_id}/generate/cancel")
+def cancel_series_summaries_generation(
+    series_id: str,
+    container: ApiContainerDep,
+) -> dict[str, object]:
+    container.generation_progress_tracker.request_cancel(_build_series_task_id(series_id))
+    return {"status": "cancelled", "task_id": _build_series_task_id(series_id)}
 
 
 @router.post("/api/videos/{series_id}/{video_id}/mindmap/generate")
@@ -296,7 +342,27 @@ async def stream_video_generation_progress(
         stream_progress_events(
             tracker=container.generation_progress_tracker,
             task_id=task_id,
-            terminal_statuses={"completed", "failed"},
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/api/series/{series_id}/generate/progress")
+async def stream_series_generation_progress(
+    series_id: str,
+    container: ApiContainerDep,
+) -> StreamingResponse:
+    task_id = _build_series_task_id(series_id)
+    return StreamingResponse(
+        stream_progress_events(
+            tracker=container.generation_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
         ),
         media_type="text/event-stream",
         headers={
@@ -308,6 +374,10 @@ async def stream_video_generation_progress(
 
 def _build_task_id(series_id: str, video_id: str) -> str:
     return f"{series_id}/{video_id}"
+
+
+def _build_series_task_id(series_id: str) -> str:
+    return f"series/{series_id}"
 
 
 def _ensure_video_exists(container, series_id: str, video_id: str) -> None:

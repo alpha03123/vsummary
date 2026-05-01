@@ -285,6 +285,10 @@ export function useWorkspaceDataEffects(state, dispatch) {
       dispatch({ type: "tools_loaded", tools: null });
       return;
     }
+    if (selectedVideo.isLinked || selectedVideo.status === "linked") {
+      dispatch({ type: "tools_loaded", tools: null });
+      return;
+    }
 
     let cancelled = false;
     dispatch({ type: "tools_loading_started" });

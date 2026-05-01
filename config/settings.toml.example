@@ -9,7 +9,7 @@ transcript_enhancement_enabled = false
 
 # Faster-Whisper 转写引擎具体配置
 [asr.faster_whisper]
-# 运行设备: "auto" (自动选择), "cuda" (显卡加速), "cpu" (纯 CPU 运行)
+# 运行设备: "auto" (自动选择), "gpu" (NVIDIA 显卡加速), "cpu" (纯 CPU 运行)
 device = "auto"
 # 模型大小: "tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"
 # 推荐使用 "large-v3-turbo" (约 1.5GB)，权衡了速度和准确度
@@ -56,7 +56,7 @@ planner_transport = "structured"
 embedding_provider = "local_huggingface"
 # 使用的向量模型路径或 HuggingFace ID
 embedding_model = "BAAI/bge-base-zh-v1.5"
-# 向量化运行设备: "cuda" 或 "cpu"
-embedding_device = "cuda"
+# 向量化运行设备: "cpu"、"gpu" 或 "auto"
+embedding_device = "cpu"
 # 批量向量化的批次大小
 embedding_batch_size = 8

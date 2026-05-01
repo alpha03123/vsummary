@@ -66,6 +66,7 @@ from backend.video_summary.library.usecases import (
     DeleteSeries,
     DeleteVideoSource,
     GenerateVideoKnowledgeCards,
+    GenerateSeriesSummaryFromLibrary,
     GenerateVideoMindmapFromLibrary,
     GenerateVideoSummaryFromLibrary,
     GetVideoChapterCards,
@@ -108,6 +109,7 @@ class ApiContainer:
     delete_video_note: DeleteVideoNote
     get_video_workspace_tools: GetVideoWorkspaceTools
     generate_video_summary: GenerateVideoSummaryFromLibrary
+    generate_series_summaries: GenerateSeriesSummaryFromLibrary
     generate_video_mindmap: GenerateVideoMindmapFromLibrary
     delete_series: DeleteSeries
     delete_video_source: DeleteVideoSource
@@ -151,6 +153,7 @@ def build_api_container(
         workflow=ConfiguredMindmapWorkflow(root_dir),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or RuleBasedKnowledgeCardGenerator()
+    summary_generation_use_case = GenerateVideoSummaryFromLibrary(workspace, resolved_generator, progress_tracker)
     agent_runtime = LazyAgentRuntimeProvider(root_dir=root_dir, workspace=workspace)
     invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
     bilibili_meta_service = BilibiliMetaService()
@@ -179,7 +182,8 @@ def build_api_container(
         update_video_note=UpdateVideoNote(workspace),
         delete_video_note=DeleteVideoNote(workspace),
         get_video_workspace_tools=GetVideoWorkspaceTools(workspace),
-        generate_video_summary=GenerateVideoSummaryFromLibrary(workspace, resolved_generator, progress_tracker),
+        generate_video_summary=summary_generation_use_case,
+        generate_series_summaries=GenerateSeriesSummaryFromLibrary(workspace, summary_generation_use_case, progress_tracker),
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
         delete_series=DeleteSeries(workspace, invalidator),
         delete_video_source=DeleteVideoSource(workspace, invalidator),

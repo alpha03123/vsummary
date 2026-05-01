@@ -14,6 +14,10 @@ from backend.video_summary.generation.ports import (
 )
 
 
+class GenerateCancelledError(RuntimeError):
+    pass
+
+
 class GenerateVideoSummary:
     def __init__(
         self,
@@ -35,6 +39,7 @@ class GenerateVideoSummary:
         output_dir: Path,
         progress_reporter: ProgressReporter | None = None,
     ) -> SummaryDocument:
+        _raise_if_cancelled(progress_reporter)
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
         audio_path = output_dir / "audio.wav"
         transcript_stem = output_dir / "transcript"
@@ -46,10 +51,12 @@ class GenerateVideoSummary:
             title=video_path.stem,
             duration_seconds=await asyncio.to_thread(self._media_processor.probe_duration, video_path),
         )
+        _raise_if_cancelled(progress_reporter)
 
         if progress_reporter is not None:
             progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
         await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path)
+        _raise_if_cancelled(progress_reporter)
         if progress_reporter is not None:
             progress_reporter.update("transcribe", 20.0, "正在使用 Whisper 转写音频")
         transcript = await asyncio.to_thread(
@@ -58,16 +65,14 @@ class GenerateVideoSummary:
             transcript_stem,
             None
             if progress_reporter is None
-            else lambda ratio: progress_reporter.update(
-                "transcribe",
-                20.0 + max(0.0, min(1.0, ratio)) * 55.0,
-                "Whisper 正在转写音频",
-            ),
+            else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
         )
+        _raise_if_cancelled(progress_reporter)
 
         if self._transcript_enhancer is not None:
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
+            _raise_if_cancelled(progress_reporter)
             try:
                 transcript = await self._transcript_enhancer.enhance(video, transcript)
             except Exception as error:
@@ -76,15 +81,18 @@ class GenerateVideoSummary:
                 transcript=transcript,
                 output_dir=output_dir,
             )
+            _raise_if_cancelled(progress_reporter)
 
         await self._artifact_store.save_cleaned_transcript(
             video=video,
             transcript=transcript,
             output_dir=output_dir,
         )
+        _raise_if_cancelled(progress_reporter)
 
         if progress_reporter is not None:
             progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
+        _raise_if_cancelled(progress_reporter)
         try:
             summary_document = await self._summarizer.summarize(video, transcript)
         except Exception as error:
@@ -114,3 +122,21 @@ def _contains_connection_failure(error: BaseException) -> bool:
             return True
         current = current.__cause__ or current.__context__
     return False
+
+
+def _handle_transcribe_progress(progress_reporter: ProgressReporter, ratio: float) -> None:
+    progress_reporter.raise_if_cancelled()
+    progress_reporter.update(
+        "transcribe",
+        20.0 + max(0.0, min(1.0, ratio)) * 55.0,
+        "Whisper 正在转写音频",
+    )
+
+
+def _raise_if_cancelled(progress_reporter: ProgressReporter | None) -> None:
+    if progress_reporter is None:
+        return
+    try:
+        progress_reporter.raise_if_cancelled()
+    except RuntimeError as error:
+        raise GenerateCancelledError(str(error) or "生成已取消") from error

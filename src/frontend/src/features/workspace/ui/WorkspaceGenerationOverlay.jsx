@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { WorkspaceMetricCard } from "./shared/WorkspaceMetricCard";
 
@@ -29,7 +29,13 @@ function formatDurationLabel(value) {
   return `${seconds}秒`;
 }
 
-export function WorkspaceGenerationOverlay({ generationProgress, generationSnapshot }) {
+export function WorkspaceGenerationOverlay({
+  generationProgress,
+  generationSnapshot,
+  title = "正在生成 AI 概况",
+  onCancel,
+  cancelLabel = "取消",
+}) {
   const hasRealGenerationProgress = typeof generationProgress === "number";
   const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : "处理中";
   const activeStageId = generationSnapshot?.status === "completed" ? "completed" : generationSnapshot?.stage;
@@ -56,7 +62,7 @@ export function WorkspaceGenerationOverlay({ generationProgress, generationSnaps
       >
         <LoaderCircle size={36} className="animate-spin text-accent" strokeWidth={2.5} />
         <div className="w-full">
-          <h3 className="mb-1.5 text-base font-bold text-stone-900 dark:text-stone-100">正在生成 AI 概况</h3>
+          <h3 className="mb-1.5 text-base font-bold text-stone-900 dark:text-stone-100">{title}</h3>
           <p className="mb-2 text-[13px] font-medium text-stone-500 dark:text-stone-400">
             {generationSnapshot?.detail ?? "正在阅读视频并提炼核心内容..."}
           </p>
@@ -110,6 +116,16 @@ export function WorkspaceGenerationOverlay({ generationProgress, generationSnaps
               );
             })}
           </div>
+          {typeof onCancel === "function" && generationSnapshot?.status === "running" ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+            >
+              <X size={16} />
+              {cancelLabel}
+            </button>
+          ) : null}
         </div>
       </motion.div>
     </motion.div>

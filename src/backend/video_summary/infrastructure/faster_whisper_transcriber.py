@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -68,7 +69,7 @@ class FasterWhisperTranscriber:
 def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if _is_nvidia_gpu_available() else "cpu"
-    if device == "gpu":
+    if device in {"gpu", "cuda"}:
         if not _is_nvidia_gpu_available():
             raise RuntimeError("GPU mode requested, but NVIDIA runtime is not available.")
         return "cuda"
@@ -98,11 +99,7 @@ def _ensure_windows_cuda_dll_dirs() -> None:
     if _CUDA_DLL_DIRS_READY or sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
         return
 
-    candidates = [
-        Path(sys.prefix) / "Lib" / "site-packages" / "nvidia" / "cublas" / "bin",
-        Path(sys.prefix) / "Lib" / "site-packages" / "nvidia" / "cudnn" / "bin",
-        Path(sys.prefix) / "Lib" / "site-packages" / "nvidia" / "cuda_nvrtc" / "bin",
-    ]
+    candidates = _discover_nvidia_bin_dirs()
 
     existing_path_entries = os.environ.get("PATH", "").split(os.pathsep)
     prepended_entries: list[str] = []
@@ -120,6 +117,26 @@ def _ensure_windows_cuda_dll_dirs() -> None:
         os.environ["PATH"] = os.pathsep.join([*prepended_entries, *existing_path_entries])
 
     _CUDA_DLL_DIRS_READY = True
+
+
+def _discover_nvidia_bin_dirs() -> list[Path]:
+    package_names = (
+        "nvidia.cublas",
+        "nvidia.cudnn",
+        "nvidia.cuda_nvrtc",
+        "nvidia.cuda_runtime",
+    )
+    candidates: list[Path] = []
+    for package_name in package_names:
+        spec = importlib.util.find_spec(package_name)
+        locations = getattr(spec, "submodule_search_locations", None)
+        if not locations:
+            continue
+        for location in locations:
+            bin_dir = Path(location) / "bin"
+            if bin_dir.exists() and bin_dir not in candidates:
+                candidates.append(bin_dir)
+    return candidates
 
 
 def _build_decode_options(transcription_mode: str) -> dict[str, object]:

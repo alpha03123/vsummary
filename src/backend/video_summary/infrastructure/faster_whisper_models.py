@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides
+
 
 SUPPORTED_FASTER_WHISPER_MODELS = (
     ("small", "Small"),
@@ -25,6 +27,7 @@ class FasterWhisperModelInfo:
 class FasterWhisperModelManager:
     def __init__(self, models_dir: Path) -> None:
         self._models_dir = models_dir
+        self._root_dir = models_dir.parents[2]
 
     def list_models(self, current_model_size: str) -> list[FasterWhisperModelInfo]:
         return [
@@ -70,6 +73,7 @@ class FasterWhisperModelManager:
 
         target_dir = self.resolve_model_dir(model_size)
         target_dir.mkdir(parents=True, exist_ok=True)
+        apply_runtime_env_overrides(self._root_dir)
         repo_id = _MODELS[model_size]
         total_bytes = _get_expected_download_size(repo_id)
         tqdm_class = _build_download_tqdm_class(

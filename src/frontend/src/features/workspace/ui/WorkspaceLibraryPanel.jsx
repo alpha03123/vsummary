@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowDown,
+  Search,
   LoaderCircle,
   Sparkles,
   FileVideo,
@@ -10,8 +11,10 @@ import {
   Link2,
   ExternalLink,
   Trash2,
+  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
 
@@ -52,13 +55,17 @@ function PanelFooter({
   selectedContextType,
   selectedVideo,
   isGeneratingSelectedVideo,
+  isGeneratingSeries,
   activeSeries,
   currentAsrModel,
   downloadProgress,
   onGenerateVideo,
+  onGenerateSeries,
+  onCancelGeneration,
   onDownloadVideo,
   onAddPlaygroundVideo,
   onRequestDeleteCurrentVideo,
+  onOpenSettings,
 }) {
   const isPlayground = activeSeries?.id === "__playground__";
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
@@ -73,28 +80,6 @@ function PanelFooter({
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
           添加或选择一个视频，再进入 AI 概况、预览、笔记和知识工具。
         </p>
-        {onAddPlaygroundVideo ? (
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={onAddPlaygroundVideo}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-4 py-2.5 text-sm font-semibold text-accent shadow-none transition-colors hover:bg-accent/14 hover:border-accent/60"
-            >
-              <ArrowDown size={16} strokeWidth={2.5} />
-              添加 Playground 视频
-            </button>
-            {selectedVideo ? (
-              <button
-                type="button"
-                onClick={() => onRequestDeleteCurrentVideo?.()}
-                className="btn-danger-ghost inline-flex items-center justify-center w-11 h-11 rounded-2xl"
-                title="删除当前视频"
-              >
-                <Trash2 size={16} />
-              </button>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     );
   }
@@ -109,6 +94,29 @@ function PanelFooter({
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
           你可以在当前对话栏询问关于整个系列的问题 ： {activeSeries?.title}。
         </p>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
+            className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${
+              isGeneratingSeries
+                ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+                : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
+            }`}
+          >
+            {isGeneratingSeries ? (
+              <>
+                <LoaderCircle size={16} className="animate-spin" />
+                取消处理整个系列
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} strokeWidth={2.5} />
+                处理全部系列视频
+              </>
+            )}
+          </button>
+        </div>
       </div>
     );
   }
@@ -197,8 +205,8 @@ function PanelFooter({
           ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
           : "bg-accent text-white hover:bg-accent/90 shadow-sm active:scale-[0.98]"
           }`}
-        onClick={onGenerateVideo}
-        disabled={isGeneratingSelectedVideo || modelNeedsDownload}
+        onClick={modelNeedsDownload ? onOpenSettings : onGenerateVideo}
+        disabled={isGeneratingSelectedVideo}
       >
         {isGeneratingSelectedVideo ? (
           <>
@@ -233,11 +241,14 @@ export function WorkspaceLibraryPanel({
   selectedContextType,
   selectedVideo,
   isGeneratingSelectedVideo,
+  isGeneratingSeries,
   currentAsrModel,
   onEnterLibraryHome,
   onSelectSeriesContext,
   onSelectVideo,
   onGenerateVideo,
+  onGenerateSeries,
+  onCancelGeneration,
   onDownloadVideo,
   onAddPlaygroundVideo,
   onAddSeriesVideo,
@@ -245,10 +256,24 @@ export function WorkspaceLibraryPanel({
   onRequestDeleteCurrentVideo,
   onRequestDeleteSeries,
   downloadProgress,
+  onOpenSettings,
 }) {
   const videos = activeSeries?.videos ?? [];
   const isLinkedSeries = Boolean(activeSeries?.isLinked);
   const isPlayground = activeSeries?.id === "__playground__";
+  const [filterText, setFilterText] = useState("");
+  const normalizedFilter = filterText.trim().toLowerCase();
+  const filteredVideos = useMemo(() => {
+    if (!normalizedFilter) {
+      return videos;
+    }
+    return videos.filter((video) => {
+      const haystacks = [video.title, video.source_name, video.source_url]
+        .filter((value) => typeof value === "string")
+        .map((value) => value.toLowerCase());
+      return haystacks.some((value) => value.includes(normalizedFilter));
+    });
+  }, [normalizedFilter, videos]);
 
   return (
     <section className="flex flex-col h-full w-full bg-transparent relative">
@@ -290,19 +315,43 @@ export function WorkspaceLibraryPanel({
               删除整个系列
             </button>
           </div>
+        ) : onAddPlaygroundVideo ? (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={onAddPlaygroundVideo}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-4 py-3 text-sm font-semibold text-accent shadow-none transition-colors hover:bg-accent/14 hover:border-accent/60"
+            >
+              <ArrowDown size={16} strokeWidth={2.5} />
+              添加 Playground 视频
+            </button>
+          </div>
         ) : null}
 
-        {/* Quick Stats */}
-        <div className="flex gap-2 text-xs">
-          <div className="workspace-muted-panel flex-1 rounded-xl p-2 border">
-            <span className="block text-stone-400 dark:text-stone-500 mb-0.5">总视频数</span>
-            <strong className="text-stone-700 dark:text-stone-200">{videos.length} 个视频</strong>
+        {!isPlayground ? (
+          <div className="relative">
+            <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+            <input
+              type="text"
+              value={filterText}
+              onChange={(event) => setFilterText(event.target.value)}
+              placeholder="筛选当前系列内容"
+              className="w-full rounded-2xl border border-stone-200/80 bg-white px-10 py-2.5 pr-10 text-sm text-stone-700 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500"
+            />
+            {filterText ? (
+              <button
+                type="button"
+                onClick={() => setFilterText("")}
+                className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                aria-label="清空筛选条件"
+                title="清空筛选条件"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
           </div>
-          <div className="workspace-panel flex-1 rounded-xl p-2 border border-stone-200 dark:border-white/10 shadow-sm">
-            <span className="block text-stone-500 dark:text-stone-400 font-medium mb-0.5">已处理</span>
-            <strong className="text-stone-900 dark:text-stone-100">{videos.filter((video) => video.processed).length} 个视频</strong>
-          </div>
-        </div>
+        ) : null}
+
       </div>
 
       {/* Video / Source List */}
@@ -334,7 +383,7 @@ export function WorkspaceLibraryPanel({
           </button>
         ) : null}
 
-        {videos.map((video, index) => {
+        {filteredVideos.map((video, index) => {
           const isActive = video.id === selectedVideo?.id && selectedContextType !== "series";
           return (
             <button
@@ -368,19 +417,28 @@ export function WorkspaceLibraryPanel({
             </button>
           );
         })}
+        {!isPlayground && filteredVideos.length === 0 ? (
+          <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm text-stone-500 dark:border-stone-800 dark:text-stone-400">
+            当前筛选条件下没有匹配的视频。
+          </div>
+        ) : null}
       </div>
 
       <PanelFooter
         selectedContextType={selectedContextType}
         selectedVideo={selectedVideo}
         isGeneratingSelectedVideo={isGeneratingSelectedVideo}
+        isGeneratingSeries={isGeneratingSeries}
         activeSeries={activeSeries}
         currentAsrModel={currentAsrModel}
         downloadProgress={downloadProgress}
         onGenerateVideo={onGenerateVideo}
+        onGenerateSeries={onGenerateSeries}
+        onCancelGeneration={onCancelGeneration}
         onDownloadVideo={onDownloadVideo}
         onAddPlaygroundVideo={onAddPlaygroundVideo}
         onRequestDeleteCurrentVideo={onRequestDeleteCurrentVideo}
+        onOpenSettings={onOpenSettings}
       />
     </section>
   );

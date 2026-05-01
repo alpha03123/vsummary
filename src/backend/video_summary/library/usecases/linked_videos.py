@@ -40,17 +40,7 @@ class ResolveBilibiliSeries:
 
     async def run(self, *, url: str) -> LibrarySeriesDTO:
         url_info = _parse_url(url, self._parser)
-        if url_info.url_type == "video":
-            video = await self._resolver.resolve_single_video(url_info)
-            linked_series = LinkedSeries(
-                series_id=f"bilibili-video-{url_info.bvid}",
-                title=video.title,
-                cover_url=video.cover_url,
-                source_url=video.source_url,
-                videos=[video],
-            )
-        else:
-            linked_series = await self._resolver.resolve_series(url_info)
+        linked_series = await self._resolver.resolve_series(url_info)
         self._workspace.save_linked_series(linked_series)
         self._invalidator.invalidate()
         return _to_series_dto(linked_series)

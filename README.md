@@ -1,27 +1,28 @@
 # vsummary
 
-一个本地视频知识库工具。把视频放进来，自动转写成文字、生成 AI 概况，然后可以对着视频内容提问、做笔记、生成思维导图和知识卡片。
+一个本地视频知识库工具。把视频放进来，自动转写为文本、生成 AI 概况，然后可以基于视频内容进行问答、做笔记、生成思维导图和知识卡片。
 
 ---
 
 ## 核心特性
 
-- **完全本地化转写**：使用 `faster-whisper` 在本地进行视频转写，隐私安全，无需消耗 API 流量。
-- **AI 知识增强**：基于转写文本生成思维导图、知识卡片和多维度的 AI 总结。
-- **对话式检索**：直接对着视频库提问，系统会根据视频内容精准定位并回答。
-- **B 站合集导入**：支持一键解析并下载 Bilibili 合集视频。
+- **本地转写**：使用 `faster-whisper` 在本地执行视频转写。
+- **AI 知识增强**：基于转写结果生成 AI 概况、思维导图、知识卡片与笔记。
+- **对话式检索**：直接围绕视频内容发问，系统会定位并回答。
+- **B 站导入**：支持解析和下载 Bilibili 单视频与合集链接。
 
 ---
 
 ## 准备环境
 
-在启动之前，请确保已安装以下工具：
+启动前请先准备：
 
 | 工具 | 用途 | 下载地址 |
 |------|------|----------|
 | Miniconda 或 Anaconda | 管理 Python 环境和依赖 | https://www.anaconda.com/download/success |
 | Node.js 18+ | 运行前端界面 | https://nodejs.org |
 
+推荐使用 **Miniconda/Anaconda Prompt** 进行初始化与启动。
 
 ---
 
@@ -29,34 +30,21 @@
 
 ### 1. 创建 Conda 环境
 
-**使用 Miniconda(推荐) 的用户**，打开 Anaconda Prompt 或终端，在项目根目录下执行：
+在项目根目录执行：
 
 ```bat
 conda env create -f environment.yml
 conda activate vsummary
 ```
 
-**已安装 Anaconda 的用户**，操作完全相同——打开 Anaconda Prompt（或 Anaconda Navigator 内的终端），在项目根目录下执行相同命令即可：
+这会自动安装：
 
-```bat
-conda env create -f environment.yml
-conda activate vsummary
-```
+- Python 3.11
+- FFmpeg
+- 后端依赖
+- `faster-whisper` 所需的 CUDA 12 运行时包
 
-这会自动安装 Python 3.11、FFmpeg 及所有后端依赖，无需额外配置环境变量。
-
-### 2. （可选）启用 GPU 加速
-
-若你有 **NVIDIA 显卡**，Conda 环境已经默认安装了所需的 CUDA 运行库。
-
-只需修改 `config/settings.toml`（初次运行后自动生成），将 `device` 改为 `"cuda"` 即可：
-
-```toml
-[asr.faster_whisper]
-device = "cuda"
-```
-
-### 3. 安装前端依赖
+### 2. 安装前端依赖
 
 ```bat
 cd src\frontend
@@ -64,77 +52,215 @@ npm install
 cd ..\..
 ```
 
-### 4. 配置说明
+### 3. 复制 `.env`
 
-项目包含两个核心配置文件：
-
-#### A. 密钥配置 (`.env`)
-
-复制并重命名 `.env.example` 为 `.env`，填入你的 AI 模型信息：
+复制 `.env.example` 为 `.env`，再填写模型供应商配置：
 
 ```dotenv
 OPENAI_API_KEY=sk-你的密钥
 OPENAI_PROVIDER=openai_compatible
-OPENAI_BASE_URL=https://你的供应商地址/v1
-OPENAI_MODEL=gpt-4o
+OPENAI_BASE_URL=https://api.deepseek.com
+OPENAI_MODEL=deepseek-v4-flash
 ```
 
-#### B. 运行配置 (`config/settings.toml`)
+说明：
 
-初次运行后自动生成，可调整以下参数：
+- `OPENAI_BASE_URL` 可以写成：
+  - `https://api.deepseek.com`
+  - `https://api.deepseek.com/v1`
+- 程序会自动补齐并归一为 `/v1`
+- 最终实际请求由后端统一拼到 `chat/completions`
 
-- **转写设备**：`device = "cpu"`（默认）或 `"cuda"`（GPU 加速）
-- **模型大小**：默认为 `large-v3-turbo`（约 1.5GB），配置较低可改为 `small` 或 `base`
+### 4. 配置 HuggingFace 镜像
 
-### 5. 启动服务
+如果你所在网络环境无法稳定访问 HuggingFace，请在 `.env` 里继续加入：
 
-分别打开两个终端窗口执行：
+```dotenv
+HF_ENDPOINT=https://hf-mirror.com
+```
 
-**终端 1 — 启动后端：**
+
+
+### 5. 首次启动后检查 `config/settings.toml`
+
+程序第一次运行后会生成 `config/settings.toml`。推荐重点检查这两段：
+
+```toml
+[asr.faster_whisper]
+device = "auto"
+model_size = "large-v3-turbo"
+compute_type = "float16"
+transcription_mode = "accurate"
+
+[agent_retrieval]
+embedding_provider = "local_huggingface"
+embedding_model = "BAAI/bge-base-zh-v1.5"
+embedding_device = "cpu"
+embedding_batch_size = 8
+```
+
+说明：
+
+- `device` 控制 **视频转写（fast whisper模型）** 用 CPU 还是 NVIDIA GPU（建议GPU）
+- `embedding_device` 控制 **RAG 向量检索模型** 用 CPU 还是 GPU (建议CPU)
+
+### 6. 启动服务
+
+#### 方式 A：一键启动
+
+直接双击根目录下的 `start.bat`。
+
+#### 方式 B：手动启动
+
+**终端 1：后端**
 
 ```bat
-conda activate vsummary
 cd src
-python -m uvicorn backend.api.app:app --host 127.0.0.1 --port 8001
+conda run -n vsummary python -m uvicorn backend.api.app:app --host 127.0.0.1 --port 8001
 ```
 
-**终端 2 — 启动前端：**
+**终端 2：前端**
 
 ```bat
 cd src\frontend
 npm run dev
 ```
 
-启动后，访问浏览器：**[http://127.0.0.1:4173](http://127.0.0.1:4173)**
+启动后访问：
 
- ## **一键启动**：
- 直接双击根目录下的 `start.bat`，会自动打开两个终端窗口分别运行后端和前端。
+- 前端：[http://127.0.0.1:4173](http://127.0.0.1:4173)
+- 后端：[http://127.0.0.1:8001](http://127.0.0.1:8001)
+
+---
+
+## GPU 说明
+
+### 视频转写 GPU
+
+如果你有 NVIDIA 显卡，并且希望启用视频转写 GPU 加速，可以：
+
+```toml
+[asr.faster_whisper]
+device = "gpu"
+```
+
+### CUDA 11 用户
 
 
+如果你的机器仍然停留在 CUDA 11，建议：
 
-## 数据
+1. 优先使用 CPU 模式
+2. 或尝试把 `environment.yml` 中默认的 CUDA 12 运行时包改成 CUDA 11 对应包
+```yaml
+- nvidia-cublas-cu11
+- nvidia-cudnn-cu11
+- nvidia-cuda-runtime-cu11
+- nvidia-cuda-nvrtc-cu11
+```
 
-- **视频文件**：放在 `videos/` 目录下。
-- **处理结果**：所有的转写、总结、笔记都存储在 `workspace/` 目录下。
-- **本地模型**：自动下载的模型文件存储在 `data/models/` 目录下。
-- **隐私说明**：除了向 LLM 提供商发送文本进行总结/对话外，所有音频处理和原始数据均保留在本地。
+
+### RAG / embedding GPU
+
+`embedding_device` 默认建议保持为：
+
+```toml
+embedding_device = "cpu"
+```
+- 当前环境变量配置的是cpu的torch，如果你自己安装了GPU TORCH，可以改为GPU.
+
+
+---
+
+## 数据目录
+
+- `videos/`：原始视频文件
+- `workspace/`：转写、概况、笔记等工作产物
+- `data/models/`：本地模型文件
+
+除了发给 LLM 供应商的文本请求外，原始音视频处理都保留在本地。
 
 ---
 
 ## 常见问题
 
-**Q: 出现 `cublas.dll not found` 或 `cudnn` 相关报错？**
+### 1. `cublas.dll not found` / `cudart64_12.dll` / `cudnn` 报错
 
-A: 按照上方"启用 GPU 加速"步骤安装 CUDA 运行库，或将 `config/settings.toml` 中的 `device` 改回 `"cpu"` 以纯 CPU 运行。
+说明当前 GPU 运行时没有就绪。
 
-**Q: 第一次运行生成概况很慢？**
+建议顺序：
 
-A: 首次运行需要下载约 1.5GB 的转写模型，取决于网速。下载完成后，后续转写速度将大幅提升。
+1. 确认你是通过 `environment.yml` 创建环境
+2. 确认后端是从这个环境启动的
+3. 如果还不行，先改回 CPU：
 
-**Q: 前端页面显示"连接后端失败"？**
+```toml
+[asr.faster_whisper]
+device = "cpu"
+```
 
-A: 请检查后端终端窗口是否有红色报错。通常是因为端口 8001 被占用或 `.env` 里的 API Key 格式不正确。
+### 2. 只有 CUDA 11，GPU 不能直接跑
 
-**Q: 如何更换转写语言？**
+当前默认环境走的是 **CUDA 12**。如果你必须使用 CUDA 11，可以尝试把 `environment.yml` 中的以下依赖改为 CUDA 11 对应包：
 
-A: 修改 `config/settings.toml` 中的 `language = "zh"` 为你需要的语言代码。
+```yaml
+- nvidia-cublas-cu11
+- nvidia-cudnn-cu11
+- nvidia-cuda-runtime-cu11
+- nvidia-cuda-nvrtc-cu11
+```
+
+这不是当前仓库默认支持矩阵，需要你自行创建环境并验证。如果你只想稳定使用，优先改回 CPU 模式。
+
+### 3. HuggingFace 下载很慢 / 失败
+
+在 `.env` 中加入：
+
+```dotenv
+HF_ENDPOINT=https://hf-mirror.com
+```
+
+然后重启后端。
+
+### 4. RAG 报 `Torch not compiled with CUDA enabled`
+
+说明你把 embedding 设备设成了 GPU，但当前 PyTorch 不是 CUDA 版。
+
+请改回：
+
+```toml
+[agent_retrieval]
+embedding_device = "cpu"
+```
+
+### 5. 模型供应商 URL 写法不确定
+
+以下写法都可以：
+
+- `https://api.deepseek.com`
+- `https://api.deepseek.com/v1`
+
+程序会自动补齐 `/v1` 并统一处理。
+
+
+### 6. 前端提示“连接后端失败”
+
+通常是：
+
+- 端口 `8001` 已被占用
+- `.env` 里的模型配置不正确
+- 后端终端里已经有红色报错
+
+### 7. 第一次生成概况很慢
+
+首次需要下载模型，且初次转写本身会更慢，属于正常现象。
+
+### 8. 如何更换转写语言
+
+修改：
+
+```toml
+[asr]
+language = "zh"
+```
+
+改成你需要的语言代码即可。

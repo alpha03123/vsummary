@@ -115,6 +115,8 @@ export function workspaceReducer(state, action) {
         notesLoading: false,
         savingNote: false,
         generatingVideoKey: null,
+        generatingSeriesId: null,
+        generationMode: null,
         generatingMindmapKey: null,
         generationProgress: null,
         generationSnapshot: null,
@@ -157,6 +159,8 @@ export function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        generatingSeriesId: null,
+        generationMode: null,
         chatBaseScopeKey,
         chatScopeKey,
         chatSessionIdsByScope: chatSessionScope.chatSessionIdsByScope,
@@ -185,6 +189,8 @@ export function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        generatingSeriesId: null,
+        generationMode: null,
         downloadingVideoKey: null,
         videoDownloadProgress: null,
         chatBaseScopeKey: null,
@@ -221,6 +227,8 @@ export function workspaceReducer(state, action) {
         previewSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
+        generatingSeriesId: null,
+        generationMode: null,
         downloadingVideoKey: null,
         videoDownloadProgress: null,
         chatBaseScopeKey,
@@ -288,6 +296,7 @@ export function workspaceReducer(state, action) {
         ...state,
         tools: action.tools,
         toolsLoading: false,
+        error: "",
       };
     case "summary_loading_started":
       return {
@@ -296,7 +305,10 @@ export function workspaceReducer(state, action) {
         error: "",
       };
     case "summary_loaded":
-      return createSummaryLoadedState(action.summary, state);
+      return createSummaryLoadedState(action.summary, {
+        ...state,
+        error: "",
+      });
     case "summary_cleared":
       return {
         ...state,
@@ -311,7 +323,10 @@ export function workspaceReducer(state, action) {
         error: "",
       };
     case "mindmap_loaded":
-      return createMindmapLoadedState(action.mindmap, state);
+      return createMindmapLoadedState(action.mindmap, {
+        ...state,
+        error: "",
+      });
     case "mindmap_cleared":
       return {
         ...state,
@@ -383,6 +398,7 @@ export function workspaceReducer(state, action) {
         ...state,
         notes: action.notes,
         notesLoading: false,
+        error: "",
       };
     case "notes_cleared":
       return {
@@ -514,6 +530,8 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         generatingVideoKey: action.videoKey,
+        generatingSeriesId: null,
+        generationMode: "video",
         generationProgress: 0,
         generationSnapshot: {
           status: "running",
@@ -530,11 +548,42 @@ export function workspaceReducer(state, action) {
         },
         error: "",
       };
+    case "series_generation_started":
+      return {
+        ...state,
+        generatingSeriesId: action.seriesId,
+        generatingVideoKey: null,
+        generationMode: "series",
+        generationProgress: 0,
+        generationSnapshot: {
+          status: "running",
+          stage: "prepare",
+          progress: 0,
+          detail: "系列任务已开始",
+          error: null,
+          startedAt: null,
+          stageStartedAt: null,
+          elapsedSeconds: 0,
+          stageElapsedSeconds: 0,
+          estimatedTotalSeconds: null,
+          remainingSeconds: null,
+        },
+        error: "",
+      };
     case "generation_progress_updated":
       return {
         ...state,
         generationProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
         generationSnapshot: action.snapshot,
+      };
+    case "generation_cancelled":
+      return {
+        ...state,
+        generatingVideoKey: null,
+        generatingSeriesId: null,
+        generationMode: null,
+        generationProgress: null,
+        generationSnapshot: null,
       };
     case "generation_succeeded":
       return createSummaryLoadedState(action.summary, {
@@ -563,9 +612,21 @@ export function workspaceReducer(state, action) {
             },
           },
         generatingVideoKey: null,
+        generatingSeriesId: null,
+        generationMode: null,
         generationProgress: null,
         generationSnapshot: null,
       });
+    case "series_generation_succeeded":
+      return {
+        ...state,
+        library: action.library ?? state.library,
+        generatingSeriesId: null,
+        generatingVideoKey: null,
+        generationMode: null,
+        generationProgress: null,
+        generationSnapshot: null,
+      };
     case "video_download_started":
       return {
         ...state,

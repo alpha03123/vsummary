@@ -56,6 +56,9 @@ export function WorkspaceToolbar({
       </div>
 
       <div className="flex items-center gap-3">
+        <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400">
+          Settings
+        </span>
         <button
           ref={settingsButtonRef}
           className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-500 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"}`}

@@ -1,8 +1,11 @@
 import {
+  cancelSeriesSummaries,
+  cancelVideoSummary,
   createVideoNote,
   deleteSeries,
   deleteVideoNote,
   deleteVideoSource,
+  generateSeriesSummaries,
   generateVideoKnowledgeCards,
   generateVideoMindmap,
   generateVideoSummary,
@@ -13,6 +16,7 @@ import {
   resolveBilibiliSeries,
   resolveBilibiliVideo,
   startVideoDownload,
+  subscribeSeriesGenerationProgress,
   subscribeVideoDownloadProgress,
   subscribeVideoGenerationProgress,
   updateVideoNote,
@@ -77,6 +81,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           message: snapshot.error ?? "生成失败",
         });
       }
+      if (snapshot.status === "cancelled") {
+        dispatch({ type: "generation_cancelled" });
+      }
     });
 
     try {
@@ -96,6 +103,66 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       });
     } finally {
       unsubscribe();
+    }
+  }
+
+  async function onGenerateSeries() {
+    if (!state.selectedSeriesId) {
+      return;
+    }
+
+    const seriesId = state.selectedSeriesId;
+    dispatch({ type: "series_generation_started", seriesId });
+
+    const unsubscribe = subscribeSeriesGenerationProgress(seriesId, (snapshot) => {
+      if (snapshot.status === "running" || snapshot.status === "completed") {
+        dispatch({
+          type: "generation_progress_updated",
+          progress: snapshot.progress,
+          snapshot,
+        });
+      }
+      if (snapshot.status === "failed") {
+        dispatch({
+          type: "load_failed",
+          message: snapshot.error ?? "系列处理失败",
+        });
+      }
+      if (snapshot.status === "cancelled") {
+        dispatch({ type: "generation_cancelled" });
+      }
+    });
+
+    try {
+      await generateSeriesSummaries(seriesId, {
+        transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
+      });
+      const library = await reloadWorkspaceLibrary();
+      dispatch({ type: "series_generation_succeeded", library });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "系列处理失败",
+      });
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  async function onCancelGeneration() {
+    try {
+      if (state.generationMode === "series" && state.generatingSeriesId) {
+        await cancelSeriesSummaries(state.generatingSeriesId);
+        return;
+      }
+      if (state.generatingVideoKey && state.selectedSeriesId && state.selectedVideoId) {
+        await cancelVideoSummary(state.selectedSeriesId, state.selectedVideoId);
+      }
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "取消生成失败",
+      });
     }
   }
 
@@ -339,6 +406,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onGenerateKnowledgeCards,
     onGenerateVideo,
     onGenerateMindmap,
+    onGenerateSeries,
+    onCancelGeneration,
     onCreateNote,
     onUpdateNote,
     onDeleteNote,

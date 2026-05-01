@@ -31,7 +31,10 @@ from backend.video_summary.library.usecases.mutations import (
     DeleteSeries,
     DeleteVideoSource,
 )
-from backend.video_summary.library.usecases.summary_generation import GenerateVideoSummaryFromLibrary
+from backend.video_summary.library.usecases.summary_generation import (
+    GenerateSeriesSummaryFromLibrary,
+    GenerateVideoSummaryFromLibrary,
+)
 
 __all__ = [
     "CreateVideoNote",
@@ -41,6 +44,7 @@ __all__ = [
     "DeleteVideoSource",
     "GenerateVideoKnowledgeCards",
     "GenerateVideoMindmapFromLibrary",
+    "GenerateSeriesSummaryFromLibrary",
     "GenerateVideoSummaryFromLibrary",
     "GetVideoChapterCards",
     "GetVideoKnowledgeCards",

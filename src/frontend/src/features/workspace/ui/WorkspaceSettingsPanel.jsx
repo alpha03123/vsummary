@@ -276,6 +276,21 @@ export function WorkspaceSettingsPanel({
                     )}
                   </div>
                 </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="检索模型"
+                  description="控制检索模型运行在 CPU 还是 GPU。建议CPU,除非你自行安装了GPU环境。"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.ragEmbeddingDevice}
+                    options={[
+                      { id: "cpu", label: "CPU" },
+                      { id: "gpu", label: "GPU" },
+                      { id: "auto", label: "自动" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
+                  />
+                </WorkspaceSettingRow>
               </>
             )}
 
@@ -298,7 +313,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="API 根地址"
-                  description="填写 OpenAI 兼容 API 的根地址，例如 `https://api.openai.com/v1`。"
+                  description="填写 OpenAI 兼容 API 根地址，例如 `https://api.deepseek.com` 或 `https://api.deepseek.com/v1`。"
                 >
                   <WorkspaceTextInput
                     value={ui.openaiBaseUrl}
@@ -368,11 +383,26 @@ export function WorkspaceSettingsPanel({
             )}
 
             {activeTab === "network" && (
-              <div className="flex flex-col items-center justify-center p-10 h-64 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-3xl mt-4">
-                <FileText className="text-stone-300 dark:text-stone-700 mb-4" size={48} strokeWidth={1} />
-                <h3 className="font-bold text-stone-900 dark:text-stone-100 mb-2">此模块预留中</h3>
+              <>
+                <div className="mb-2">
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">网络与镜像</h3>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">
+                    这里的配置会写入项目根目录 `.env` 并实时生效。
+                  </p>
+                </div>
 
-              </div>
+                <WorkspaceSettingRow
+                  title="HuggingFace 镜像地址"
+                  description="Huggingface镜像,如果无法下载模型请配置此设置,留空时默认使用 HuggingFace 官方源。"
+                >
+                  <WorkspaceTextInput
+                    value={ui.hfEndpoint}
+                    onChange={(nextValue) => onChangeSetting("hfEndpoint", nextValue)}
+                    placeholder="https://hf-mirror.com"
+                    className="w-[340px]"
+                  />
+                </WorkspaceSettingRow>
+              </>
             )}
           </motion.div>
         </div>
