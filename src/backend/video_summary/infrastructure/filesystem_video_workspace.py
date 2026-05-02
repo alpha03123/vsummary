@@ -10,7 +10,6 @@ from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.models import (
     ChapterCardDTO as ChapterCardDTO,
     KnowledgeCardDTO as KnowledgeCardDTO,
-    KnowledgeCardSourceRefDTO as KnowledgeCardSourceRefDTO,
     LibrarySeriesDTO as LibrarySeriesDTO,
     LibraryVideoCardDTO as LibraryVideoCardDTO,
     TranscriptSegmentDTO as TranscriptSegmentDTO,
@@ -724,17 +723,7 @@ def _serialize_knowledge_card(card: KnowledgeCardDTO) -> dict[str, object]:
         "details": card.details,
         "tags": list(card.tags),
         "keywords": list(card.keywords),
-        "source_refs": [_serialize_source_ref(item) for item in card.source_refs],
         "related_card_ids": list(card.related_card_ids),
-    }
-
-
-def _serialize_source_ref(source_ref: KnowledgeCardSourceRefDTO) -> dict[str, object]:
-    return {
-        "chapter_id": source_ref.chapter_id,
-        "start_seconds": source_ref.start_seconds,
-        "end_seconds": source_ref.end_seconds,
-        "quote": source_ref.quote,
     }
 
 
@@ -749,35 +738,8 @@ def _to_knowledge_card_view(card_record: dict[str, object]) -> KnowledgeCardDTO:
         details=_require_note_text(card_record.get("details"), "details"),
         tags=_require_string_list(card_record.get("tags"), "tags"),
         keywords=_require_string_list(card_record.get("keywords"), "keywords"),
-        source_refs=_to_source_ref_views(card_record.get("source_refs")),
         related_card_ids=_require_string_list(card_record.get("related_card_ids"), "related_card_ids"),
     )
-
-
-def _to_source_ref_views(value: object) -> list[KnowledgeCardSourceRefDTO]:
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError("knowledge_cards.json 格式错误：source_refs 必须是数组。")
-    result: list[KnowledgeCardSourceRefDTO] = []
-    for item in value:
-        if not isinstance(item, dict):
-            raise ValueError("knowledge_cards.json 格式错误：source_ref 必须是对象。")
-        chapter_id = item.get("chapter_id")
-        quote = item.get("quote")
-        if chapter_id is not None and (not isinstance(chapter_id, str) or not chapter_id.strip()):
-            raise ValueError("knowledge_cards.json 格式错误：source_ref.chapter_id 不合法。")
-        if not isinstance(quote, str):
-            raise ValueError("knowledge_cards.json 格式错误：source_ref.quote 不合法。")
-        result.append(
-            KnowledgeCardSourceRefDTO(
-                chapter_id=chapter_id.strip() if isinstance(chapter_id, str) else None,
-                start_seconds=_as_seconds(item.get("start_seconds")),
-                end_seconds=_as_seconds(item.get("end_seconds")),
-                quote=quote.strip(),
-            )
-        )
-    return result
 
 
 def _require_string_list(value: object, field_name: str) -> list[str]:
@@ -794,7 +756,7 @@ def _require_string_list(value: object, field_name: str) -> list[str]:
 
 
 def _require_knowledge_card_kind(value: object) -> str:
-    allowed = {"concept", "method", "case", "term", "conclusion"}
+    allowed = {"concept", "method", "case", "term", "conclusion", "insight"}
     if not isinstance(value, str) or value not in allowed:
         raise ValueError(f"knowledge_cards.json 格式错误：kind 必须是 {', '.join(sorted(allowed))}。")
     return value

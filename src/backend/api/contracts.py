@@ -25,6 +25,7 @@ class WorkspaceSettingsResponse(BaseModel):
     asr_model_quality: str
     transcription_mode: str
     rag_embedding_device: str
+    window_tokens: int
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -34,6 +35,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     asr_model_quality: str
     transcription_mode: str
     rag_embedding_device: str
+    window_tokens: int
 
 
 class ProviderSettingsResponse(BaseModel):

@@ -50,8 +50,8 @@ from backend.video_summary.infrastructure.library_generation_adapters import (
     WorkspaceBackedVideoMindmapGenerator,
     WorkspaceBackedVideoSummaryGenerator,
 )
+from backend.video_summary.infrastructure.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
-from backend.video_summary.infrastructure.rule_based_knowledge_card_generator import RuleBasedKnowledgeCardGenerator
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 from backend.video_summary.infrastructure.settings import load_settings
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
@@ -135,7 +135,7 @@ def build_api_container(
         workspace=workspace,
         workflow=ConfiguredMindmapWorkflow(root_dir),
     )
-    resolved_knowledge_card_generator = knowledge_card_generator or RuleBasedKnowledgeCardGenerator()
+    resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(root_dir)
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(workspace, resolved_generator, progress_tracker)
     agent_runtime = LazyAgentRuntimeProvider(root_dir=root_dir, workspace=workspace)
     invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)

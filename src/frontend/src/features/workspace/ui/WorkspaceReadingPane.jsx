@@ -82,7 +82,6 @@ export function WorkspaceReadingPane({
   isGeneratingSelectedVideo,
   onSelectTool,
   onFocusNode,
-  onOpenCard,
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onCreateNote,
@@ -211,7 +210,6 @@ export function WorkspaceReadingPane({
                       knowledgeCardsFeedback={knowledgeCardsFeedback}
                       knowledgeCardsLoading={knowledgeCardsLoading}
                       onGenerateKnowledgeCards={onGenerateKnowledgeCards}
-                      onOpenCard={onOpenCard}
                     />
                   ) : null}
                   {selectedToolId === "chat-management" || selectedToolId === "series-chat-management" ? (

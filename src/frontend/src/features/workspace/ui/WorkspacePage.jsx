@@ -342,7 +342,6 @@ export function WorkspacePage({ page }) {
                   isGeneratingSelectedVideo={generation.isGeneratingSummary}
                   onSelectTool={actions.selectTool}
                   onFocusNode={actions.focusNode}
-                  onOpenCard={actions.openCard}
                   onGenerateMindmap={actions.generateMindmap}
                   onGenerateKnowledgeCards={actions.generateKnowledgeCards}
                   onCreateNote={actions.createNote}

@@ -31,6 +31,7 @@ export async function loadWorkspaceSettings() {
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
     ragEmbeddingDevice: payload.rag_embedding_device,
+    windowTokens: payload.window_tokens,
   };
 }
 
@@ -60,6 +61,7 @@ export async function updateWorkspaceSettings(settings) {
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
       rag_embedding_device: settings.ragEmbeddingDevice,
+      window_tokens: settings.windowTokens,
     }),
   });
   return {
@@ -69,6 +71,7 @@ export async function updateWorkspaceSettings(settings) {
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
     ragEmbeddingDevice: payload.rag_embedding_device,
+    windowTokens: payload.window_tokens,
   };
 }
 

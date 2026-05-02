@@ -4,7 +4,7 @@ language = "zh"
 transcript_enhancement_enabled = false
 
 [asr.faster_whisper]
-device = "auto"
+device = "gpu"
 model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
@@ -18,12 +18,15 @@ mode = true
 
 [agent_context]
 window_tokens = 1000000
+
+[agent_context.advanced]
 reserved_output_tokens = 20000
 warning_threshold_ratio = 0.6
 compact_threshold_ratio = 0.8
 blocking_threshold_ratio = 0.92
 keep_tail_messages = 6
 projection_max_tokens_ratio = 0.08
+direct_summary_threshold_ratio = 0.9
 planner_transport = "structured"
 
 [agent_retrieval]

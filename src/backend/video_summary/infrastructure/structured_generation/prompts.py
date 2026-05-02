@@ -95,6 +95,40 @@ def build_document_prompt(
     )
 
 
+def build_transcript_document_prompt(video: VideoAsset, transcript: Transcript) -> str:
+    return (
+        "请基于以下中文视频转写，生成结构化 JSON。\n"
+        f"视频标题：{video.title}\n"
+        f"视频时长：{format_timestamp(video.duration_seconds)}\n"
+        f"识别语言：{transcript.language}\n\n"
+        "要求：\n"
+        "1. 只输出 JSON，不要输出额外解释。\n"
+        "2. 不要编造原文没有提到的内容。\n"
+        "3. 章节必须按时间顺序组织，并给出 start_seconds 和 end_seconds，单位为秒。\n"
+        "4. 关键结论控制在 5 到 10 条。\n"
+        "5. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n\n"
+        "JSON 结构：\n"
+        "{\n"
+        '  "title": "视频标题",\n'
+        '  "one_sentence_summary": "一句话总结",\n'
+        '  "core_problem": "视频核心要解决的问题",\n'
+        '  "chapters": [\n'
+        "    {\n"
+        '      "id": "chapter-1",\n'
+        '      "title": "章节标题",\n'
+        '      "start_seconds": 0,\n'
+        '      "end_seconds": 120,\n'
+        '      "summary": "章节小结",\n'
+        '      "key_points": ["要点1", "要点2"]\n'
+        "    }\n"
+        "  ],\n"
+        '  "key_takeaways": ["结论1", "结论2"]\n'
+        "}\n\n"
+        "转写如下：\n"
+        f"{segments_to_text(transcript.segments)}"
+    )
+
+
 def segments_to_text(segments: list[TranscriptSegment]) -> str:
     lines: list[str] = []
     for segment in segments:

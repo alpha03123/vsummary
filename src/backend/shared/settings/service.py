@@ -14,6 +14,7 @@ from backend.video_summary.infrastructure.settings import (
     load_settings,
     normalize_openai_base_url,
     replace_agent_retrieval_embedding_device,
+    replace_agent_context_window_tokens,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
@@ -45,6 +46,7 @@ class WorkspaceSettings:
     asr_model_quality: str
     transcription_mode: str
     rag_embedding_device: str
+    window_tokens: int
 
 
 class SettingsServicePort(Protocol):
@@ -60,6 +62,7 @@ class SettingsServicePort(Protocol):
         asr_model_quality: str,
         transcription_mode: str,
         rag_embedding_device: str,
+        window_tokens: int,
     ) -> WorkspaceSettings:
         ...
 
@@ -99,6 +102,7 @@ class SettingsService:
             asr_model_quality=settings.asr.faster_whisper.model_size,
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
             rag_embedding_device=settings.agent_retrieval.embedding_device,
+            window_tokens=settings.agent_context.window_tokens,
         )
 
     def update_workspace_settings(
@@ -110,6 +114,7 @@ class SettingsService:
         asr_model_quality: str,
         transcription_mode: str,
         rag_embedding_device: str,
+        window_tokens: int,
     ) -> WorkspaceSettings:
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
@@ -117,6 +122,8 @@ class SettingsService:
             raise SettingsValidationError(f"unsupported asr model '{asr_model_quality}'")
         if transcription_mode not in VALID_TRANSCRIPTION_MODES:
             raise SettingsValidationError(f"unsupported transcription mode '{transcription_mode}'")
+        if window_tokens <= 0:
+            raise SettingsValidationError("window_tokens 必须是正整数。")
 
         current_settings = load_settings(self._config_path, self._root_dir)
         next_settings = replace_workspace_ui_settings(
@@ -130,6 +137,7 @@ class SettingsService:
         next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
         next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
         next_settings = replace_agent_retrieval_embedding_device(next_settings, rag_embedding_device)
+        next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
         save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
@@ -139,6 +147,7 @@ class SettingsService:
             asr_model_quality=asr_model_quality,
             transcription_mode=transcription_mode,
             rag_embedding_device=next_settings.agent_retrieval.embedding_device,
+            window_tokens=next_settings.agent_context.window_tokens,
         )
 
     def get_provider_settings(self) -> ProviderSettings:

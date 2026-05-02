@@ -75,16 +75,6 @@ function asChapterCard(value, label) {
   };
 }
 
-function asKnowledgeCardSourceRef(value, label) {
-  const record = asRecord(value, label);
-  return {
-    chapterId: typeof record.chapter_id === "string" ? record.chapter_id : null,
-    startSeconds: typeof record.start_seconds === "number" ? record.start_seconds : null,
-    endSeconds: typeof record.end_seconds === "number" ? record.end_seconds : null,
-    quote: asString(record.quote, `${label}.quote`),
-  };
-}
-
 function asKnowledgeCard(value, label) {
   const record = asRecord(value, label);
   return {
@@ -95,9 +85,6 @@ function asKnowledgeCard(value, label) {
     details: asString(record.details, `${label}.details`),
     tags: Array.isArray(record.tags) ? asStringList(record.tags, `${label}.tags`) : [],
     keywords: Array.isArray(record.keywords) ? asStringList(record.keywords, `${label}.keywords`) : [],
-    sourceRefs: Array.isArray(record.source_refs)
-      ? record.source_refs.map((item, index) => asKnowledgeCardSourceRef(item, `${label}.source_refs[${index}]`))
-      : [],
     relatedCardIds: Array.isArray(record.related_card_ids)
       ? asStringList(record.related_card_ids, `${label}.related_card_ids`)
       : [],

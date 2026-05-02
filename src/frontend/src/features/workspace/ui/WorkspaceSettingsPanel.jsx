@@ -291,6 +291,19 @@ export function WorkspaceSettingsPanel({
                     onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
                   />
                 </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="上下文大小"
+                  description="控制模型单次可用的上下文预算。视频摘要会根据这个值决定是否直接读取原始转写，或先分块再汇总。"
+                >
+                  <WorkspaceTextInput
+                    value={String(ui.windowTokens)}
+                    onChange={(nextValue) => onChangeSetting("windowTokens", Number.parseInt(nextValue, 10) || 1)}
+                    placeholder="1000000"
+                    className="w-[180px]"
+                    type="number"
+                  />
+                </WorkspaceSettingRow>
               </>
             )}
 

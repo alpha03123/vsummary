@@ -99,27 +99,6 @@ export function useWorkspaceController() {
     });
   }
 
-  function onOpenCard(card) {
-    const primarySource = Array.isArray(card?.sourceRefs) ? card.sourceRefs[0] : null;
-    const startSeconds = typeof card?.startSeconds === "number"
-      ? card.startSeconds
-      : primarySource?.startSeconds;
-    const endSeconds = typeof card?.endSeconds === "number"
-      ? card.endSeconds
-      : primarySource?.endSeconds;
-    if (typeof startSeconds !== "number") {
-      return;
-    }
-    dispatch({ type: "tool_selected", toolId: "preview" });
-    dispatch({
-      type: "preview_seek_requested",
-      seconds: startSeconds,
-      endSeconds: typeof endSeconds === "number" ? endSeconds : null,
-      chapterTitle: typeof card.title === "string" ? card.title : "",
-      requestId: `${Date.now()}-${card.id}`,
-    });
-  }
-
   function onClearError() {
     dispatch({ type: "error_cleared" });
   }
@@ -163,7 +142,6 @@ export function useWorkspaceController() {
     onSelectSeriesContext,
     onSelectTool,
     onFocusNode,
-    onOpenCard,
     onSubmitChat: chatActions.onSubmitChat,
     onStartNewChat: chatActions.onStartNewChat,
     onSelectChatSession: chatActions.onSelectChatSession,

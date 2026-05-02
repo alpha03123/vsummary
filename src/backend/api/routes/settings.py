@@ -30,6 +30,7 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
         rag_embedding_device=settings.rag_embedding_device,
+        window_tokens=settings.window_tokens,
     )
 
 
@@ -46,6 +47,7 @@ def update_workspace_settings(
             asr_model_quality=request.asr_model_quality,
             transcription_mode=request.transcription_mode,
             rag_embedding_device=request.rag_embedding_device,
+            window_tokens=request.window_tokens,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -57,6 +59,7 @@ def update_workspace_settings(
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
         rag_embedding_device=settings.rag_embedding_device,
+        window_tokens=settings.window_tokens,
     )
 
 

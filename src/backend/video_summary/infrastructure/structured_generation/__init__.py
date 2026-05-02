@@ -1,4 +1,4 @@
-from .prompts import build_chunk_prompt, build_document_prompt, chunk_segments
+from .prompts import build_chunk_prompt, build_document_prompt, build_transcript_document_prompt, chunk_segments
 from .renderers import render_markdown
 from .schemas import (
     MindmapNodePayload,
@@ -16,6 +16,7 @@ __all__ = [
     "TranscriptSegmentPayload",
     "build_chunk_prompt",
     "build_document_prompt",
+    "build_transcript_document_prompt",
     "chunk_segments",
     "render_markdown",
 ]

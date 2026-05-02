@@ -6,7 +6,6 @@ from backend.agent.schemas.action_plan import AgentTurnResult, CitationReference
 from backend.video_summary.library.models import (
     ChapterCardDTO,
     KnowledgeCardDTO,
-    KnowledgeCardSourceRefDTO,
     LibrarySeriesDTO,
     LibraryVideoCardDTO,
     VideoChapterCardsDTO,
@@ -157,22 +156,6 @@ class VideoChapterCardsResponse(BaseModel):
         )
 
 
-class KnowledgeCardSourceRefResponse(BaseModel):
-    chapter_id: str | None = None
-    start_seconds: float | None = None
-    end_seconds: float | None = None
-    quote: str
-
-    @classmethod
-    def from_model(cls, source_ref: KnowledgeCardSourceRefDTO) -> "KnowledgeCardSourceRefResponse":
-        return cls(
-            chapter_id=source_ref.chapter_id,
-            start_seconds=source_ref.start_seconds,
-            end_seconds=source_ref.end_seconds,
-            quote=source_ref.quote,
-        )
-
-
 class KnowledgeCardResponse(BaseModel):
     id: str
     title: str
@@ -181,7 +164,6 @@ class KnowledgeCardResponse(BaseModel):
     details: str
     tags: list[str]
     keywords: list[str]
-    source_refs: list[KnowledgeCardSourceRefResponse]
     related_card_ids: list[str]
 
     @classmethod
@@ -194,7 +176,6 @@ class KnowledgeCardResponse(BaseModel):
             details=card.details,
             tags=card.tags,
             keywords=card.keywords,
-            source_refs=[KnowledgeCardSourceRefResponse.from_model(item) for item in card.source_refs],
             related_card_ids=card.related_card_ids,
         )
 

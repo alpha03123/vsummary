@@ -514,7 +514,6 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
         ).strip()
         if not card_text:
             continue
-        first_ref = card.source_refs[0] if card.source_refs else None
         docs.append(
             RetrievalDocument(
                 text=card_text,
@@ -527,8 +526,6 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
                     "source_family": "cards",
                     "card_id": card.id,
                     "card_kind": card.kind,
-                    "start_seconds": getattr(first_ref, "start_seconds", None),
-                    "end_seconds": getattr(first_ref, "end_seconds", None),
                     }
                 ),
             )

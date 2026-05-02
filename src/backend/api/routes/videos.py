@@ -80,7 +80,12 @@ def generate_video_knowledge_cards(
     container: ApiContainerDep,
 ) -> VideoKnowledgeCardsResponse:
     _ensure_video_exists(container, series_id, video_id)
-    video_cards = container.generate_video_cards.run(series_id, video_id)
+    try:
+        video_cards = container.generate_video_cards.run(series_id, video_id)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     if video_cards is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
     return VideoKnowledgeCardsResponse.from_model(video_cards)

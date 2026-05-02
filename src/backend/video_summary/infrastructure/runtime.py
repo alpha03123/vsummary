@@ -45,7 +45,12 @@ def build_video_summary_runtime(
 ) -> VideoSummaryRuntime:
     transcriber, asr = _build_transcriber(settings)
     gateway = build_litellm_completion_gateway(settings)
-    summarizer = LiteLLMCompletionSummarizer(gateway=gateway)
+    summarizer = LiteLLMCompletionSummarizer(
+        gateway=gateway,
+        context_window_tokens=settings.agent_context.window_tokens,
+        reserved_output_tokens=settings.agent_context.reserved_output_tokens,
+        direct_summary_threshold_ratio=settings.agent_context.direct_summary_threshold_ratio,
+    )
     return VideoSummaryRuntime(
         transcriber=transcriber,
         summarizer=summarizer,

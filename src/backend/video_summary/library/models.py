@@ -97,14 +97,6 @@ class VideoChapterCardsDTO:
 
 
 @dataclass(frozen=True)
-class KnowledgeCardSourceRefDTO:
-    chapter_id: str | None
-    start_seconds: float | None
-    end_seconds: float | None
-    quote: str
-
-
-@dataclass(frozen=True)
 class KnowledgeCardDTO:
     id: str
     title: str
@@ -113,7 +105,6 @@ class KnowledgeCardDTO:
     details: str
     tags: list[str]
     keywords: list[str]
-    source_refs: list[KnowledgeCardSourceRefDTO]
     related_card_ids: list[str]
 
 

@@ -53,7 +53,6 @@ export function buildWorkspacePageModel(controller) {
       selectSeriesContext: controller.onSelectSeriesContext,
       selectTool: controller.onSelectTool,
       focusNode: controller.onFocusNode,
-      openCard: controller.onOpenCard,
       generateVideo: controller.onGenerateVideo,
       generateSeries: controller.onGenerateSeries,
       cancelGeneration: controller.onCancelGeneration,

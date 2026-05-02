@@ -20,6 +20,7 @@ DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
 DEFAULT_AGENT_BLOCKING_THRESHOLD_RATIO = 0.92
 DEFAULT_AGENT_KEEP_TAIL_MESSAGES = 6
 DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO = 0.08
+DEFAULT_AGENT_DIRECT_SUMMARY_THRESHOLD_RATIO = 0.90
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "local_huggingface"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-base-zh-v1.5"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "cpu"
@@ -72,6 +73,7 @@ class AgentContextSettings:
     blocking_threshold_ratio: float
     keep_tail_messages: int
     projection_max_tokens_ratio: float
+    direct_summary_threshold_ratio: float
     planner_transport: str = "structured"
 
 
@@ -141,37 +143,42 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         mode=bool(debug_payload.get("mode", False)),
     )
     agent_context_payload = payload.get("agent_context", {})
+    agent_context_advanced_payload = agent_context_payload.get("advanced", {})
     agent_context_settings = AgentContextSettings(
         window_tokens=_normalize_positive_int(
             agent_context_payload.get("window_tokens"),
             default=DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS,
         ),
         reserved_output_tokens=_normalize_positive_int(
-            agent_context_payload.get("reserved_output_tokens"),
+            agent_context_advanced_payload.get("reserved_output_tokens"),
             default=DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS,
         ),
         warning_threshold_ratio=_normalize_ratio(
-            agent_context_payload.get("warning_threshold_ratio"),
+            agent_context_advanced_payload.get("warning_threshold_ratio"),
             default=DEFAULT_AGENT_WARNING_THRESHOLD_RATIO,
         ),
         compact_threshold_ratio=_normalize_ratio(
-            agent_context_payload.get("compact_threshold_ratio"),
+            agent_context_advanced_payload.get("compact_threshold_ratio"),
             default=DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO,
         ),
         blocking_threshold_ratio=_normalize_ratio(
-            agent_context_payload.get("blocking_threshold_ratio"),
+            agent_context_advanced_payload.get("blocking_threshold_ratio"),
             default=DEFAULT_AGENT_BLOCKING_THRESHOLD_RATIO,
         ),
         keep_tail_messages=_normalize_positive_int(
-            agent_context_payload.get("keep_tail_messages"),
+            agent_context_advanced_payload.get("keep_tail_messages"),
             default=DEFAULT_AGENT_KEEP_TAIL_MESSAGES,
         ),
         projection_max_tokens_ratio=_normalize_ratio(
-            agent_context_payload.get("projection_max_tokens_ratio"),
+            agent_context_advanced_payload.get("projection_max_tokens_ratio"),
             default=DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO,
         ),
+        direct_summary_threshold_ratio=_normalize_ratio(
+            agent_context_advanced_payload.get("direct_summary_threshold_ratio"),
+            default=DEFAULT_AGENT_DIRECT_SUMMARY_THRESHOLD_RATIO,
+        ),
         planner_transport=_normalize_planner_transport(
-            agent_context_payload.get("planner_transport")
+            agent_context_advanced_payload.get("planner_transport")
         ),
     )
     agent_retrieval_payload = payload.get("agent_retrieval", {})
@@ -248,6 +255,20 @@ def replace_agent_retrieval_embedding_device(settings: AppSettings, embedding_de
         agent_retrieval=replace(
             settings.agent_retrieval,
             embedding_device=normalized_device,
+        ),
+    )
+
+
+def replace_agent_context_window_tokens(settings: AppSettings, window_tokens: int) -> AppSettings:
+    normalized_window_tokens = _normalize_positive_int(
+        window_tokens,
+        default=DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS,
+    )
+    return replace(
+        settings,
+        agent_context=replace(
+            settings.agent_context,
+            window_tokens=normalized_window_tokens,
         ),
     )
 
@@ -336,12 +357,15 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "",
         "[agent_context]",
         f"window_tokens = {settings.agent_context.window_tokens}",
+        "",
+        "[agent_context.advanced]",
         f"reserved_output_tokens = {settings.agent_context.reserved_output_tokens}",
         f"warning_threshold_ratio = {settings.agent_context.warning_threshold_ratio}",
         f"compact_threshold_ratio = {settings.agent_context.compact_threshold_ratio}",
         f"blocking_threshold_ratio = {settings.agent_context.blocking_threshold_ratio}",
         f"keep_tail_messages = {settings.agent_context.keep_tail_messages}",
         f"projection_max_tokens_ratio = {settings.agent_context.projection_max_tokens_ratio}",
+        f"direct_summary_threshold_ratio = {settings.agent_context.direct_summary_threshold_ratio}",
         f'planner_transport = "{settings.agent_context.planner_transport}"',
         "",
         "[agent_retrieval]",
