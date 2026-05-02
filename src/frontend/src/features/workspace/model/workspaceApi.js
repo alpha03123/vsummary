@@ -540,22 +540,6 @@ function buildRecoveredMeta(role, createdAt) {
   return `${actor} • ${suffix}`;
 }
 
-export async function resolveBilibiliSeries(url) {
-  return fetchJson("/api/linked/bilibili/resolve/series", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
-}
-
-export async function resolveBilibiliVideo(url, targetSeriesId = null) {
-  return fetchJson("/api/linked/bilibili/resolve/video", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, target_series_id: targetSeriesId }),
-  });
-}
-
 export async function importLocalSeries(seriesTitle, files) {
   const payload = new FormData();
   payload.append("series_title", seriesTitle);
@@ -600,45 +584,4 @@ export async function deleteVideoSource(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}`, {
     method: "DELETE",
   });
-}
-
-export async function startVideoDownload(seriesId, videoId) {
-  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
-    method: "POST",
-  });
-}
-
-export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
-  const source = new EventSource(
-    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/progress`,
-  );
-  let terminal = false;
-
-  source.onmessage = (event) => {
-    const snapshot = parseProgressMessage(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      source.close();
-    }
-  };
-
-  source.onerror = () => {
-    if (terminal) {
-      return;
-    }
-    listener({
-      status: "failed",
-      stage: "failed",
-      progress: null,
-      detail: null,
-      error: "视频下载进度连接已中断",
-    });
-    source.close();
-  };
-
-  return () => {
-    terminal = true;
-    source.close();
-  };
 }

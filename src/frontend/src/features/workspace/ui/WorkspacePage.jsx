@@ -159,7 +159,6 @@ export function WorkspacePage({ page }) {
               onGenerateVideo={actions.generateVideo}
               onGenerateSeries={actions.generateSeries}
               onCancelGeneration={actions.cancelGeneration}
-              onDownloadVideo={actions.downloadVideo}
               onAddPlaygroundVideo={() => setImportModalState({ mode: "playground" })}
               onAddSeriesVideo={() => {
                 if (!activeSeries) {
@@ -406,12 +405,6 @@ export function WorkspacePage({ page }) {
           targetSeriesId={importModalState.targetSeriesId ?? null}
           targetSeriesTitle={importModalState.targetSeriesTitle ?? ""}
           onClose={() => setImportModalState(null)}
-          onResolveSeries={async (url) => actions.resolveLinkedSeries(url)}
-          onResolveVideo={async (url, targetSeriesId) => (
-            targetSeriesId
-              ? actions.resolveSeriesVideo(url, targetSeriesId)
-              : actions.resolvePlaygroundVideo(url)
-          )}
           onImportLocalSeries={async (seriesTitle, files) => actions.importLocalSeries(seriesTitle, files)}
           onImportSeriesVideos={async (seriesId, files) => actions.importSeriesVideos(seriesId, files)}
           onImportLocalPlaygroundVideos={async (files) => actions.importLocalPlaygroundVideos(files)}

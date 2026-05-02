@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { X, Link2, Loader2, CheckCircle2, AlertCircle, FolderUp, Film } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function WorkspaceImportModal({
@@ -7,14 +7,10 @@ export function WorkspaceImportModal({
   targetSeriesId = null,
   targetSeriesTitle = "",
   onClose,
-  onResolveSeries,
-  onResolveVideo,
   onImportLocalSeries,
   onImportSeriesVideos,
   onImportLocalPlaygroundVideos,
 }) {
-  const [sourceType, setSourceType] = useState("local");
-  const [url, setUrl] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
   const [files, setFiles] = useState([]);
   const [status, setStatus] = useState("idle");
@@ -23,27 +19,13 @@ export function WorkspaceImportModal({
 
   const isSeriesCreation = mode === "series";
   const isSeriesVideo = mode === "series-video";
-  const isPlayground = mode === "playground";
   const title = isSeriesCreation
     ? "添加系列"
     : isSeriesVideo
       ? `添加视频到 ${targetSeriesTitle || "当前系列"}`
       : "添加 Playground 视频";
-  const subtitle = isSeriesCreation ? "系列来源" : "视频来源";
-  const placeholder = isSeriesCreation
-    ? "https://space.bilibili.com/.../collectiondetail?sid=..."
-    : "https://www.bilibili.com/video/BVxxx";
-  const localButtonText = isSeriesCreation
-    ? "导入本地系列"
-    : isSeriesVideo
-      ? "导入本地视频"
-      : "导入 Playground 视频";
-  const externalButtonText = isSeriesCreation
-    ? "添加外链系列"
-    : isSeriesVideo
-      ? "添加外链视频"
-      : "添加外链视频";
-  const actionLabel = sourceType === "local" ? "导入" : "解析";
+  const subtitle = isSeriesCreation ? "本地导入" : "视频导入";
+  const actionLabel = "导入";
   const selectedFileSummary = useMemo(() => {
     if (!files.length) {
       return "未选择文件";
@@ -60,35 +42,18 @@ export function WorkspaceImportModal({
     setPreview(null);
 
     try {
-      if (sourceType === "local") {
-        if (!files.length) {
-          setStatus("idle");
-          return;
-        }
-        const result = isSeriesCreation
-          ? await onImportLocalSeries(seriesTitle.trim(), files)
-          : isSeriesVideo
-            ? await onImportSeriesVideos(targetSeriesId, files)
-            : await onImportLocalPlaygroundVideos(files);
-        setPreview({
-          title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : "Playground"),
-          videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? files.length,
-        });
-        setStatus("success");
-        return;
-      }
-
-      const trimmed = url.trim();
-      if (!trimmed) {
+      if (!files.length) {
         setStatus("idle");
         return;
       }
       const result = isSeriesCreation
-        ? await onResolveSeries(trimmed)
-        : await onResolveVideo(trimmed, isSeriesVideo ? targetSeriesId : null);
+        ? await onImportLocalSeries(seriesTitle.trim(), files)
+        : isSeriesVideo
+          ? await onImportSeriesVideos(targetSeriesId, files)
+          : await onImportLocalPlaygroundVideos(files);
       setPreview({
-        title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : result.title),
-        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? 1,
+        title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : "Playground"),
+        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? files.length,
       });
       setStatus("success");
     } catch (error) {
@@ -97,15 +62,7 @@ export function WorkspaceImportModal({
     }
   }
 
-  function handleKeyDown(event) {
-    if (event.key === "Enter" && sourceType === "external") {
-      handleSubmit();
-    }
-  }
-
-  const localDisabled = isSeriesCreation ? !seriesTitle.trim() || !files.length : !files.length;
-  const externalDisabled = !url.trim();
-  const submitDisabled = status === "loading" || (sourceType === "local" ? localDisabled : externalDisabled);
+  const submitDisabled = status === "loading" || (isSeriesCreation ? !seriesTitle.trim() || !files.length : !files.length);
 
   return (
     <AnimatePresence>
@@ -130,7 +87,7 @@ export function WorkspaceImportModal({
           <div className="flex items-center justify-between border-b border-stone-200/80 p-6 dark:border-stone-800">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
-                {sourceType === "local" ? <FolderUp size={18} /> : <Link2 size={18} />}
+                <FolderUp size={18} />
               </div>
               <div>
                 <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500">{subtitle}</p>
@@ -147,103 +104,45 @@ export function WorkspaceImportModal({
           </div>
 
           <div className="flex flex-col gap-5 p-6">
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setSourceType("local")}
-                className={`rounded-2xl border px-4 py-3 text-left transition ${
-                  sourceType === "local"
-                    ? "border-accent bg-accent/10 text-accent dark:border-accent/50 dark:bg-accent/10 dark:text-accent"
-                    : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
-                }`}
-              >
-                <div className="flex items-center gap-2 text-sm font-bold">
-                  <FolderUp size={16} />
-                  {localButtonText}
-                </div>
-                <p className="mt-1 text-xs font-medium opacity-80">选择本地视频文件，复制进项目目录。</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSourceType("external")}
-                className={`rounded-2xl border px-4 py-3 text-left transition ${
-                  sourceType === "external"
-                    ? "border-accent bg-accent/10 text-accent dark:border-accent/50 dark:bg-accent/10 dark:text-accent"
-                    : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
-                }`}
-              >
-                <div className="flex items-center gap-2 text-sm font-bold">
-                  <Link2 size={16} />
-                  {externalButtonText}
-                </div>
-                <p className="mt-1 text-xs font-medium opacity-80">通过 Bilibili 链接解析系列或单视频。</p>
-              </button>
-            </div>
-
-            {sourceType === "local" ? (
-              <div className="flex flex-col gap-4">
-                {isSeriesCreation ? (
-                  <div>
-                    <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                      系列名称
-                    </label>
-                    <input
-                      type="text"
-                      value={seriesTitle}
-                      onChange={(event) => setSeriesTitle(event.target.value)}
-                      placeholder="例如：Agent Frameworks"
-                      disabled={status === "loading"}
-                      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
-                      autoFocus
-                    />
-                  </div>
-                ) : null}
-
-                <div>
-                  <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                    选择视频文件
-                  </label>
-                  <label className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 transition hover:border-accent hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
-                      <Film size={16} />
-                      {selectedFileSummary}
-                    </div>
-                    <p className="text-xs text-stone-500 dark:text-zinc-400">
-                      支持多选，导入时会复制到项目的 videos 目录。
-                    </p>
-                    <input
-                      type="file"
-                      accept="video/*,.mp4,.mov,.mkv,.avi,.webm,.m4v"
-                      multiple
-                      disabled={status === "loading"}
-                      onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-            ) : (
+            {isSeriesCreation ? (
               <div>
                 <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                  {isSeriesCreation ? "合集 / 多P视频 URL" : "Bilibili 视频 URL"}
+                  系列名称
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(event) => setUrl(event.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={placeholder}
-                    disabled={status === "loading"}
-                    className="flex-1 rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
-                    autoFocus
-                  />
-                </div>
-                <p className="mt-2 text-[11px] text-stone-400 dark:text-zinc-500">
-                  {isSeriesCreation ? "支持：合集 (collectiondetail) · 系列 (seriesdetail) · 多P视频" : "支持：单个 BV 号视频"}
-                </p>
+                <input
+                  type="text"
+                  value={seriesTitle}
+                  onChange={(event) => setSeriesTitle(event.target.value)}
+                  placeholder="例如：Agent Frameworks"
+                  disabled={status === "loading"}
+                  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                  autoFocus
+                />
               </div>
-            )}
+            ) : null}
+
+            <div>
+              <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                选择视频文件
+              </label>
+              <label className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 transition hover:border-accent hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900">
+                <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
+                  <Film size={16} />
+                  {selectedFileSummary}
+                </div>
+                <p className="text-xs text-stone-500 dark:text-zinc-400">
+                  支持多选，导入时会复制到项目的 videos 目录。
+                </p>
+                <input
+                  type="file"
+                  accept="video/*,.mp4,.mov,.mkv,.avi,.webm,.m4v"
+                  multiple
+                  disabled={status === "loading"}
+                  onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+                  className="hidden"
+                />
+              </label>
+            </div>
 
             {status === "success" && preview ? (
               <motion.div

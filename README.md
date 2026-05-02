@@ -2,6 +2,7 @@
 
 一个本地视频知识库工具。把视频放进来，自动转写为文本、生成 AI 概况，然后可以基于视频内容进行问答、做笔记、生成思维导图和知识卡片。
 
+
 ---
 
 ## 核心特性
@@ -9,7 +10,6 @@
 - **本地转写**：使用 `faster-whisper` 在本地执行视频转写。
 - **AI 知识增强**：基于转写结果生成 AI 概况、思维导图、知识卡片与笔记。
 - **对话式检索**：直接围绕视频内容发问，系统会定位并回答。
-- **B 站导入**：支持解析和下载 Bilibili 单视频与合集链接。
 
 ---
 
@@ -52,7 +52,17 @@ npm install
 cd ..\..
 ```
 
-### 3. 复制 `.env`
+### 3. 准备本地视频
+
+将你要处理的视频文件放到本地后，通过前端界面的：
+
+- `添加系列`
+- `添加视频`
+- `添加 Playground 视频`
+
+进行本地导入。
+
+### 4. 复制 `.env`
 
 复制 `.env.example` 为 `.env`，再填写模型供应商配置：
 
@@ -71,7 +81,7 @@ OPENAI_MODEL=deepseek-v4-flash
 - 程序会自动补齐并归一为 `/v1`
 - 最终实际请求由后端统一拼到 `chat/completions`
 
-### 4. 配置 HuggingFace 镜像
+### 5. 配置 HuggingFace 镜像
 
 如果你所在网络环境无法稳定访问 HuggingFace，请在 `.env` 里继续加入：
 
@@ -81,7 +91,7 @@ HF_ENDPOINT=https://hf-mirror.com
 
 
 
-### 5. 首次启动后检查 `config/settings.toml`
+### 6. 首次启动后检查 `config/settings.toml`
 
 程序第一次运行后会生成 `config/settings.toml`。推荐重点检查这两段：
 
@@ -104,7 +114,7 @@ embedding_batch_size = 8
 - `device` 控制 **视频转写（fast whisper模型）** 用 CPU 还是 NVIDIA GPU（建议GPU）
 - `embedding_device` 控制 **RAG 向量检索模型** 用 CPU 还是 GPU (建议CPU)
 
-### 6. 启动服务
+### 7. 启动服务
 
 #### 方式 A：一键启动
 
@@ -198,7 +208,7 @@ embedding_device = "cpu"
 device = "cpu"
 ```
 
-### 2. 只有 CUDA 11，GPU 不能直接跑
+### 2. 只有 CUDA 11
 
 当前默认环境走的是 **CUDA 12**。如果你必须使用 CUDA 11，可以尝试把 `environment.yml` 中的以下依赖改为 CUDA 11 对应包：
 
@@ -209,7 +219,6 @@ device = "cpu"
 - nvidia-cuda-nvrtc-cu11
 ```
 
-这不是当前仓库默认支持矩阵，需要你自行创建环境并验证。如果你只想稳定使用，优先改回 CPU 模式。
 
 ### 3. HuggingFace 下载很慢 / 失败
 
@@ -232,29 +241,8 @@ HF_ENDPOINT=https://hf-mirror.com
 embedding_device = "cpu"
 ```
 
-### 5. 模型供应商 URL 写法不确定
 
-以下写法都可以：
-
-- `https://api.deepseek.com`
-- `https://api.deepseek.com/v1`
-
-程序会自动补齐 `/v1` 并统一处理。
-
-
-### 6. 前端提示“连接后端失败”
-
-通常是：
-
-- 端口 `8001` 已被占用
-- `.env` 里的模型配置不正确
-- 后端终端里已经有红色报错
-
-### 7. 第一次生成概况很慢
-
-首次需要下载模型，且初次转写本身会更慢，属于正常现象。
-
-### 8. 如何更换转写语言
+### 5. 如何更换转写语言
 
 修改：
 

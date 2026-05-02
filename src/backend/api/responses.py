@@ -30,10 +30,6 @@ class VideoCardResponse(BaseModel):
     source_name: str
     processed: bool
     status: str
-    is_linked: bool = False
-    bilibili_bvid: str = ""
-    bilibili_page: int = 0
-    source_url: str = ""
 
     @classmethod
     def from_model(cls, video: LibraryVideoCardDTO) -> "VideoCardResponse":
@@ -43,18 +39,12 @@ class VideoCardResponse(BaseModel):
             source_name=video.source_name,
             processed=video.processed,
             status=video.status,
-            is_linked=video.is_linked,
-            bilibili_bvid=video.bilibili_bvid,
-            bilibili_page=video.bilibili_page,
-            source_url=video.source_url,
         )
 
 class SeriesResponse(BaseModel):
     id: str
     title: str
     videos: list[VideoCardResponse]
-    is_linked: bool = False
-    source_url: str = ""
 
     @classmethod
     def from_model(cls, series: LibrarySeriesDTO) -> "SeriesResponse":
@@ -62,8 +52,6 @@ class SeriesResponse(BaseModel):
             id=series.id,
             title=series.title,
             videos=[VideoCardResponse.from_model(video) for video in series.videos],
-            is_linked=series.is_linked,
-            source_url=series.source_url,
         )
 
 class WorkspaceResponse(BaseModel):
@@ -85,24 +73,6 @@ class VideoLibraryResponse(BaseModel):
             workspace=WorkspaceResponse.from_model(library.workspace),
             series=[SeriesResponse.from_model(series) for series in library.series],
         )
-
-
-class ResolveBilibiliSeriesRequest(BaseModel):
-    url: str
-
-
-class ResolveBilibiliVideoRequest(BaseModel):
-    url: str
-    target_series_id: str | None = None
-
-
-class LinkedVideoDownloadResponse(BaseModel):
-    status: str
-    task_id: str
-
-    @classmethod
-    def started(cls, task_id: str) -> "LinkedVideoDownloadResponse":
-        return cls(status="started", task_id=task_id)
 
 
 class WorkspaceToolResponse(BaseModel):

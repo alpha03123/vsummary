@@ -37,9 +37,8 @@ export function useWorkspaceController() {
   const isGeneratingMindmapSelectedVideo =
     state.generatingMindmapKey != null &&
     state.generatingMindmapKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
-  const selectedVideoIsLinked = selectedVideo?.isLinked === true || selectedVideo?.status === "linked";
   const previewUrl = state.selectedSeriesId && state.selectedVideoId
-    ? (selectedVideoIsLinked ? null : getVideoPreviewUrl(state.selectedSeriesId, state.selectedVideoId))
+    ? getVideoPreviewUrl(state.selectedSeriesId, state.selectedVideoId)
     : null;
 
   const contentActions = createWorkspaceContentActions({
@@ -186,14 +185,10 @@ export function useWorkspaceController() {
     onCancelFasterWhisperModelDownload: settingsActions.onCancelFasterWhisperModelDownload,
     onResetSettings: settingsActions.onResetSettings,
     onClearError,
-    onResolveLinkedSeries: contentActions.onResolveLinkedSeries,
-    onResolvePlaygroundVideo: contentActions.onResolvePlaygroundVideo,
-    onResolveSeriesVideo: contentActions.onResolveSeriesVideo,
     onImportLocalSeries: contentActions.onImportLocalSeries,
     onImportLocalPlaygroundVideos: contentActions.onImportLocalPlaygroundVideos,
     onImportSeriesVideos: contentActions.onImportSeriesVideos,
     onDeleteSeries: contentActions.onDeleteSeries,
     onDeleteCurrentVideo: contentActions.onDeleteCurrentVideo,
-    onDownloadVideo: contentActions.onDownloadVideo,
   };
 }

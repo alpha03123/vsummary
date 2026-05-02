@@ -13,11 +13,7 @@ import {
   importLocalSeries,
   importLocalSeriesVideos,
   loadWorkspaceLibrary,
-  resolveBilibiliSeries,
-  resolveBilibiliVideo,
-  startVideoDownload,
   subscribeSeriesGenerationProgress,
-  subscribeVideoDownloadProgress,
   subscribeVideoGenerationProgress,
   updateVideoNote,
 } from "./workspaceApi";
@@ -251,39 +247,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onResolveLinkedSeries(url) {
-    try {
-      const rawSeries = await resolveBilibiliSeries(url);
-      await reloadWorkspaceLibrary();
-      return rawSeries;
-    } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析 Bilibili URL 失败" });
-      throw error;
-    }
-  }
-
-  async function onResolvePlaygroundVideo(url) {
-    try {
-      const rawVideo = await resolveBilibiliVideo(url);
-      await reloadWorkspaceLibrary();
-      return rawVideo;
-    } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析 Bilibili 视频失败" });
-      throw error;
-    }
-  }
-
-  async function onResolveSeriesVideo(url, seriesId) {
-    try {
-      const rawVideo = await resolveBilibiliVideo(url, seriesId);
-      await reloadWorkspaceLibrary();
-      return rawVideo;
-    } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列添加外链视频失败" });
-      throw error;
-    }
-  }
-
   async function onImportLocalSeries(seriesTitle, files) {
     try {
       const rawSeries = await importLocalSeries(seriesTitle, files);
@@ -358,50 +321,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onDownloadVideo(video) {
-    if (!state.selectedSeriesId || !video?.id) {
-      return;
-    }
-
-    const seriesId = state.selectedSeriesId;
-    const videoId = video.id;
-    dispatch({ type: "video_download_started", seriesId, videoId });
-
-    try {
-      await startVideoDownload(seriesId, videoId);
-      const unsubscribe = subscribeVideoDownloadProgress(seriesId, videoId, async (snapshot) => {
-        if (snapshot.status === "running" || snapshot.status === "completed") {
-          dispatch({
-            type: "video_download_progress_updated",
-            seriesId,
-            videoId,
-            progress: snapshot.progress,
-          });
-        }
-
-        if (snapshot.status === "completed") {
-          unsubscribe();
-          const library = await reloadWorkspaceLibrary();
-          dispatch({ type: "video_download_completed", seriesId, videoId, library });
-        }
-
-        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
-          unsubscribe();
-          dispatch({ type: "video_download_failed", seriesId, videoId });
-          if (snapshot.status === "failed") {
-            dispatch({
-              type: "load_failed",
-              message: snapshot.error ?? "视频下载失败",
-            });
-          }
-        }
-      });
-    } catch (error) {
-      dispatch({ type: "video_download_failed", seriesId, videoId });
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "视频下载失败" });
-    }
-  }
-
   return {
     onGenerateKnowledgeCards,
     onGenerateVideo,
@@ -411,14 +330,10 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onCreateNote,
     onUpdateNote,
     onDeleteNote,
-    onResolveLinkedSeries,
-    onResolvePlaygroundVideo,
-    onResolveSeriesVideo,
     onImportLocalSeries,
     onImportLocalPlaygroundVideos,
     onImportSeriesVideos,
     onDeleteSeries,
     onDeleteCurrentVideo,
-    onDownloadVideo,
   };
 }

@@ -2,15 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
-
-
-@dataclass(frozen=True)
-class BilibiliUrlInfoDTO:
-    url_type: Literal["season", "series", "video"]
-    uid: int | None = None
-    sid: int | None = None
-    bvid: str | None = None
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -18,8 +10,6 @@ class LibrarySeriesDTO:
     id: str
     title: str
     videos: list["LibraryVideoCardDTO"]
-    is_linked: bool = False
-    source_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -29,10 +19,6 @@ class LibraryVideoCardDTO:
     source_name: str
     processed: bool
     status: str
-    is_linked: bool = False
-    bilibili_bvid: str = ""
-    bilibili_page: int = 0
-    source_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -177,4 +163,3 @@ class VideoWorkspaceToolsDTO:
     notes: WorkspaceToolDTO
     preview: WorkspaceToolDTO
     ai_todo: str
-

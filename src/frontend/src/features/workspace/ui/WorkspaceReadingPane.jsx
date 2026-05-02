@@ -89,7 +89,6 @@ export function WorkspaceReadingPane({
   onUpdateNote,
   onDeleteNote,
 }) {
-  const isLinkedVideo = selectedVideo?.isLinked === true || selectedVideo?.status === "linked";
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
@@ -229,15 +228,7 @@ export function WorkspaceReadingPane({
                     />
                   ) : null}
                   {selectedToolId === "preview" ? (
-                    isLinkedVideo ? (
-                      <WorkspaceStateBlock
-                        eyebrow="Preview"
-                        title="视频尚未下载"
-                        description="当前视频仍是外链占位项。请先在左侧点击“下载视频”，下载完成后再进入预览。"
-                      />
-                    ) : (
-                      <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={previewSeekRequest} />
-                    )
+                    <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={previewSeekRequest} />
                   ) : null}
                 </Suspense>
               ) : null}
