@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
+import hashlib
+import json
+from threading import Lock
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -12,6 +15,20 @@ from backend.shared.llm.json_mode import describe_validation_error, validate_jso
 StructuredResponseT = TypeVar("StructuredResponseT", bound=BaseModel)
 CompletionFn = Callable[..., Any]
 AsyncCompletionFn = Callable[..., Awaitable[Any]]
+StructuredModeName = str
+StructuredMode = tuple[StructuredModeName, list[dict[str, Any]], dict[str, Any] | type[BaseModel] | None]
+STRUCTURED_MODE_SCHEMA = "schema"
+STRUCTURED_MODE_JSON_OBJECT = "json_object"
+STRUCTURED_MODE_PROMPT = "prompt"
+STRUCTURED_RESPONSE_FORMAT_ERROR_MARKERS = (
+    "response_format",
+    "json_schema",
+    "json_object",
+    "schema is not supported",
+    "not support schema",
+)
+_STRUCTURED_MODE_CACHE: dict[str, StructuredModeName] = {}
+_STRUCTURED_MODE_CACHE_LOCK = Lock()
 
 
 class LiteLLMCompletionGateway:
@@ -33,6 +50,12 @@ class LiteLLMCompletionGateway:
         self._model = _normalize_litellm_model(self._provider, model)
         self._base_url = base_url.rstrip("/")
         self._api_key = normalized_api_key
+        self._structured_mode_cache_key = _build_structured_mode_cache_key(
+            provider=self._provider,
+            base_url=self._base_url,
+            model=self._model,
+            api_key=self._api_key,
+        )
         self._completion = completion_fn or _load_litellm_completion()
         self._acompletion = acompletion_fn or _load_litellm_acompletion()
 
@@ -173,12 +196,31 @@ class LiteLLMCompletionGateway:
         last_raw_text = ""
 
         for attempt_index in range(retries + 1):
-            structured_messages = _build_retry_messages(messages=messages, validation_error=validation_error)
-            last_raw_text = self.complete_text(
-                structured_messages,
-                temperature=temperature,
-                response_format=response_model,
+            modes = _build_structured_request_modes(
+                cache_key=self._structured_mode_cache_key,
+                messages=messages,
+                response_model=response_model,
+                validation_error=validation_error,
             )
+            mode_errors: list[str] = []
+            for mode_name, structured_messages, response_format in modes:
+                try:
+                    last_raw_text = self.complete_text(
+                        structured_messages,
+                        temperature=temperature,
+                        response_format=response_format,
+                    )
+                    _remember_structured_mode(self._structured_mode_cache_key, mode_name)
+                    break
+                except Exception as error:
+                    if not _is_response_format_error(error) or response_format is None:
+                        raise
+                    mode_errors.append(str(error))
+            else:
+                raise RuntimeError(
+                    "LiteLLM 结构化请求失败: 所有 response_format 模式均不可用。"
+                    f"{'; '.join(mode_errors)}"
+                )
             try:
                 validated = validate_json_response(
                     raw_text=last_raw_text,
@@ -207,12 +249,31 @@ class LiteLLMCompletionGateway:
         last_raw_text = ""
 
         for attempt_index in range(retries + 1):
-            structured_messages = _build_retry_messages(messages=messages, validation_error=validation_error)
-            last_raw_text = await self.acomplete_text(
-                structured_messages,
-                temperature=temperature,
-                response_format=response_model,
+            modes = _build_structured_request_modes(
+                cache_key=self._structured_mode_cache_key,
+                messages=messages,
+                response_model=response_model,
+                validation_error=validation_error,
             )
+            mode_errors: list[str] = []
+            for mode_name, structured_messages, response_format in modes:
+                try:
+                    last_raw_text = await self.acomplete_text(
+                        structured_messages,
+                        temperature=temperature,
+                        response_format=response_format,
+                    )
+                    _remember_structured_mode(self._structured_mode_cache_key, mode_name)
+                    break
+                except Exception as error:
+                    if not _is_response_format_error(error) or response_format is None:
+                        raise
+                    mode_errors.append(str(error))
+            else:
+                raise RuntimeError(
+                    "LiteLLM 结构化请求失败: 所有 response_format 模式均不可用。"
+                    f"{'; '.join(mode_errors)}"
+                )
             try:
                 validated = validate_json_response(
                     raw_text=last_raw_text,
@@ -261,23 +322,132 @@ def _dump_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(message) for message in messages]
 
 
-def _build_retry_messages(
+def _build_structured_request_modes(
+    *,
+    cache_key: str,
+    messages: Sequence[dict[str, Any]],
+    response_model: type[BaseModel],
+    validation_error: str | None,
+) -> list[StructuredMode]:
+    modes = [
+        (
+            STRUCTURED_MODE_SCHEMA,
+            _append_validation_retry_messages(messages, validation_error),
+            response_model,
+        ),
+        (
+            STRUCTURED_MODE_JSON_OBJECT,
+            _build_json_mode_messages(messages=messages, validation_error=validation_error),
+            {"type": "json_object"},
+        ),
+        (
+            STRUCTURED_MODE_PROMPT,
+            _build_prompt_fallback_messages(
+                messages=messages,
+                response_model=response_model,
+                validation_error=validation_error,
+            ),
+            None,
+        ),
+    ]
+    cached_mode = _lookup_structured_mode(cache_key)
+    if cached_mode is None:
+        return modes
+    selected = [mode for mode in modes if mode[0] == cached_mode]
+    return selected or modes
+
+
+def _build_json_mode_messages(
     *,
     messages: Sequence[dict[str, Any]],
     validation_error: str | None,
 ) -> list[dict[str, Any]]:
-    if not validation_error:
-        return _dump_messages(messages)
-    return [
-        *_dump_messages(messages),
+    structured_messages = [
         {
             "role": "user",
-            "content": (
-                "上一轮结构化输出没有通过本地校验，请修正后重新输出。\n"
-                f"校验错误：{validation_error}"
-            ),
+            "content": "这是 JSON mode 请求。只输出一个 JSON 对象，不要输出 Markdown、解释、代码块或额外文本。",
         },
+        *_dump_messages(messages),
     ]
+    if validation_error:
+        structured_messages.append(_build_validation_retry_message(validation_error))
+    return structured_messages
+
+
+def _build_prompt_fallback_messages(
+    *,
+    messages: Sequence[dict[str, Any]],
+    response_model: type[BaseModel],
+    validation_error: str | None,
+) -> list[dict[str, Any]]:
+    schema = response_model.model_json_schema()
+    instruction = (
+        "这是结构化输出请求。只输出一个 JSON 对象，不要输出 Markdown、解释、代码块、引用清单或额外文本。\n"
+        f"JSON 对象必须匹配 {response_model.__name__} 的 JSON Schema：\n"
+        f"{json.dumps(schema, ensure_ascii=False)}"
+    )
+    structured_messages = [
+        {
+            "role": "user",
+            "content": instruction,
+        },
+        *_dump_messages(messages),
+    ]
+    if validation_error:
+        structured_messages.append(_build_validation_retry_message(validation_error))
+    return structured_messages
+
+
+def _append_validation_retry_messages(
+    messages: Sequence[dict[str, Any]],
+    validation_error: str | None,
+) -> list[dict[str, Any]]:
+    structured_messages = _dump_messages(messages)
+    if validation_error:
+        structured_messages.append(_build_validation_retry_message(validation_error))
+    return structured_messages
+
+
+def _build_validation_retry_message(validation_error: str) -> dict[str, str]:
+    return {
+        "role": "user",
+        "content": (
+            "上一轮结构化输出没有通过本地校验，请修正后重新输出。\n"
+            f"校验错误：{validation_error}\n"
+            "仍然只输出一个 JSON 对象，不要输出任何额外文本。"
+        ),
+    }
+
+
+def _is_response_format_error(error: Exception) -> bool:
+    text = str(error).lower()
+    return any(marker in text for marker in STRUCTURED_RESPONSE_FORMAT_ERROR_MARKERS)
+
+
+def _build_structured_mode_cache_key(
+    *,
+    provider: str,
+    base_url: str,
+    model: str,
+    api_key: str,
+) -> str:
+    key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:12]
+    return "|".join([provider.strip(), base_url.rstrip("/"), model.strip(), key_hash])
+
+
+def _lookup_structured_mode(cache_key: str) -> StructuredModeName | None:
+    with _STRUCTURED_MODE_CACHE_LOCK:
+        return _STRUCTURED_MODE_CACHE.get(cache_key)
+
+
+def _remember_structured_mode(cache_key: str, mode_name: StructuredModeName) -> None:
+    with _STRUCTURED_MODE_CACHE_LOCK:
+        _STRUCTURED_MODE_CACHE[cache_key] = mode_name
+
+
+def clear_structured_mode_cache() -> None:
+    with _STRUCTURED_MODE_CACHE_LOCK:
+        _STRUCTURED_MODE_CACHE.clear()
 
 
 def _extract_completion_content(response: Any) -> str:

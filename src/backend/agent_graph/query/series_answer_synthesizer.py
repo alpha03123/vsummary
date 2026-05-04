@@ -52,6 +52,8 @@ class SeriesAnswerSynthesizer:
                     "你是 series 回答合成器。"
                     "你只能基于给定 evidence 回答。"
                     "输出 answer、citations、used_source_types。"
+                    'citations 必须是 evidence_id 字符串数组，例如 "citations": ["e1"]。'
+                    "每个 citations 项必须来自 retrieval_hits。"
                     "不要输出 doc_id、score 等内部字段。"
                 ),
             ),
