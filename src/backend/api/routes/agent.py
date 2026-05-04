@@ -100,6 +100,11 @@ def get_agent_context_usage(request: AgentContextUsageRequest, container: ApiCon
     )
 
 
+@router.get("/api/agent/memory/status")
+def get_agent_memory_status(container: ApiContainerDep) -> dict[str, object]:
+    return container.knowledge_memory_progress_tracker.get_snapshot("agent-memory-refresh").to_dict()
+
+
 @router.post("/api/agent/session/recover", response_model=AgentSessionRecoveryResponse)
 def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiContainerDep) -> AgentSessionRecoveryResponse:
     snapshot = container.agent_session_store.get_snapshot(request.session_id)

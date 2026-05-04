@@ -6,7 +6,7 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentContextLoader, AgentSessionStore
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult, ScopeType
 from backend.agent_graph.evidence.citations import build_citations_from_graph_result
-from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_tool_results
+from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_reason, extract_tool_results
 from backend.agent_graph.runtime.state import AgentGraphState
 
 
@@ -97,7 +97,7 @@ class AgentGraphTurnBuilder:
             plan=AgentActionPlan(
                 scope_type=ScopeType(context.scope_type),
                 tool_calls=[],
-                reason=str(result.get("query_plan", {})),
+                reason=extract_reason(result),
                 use_answerer=bool(str(result.get("answer", "")).strip()),
             ),
             tool_results=tool_results,

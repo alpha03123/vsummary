@@ -26,7 +26,7 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
         if not source_type or not video_id:
             continue
 
-        if source_type == "summary":
+        if source_type in {"summary", "summary_global", "summary_chapter", "series_synopsis"}:
             citations.append(
                 CitationReference(
                     id=str(next_id),
@@ -102,7 +102,7 @@ def _append_summary_items(citations: list[CitationReference], items: object, nex
         title = str(item.get("title", "")).strip() or video_id
         if not video_id:
             continue
-        source_type = str(item.get("source_type", "")).strip() or "summary"
+        source_type = str(item.get("source_type", "")).strip() or "summary_global"
         citations.append(
             CitationReference(
                 id=str(next_id),

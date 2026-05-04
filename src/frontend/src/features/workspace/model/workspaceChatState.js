@@ -102,6 +102,13 @@ export function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
             Array.isArray(event.payload?.citations) ? event.payload.citations : null,
           ),
         ), false);
+    case "error":
+      return transformChatThreadMessages(
+        state,
+        chatScopeKey,
+        (messages) => markChatStreamFailed(messages, requestId, event.payload?.message),
+        false,
+      );
     default:
       return state;
   }
@@ -138,8 +145,8 @@ function buildThinkingMessage(requestId, payload, { status }) {
     role: "assistant",
     kind: "thought-trace",
     content: hasStages
-      ? status === "running" ? "执行中" : "执行完成"
-      : status === "running" ? "思考中" : "思路已完成",
+      ? status === "running" ? "执行中" : status === "failed" ? "执行失败" : "执行完成"
+      : status === "running" ? "思考中" : status === "failed" ? "思路失败" : "思路已完成",
     thoughtTrace: {
       status,
       summary,
@@ -148,6 +155,8 @@ function buildThinkingMessage(requestId, payload, { status }) {
     },
     meta: status === "running"
       ? hasStages ? "Notebook Assistant • 执行中" : "Notebook Assistant • 思考中"
+      : status === "failed"
+        ? `Notebook Assistant • ${hasStages ? "执行失败" : "思路失败"}`
       : buildStatusMeta(hasStages ? "执行" : "思路", durationMs),
   };
 }
@@ -196,6 +205,8 @@ function buildToolTraceMessage(requestId, messages, event, completed) {
       ? buildStatusMeta("工具链", durationMs)
       : status === "running"
         ? "Notebook Assistant • 正在调用工具"
+        : status === "failed"
+          ? "Notebook Assistant • 工具链失败"
         : "Notebook Assistant • 等待下一步",
   };
 }
@@ -322,8 +333,67 @@ function buildStreamingAnswerMessage(requestId, content, status, durationMs, usa
     citations,
     meta: status === "running"
       ? "Notebook Assistant • 输出中"
+      : status === "failed"
+        ? "Notebook Assistant • 输出失败"
       : buildAssistantChatMeta(durationMs, usage),
   };
+}
+
+function markChatStreamFailed(messages, requestId, errorMessage) {
+  const nextMessages = [...messages];
+  const nextErrorMessage = typeof errorMessage === "string" && errorMessage.trim()
+    ? errorMessage.trim()
+    : "AI 对话失败";
+  const thoughtIndex = nextMessages.findIndex((message) => message.id === `thought-${requestId}`);
+  if (thoughtIndex !== -1) {
+    const currentMessage = nextMessages[thoughtIndex];
+    nextMessages[thoughtIndex] = buildThinkingMessage(
+      requestId,
+      {
+        summary: nextErrorMessage,
+        duration_ms: currentMessage?.thoughtTrace?.durationMs ?? null,
+        previous_stages: (currentMessage?.thoughtTrace?.stages ?? []).map((stage) => ({
+          ...stage,
+          status: stage.status === "running" ? "failed" : stage.status,
+        })),
+      },
+      { status: "failed" },
+    );
+  }
+
+  const toolTraceIndex = nextMessages.findIndex((message) => message.id === `tool-trace-${requestId}`);
+  if (toolTraceIndex !== -1) {
+    const currentMessage = nextMessages[toolTraceIndex];
+    const currentSteps = Array.isArray(currentMessage?.toolTrace?.steps) ? currentMessage.toolTrace.steps : [];
+    nextMessages[toolTraceIndex] = {
+      ...currentMessage,
+      content: "工具调用失败",
+      toolTrace: {
+        ...currentMessage.toolTrace,
+        status: "failed",
+        steps: currentSteps.map((step) => ({
+          ...step,
+          status: step.status === "running" ? "failed" : step.status,
+        })),
+      },
+      meta: "Notebook Assistant • 工具链失败",
+    };
+  }
+
+  const answerIndex = nextMessages.findIndex((message) => message.id === `assistant-${requestId}`);
+  if (answerIndex !== -1) {
+    const currentMessage = nextMessages[answerIndex];
+    nextMessages[answerIndex] = buildStreamingAnswerMessage(
+      requestId,
+      currentMessage?.content ?? "",
+      "failed",
+      null,
+      currentMessage?.usage ?? null,
+      currentMessage?.citations ?? null,
+    );
+  }
+
+  return nextMessages;
 }
 
 function buildStatusMeta(label, durationMs) {

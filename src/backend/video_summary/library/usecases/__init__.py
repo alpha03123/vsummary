@@ -29,6 +29,7 @@ from backend.video_summary.library.usecases.summary_generation import (
     GenerateSeriesSummaryFromLibrary,
     GenerateVideoSummaryFromLibrary,
 )
+from backend.video_summary.library.usecases.series_synopsis_generation import RefreshSeriesKnowledgeMemory
 
 __all__ = [
     "CreateVideoNote",
@@ -51,5 +52,6 @@ __all__ = [
     "ImportLocalSeries",
     "ImportLocalSeriesVideos",
     "ListVideoLibrary",
+    "RefreshSeriesKnowledgeMemory",
     "UpdateVideoNote",
 ]

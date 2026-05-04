@@ -4,11 +4,15 @@ from langgraph.graph import END, START, StateGraph
 
 from backend.agent.tools.context_access import render_model_visible_actions_for_scope
 from backend.agent_graph.runtime.nodes import (
+    build_route_scope_node,
     build_advance_subplan_node,
     build_answer_node,
     build_dispatch_action_node,
+    build_retrieve_evidence_node,
     build_execute_series_meta_node,
     build_execute_summary_node,
+    build_synthesize_answer_node,
+    build_understand_query_node,
     build_execute_video_graph_node,
     build_execute_video_rag_node,
     build_execute_video_workflow_node,
@@ -32,7 +36,6 @@ def build_agent_graph(
     *,
     classifier_program=None,
     compare_split_program=None,
-    series_planner=None,
     retrieval_service=None,
     pinpoint_service=None,
     workflow_service=None,
@@ -41,7 +44,9 @@ def build_agent_graph(
     answer_program=None,
     note_program=None,
     action_reply_program=None,
-    series_aggregator=None,
+    series_query_processor=None,
+    series_answer_synthesizer=None,
+    workspace=None,
 ):
     resolved_classifier_program = classifier_program or SeriesQueryClassifierProgram(
         available_actions_resolver=render_model_visible_actions_for_scope,
@@ -57,13 +62,28 @@ def build_agent_graph(
     resolved_action_reply_program = action_reply_program or ActionAfterContentReplyProgram()
 
     graph = StateGraph(AgentGraphState)
+    graph.add_node("route_scope", build_route_scope_node())
     graph.add_node(
         "build_plan",
         build_plan_node(
             classifier_program=resolved_classifier_program,
             compare_split_program=resolved_compare_split_program,
-            series_planner=series_planner,
         ),
+    )
+    graph.add_node(
+        "understand_query",
+        build_understand_query_node(
+            series_query_processor=series_query_processor,
+            workspace=workspace,
+        ),
+    )
+    graph.add_node(
+        "retrieve_evidence",
+        build_retrieve_evidence_node(retrieval_service=resolved_retrieval_service),
+    )
+    graph.add_node(
+        "synthesize_answer",
+        build_synthesize_answer_node(series_answer_synthesizer=series_answer_synthesizer),
     )
     graph.add_node("advance_subplan", build_advance_subplan_node())
     graph.add_node("execute_series_meta", build_execute_series_meta_node(meta_state_reader=resolved_meta_state_reader))
@@ -91,12 +111,19 @@ def build_agent_graph(
             answer_program=resolved_answer_program,
             note_program=resolved_note_program,
             action_reply_program=resolved_action_reply_program,
-            series_aggregator=series_aggregator,
         ),
     )
     graph.add_node("finalize", finalize_state)
-    graph.add_node("update_memory", apply_memory_update)
-    graph.add_edge(START, "build_plan")
+    graph.add_node("update_session_memory", apply_memory_update)
+    graph.add_edge(START, "route_scope")
+    graph.add_conditional_edges(
+        "route_scope",
+        _route_after_scope,
+        {
+            "series": "understand_query",
+            "default": "build_plan",
+        },
+    )
     graph.add_conditional_edges(
         "build_plan",
         _route_after_build_plan,
@@ -158,6 +185,9 @@ def build_agent_graph(
             "answer": "answer",
         },
     )
+    graph.add_edge("understand_query", "retrieve_evidence")
+    graph.add_edge("retrieve_evidence", "synthesize_answer")
+    graph.add_edge("synthesize_answer", "finalize")
     graph.add_edge("read_meta_state", "answer")
     graph.add_edge("dispatch_action", "finalize")
     graph.add_conditional_edges(
@@ -168,8 +198,8 @@ def build_agent_graph(
             "finalize": "finalize",
         },
     )
-    graph.add_edge("finalize", "update_memory")
-    graph.add_edge("update_memory", END)
+    graph.add_edge("finalize", "update_session_memory")
+    graph.add_edge("update_session_memory", END)
     return graph.compile()
 
 
@@ -220,6 +250,12 @@ def _route_after_build_plan(state: AgentGraphState) -> str:
     if goal == "meta_state":
         return "read_meta_state"
     return "advance_subplan"
+
+
+def _route_after_scope(state: AgentGraphState) -> str:
+    if str(state.get("scope_type", "")).strip() == "series":
+        return "series"
+    return "default"
 
 
 def _route_after_advance_subplan(state: AgentGraphState) -> str:

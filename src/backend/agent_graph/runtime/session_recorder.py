@@ -5,10 +5,8 @@ from backend.agent.memory.dialog_history import DialogHistoryCompactor, render_d
 from backend.agent.ports import AgentSessionStore
 from backend.agent.schemas.action_plan import AgentTurnResult
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent.session.models import AgentSessionSelectedVideoEntry
 from backend.agent_graph.runtime.outcome import (
     extract_history_summary_update,
-    extract_selected_videos,
     merge_evidence_history,
 )
 
@@ -63,14 +61,7 @@ class AgentGraphSessionRecorder:
             user_message=user_message,
             assistant_message=turn_result.assistant_message,
             tool_results=turn_result.tool_results,
-            selected_videos=[
-                AgentSessionSelectedVideoEntry(
-                    video_id=str(item.get("video_id", "")).strip(),
-                    reason_for_selection=str(item.get("reason_for_selection", "")).strip(),
-                )
-                for item in extract_selected_videos(result)
-                if str(item.get("video_id", "")).strip()
-            ],
+            selected_videos=[],
         )
 
     def clear_session(self, session_id: str) -> None:

@@ -5,12 +5,6 @@ from datetime import datetime
 
 from backend.agent.schemas.stream_events import AgentStreamEvent
 from backend.agent_graph.runtime.node_catalog import get_node_alias
-from backend.agent_graph.runtime.nodes import (
-    append_answer_to_state,
-    apply_memory_update,
-    finalize_state,
-    should_use_series_aggregator,
-)
 from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_tool_results
 
 
@@ -22,13 +16,11 @@ class AgentGraphStreamOrchestrator:
         invoke_graph: Callable[..., dict[str, object]],
         turn_builder,
         session_recorder,
-        series_aggregator=None,
     ) -> None:
         self._graph = graph
         self._invoke_graph = invoke_graph
         self._turn_builder = turn_builder
         self._session_recorder = session_recorder
-        self._series_aggregator = series_aggregator
 
     def stream(
         self,
@@ -83,14 +75,11 @@ class AgentGraphStreamOrchestrator:
         final_result: dict[str, object] | None = None
         answer_usage: dict[str, int] = {}
 
-        interrupt_before = ["answer"] if self._series_aggregator is not None and str(graph_input["scope_type"]) == "series" else None
-
         yield AgentStreamEvent(type="thinking_started", payload={"message": "正在执行图节点"})
 
         for raw_event in self._graph.stream(
             graph_input,
             stream_mode="debug",
-            interrupt_before=interrupt_before,
         ):
             if not isinstance(raw_event, dict):
                 continue
@@ -156,12 +145,6 @@ class AgentGraphStreamOrchestrator:
             graph_input=graph_input,
             debug_trace=debug_trace,
         )
-        should_stream_answer = (
-            isinstance(result, dict)
-            and not str(result.get("assistant_message", "")).strip()
-            and should_use_series_aggregator(result, self._series_aggregator)
-        )
-
         if emitted_tool_count:
             yield AgentStreamEvent(
                 type="tool_chain_completed",
@@ -171,103 +154,19 @@ class AgentGraphStreamOrchestrator:
                 },
             )
 
-        if should_stream_answer:
-            answer_stage_id = "stage-answer"
-            answer_started_at = _current_time_like(stream_started_at)
-            stage_started_at[answer_stage_id] = answer_started_at
-            yield AgentStreamEvent(
-                type="stage_started",
-                payload={
-                    "stage_id": answer_stage_id,
-                    "node_id": "answer",
-                    "label": get_node_alias("answer"),
-                },
-            )
-            yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
-
-            answer_text = ""
-            for chunk in self._series_aggregator.stream(
-                user_message=result["user_message"],
-                query_plan=dict(result.get("query_plan", {})),
-                execution_results=list(result.get("retrieval_results", [])),
-                tool_results=list(result.get("tool_results", [])),
-                dialog_history=str(result.get("dialog_history", "")),
-                history_messages=list(result.get("history_messages", [])),
+        if not str(result.get("assistant_message", "")).strip():
+            if debug_trace is not None:
+                debug_trace["graph_result"] = result
+            result = self._invoke_graph(
+                graph=self._graph,
+                graph_input=graph_input,
                 debug_trace=debug_trace,
-            ):
-                if chunk.delta:
-                    answer_text += chunk.delta
-                    yield AgentStreamEvent(type="answer_delta", payload={"delta": chunk.delta})
-                if chunk.usage:
-                    answer_usage = dict(chunk.usage)
-            answer_finished_at = _current_time_like(answer_started_at)
-            yield AgentStreamEvent(
-                type="stage_completed",
-                payload={
-                    "stage_id": answer_stage_id,
-                    "node_id": "answer",
-                    "label": get_node_alias("answer"),
-                    "duration_ms": _duration_ms(answer_started_at, answer_finished_at),
-                },
             )
-
-            finalize_started_at = _current_time_like(answer_finished_at)
-            yield AgentStreamEvent(
-                type="stage_started",
-                payload={
-                    "stage_id": "stage-finalize",
-                    "node_id": "finalize",
-                    "label": get_node_alias("finalize"),
-                },
-            )
-            result = _materialize_stream_result(
-                result,
-                answer_text=answer_text,
-            )
-            finalize_finished_at = _current_time_like(finalize_started_at)
-            yield AgentStreamEvent(
-                type="stage_completed",
-                payload={
-                    "stage_id": "stage-finalize",
-                    "node_id": "finalize",
-                    "label": get_node_alias("finalize"),
-                    "duration_ms": _duration_ms(finalize_started_at, finalize_finished_at),
-                },
-            )
-
-            memory_started_at = _current_time_like(finalize_finished_at)
-            yield AgentStreamEvent(
-                type="stage_started",
-                payload={
-                    "stage_id": "stage-update-memory",
-                    "node_id": "update_memory",
-                    "label": get_node_alias("update_memory"),
-                },
-            )
-            stream_finished_at = _current_time_like(memory_started_at)
-            yield AgentStreamEvent(
-                type="stage_completed",
-                payload={
-                    "stage_id": "stage-update-memory",
-                    "node_id": "update_memory",
-                    "label": get_node_alias("update_memory"),
-                    "duration_ms": _duration_ms(memory_started_at, stream_finished_at),
-                },
-            )
-        else:
-            if not str(result.get("assistant_message", "")).strip():
-                if debug_trace is not None:
-                    debug_trace["graph_result"] = result
-                result = self._invoke_graph(
-                    graph=self._graph,
-                    graph_input=graph_input,
-                    debug_trace=debug_trace,
-                )
-            yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
-            assistant_message = extract_assistant_message(result)
-            for delta in _chunk_text(assistant_message):
-                yield AgentStreamEvent(type="answer_delta", payload={"delta": delta})
-            stream_finished_at = _current_time_like(stream_started_at)
+        yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
+        assistant_message = extract_assistant_message(result)
+        for delta in _chunk_text(assistant_message):
+            yield AgentStreamEvent(type="answer_delta", payload={"delta": delta})
+        stream_finished_at = _current_time_like(stream_started_at)
 
         if debug_trace is not None:
             debug_trace["graph_result"] = result
@@ -362,12 +261,3 @@ def _chunk_text(text: str, *, max_chars: int = 24) -> Iterator[str]:
             buffer = ""
     if buffer:
         yield buffer
-
-
-def _materialize_stream_result(result: dict[str, object], *, answer_text: str) -> dict[str, object]:
-    next_result = dict(result)
-    if answer_text:
-        next_result = append_answer_to_state(next_result, answer_text)
-    next_result = finalize_state(next_result)
-    next_result = apply_memory_update(next_result)
-    return next_result

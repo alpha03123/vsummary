@@ -21,6 +21,7 @@ from backend.video_summary.library.ports import VideoLibraryReader
 INDEX_SCHEMA_VERSION = 3
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 COMMON_METADATA_DEFAULTS: dict[str, object] = {
+    "doc_id": "",
     "series_id": "",
     "video_id": "",
     "title": "",
@@ -60,7 +61,11 @@ class SeriesRetrievalService:
     def invalidate(self) -> None:
         self._index = None
         self._signature = None
-        _reset_lancedb_table(self._db_uri, INDEX_TABLE_NAME)
+
+    def refresh(self) -> None:
+        self._index = None
+        self._signature = None
+        self._rebuild_index()
 
     def search(
         self,
@@ -75,7 +80,7 @@ class SeriesRetrievalService:
         context_window_seconds: int,
         max_hits: int,
     ) -> dict[str, object]:
-        index = self._get_or_build_index()
+        index = self._require_index()
         retriever = index.as_retriever(
             similarity_top_k=max(8, max_hits * 4),
             filters=_build_filters(
@@ -91,13 +96,17 @@ class SeriesRetrievalService:
         for item in nodes:
             metadata = dict(getattr(item.node, "metadata", {}) or {})
             hit = {
+                "doc_id": str(metadata.get("doc_id", "")),
+                "series_id": str(metadata.get("series_id", "")),
                 "video_id": str(metadata.get("video_id", "")),
                 "title": str(metadata.get("title", "")),
                 "source_type": str(metadata.get("source_type", "")),
+                "source_family": str(metadata.get("source_family", "")),
                 "score": float(item.score or 0.0),
                 "start_seconds": metadata.get("start_seconds"),
                 "end_seconds": metadata.get("end_seconds"),
                 "chapter_title": metadata.get("chapter_title"),
+                "text": item.node.get_content(),
                 "snippet": item.node.get_content(),
             }
             if hit["source_type"] == "transcript_chunk" and expand_context:
@@ -111,6 +120,10 @@ class SeriesRetrievalService:
             hits.append(hit)
 
         hits.sort(key=lambda item: (-float(item["score"]), str(item["video_id"]), str(item["source_type"])))
+        hits = hits[:max_hits]
+        for index, hit in enumerate(hits, start=1):
+            hit["evidence_id"] = f"e{index}"
+
         return {
             "scope_type": scope_type,
             "series_id": series_id,
@@ -118,19 +131,37 @@ class SeriesRetrievalService:
             "query": query,
             "target_source": target_source,
             "source_tags": list(source_tags or []),
-            "hits": hits[:max_hits],
+            "hits": hits,
         }
 
     def _get_or_build_index(self) -> VectorStoreIndex:
         signature = _build_workspace_signature(self._workspace)
         if self._index is not None and self._signature == signature:
             return self._index
+        loaded = self._try_load_existing_index(signature)
+        if loaded is not None:
+            self._index = loaded
+            self._signature = signature
+            return loaded
+        return self._rebuild_index()
 
+    def _require_index(self) -> VectorStoreIndex:
+        if self._index is not None:
+            return self._index
+        signature = _build_workspace_signature(self._workspace)
+        loaded = self._try_load_existing_index(signature)
+        if loaded is not None:
+            self._index = loaded
+            self._signature = signature
+            return loaded
+        raise RuntimeError("Agent retrieval index 尚未就绪，请先执行知识记忆刷新。")
+
+    def _rebuild_index(self) -> VectorStoreIndex:
+        signature = _build_workspace_signature(self._workspace)
         documents = [
             Document(text=document.text, metadata=document.metadata)
             for document in _build_documents(self._workspace)
         ]
-        _reset_lancedb_table(self._db_uri, INDEX_TABLE_NAME)
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
@@ -144,7 +175,26 @@ class SeriesRetrievalService:
             show_progress=False,
         )
         self._signature = signature
+        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signature)
         return self._index
+
+    def _try_load_existing_index(
+        self,
+        signature: tuple[tuple[str, ...], tuple[str, ...]],
+    ) -> VectorStoreIndex | None:
+        stored_signature = _read_signature_file(self._db_uri, INDEX_TABLE_NAME)
+        if stored_signature != signature:
+            return None
+        if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
+            return None
+        vector_store = LanceDBVectorStore(
+            uri=self._db_uri,
+            table_name=INDEX_TABLE_NAME,
+        )
+        return VectorStoreIndex.from_vector_store(
+            vector_store=vector_store,
+            embed_model=self._embed_model,
+        )
 
 
 class MetaStateReader:
@@ -398,10 +448,11 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
                 text=summary_text,
                 metadata=_with_common_metadata(
                     {
+                    "doc_id": f"series:{summary.series_id}:video:{summary.video_id}:summary_global",
                     "series_id": summary.series_id,
                     "video_id": summary.video_id,
                     "title": summary.title,
-                    "source_type": "summary",
+                    "source_type": "summary_global",
                     "source_family": "summary",
                     }
                 ),
@@ -430,10 +481,11 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
                 text=chapter_text,
                 metadata=_with_common_metadata(
                     {
+                    "doc_id": f"series:{summary.series_id}:video:{summary.video_id}:summary_chapter:{str(chapter.get('id', '')).strip() or str(chapter.get('title', '')).strip()}",
                     "series_id": summary.series_id,
                     "video_id": summary.video_id,
                     "title": summary.title,
-                    "source_type": "chapter",
+                    "source_type": "summary_chapter",
                     "source_family": "summary",
                     "chapter_title": str(chapter.get("title", "")).strip(),
                     "start_seconds": chapter.get("start_seconds"),
@@ -453,6 +505,7 @@ def _build_transcript_documents(transcript) -> list[RetrievalDocument]:
                 text=segment.text,
                 metadata=_with_common_metadata(
                     {
+                    "doc_id": f"series:{transcript.series_id}:video:{transcript.video_id}:transcript:{segment.start_seconds}-{segment.end_seconds}",
                     "series_id": transcript.series_id,
                     "video_id": transcript.video_id,
                     "title": transcript.title,
@@ -485,6 +538,7 @@ def _build_notes_documents(notes) -> list[RetrievalDocument]:
                 text=note_text,
                 metadata=_with_common_metadata(
                     {
+                    "doc_id": f"series:{notes.series_id}:video:{notes.video_id}:note:{note.id}",
                     "series_id": notes.series_id,
                     "video_id": notes.video_id,
                     "title": notes.title,
@@ -519,6 +573,7 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
                 text=card_text,
                 metadata=_with_common_metadata(
                     {
+                    "doc_id": f"series:{cards.series_id}:video:{cards.video_id}:knowledge_card:{card.id}",
                     "series_id": cards.series_id,
                     "video_id": cards.video_id,
                     "title": cards.title,
@@ -551,6 +606,64 @@ def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
         pass
 
 
+def _table_exists(db_uri: str, table_name: str) -> bool:
+    connection = lancedb.connect(db_uri)
+    try:
+        table_names = set(connection.table_names())
+    except Exception:
+        return False
+    return table_name in table_names
+
+
+def _signature_file_path(db_uri: str, table_name: str) -> Path:
+    return Path(db_uri) / f"{table_name}.signature.json"
+
+
+def _write_signature_file(
+    db_uri: str,
+    table_name: str,
+    signature: tuple[tuple[str, ...], tuple[str, ...]],
+) -> None:
+    signature_path = _signature_file_path(db_uri, table_name)
+    signature_path.parent.mkdir(parents=True, exist_ok=True)
+    signature_path.write_text(
+        json.dumps(
+            {
+                "index_schema_version": INDEX_SCHEMA_VERSION,
+                "signature": [list(signature[0]), list(signature[1])],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _read_signature_file(
+    db_uri: str,
+    table_name: str,
+) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    signature_path = _signature_file_path(db_uri, table_name)
+    if not signature_path.exists():
+        return None
+    try:
+        payload = json.loads(signature_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    raw_signature = payload.get("signature")
+    if (
+        not isinstance(raw_signature, list)
+        or len(raw_signature) != 2
+        or not isinstance(raw_signature[0], list)
+        or not isinstance(raw_signature[1], list)
+    ):
+        return None
+    return (
+        tuple(str(item) for item in raw_signature[0]),
+        tuple(str(item) for item in raw_signature[1]),
+    )
+
+
 def _expand_transcript_hit(
     *,
     workspace: VideoLibraryReader,
@@ -575,6 +688,7 @@ def _expand_transcript_hit(
         **hit,
         "start_seconds": segments[0].start_seconds,
         "end_seconds": segments[-1].end_seconds,
+        "text": " ".join(segment.text for segment in segments),
         "snippet": " ".join(segment.text for segment in segments),
     }
 

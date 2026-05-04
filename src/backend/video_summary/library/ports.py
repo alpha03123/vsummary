@@ -33,6 +33,9 @@ class VideoLibraryReader(Protocol):
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
         ...
 
+    def get_series_catalog(self, series_id: str) -> dict[str, object] | None:
+        ...
+
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
         ...
 
@@ -64,6 +67,10 @@ class VideoKnowledgeCardWriter(Protocol):
         ...
 
 class VideoKnowledgeCardStore(VideoLibraryReader, VideoKnowledgeCardWriter, Protocol):
+    pass
+
+
+class VideoKnowledgeCardStoreWithRefresh(VideoKnowledgeCardStore, Protocol):
     pass
 
 
@@ -150,4 +157,14 @@ class VideoGenerationProgressTracker(Protocol):
 
 class WorkspaceIndexInvalidator(Protocol):
     def invalidate(self) -> None:
+        ...
+
+
+class WorkspaceIndexRefresher(Protocol):
+    def refresh(self) -> None:
+        ...
+
+
+class SeriesKnowledgeMemoryRefresher(Protocol):
+    def refresh(self, series_id: str):
         ...

@@ -303,6 +303,10 @@ export async function loadAgentContextUsage(sessionId, context) {
   );
 }
 
+export async function loadAgentMemoryStatus() {
+  return toProgressSnapshot(await fetchJson("/api/agent/memory/status"));
+}
+
 export async function loadAgentSessionRecovery(sessionId, context) {
   const payload = await fetchJson("/api/agent/session/recover", {
     method: "POST",
@@ -388,6 +392,7 @@ export async function streamAgentChat(sessionId, message, context, listener) {
       const event = parseSseEvent(rawEvent);
       if (event != null) {
         if (event.type === "error") {
+          listener(event);
           throw new Error(typeof event.payload?.message === "string" ? event.payload.message : "AI 对话失败");
         }
         listener(event);
@@ -491,7 +496,10 @@ async function fetchJson(path, init) {
 }
 
 function parseProgressMessage(rawValue) {
-  const payload = JSON.parse(rawValue);
+  return toProgressSnapshot(JSON.parse(rawValue));
+}
+
+function toProgressSnapshot(payload) {
   return {
     status: typeof payload.status === "string" ? payload.status : "idle",
     stage: typeof payload.stage === "string" ? payload.stage : null,
@@ -506,6 +514,7 @@ function parseProgressMessage(rawValue) {
     estimatedTotalSeconds:
       typeof payload.estimated_total_seconds === "number" ? payload.estimated_total_seconds : null,
     remainingSeconds: typeof payload.remaining_seconds === "number" ? payload.remaining_seconds : null,
+    updatedAt: typeof payload.updated_at === "number" ? payload.updated_at : null,
   };
 }
 

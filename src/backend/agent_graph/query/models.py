@@ -55,3 +55,30 @@ class StructuredQueryPlan(BaseModel):
     selection_mode: SelectionMode = SelectionMode.FRESH
     retrieval_tags: list[str] = Field(default_factory=list)
     subplans: list[QuerySubplan] = Field(default_factory=list)
+
+
+class SeriesQueryUnderstanding(BaseModel):
+    normalized_query: str
+    subqueries: list[str] = Field(default_factory=list)
+    filters: dict[str, object] = Field(default_factory=dict)
+
+
+class RetrievalHit(BaseModel):
+    evidence_id: str
+    doc_id: str
+    series_id: str
+    video_id: str | None = None
+    source_type: str
+    source_family: str
+    title: str
+    chapter_title: str | None = None
+    start_seconds: float | None = None
+    end_seconds: float | None = None
+    score: float = 0.0
+    text: str = ""
+
+
+class SeriesAnswerPayload(BaseModel):
+    answer: str
+    citations: list[dict[str, object]] = Field(default_factory=list)
+    used_source_types: list[str] = Field(default_factory=list)

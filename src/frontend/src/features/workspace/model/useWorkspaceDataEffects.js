@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import {
   checkBackendHealth,
   loadAgentContextUsage,
+  loadAgentMemoryStatus,
   loadAgentSessionRecovery,
   loadFasterWhisperModels,
   loadProviderSettings,
@@ -71,6 +72,42 @@ export function useWorkspaceDataEffects(state, dispatch) {
 
     return () => {
       cancelled = true;
+    };
+  }, [dispatch, state.backendReady]);
+
+  useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId = null;
+
+    const pollMemoryStatus = async () => {
+      try {
+        const snapshot = await loadAgentMemoryStatus();
+        if (cancelled) {
+          return;
+        }
+        dispatch({ type: "knowledge_memory_status_loaded", snapshot });
+        timeoutId = window.setTimeout(
+          pollMemoryStatus,
+          snapshot.status === "running" ? 1000 : 5000,
+        );
+      } catch {
+        if (!cancelled) {
+          timeoutId = window.setTimeout(pollMemoryStatus, 5000);
+        }
+      }
+    };
+
+    pollMemoryStatus();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [dispatch, state.backendReady]);
 

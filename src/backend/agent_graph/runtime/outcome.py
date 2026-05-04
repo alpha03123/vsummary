@@ -10,6 +10,21 @@ def extract_assistant_message(result: dict[str, object]) -> str:
     ).strip()
 
 
+def extract_reason(result: dict[str, object]) -> str:
+    query_understanding = result.get("query_understanding", {})
+    if isinstance(query_understanding, dict):
+        normalized_query = str(query_understanding.get("normalized_query", "")).strip()
+        if normalized_query:
+            return normalized_query
+    reason = result.get("reason")
+    if isinstance(reason, str) and reason.strip():
+        return reason.strip()
+    query_plan = result.get("query_plan", {})
+    if isinstance(query_plan, dict) and query_plan:
+        return str(query_plan)
+    return ""
+
+
 def extract_tool_results(result: dict[str, object]) -> list[ToolExecutionResult]:
     explicit_tool_results = result.get("tool_results")
     if not isinstance(explicit_tool_results, list) or not explicit_tool_results:
@@ -27,18 +42,6 @@ def extract_tool_results(result: dict[str, object]) -> list[ToolExecutionResult]
             )
         )
     return normalized
-
-
-def extract_selected_videos(result: dict[str, object]) -> list[dict[str, object]]:
-    query_plan = result.get("query_plan", {})
-    if not isinstance(query_plan, dict):
-        return []
-    selected_videos = query_plan.get("selected_videos", [])
-    if not isinstance(selected_videos, list):
-        return []
-    return [item for item in selected_videos if isinstance(item, dict) and str(item.get("video_id", "")).strip()]
-
-
 def merge_evidence_history(*, current: dict[str, object], result: dict[str, object]) -> dict[str, object]:
     merged = dict(current)
     evidence_history = result.get("evidence_history", {})

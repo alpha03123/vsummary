@@ -329,6 +329,7 @@ function WorkspaceToolTraceMessage({ message }) {
   const durationLabel = formatDurationLabel(message.toolTrace?.durationMs);
   const isRunning = message.toolTrace?.status === "running";
   const isIdle = message.toolTrace?.status === "idle";
+  const isFailed = message.toolTrace?.status === "failed";
 
   return (
     <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
@@ -351,11 +352,17 @@ function WorkspaceToolTraceMessage({ message }) {
                   <LoaderCircle size={12} className="animate-spin" />
                   调用中
                 </span>
+              ) : isFailed ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger-subtle px-2 py-0.5 text-[11px] font-medium text-danger">
+                  失败
+                </span>
               ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               {isRunning
                 ? "工具正在执行中"
+                : isFailed
+                  ? "工具调用过程中发生错误"
                 : isIdle
                   ? "当前这一步已完成，等待下一步规划"
                   : "展开查看本轮实际调用的工具名和步骤说明"}
@@ -379,9 +386,11 @@ function WorkspaceToolTraceMessage({ message }) {
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{step.label}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.status === "running"
                   ? "bg-warning-subtle text-warning"
-                  : "bg-success-subtle text-success"
+                  : step.status === "failed"
+                    ? "bg-danger-subtle text-danger"
+                    : "bg-success-subtle text-success"
                   }`}>
-                  {step.status === "running" ? "进行中" : "已完成"}
+                  {step.status === "running" ? "进行中" : step.status === "failed" ? "失败" : "已完成"}
                 </span>
                 {step.target ? (
                   <span className="truncate text-xs text-stone-500 dark:text-stone-400">({step.target})</span>
@@ -456,6 +465,7 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
 
 function WorkspaceThoughtTraceMessage({ message }) {
   const isRunning = message.thoughtTrace?.status === "running";
+  const isFailed = message.thoughtTrace?.status === "failed";
   const durationLabel = formatDurationLabel(message.thoughtTrace?.durationMs);
   const summary = typeof message.thoughtTrace?.summary === "string" ? message.thoughtTrace.summary : "";
   const stages = Array.isArray(message.thoughtTrace?.stages) ? message.thoughtTrace.stages : [];
@@ -481,7 +491,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
                 ) : null}
               </div>
               <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                {isRunning ? "当前按图节点顺序执行中" : "本轮图节点执行已完成"}
+                {isRunning ? "当前按图节点顺序执行中" : isFailed ? "本轮图节点执行失败" : "本轮图节点执行已完成"}
               </p>
             </div>
             <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
@@ -493,6 +503,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
             <AnimatePresence initial={false}>
               {stages.map((stage) => {
                 const stageRunning = stage.status === "running";
+                const stageFailed = stage.status === "failed";
                 const stageDurationLabel = formatDurationLabel(stage.durationMs);
                 return (
                   <motion.div
@@ -507,7 +518,9 @@ function WorkspaceThoughtTraceMessage({ message }) {
                       <div className="flex min-w-0 items-center gap-3">
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl ${stageRunning
                           ? "bg-info-subtle text-info"
-                          : "bg-success-subtle text-success"
+                          : stageFailed
+                            ? "bg-danger-subtle text-danger"
+                            : "bg-success-subtle text-success"
                           }`}>
                           {stageRunning ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                         </div>
@@ -519,9 +532,11 @@ function WorkspaceThoughtTraceMessage({ message }) {
                       <div className="flex shrink-0 items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${stageRunning
                           ? "bg-info-subtle text-info"
-                          : "bg-success-subtle text-success"
+                          : stageFailed
+                            ? "bg-danger-subtle text-danger"
+                            : "bg-success-subtle text-success"
                           }`}>
-                          {stageRunning ? "执行中" : "已完成"}
+                          {stageRunning ? "执行中" : stageFailed ? "失败" : "已完成"}
                         </span>
                         {stageDurationLabel ? (
                           <span className="text-xs text-stone-400 dark:text-stone-500">用时 {stageDurationLabel}</span>
@@ -556,7 +571,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
               ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : "展开查看本轮对问题的思路摘要"}
+              {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : isFailed ? "本轮思路执行失败，展开查看错误摘要" : "展开查看本轮对问题的思路摘要"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />

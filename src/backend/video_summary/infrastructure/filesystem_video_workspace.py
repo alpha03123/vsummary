@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from backend.agent_graph.evidence.document_schema import SeriesCatalogPayload
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.models import (
     ChapterCardDTO as ChapterCardDTO,
@@ -29,6 +30,7 @@ from backend.video_summary.library.models import (
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 
 SERIES_META_FILE = "series_meta.json"
+SERIES_CATALOG_FILE = "series_catalog.json"
 
 
 class FileSystemVideoWorkspace:
@@ -110,6 +112,22 @@ class FileSystemVideoWorkspace:
             video_id=video_id,
             title=title,
             summary=summary,
+        )
+
+    def get_series_catalog(self, series_id: str) -> dict[str, object] | None:
+        payload_path = self._workspace_dir / series_id / SERIES_CATALOG_FILE
+        if not payload_path.exists():
+            return None
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+        return SeriesCatalogPayload.model_validate(payload).model_dump(mode="json")
+
+    def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
+        normalized = SeriesCatalogPayload.model_validate(payload).model_dump(mode="json")
+        output_dir = self._workspace_dir / series_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / SERIES_CATALOG_FILE).write_text(
+            json.dumps(normalized, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:

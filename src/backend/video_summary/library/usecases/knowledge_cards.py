@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 from backend.video_summary.library.models import VideoKnowledgeCardsDTO
-from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoKnowledgeCardStore
+from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoKnowledgeCardStore, WorkspaceIndexRefresher
 
 
 class GenerateVideoKnowledgeCards:
-    def __init__(self, workspace: VideoKnowledgeCardStore, generator: KnowledgeCardGenerator) -> None:
+    def __init__(
+        self,
+        workspace: VideoKnowledgeCardStore,
+        generator: KnowledgeCardGenerator,
+        index_refresher: WorkspaceIndexRefresher | None = None,
+    ) -> None:
         self._workspace = workspace
         self._generator = generator
+        self._index_refresher = index_refresher
 
     def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         if self._workspace.get_video_source(series_id, video_id) is None:
@@ -24,4 +30,6 @@ class GenerateVideoKnowledgeCards:
             title=summary.title,
             cards=cards,
         )
+        if self._index_refresher is not None:
+            self._index_refresher.refresh()
         return self._workspace.get_video_knowledge_cards(series_id, video_id)

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { CheckCircle2, Database, LoaderCircle, X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
@@ -247,6 +247,8 @@ export function WorkspacePage({ page }) {
           </div>
         )}
 
+        <WorkspaceKnowledgeMemoryStatusBar snapshot={state.knowledgeMemorySnapshot} />
+
         <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
           {activeSeries && !isPlaygroundHome ? (
             <section
@@ -439,6 +441,49 @@ export function WorkspacePage({ page }) {
           }
         }}
       />
+    </div>
+  );
+}
+
+function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
+  if (!snapshot || snapshot.status === "idle") {
+    return null;
+  }
+  if (
+    snapshot.status === "completed" &&
+    typeof snapshot.updatedAt === "number" &&
+    Date.now() / 1000 - snapshot.updatedAt > 10
+  ) {
+    return null;
+  }
+  if (snapshot.status !== "running" && snapshot.status !== "completed" && snapshot.status !== "failed") {
+    return null;
+  }
+
+  const isRunning = snapshot.status === "running";
+  const isFailed = snapshot.status === "failed";
+  const Icon = isRunning ? LoaderCircle : isFailed ? Database : CheckCircle2;
+  const title = isRunning ? "长期记忆整理中" : isFailed ? "长期记忆整理失败" : "长期记忆已整理";
+  const detail = isFailed
+    ? snapshot.error ?? "请查看后端日志。"
+    : snapshot.detail ?? (isRunning ? "正在重建 RAG 索引与 catalog 记忆。" : "RAG 索引已可用于检索。");
+  const progressText = typeof snapshot.progress === "number" ? `${Math.round(snapshot.progress)}%` : "";
+  const toneClassName = isFailed
+    ? "border-red-100 bg-red-50/90 text-red-800 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
+    : "border-amber-100 bg-amber-50/90 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100";
+
+  return (
+    <div className={`mx-6 mt-4 flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${toneClassName}`}>
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 dark:bg-black/20">
+        <Icon size={18} className={isRunning ? "animate-spin" : ""} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2 font-semibold">
+          <span>{title}</span>
+          {progressText ? <span className="text-xs opacity-70">{progressText}</span> : null}
+        </div>
+        <p className="mt-0.5 truncate text-xs opacity-80">{detail}</p>
+      </div>
     </div>
   );
 }

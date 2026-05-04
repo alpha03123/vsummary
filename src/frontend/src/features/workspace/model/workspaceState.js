@@ -374,6 +374,7 @@ export function createInitialWorkspaceState() {
     contextUsageByScope: {},
     contextUsage: null,
     contextUsageLoading: false,
+    knowledgeMemorySnapshot: null,
     settingsPanelOpen: false,
     backendReady: false,
     error: "",

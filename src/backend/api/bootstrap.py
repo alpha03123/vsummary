@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
+from threading import Thread
 from typing import Callable
+import logging
 
 import dspy
 
@@ -12,10 +14,11 @@ from backend.agent.memory.dialog_history import DialogHistoryCompactor
 from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
 from backend.agent_graph.actions.action_dispatcher import ActionDispatcher
+from backend.agent_graph.evidence.index_builder import AgentWorkspaceIndexBuilder
 from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.evidence.pinpoint import BGEReranker, VideoGraphPinpointService
-from backend.agent_graph.query.series_aggregator import SeriesAggregator
-from backend.agent_graph.query.series_planner import SeriesPlanner
+from backend.agent_graph.query.series_answer_synthesizer import SeriesAnswerSynthesizer
+from backend.agent_graph.query.series_query_processor import SeriesQueryProcessor
 from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
 from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
 from backend.agent_graph.dspy.programs import (
@@ -60,6 +63,7 @@ from backend.video_summary.library.usecases import (
     DeleteSeries,
     DeleteVideoSource,
     GenerateVideoKnowledgeCards,
+    RefreshSeriesKnowledgeMemory,
     GenerateSeriesSummaryFromLibrary,
     GenerateVideoMindmapFromLibrary,
     GenerateVideoSummaryFromLibrary,
@@ -78,6 +82,8 @@ from backend.video_summary.library.usecases import (
     DeleteVideoNote,
     UpdateVideoNote,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ApiContainer:
@@ -106,11 +112,13 @@ class ApiContainer:
     import_local_series_videos: ImportLocalSeriesVideos
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
+    knowledge_memory_progress_tracker: InMemoryProgressTracker
     settings_service: SettingsServicePort
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
     invalidate_agent_workspace_indexes: Callable[[], None]
+    refresh_agent_workspace_indexes: Callable[[], None]
 
 
 def build_api_container(
@@ -124,6 +132,7 @@ def build_api_container(
     workspace = FileSystemVideoWorkspace(root_dir)
     progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
+    knowledge_memory_progress_tracker = InMemoryProgressTracker()
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
     )
@@ -136,9 +145,21 @@ def build_api_container(
         workflow=ConfiguredMindmapWorkflow(root_dir),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(root_dir)
-    summary_generation_use_case = GenerateVideoSummaryFromLibrary(workspace, resolved_generator, progress_tracker)
     agent_runtime = LazyAgentRuntimeProvider(root_dir=root_dir, workspace=workspace)
-    invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
+    index_refresher = _WorkspaceIndexRefresher(
+        agent_runtime.refresh_workspace_indexes,
+        progress_tracker=knowledge_memory_progress_tracker,
+    )
+    series_memory_refresher = RefreshSeriesKnowledgeMemory(
+        workspace=workspace,
+        index_refresher=index_refresher,
+    )
+    summary_generation_use_case = GenerateVideoSummaryFromLibrary(
+        workspace,
+        resolved_generator,
+        progress_tracker,
+        series_memory_refresher=series_memory_refresher,
+    )
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
@@ -149,22 +170,23 @@ def build_api_container(
         get_video_mindmap=GetVideoMindmap(workspace),
         get_video_chapter_cards=GetVideoChapterCards(workspace),
         get_video_cards=GetVideoKnowledgeCards(workspace),
-        generate_video_cards=GenerateVideoKnowledgeCards(workspace, resolved_knowledge_card_generator),
+        generate_video_cards=GenerateVideoKnowledgeCards(workspace, resolved_knowledge_card_generator, index_refresher),
         get_video_notes=GetVideoNotes(workspace),
-        create_video_note=CreateVideoNote(workspace),
-        update_video_note=UpdateVideoNote(workspace),
-        delete_video_note=DeleteVideoNote(workspace),
+        create_video_note=CreateVideoNote(workspace, index_refresher),
+        update_video_note=UpdateVideoNote(workspace, index_refresher),
+        delete_video_note=DeleteVideoNote(workspace, index_refresher),
         get_video_workspace_tools=GetVideoWorkspaceTools(workspace),
         generate_video_summary=summary_generation_use_case,
         generate_series_summaries=GenerateSeriesSummaryFromLibrary(workspace, summary_generation_use_case, progress_tracker),
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
-        delete_series=DeleteSeries(workspace, invalidator),
-        delete_video_source=DeleteVideoSource(workspace, invalidator),
-        import_local_series=ImportLocalSeries(workspace, invalidator),
-        import_local_playground_videos=ImportLocalPlaygroundVideos(workspace, invalidator),
-        import_local_series_videos=ImportLocalSeriesVideos(workspace, invalidator),
+        delete_series=DeleteSeries(workspace, index_refresher),
+        delete_video_source=DeleteVideoSource(workspace, index_refresher),
+        import_local_series=ImportLocalSeries(workspace),
+        import_local_playground_videos=ImportLocalPlaygroundVideos(workspace),
+        import_local_series_videos=ImportLocalSeriesVideos(workspace),
         generation_progress_tracker=progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
+        knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
         settings_service=SettingsService(
             config_path=config_path,
             root_dir=root_dir,
@@ -174,6 +196,7 @@ def build_api_container(
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
         invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
+        refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
     )
 
 
@@ -183,6 +206,46 @@ class _WorkspaceIndexInvalidator:
 
     def invalidate(self) -> None:
         self._invalidate()
+
+
+class _WorkspaceIndexRefresher:
+    def __init__(
+        self,
+        refresh: Callable[[], None],
+        *,
+        progress_tracker: InMemoryProgressTracker,
+        task_id: str = "agent-memory-refresh",
+    ) -> None:
+        self._refresh = refresh
+        self._progress_tracker = progress_tracker
+        self._task_id = task_id
+        self._lock = Lock()
+        self._in_flight = False
+
+    def refresh(self) -> None:
+        with self._lock:
+            if self._in_flight:
+                return
+            self._in_flight = True
+        self._progress_tracker.create_reporter(self._task_id).update(
+            "index",
+            5.0,
+            "长期记忆整理任务已进入后台队列",
+        )
+        Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        reporter = self._progress_tracker.create_reporter(self._task_id)
+        try:
+            reporter.update("index", 20.0, "正在重建长期记忆索引")
+            self._refresh()
+            reporter.completed("长期记忆整理完成")
+        except Exception as error:
+            LOGGER.exception("workspace index refresh failed")
+            reporter.failed(str(error))
+        finally:
+            with self._lock:
+                self._in_flight = False
 
 class LazyAgentRuntimeProvider:
     def __init__(self, *, root_dir: Path, workspace: FileSystemVideoWorkspace) -> None:
@@ -240,21 +303,30 @@ class LazyAgentRuntimeProvider:
                     context_window_tokens=app_settings.agent_context.window_tokens,
                     compression_ratio=0.90,
                 )
-                series_aggregator = SeriesAggregator(gateway=planner_gateway)
-                series_planner = SeriesPlanner(workspace=self._workspace, gateway=planner_gateway)
-                retrieval_service = SeriesRetrievalService(
-                    workspace=self._workspace,
-                    db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
-                    root_dir=self._root_dir,
-                )
-                self._cached_retrieval_service = retrieval_service
+                series_query_processor = SeriesQueryProcessor(gateway=planner_gateway)
+                series_answer_synthesizer = SeriesAnswerSynthesizer(gateway=planner_gateway)
+                retrieval_service = self._cached_retrieval_service
+                if retrieval_service is None:
+                    retrieval_service = SeriesRetrievalService(
+                        workspace=self._workspace,
+                        db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
+                        root_dir=self._root_dir,
+                    )
+                    self._cached_retrieval_service = retrieval_service
+                reranker_model_name = _resolve_local_reranker_model_name(self._root_dir)
                 pinpoint_service = VideoGraphPinpointService(
                     workspace=self._workspace,
-                    semantic_scorer=BGEReranker(device=app_settings.agent_retrieval.embedding_device),
+                    semantic_scorer=BGEReranker(
+                        model_name=reranker_model_name,
+                        device=app_settings.agent_retrieval.embedding_device,
+                    ),
                 )
                 workflow_service = VideoWorkflowExtractor(
                     workspace=self._workspace,
-                    semantic_scorer=BGEReranker(device=app_settings.agent_retrieval.embedding_device),
+                    semantic_scorer=BGEReranker(
+                        model_name=reranker_model_name,
+                        device=app_settings.agent_retrieval.embedding_device,
+                    ),
                 )
                 meta_state_reader = MetaStateReader(workspace=self._workspace)
                 answer_program = AnswerSynthesisProgram()
@@ -270,7 +342,6 @@ class LazyAgentRuntimeProvider:
                 graph = build_agent_graph(
                     classifier_program=classifier_program,
                     compare_split_program=compare_split_program,
-                    series_planner=series_planner,
                     retrieval_service=retrieval_service,
                     pinpoint_service=pinpoint_service,
                     workflow_service=workflow_service,
@@ -279,13 +350,14 @@ class LazyAgentRuntimeProvider:
                     answer_program=answer_program,
                     note_program=note_program,
                     action_reply_program=action_reply_program,
-                    series_aggregator=series_aggregator,
+                    series_query_processor=series_query_processor,
+                    series_answer_synthesizer=series_answer_synthesizer,
+                    workspace=self._workspace,
                 )
                 self._cached_agent_graph_service = AgentGraphService(
                     context_loader=self._context_loader,
                     graph=graph,
                     session_store=self.session_store,
-                    series_aggregator=series_aggregator,
                     dialog_history_compactor=dialog_history_compactor,
                 )
             return self._cached_agent_graph_service
@@ -294,6 +366,18 @@ class LazyAgentRuntimeProvider:
         with self._lock:
             if self._cached_retrieval_service is not None:
                 self._cached_retrieval_service.invalidate()
+
+    def refresh_workspace_indexes(self) -> None:
+        with self._lock:
+            retrieval_service = self._cached_retrieval_service
+            if retrieval_service is None:
+                retrieval_service = SeriesRetrievalService(
+                    workspace=self._workspace,
+                    db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
+                    root_dir=self._root_dir,
+                )
+                self._cached_retrieval_service = retrieval_service
+            AgentWorkspaceIndexBuilder(retrieval_service=retrieval_service).refresh()
 
     def get_context_budget_service(self) -> AgentContextBudgetService:
         with self._lock:
@@ -336,3 +420,10 @@ def _build_tool_executor(
             ToolName.SAVE_NOTE: execute_save_note,
         }
     )
+
+
+def _resolve_local_reranker_model_name(root_dir: Path) -> str:
+    local_dir = root_dir / "data" / "models" / "huggingface" / "bge-reranker-v2-m3"
+    if local_dir.is_dir():
+        return str(local_dir)
+    return "BAAI/bge-reranker-v2-m3"

@@ -801,6 +801,11 @@ export function workspaceReducer(state, action) {
             : state.contextUsage,
         contextUsageByScope: setContextUsageForScope(state.contextUsageByScope, action.chatScopeKey, action.usage),
       };
+    case "knowledge_memory_status_loaded":
+      return {
+        ...state,
+        knowledgeMemorySnapshot: action.snapshot,
+      };
     default:
       return state;
   }

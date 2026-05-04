@@ -8,6 +8,7 @@ import {
   removeScopedValue,
   resolveChatSessionsForScope,
 } from "./workspaceState";
+import { workspaceReducer } from "./workspaceReducer";
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
 
@@ -115,5 +116,25 @@ describe("workspaceState chat session persistence", () => {
     expect(removeScopedValue(chatThreads, "series|series-a|series-home::2")).toEqual({
       "series|series-a|series-home": [{ id: "msg-1", role: "assistant", content: "第一个回答" }],
     });
+  });
+});
+
+describe("workspaceReducer knowledge memory status", () => {
+  it("stores the latest long-term memory snapshot", () => {
+    const state = createInitialWorkspaceState();
+    const snapshot = {
+      status: "running",
+      stage: "index",
+      progress: 20,
+      detail: "正在重建长期记忆索引",
+      error: null,
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "knowledge_memory_status_loaded",
+      snapshot,
+    });
+
+    expect(nextState.knowledgeMemorySnapshot).toBe(snapshot);
   });
 });

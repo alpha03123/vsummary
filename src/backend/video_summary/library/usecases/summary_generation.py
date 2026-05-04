@@ -8,11 +8,11 @@ from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import LibrarySeriesDTO
 from backend.video_summary.library.models import VideoSummaryDTO
 from backend.video_summary.library.ports import (
+    SeriesKnowledgeMemoryRefresher,
     VideoGenerationProgressTracker,
     VideoLibraryReader,
     VideoSummaryGenerator,
 )
-
 
 @dataclass(frozen=True)
 class SeriesGenerationResult:
@@ -28,10 +28,12 @@ class GenerateVideoSummaryFromLibrary:
         workspace: VideoLibraryReader,
         generator: VideoSummaryGenerator,
         progress_tracker: VideoGenerationProgressTracker,
+        series_memory_refresher: SeriesKnowledgeMemoryRefresher | None = None,
     ) -> None:
         self._workspace = workspace
         self._generator = generator
         self._progress_tracker = progress_tracker
+        self._series_memory_refresher = series_memory_refresher
         self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
         self._generation_slot = asyncio.Semaphore(1)
@@ -101,6 +103,8 @@ class GenerateVideoSummaryFromLibrary:
                     progress_reporter=reporter,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
                 )
+                if self._series_memory_refresher is not None:
+                    self._series_memory_refresher.refresh(series_id)
             if owns_reporter:
                 reporter.completed("AI 概况已生成")
             return self._workspace.get_video_summary(series_id, video_id)

@@ -21,11 +21,9 @@ class AgentGraphService:
         context_loader: AgentContextLoader,
         graph,
         session_store=None,
-        series_aggregator=None,
         dialog_history_compactor: DialogHistoryCompactor | None = None,
     ) -> None:
         self._graph = graph
-        self._series_aggregator = series_aggregator
         self._input_builder = AgentGraphInputBuilder(
             context_loader=context_loader,
             session_store=session_store,
@@ -40,7 +38,6 @@ class AgentGraphService:
             invoke_graph=self._invoke_graph,
             turn_builder=self._turn_builder,
             session_recorder=self._session_recorder,
-            series_aggregator=series_aggregator,
         )
 
     def _record_debug_input(
@@ -93,6 +90,7 @@ class AgentGraphService:
         graph_input = input_bundle.payload
         self._record_debug_input(debug_trace=debug_trace, graph_input=graph_input)
         result = self._invoke_graph(graph=self._graph, graph_input=graph_input, debug_trace=debug_trace)
+        self._record_debug_output(debug_trace=debug_trace, result=result)
         turn_result = self._turn_builder.build(
             context=context,
             result=result,
@@ -130,6 +128,27 @@ class AgentGraphService:
             graph_input=graph_input,
             debug_trace=debug_trace,
         )
+
+    def _record_debug_output(
+        self,
+        *,
+        debug_trace: dict[str, object] | None,
+        result: dict[str, object],
+    ) -> None:
+        if debug_trace is None:
+            return
+        query_understanding = result.get("query_understanding")
+        if isinstance(query_understanding, dict):
+            debug_trace.setdefault("series_query_processor", {"output": query_understanding})
+        retrieval_request = result.get("retrieval_request")
+        if isinstance(retrieval_request, dict):
+            debug_trace.setdefault("retrieval_request", retrieval_request)
+        retrieval_results = result.get("retrieval_results")
+        if isinstance(retrieval_results, list):
+            debug_trace.setdefault("retrieval_response", {"hits": retrieval_results})
+        answer_payload = result.get("answer_payload")
+        if isinstance(answer_payload, dict):
+            debug_trace.setdefault("answer_synthesis", {"output": answer_payload})
 
     def clear_session(
         self,
