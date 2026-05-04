@@ -145,9 +145,9 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
             <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500 mb-4 relative z-10">Playground</p>
             <div className="relative z-10 flex flex-col gap-4 flex-1">
               <div>
-                <h3 className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">零散视频库</h3>
+                <h3 className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">排练场</h3>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-stone-500 dark:text-zinc-400">
-                  作为快捷处理入口，用于处理日常非系列视频/音频
+                  处理日常非系列视频
                 </p>
               </div>
               <div className="mt-2">
