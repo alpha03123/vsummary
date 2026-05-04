@@ -31,5 +31,5 @@ class GenerateVideoKnowledgeCards:
             cards=cards,
         )
         if self._index_refresher is not None:
-            self._index_refresher.refresh()
+            self._index_refresher.upsert_video(series_id, video_id)
         return self._workspace.get_video_knowledge_cards(series_id, video_id)

@@ -245,6 +245,14 @@ export async function cancelVideoSummary(seriesId, videoId) {
   });
 }
 
+export async function loadVideoGenerationStatus(seriesId, videoId) {
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate/status`);
+  return {
+    taskId: typeof payload.task_id === "string" ? payload.task_id : `${seriesId}/${videoId}`,
+    snapshot: toProgressSnapshot(payload.snapshot ?? {}),
+  };
+}
+
 export async function generateSeriesSummaries(seriesId, options = {}) {
   return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
     method: "POST",
@@ -264,6 +272,14 @@ export async function cancelSeriesSummaries(seriesId) {
   return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate/cancel`, {
     method: "POST",
   });
+}
+
+export async function loadSeriesGenerationStatus(seriesId) {
+  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate/status`);
+  return {
+    taskId: typeof payload.task_id === "string" ? payload.task_id : `series/${seriesId}`,
+    snapshot: toProgressSnapshot(payload.snapshot ?? {}),
+  };
 }
 
 export async function generateVideoMindmap(seriesId, videoId) {

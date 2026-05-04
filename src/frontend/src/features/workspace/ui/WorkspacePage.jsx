@@ -356,7 +356,7 @@ export function WorkspacePage({ page }) {
 
           {/* Loading Overlay when generating AI Summary */}
           <AnimatePresence>
-            {activeSeries && (generation.isGeneratingSummary || generation.isGeneratingSeries) && (
+            {activeSeries && generation.showOverlay && generation.snapshot && (
               <Suspense fallback={null}>
                 <WorkspaceGenerationOverlay
                   generationProgress={generation.progress}

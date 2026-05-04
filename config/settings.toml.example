@@ -60,3 +60,12 @@ embedding_model = "BAAI/bge-base-zh-v1.5"
 embedding_device = "cpu"
 # 批量向量化的批次大小
 embedding_batch_size = 8
+
+# 生成任务并发设置
+[generation]
+# 全局同时运行的视频生成任务数量
+video_generation_concurrency = 1
+# 单个视频在 chunk 摘要阶段允许并发的 LLM 请求数量
+summary_chunk_concurrency = 1
+# 单个 series 批量生成时同时调度的视频数量
+series_video_concurrency = 1

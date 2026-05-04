@@ -23,6 +23,7 @@ from backend.api.responses import (
 )
 from backend.api.sse import stream_progress_events
 from backend.video_summary.infrastructure.runtime import AsrModelNotReadyError
+from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
 router = APIRouter()
 
@@ -230,6 +231,8 @@ async def generate_series_summaries(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except DuplicateSeriesGenerationError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return {
@@ -357,6 +360,20 @@ async def stream_video_generation_progress(
     )
 
 
+@router.get("/api/videos/{series_id}/{video_id}/generate/status")
+def get_video_generation_status(
+    series_id: str,
+    video_id: str,
+    container: ApiContainerDep,
+) -> dict[str, object]:
+    _ensure_video_exists(container, series_id, video_id)
+    task_id = _build_task_id(series_id, video_id)
+    return {
+        "task_id": task_id,
+        "snapshot": container.generation_progress_tracker.get_snapshot(task_id).to_dict(),
+    }
+
+
 @router.get("/api/series/{series_id}/generate/progress")
 async def stream_series_generation_progress(
     series_id: str,
@@ -375,6 +392,18 @@ async def stream_series_generation_progress(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.get("/api/series/{series_id}/generate/status")
+def get_series_generation_status(
+    series_id: str,
+    container: ApiContainerDep,
+) -> dict[str, object]:
+    task_id = _build_series_task_id(series_id)
+    return {
+        "task_id": task_id,
+        "snapshot": container.generation_progress_tracker.get_snapshot(task_id).to_dict(),
+    }
 
 
 def _build_task_id(series_id: str, video_id: str) -> str:

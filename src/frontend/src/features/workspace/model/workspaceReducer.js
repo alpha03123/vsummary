@@ -1,7 +1,10 @@
 import {
   appendChatSessionForScope,
+  buildSeriesGenerationTaskKey,
   buildChatScopeKey,
   buildChatSessionTitleFromMessage,
+  buildVideoGenerationTaskKey,
+  createGenerationTaskRecord,
   createInitialWorkspaceState,
   createLibraryHomeState,
   createMindmapLoadedState,
@@ -12,6 +15,7 @@ import {
   getChatMessagesForScope,
   getChatSessionMetaForScope,
   getContextUsageForScope,
+  getGenerationTaskForKey,
   hasRecoveredChatScope,
   markVideoAsReady,
   normalizeUiSettings,
@@ -22,6 +26,7 @@ import {
   setChatMessagesForScope,
   setChatSessionIdForScope,
   setContextUsageForScope,
+  setGenerationTaskForKey,
   setRecoveredChatScope,
   updateChatSessionMetaForScope,
 } from "./workspaceState";
@@ -40,6 +45,22 @@ function resolveNextSessionTitle(chatSessionListsByScope, chatBaseScopeKey, sess
     return currentTitle;
   }
   return buildChatSessionTitleFromMessage(message);
+}
+
+function createRunningSnapshot(detail) {
+  return {
+    status: "running",
+    stage: "prepare",
+    progress: 0,
+    detail,
+    error: null,
+    startedAt: null,
+    stageStartedAt: null,
+    elapsedSeconds: 0,
+    stageElapsedSeconds: 0,
+    estimatedTotalSeconds: null,
+    remainingSeconds: null,
+  };
 }
 
 export { createInitialWorkspaceState };
@@ -533,19 +554,17 @@ export function workspaceReducer(state, action) {
         generatingSeriesId: null,
         generationMode: "video",
         generationProgress: 0,
-        generationSnapshot: {
-          status: "running",
-          stage: "prepare",
-          progress: 0,
-          detail: "任务已开始",
-          error: null,
-          startedAt: null,
-          stageStartedAt: null,
-          elapsedSeconds: 0,
-          stageElapsedSeconds: 0,
-          estimatedTotalSeconds: null,
-          remainingSeconds: null,
-        },
+        generationSnapshot: createRunningSnapshot("任务已开始"),
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            taskKey: buildVideoGenerationTaskKey(action.seriesId, action.videoId),
+            mode: "video",
+            seriesId: action.seriesId,
+            videoId: action.videoId,
+            snapshot: createRunningSnapshot("任务已开始"),
+          }),
+        ),
         error: "",
       };
     case "series_generation_started":
@@ -555,19 +574,16 @@ export function workspaceReducer(state, action) {
         generatingVideoKey: null,
         generationMode: "series",
         generationProgress: 0,
-        generationSnapshot: {
-          status: "running",
-          stage: "prepare",
-          progress: 0,
-          detail: "系列任务已开始",
-          error: null,
-          startedAt: null,
-          stageStartedAt: null,
-          elapsedSeconds: 0,
-          stageElapsedSeconds: 0,
-          estimatedTotalSeconds: null,
-          remainingSeconds: null,
-        },
+        generationSnapshot: createRunningSnapshot("系列任务已开始"),
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            taskKey: buildSeriesGenerationTaskKey(action.seriesId),
+            mode: "series",
+            seriesId: action.seriesId,
+            snapshot: createRunningSnapshot("系列任务已开始"),
+          }),
+        ),
         error: "",
       };
     case "generation_progress_updated":
@@ -575,6 +591,32 @@ export function workspaceReducer(state, action) {
         ...state,
         generationProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
         generationSnapshot: action.snapshot,
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            taskKey: action.taskKey,
+            mode: action.mode,
+            seriesId: action.seriesId,
+            videoId: action.videoId ?? null,
+            snapshot: action.snapshot,
+            subscriptionActive: action.subscriptionActive ?? false,
+          }),
+        ),
+      };
+    case "generation_status_loaded":
+      return {
+        ...state,
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            taskKey: action.taskKey,
+            mode: action.mode,
+            seriesId: action.seriesId,
+            videoId: action.videoId ?? null,
+            snapshot: action.snapshot,
+            subscriptionActive: Boolean(action.subscriptionActive),
+          }),
+        ),
       };
     case "generation_cancelled":
       return {
@@ -584,39 +626,74 @@ export function workspaceReducer(state, action) {
         generationMode: null,
         generationProgress: null,
         generationSnapshot: null,
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            taskKey: action.taskKey,
+            mode: action.mode,
+            seriesId: action.seriesId,
+            videoId: action.videoId ?? null,
+            snapshot: action.snapshot ?? { status: "cancelled", stage: "cancelled", progress: null, detail: "任务已取消", error: null },
+            subscriptionActive: false,
+          }),
+        ),
       };
     case "generation_succeeded":
-      return createSummaryLoadedState(action.summary, {
-        ...state,
-        library: markVideoAsReady(state.library, action.seriesId, action.videoId),
-        tools: state.tools == null
-          ? state.tools
-          : {
-            ...state.tools,
-            overview: {
-              ...state.tools.overview,
-              generated: true,
-              status: "ready",
+      {
+        const isCurrentVideo =
+          state.selectedContextType === "video" &&
+          state.selectedSeriesId === action.seriesId &&
+          state.selectedVideoId === action.videoId;
+        const nextState = {
+          ...state,
+          library: markVideoAsReady(state.library, action.seriesId, action.videoId),
+          tools: !isCurrentVideo || state.tools == null
+            ? state.tools
+            : {
+              ...state.tools,
+              overview: {
+                ...state.tools.overview,
+                generated: true,
+                status: "ready",
+              },
+              mindmap: {
+                ...state.tools.mindmap,
+                available: true,
+                generated: false,
+                status: "available",
+              },
+              knowledgeCards: {
+                ...state.tools.knowledgeCards,
+                available: true,
+                generated: false,
+                status: "available",
+              },
             },
-            mindmap: {
-              ...state.tools.mindmap,
-              available: true,
-              generated: false,
-              status: "available",
-            },
-            knowledgeCards: {
-              ...state.tools.knowledgeCards,
-              available: true,
-              generated: false,
-              status: "available",
-            },
-          },
-        generatingVideoKey: null,
-        generatingSeriesId: null,
-        generationMode: null,
-        generationProgress: null,
-        generationSnapshot: null,
-      });
+          generatingVideoKey: null,
+          generatingSeriesId: null,
+          generationMode: null,
+          generationProgress: null,
+          generationSnapshot: null,
+          generationTasksByKey: setGenerationTaskForKey(
+            state.generationTasksByKey,
+            createGenerationTaskRecord({
+              taskKey: action.taskKey ?? buildVideoGenerationTaskKey(action.seriesId, action.videoId),
+              mode: "video",
+              seriesId: action.seriesId,
+              videoId: action.videoId,
+              snapshot: {
+                status: "completed",
+                stage: "completed",
+                progress: 100,
+                detail: "AI 概况已生成",
+                error: null,
+              },
+              subscriptionActive: false,
+            }),
+          ),
+        };
+        return isCurrentVideo ? createSummaryLoadedState(action.summary, nextState) : nextState;
+      }
     case "series_generation_succeeded":
       return {
         ...state,
@@ -626,6 +703,22 @@ export function workspaceReducer(state, action) {
         generationMode: null,
         generationProgress: null,
         generationSnapshot: null,
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            taskKey: action.taskKey ?? buildSeriesGenerationTaskKey(action.seriesId),
+            mode: "series",
+            seriesId: action.seriesId,
+            snapshot: {
+              status: "completed",
+              stage: "completed",
+              progress: 100,
+              detail: "系列任务已完成",
+              error: null,
+            },
+            subscriptionActive: false,
+          }),
+        ),
       };
     case "video_download_started":
       return {

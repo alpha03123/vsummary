@@ -18,7 +18,7 @@ from backend.video_summary.infrastructure.settings import (
 )
 from backend.video_summary.library.ports import VideoLibraryReader
 
-INDEX_SCHEMA_VERSION = 3
+INDEX_SCHEMA_VERSION = 4
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 COMMON_METADATA_DEFAULTS: dict[str, object] = {
     "doc_id": "",
@@ -63,9 +63,30 @@ class SeriesRetrievalService:
         self._signature = None
 
     def refresh(self) -> None:
+        self.refresh_all()
+
+    def refresh_all(self) -> None:
         self._index = None
         self._signature = None
         self._rebuild_index()
+
+    def upsert_video(self, series_id: str, video_id: str) -> None:
+        self._ensure_incremental_mutation_ready()
+        self._delete_video_rows(series_id=series_id, video_id=video_id)
+        documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
+        if documents:
+            self._append_documents(documents)
+        self._finalize_incremental_mutation()
+
+    def delete_video(self, series_id: str, video_id: str) -> None:
+        self._ensure_incremental_mutation_ready()
+        self._delete_video_rows(series_id=series_id, video_id=video_id)
+        self._finalize_incremental_mutation()
+
+    def delete_series(self, series_id: str) -> None:
+        self._ensure_incremental_mutation_ready()
+        self._delete_series_rows(series_id=series_id)
+        self._finalize_incremental_mutation()
 
     def search(
         self,
@@ -158,10 +179,7 @@ class SeriesRetrievalService:
 
     def _rebuild_index(self) -> VectorStoreIndex:
         signature = _build_workspace_signature(self._workspace)
-        documents = [
-            Document(text=document.text, metadata=document.metadata)
-            for document in _build_documents(self._workspace)
-        ]
+        documents = _to_llama_documents(_build_documents(self._workspace))
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
@@ -177,6 +195,52 @@ class SeriesRetrievalService:
         self._signature = signature
         _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signature)
         return self._index
+
+    def _append_documents(self, documents: list[RetrievalDocument]) -> None:
+        vector_store = LanceDBVectorStore(
+            uri=self._db_uri,
+            table_name=INDEX_TABLE_NAME,
+            mode="append",
+        )
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        VectorStoreIndex.from_documents(
+            _to_llama_documents(documents),
+            storage_context=storage_context,
+            embed_model=self._embed_model,
+            show_progress=False,
+        )
+
+    def _ensure_incremental_mutation_ready(self) -> None:
+        if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
+            raise RuntimeError(
+                "长期记忆索引尚未初始化，无法执行增量更新。请先执行 full rebuild。"
+            )
+        if _read_signature_file(self._db_uri, INDEX_TABLE_NAME) is None:
+            raise RuntimeError(
+                "长期记忆索引签名缺失，无法安全执行增量更新。请先执行 full rebuild。"
+            )
+
+    def _finalize_incremental_mutation(self) -> None:
+        self.invalidate()
+        signature = _build_workspace_signature(self._workspace)
+        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signature)
+
+    def _delete_video_rows(self, *, series_id: str, video_id: str) -> None:
+        _delete_rows(
+            db_uri=self._db_uri,
+            table_name=INDEX_TABLE_NAME,
+            where=(
+                f"metadata.series_id = '{_escape_lance_string(series_id)}' "
+                f"and metadata.video_id = '{_escape_lance_string(video_id)}'"
+            ),
+        )
+
+    def _delete_series_rows(self, *, series_id: str) -> None:
+        _delete_rows(
+            db_uri=self._db_uri,
+            table_name=INDEX_TABLE_NAME,
+            where=f"metadata.series_id = '{_escape_lance_string(series_id)}'",
+        )
 
     def _try_load_existing_index(
         self,
@@ -411,19 +475,59 @@ def _build_documents(workspace: VideoLibraryReader) -> list[RetrievalDocument]:
     documents: list[RetrievalDocument] = []
     for series in workspace.list_series():
         for video in series.videos:
-            summary = workspace.get_video_summary(series.id, video.id)
-            transcript = workspace.get_video_transcript(series.id, video.id)
-            notes = workspace.get_video_notes(series.id, video.id)
-            knowledge_cards = workspace.get_video_knowledge_cards(series.id, video.id)
-            if summary is not None:
-                documents.extend(_build_summary_documents(summary))
-            if transcript is not None:
-                documents.extend(_build_transcript_documents(transcript))
-            if notes is not None:
-                documents.extend(_build_notes_documents(notes))
-            if knowledge_cards is not None:
-                documents.extend(_build_knowledge_card_documents(knowledge_cards))
+            documents.extend(
+                _build_documents_for_assets(
+                    summary=workspace.get_video_summary(series.id, video.id),
+                    transcript=workspace.get_video_transcript(series.id, video.id),
+                    notes=workspace.get_video_notes(series.id, video.id),
+                    knowledge_cards=workspace.get_video_knowledge_cards(series.id, video.id),
+                )
+            )
     return documents
+
+
+def _build_documents_for_video(
+    workspace: VideoLibraryReader,
+    *,
+    series_id: str,
+    video_id: str,
+) -> list[RetrievalDocument]:
+    return _build_documents_for_assets(
+        summary=workspace.get_video_summary(series_id, video_id),
+        transcript=workspace.get_video_transcript(series_id, video_id),
+        notes=workspace.get_video_notes(series_id, video_id),
+        knowledge_cards=workspace.get_video_knowledge_cards(series_id, video_id),
+    )
+
+
+def _build_documents_for_assets(
+    *,
+    summary,
+    transcript,
+    notes,
+    knowledge_cards,
+) -> list[RetrievalDocument]:
+    documents: list[RetrievalDocument] = []
+    if summary is not None:
+        documents.extend(_build_summary_documents(summary))
+    if transcript is not None:
+        documents.extend(_build_transcript_documents(transcript))
+    if notes is not None:
+        documents.extend(_build_notes_documents(notes))
+    if knowledge_cards is not None:
+        documents.extend(_build_knowledge_card_documents(knowledge_cards))
+    return documents
+
+
+def _to_llama_documents(documents: list[RetrievalDocument]) -> list[Document]:
+    return [
+        Document(
+            id_=str(document.metadata["doc_id"]),
+            text=document.text,
+            metadata=document.metadata,
+        )
+        for document in documents
+    ]
 
 
 def _build_summary_documents(summary) -> list[RetrievalDocument]:
@@ -606,6 +710,12 @@ def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
         pass
 
 
+def _delete_rows(*, db_uri: str, table_name: str, where: str) -> None:
+    connection = lancedb.connect(db_uri)
+    table = connection.open_table(table_name)
+    table.delete(where)
+
+
 def _table_exists(db_uri: str, table_name: str) -> bool:
     connection = lancedb.connect(db_uri)
     try:
@@ -613,6 +723,10 @@ def _table_exists(db_uri: str, table_name: str) -> bool:
     except Exception:
         return False
     return table_name in table_names
+
+
+def _escape_lance_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def _signature_file_path(db_uri: str, table_name: str) -> Path:

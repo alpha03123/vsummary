@@ -81,10 +81,10 @@ class InMemoryProgressTracker:
             previous = self._snapshots.get(task_id)
             sequence = 0 if previous is None else previous.sequence + 1
             self._snapshots[task_id] = ProgressSnapshot(
-                status="cancelled",
-                stage="cancelled",
+                status="cancelling",
+                stage="cancelling",
                 progress=previous.progress if previous is not None else None,
-                detail="任务已取消",
+                detail="正在取消任务",
                 error=None,
                 started_at=now if previous is None else previous.started_at,
                 stage_started_at=now,
@@ -96,10 +96,10 @@ class InMemoryProgressTracker:
                     else _estimate_total_seconds(
                         elapsed_seconds=max(0.0, now - previous.started_at),
                         progress=previous.progress,
-                        status="cancelled",
+                        status="cancelling",
                     )
                 ),
-                remaining_seconds=0.0,
+                remaining_seconds=None,
                 sequence=sequence,
                 updated_at=now,
             )

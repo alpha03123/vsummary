@@ -25,6 +25,9 @@ DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "local_huggingface"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-base-zh-v1.5"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "cpu"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE = 8
+DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
+DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
+DEFAULT_SERIES_VIDEO_CONCURRENCY = 1
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -86,6 +89,13 @@ class AgentRetrievalSettings:
 
 
 @dataclass(frozen=True)
+class GenerationConcurrencySettings:
+    video_generation_concurrency: int
+    summary_chunk_concurrency: int
+    series_video_concurrency: int
+
+
+@dataclass(frozen=True)
 class AppSettings:
     asr: AsrSettings
     openai: OpenAISettings
@@ -93,6 +103,7 @@ class AppSettings:
     debug: DebugSettings
     agent_context: AgentContextSettings
     agent_retrieval: AgentRetrievalSettings
+    generation: GenerationConcurrencySettings
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
@@ -200,6 +211,24 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE,
         ),
     )
+    generation_payload = payload.get("generation", {})
+    generation_settings = GenerationConcurrencySettings(
+        video_generation_concurrency=_normalize_positive_int(
+            generation_payload.get("video_generation_concurrency"),
+            default=DEFAULT_VIDEO_GENERATION_CONCURRENCY,
+            field_name="generation.video_generation_concurrency",
+        ),
+        summary_chunk_concurrency=_normalize_positive_int(
+            generation_payload.get("summary_chunk_concurrency"),
+            default=DEFAULT_SUMMARY_CHUNK_CONCURRENCY,
+            field_name="generation.summary_chunk_concurrency",
+        ),
+        series_video_concurrency=_normalize_positive_int(
+            generation_payload.get("series_video_concurrency"),
+            default=DEFAULT_SERIES_VIDEO_CONCURRENCY,
+            field_name="generation.series_video_concurrency",
+        ),
+    )
 
     return AppSettings(
         asr=asr_settings,
@@ -208,6 +237,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         debug=debug_settings,
         agent_context=agent_context_settings,
         agent_retrieval=agent_retrieval_settings,
+        generation=generation_settings,
     )
 
 
@@ -374,6 +404,11 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'embedding_device = "{settings.agent_retrieval.embedding_device}"',
         f"embedding_batch_size = {settings.agent_retrieval.embedding_batch_size}",
         "",
+        "[generation]",
+        f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
+        f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
+        f"series_video_concurrency = {settings.generation.series_video_concurrency}",
+        "",
     ]
     return "\n".join(lines)
 
@@ -382,9 +417,13 @@ def _toml_bool(value: bool) -> str:
     return "true" if value else "false"
 
 
-def _normalize_positive_int(value: object, *, default: int) -> int:
+def _normalize_positive_int(value: object, *, default: int, field_name: str | None = None) -> int:
+    if value is None:
+        return default
     if isinstance(value, int) and value > 0:
         return value
+    if field_name is not None:
+        raise ValueError(f"{field_name} 必须是大于 0 的整数。")
     return default
 
 

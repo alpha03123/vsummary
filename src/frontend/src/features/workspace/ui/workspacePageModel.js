@@ -1,4 +1,8 @@
+import { isGenerationSnapshotActive } from "../model/workspaceState";
+
 export function buildWorkspacePageModel(controller) {
+  const generationSnapshot = controller.currentGenerationTask?.snapshot ?? null;
+  const showGenerationOverlay = isGenerationSnapshotActive(generationSnapshot);
   return {
     shell: {
       state: controller.state,
@@ -42,8 +46,9 @@ export function buildWorkspacePageModel(controller) {
       fasterWhisperModelsLoading: controller.fasterWhisperModelsLoading,
       downloadingModelId: controller.downloadingModelId,
       modelDownloadProgress: controller.modelDownloadProgress,
-      progress: controller.state.generationProgress,
-      snapshot: controller.state.generationSnapshot,
+      progress: generationSnapshot?.progress ?? null,
+      snapshot: generationSnapshot,
+      showOverlay: showGenerationOverlay,
       videoDownloadProgress: controller.state.videoDownloadProgress ?? null,
     },
     actions: {

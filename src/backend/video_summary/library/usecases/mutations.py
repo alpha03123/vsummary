@@ -28,7 +28,7 @@ class DeleteSeries:
         if not deleted:
             raise LookupError(f"series not found '{series_id}'")
         if processed_exists:
-            self._index_refresher.refresh()
+            self._index_refresher.delete_series(series_id)
         return DeleteSeriesResult(series_id=series_id)
 
 
@@ -44,5 +44,5 @@ class DeleteVideoSource:
         if not deleted:
             raise LookupError(f"video not found '{series_id}/{video_id}'")
         if processed:
-            self._index_refresher.refresh()
+            self._index_refresher.delete_video(series_id, video_id)
         return DeleteVideoResult(series_id=series_id, video_id=video_id)

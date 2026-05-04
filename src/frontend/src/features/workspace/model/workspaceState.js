@@ -37,6 +37,79 @@ export function buildChatScopeKey(selectedContextType, seriesId, videoId, select
   return null;
 }
 
+export function buildVideoGenerationTaskKey(seriesId, videoId) {
+  if (!seriesId || !videoId) {
+    return null;
+  }
+  return `video:${seriesId}/${videoId}`;
+}
+
+export function buildSeriesGenerationTaskKey(seriesId) {
+  if (!seriesId) {
+    return null;
+  }
+  return `series:${seriesId}`;
+}
+
+export function createGenerationTaskRecord({
+  taskKey,
+  mode,
+  seriesId,
+  videoId = null,
+  snapshot,
+  subscriptionActive = false,
+}) {
+  if (!taskKey) {
+    return null;
+  }
+  return {
+    taskKey,
+    mode,
+    seriesId,
+    videoId,
+    snapshot,
+    subscriptionActive,
+  };
+}
+
+export function setGenerationTaskForKey(generationTasksByKey, task) {
+  if (!task?.taskKey) {
+    return { ...(generationTasksByKey ?? {}) };
+  }
+  return {
+    ...(generationTasksByKey ?? {}),
+    [task.taskKey]: task,
+  };
+}
+
+export function getGenerationTaskForKey(generationTasksByKey, taskKey) {
+  if (!taskKey) {
+    return null;
+  }
+  return generationTasksByKey?.[taskKey] ?? null;
+}
+
+export function getGenerationTaskForSelection(state) {
+  if (state?.selectedContextType === "video") {
+    return getGenerationTaskForKey(
+      state.generationTasksByKey,
+      buildVideoGenerationTaskKey(state.selectedSeriesId, state.selectedVideoId),
+    );
+  }
+  if (state?.selectedContextType === "series") {
+    return getGenerationTaskForKey(
+      state.generationTasksByKey,
+      buildSeriesGenerationTaskKey(state.selectedSeriesId),
+    );
+  }
+  return null;
+}
+
+export function isGenerationSnapshotActive(snapshot) {
+  const status = snapshot?.status;
+  return status === "running" || status === "queued" || status === "cancelling";
+}
+
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
 const DEFAULT_CHAT_SESSION_TITLE = "当前对话";
 const NEW_CHAT_SESSION_TITLE_PREFIX = "新对话";
@@ -345,6 +418,7 @@ export function createInitialWorkspaceState() {
     generatingSeriesId: null,
     generationMode: null,
     generatingMindmapKey: null,
+    generationTasksByKey: {},
     generationProgress: null,
     generationSnapshot: null,
     downloadingVideoKey: null,

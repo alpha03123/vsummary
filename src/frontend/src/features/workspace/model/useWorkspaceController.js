@@ -7,6 +7,8 @@ import {
   findSeriesById,
   findVideoById,
   getChatSessionListForScope,
+  getGenerationTaskForSelection,
+  isGenerationSnapshotActive,
 } from "./workspaceState";
 import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
@@ -26,14 +28,17 @@ export function useWorkspaceController() {
   const summary = state.summary;
   const mindmap = state.mindmap;
   const tools = state.tools;
+  const currentGenerationTask = getGenerationTaskForSelection(state);
   const selectedNode = useMemo(
     () => findNodeById(mindmap, state.selectedNodeId),
     [mindmap, state.selectedNodeId],
   );
   const isGeneratingSelectedVideo =
-    state.generatingVideoKey != null &&
-    state.generatingVideoKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
-  const isGeneratingSelectedSeries = state.generatingSeriesId != null && state.generatingSeriesId === state.selectedSeriesId;
+    currentGenerationTask?.mode === "video" &&
+    isGenerationSnapshotActive(currentGenerationTask.snapshot);
+  const isGeneratingSelectedSeries =
+    currentGenerationTask?.mode === "series" &&
+    isGenerationSnapshotActive(currentGenerationTask.snapshot);
   const isGeneratingMindmapSelectedVideo =
     state.generatingMindmapKey != null &&
     state.generatingMindmapKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
@@ -105,6 +110,7 @@ export function useWorkspaceController() {
 
   return {
     state,
+    currentGenerationTask,
     ui: state.ui,
     fasterWhisperModels: state.fasterWhisperModels,
     fasterWhisperModelsLoading: state.fasterWhisperModelsLoading,

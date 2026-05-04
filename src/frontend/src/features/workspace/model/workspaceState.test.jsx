@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  buildSeriesGenerationTaskKey,
+  buildVideoGenerationTaskKey,
   createInitialWorkspaceState,
   loadChatSessionIdsByScope,
   loadChatSessionListsByScope,
@@ -136,5 +138,133 @@ describe("workspaceReducer knowledge memory status", () => {
     });
 
     expect(nextState.knowledgeMemorySnapshot).toBe(snapshot);
+  });
+});
+
+describe("workspaceReducer generation task state", () => {
+  it("preserves video generation task state across scope switches", () => {
+    const library = {
+      workspace: { id: "workspace", title: "Workspace" },
+      series: [
+        {
+          id: "series-a",
+          title: "Series A",
+          videos: [
+            { id: "video-1", title: "Video 1", source_name: "video-1.mp4", processed: false, status: "pending" },
+            { id: "video-2", title: "Video 2", source_name: "video-2.mp4", processed: false, status: "pending" },
+          ],
+        },
+      ],
+    };
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "workspace_loaded",
+      library,
+    });
+    state = workspaceReducer(state, { type: "video_selected", seriesId: "series-a", videoId: "video-1" });
+    state = workspaceReducer(state, {
+      type: "generation_status_loaded",
+      taskKey: buildVideoGenerationTaskKey("series-a", "video-1"),
+      mode: "video",
+      seriesId: "series-a",
+      videoId: "video-1",
+      snapshot: { status: "running", stage: "summarize", progress: 60, detail: "正在生成", error: null },
+    });
+
+    const switched = workspaceReducer(state, { type: "video_selected", seriesId: "series-a", videoId: "video-2" });
+
+    expect(switched.generationTasksByKey[buildVideoGenerationTaskKey("series-a", "video-1")]).toEqual(
+      expect.objectContaining({
+        mode: "video",
+        seriesId: "series-a",
+        videoId: "video-1",
+        snapshot: expect.objectContaining({ status: "running", progress: 60 }),
+      }),
+    );
+  });
+
+  it("keeps series generation task state when switching from series to video and back", () => {
+    const library = {
+      workspace: { id: "workspace", title: "Workspace" },
+      series: [
+        {
+          id: "series-a",
+          title: "Series A",
+          videos: [
+            { id: "video-1", title: "Video 1", source_name: "video-1.mp4", processed: false, status: "pending" },
+          ],
+        },
+      ],
+    };
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "workspace_loaded",
+      library,
+    });
+    state = workspaceReducer(state, { type: "series_selected", seriesId: "series-a" });
+    state = workspaceReducer(state, {
+      type: "generation_status_loaded",
+      taskKey: buildSeriesGenerationTaskKey("series-a"),
+      mode: "series",
+      seriesId: "series-a",
+      videoId: null,
+      snapshot: { status: "running", stage: "batch", progress: 40, detail: "正在处理 2/5", error: null },
+    });
+
+    state = workspaceReducer(state, { type: "video_selected", seriesId: "series-a", videoId: "video-1" });
+    const restored = workspaceReducer(state, { type: "series_context_selected" });
+
+    expect(restored.generationTasksByKey[buildSeriesGenerationTaskKey("series-a")]).toEqual(
+      expect.objectContaining({
+        mode: "series",
+        seriesId: "series-a",
+        snapshot: expect.objectContaining({ status: "running", progress: 40 }),
+      }),
+    );
+  });
+
+  it("does not replace the currently selected summary with a stale background success", () => {
+    const initialState = {
+      ...createInitialWorkspaceState(),
+      library: {
+        workspace: { id: "workspace", title: "Workspace" },
+        series: [
+          {
+            id: "series-a",
+            title: "Series A",
+            videos: [
+              { id: "video-1", title: "Video 1", source_name: "video-1.mp4", processed: false, status: "pending" },
+              { id: "video-2", title: "Video 2", source_name: "video-2.mp4", processed: false, status: "pending" },
+            ],
+          },
+        ],
+      },
+      selectedSeriesId: "series-a",
+      selectedVideoId: "video-2",
+      selectedContextType: "video",
+      summary: {
+        title: "Current Video",
+        chapters: [{ id: "chapter-current" }],
+      },
+      tools: {
+        overview: { generated: false, status: "pending" },
+        mindmap: { available: false, generated: false, status: "blocked" },
+        knowledgeCards: { available: false, generated: false, status: "blocked" },
+      },
+    };
+
+    const nextState = workspaceReducer(initialState, {
+      type: "generation_succeeded",
+      taskKey: buildVideoGenerationTaskKey("series-a", "video-1"),
+      seriesId: "series-a",
+      videoId: "video-1",
+      summary: {
+        title: "Background Video",
+        chapters: [{ id: "chapter-background" }],
+      },
+    });
+
+    expect(nextState.summary.title).toBe("Current Video");
+    expect(
+      nextState.library.series[0].videos.find((video) => video.id === "video-1"),
+    ).toEqual(expect.objectContaining({ processed: true, status: "ready" }));
   });
 });

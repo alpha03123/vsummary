@@ -34,3 +34,8 @@ embedding_provider = "local_huggingface"
 embedding_model = "BAAI/bge-base-zh-v1.5"
 embedding_device = "cpu"
 embedding_batch_size = 8
+
+[generation]
+video_generation_concurrency = 2
+summary_chunk_concurrency = 3
+series_video_concurrency = 4

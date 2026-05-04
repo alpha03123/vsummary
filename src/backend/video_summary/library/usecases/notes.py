@@ -26,7 +26,7 @@ class CreateVideoNote:
             source=source,
         )
         if note is not None and self._index_refresher is not None:
-            self._index_refresher.refresh()
+            self._index_refresher.upsert_video(series_id, video_id)
         return note
 
 
@@ -44,7 +44,7 @@ class UpdateVideoNote:
             content=content,
         )
         if note is not None and self._index_refresher is not None:
-            self._index_refresher.refresh()
+            self._index_refresher.upsert_video(series_id, video_id)
         return note
 
 
@@ -56,5 +56,5 @@ class DeleteVideoNote:
     def run(self, series_id: str, video_id: str, note_id: str) -> bool | None:
         deleted = self._workspace.delete_video_note(series_id, video_id, note_id)
         if deleted and self._index_refresher is not None:
-            self._index_refresher.refresh()
+            self._index_refresher.upsert_video(series_id, video_id)
         return deleted

@@ -50,6 +50,7 @@ def build_video_summary_runtime(
         context_window_tokens=settings.agent_context.window_tokens,
         reserved_output_tokens=settings.agent_context.reserved_output_tokens,
         direct_summary_threshold_ratio=settings.agent_context.direct_summary_threshold_ratio,
+        summary_chunk_concurrency=settings.generation.summary_chunk_concurrency,
     )
     return VideoSummaryRuntime(
         transcriber=transcriber,

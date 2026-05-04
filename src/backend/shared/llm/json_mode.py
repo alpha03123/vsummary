@@ -11,7 +11,7 @@ def validate_json_response(
     raw_text: str,
     response_model: type[BaseModel],
 ) -> BaseModel:
-    payload = extract_json_document(raw_text)
+    payload = extract_json_document(raw_text, require_object=True)
     return response_model.model_validate(payload)
 
 
@@ -21,23 +21,27 @@ def describe_validation_error(error: Exception) -> str:
     return str(error)
 
 
-def extract_json_document(raw_text: str) -> object:
+def extract_json_document(raw_text: str, *, require_object: bool = False) -> object:
     text = raw_text.strip()
     if not text:
         raise ValueError("模型返回为空，无法解析 JSON。")
 
     direct_value = _try_json_load(text)
     if direct_value is not None:
+        if require_object and not isinstance(direct_value, dict):
+            raise ValueError("模型返回的 JSON 顶层必须是对象。")
         return direct_value
 
-    fenced_value = _extract_fenced_json(text)
+    fenced_value = _extract_fenced_json(text, require_object=require_object)
     if fenced_value is not None:
         return fenced_value
 
-    balanced_value = _extract_balanced_json(text)
+    balanced_value = _extract_balanced_json(text, require_object=require_object)
     if balanced_value is not None:
         return balanced_value
 
+    if require_object:
+        raise ValueError("模型返回中未找到可解析的 JSON 对象。")
     raise ValueError("模型返回中未找到可解析的 JSON。")
 
 
@@ -48,18 +52,21 @@ def _try_json_load(candidate: str) -> object | None:
         return None
 
 
-def _extract_fenced_json(text: str) -> object | None:
+def _extract_fenced_json(text: str, *, require_object: bool = False) -> object | None:
     matches = re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text, re.IGNORECASE)
     for match in matches:
         candidate = match.group(1).strip()
         loaded = _try_json_load(candidate)
         if loaded is not None:
+            if require_object and not isinstance(loaded, dict):
+                continue
             return loaded
     return None
 
 
-def _extract_balanced_json(text: str) -> object | None:
-    start_indexes = [index for index, char in enumerate(text) if char in "{["]
+def _extract_balanced_json(text: str, *, require_object: bool = False) -> object | None:
+    opening_chars = "{" if require_object else "{["
+    start_indexes = [index for index, char in enumerate(text) if char in opening_chars]
     for start_index in start_indexes:
         end_index = _find_balanced_end(text, start_index)
         if end_index is None:
@@ -67,6 +74,8 @@ def _extract_balanced_json(text: str) -> object | None:
         candidate = text[start_index : end_index + 1]
         loaded = _try_json_load(candidate)
         if loaded is not None:
+            if require_object and not isinstance(loaded, dict):
+                continue
             return loaded
     return None
 

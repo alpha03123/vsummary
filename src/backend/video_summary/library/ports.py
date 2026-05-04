@@ -161,10 +161,22 @@ class WorkspaceIndexInvalidator(Protocol):
 
 
 class WorkspaceIndexRefresher(Protocol):
+    def refresh_all(self) -> None:
+        ...
+
     def refresh(self) -> None:
+        ...
+
+    def upsert_video(self, series_id: str, video_id: str) -> None:
+        ...
+
+    def delete_video(self, series_id: str, video_id: str) -> None:
+        ...
+
+    def delete_series(self, series_id: str) -> None:
         ...
 
 
 class SeriesKnowledgeMemoryRefresher(Protocol):
-    def refresh(self, series_id: str):
+    def refresh(self, series_id: str, video_id: str):
         ...

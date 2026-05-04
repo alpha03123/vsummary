@@ -64,10 +64,10 @@ class RefreshSeriesKnowledgeMemory:
         self._workspace = workspace
         self._index_refresher = index_refresher
 
-    def refresh(self, series_id: str) -> None:
+    def refresh(self, series_id: str, video_id: str) -> None:
         catalog = build_series_catalog_payload(self._workspace, series_id)
         self._workspace.save_series_catalog(series_id, catalog)
-        self._index_refresher.refresh()
+        self._index_refresher.upsert_video(series_id, video_id)
 
 
 def _now_iso() -> str:

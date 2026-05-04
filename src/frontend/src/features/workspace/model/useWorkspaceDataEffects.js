@@ -6,20 +6,93 @@ import {
   loadAgentMemoryStatus,
   loadAgentSessionRecovery,
   loadFasterWhisperModels,
+  loadSeriesGenerationStatus,
   loadProviderSettings,
   loadVideoKnowledgeCards,
+  loadVideoGenerationStatus,
   loadVideoMindmap,
   loadVideoNotes,
   loadVideoSummary,
   loadVideoTools,
   loadWorkspaceLibrary,
   loadWorkspaceSettings,
+  subscribeSeriesGenerationProgress,
+  subscribeVideoGenerationProgress,
 } from "./workspaceApi";
 import { buildAgentChatContextPayload } from "./workspaceChatRuntime";
 import { BACKEND_HEALTH_RETRY_DELAY_MS } from "./workspaceControllerConstants";
-import { findVideoById, hasRecoveredChatScope } from "./workspaceState";
+import {
+  buildSeriesGenerationTaskKey,
+  buildVideoGenerationTaskKey,
+  findVideoById,
+  getGenerationTaskForSelection,
+  hasRecoveredChatScope,
+  isGenerationSnapshotActive,
+} from "./workspaceState";
+
+const generationSubscriptions = new Map();
+
+function clearGenerationSubscription(taskKey) {
+  const unsubscribe = generationSubscriptions.get(taskKey);
+  if (typeof unsubscribe === "function") {
+    unsubscribe();
+  }
+  generationSubscriptions.delete(taskKey);
+}
+
+function ensureVideoGenerationSubscription({ seriesId, videoId, dispatch }) {
+  const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
+  if (!taskKey || generationSubscriptions.has(taskKey)) {
+    return;
+  }
+  const unsubscribe = subscribeVideoGenerationProgress(seriesId, videoId, (snapshot) => {
+    dispatch({
+      type: "generation_progress_updated",
+      taskKey,
+      mode: "video",
+      seriesId,
+      videoId,
+      progress: snapshot.progress,
+      snapshot,
+      subscriptionActive: isGenerationSnapshotActive(snapshot),
+    });
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      clearGenerationSubscription(taskKey);
+    }
+  });
+  generationSubscriptions.set(taskKey, unsubscribe);
+}
+
+function ensureSeriesGenerationSubscription({ seriesId, dispatch }) {
+  const taskKey = buildSeriesGenerationTaskKey(seriesId);
+  if (!taskKey || generationSubscriptions.has(taskKey)) {
+    return;
+  }
+  const unsubscribe = subscribeSeriesGenerationProgress(seriesId, (snapshot) => {
+    dispatch({
+      type: "generation_progress_updated",
+      taskKey,
+      mode: "series",
+      seriesId,
+      videoId: null,
+      progress: snapshot.progress,
+      snapshot,
+      subscriptionActive: isGenerationSnapshotActive(snapshot),
+    });
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      clearGenerationSubscription(taskKey);
+    }
+  });
+  generationSubscriptions.set(taskKey, unsubscribe);
+}
 
 export function useWorkspaceDataEffects(state, dispatch) {
+  useEffect(() => () => {
+    for (const taskKey of generationSubscriptions.keys()) {
+      clearGenerationSubscription(taskKey);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     let timeoutId = null;
@@ -213,6 +286,96 @@ export function useWorkspaceDataEffects(state, dispatch) {
       root.classList.remove("theme-transitioning");
     };
   }, [state.ui.theme]);
+
+  useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+    if (state.selectedContextType === "video" && state.selectedSeriesId && state.selectedVideoId) {
+      let cancelled = false;
+      loadVideoGenerationStatus(state.selectedSeriesId, state.selectedVideoId)
+        .then(({ snapshot }) => {
+          if (cancelled) {
+            return;
+          }
+          dispatch({
+            type: "generation_status_loaded",
+            taskKey: buildVideoGenerationTaskKey(state.selectedSeriesId, state.selectedVideoId),
+            mode: "video",
+            seriesId: state.selectedSeriesId,
+            videoId: state.selectedVideoId,
+            snapshot,
+            subscriptionActive: isGenerationSnapshotActive(snapshot),
+          });
+        })
+        .catch(() => {});
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (state.selectedContextType === "series" && state.selectedSeriesId) {
+      let cancelled = false;
+      loadSeriesGenerationStatus(state.selectedSeriesId)
+        .then(({ snapshot }) => {
+          if (cancelled) {
+            return;
+          }
+          dispatch({
+            type: "generation_status_loaded",
+            taskKey: buildSeriesGenerationTaskKey(state.selectedSeriesId),
+            mode: "series",
+            seriesId: state.selectedSeriesId,
+            videoId: null,
+            snapshot,
+            subscriptionActive: isGenerationSnapshotActive(snapshot),
+          });
+        })
+        .catch(() => {});
+
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [
+    dispatch,
+    state.backendReady,
+    state.selectedContextType,
+    state.selectedSeriesId,
+    state.selectedVideoId,
+  ]);
+
+  useEffect(() => {
+    const currentTask = getGenerationTaskForSelection(state);
+    if (!currentTask) {
+      return;
+    }
+
+    if (currentTask.mode === "video" && currentTask.seriesId && currentTask.videoId) {
+      if (isGenerationSnapshotActive(currentTask.snapshot)) {
+        ensureVideoGenerationSubscription({
+          seriesId: currentTask.seriesId,
+          videoId: currentTask.videoId,
+          dispatch,
+        });
+      } else {
+        clearGenerationSubscription(currentTask.taskKey);
+      }
+      return;
+    }
+
+    if (currentTask.mode === "series" && currentTask.seriesId) {
+      if (isGenerationSnapshotActive(currentTask.snapshot)) {
+        ensureSeriesGenerationSubscription({
+          seriesId: currentTask.seriesId,
+          dispatch,
+        });
+      } else {
+        clearGenerationSubscription(currentTask.taskKey);
+      }
+    }
+  }, [dispatch, state]);
 
   useEffect(() => {
     if (!state.library || !state.chatScopeKey || !state.chatBaseScopeKey) {
