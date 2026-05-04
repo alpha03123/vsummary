@@ -71,7 +71,9 @@ class SeriesRetrievalService:
         self._rebuild_index()
 
     def upsert_video(self, series_id: str, video_id: str) -> None:
-        self._ensure_incremental_mutation_ready()
+        if not self._is_incremental_mutation_ready():
+            self.refresh_all()
+            return
         self._delete_video_rows(series_id=series_id, video_id=video_id)
         documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
         if documents:
@@ -79,12 +81,16 @@ class SeriesRetrievalService:
         self._finalize_incremental_mutation()
 
     def delete_video(self, series_id: str, video_id: str) -> None:
-        self._ensure_incremental_mutation_ready()
+        if not self._is_incremental_mutation_ready():
+            self.refresh_all()
+            return
         self._delete_video_rows(series_id=series_id, video_id=video_id)
         self._finalize_incremental_mutation()
 
     def delete_series(self, series_id: str) -> None:
-        self._ensure_incremental_mutation_ready()
+        if not self._is_incremental_mutation_ready():
+            self.refresh_all()
+            return
         self._delete_series_rows(series_id=series_id)
         self._finalize_incremental_mutation()
 
@@ -210,15 +216,11 @@ class SeriesRetrievalService:
             show_progress=False,
         )
 
-    def _ensure_incremental_mutation_ready(self) -> None:
-        if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
-            raise RuntimeError(
-                "长期记忆索引尚未初始化，无法执行增量更新。请先执行 full rebuild。"
-            )
-        if _read_signature_file(self._db_uri, INDEX_TABLE_NAME) is None:
-            raise RuntimeError(
-                "长期记忆索引签名缺失，无法安全执行增量更新。请先执行 full rebuild。"
-            )
+    def _is_incremental_mutation_ready(self) -> bool:
+        return (
+            _table_exists(self._db_uri, INDEX_TABLE_NAME)
+            and _read_signature_file(self._db_uri, INDEX_TABLE_NAME) is not None
+        )
 
     def _finalize_incremental_mutation(self) -> None:
         self.invalidate()
