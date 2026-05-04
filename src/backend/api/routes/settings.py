@@ -31,11 +31,12 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         transcription_mode=settings.transcription_mode,
         rag_embedding_device=settings.rag_embedding_device,
         window_tokens=settings.window_tokens,
+        video_generation_concurrency=settings.video_generation_concurrency,
     )
 
 
 @router.put("/api/settings", response_model=WorkspaceSettingsResponse)
-def update_workspace_settings(
+async def update_workspace_settings(
     request: UpdateWorkspaceSettingsRequest,
     container: ApiContainerDep,
 ) -> WorkspaceSettingsResponse:
@@ -48,9 +49,17 @@ def update_workspace_settings(
             transcription_mode=request.transcription_mode,
             rag_embedding_device=request.rag_embedding_device,
             window_tokens=request.window_tokens,
+            video_generation_concurrency=request.video_generation_concurrency,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+    container.generate_video_summary.update_video_generation_concurrency(
+        settings.video_generation_concurrency
+    )
+    container.generate_series_summaries.update_video_generation_concurrency(
+        settings.video_generation_concurrency
+    )
 
     return WorkspaceSettingsResponse(
         theme=settings.theme,
@@ -60,6 +69,7 @@ def update_workspace_settings(
         transcription_mode=settings.transcription_mode,
         rag_embedding_device=settings.rag_embedding_device,
         window_tokens=settings.window_tokens,
+        video_generation_concurrency=settings.video_generation_concurrency,
     )
 
 

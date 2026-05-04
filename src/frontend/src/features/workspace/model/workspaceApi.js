@@ -32,6 +32,7 @@ export async function loadWorkspaceSettings() {
     transcriptionMode: payload.transcription_mode,
     ragEmbeddingDevice: payload.rag_embedding_device,
     windowTokens: payload.window_tokens,
+    videoGenerationConcurrency: payload.video_generation_concurrency,
   };
 }
 
@@ -62,6 +63,7 @@ export async function updateWorkspaceSettings(settings) {
       transcription_mode: settings.transcriptionMode,
       rag_embedding_device: settings.ragEmbeddingDevice,
       window_tokens: settings.windowTokens,
+      video_generation_concurrency: settings.videoGenerationConcurrency,
     }),
   });
   return {
@@ -72,6 +74,7 @@ export async function updateWorkspaceSettings(settings) {
     transcriptionMode: payload.transcription_mode,
     ragEmbeddingDevice: payload.rag_embedding_device,
     windowTokens: payload.window_tokens,
+    videoGenerationConcurrency: payload.video_generation_concurrency,
   };
 }
 

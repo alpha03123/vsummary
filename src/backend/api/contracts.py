@@ -26,6 +26,7 @@ class WorkspaceSettingsResponse(BaseModel):
     transcription_mode: str
     rag_embedding_device: str
     window_tokens: int
+    video_generation_concurrency: int
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -36,6 +37,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     transcription_mode: str
     rag_embedding_device: str
     window_tokens: int
+    video_generation_concurrency: int
 
 
 class ProviderSettingsResponse(BaseModel):

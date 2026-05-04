@@ -18,6 +18,7 @@ from backend.video_summary.infrastructure.settings import (
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
+    replace_video_generation_concurrency,
     replace_workspace_ui_settings,
     save_env_settings,
     save_settings,
@@ -47,6 +48,7 @@ class WorkspaceSettings:
     transcription_mode: str
     rag_embedding_device: str
     window_tokens: int
+    video_generation_concurrency: int
 
 
 class SettingsServicePort(Protocol):
@@ -63,6 +65,7 @@ class SettingsServicePort(Protocol):
         transcription_mode: str,
         rag_embedding_device: str,
         window_tokens: int,
+        video_generation_concurrency: int,
     ) -> WorkspaceSettings:
         ...
 
@@ -103,6 +106,7 @@ class SettingsService:
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
             rag_embedding_device=settings.agent_retrieval.embedding_device,
             window_tokens=settings.agent_context.window_tokens,
+            video_generation_concurrency=settings.generation.video_generation_concurrency,
         )
 
     def update_workspace_settings(
@@ -115,6 +119,7 @@ class SettingsService:
         transcription_mode: str,
         rag_embedding_device: str,
         window_tokens: int,
+        video_generation_concurrency: int,
     ) -> WorkspaceSettings:
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
@@ -124,6 +129,8 @@ class SettingsService:
             raise SettingsValidationError(f"unsupported transcription mode '{transcription_mode}'")
         if window_tokens <= 0:
             raise SettingsValidationError("window_tokens 必须是正整数。")
+        if video_generation_concurrency <= 0:
+            raise SettingsValidationError("video_generation_concurrency 必须是正整数。")
 
         current_settings = load_settings(self._config_path, self._root_dir)
         next_settings = replace_workspace_ui_settings(
@@ -138,6 +145,7 @@ class SettingsService:
         next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
         next_settings = replace_agent_retrieval_embedding_device(next_settings, rag_embedding_device)
         next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
+        next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
         save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
@@ -148,6 +156,7 @@ class SettingsService:
             transcription_mode=transcription_mode,
             rag_embedding_device=next_settings.agent_retrieval.embedding_device,
             window_tokens=next_settings.agent_context.window_tokens,
+            video_generation_concurrency=next_settings.generation.video_generation_concurrency,
         )
 
     def get_provider_settings(self) -> ProviderSettings:

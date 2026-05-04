@@ -27,7 +27,6 @@ DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "cpu"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE = 8
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
-DEFAULT_SERIES_VIDEO_CONCURRENCY = 1
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -92,7 +91,6 @@ class AgentRetrievalSettings:
 class GenerationConcurrencySettings:
     video_generation_concurrency: int
     summary_chunk_concurrency: int
-    series_video_concurrency: int
 
 
 @dataclass(frozen=True)
@@ -223,11 +221,6 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             default=DEFAULT_SUMMARY_CHUNK_CONCURRENCY,
             field_name="generation.summary_chunk_concurrency",
         ),
-        series_video_concurrency=_normalize_positive_int(
-            generation_payload.get("series_video_concurrency"),
-            default=DEFAULT_SERIES_VIDEO_CONCURRENCY,
-            field_name="generation.series_video_concurrency",
-        ),
     )
 
     return AppSettings(
@@ -299,6 +292,21 @@ def replace_agent_context_window_tokens(settings: AppSettings, window_tokens: in
         agent_context=replace(
             settings.agent_context,
             window_tokens=normalized_window_tokens,
+        ),
+    )
+
+
+def replace_video_generation_concurrency(settings: AppSettings, video_generation_concurrency: int) -> AppSettings:
+    normalized_concurrency = _normalize_positive_int(
+        video_generation_concurrency,
+        default=DEFAULT_VIDEO_GENERATION_CONCURRENCY,
+        field_name="generation.video_generation_concurrency",
+    )
+    return replace(
+        settings,
+        generation=replace(
+            settings.generation,
+            video_generation_concurrency=normalized_concurrency,
         ),
     )
 
@@ -407,7 +415,6 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[generation]",
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
-        f"series_video_concurrency = {settings.generation.series_video_concurrency}",
         "",
     ]
     return "\n".join(lines)

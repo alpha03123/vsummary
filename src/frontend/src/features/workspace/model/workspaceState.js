@@ -13,6 +13,7 @@ export const defaultUiSettings = {
   hasOpenaiApiKey: false,
   openaiApiKeyMasked: "",
   windowTokens: 1000000,
+  videoGenerationConcurrency: 1,
 };
 
 export function createWelcomeChatMessages() {
@@ -625,5 +626,11 @@ export function normalizeUiSettings(value) {
       typeof record.windowTokens === "number" && Number.isInteger(record.windowTokens) && record.windowTokens > 0
         ? record.windowTokens
         : 1000000,
+    videoGenerationConcurrency:
+      typeof record.videoGenerationConcurrency === "number"
+        && Number.isInteger(record.videoGenerationConcurrency)
+        && record.videoGenerationConcurrency > 0
+        ? record.videoGenerationConcurrency
+        : 1,
   };
 }

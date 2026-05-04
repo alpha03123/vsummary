@@ -4,6 +4,8 @@ import asyncio
 from dataclasses import dataclass
 import logging
 
+from anyio import CapacityLimiter
+
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import LibrarySeriesDTO
@@ -44,7 +46,10 @@ class GenerateVideoSummaryFromLibrary:
         self._series_memory_refresher = series_memory_refresher
         self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
-        self._video_generation_slots = asyncio.Semaphore(max(1, video_generation_concurrency))
+        self._video_generation_slots = CapacityLimiter(max(1, video_generation_concurrency))
+
+    def update_video_generation_concurrency(self, video_generation_concurrency: int) -> None:
+        self._video_generation_slots.total_tokens = max(1, video_generation_concurrency)
 
     async def run(
         self,
@@ -101,7 +106,7 @@ class GenerateVideoSummaryFromLibrary:
         owns_reporter = progress_reporter is None
         reporter = progress_reporter or self._progress_tracker.create_reporter(f"{series_id}/{video_id}")
         try:
-            if self._video_generation_slots.locked():
+            if self._video_generation_slots.available_tokens <= 0:
                 reporter.update("prepare", 0.0, "正在等待当前生成任务完成")
 
             async with self._video_generation_slots:
@@ -147,14 +152,17 @@ class GenerateSeriesSummaryFromLibrary:
         workspace: VideoLibraryReader,
         generator: GenerateVideoSummaryFromLibrary,
         progress_tracker: VideoGenerationProgressTracker,
-        series_video_concurrency: int = 1,
+        video_generation_concurrency: int = 1,
     ) -> None:
         self._workspace = workspace
         self._generator = generator
         self._progress_tracker = progress_tracker
-        self._series_video_concurrency = max(1, series_video_concurrency)
+        self._video_generation_concurrency = max(1, video_generation_concurrency)
         self._active_series_tasks: dict[str, asyncio.Task[SeriesGenerationResult]] = {}
         self._active_series_tasks_lock = asyncio.Lock()
+
+    def update_video_generation_concurrency(self, video_generation_concurrency: int) -> None:
+        self._video_generation_concurrency = max(1, video_generation_concurrency)
 
     async def run(
         self,
@@ -216,7 +224,7 @@ class GenerateSeriesSummaryFromLibrary:
             for index, video in enumerate(pending_videos, start=1):
                 queue.put_nowait((index, video))
 
-            worker_count = min(self._series_video_concurrency, len(pending_videos))
+            worker_count = min(self._video_generation_concurrency, len(pending_videos))
 
             async def worker() -> None:
                 nonlocal cancelled_video_id, failure

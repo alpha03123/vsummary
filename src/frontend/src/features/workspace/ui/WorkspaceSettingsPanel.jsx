@@ -33,7 +33,7 @@ export function WorkspaceSettingsPanel({
     { id: "general", label: "常规与显示", icon: Settings2 },
     { id: "ai", label: "AI 总结能力", icon: Cpu },
     { id: "keys", label: "模型供应商", icon: Key },
-    { id: "network", label: "网络代理 (等待接入)", icon: Globe },
+    { id: "network", label: "网络代理 ", icon: Globe },
   ];
   return (
     <motion.section
@@ -279,7 +279,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="检索模型"
-                  description="控制检索模型运行在 CPU 还是 GPU。建议CPU,除非你自行安装了GPU环境。"
+                  description="控制检索模型运行在 CPU 还是 GPU。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.ragEmbeddingDevice}
@@ -294,12 +294,25 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="上下文大小"
-                  description="控制模型单次可用的上下文预算。视频摘要会根据这个值决定是否直接读取原始转写，或先分块再汇总。"
+                  description="控制模型单次可用的上下文预算。"
                 >
                   <WorkspaceTextInput
                     value={String(ui.windowTokens)}
                     onChange={(nextValue) => onChangeSetting("windowTokens", Number.parseInt(nextValue, 10) || 1)}
                     placeholder="1000000"
+                    className="w-[180px]"
+                    type="number"
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="视频并行处理数"
+                  description="控制全局最多同时处理多少个视频。"
+                >
+                  <WorkspaceTextInput
+                    value={String(ui.videoGenerationConcurrency)}
+                    onChange={(nextValue) => onChangeSetting("videoGenerationConcurrency", Number.parseInt(nextValue, 10) || 1)}
+                    placeholder="1"
                     className="w-[180px]"
                     type="number"
                   />

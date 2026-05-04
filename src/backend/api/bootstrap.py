@@ -186,7 +186,7 @@ def build_api_container(
             workspace,
             summary_generation_use_case,
             progress_tracker,
-            series_video_concurrency=settings.generation.series_video_concurrency,
+            video_generation_concurrency=settings.generation.video_generation_concurrency,
         ),
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
         delete_series=DeleteSeries(workspace, index_refresher),
