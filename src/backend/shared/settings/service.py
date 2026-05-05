@@ -25,6 +25,7 @@ from backend.video_summary.infrastructure.settings import (
     save_env_settings,
     save_settings,
 )
+from backend.shared.llm import LiteLLMCompletionGateway
 
 
 class SettingsValidationError(ValueError):
@@ -87,6 +88,17 @@ class SettingsServicePort(Protocol):
         openai_api_key: str | None,
         hf_endpoint: str | None,
     ) -> ProviderSettings:
+        ...
+
+    def test_provider_settings(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_model: str,
+        openai_api_key: str | None,
+        hf_endpoint: str | None,
+    ) -> str:
         ...
 
 
@@ -227,6 +239,31 @@ class SettingsService:
                 hf_endpoint=provider_settings.hf_endpoint,
             )
         return provider_settings
+
+    def test_provider_settings(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_model: str,
+        openai_api_key: str | None,
+        hf_endpoint: str | None,
+    ) -> str:
+        provider_settings = self._validate_provider_settings(
+            llm_provider=llm_provider,
+            openai_base_url=openai_base_url,
+            openai_model=openai_model,
+            openai_api_key=openai_api_key,
+            hf_endpoint=hf_endpoint,
+        )
+        gateway = LiteLLMCompletionGateway(
+            provider=provider_settings.llm_provider,
+            base_url=provider_settings.openai_base_url,
+            model=provider_settings.openai_model,
+            api_key=self._resolve_openai_api_key(openai_api_key),
+        )
+        response = gateway.test_connection()
+        return response or "ok"
 
     def _save_provider_settings(
         self,

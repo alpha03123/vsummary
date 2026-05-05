@@ -74,6 +74,7 @@ export function buildWorkspacePageModel(controller) {
       closeSettingsPanel: controller.onCloseSettingsPanel,
       changeSetting: controller.onChangeSetting,
       saveApiKey: controller.onSaveApiKey,
+      testProviderConnection: controller.onTestProviderConnection,
       downloadFasterWhisperModel: controller.onDownloadFasterWhisperModel,
       cancelFasterWhisperModelDownload: controller.onCancelFasterWhisperModelDownload,
       downloadRagModel: controller.onDownloadRagModel,

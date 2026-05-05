@@ -61,6 +61,11 @@ class UpdateProviderSettingsRequest(BaseModel):
     hf_endpoint: str | None = None
 
 
+class TestProviderSettingsResponse(BaseModel):
+    ok: bool
+    message: str
+
+
 class FasterWhisperModelResponse(BaseModel):
     id: str
     label: str

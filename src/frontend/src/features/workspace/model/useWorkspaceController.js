@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 
 import { getVideoPreviewUrl } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
@@ -22,6 +22,16 @@ export function useWorkspaceController() {
   const [state, dispatch] = useReducer(workspaceReducer, undefined, createInitialWorkspaceState);
 
   useWorkspaceDataEffects(state, dispatch);
+
+  useEffect(() => {
+    if (!state.error) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => {
+      dispatch({ type: "error_cleared" });
+    }, 6000);
+    return () => window.clearTimeout(timeoutId);
+  }, [state.error]);
 
   const activeSeries = findSeriesById(state.library, state.selectedSeriesId);
   const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
@@ -169,6 +179,7 @@ export function useWorkspaceController() {
     onCloseSettingsPanel: settingsActions.onCloseSettingsPanel,
     onChangeSetting: settingsActions.onChangeSetting,
     onSaveApiKey: settingsActions.onSaveApiKey,
+    onTestProviderConnection: settingsActions.onTestProviderConnection,
     onDownloadFasterWhisperModel: settingsActions.onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload: settingsActions.onCancelFasterWhisperModelDownload,
     onDownloadRagModel: settingsActions.onDownloadRagModel,

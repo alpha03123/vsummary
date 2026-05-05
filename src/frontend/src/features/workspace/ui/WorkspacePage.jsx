@@ -396,6 +396,7 @@ export function WorkspacePage({ page }) {
                   modelDownloadProgress={generation.modelDownloadProgress}
                   onChangeSetting={actions.changeSetting}
                   onSaveApiKey={actions.saveApiKey}
+                  onTestProviderConnection={actions.testProviderConnection}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onCancelFasterWhisperModelDownload={actions.cancelFasterWhisperModelDownload}
                   onDownloadRagModel={actions.downloadRagModel}

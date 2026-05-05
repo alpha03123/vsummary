@@ -21,6 +21,7 @@ export function WorkspaceSettingsPanel({
   modelDownloadProgress,
   onChangeSetting,
   onSaveApiKey,
+  onTestProviderConnection,
   onDownloadFasterWhisperModel,
   onCancelFasterWhisperModelDownload,
   onDownloadRagModel,
@@ -32,6 +33,7 @@ export function WorkspaceSettingsPanel({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmDownloadModelId, setConfirmDownloadModelId] = useState(null);
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
+  const [providerTest, setProviderTest] = useState({ status: "idle", message: "" });
   const hasApiKey = ui.hasOpenaiApiKey;
   const apiKeyStatus = ui.openaiApiKey.trim() || ui.openaiApiKeyMasked;
   const isAnyRagModelDownloading = ragModels.some((model) => model.status === "running");
@@ -472,6 +474,44 @@ export function WorkspaceSettingsPanel({
                         保存 Key
                       </button>
                     </div>
+                  </div>
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="连接测试"
+                  description="发起一次模型请求"
+                >
+                  <div className="w-[340px]">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (typeof onTestProviderConnection !== "function") {
+                          return;
+                        }
+                        setProviderTest({ status: "testing", message: "正在测试模型连接..." });
+                        const result = await onTestProviderConnection();
+                        setProviderTest({
+                          status: result?.ok ? "success" : "failed",
+                          message: result?.message ?? "模型连接测试失败",
+                        });
+                      }}
+                      disabled={providerTest.status === "testing"}
+                      className="w-full rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {providerTest.status === "testing" ? "测试中..." : "测试"}
+                    </button>
+                    {providerTest.message ? (
+                      <p
+                        className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${providerTest.status === "success"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          : providerTest.status === "failed"
+                            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                            : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+                          }`}
+                      >
+                        {providerTest.message}
+                      </p>
+                    ) : null}
                   </div>
                 </WorkspaceSettingRow>
               </>

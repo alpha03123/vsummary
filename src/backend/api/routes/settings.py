@@ -10,6 +10,7 @@ from backend.api.contracts import (
     FasterWhisperModelResponse,
     ProviderSettingsResponse,
     RagModelResponse,
+    TestProviderSettingsResponse,
     UpdateProviderSettingsRequest,
     UpdateWorkspaceSettingsRequest,
     WorkspaceSettingsResponse,
@@ -122,6 +123,29 @@ def update_provider_settings(
         openai_api_key_masked=env_settings.openai_api_key_masked,
         hf_endpoint=env_settings.hf_endpoint,
     )
+
+
+@router.post("/api/provider-settings/test", response_model=TestProviderSettingsResponse)
+def test_provider_settings(
+    request: UpdateProviderSettingsRequest,
+    container: ApiContainerDep,
+) -> TestProviderSettingsResponse:
+    try:
+        response = container.settings_service.test_provider_settings(
+            llm_provider=request.llm_provider,
+            openai_base_url=request.openai_base_url,
+            openai_model=request.openai_model,
+            openai_api_key=request.openai_api_key,
+            hf_endpoint=request.hf_endpoint,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    return TestProviderSettingsResponse(ok=True, message=f"模型连接成功：{response}")
 
 
 @router.get("/api/asr/faster-whisper/models", response_model=list[FasterWhisperModelResponse])

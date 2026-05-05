@@ -21,13 +21,15 @@ class FasterWhisperTranscriber:
         transcription_mode: str,
         language: str = "zh",
     ) -> None:
-        try:
+        resolved_device = _resolve_device(device)
+        if resolved_device == "cuda":
             _ensure_windows_cuda_dll_dirs()
+
+        try:
             from faster_whisper import WhisperModel
         except ImportError as error:
             raise RuntimeError("faster-whisper is not installed.") from error
 
-        resolved_device = _resolve_device(device)
         self._language = language
         self._decode_options = _build_decode_options(transcription_mode)
         self._model = WhisperModel(
@@ -128,7 +130,10 @@ def _discover_nvidia_bin_dirs() -> list[Path]:
     )
     candidates: list[Path] = []
     for package_name in package_names:
-        spec = importlib.util.find_spec(package_name)
+        try:
+            spec = importlib.util.find_spec(package_name)
+        except ModuleNotFoundError:
+            continue
         locations = getattr(spec, "submodule_search_locations", None)
         if not locations:
             continue

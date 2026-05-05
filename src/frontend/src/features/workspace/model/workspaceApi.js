@@ -109,6 +109,22 @@ export async function updateProviderSettings(settings) {
   };
 }
 
+export async function testProviderSettings(settings) {
+  return fetchJson("/api/provider-settings/test", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      llm_provider: settings.llmProvider,
+      openai_base_url: settings.openaiBaseUrl,
+      openai_model: settings.openaiModel,
+      openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
+      hf_endpoint: settings.hfEndpoint,
+    }),
+  });
+}
+
 export async function loadFasterWhisperModels() {
   return fetchJson("/api/asr/faster-whisper/models");
 }
@@ -524,16 +540,44 @@ export function getVideoPreviewUrl(seriesId, videoId) {
 async function fetchJson(path, init) {
   const response = await fetch(path, init);
   if (!response.ok) {
-    let detail = "";
+    let detail = null;
     try {
       const payload = await response.json();
-      detail = typeof payload.detail === "string" ? payload.detail : "";
+      detail = extractErrorMessage(payload);
     } catch {
-      detail = "";
+      detail = null;
     }
-    throw new Error(detail ? `${response.status} ${detail}` : `加载失败：${path}`);
+    throw new Error(detail ? `${response.status} ${detail}` : `${response.status} 请求失败：${path}`);
   }
   return response.json();
+}
+
+function extractErrorMessage(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  for (const key of ["detail", "message", "error"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  if (Array.isArray(payload.detail) && payload.detail.length > 0) {
+    return payload.detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (item && typeof item === "object") {
+          const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+          const message = typeof item.msg === "string" ? item.msg : JSON.stringify(item);
+          return location ? `${location}: ${message}` : message;
+        }
+        return String(item);
+      })
+      .join("; ");
+  }
+  return null;
 }
 
 function parseProgressMessage(rawValue) {

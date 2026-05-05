@@ -65,15 +65,20 @@ class LiteLLMCompletionGateway:
         *,
         temperature: float = 0,
         response_format: dict[str, Any] | type[BaseModel] | None = None,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
     ) -> str:
-        response = self._completion(
+        request = _build_completion_request(
             model=self._model,
             messages=_dump_messages(messages),
             api_base=self._base_url,
             api_key=self._api_key,
             temperature=temperature,
             response_format=response_format,
+            max_tokens=max_tokens,
+            timeout=timeout,
         )
+        response = self._completion(**request)
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
@@ -89,15 +94,20 @@ class LiteLLMCompletionGateway:
         *,
         temperature: float = 0,
         response_format: dict[str, Any] | type[BaseModel] | None = None,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
     ) -> str:
-        response = await self._acompletion(
+        request = _build_completion_request(
             model=self._model,
             messages=_dump_messages(messages),
             api_base=self._base_url,
             api_key=self._api_key,
             temperature=temperature,
             response_format=response_format,
+            max_tokens=max_tokens,
+            timeout=timeout,
         )
+        response = await self._acompletion(**request)
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
@@ -162,6 +172,14 @@ class LiteLLMCompletionGateway:
                 yield ChatCompletionStreamChunk(delta=delta)
         if final_usage:
             yield ChatCompletionStreamChunk(usage=final_usage)
+
+    def test_connection(self) -> str:
+        return self.complete_text(
+            [{"role": "user", "content": "Reply with exactly: ok"}],
+            temperature=0,
+            max_tokens=8,
+            timeout=15,
+        )
 
     async def astream_text(
         self,
@@ -320,6 +338,32 @@ def _normalize_litellm_model(provider: str, model: str) -> str:
 
 def _dump_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(message) for message in messages]
+
+
+def _build_completion_request(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    api_base: str,
+    api_key: str,
+    temperature: float,
+    response_format: dict[str, Any] | type[BaseModel] | None,
+    max_tokens: int | None,
+    timeout: float | None,
+) -> dict[str, Any]:
+    request: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "api_base": api_base,
+        "api_key": api_key,
+        "temperature": temperature,
+        "response_format": response_format,
+    }
+    if max_tokens is not None:
+        request["max_tokens"] = max_tokens
+    if timeout is not None:
+        request["timeout"] = timeout
+    return request
 
 
 def _build_structured_request_modes(

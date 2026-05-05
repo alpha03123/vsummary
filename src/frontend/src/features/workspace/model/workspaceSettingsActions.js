@@ -6,6 +6,7 @@ import {
   loadFasterWhisperModels,
   loadRagModels,
   subscribeFasterWhisperModelDownloadProgress,
+  testProviderSettings,
   updateProviderSettings,
   updateWorkspaceSettings,
 } from "./workspaceApi";
@@ -86,6 +87,24 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         type: "load_failed",
         message: error instanceof Error ? error.message : "API Key 保存失败",
       });
+    }
+  }
+
+  async function onTestProviderConnection() {
+    const nextUi = normalizeUiSettings(state.ui);
+    try {
+      const result = await testProviderSettings(nextUi);
+      return {
+        ok: result.ok === true,
+        message: typeof result.message === "string" ? result.message : "模型连接成功",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "模型连接测试失败";
+      dispatch({ type: "load_failed", message });
+      return {
+        ok: false,
+        message,
+      };
     }
   }
 
@@ -218,6 +237,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onCloseSettingsPanel,
     onChangeSetting,
     onSaveApiKey,
+    onTestProviderConnection,
     onResetSettings,
     onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload,

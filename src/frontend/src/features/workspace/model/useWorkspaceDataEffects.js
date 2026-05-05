@@ -60,6 +60,9 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, dispatch }) {
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       clearGenerationSubscription(taskKey);
     }
+    if (snapshot.status === "failed" && snapshot.error) {
+      dispatch({ type: "load_failed", message: snapshot.error });
+    }
   });
   generationSubscriptions.set(taskKey, unsubscribe);
 }
@@ -82,6 +85,9 @@ function ensureSeriesGenerationSubscription({ seriesId, dispatch }) {
     });
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       clearGenerationSubscription(taskKey);
+    }
+    if (snapshot.status === "failed" && snapshot.error) {
+      dispatch({ type: "load_failed", message: snapshot.error });
     }
   });
   generationSubscriptions.set(taskKey, unsubscribe);

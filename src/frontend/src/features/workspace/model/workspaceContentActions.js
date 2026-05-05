@@ -73,6 +73,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         summary: summaryResult,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "生成失败";
+      dispatch({ type: "load_failed", message });
       dispatch({
         type: "generation_status_loaded",
         taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
@@ -84,7 +86,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           stage: "failed",
           progress: null,
           detail: null,
-          error: error instanceof Error ? error.message : "生成失败",
+          error: message,
         },
         subscriptionActive: false,
       });
@@ -106,6 +108,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const library = await reloadWorkspaceLibrary();
       dispatch({ type: "series_generation_succeeded", taskKey: buildSeriesGenerationTaskKey(seriesId), seriesId, library });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "系列处理失败";
+      dispatch({ type: "load_failed", message });
       dispatch({
         type: "generation_status_loaded",
         taskKey: buildSeriesGenerationTaskKey(seriesId),
@@ -117,7 +121,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           stage: "failed",
           progress: null,
           detail: null,
-          error: error instanceof Error ? error.message : "系列处理失败",
+          error: message,
         },
         subscriptionActive: false,
       });
