@@ -124,6 +124,27 @@ export function workspaceReducer(state, action) {
         downloadingModelId: null,
         modelDownloadProgress: null,
       };
+    case "rag_models_loading_started":
+      return {
+        ...state,
+        ragModelsLoading: true,
+      };
+    case "rag_model_download_started":
+      return {
+        ...state,
+        downloadingRagModelKey: action.modelKey,
+        ragModelsLoading: true,
+        error: "",
+      };
+    case "rag_models_loaded":
+      return {
+        ...state,
+        ragModels: action.models,
+        ragModelsLoading: false,
+        downloadingRagModelKey: action.models.some((model) => model.status === "running")
+          ? (state.downloadingRagModelKey ?? action.models.find((model) => model.status === "running")?.key ?? null)
+          : null,
+      };
     case "load_failed":
       return {
         ...state,
@@ -148,6 +169,7 @@ export function workspaceReducer(state, action) {
         contextUsageLoading: false,
         error: action.message,
         fasterWhisperModelsLoading: false,
+        ragModelsLoading: false,
       };
     case "error_cleared":
       return {
@@ -498,6 +520,13 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         settingsPanelOpen: !state.settingsPanelOpen,
+        settingsPanelInitialTab: "general",
+      };
+    case "settings_panel_opened":
+      return {
+        ...state,
+        settingsPanelOpen: true,
+        settingsPanelInitialTab: action.initialTab ?? "general",
       };
     case "chat_request_started": {
       const nextState = appendChatThreadMessage(state, action.chatScopeKey, {

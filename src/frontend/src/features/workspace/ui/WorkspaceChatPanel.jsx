@@ -50,8 +50,10 @@ export function WorkspaceChatPanel({
   chatPending = false,
   contextUsage = null,
   contextUsageLoading = false,
+  ragModels = [],
   onSelectChatSession,
   onOpenSeekReference,
+  onOpenSettings,
   onSubmitChat,
 }) {
   const [draft, setDraft] = useState("");
@@ -70,7 +72,10 @@ export function WorkspaceChatPanel({
     selectedVideo != null &&
     overviewMissing &&
     !overviewGenerated;
-  const interactionDisabled = chatPending || chatLocked;
+  const embeddingModel = ragModels.find((model) => model.key === "embedding") ?? null;
+  const seriesRagLocked = selectedContextType === "series" && embeddingModel != null && !embeddingModel.downloaded;
+  const interactionDisabled = chatPending || chatLocked || seriesRagLocked;
+  const lockedContentClass = chatLocked || seriesRagLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
   const suggestedPrompts = [
     { title: "总结核心结论", desc: "给我总结一下这个视频的核心结论", icon: Sparkles },
     { title: "记录重点知识", desc: "帮我记一下这个视频的重点", icon: FileText },
@@ -142,12 +147,29 @@ export function WorkspaceChatPanel({
         </div>
       ) : null}
 
+      {seriesRagLocked ? (
+        <div className="border-b border-amber-200/80 bg-amber-50/90 px-6 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+          <div className="font-semibold">请先下载 RAG 向量模型后再使用 series 问答</div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">
+              系列问答需要先构建向量检索能力，点击后会直接打开设置里的下载管理。
+            </p>
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="shrink-0 rounded-xl bg-amber-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-950 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+            >
+              去设置下载
+            </button>
+          </div>
+        </div>
+      ) : null}
+
 
 
       {/* Chat History Area */}
       <div
-        className={`flex-1 overflow-auto p-6 md:p-8 flex flex-col gap-6 transition ${chatLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : ""
-          }`}
+        className={`flex-1 overflow-auto p-6 md:p-8 flex flex-col gap-6 transition ${lockedContentClass}`}
       >
         {chatMessages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 mt-8">
@@ -165,7 +187,7 @@ export function WorkspaceChatPanel({
                     key={idx}
                     type="button"
                     onClick={() => setDraft(prompt.desc)}
-                    disabled={chatLocked}
+                    disabled={chatLocked || seriesRagLocked}
                     className="group flex flex-col items-start gap-2 rounded-2xl border border-stone-200/80 bg-white/60 p-4 text-left transition-all hover:border-accent/40 hover:bg-accent/5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/5 dark:bg-white/5 dark:hover:border-accent/30 dark:hover:bg-accent/10"
                   >
                     <div className="flex items-center gap-2 text-sm font-bold text-stone-700 dark:text-stone-200 group-hover:text-accent transition-colors">
@@ -228,12 +250,11 @@ export function WorkspaceChatPanel({
 
       {/* Floating Composer Area */}
       <div
-        className={`shrink-0 p-4 md:px-6 md:pb-6 md:pt-2 bg-transparent transition-all ${chatLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : ""
-          }`}
+        className={`shrink-0 p-4 md:px-6 md:pb-6 md:pt-2 bg-transparent transition-all ${lockedContentClass}`}
       >
         <div className="max-w-4xl mx-auto relative rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
-            placeholder={chatLocked ? "请先生成 AI 概况..." : "向 AI 助手提问或下达指令..."}
+            placeholder={chatLocked ? "请先生成 AI 概况..." : seriesRagLocked ? "请先下载 RAG 向量模型..." : "向 AI 助手提问或下达指令..."}
             className="w-full bg-transparent resize-none py-5 pl-6 pr-16 text-[15px] text-stone-800 dark:text-stone-100 outline-none leading-relaxed h-[100px] placeholder:text-stone-400 dark:placeholder:text-stone-500"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -261,6 +282,8 @@ export function WorkspaceChatPanel({
           <p className="text-xs font-medium text-stone-400 dark:text-stone-500">
             {chatLocked
               ? "概况生成完成后，这里会恢复正常提问"
+              : seriesRagLocked
+                ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
               : "AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作"}
           </p>
         </div>

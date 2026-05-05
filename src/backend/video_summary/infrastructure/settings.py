@@ -25,6 +25,8 @@ DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "local_huggingface"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-base-zh-v1.5"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "cpu"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE = 8
+DEFAULT_AGENT_RETRIEVAL_MAX_HITS = 5
+DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED = True
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
@@ -85,6 +87,8 @@ class AgentRetrievalSettings:
     embedding_model: str
     embedding_device: str
     embedding_batch_size: int
+    max_hits: int
+    rerank_enabled: bool
 
 
 @dataclass(frozen=True)
@@ -208,6 +212,14 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             agent_retrieval_payload.get("embedding_batch_size"),
             default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE,
         ),
+        max_hits=_normalize_positive_int(
+            agent_retrieval_payload.get("max_hits"),
+            default=DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
+            field_name="agent_retrieval.max_hits",
+        ),
+        rerank_enabled=bool(
+            agent_retrieval_payload.get("rerank_enabled", DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED)
+        ),
     )
     generation_payload = payload.get("generation", {})
     generation_settings = GenerationConcurrencySettings(
@@ -278,6 +290,34 @@ def replace_agent_retrieval_embedding_device(settings: AppSettings, embedding_de
         agent_retrieval=replace(
             settings.agent_retrieval,
             embedding_device=normalized_device,
+        ),
+    )
+
+
+def replace_agent_retrieval_runtime_settings(
+    settings: AppSettings,
+    *,
+    embedding_device: str,
+    max_hits: int,
+    rerank_enabled: bool,
+) -> AppSettings:
+    normalized_device = _normalize_device(
+        embedding_device,
+        field_name="agent_retrieval.embedding_device",
+        default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE,
+    )
+    normalized_max_hits = _normalize_positive_int(
+        max_hits,
+        default=DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
+        field_name="agent_retrieval.max_hits",
+    )
+    return replace(
+        settings,
+        agent_retrieval=replace(
+            settings.agent_retrieval,
+            embedding_device=normalized_device,
+            max_hits=normalized_max_hits,
+            rerank_enabled=bool(rerank_enabled),
         ),
     )
 
@@ -411,6 +451,8 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'embedding_model = "{settings.agent_retrieval.embedding_model}"',
         f'embedding_device = "{settings.agent_retrieval.embedding_device}"',
         f"embedding_batch_size = {settings.agent_retrieval.embedding_batch_size}",
+        f"max_hits = {settings.agent_retrieval.max_hits}",
+        f"rerank_enabled = {_toml_bool(settings.agent_retrieval.rerank_enabled)}",
         "",
         "[generation]",
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",

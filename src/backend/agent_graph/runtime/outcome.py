@@ -19,9 +19,6 @@ def extract_reason(result: dict[str, object]) -> str:
     reason = result.get("reason")
     if isinstance(reason, str) and reason.strip():
         return reason.strip()
-    query_plan = result.get("query_plan", {})
-    if isinstance(query_plan, dict) and query_plan:
-        return str(query_plan)
     return ""
 
 

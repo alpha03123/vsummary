@@ -25,6 +25,8 @@ class WorkspaceSettingsResponse(BaseModel):
     asr_model_quality: str
     transcription_mode: str
     rag_embedding_device: str
+    rag_max_hits: int
+    rag_rerank_enabled: bool
     window_tokens: int
     video_generation_concurrency: int
 
@@ -36,6 +38,8 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     asr_model_quality: str
     transcription_mode: str
     rag_embedding_device: str
+    rag_max_hits: int
+    rag_rerank_enabled: bool
     window_tokens: int
     video_generation_concurrency: int
 
@@ -63,3 +67,16 @@ class FasterWhisperModelResponse(BaseModel):
     downloaded: bool
     current: bool
     recommended: bool
+
+
+class RagModelResponse(BaseModel):
+    key: str
+    label: str
+    repo_id: str
+    local_path: str
+    purpose: str
+    downloaded: bool
+    status: str
+    progress: float | None = None
+    detail: str | None = None
+    error: str | None = None

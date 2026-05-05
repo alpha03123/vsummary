@@ -48,6 +48,7 @@ function PanelFooter({
   isGeneratingSeries,
   activeSeries,
   currentAsrModel,
+  ragModels,
   downloadProgress,
   onGenerateVideo,
   onGenerateSeries,
@@ -58,6 +59,8 @@ function PanelFooter({
 }) {
   const isPlayground = activeSeries?.id === "__playground__";
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
+  const embeddingModel = ragModels?.find((model) => model.key === "embedding") ?? null;
+  const embeddingNeedsDownload = embeddingModel != null && !embeddingModel.downloaded;
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -81,9 +84,21 @@ function PanelFooter({
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">Series scope</h3>
         </div>
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-          你可以在当前对话栏询问关于整个系列的问题 ： {activeSeries?.title}。
+          {embeddingNeedsDownload
+            ? "当前向量检索模型尚未下载，下载后才能使用 series 问答。"
+            : `你可以在当前对话栏询问关于整个系列的问题 ： ${activeSeries?.title}。`}
         </p>
         <div className="mt-3">
+          {embeddingNeedsDownload ? (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="mb-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-2.5 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100/80 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200 dark:hover:bg-amber-950/30"
+            >
+              <ArrowDown size={16} strokeWidth={2.5} />
+              先下载 RAG 向量模型
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
@@ -192,6 +207,7 @@ export function WorkspaceLibraryPanel({
   isGeneratingSelectedVideo,
   isGeneratingSeries,
   currentAsrModel,
+  ragModels,
   onEnterLibraryHome,
   onSelectSeriesContext,
   onSelectVideo,
@@ -378,6 +394,7 @@ export function WorkspaceLibraryPanel({
         isGeneratingSeries={isGeneratingSeries}
         activeSeries={activeSeries}
         currentAsrModel={currentAsrModel}
+        ragModels={ragModels}
         downloadProgress={downloadProgress}
         onGenerateVideo={onGenerateVideo}
         onGenerateSeries={onGenerateSeries}

@@ -61,7 +61,6 @@ class AgentGraphSessionRecorder:
             user_message=user_message,
             assistant_message=turn_result.assistant_message,
             tool_results=turn_result.tool_results,
-            selected_videos=[],
         )
 
     def clear_session(self, session_id: str) -> None:

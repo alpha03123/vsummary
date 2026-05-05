@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.rag_models import RAG_RERANKER_REQUIRED_MESSAGE, RagModelManager
 from backend.video_summary.infrastructure.settings import (
     EnvSettings,
     VALID_THEMES,
@@ -13,7 +14,7 @@ from backend.video_summary.infrastructure.settings import (
     load_env_settings,
     load_settings,
     normalize_openai_base_url,
-    replace_agent_retrieval_embedding_device,
+    replace_agent_retrieval_runtime_settings,
     replace_agent_context_window_tokens,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
@@ -47,6 +48,8 @@ class WorkspaceSettings:
     asr_model_quality: str
     transcription_mode: str
     rag_embedding_device: str
+    rag_max_hits: int
+    rag_rerank_enabled: bool
     window_tokens: int
     video_generation_concurrency: int
 
@@ -64,6 +67,8 @@ class SettingsServicePort(Protocol):
         asr_model_quality: str,
         transcription_mode: str,
         rag_embedding_device: str,
+        rag_max_hits: int,
+        rag_rerank_enabled: bool,
         window_tokens: int,
         video_generation_concurrency: int,
     ) -> WorkspaceSettings:
@@ -91,13 +96,18 @@ class SettingsService:
         config_path: Path,
         root_dir: Path,
         faster_whisper_model_manager: FasterWhisperModelManager,
+        rag_model_manager: RagModelManager | None = None,
     ) -> None:
         self._config_path = config_path
         self._root_dir = root_dir
         self._faster_whisper_model_manager = faster_whisper_model_manager
+        self._rag_model_manager = rag_model_manager
 
     def get_workspace_settings(self) -> WorkspaceSettings:
         settings = load_settings(self._config_path, self._root_dir)
+        rag_rerank_enabled = settings.agent_retrieval.rerank_enabled and (
+            self._rag_model_manager is None or self._rag_model_manager.is_downloaded("reranker")
+        )
         return WorkspaceSettings(
             theme=settings.workspace_ui.theme,
             show_takeaways=settings.workspace_ui.show_takeaways,
@@ -105,6 +115,8 @@ class SettingsService:
             asr_model_quality=settings.asr.faster_whisper.model_size,
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
             rag_embedding_device=settings.agent_retrieval.embedding_device,
+            rag_max_hits=settings.agent_retrieval.max_hits,
+            rag_rerank_enabled=rag_rerank_enabled,
             window_tokens=settings.agent_context.window_tokens,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
         )
@@ -118,6 +130,8 @@ class SettingsService:
         asr_model_quality: str,
         transcription_mode: str,
         rag_embedding_device: str,
+        rag_max_hits: int,
+        rag_rerank_enabled: bool,
         window_tokens: int,
         video_generation_concurrency: int,
     ) -> WorkspaceSettings:
@@ -129,8 +143,16 @@ class SettingsService:
             raise SettingsValidationError(f"unsupported transcription mode '{transcription_mode}'")
         if window_tokens <= 0:
             raise SettingsValidationError("window_tokens 必须是正整数。")
+        if rag_max_hits <= 0:
+            raise SettingsValidationError("rag_max_hits 必须是正整数。")
         if video_generation_concurrency <= 0:
             raise SettingsValidationError("video_generation_concurrency 必须是正整数。")
+        if (
+            rag_rerank_enabled
+            and self._rag_model_manager is not None
+            and not self._rag_model_manager.is_downloaded("reranker")
+        ):
+            raise SettingsValidationError(RAG_RERANKER_REQUIRED_MESSAGE)
 
         current_settings = load_settings(self._config_path, self._root_dir)
         next_settings = replace_workspace_ui_settings(
@@ -143,7 +165,12 @@ class SettingsService:
         next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
         next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
         next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
-        next_settings = replace_agent_retrieval_embedding_device(next_settings, rag_embedding_device)
+        next_settings = replace_agent_retrieval_runtime_settings(
+            next_settings,
+            embedding_device=rag_embedding_device,
+            max_hits=rag_max_hits,
+            rerank_enabled=rag_rerank_enabled,
+        )
         next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
         next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
         save_settings(self._config_path, next_settings)
@@ -155,6 +182,8 @@ class SettingsService:
             asr_model_quality=asr_model_quality,
             transcription_mode=transcription_mode,
             rag_embedding_device=next_settings.agent_retrieval.embedding_device,
+            rag_max_hits=next_settings.agent_retrieval.max_hits,
+            rag_rerank_enabled=next_settings.agent_retrieval.rerank_enabled,
             window_tokens=next_settings.agent_context.window_tokens,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
         )

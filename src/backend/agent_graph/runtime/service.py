@@ -57,7 +57,6 @@ class AgentGraphService:
             "history_message_count": len(graph_input["history_messages"]),
             "dialog_history": graph_input["dialog_history"],
             "evidence_history": graph_input["evidence_history"],
-            "history_selected_videos": graph_input["history_selected_videos"],
             "user_message": graph_input["user_message"],
         }
 

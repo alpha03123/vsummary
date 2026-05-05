@@ -5,6 +5,8 @@ export const defaultUiSettings = {
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
   ragEmbeddingDevice: "cpu",
+  ragMaxHits: 5,
+  ragRerankEnabled: true,
   llmProvider: "openai_compatible",
   openaiBaseUrl: "http://127.0.0.1:8317/v1",
   openaiModel: "gpt-5.4",
@@ -436,6 +438,9 @@ export function createInitialWorkspaceState() {
     savingNote: false,
     fasterWhisperModels: [],
     fasterWhisperModelsLoading: false,
+    ragModels: [],
+    ragModelsLoading: false,
+    downloadingRagModelKey: null,
     ui: resetUiSettings(),
     chatThreads: {},
     chatRecoveryByScope: {},
@@ -451,6 +456,7 @@ export function createInitialWorkspaceState() {
     contextUsageLoading: false,
     knowledgeMemorySnapshot: null,
     settingsPanelOpen: false,
+    settingsPanelInitialTab: "general",
     backendReady: false,
     error: "",
     loading: true,
@@ -606,6 +612,12 @@ export function normalizeUiSettings(value) {
       record.ragEmbeddingDevice === "gpu" || record.ragEmbeddingDevice === "auto"
         ? record.ragEmbeddingDevice
         : "cpu",
+    ragMaxHits:
+      typeof record.ragMaxHits === "number" && Number.isInteger(record.ragMaxHits) && record.ragMaxHits > 0
+        ? record.ragMaxHits
+        : 5,
+    ragRerankEnabled:
+      typeof record.ragRerankEnabled === "boolean" ? record.ragRerankEnabled : true,
     llmProvider: record.llmProvider === "openai_compatible" ? record.llmProvider : "openai_compatible",
     openaiBaseUrl:
       typeof record.openaiBaseUrl === "string" && record.openaiBaseUrl.trim()

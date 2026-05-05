@@ -10,41 +10,24 @@ import logging
 import dspy
 
 from backend.agent import AgentContextBudgetService, FileAgentSessionStore
-from backend.agent.memory.dialog_history import DialogHistoryCompactor
 from backend.agent.agent.execution import RegistryAgentToolExecutor
+from backend.agent.memory.dialog_history import DialogHistoryCompactor
 from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
-from backend.agent_graph.actions.action_dispatcher import ActionDispatcher
+from backend.agent.schemas.tool_calls import ToolName
+from backend.agent.tools.notes import execute_open_notes, execute_save_note
+from backend.agent.tools.video import execute_video_seek
+from backend.agent_graph.actions.video_action_planner import VideoActionPlanner
 from backend.agent_graph.evidence.index_builder import AgentWorkspaceIndexBuilder
 from backend.agent_graph.runtime.graph import build_agent_graph
-from backend.agent_graph.evidence.pinpoint import BGEReranker, VideoGraphPinpointService
+from backend.agent_graph.evidence.pinpoint import BGEReranker
 from backend.agent_graph.query.series_answer_synthesizer import SeriesAnswerSynthesizer
 from backend.agent_graph.query.series_query_processor import SeriesQueryProcessor
-from backend.agent_graph.evidence.video_workflow import VideoWorkflowExtractor
 from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
 from backend.agent_graph.dspy.programs import (
-    ActionAfterContentReplyProgram,
     AnswerSynthesisProgram,
-    NoteSynthesisProgram,
 )
-from backend.agent_graph.dspy.program_loader import (
-    load_or_create_classifier_program,
-    load_or_create_split_compare_program,
-)
-from backend.agent_graph.evidence.retrieval import MetaStateReader, SeriesRetrievalService
+from backend.agent_graph.evidence.retrieval import SeriesRetrievalService
 from backend.agent_graph.runtime.service import AgentGraphService
-from backend.agent.schemas.tool_calls import ToolName
-from backend.agent.tools.library_info import (
-    create_get_video_summary_handler,
-    create_get_video_transcript_handler,
-    create_get_video_tools_handler,
-    create_list_series_videos_handler,
-)
-from backend.agent.tools.context_access import render_model_visible_actions_for_scope
-from backend.agent.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
-from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
-from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
-from backend.agent.tools.series import execute_open_series_home, execute_open_series_overview
-from backend.agent.tools.video import execute_open_video, execute_video_seek
 from backend.shared.settings import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
@@ -55,6 +38,7 @@ from backend.video_summary.infrastructure.library_generation_adapters import (
 )
 from backend.video_summary.infrastructure.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
+from backend.video_summary.infrastructure.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
 from backend.video_summary.infrastructure.settings import load_settings
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
@@ -113,6 +97,7 @@ class ApiContainer:
     generation_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     knowledge_memory_progress_tracker: InMemoryProgressTracker
+    rag_model_manager: RagModelManager
     settings_service: SettingsServicePort
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
@@ -134,6 +119,11 @@ def build_api_container(
     progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
+    rag_model_progress_tracker = InMemoryProgressTracker()
+    rag_model_manager = RagModelManager(
+        root_dir=root_dir,
+        progress_tracker=rag_model_progress_tracker,
+    )
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
     )
@@ -146,7 +136,11 @@ def build_api_container(
         workflow=ConfiguredMindmapWorkflow(root_dir),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(root_dir)
-    agent_runtime = LazyAgentRuntimeProvider(root_dir=root_dir, workspace=workspace)
+    agent_runtime = LazyAgentRuntimeProvider(
+        root_dir=root_dir,
+        workspace=workspace,
+        rag_model_manager=rag_model_manager,
+    )
     index_refresher = _WorkspaceIndexRefresher(
         refresh_all=agent_runtime.refresh_workspace_indexes,
         upsert_video=agent_runtime.upsert_workspace_video,
@@ -197,10 +191,12 @@ def build_api_container(
         generation_progress_tracker=progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
         knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
+        rag_model_manager=rag_model_manager,
         settings_service=SettingsService(
             config_path=config_path,
             root_dir=root_dir,
             faster_whisper_model_manager=model_manager,
+            rag_model_manager=rag_model_manager,
         ),
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
@@ -389,9 +385,16 @@ class _WorkspaceIndexRefresher:
         raise RuntimeError(f"unsupported workspace index operation '{kind}'")
 
 class LazyAgentRuntimeProvider:
-    def __init__(self, *, root_dir: Path, workspace: FileSystemVideoWorkspace) -> None:
+    def __init__(
+        self,
+        *,
+        root_dir: Path,
+        workspace: FileSystemVideoWorkspace,
+        rag_model_manager: RagModelManager | None = None,
+    ) -> None:
         self._root_dir = root_dir
         self._workspace = workspace
+        self._rag_model_manager = rag_model_manager
         self._context_loader = WorkspaceAgentContextLoader(workspace)
         self.session_store = FileAgentSessionStore(root_dir / "data" / "agent_sessions")
         self._lock = Lock()
@@ -422,17 +425,6 @@ class LazyAgentRuntimeProvider:
                     compact_threshold_ratio=app_settings.agent_context.compact_threshold_ratio,
                     blocking_threshold_ratio=app_settings.agent_context.blocking_threshold_ratio,
                 )
-                list_series_videos = create_list_series_videos_handler(self._workspace)
-                get_video_summary = create_get_video_summary_handler(self._workspace)
-                get_video_tools = create_get_video_tools_handler(self._workspace)
-                get_video_transcript = create_get_video_transcript_handler(self._workspace)
-                classifier_program = load_or_create_classifier_program(
-                    artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "classifier" / "program.json",
-                    available_actions_resolver=render_model_visible_actions_for_scope,
-                )
-                compare_split_program = load_or_create_split_compare_program(
-                    artifact_path=self._root_dir / "data" / "agent_graph" / "dspy" / "split_compare" / "program.json",
-                )
                 planner_gateway = LiteLLMChatGateway(
                     provider=env_settings.provider,
                     model=env_settings.model,
@@ -446,54 +438,27 @@ class LazyAgentRuntimeProvider:
                 )
                 series_query_processor = SeriesQueryProcessor(gateway=planner_gateway)
                 series_answer_synthesizer = SeriesAnswerSynthesizer(gateway=planner_gateway)
+                video_action_planner = VideoActionPlanner(gateway=planner_gateway)
+                tool_executor = RegistryAgentToolExecutor(
+                    registry={
+                        ToolName.OPEN_NOTES: execute_open_notes,
+                        ToolName.SAVE_NOTE: execute_save_note,
+                        ToolName.VIDEO_SEEK: execute_video_seek,
+                    }
+                )
                 retrieval_service = self._cached_retrieval_service
                 if retrieval_service is None:
-                    retrieval_service = SeriesRetrievalService(
-                        workspace=self._workspace,
-                        db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
-                        root_dir=self._root_dir,
-                    )
+                    retrieval_service = self._build_lazy_retrieval_service()
                     self._cached_retrieval_service = retrieval_service
-                reranker_model_name = _resolve_local_reranker_model_name(self._root_dir)
-                pinpoint_service = VideoGraphPinpointService(
-                    workspace=self._workspace,
-                    semantic_scorer=BGEReranker(
-                        model_name=reranker_model_name,
-                        device=app_settings.agent_retrieval.embedding_device,
-                    ),
-                )
-                workflow_service = VideoWorkflowExtractor(
-                    workspace=self._workspace,
-                    semantic_scorer=BGEReranker(
-                        model_name=reranker_model_name,
-                        device=app_settings.agent_retrieval.embedding_device,
-                    ),
-                )
-                meta_state_reader = MetaStateReader(workspace=self._workspace)
                 answer_program = AnswerSynthesisProgram()
-                note_program = NoteSynthesisProgram()
-                action_reply_program = ActionAfterContentReplyProgram()
-                tool_executor = _build_tool_executor(
-                    list_series_videos=list_series_videos,
-                    get_video_summary=get_video_summary,
-                    get_video_tools=get_video_tools,
-                    get_video_transcript=get_video_transcript,
-                )
-                action_dispatcher = ActionDispatcher(tool_executor=tool_executor)
                 graph = build_agent_graph(
-                    classifier_program=classifier_program,
-                    compare_split_program=compare_split_program,
                     retrieval_service=retrieval_service,
-                    pinpoint_service=pinpoint_service,
-                    workflow_service=workflow_service,
-                    meta_state_reader=meta_state_reader,
-                    action_dispatcher=action_dispatcher,
                     answer_program=answer_program,
-                    note_program=note_program,
-                    action_reply_program=action_reply_program,
                     series_query_processor=series_query_processor,
                     series_answer_synthesizer=series_answer_synthesizer,
                     workspace=self._workspace,
+                    video_action_planner=video_action_planner,
+                    tool_executor=tool_executor,
                 )
                 self._cached_agent_graph_service = AgentGraphService(
                     context_loader=self._context_loader,
@@ -539,40 +504,102 @@ class LazyAgentRuntimeProvider:
         with self._lock:
             retrieval_service = self._cached_retrieval_service
             if retrieval_service is None:
-                retrieval_service = SeriesRetrievalService(
-                    workspace=self._workspace,
-                    db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
-                    root_dir=self._root_dir,
-                )
+                retrieval_service = self._build_lazy_retrieval_service()
                 self._cached_retrieval_service = retrieval_service
             return retrieval_service
 
-def _build_tool_executor(
-    *,
-    list_series_videos,
-    get_video_summary,
-    get_video_tools,
-    get_video_transcript,
-) -> RegistryAgentToolExecutor:
-    return RegistryAgentToolExecutor(
-        registry={
-            ToolName.LIST_SERIES_VIDEOS: list_series_videos,
-            ToolName.GET_VIDEO_SUMMARY: get_video_summary,
-            ToolName.GET_VIDEO_TOOLS: get_video_tools,
-            ToolName.GET_VIDEO_TRANSCRIPT: get_video_transcript,
-            ToolName.OPEN_SERIES_HOME: execute_open_series_home,
-            ToolName.OPEN_SERIES_OVERVIEW: execute_open_series_overview,
-            ToolName.OPEN_OVERVIEW: execute_open_overview,
-            ToolName.OPEN_MINDMAP: execute_open_mindmap,
-            ToolName.OPEN_KNOWLEDGE_CARDS: execute_open_knowledge_cards,
-            ToolName.OPEN_NOTES: execute_open_notes,
-            ToolName.OPEN_VIDEO: execute_open_video,
-            ToolName.VIDEO_SEEK: execute_video_seek,
-            ToolName.GENERATE_OVERVIEW: execute_generate_overview,
-            ToolName.GENERATE_MINDMAP: execute_generate_mindmap,
-            ToolName.SAVE_NOTE: execute_save_note,
-        }
-    )
+    def _build_lazy_retrieval_service(self):
+        if self._rag_model_manager is None:
+            return self._build_series_retrieval_service()
+        return _RagModelAwareRetrievalService(
+            rag_model_manager=self._rag_model_manager,
+            factory=self._build_series_retrieval_service,
+            settings_loader=lambda: load_settings(self._root_dir / "config" / "settings.toml", self._root_dir),
+        )
+
+    def _build_series_retrieval_service(self) -> SeriesRetrievalService:
+        return SeriesRetrievalService(
+            workspace=self._workspace,
+            db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
+            reranker=self._build_reranker(self._resolve_retrieval_device()),
+            root_dir=self._root_dir,
+        )
+
+    def _resolve_retrieval_device(self) -> str:
+        settings_path = self._root_dir / "config" / "settings.toml"
+        if not settings_path.exists():
+            return "cpu"
+        return load_settings(settings_path, self._root_dir).agent_retrieval.embedding_device
+
+    def _build_reranker(self, device: str) -> BGEReranker | None:
+        if self._rag_model_manager is not None:
+            if not self._rag_model_manager.is_downloaded("reranker"):
+                return None
+            return BGEReranker(
+                model_name=str(self._rag_model_manager.local_model_dir("reranker")),
+                device=device,
+            )
+        return BGEReranker(
+            model_name=_resolve_local_reranker_model_name(self._root_dir),
+            device=device,
+        )
+
+
+class _RagModelAwareRetrievalService:
+    def __init__(
+        self,
+        *,
+        rag_model_manager: RagModelManager,
+        factory: Callable[[], SeriesRetrievalService],
+        settings_loader: Callable[[], object],
+    ) -> None:
+        self._rag_model_manager = rag_model_manager
+        self._factory = factory
+        self._settings_loader = settings_loader
+        self._service: SeriesRetrievalService | None = None
+        self._signature: tuple[bool, bool, str] | None = None
+
+    def search(self, **kwargs):
+        return self._require_service().search(**kwargs)
+
+    def default_max_hits(self) -> int:
+        return self._settings_loader().agent_retrieval.max_hits
+
+    def refresh(self) -> None:
+        self._require_service().refresh()
+
+    def refresh_all(self) -> None:
+        self._require_service().refresh_all()
+
+    def upsert_video(self, series_id: str, video_id: str) -> None:
+        self._require_service().upsert_video(series_id, video_id)
+
+    def delete_video(self, series_id: str, video_id: str) -> None:
+        self._require_service().delete_video(series_id, video_id)
+
+    def delete_series(self, series_id: str) -> None:
+        self._require_service().delete_series(series_id)
+
+    def invalidate(self) -> None:
+        if self._service is not None:
+            self._service.invalidate()
+
+    def _require_service(self) -> SeriesRetrievalService:
+        if not self._rag_model_manager.is_downloaded("embedding"):
+            raise RuntimeError(RAG_EMBEDDING_REQUIRED_MESSAGE)
+        signature = self._build_signature()
+        if self._service is None or self._signature != signature:
+            self._service = self._factory()
+            self._signature = signature
+        return self._service
+
+    def _build_signature(self) -> tuple[bool, bool, str]:
+        settings = self._settings_loader()
+        return (
+            self._rag_model_manager.is_downloaded("embedding"),
+            self._rag_model_manager.is_downloaded("reranker"),
+            settings.agent_retrieval.embedding_device,
+        )
 
 
 def _resolve_local_reranker_model_name(root_dir: Path) -> str:

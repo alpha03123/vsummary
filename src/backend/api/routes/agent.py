@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.agent.memory.context import AgentContext
+from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult, ScopeType
 from backend.api.container import ApiContainerDep
 from backend.api.responses import (
     AgentChatRequest,
@@ -18,6 +19,10 @@ from backend.api.responses import (
     AgentSessionRecoveryResponse,
 )
 from backend.api.sse import encode_sse_event
+from backend.video_summary.infrastructure.rag_models import (
+    RAG_EMBEDDING_REQUIRED_MESSAGE,
+    RAG_MODEL_DOWNLOAD_MESSAGE,
+)
 from backend.video_summary.infrastructure.settings import load_settings
 
 LOGGER = logging.getLogger(__name__)
@@ -27,6 +32,9 @@ router = APIRouter()
 @router.post("/api/agent/chat", response_model=AgentChatResponse)
 def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentChatResponse:
     context_override = _build_agent_context_override(request.session_id, request.context)
+    rag_block_message = _resolve_rag_block_message(context_override, container)
+    if rag_block_message:
+        return _build_rag_block_response(context_override, rag_block_message)
 
     try:
         result = container.get_agent_graph_service().run_turn(
@@ -44,6 +52,10 @@ def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> 
     context_override = _build_agent_context_override(request.session_id, request.context)
 
     def event_iterator():
+        rag_block_message = _resolve_rag_block_message(context_override, container)
+        if rag_block_message:
+            yield from _stream_rag_block_message(rag_block_message)
+            return
         debug_trace: dict[str, object] | None = {} if _is_agent_debug_enabled(container) else None
         try:
             service = container.get_agent_graph_service()
@@ -133,7 +145,9 @@ def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiCo
 
 @router.post("/api/agent/session/clear")
 def clear_agent_session(request: AgentSessionClearRequest, container: ApiContainerDep) -> dict[str, object]:
-    container.get_agent_graph_service().clear_session(session_id=request.session_id)
+    session_store = getattr(container, "agent_session_store", None)
+    if session_store is not None:
+        session_store.clear_snapshot(request.session_id)
     return {"status": "cleared", "session_id": request.session_id}
 
 
@@ -149,6 +163,42 @@ def _build_agent_context_override(session_id: str, request_context) -> AgentCont
         video_title=request_context.video_title,
         selected_tool=request_context.selected_tool,
     )
+
+
+def _resolve_rag_block_message(context: AgentContext | None, container) -> str | None:
+    if context is None or context.scope_type != ScopeType.SERIES.value:
+        return None
+    rag_model_manager = getattr(container, "rag_model_manager", None)
+    if rag_model_manager is None:
+        return None
+    if rag_model_manager.has_active_download():
+        return RAG_MODEL_DOWNLOAD_MESSAGE
+    if not rag_model_manager.is_downloaded("embedding"):
+        return RAG_EMBEDDING_REQUIRED_MESSAGE
+    return None
+
+
+def _build_rag_block_response(context: AgentContext | None, message: str) -> AgentChatResponse:
+    scope_type = ScopeType.SERIES if context is None or context.scope_type == ScopeType.SERIES.value else ScopeType.VIDEO
+    return AgentChatResponse.from_result(
+        AgentTurnResult(
+            assistant_message=message,
+            plan=AgentActionPlan(
+                scope_type=scope_type,
+                reason="rag_model_unavailable",
+                tool_calls=[],
+                use_answerer=False,
+            ),
+            tool_results=[],
+            citations=[],
+        )
+    )
+
+
+def _stream_rag_block_message(message: str):
+    yield encode_sse_event("answer_started", {"message": "正在检查 RAG 模型"})
+    yield encode_sse_event("answer_delta", {"delta": message})
+    yield encode_sse_event("answer_completed", {"message": message, "citations": []})
 
 
 def _is_agent_debug_enabled(container) -> bool:

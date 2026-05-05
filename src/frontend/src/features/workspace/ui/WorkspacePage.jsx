@@ -193,7 +193,8 @@ export function WorkspacePage({ page }) {
               }}
               downloadProgress={generation.videoDownloadProgress}
               currentAsrModel={currentAsrModel}
-              onOpenSettings={actions.toggleSettingsPanel}
+              ragModels={generation.ragModels}
+              onOpenSettings={() => actions.openSettingsPanel("network")}
             />
           ) : (
             <WorkspaceSeriesGrid
@@ -268,8 +269,10 @@ export function WorkspacePage({ page }) {
                 chatPending={chat.pending}
                 contextUsage={chat.contextUsage}
                 contextUsageLoading={chat.contextUsageLoading}
+                ragModels={generation.ragModels}
                 onSelectChatSession={chat.selectChatSession}
                 onOpenSeekReference={chat.openSeekReference}
+                onOpenSettings={() => actions.openSettingsPanel("network")}
                 onSubmitChat={chat.submit}
               />
             </section>
@@ -383,14 +386,19 @@ export function WorkspacePage({ page }) {
               <Suspense fallback={<WorkspaceModalLoadingState />}>
                 <WorkspaceSettingsPanel
                   ui={ui}
+                  initialTab={state.settingsPanelInitialTab}
                   fasterWhisperModels={generation.fasterWhisperModels}
                   fasterWhisperModelsLoading={generation.fasterWhisperModelsLoading}
+                  ragModels={generation.ragModels}
+                  ragModelsLoading={generation.ragModelsLoading}
+                  downloadingRagModelKey={generation.downloadingRagModelKey}
                   downloadingModelId={generation.downloadingModelId}
                   modelDownloadProgress={generation.modelDownloadProgress}
                   onChangeSetting={actions.changeSetting}
                   onSaveApiKey={actions.saveApiKey}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onCancelFasterWhisperModelDownload={actions.cancelFasterWhisperModelDownload}
+                  onDownloadRagModel={actions.downloadRagModel}
                   onResetSettings={actions.resetSettings}
                   onClose={actions.closeSettingsPanel}
                 />

@@ -7,6 +7,7 @@ from backend.api.container import ApiContainerDep
 from backend.api.contracts import (
     FasterWhisperModelResponse,
     ProviderSettingsResponse,
+    RagModelResponse,
     UpdateProviderSettingsRequest,
     UpdateWorkspaceSettingsRequest,
     WorkspaceSettingsResponse,
@@ -30,6 +31,8 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
         rag_embedding_device=settings.rag_embedding_device,
+        rag_max_hits=settings.rag_max_hits,
+        rag_rerank_enabled=settings.rag_rerank_enabled,
         window_tokens=settings.window_tokens,
         video_generation_concurrency=settings.video_generation_concurrency,
     )
@@ -48,6 +51,8 @@ async def update_workspace_settings(
             asr_model_quality=request.asr_model_quality,
             transcription_mode=request.transcription_mode,
             rag_embedding_device=request.rag_embedding_device,
+            rag_max_hits=request.rag_max_hits,
+            rag_rerank_enabled=request.rag_rerank_enabled,
             window_tokens=request.window_tokens,
             video_generation_concurrency=request.video_generation_concurrency,
         )
@@ -68,6 +73,8 @@ async def update_workspace_settings(
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
         rag_embedding_device=settings.rag_embedding_device,
+        rag_max_hits=settings.rag_max_hits,
+        rag_rerank_enabled=settings.rag_rerank_enabled,
         window_tokens=settings.window_tokens,
         video_generation_concurrency=settings.video_generation_concurrency,
     )
@@ -188,5 +195,34 @@ def cancel_faster_whisper_model_download(model_id: str, container: ApiContainerD
     return {"status": "cancelled"}
 
 
+@router.get("/api/rag/models", response_model=list[RagModelResponse])
+def list_rag_models(container: ApiContainerDep) -> list[RagModelResponse]:
+    return [_to_rag_model_response(model) for model in container.rag_model_manager.list_models()]
+
+
+@router.post("/api/rag/models/{model_key}/download", response_model=RagModelResponse)
+def download_rag_model(model_key: str, container: ApiContainerDep) -> RagModelResponse:
+    try:
+        status = container.rag_model_manager.start_download(model_key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return _to_rag_model_response(status)
+
+
 def _build_model_download_task_id(model_id: str) -> str:
     return f"asr-download/{model_id}"
+
+
+def _to_rag_model_response(model) -> RagModelResponse:
+    return RagModelResponse(
+        key=model.key,
+        label=model.label,
+        repo_id=model.repo_id,
+        local_path=model.local_path,
+        purpose=model.purpose,
+        downloaded=model.downloaded,
+        status=model.status,
+        progress=model.progress,
+        detail=model.detail,
+        error=model.error,
+    )

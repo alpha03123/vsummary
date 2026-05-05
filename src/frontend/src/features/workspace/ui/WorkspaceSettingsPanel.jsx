@@ -11,29 +11,39 @@ import {
 
 export function WorkspaceSettingsPanel({
   ui,
+  initialTab = "general",
   fasterWhisperModels,
   fasterWhisperModelsLoading,
+  ragModels = [],
+  ragModelsLoading = false,
+  downloadingRagModelKey = null,
   downloadingModelId,
   modelDownloadProgress,
   onChangeSetting,
   onSaveApiKey,
   onDownloadFasterWhisperModel,
   onCancelFasterWhisperModelDownload,
+  onDownloadRagModel,
   onResetSettings,
   onClose,
 }) {
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmDownloadModelId, setConfirmDownloadModelId] = useState(null);
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
   const hasApiKey = ui.hasOpenaiApiKey;
   const apiKeyStatus = ui.openaiApiKey.trim() || ui.openaiApiKeyMasked;
+  const isAnyRagModelDownloading = ragModels.some((model) => model.status === "running");
+  const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
+  const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
+  const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
 
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
     { id: "ai", label: "AI 总结能力", icon: Cpu },
+    { id: "rag", label: "RAG 处理", icon: FileText },
     { id: "keys", label: "模型供应商", icon: Key },
-    { id: "network", label: "网络代理 ", icon: Globe },
+    { id: "network", label: "下载管理 ", icon: Globe },
   ];
   return (
     <motion.section
@@ -278,21 +288,6 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
-                  title="检索模型"
-                  description="控制检索模型运行在 CPU 还是 GPU。"
-                >
-                  <WorkspaceSegmentedControl
-                    value={ui.ragEmbeddingDevice}
-                    options={[
-                      { id: "cpu", label: "CPU" },
-                      { id: "gpu", label: "GPU" },
-                      { id: "auto", label: "自动" },
-                    ]}
-                    onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
                   title="上下文大小"
                   description="控制模型单次可用的上下文预算。"
                 >
@@ -313,6 +308,79 @@ export function WorkspaceSettingsPanel({
                     value={String(ui.videoGenerationConcurrency)}
                     onChange={(nextValue) => onChangeSetting("videoGenerationConcurrency", Number.parseInt(nextValue, 10) || 1)}
                     placeholder="1"
+                    className="w-[180px]"
+                    type="number"
+                  />
+                </WorkspaceSettingRow>
+              </>
+            )}
+
+            {activeTab === "rag" && (
+              <>
+                <div className="mb-2">
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">RAG 处理</h3>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">控制 Series 对话的证据召回与重排策略，会写入 `settings.toml`。</p>
+                </div>
+
+                <WorkspaceSettingRow
+                  title="检索模型"
+                  description="控制检索模型运行在 CPU 还是 GPU。"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.ragEmbeddingDevice}
+                    options={[
+                      { id: "cpu", label: "CPU" },
+                      { id: "gpu", label: "GPU" },
+                      { id: "auto", label: "自动" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="RAG 重排"
+                  description={
+                    rerankerNeedsDownload
+                      ? "重排序模型尚未下载，下载前不能开启 reranking。"
+                      : "开启后先召回更多 embedding 候选，再用 reranker 精排最终证据。关闭后直接使用 embedding 结果。"
+                  }
+                >
+                  <div className="flex flex-col items-end gap-2">
+                    <WorkspaceToggleSwitch
+                      checked={effectiveRerankEnabled}
+                      disabled={rerankerNeedsDownload}
+                      onChange={() => {
+                        if (!rerankerNeedsDownload) {
+                          onChangeSetting("ragRerankEnabled", !effectiveRerankEnabled);
+                        }
+                      }}
+                    />
+                    {rerankerNeedsDownload ? (
+                      <button
+                        type="button"
+                        onClick={() => onDownloadRagModel("reranker")}
+                        disabled={isAnyRagModelDownloading}
+                        className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
+                      >
+                        <Download size={14} />
+                        下载重排序模型
+                      </button>
+                    ) : null}
+                  </div>
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="RAG 证据数量"
+                  description={
+                    effectiveRerankEnabled
+                      ? `最终进入回答的证据数。当前会先用 embedding 召回 ${ui.ragMaxHits * 4} 条候选，再重排保留 ${ui.ragMaxHits} 条。`
+                      : "最终进入回答的证据数。关闭重排时，embedding 直接召回这个数量。"
+                  }
+                >
+                  <WorkspaceTextInput
+                    value={String(ui.ragMaxHits)}
+                    onChange={(nextValue) => onChangeSetting("ragMaxHits", Number.parseInt(nextValue, 10) || 1)}
+                    placeholder="5"
                     className="w-[180px]"
                     type="number"
                   />
@@ -411,7 +479,7 @@ export function WorkspaceSettingsPanel({
             {activeTab === "network" && (
               <>
                 <div className="mb-2">
-                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">网络与镜像</h3>
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">下载管理</h3>
                   <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">
                     这里的配置会写入项目根目录 `.env` 并实时生效。
                   </p>
@@ -427,6 +495,72 @@ export function WorkspaceSettingsPanel({
                     placeholder="https://hf-mirror.com"
                     className="w-[340px]"
                   />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="RAG 检索模型"
+                  description="Series 对话依赖 embedding 模型；reranking 只有在重排序模型已下载后才能开启。"
+                >
+                  <div className="w-full min-w-[320px] flex flex-col gap-3">
+                    {ragModelsLoading && !ragModels.length ? (
+                      <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+                        <LoaderCircle size={16} className="animate-spin" />
+                        正在读取 RAG 模型状态...
+                      </div>
+                    ) : (
+                      ragModels.map((model) => {
+                        const isDownloading = model.status === "running" || downloadingRagModelKey === model.key;
+                        const statusText = model.downloaded
+                          ? "已下载到本地"
+                          : isDownloading
+                            ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
+                            : "尚未下载";
+                        return (
+                          <div
+                            key={model.key}
+                            className={`rounded-2xl border p-4 transition-colors ${model.downloaded
+                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                              : "border-stone-200 dark:border-stone-800"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <strong className="text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
+                                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{statusText}</p>
+                                {isDownloading ? (
+                                  <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-accent transition-[width] duration-200 ease-out"
+                                      style={{ width: `${typeof model.progress === "number" ? model.progress : 8}%` }}
+                                    />
+                                  </div>
+                                ) : null}
+                              </div>
+                              {model.downloaded ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+                                >
+                                  使用中
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => onDownloadRagModel(model.key)}
+                                  disabled={isAnyRagModelDownloading}
+                                  className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
+                                >
+                                  {isDownloading ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
+                                  {isDownloading ? "下载中" : "下载"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </WorkspaceSettingRow>
               </>
             )}

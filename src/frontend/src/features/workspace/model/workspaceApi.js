@@ -31,6 +31,8 @@ export async function loadWorkspaceSettings() {
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
     ragEmbeddingDevice: payload.rag_embedding_device,
+    ragMaxHits: payload.rag_max_hits,
+    ragRerankEnabled: payload.rag_rerank_enabled,
     windowTokens: payload.window_tokens,
     videoGenerationConcurrency: payload.video_generation_concurrency,
   };
@@ -62,6 +64,8 @@ export async function updateWorkspaceSettings(settings) {
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
       rag_embedding_device: settings.ragEmbeddingDevice,
+      rag_max_hits: settings.ragMaxHits,
+      rag_rerank_enabled: settings.ragRerankEnabled,
       window_tokens: settings.windowTokens,
       video_generation_concurrency: settings.videoGenerationConcurrency,
     }),
@@ -73,6 +77,8 @@ export async function updateWorkspaceSettings(settings) {
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
     ragEmbeddingDevice: payload.rag_embedding_device,
+    ragMaxHits: payload.rag_max_hits,
+    ragRerankEnabled: payload.rag_rerank_enabled,
     windowTokens: payload.window_tokens,
     videoGenerationConcurrency: payload.video_generation_concurrency,
   };
@@ -105,6 +111,16 @@ export async function updateProviderSettings(settings) {
 
 export async function loadFasterWhisperModels() {
   return fetchJson("/api/asr/faster-whisper/models");
+}
+
+export async function loadRagModels() {
+  return fetchJson("/api/rag/models");
+}
+
+export async function downloadRagModel(modelKey) {
+  return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download`, {
+    method: "POST",
+  });
 }
 
 export async function downloadFasterWhisperModel(modelId) {

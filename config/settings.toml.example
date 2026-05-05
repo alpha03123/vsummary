@@ -60,6 +60,10 @@ embedding_model = "BAAI/bge-base-zh-v1.5"
 embedding_device = "cpu"
 # 批量向量化的批次大小
 embedding_batch_size = 8
+# 最终进入回答节点的证据数量
+max_hits = 5
+# 是否启用 reranker 重排；开启时 embedding 候选数为 max_hits 的 4 倍
+rerank_enabled = true
 
 # 生成任务并发设置
 [generation]

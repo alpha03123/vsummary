@@ -46,7 +46,6 @@ class AgentGraphInputBuilder:
         dialog_history = str(getattr(context, "dialog_history", "") or "").strip()
         history_summary = str(getattr(context, "history_summary", "") or "").strip()
         evidence_history = dict(getattr(context, "evidence_history", {}) or {})
-        history_selected_videos: list[dict[str, object]] = []
         if self._session_store is not None:
             snapshot = self._session_store.get_snapshot(session_id)
             if snapshot is not None:
@@ -57,13 +56,6 @@ class AgentGraphInputBuilder:
                 dialog_history = str(getattr(snapshot.context, "dialog_history", "") or "").strip()
                 history_summary = str(getattr(snapshot.context, "history_summary", "") or "").strip()
                 evidence_history = dict(getattr(snapshot.context, "evidence_history", {}) or {})
-                history_selected_videos = [
-                    {
-                        "video_id": item.video_id,
-                        "reason_for_selection": item.reason_for_selection,
-                    }
-                    for item in snapshot.selected_videos
-                ]
         return GraphInputBundle(
             context=context,
             payload={
@@ -76,7 +68,6 @@ class AgentGraphInputBuilder:
                 "evidence_history": evidence_history,
                 "history_messages": history_messages,
                 "history_summary": history_summary,
-                "history_selected_videos": history_selected_videos,
             },
         )
 

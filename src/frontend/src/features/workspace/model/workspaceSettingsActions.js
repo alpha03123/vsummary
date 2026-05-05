@@ -1,7 +1,9 @@
 import {
   cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
+  downloadRagModel,
   loadFasterWhisperModels,
+  loadRagModels,
   subscribeFasterWhisperModelDownloadProgress,
   updateProviderSettings,
   updateWorkspaceSettings,
@@ -11,6 +13,10 @@ import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 export function createWorkspaceSettingsActions({ state, dispatch }) {
   function onToggleSettingsPanel() {
     dispatch({ type: "settings_panel_toggled" });
+  }
+
+  function onOpenSettingsPanel(initialTab = "general") {
+    dispatch({ type: "settings_panel_opened", initialTab });
   }
 
   function onCloseSettingsPanel() {
@@ -172,13 +178,29 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
+  async function onDownloadRagModel(modelKey) {
+    dispatch({ type: "rag_model_download_started", modelKey });
+    try {
+      await downloadRagModel(modelKey);
+      const models = await loadRagModels();
+      dispatch({ type: "rag_models_loaded", models });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "RAG 模型下载失败",
+      });
+    }
+  }
+
   return {
     onToggleSettingsPanel,
+    onOpenSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,
     onSaveApiKey,
     onResetSettings,
     onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload,
+    onDownloadRagModel,
   };
 }

@@ -6,6 +6,7 @@ import {
   loadAgentMemoryStatus,
   loadAgentSessionRecovery,
   loadFasterWhisperModels,
+  loadRagModels,
   loadSeriesGenerationStatus,
   loadProviderSettings,
   loadVideoKnowledgeCards,
@@ -145,6 +146,41 @@ export function useWorkspaceDataEffects(state, dispatch) {
 
     return () => {
       cancelled = true;
+    };
+  }, [dispatch, state.backendReady]);
+
+  useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId = null;
+
+    const pollRagModels = async () => {
+      try {
+        const models = await loadRagModels();
+        if (cancelled) {
+          return;
+        }
+        dispatch({ type: "rag_models_loaded", models });
+        const hasRunningDownload = models.some((model) => model.status === "running");
+        timeoutId = window.setTimeout(pollRagModels, hasRunningDownload ? 1000 : 5000);
+      } catch {
+        if (!cancelled) {
+          timeoutId = window.setTimeout(pollRagModels, 5000);
+        }
+      }
+    };
+
+    dispatch({ type: "rag_models_loading_started" });
+    pollRagModels();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [dispatch, state.backendReady]);
 

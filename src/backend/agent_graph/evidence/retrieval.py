@@ -13,6 +13,8 @@ from llama_index.vector_stores.lancedb import LanceDBVectorStore
 
 from backend.video_summary.infrastructure.settings import (
     AgentRetrievalSettings,
+    DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
+    DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED,
     apply_runtime_env_overrides,
     load_settings,
 )
@@ -20,6 +22,7 @@ from backend.video_summary.library.ports import VideoLibraryReader
 
 INDEX_SCHEMA_VERSION = 4
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
+RERANK_EMBEDDING_MULTIPLIER = 4
 COMMON_METADATA_DEFAULTS: dict[str, object] = {
     "doc_id": "",
     "series_id": "",
@@ -50,11 +53,16 @@ class SeriesRetrievalService:
         workspace: VideoLibraryReader,
         db_uri: str,
         embed_model=None,
+        reranker=None,
+        rerank_enabled: bool | None = None,
         root_dir: Path | None = None,
     ) -> None:
         self._workspace = workspace
         self._db_uri = db_uri
+        self._root_dir = root_dir
         self._embed_model = embed_model or _build_default_embed_model(root_dir)
+        self._reranker = reranker
+        self._rerank_enabled_override = rerank_enabled
         self._index: VectorStoreIndex | None = None
         self._signature: tuple[tuple[str, ...], tuple[str, ...]] | None = None
 
@@ -105,11 +113,18 @@ class SeriesRetrievalService:
         source_tags: list[str] | None = None,
         expand_context: bool,
         context_window_seconds: int,
-        max_hits: int,
+        max_hits: int | None,
     ) -> dict[str, object]:
         index = self._require_index()
+        final_max_hits = self._resolve_final_max_hits(max_hits)
+        rerank_enabled = self._resolve_rerank_enabled()
+        embedding_top_k = (
+            final_max_hits * RERANK_EMBEDDING_MULTIPLIER
+            if rerank_enabled and self._reranker is not None
+            else final_max_hits
+        )
         retriever = index.as_retriever(
-            similarity_top_k=max(8, max_hits * 4),
+            similarity_top_k=embedding_top_k,
             filters=_build_filters(
                 scope_type=scope_type,
                 series_id=series_id,
@@ -146,8 +161,23 @@ class SeriesRetrievalService:
                 )
             hits.append(hit)
 
-        hits.sort(key=lambda item: (-float(item["score"]), str(item["video_id"]), str(item["source_type"])))
-        hits = hits[:max_hits]
+        if rerank_enabled and self._reranker is not None and hits:
+            rerank_scores = self._reranker.score(
+                query=query,
+                texts=[str(hit.get("text", "")) for hit in hits],
+            )
+            scored_hits = [
+                (
+                    float(rerank_scores[index]) if index < len(rerank_scores) else 0.0,
+                    hit,
+                )
+                for index, hit in enumerate(hits)
+            ]
+            scored_hits.sort(key=lambda item: (-item[0], str(item[1]["video_id"]), str(item[1]["source_type"])))
+            hits = [hit for _, hit in scored_hits]
+        else:
+            hits.sort(key=lambda item: (-float(item["score"]), str(item["video_id"]), str(item["source_type"])))
+        hits = hits[:final_max_hits]
         for index, hit in enumerate(hits, start=1):
             hit["evidence_id"] = f"e{index}"
 
@@ -160,6 +190,9 @@ class SeriesRetrievalService:
             "source_tags": list(source_tags or []),
             "hits": hits,
         }
+
+    def default_max_hits(self) -> int:
+        return self._load_runtime_retrieval_settings().max_hits
 
     def _get_or_build_index(self) -> VectorStoreIndex:
         signature = _build_workspace_signature(self._workspace)
@@ -262,6 +295,30 @@ class SeriesRetrievalService:
             embed_model=self._embed_model,
         )
 
+    def _resolve_final_max_hits(self, max_hits: int | None) -> int:
+        if max_hits is not None:
+            if max_hits <= 0:
+                raise ValueError("max_hits 必须是正整数。")
+            return max_hits
+        return self.default_max_hits()
+
+    def _resolve_rerank_enabled(self) -> bool:
+        if self._rerank_enabled_override is not None:
+            return self._rerank_enabled_override
+        return self._load_runtime_retrieval_settings().rerank_enabled
+
+    def _load_runtime_retrieval_settings(self) -> AgentRetrievalSettings:
+        if self._root_dir is None:
+            return AgentRetrievalSettings(
+                embedding_provider="local_huggingface",
+                embedding_model="BAAI/bge-base-zh-v1.5",
+                embedding_device="cpu",
+                embedding_batch_size=8,
+                max_hits=DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
+                rerank_enabled=DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED,
+            )
+        return load_settings(self._root_dir / "config" / "settings.toml", self._root_dir).agent_retrieval
+
 
 class MetaStateReader:
     def __init__(self, *, workspace: VideoLibraryReader) -> None:
@@ -307,8 +364,17 @@ def _build_default_embed_model(root_dir: Path | None):
         return MockEmbedding(embed_dim=32)
     apply_runtime_env_overrides(root_dir)
     settings = load_settings(root_dir / "config" / "settings.toml", root_dir)
+    retrieval_settings = settings.agent_retrieval
+    local_embedding_dir = root_dir / "data" / "models" / "huggingface" / "bge-base-zh-v1.5"
+    if retrieval_settings.embedding_model == "BAAI/bge-base-zh-v1.5" and local_embedding_dir.is_dir():
+        from dataclasses import replace
+
+        retrieval_settings = replace(
+            retrieval_settings,
+            embedding_model=str(local_embedding_dir),
+        )
     return _build_embed_model_from_settings(
-        retrieval_settings=settings.agent_retrieval,
+        retrieval_settings=retrieval_settings,
     )
 
 

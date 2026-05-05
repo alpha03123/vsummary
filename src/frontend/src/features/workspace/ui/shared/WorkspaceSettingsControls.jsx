@@ -10,11 +10,12 @@ export function WorkspaceSettingRow({ title, description, children }) {
   );
 }
 
-export function WorkspaceToggleSwitch({ checked, onChange }) {
+export function WorkspaceToggleSwitch({ checked, disabled = false, onChange }) {
   return (
     <button
       type="button"
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 ${
+      disabled={disabled}
+      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
         checked ? "bg-accent" : "bg-stone-300 dark:bg-stone-600"
       }`}
       onClick={onChange}
