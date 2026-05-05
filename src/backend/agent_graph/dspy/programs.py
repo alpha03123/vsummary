@@ -5,8 +5,12 @@ from typing import Any
 
 import dspy
 
+from backend.agent_graph.prompts import VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT
 
-class SynthesizeSeriesAnswer(dspy.Signature):
+
+class SynthesizeVideoAnswer(dspy.Signature):
+    __doc__ = VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT
+
     user_message: str = dspy.InputField()
     retrieval_results: list[dict[str, object]] = dspy.InputField()
     meta_state: dict[str, object] = dspy.InputField()
@@ -15,7 +19,7 @@ class SynthesizeSeriesAnswer(dspy.Signature):
 
 class AnswerSynthesisProgram:
     def __init__(self, predictor: Callable[..., Any] | None = None) -> None:
-        self._predictor = predictor or dspy.ChainOfThought(SynthesizeSeriesAnswer)
+        self._predictor = predictor or dspy.ChainOfThought(SynthesizeVideoAnswer)
 
     def run(
         self,
