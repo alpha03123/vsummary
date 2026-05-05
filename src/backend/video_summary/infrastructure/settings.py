@@ -7,6 +7,8 @@ import re
 import tomllib
 from urllib.parse import urlparse
 
+from backend.shared.filesystem import atomic_write_text
+
 
 VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper"}
@@ -247,7 +249,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 
 
 def save_settings(config_path: Path, settings: AppSettings) -> None:
-    config_path.write_text(_render_settings_toml(settings), encoding="utf-8")
+    atomic_write_text(config_path, _render_settings_toml(settings))
 
 
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:
@@ -584,7 +586,7 @@ def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
         if key not in seen_keys:
             next_lines.append(f"{key}={value}")
 
-    dotenv_path.write_text("\n".join(next_lines).rstrip() + "\n", encoding="utf-8")
+    atomic_write_text(dotenv_path, "\n".join(next_lines).rstrip() + "\n")
 
 
 def _load_dotenv(dotenv_path: Path) -> dict[str, str]:

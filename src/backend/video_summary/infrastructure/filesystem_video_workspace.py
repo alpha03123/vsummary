@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from backend.shared.filesystem import KeyedLockManager, atomic_write_text
 from backend.video_summary.infrastructure.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.models import (
@@ -38,6 +39,7 @@ class FileSystemVideoWorkspace:
         self._root_dir = root_dir
         self._videos_dir = root_dir / "videos"
         self._workspace_dir = root_dir / "workspace"
+        self._notes_locks = KeyedLockManager()
 
     def get_workspace(self) -> WorkspaceDTO:
         workspace_id = self._root_dir.name
@@ -125,9 +127,9 @@ class FileSystemVideoWorkspace:
         normalized = SeriesCatalogPayload.model_validate(payload).model_dump(mode="json")
         output_dir = self._workspace_dir / series_id
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / SERIES_CATALOG_FILE).write_text(
+        atomic_write_text(
+            output_dir / SERIES_CATALOG_FILE,
             json.dumps(normalized, ensure_ascii=False, indent=2),
-            encoding="utf-8",
         )
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
@@ -221,9 +223,9 @@ class FileSystemVideoWorkspace:
         }
         output_dir = self._get_video_output_dir(series_id, video_id)
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "knowledge_cards.json").write_text(
+        atomic_write_text(
+            output_dir / "knowledge_cards.json",
             json.dumps(cards_payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
         )
 
     def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
@@ -266,9 +268,10 @@ class FileSystemVideoWorkspace:
             "created_at": now,
             "updated_at": now,
         }
-        notes_payload = self._read_notes_payload(series_id, video_id)
-        notes_payload["notes"].append(note_record)
-        self._write_notes_payload(series_id, video_id, notes_payload)
+        with self._notes_locks.hold(_notes_lock_key(series_id, video_id)):
+            notes_payload = self._read_notes_payload(series_id, video_id)
+            notes_payload["notes"].append(note_record)
+            self._write_notes_payload(series_id, video_id, notes_payload)
         return _to_note_view(note_record)
 
     def update_video_note(
@@ -285,27 +288,29 @@ class FileSystemVideoWorkspace:
 
         next_title = _require_note_text(title, "title")
         next_content = _require_note_text(content, "content")
-        notes_payload = self._read_notes_payload(series_id, video_id)
-        for note in notes_payload["notes"]:
-            if note["id"] != note_id:
-                continue
-            note["title"] = next_title
-            note["content"] = next_content
-            note["updated_at"] = _now_iso()
-            self._write_notes_payload(series_id, video_id, notes_payload)
-            return _to_note_view(note)
+        with self._notes_locks.hold(_notes_lock_key(series_id, video_id)):
+            notes_payload = self._read_notes_payload(series_id, video_id)
+            for note in notes_payload["notes"]:
+                if note["id"] != note_id:
+                    continue
+                note["title"] = next_title
+                note["content"] = next_content
+                note["updated_at"] = _now_iso()
+                self._write_notes_payload(series_id, video_id, notes_payload)
+                return _to_note_view(note)
         return None
 
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
         if self.get_video_source(series_id, video_id) is None:
             return None
 
-        notes_payload = self._read_notes_payload(series_id, video_id)
-        remaining_notes = [note for note in notes_payload["notes"] if note["id"] != note_id]
-        if len(remaining_notes) == len(notes_payload["notes"]):
-            return False
+        with self._notes_locks.hold(_notes_lock_key(series_id, video_id)):
+            notes_payload = self._read_notes_payload(series_id, video_id)
+            remaining_notes = [note for note in notes_payload["notes"] if note["id"] != note_id]
+            if len(remaining_notes) == len(notes_payload["notes"]):
+                return False
 
-        self._write_notes_payload(series_id, video_id, {"notes": remaining_notes})
+            self._write_notes_payload(series_id, video_id, {"notes": remaining_notes})
         return True
 
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
@@ -494,9 +499,9 @@ class FileSystemVideoWorkspace:
     def _write_series_title(self, series_id: str, title: str) -> None:
         output_dir = self._workspace_dir / series_id
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / SERIES_META_FILE).write_text(
+        atomic_write_text(
+            output_dir / SERIES_META_FILE,
             json.dumps({"title": title}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
         )
 
     def _get_video_output_dir(self, series_id: str, video_id: str) -> Path:
@@ -531,14 +536,18 @@ class FileSystemVideoWorkspace:
     def _write_notes_payload(self, series_id: str, video_id: str, payload: dict[str, list[dict[str, str]]]) -> None:
         output_dir = self._get_video_output_dir(series_id, video_id)
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "notes.json").write_text(
+        atomic_write_text(
+            output_dir / "notes.json",
             json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
         )
 
 
 def _is_video_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
+
+
+def _notes_lock_key(series_id: str, video_id: str) -> str:
+    return f"{series_id}/{video_id}"
 
 
 def _normalize_series_id(value: str) -> str:

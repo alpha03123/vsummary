@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
+from threading import Lock
 
 from anyio import CapacityLimiter
 
@@ -46,10 +47,20 @@ class GenerateVideoSummaryFromLibrary:
         self._series_memory_refresher = series_memory_refresher
         self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
+        self._active_task_keys: set[tuple[str, str]] = set()
+        self._activity_lock = Lock()
         self._video_generation_slots = CapacityLimiter(max(1, video_generation_concurrency))
 
     def update_video_generation_concurrency(self, video_generation_concurrency: int) -> None:
         self._video_generation_slots.total_tokens = max(1, video_generation_concurrency)
+
+    def is_video_generation_active(self, series_id: str, video_id: str) -> bool:
+        with self._activity_lock:
+            return (series_id, video_id) in self._active_task_keys
+
+    def is_series_generation_active(self, series_id: str) -> bool:
+        with self._activity_lock:
+            return any(active_series_id == series_id for active_series_id, _ in self._active_task_keys)
 
     async def run(
         self,
@@ -92,6 +103,8 @@ class GenerateVideoSummaryFromLibrary:
                 )
             )
             self._active_tasks[task_id] = task
+            with self._activity_lock:
+                self._active_task_keys.add((series_id, video_id))
             return task
 
     async def _run_generation(
@@ -144,6 +157,12 @@ class GenerateVideoSummaryFromLibrary:
             current = self._active_tasks.get(task_id)
             if current is asyncio.current_task():
                 self._active_tasks.pop(task_id, None)
+                try:
+                    series_id, video_id = task_id.split("/", 1)
+                except ValueError:
+                    return
+                with self._activity_lock:
+                    self._active_task_keys.discard((series_id, video_id))
 
 
 class GenerateSeriesSummaryFromLibrary:
@@ -160,9 +179,20 @@ class GenerateSeriesSummaryFromLibrary:
         self._video_generation_concurrency = max(1, video_generation_concurrency)
         self._active_series_tasks: dict[str, asyncio.Task[SeriesGenerationResult]] = {}
         self._active_series_tasks_lock = asyncio.Lock()
+        self._active_series_ids: set[str] = set()
+        self._activity_lock = Lock()
 
     def update_video_generation_concurrency(self, video_generation_concurrency: int) -> None:
         self._video_generation_concurrency = max(1, video_generation_concurrency)
+
+    def is_video_generation_active(self, series_id: str, video_id: str) -> bool:
+        return self._generator.is_video_generation_active(series_id, video_id)
+
+    def is_series_generation_active(self, series_id: str) -> bool:
+        with self._activity_lock:
+            if series_id in self._active_series_ids:
+                return True
+        return self._generator.is_series_generation_active(series_id)
 
     async def run(
         self,
@@ -198,6 +228,8 @@ class GenerateSeriesSummaryFromLibrary:
                 )
             )
             self._active_series_tasks[task_id] = task
+            with self._activity_lock:
+                self._active_series_ids.add(series_id)
             return task
 
     async def _run_series_generation(
@@ -306,6 +338,9 @@ class GenerateSeriesSummaryFromLibrary:
             current = self._active_series_tasks.get(task_id)
             if current is asyncio.current_task():
                 self._active_series_tasks.pop(task_id, None)
+                series_id = task_id.removeprefix("series/")
+                with self._activity_lock:
+                    self._active_series_ids.discard(series_id)
 
     def _get_series(self, series_id: str) -> LibrarySeriesDTO:
         series = next((item for item in self._workspace.list_series() if item.id == series_id), None)

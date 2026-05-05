@@ -23,6 +23,7 @@ from backend.api.responses import (
 )
 from backend.api.sse import stream_progress_events
 from backend.video_summary.infrastructure.runtime import AsrModelNotReadyError
+from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
 router = APIRouter()
@@ -268,6 +269,8 @@ async def generate_video_mindmap(
 def delete_series(series_id: str, container: ApiContainerDep) -> dict[str, object]:
     try:
         deleted = container.delete_series.run(series_id)
+    except GenerationInProgressError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except LookupError as error:
@@ -279,6 +282,8 @@ def delete_series(series_id: str, container: ApiContainerDep) -> dict[str, objec
 def delete_video_source(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
     try:
         deleted = container.delete_video_source.run(series_id, video_id)
+    except GenerationInProgressError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return {"status": "deleted", "series_id": deleted.series_id, "video_id": deleted.video_id}

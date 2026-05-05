@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 import hashlib
 import json
+import logging
 from pathlib import Path
+from threading import RLock
 
 import lancedb
 from llama_index.core import Document, StorageContext, VectorStoreIndex
@@ -11,6 +14,7 @@ from llama_index.core.embeddings import MockEmbedding
 from llama_index.core.vector_stores import FilterCondition, FilterOperator, MetadataFilter, MetadataFilters
 from llama_index.vector_stores.lancedb import LanceDBVectorStore
 
+from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.infrastructure.settings import (
     AgentRetrievalSettings,
     DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
@@ -23,6 +27,8 @@ from backend.video_summary.library.ports import VideoLibraryReader
 INDEX_SCHEMA_VERSION = 4
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
+LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
+LOGGER = logging.getLogger(__name__)
 COMMON_METADATA_DEFAULTS: dict[str, object] = {
     "doc_id": "",
     "series_id": "",
@@ -65,42 +71,52 @@ class SeriesRetrievalService:
         self._rerank_enabled_override = rerank_enabled
         self._index: VectorStoreIndex | None = None
         self._signature: tuple[tuple[str, ...], tuple[str, ...]] | None = None
+        self._index_lock = RLock()
 
     def invalidate(self) -> None:
-        self._index = None
-        self._signature = None
+        with self._index_lock:
+            self._index = None
+            self._signature = None
 
     def refresh(self) -> None:
         self.refresh_all()
 
     def refresh_all(self) -> None:
-        self._index = None
-        self._signature = None
-        self._rebuild_index()
+        with self._index_lock:
+            self._index = None
+            self._signature = None
+            self._rebuild_index()
 
     def upsert_video(self, series_id: str, video_id: str) -> None:
-        if not self._is_incremental_mutation_ready():
-            self.refresh_all()
-            return
-        self._delete_video_rows(series_id=series_id, video_id=video_id)
-        documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
-        if documents:
-            self._append_documents(documents)
-        self._finalize_incremental_mutation()
+        with self._index_lock:
+            if not self._is_incremental_mutation_ready():
+                self.refresh_all()
+                return
+            self._delete_video_rows(series_id=series_id, video_id=video_id)
+            documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
+            if documents:
+                self._append_documents(documents)
+            self._finalize_incremental_mutation()
 
     def delete_video(self, series_id: str, video_id: str) -> None:
-        if not self._is_incremental_mutation_ready():
-            self.refresh_all()
-            return
-        self._delete_video_rows(series_id=series_id, video_id=video_id)
-        self._finalize_incremental_mutation()
+        with self._index_lock:
+            if not self._is_incremental_mutation_ready():
+                self.refresh_all()
+                return
+            self._delete_video_rows(series_id=series_id, video_id=video_id)
+            self._finalize_incremental_mutation()
 
     def delete_series(self, series_id: str) -> None:
-        if not self._is_incremental_mutation_ready():
-            self.refresh_all()
-            return
-        self._delete_series_rows(series_id=series_id)
-        self._finalize_incremental_mutation()
+        with self._index_lock:
+            if not self._is_incremental_mutation_ready():
+                self.refresh_all()
+                return
+            self._delete_series_rows(series_id=series_id)
+            self._finalize_incremental_mutation()
+            try:
+                _optimize_lancedb_table(self._db_uri, INDEX_TABLE_NAME)
+            except Exception:
+                LOGGER.exception("lancedb table optimize failed after deleting series %s", series_id)
 
     def search(
         self,
@@ -115,25 +131,26 @@ class SeriesRetrievalService:
         context_window_seconds: int,
         max_hits: int | None,
     ) -> dict[str, object]:
-        index = self._require_index()
-        final_max_hits = self._resolve_final_max_hits(max_hits)
-        rerank_enabled = self._resolve_rerank_enabled()
-        embedding_top_k = (
-            final_max_hits * RERANK_EMBEDDING_MULTIPLIER
-            if rerank_enabled and self._reranker is not None
-            else final_max_hits
-        )
-        retriever = index.as_retriever(
-            similarity_top_k=embedding_top_k,
-            filters=_build_filters(
-                scope_type=scope_type,
-                series_id=series_id,
-                video_id=video_id,
-                target_source=target_source,
-                source_tags=source_tags or [],
-            ),
-        )
-        nodes = retriever.retrieve(query)
+        with self._index_lock:
+            index = self._require_index()
+            final_max_hits = self._resolve_final_max_hits(max_hits)
+            rerank_enabled = self._resolve_rerank_enabled()
+            embedding_top_k = (
+                final_max_hits * RERANK_EMBEDDING_MULTIPLIER
+                if rerank_enabled and self._reranker is not None
+                else final_max_hits
+            )
+            retriever = index.as_retriever(
+                similarity_top_k=embedding_top_k,
+                filters=_build_filters(
+                    scope_type=scope_type,
+                    series_id=series_id,
+                    video_id=video_id,
+                    target_source=target_source,
+                    source_tags=source_tags or [],
+                ),
+            )
+            nodes = retriever.retrieve(query)
         hits: list[dict[str, object]] = []
         for item in nodes:
             metadata = dict(getattr(item.node, "metadata", {}) or {})
@@ -784,6 +801,12 @@ def _delete_rows(*, db_uri: str, table_name: str, where: str) -> None:
     table.delete(where)
 
 
+def _optimize_lancedb_table(db_uri: str, table_name: str) -> None:
+    connection = lancedb.connect(db_uri)
+    table = connection.open_table(table_name)
+    table.optimize(cleanup_older_than=LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN)
+
+
 def _table_exists(db_uri: str, table_name: str) -> bool:
     connection = lancedb.connect(db_uri)
     try:
@@ -808,7 +831,8 @@ def _write_signature_file(
 ) -> None:
     signature_path = _signature_file_path(db_uri, table_name)
     signature_path.parent.mkdir(parents=True, exist_ok=True)
-    signature_path.write_text(
+    atomic_write_text(
+        signature_path,
         json.dumps(
             {
                 "index_schema_version": INDEX_SCHEMA_VERSION,
@@ -817,7 +841,6 @@ def _write_signature_file(
             ensure_ascii=False,
             indent=2,
         ),
-        encoding="utf-8",
     )
 
 

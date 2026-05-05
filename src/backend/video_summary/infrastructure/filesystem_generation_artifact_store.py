@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
+from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.ports import GenerationArtifactStore
 
@@ -69,5 +70,4 @@ async def _write_text(path: Path, content: str) -> None:
 
 
 def _sync_write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    atomic_write_text(path, content)

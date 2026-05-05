@@ -2,15 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import tomllib
-
-RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
-
-
-@dataclass(frozen=True)
-class HuggingFaceModelSpec:
-    repo_id: str
-    local_dir_name: str
 
 
 @dataclass(frozen=True)
@@ -19,7 +10,6 @@ class PackageVariant:
     environment_file: Path
     settings_template: Path
     environment_name: str
-    huggingface_models: tuple[HuggingFaceModelSpec, ...]
 
 
 @dataclass(frozen=True)
@@ -36,32 +26,12 @@ PACKAGE_VARIANTS: dict[str, PackageVariant] = {
         environment_file=Path("scripts/package/environment.cpu.yml"),
         settings_template=Path("scripts/package/settings.cpu.toml"),
         environment_name="vsummary-pack-cpu",
-        huggingface_models=(
-            HuggingFaceModelSpec(
-                repo_id="BAAI/bge-base-zh-v1.5",
-                local_dir_name="bge-base-zh-v1.5",
-            ),
-            HuggingFaceModelSpec(
-                repo_id=RERANKER_MODEL_ID,
-                local_dir_name="bge-reranker-v2-m3",
-            ),
-        ),
     ),
     "gpu": PackageVariant(
         kind="gpu",
         environment_file=Path("scripts/package/environment.gpu.yml"),
         settings_template=Path("scripts/package/settings.gpu.toml"),
         environment_name="vsummary-pack-gpu",
-        huggingface_models=(
-            HuggingFaceModelSpec(
-                repo_id="BAAI/bge-base-zh-v1.5",
-                local_dir_name="bge-base-zh-v1.5",
-            ),
-            HuggingFaceModelSpec(
-                repo_id=RERANKER_MODEL_ID,
-                local_dir_name="bge-reranker-v2-m3",
-            ),
-        ),
     ),
 }
 
@@ -76,10 +46,6 @@ def build_release_layout(*, repo_root: Path, pack_root: Path, kind: str) -> Rele
         runtime_root=build_root / "runtime",
         package_root=normalized_pack_root / f"vsummary-{kind}",
     )
-
-
-def collect_huggingface_model_ids(variant: PackageVariant) -> list[str]:
-    return [model.repo_id for model in variant.huggingface_models]
 
 
 def render_start_bat() -> str:

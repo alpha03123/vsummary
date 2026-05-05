@@ -115,6 +115,12 @@ class VideoImportStore(Protocol):
 
 
 class VideoMutationStore(Protocol):
+    def list_series(self) -> list[LibrarySeriesDTO]:
+        ...
+
+    def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
+        ...
+
     def delete_series(self, series_id: str) -> bool:
         ...
 
@@ -179,4 +185,12 @@ class WorkspaceIndexRefresher(Protocol):
 
 class SeriesKnowledgeMemoryRefresher(Protocol):
     def refresh(self, series_id: str, video_id: str):
+        ...
+
+
+class GenerationActivityChecker(Protocol):
+    def is_video_generation_active(self, series_id: str, video_id: str) -> bool:
+        ...
+
+    def is_series_generation_active(self, series_id: str) -> bool:
         ...

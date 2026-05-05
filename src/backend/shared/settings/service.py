@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Protocol
 
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
@@ -102,6 +103,7 @@ class SettingsService:
         self._root_dir = root_dir
         self._faster_whisper_model_manager = faster_whisper_model_manager
         self._rag_model_manager = rag_model_manager
+        self._settings_lock = Lock()
 
     def get_workspace_settings(self) -> WorkspaceSettings:
         settings = load_settings(self._config_path, self._root_dir)
@@ -154,26 +156,27 @@ class SettingsService:
         ):
             raise SettingsValidationError(RAG_RERANKER_REQUIRED_MESSAGE)
 
-        current_settings = load_settings(self._config_path, self._root_dir)
-        next_settings = replace_workspace_ui_settings(
-            current_settings,
-            WorkspaceUiSettings(
-                theme=theme,
-                show_takeaways=show_takeaways,
-            ),
-        )
-        next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
-        next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
-        next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
-        next_settings = replace_agent_retrieval_runtime_settings(
-            next_settings,
-            embedding_device=rag_embedding_device,
-            max_hits=rag_max_hits,
-            rerank_enabled=rag_rerank_enabled,
-        )
-        next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
-        next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
-        save_settings(self._config_path, next_settings)
+        with self._settings_lock:
+            current_settings = load_settings(self._config_path, self._root_dir)
+            next_settings = replace_workspace_ui_settings(
+                current_settings,
+                WorkspaceUiSettings(
+                    theme=theme,
+                    show_takeaways=show_takeaways,
+                ),
+            )
+            next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
+            next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
+            next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
+            next_settings = replace_agent_retrieval_runtime_settings(
+                next_settings,
+                embedding_device=rag_embedding_device,
+                max_hits=rag_max_hits,
+                rerank_enabled=rag_rerank_enabled,
+            )
+            next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
+            next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
+            save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
             theme=theme,
@@ -215,13 +218,14 @@ class SettingsService:
             openai_api_key=openai_api_key,
             hf_endpoint=hf_endpoint,
         )
-        self._save_provider_settings(
-            llm_provider=provider_settings.llm_provider,
-            openai_base_url=provider_settings.openai_base_url,
-            openai_model=provider_settings.openai_model,
-            openai_api_key=self._resolve_openai_api_key(openai_api_key),
-            hf_endpoint=provider_settings.hf_endpoint,
-        )
+        with self._settings_lock:
+            self._save_provider_settings(
+                llm_provider=provider_settings.llm_provider,
+                openai_base_url=provider_settings.openai_base_url,
+                openai_model=provider_settings.openai_model,
+                openai_api_key=self._resolve_openai_api_key(openai_api_key),
+                hf_endpoint=provider_settings.hf_endpoint,
+            )
         return provider_settings
 
     def _save_provider_settings(

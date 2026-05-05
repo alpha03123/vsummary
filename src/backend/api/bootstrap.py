@@ -161,6 +161,12 @@ def build_api_container(
         video_generation_concurrency=settings.generation.video_generation_concurrency,
         series_memory_refresher=series_memory_refresher,
     )
+    series_generation_use_case = GenerateSeriesSummaryFromLibrary(
+        workspace,
+        summary_generation_use_case,
+        progress_tracker,
+        video_generation_concurrency=settings.generation.video_generation_concurrency,
+    )
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
@@ -178,15 +184,10 @@ def build_api_container(
         delete_video_note=DeleteVideoNote(workspace, index_refresher),
         get_video_workspace_tools=GetVideoWorkspaceTools(workspace),
         generate_video_summary=summary_generation_use_case,
-        generate_series_summaries=GenerateSeriesSummaryFromLibrary(
-            workspace,
-            summary_generation_use_case,
-            progress_tracker,
-            video_generation_concurrency=settings.generation.video_generation_concurrency,
-        ),
+        generate_series_summaries=series_generation_use_case,
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
-        delete_series=DeleteSeries(workspace, index_refresher),
-        delete_video_source=DeleteVideoSource(workspace, index_refresher),
+        delete_series=DeleteSeries(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
+        delete_video_source=DeleteVideoSource(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
         import_local_series=ImportLocalSeries(workspace),
         import_local_playground_videos=ImportLocalPlaygroundVideos(workspace),
         import_local_series_videos=ImportLocalSeriesVideos(workspace),
@@ -560,6 +561,7 @@ class _RagModelAwareRetrievalService:
         self._settings_loader = settings_loader
         self._service: SeriesRetrievalService | None = None
         self._signature: tuple[bool, bool, str] | None = None
+        self._lock = Lock()
 
     def search(self, **kwargs):
         return self._require_service().search(**kwargs)
@@ -583,17 +585,19 @@ class _RagModelAwareRetrievalService:
         self._require_service().delete_series(series_id)
 
     def invalidate(self) -> None:
-        if self._service is not None:
-            self._service.invalidate()
+        with self._lock:
+            if self._service is not None:
+                self._service.invalidate()
 
     def _require_service(self) -> SeriesRetrievalService:
-        if not self._rag_model_manager.is_downloaded("embedding"):
-            raise RuntimeError(RAG_EMBEDDING_REQUIRED_MESSAGE)
-        signature = self._build_signature()
-        if self._service is None or self._signature != signature:
-            self._service = self._factory()
-            self._signature = signature
-        return self._service
+        with self._lock:
+            if not self._rag_model_manager.is_downloaded("embedding"):
+                raise RuntimeError(RAG_EMBEDDING_REQUIRED_MESSAGE)
+            signature = self._build_signature()
+            if self._service is None or self._signature != signature:
+                self._service = self._factory()
+                self._signature = signature
+            return self._service
 
     def _build_signature(self) -> tuple[bool, bool, str]:
         settings = self._settings_loader()
