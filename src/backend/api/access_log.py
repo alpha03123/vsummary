@@ -26,6 +26,7 @@ def install_access_log_filters() -> None:
         SuppressPathAccessLogFilter(
             paths={
                 "/api/agent/memory/status",
+                "/api/rag/models",
             },
         )
     )

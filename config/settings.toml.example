@@ -1,73 +1,77 @@
-# 语音转写设置 (Automatic Speech Recognition)
+# 语音转写设置。
 [asr]
-# 转写引擎，目前支持: "faster_whisper"
+# 转写引擎。目前支持 "faster_whisper"。
 provider = "faster_whisper"
-# 默认转写语言，中文为 "zh", 英文为 "en"
+# 默认转写语言。中文使用 "zh"，英文使用 "en"。
 language = "zh"
-# 是否启用转写增强（使用 AI 对转写文本进行语义修正和分段）
+# 是否启用转写增强。开启后会调用 LLM 对转写文本做语义修正和分段。
 transcript_enhancement_enabled = false
 
-# Faster-Whisper 转写引擎具体配置
+# Faster-Whisper 转写引擎配置。
 [asr.faster_whisper]
-# 运行设备: "auto" (自动选择), "gpu" (NVIDIA 显卡加速), "cpu" (纯 CPU 运行)
-device = "auto"
-# 模型大小: "tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"
-# 推荐使用 "large-v3-turbo" (约 1.5GB)，权衡了速度和准确度
+# 运行设备。"gpu" 使用 NVIDIA 显卡，"cpu" 使用 CPU，"auto" 由运行时自动选择。
+device = "gpu"
+# Whisper 模型大小。可按机器性能调整，例如 "small"、"medium"、"large-v3"、"large-v3-turbo"。
 model_size = "large-v3-turbo"
-# 计算精度: "float16" (显卡加速推荐), "int8" (CPU 运行推荐)
+# 计算精度。"float16" 适合 GPU，"int8" 更适合 CPU 或显存较小的环境。
 compute_type = "float16"
-# 转写策略: "fast" (最快), "balanced" (平衡), "accurate" (最准)
+# 转写策略。"fast" 更快，"balanced" 平衡速度和质量，"accurate" 更重视准确度。
 transcription_mode = "accurate"
 
-# 前端界面显示设置
+# 前端工作区显示设置。
 [workspace_ui]
-# 主题颜色: "dark" (暗黑模式), "light" (明亮模式)
-theme = "dark"
-# 是否在视频详情页默认显示“关键结论”
+# 主题模式。"light" 为亮色，"dark" 为暗色。
+theme = "light"
+# 是否在视频详情页默认显示关键结论。
 show_takeaways = true
 
-# 调试模式设置
+# 调试设置。
 [debug]
-# 开启后会在后端控制台输出更详细的逻辑追踪日志
-mode = false
+# 是否开启调试模式。开启后会输出更详细的后端追踪信息。
+mode = true
 
-# AI Agent 对话上下文管理 (针对 LLM 窗口)
+# Agent 上下文窗口设置。
 [agent_context]
-# 对话上下文的最大 Token 限制
+# Agent 对话可使用的最大上下文 token 数。
 window_tokens = 1000000
-# 预留给 AI 输出的 Token 数量
+
+# Agent 上下文高级策略。
+[agent_context.advanced]
+# 为模型输出预留的 token 数，避免上下文挤占回复空间。
 reserved_output_tokens = 20000
-# 触发警告的上下文占用比例 (0.6 表示占用 60% 时警告)
+# 上下文占用超过该比例时进入警告状态。
 warning_threshold_ratio = 0.6
-# 触发历史记录压缩的占用比例
+# 上下文占用超过该比例时触发历史压缩。
 compact_threshold_ratio = 0.8
-# 触发硬阻断（拒绝进一步对话）的占用比例
+# 上下文占用超过该比例时阻断继续输入，避免请求失败或输出不可控。
 blocking_threshold_ratio = 0.92
-# 压缩时最少保留的最近消息条数
+# 历史压缩时保留的最近消息条数。
 keep_tail_messages = 6
-# 投影/相关内容在上下文中占用的最大 Token 比例
+# 投影内容或相关上下文最多占用总窗口的比例。
 projection_max_tokens_ratio = 0.08
-# 规划器的传输模式: "structured" (结构化响应), "stream_buffered" (流式缓冲)
+# 当前视频摘要直接放入上下文的阈值比例，超过后改用检索方式控制上下文体积。
+direct_summary_threshold_ratio = 0.9
+# 规划器传输模式。"structured" 使用结构化响应，"stream_buffered" 使用流式缓冲。
 planner_transport = "structured"
 
-# AI Agent 向量检索设置 (RAG)
+# Agent 检索设置。
 [agent_retrieval]
-# 向量化模型供应商: "local_huggingface" (本地运行)
+# 向量模型供应商。目前默认使用本地 HuggingFace 模型。
 embedding_provider = "local_huggingface"
-# 使用的向量模型路径或 HuggingFace ID
+# 向量模型名称或本地路径。
 embedding_model = "BAAI/bge-base-zh-v1.5"
-# 向量化运行设备: "cpu"、"gpu" 或 "auto"
+# 向量化设备。"cpu"、"gpu" 或 "auto"。
 embedding_device = "cpu"
-# 批量向量化的批次大小
+# 向量化批大小。数值越大吞吐越高，但占用内存或显存更多。
 embedding_batch_size = 8
-# 最终进入回答节点的证据数量
+# 每次检索最终返回给回答节点的证据数量。
 max_hits = 5
-# 是否启用 reranker 重排；开启时 embedding 候选数为 max_hits 的 4 倍
-rerank_enabled = true
+# 是否启用 reranker 重排。开启后会先召回更多候选再做语义重排。
+rerank_enabled = false
 
-# 生成任务并发设置
+# 生成任务并发设置。
 [generation]
-# 全局同时运行的视频生成任务数量
-video_generation_concurrency = 1
-# 单个视频在 chunk 摘要阶段允许并发的 LLM 请求数量
-summary_chunk_concurrency = 1
+# 全局同时运行的视频生成任务数量。
+video_generation_concurrency = 5
+# 单个视频分片摘要阶段允许并发的 LLM 请求数量。
+summary_chunk_concurrency = 3
