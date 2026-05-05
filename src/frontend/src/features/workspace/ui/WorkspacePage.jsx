@@ -399,6 +399,7 @@ export function WorkspacePage({ page }) {
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onCancelFasterWhisperModelDownload={actions.cancelFasterWhisperModelDownload}
                   onDownloadRagModel={actions.downloadRagModel}
+                  onCancelRagModelDownload={actions.cancelRagModelDownload}
                   onResetSettings={actions.resetSettings}
                   onClose={actions.closeSettingsPanel}
                 />

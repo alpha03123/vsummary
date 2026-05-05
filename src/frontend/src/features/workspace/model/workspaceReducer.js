@@ -100,7 +100,7 @@ export function workspaceReducer(state, action) {
         ...state,
         downloadingModelId: action.modelId,
         modelDownloadProgress: 0,
-        fasterWhisperModelsLoading: true,
+        fasterWhisperModelsLoading: false,
         error: "",
       };
     case "faster_whisper_model_download_progress_updated":
@@ -135,6 +135,12 @@ export function workspaceReducer(state, action) {
         downloadingRagModelKey: action.modelKey,
         ragModelsLoading: true,
         error: "",
+      };
+    case "rag_model_download_cancelled":
+      return {
+        ...state,
+        downloadingRagModelKey: null,
+        ragModelsLoading: false,
       };
     case "rag_models_loaded":
       return {

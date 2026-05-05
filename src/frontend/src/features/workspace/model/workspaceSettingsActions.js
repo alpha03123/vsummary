@@ -1,5 +1,6 @@
 import {
   cancelFasterWhisperModelDownload,
+  cancelRagModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
   loadFasterWhisperModels,
@@ -122,7 +123,9 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
 
   async function onDownloadFasterWhisperModel(modelId) {
     dispatch({ type: "faster_whisper_model_download_started", modelId });
-    const unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
+    let unsubscribe = () => {};
+    const downloadCompleted = new Promise((resolve, reject) => {
+      unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
       if (snapshot.status === "running" || snapshot.status === "completed") {
         dispatch({
           type: "faster_whisper_model_download_progress_updated",
@@ -132,17 +135,20 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       }
 
       if (snapshot.status === "failed") {
-        dispatch({
-          type: "load_failed",
-          message: snapshot.error ?? "语音模型下载失败",
-        });
+        reject(new Error(snapshot.error ?? "语音模型下载失败"));
       }
       if (snapshot.status === "cancelled") {
         dispatch({ type: "faster_whisper_model_download_cancelled" });
+        reject(new Error("模型下载已取消"));
       }
+      if (snapshot.status === "completed") {
+        resolve();
+      }
+      });
     });
     try {
       await downloadFasterWhisperModel(modelId);
+      await downloadCompleted;
       const savedSettings = await updateWorkspaceSettings({
         ...state.ui,
         asrModelQuality: modelId,
@@ -151,7 +157,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       const models = await loadFasterWhisperModels();
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
-      if (error instanceof Error && error.message.includes("409")) {
+      if (error instanceof Error && (error.message.includes("409") || error.message.includes("取消"))) {
         dispatch({ type: "faster_whisper_model_download_cancelled" });
         return;
       }
@@ -192,6 +198,20 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
+  async function onCancelRagModelDownload(modelKey) {
+    try {
+      await cancelRagModelDownload(modelKey);
+      dispatch({ type: "rag_model_download_cancelled" });
+      const models = await loadRagModels();
+      dispatch({ type: "rag_models_loaded", models });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "取消 RAG 模型下载失败",
+      });
+    }
+  }
+
   return {
     onToggleSettingsPanel,
     onOpenSettingsPanel,
@@ -202,5 +222,6 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload,
     onDownloadRagModel,
+    onCancelRagModelDownload,
   };
 }

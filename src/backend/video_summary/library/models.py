@@ -10,6 +10,8 @@ class LibrarySeriesDTO:
     id: str
     title: str
     videos: list["LibraryVideoCardDTO"]
+    is_linked: bool = False
+    source_url: str = ""
 
 
 @dataclass(frozen=True)

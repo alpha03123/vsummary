@@ -34,6 +34,8 @@ class InMemoryProgressTracker:
     def create_reporter(self, task_id: str) -> "TaskProgressReporter":
         now = time.time()
         with self._lock:
+            previous = self._snapshots.get(task_id)
+            sequence = 0 if previous is None else previous.sequence + 1
             self._cancelled_tasks.discard(task_id)
             self._snapshots[task_id] = ProgressSnapshot(
                 status="running",
@@ -47,7 +49,7 @@ class InMemoryProgressTracker:
                 stage_elapsed_seconds=0.0,
                 estimated_total_seconds=None,
                 remaining_seconds=None,
-                sequence=0,
+                sequence=sequence,
                 updated_at=now,
             )
         return TaskProgressReporter(self, task_id)
@@ -55,9 +57,9 @@ class InMemoryProgressTracker:
     def get_snapshot(self, task_id: str) -> ProgressSnapshot:
         now = time.time()
         with self._lock:
-            return self._snapshots.get(
-                task_id,
-                ProgressSnapshot(
+            snapshot = self._snapshots.get(task_id)
+            if snapshot is None:
+                snapshot = ProgressSnapshot(
                     status="idle",
                     stage=None,
                     progress=None,
@@ -71,8 +73,9 @@ class InMemoryProgressTracker:
                     remaining_seconds=None,
                     sequence=0,
                     updated_at=now,
-                ),
-            )
+                )
+                self._snapshots[task_id] = snapshot
+            return snapshot
 
     def request_cancel(self, task_id: str) -> None:
         now = time.time()

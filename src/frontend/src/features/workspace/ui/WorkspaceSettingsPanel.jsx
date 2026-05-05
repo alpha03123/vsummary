@@ -24,6 +24,7 @@ export function WorkspaceSettingsPanel({
   onDownloadFasterWhisperModel,
   onCancelFasterWhisperModelDownload,
   onDownloadRagModel,
+  onCancelRagModelDownload,
   onResetSettings,
   onClose,
 }) {
@@ -184,7 +185,7 @@ export function WorkspaceSettingsPanel({
                   description="控制转写精确度"
                 >
                   <div className="w-full min-w-[320px] flex flex-col gap-3">
-                    {fasterWhisperModelsLoading ? (
+                    {fasterWhisperModelsLoading && !fasterWhisperModels.length ? (
                       <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
                         <LoaderCircle size={16} className="animate-spin" />
                         正在读取模型状态...
@@ -536,7 +537,15 @@ export function WorkspaceSettingsPanel({
                                   </div>
                                 ) : null}
                               </div>
-                              {model.downloaded ? (
+                              {isDownloading ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onCancelRagModelDownload(model.key)}
+                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                >
+                                  取消
+                                </button>
+                              ) : model.downloaded ? (
                                 <button
                                   type="button"
                                   disabled
@@ -551,8 +560,8 @@ export function WorkspaceSettingsPanel({
                                   disabled={isAnyRagModelDownloading}
                                   className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                                 >
-                                  {isDownloading ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
-                                  {isDownloading ? "下载中" : "下载"}
+                                  <Download size={14} />
+                                  下载
                                 </button>
                               )}
                             </div>

@@ -102,7 +102,10 @@ class FasterWhisperModelManager:
 def _get_expected_download_size(repo_id: str) -> int | None:
     from huggingface_hub import HfApi
 
-    info = HfApi().model_info(repo_id, files_metadata=True)
+    try:
+        info = HfApi().model_info(repo_id, files_metadata=True)
+    except Exception:
+        return None
     total = 0
     has_size = False
     for sibling in info.siblings:
@@ -118,35 +121,39 @@ class _DownloadProgressCoordinator:
     def __init__(self, progress_reporter, total_bytes: int | None) -> None:
         self._progress_reporter = progress_reporter
         self._total_bytes = total_bytes
-        self._completed_bytes = 0
-        self._current_key: int | None = None
-        self._current_total = 0
+        self._bars: dict[int, int] = {}
+        self._bar_totals: dict[int, int] = {}
 
     def update(self, bar: Any) -> None:
         if self._progress_reporter is None:
             return
         self._progress_reporter.raise_if_cancelled()
         key = id(bar)
-        if self._current_key != key:
-            self._current_key = key
-            self._current_total = int(bar.total or 0)
         filename = _extract_filename(getattr(bar, "desc", None))
         current_n = int(getattr(bar, "n", 0) or 0)
-        if self._total_bytes and self._total_bytes > 0:
-            progress = ((self._completed_bytes + current_n) / self._total_bytes) * 100.0
-        elif self._current_total > 0:
-            progress = (current_n / self._current_total) * 100.0
+        total = int(getattr(bar, "total", 0) or 0)
+        if _is_byte_progress_bar(total):
+            self._bars[key] = min(current_n, total)
+            self._bar_totals[key] = total
+
+        if self._total_bytes and self._total_bytes > 0 and self._bars:
+            progress = min(99.0, (sum(self._bars.values()) / self._total_bytes) * 100.0)
+        elif _is_byte_progress_bar(total):
+            progress = min(99.0, (current_n / total) * 100.0)
+        elif self._bar_totals:
+            known_total = sum(self._bar_totals.values())
+            progress = min(99.0, (sum(self._bars.values()) / known_total) * 100.0)
         else:
             progress = None
         detail = f"正在下载 {filename}" if filename else "正在下载模型文件"
         self._progress_reporter.update("download", progress, detail)
 
     def finalize_bar(self, bar: Any) -> None:
-        if self._current_key != id(bar):
-            return
-        self._completed_bytes += self._current_total
-        self._current_key = None
-        self._current_total = 0
+        key = id(bar)
+        total = int(getattr(bar, "total", 0) or 0)
+        if _is_byte_progress_bar(total):
+            self._bars[key] = total
+            self._bar_totals[key] = total
 
 
 def _build_download_tqdm_class(progress_reporter, total_bytes: int | None):
@@ -182,3 +189,7 @@ def _extract_filename(desc: object) -> str | None:
         return None
     parts = desc.strip().split(":")
     return parts[0].strip() if parts else None
+
+
+def _is_byte_progress_bar(total: int) -> bool:
+    return total >= 1024 * 1024

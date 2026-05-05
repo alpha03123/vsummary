@@ -172,6 +172,7 @@ export function useWorkspaceController() {
     onDownloadFasterWhisperModel: settingsActions.onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload: settingsActions.onCancelFasterWhisperModelDownload,
     onDownloadRagModel: settingsActions.onDownloadRagModel,
+    onCancelRagModelDownload: settingsActions.onCancelRagModelDownload,
     onResetSettings: settingsActions.onResetSettings,
     onClearError,
     onImportLocalSeries: contentActions.onImportLocalSeries,

@@ -123,6 +123,12 @@ export async function downloadRagModel(modelKey) {
   });
 }
 
+export async function cancelRagModelDownload(modelKey) {
+  return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download/cancel`, {
+    method: "POST",
+  });
+}
+
 export async function downloadFasterWhisperModel(modelId) {
   return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download`, {
     method: "POST",

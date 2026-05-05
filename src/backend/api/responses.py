@@ -44,6 +44,8 @@ class SeriesResponse(BaseModel):
     id: str
     title: str
     videos: list[VideoCardResponse]
+    is_linked: bool
+    source_url: str
 
     @classmethod
     def from_model(cls, series: LibrarySeriesDTO) -> "SeriesResponse":
@@ -51,6 +53,8 @@ class SeriesResponse(BaseModel):
             id=series.id,
             title=series.title,
             videos=[VideoCardResponse.from_model(video) for video in series.videos],
+            is_linked=series.is_linked,
+            source_url=series.source_url,
         )
 
 class WorkspaceResponse(BaseModel):
