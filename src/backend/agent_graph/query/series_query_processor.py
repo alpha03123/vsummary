@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from backend.agent.schemas.messages import AgentChatMessage
+from backend.agent_graph.prompts import SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT
 from backend.agent_graph.query.models import SeriesQueryUnderstanding
 
 
@@ -66,13 +67,7 @@ class SeriesQueryProcessor:
         return [
             AgentChatMessage(
                 role="system",
-                content=(
-                    "你是 series 查询理解器。"
-                    "你只负责把用户问题改写成更适合统一检索的查询合同。"
-                    "不要输出 selected_videos、subplans、target_video_ids、task_type、retrieval_hints。"
-                    "只输出 normalized_query、subqueries、filters。"
-                    "filters 中必须保留 series_id。"
-                ),
+                content=SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT,
             ),
             AgentChatMessage(
                 role="user",

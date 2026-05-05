@@ -338,11 +338,11 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
-                  title="RAG 重排"
+                  title="开启 RAG 重排序模型"
                   description={
                     rerankerNeedsDownload
                       ? "重排序模型尚未下载，下载前不能开启 reranking。"
-                      : "开启后先召回更多 embedding 候选，再用 reranker 精排最终证据。关闭后直接使用 embedding 结果。"
+                      : "开启后，series下检索速度会变慢，但是检索精度会提高"
                   }
                 >
                   <div className="flex flex-col items-end gap-2">
@@ -373,8 +373,8 @@ export function WorkspaceSettingsPanel({
                   title="RAG 证据数量"
                   description={
                     effectiveRerankEnabled
-                      ? `最终进入回答的证据数。当前会先用 embedding 召回 ${ui.ragMaxHits * 4} 条候选，再重排保留 ${ui.ragMaxHits} 条。`
-                      : "最终进入回答的证据数。关闭重排时，embedding 直接召回这个数量。"
+                      ? `最终进入回答的证据数。会先用 embedding 召回 ${ui.ragMaxHits * 4} 条候选，再重排保留 ${ui.ragMaxHits} 条。`
+                      : `最终进入回答的证据数，直接通过embedding召回 ${ui.ragMaxHits} 条候选。`
                   }
                 >
                   <WorkspaceTextInput
@@ -431,7 +431,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="API Key"
-                  description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。不会进入 `settings.toml`。"
+                  description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。"
                 >
                   <div className="w-[340px] rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
                     <div className="flex items-center justify-between gap-3">
@@ -499,7 +499,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="RAG 检索模型"
-                  description="Series 对话依赖 embedding 模型；reranking 只有在重排序模型已下载后才能开启。"
+                  description="Series 对话需要embdding模型，reranking模型强化检索能力(可选)"
                 >
                   <div className="w-full min-w-[320px] flex flex-col gap-3">
                     {ragModelsLoading && !ragModels.length ? (

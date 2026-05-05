@@ -5,7 +5,7 @@ import json
 from pydantic import BaseModel, Field
 
 from backend.agent.ports import ChatGateway
-from backend.agent.utils.json_protocol import parse_json_completion
+from backend.agent.prompts import COMPACTOR_SYSTEM_PROMPT
 from backend.agent.schemas.messages import AgentChatMessage
 
 
@@ -14,19 +14,6 @@ class CompactedConversationPayload(BaseModel):
     confirmed_facts: list[str] = Field(default_factory=list)
     open_threads: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
-
-
-COMPACTOR_SYSTEM_PROMPT = (
-    "你是视频知识工作台中的对话压缩器。\n"
-    "你的任务是把更早的对话消息压缩成可继续使用的语义摘要。\n"
-    "规则：\n"
-    "1. 只能依据给定消息总结，不要编造未出现的事实。\n"
-    "2. 保留真正会影响后续回答的内容：用户目标、已确认事实、未完成事项、重要约束。\n"
-    "3. 删除寒暄、重复表述、无关铺垫。\n"
-    "4. 输出必须紧凑，但不能损坏事实含义。\n"
-    "5. 只输出 JSON，不要代码块，不要额外解释。\n"
-    '6. JSON 格式固定为 {"summary":"...","confirmed_facts":["..."],"open_threads":["..."],"constraints":["..."]}。'
-)
 
 
 def compact_conversation_messages(
@@ -54,8 +41,10 @@ def compact_conversation_messages(
             ),
         ),
     ]
-    raw_output = gateway.create_text_completion(prompt_messages).strip()
-    return parse_json_completion(raw_output, CompactedConversationPayload)
+    return gateway.create_structured_completion(
+        prompt_messages,
+        response_model=CompactedConversationPayload,
+    )
 
 
 def render_compacted_payload(payload: CompactedConversationPayload) -> str:

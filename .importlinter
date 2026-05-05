@@ -27,6 +27,23 @@ source_modules =
 forbidden_modules =
     backend.video_summary.infrastructure
 
+[importlinter:contract:agent_core_must_not_read_orchestration_or_product]
+name = agent core must not depend on orchestration or product packages
+type = forbidden
+source_modules =
+    backend.agent
+forbidden_modules =
+    backend.agent_graph
+    backend.video_summary
+
+[importlinter:contract:video_summary_infra_must_not_read_agent_graph]
+name = video_summary infrastructure must not depend on agent_graph
+type = forbidden
+source_modules =
+    backend.video_summary.infrastructure
+forbidden_modules =
+    backend.agent_graph
+
 [importlinter:contract:domain_must_not_depend_on_infra_or_api]
 name = video_summary domain must not depend on api or infrastructure
 type = forbidden

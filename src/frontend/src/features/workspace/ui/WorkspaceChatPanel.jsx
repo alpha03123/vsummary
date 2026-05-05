@@ -149,10 +149,10 @@ export function WorkspaceChatPanel({
 
       {seriesRagLocked ? (
         <div className="border-b border-amber-200/80 bg-amber-50/90 px-6 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
-          <div className="font-semibold">请先下载 RAG 向量模型后再使用 series 问答</div>
+          <div className="font-semibold">请先下载 RAG 向量模型</div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">
-              系列问答需要先构建向量检索能力，点击后会直接打开设置里的下载管理。
+              series依赖rag数据库能力，请先下载相关模型。
             </p>
             <button
               type="button"
@@ -284,7 +284,7 @@ export function WorkspaceChatPanel({
               ? "概况生成完成后，这里会恢复正常提问"
               : seriesRagLocked
                 ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
-              : "AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作"}
+                : "AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作"}
           </p>
         </div>
       </div>
@@ -386,9 +386,9 @@ function WorkspaceToolTraceMessage({ message }) {
                 ? "工具正在执行中"
                 : isFailed
                   ? "工具调用过程中发生错误"
-                : isIdle
-                  ? "当前这一步已完成，等待下一步规划"
-                  : "展开查看本轮实际调用的工具名和步骤说明"}
+                  : isIdle
+                    ? "当前这一步已完成，等待下一步规划"
+                    : "展开查看本轮实际调用的工具名和步骤说明"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />

@@ -1,5 +1,5 @@
 from backend.agent.schemas.tool_calls import ToolName, ToolPlane
-from backend.agent.tools.catalog import (
+from backend.video_summary.agent.tools.catalog import (
     ALL_TOOL_DEFINITIONS,
     BUSINESS_READ_TOOL_DEFINITIONS,
     MODEL_VISIBLE_TOOL_PLANES,
@@ -8,17 +8,17 @@ from backend.agent.tools.catalog import (
     list_tool_definitions_for_plane,
     tool_is_model_visible,
 )
-from backend.agent.tools.context_access import (
+from backend.video_summary.agent.tools.context_access import (
     list_model_visible_tool_definitions_for_context,
     list_tool_definitions_for_context,
     tool_is_available_in_context,
 )
-from backend.agent.tools.library_info import create_get_video_transcript_handler
-from backend.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
-from backend.agent.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
-from backend.agent.tools.overview import execute_generate_overview, execute_open_overview
-from backend.agent.tools.series import execute_open_series_home, execute_open_series_overview
-from backend.agent.tools.video import execute_open_video, execute_video_seek
+from backend.video_summary.agent.tools.library_info import create_get_video_transcript_handler
+from backend.video_summary.agent.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
+from backend.video_summary.agent.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
+from backend.video_summary.agent.tools.overview import execute_generate_overview, execute_open_overview
+from backend.video_summary.agent.tools.series import execute_open_series_home, execute_open_series_overview
+from backend.video_summary.agent.tools.video import execute_open_video, execute_video_seek
 
 
 __all__ = [

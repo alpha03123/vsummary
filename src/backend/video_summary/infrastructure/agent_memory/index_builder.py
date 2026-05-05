@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.agent_graph.evidence.retrieval import SeriesRetrievalService
+from backend.video_summary.infrastructure.agent_memory.retrieval import SeriesRetrievalService
 
 
 class AgentWorkspaceIndexBuilder:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.tool_calls import ToolContextTag, ToolDefinition, ToolName
 
-from backend.agent.tools.catalog import (
+from backend.video_summary.agent.tools.catalog import (
     ALL_TOOL_DEFINITIONS,
     MODEL_VISIBLE_TOOL_PLANES,
     get_tool_definition,

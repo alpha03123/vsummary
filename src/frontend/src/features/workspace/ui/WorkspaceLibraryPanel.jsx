@@ -96,17 +96,16 @@ function PanelFooter({
               className="mb-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-2.5 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100/80 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200 dark:hover:bg-amber-950/30"
             >
               <ArrowDown size={16} strokeWidth={2.5} />
-              先下载 RAG 向量模型
+              下载 RAG 向量模型
             </button>
           ) : null}
           <button
             type="button"
             onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
-            className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${
-              isGeneratingSeries
+            className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${isGeneratingSeries
                 ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
                 : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
-            }`}
+              }`}
           >
             {isGeneratingSeries ? (
               <>

@@ -5,17 +5,17 @@ from backend.agent.schemas.tool_calls import (
     ToolName,
     ToolPlane,
 )
-from backend.agent.tools.library_info import (
+from backend.video_summary.agent.tools.library_info import (
     GET_VIDEO_SUMMARY_TOOL,
     GET_VIDEO_TRANSCRIPT_TOOL,
     GET_VIDEO_TOOLS_TOOL,
     LIST_SERIES_VIDEOS_TOOL,
 )
-from backend.agent.tools.mindmap import GENERATE_MINDMAP_TOOL, OPEN_MINDMAP_TOOL
-from backend.agent.tools.notes import OPEN_KNOWLEDGE_CARDS_TOOL, OPEN_NOTES_TOOL, SAVE_NOTE_TOOL
-from backend.agent.tools.overview import GENERATE_OVERVIEW_TOOL, OPEN_OVERVIEW_TOOL
-from backend.agent.tools.series import OPEN_SERIES_HOME_TOOL, OPEN_SERIES_OVERVIEW_TOOL
-from backend.agent.tools.video import OPEN_VIDEO_TOOL, VIDEO_SEEK_TOOL
+from backend.video_summary.agent.tools.mindmap import GENERATE_MINDMAP_TOOL, OPEN_MINDMAP_TOOL
+from backend.video_summary.agent.tools.notes import OPEN_KNOWLEDGE_CARDS_TOOL, OPEN_NOTES_TOOL, SAVE_NOTE_TOOL
+from backend.video_summary.agent.tools.overview import GENERATE_OVERVIEW_TOOL, OPEN_OVERVIEW_TOOL
+from backend.video_summary.agent.tools.series import OPEN_SERIES_HOME_TOOL, OPEN_SERIES_OVERVIEW_TOOL
+from backend.video_summary.agent.tools.video import OPEN_VIDEO_TOOL, VIDEO_SEEK_TOOL
 
 
 BUSINESS_READ_TOOL_DEFINITIONS: list[ToolDefinition] = [

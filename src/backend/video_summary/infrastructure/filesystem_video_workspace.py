@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from backend.agent_graph.evidence.document_schema import SeriesCatalogPayload
+from backend.video_summary.infrastructure.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.models import (
     ChapterCardDTO as ChapterCardDTO,

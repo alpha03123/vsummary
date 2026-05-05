@@ -41,14 +41,14 @@ class RagModelStatus:
 RAG_MODEL_SPECS: dict[str, RagModelSpec] = {
     "embedding": RagModelSpec(
         key="embedding",
-        label="BGE 中文向量模型",
+        label="bge-base-zh-v1.5(embedding)",
         repo_id="BAAI/bge-base-zh-v1.5",
         local_dir_name="bge-base-zh-v1.5",
         purpose="向量化检索候选内容",
     ),
     "reranker": RagModelSpec(
         key="reranker",
-        label="BGE 重排序模型",
+        label="bge-reranker-v2-m3(reranker)",
         repo_id="BAAI/bge-reranker-v2-m3",
         local_dir_name="bge-reranker-v2-m3",
         purpose="对检索候选内容进行重排序",

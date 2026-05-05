@@ -10,25 +10,27 @@ import logging
 import dspy
 
 from backend.agent import AgentContextBudgetService, FileAgentSessionStore
-from backend.agent.agent.execution import RegistryAgentToolExecutor
 from backend.agent.memory.dialog_history import DialogHistoryCompactor
-from backend.agent.infrastructure import LiteLLMChatGateway, WorkspaceAgentContextLoader
+from backend.agent.infrastructure import LiteLLMChatGateway
 from backend.agent.schemas.tool_calls import ToolName
-from backend.agent.tools.notes import execute_open_notes, execute_save_note
-from backend.agent.tools.video import execute_video_seek
 from backend.agent_graph.actions.video_action_planner import VideoActionPlanner
-from backend.agent_graph.evidence.index_builder import AgentWorkspaceIndexBuilder
 from backend.agent_graph.runtime.graph import build_agent_graph
-from backend.agent_graph.evidence.pinpoint import BGEReranker
 from backend.agent_graph.query.series_answer_synthesizer import SeriesAnswerSynthesizer
 from backend.agent_graph.query.series_query_processor import SeriesQueryProcessor
 from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
 from backend.agent_graph.dspy.programs import (
     AnswerSynthesisProgram,
 )
-from backend.agent_graph.evidence.retrieval import SeriesRetrievalService
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.shared.settings import SettingsService, SettingsServicePort
+from backend.video_summary.infrastructure.agent_memory import (
+    AgentWorkspaceIndexBuilder,
+    BGEReranker,
+    SeriesRetrievalService,
+)
+from backend.video_summary.agent import RegistryAgentToolExecutor, WorkspaceAgentContextLoader
+from backend.video_summary.agent.tools.notes import execute_open_notes, execute_save_note
+from backend.video_summary.agent.tools.video import execute_video_seek
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker

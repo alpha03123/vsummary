@@ -1,5 +1,1 @@
-from backend.agent.agent.execution import RegistryAgentToolExecutor
-
-__all__ = [
-    "RegistryAgentToolExecutor",
-]
+__all__: list[str] = []

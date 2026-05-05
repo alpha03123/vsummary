@@ -7,7 +7,7 @@ from backend.agent.memory.context import AgentContext
 from backend.agent.ports import AgentToolExecutor
 from backend.agent.schemas.action_plan import AgentActionPlan
 from backend.agent.schemas.tool_calls import ToolCall, ToolExecutionResult, ToolName
-from backend.agent.tools import tool_is_available_in_context
+from backend.video_summary.agent.tools import tool_is_available_in_context
 from backend.agent.validation.errors import AgentPlanError
 
 
