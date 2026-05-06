@@ -250,6 +250,29 @@ def download_rag_model(model_key: str, container: ApiContainerDep) -> RagModelRe
     return _to_rag_model_response(status)
 
 
+@router.get("/api/rag/models/{model_key}/download/progress")
+async def stream_rag_model_download_progress(
+    model_key: str,
+    container: ApiContainerDep,
+) -> StreamingResponse:
+    try:
+        task_id = container.rag_model_manager.stream_task_id(model_key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return StreamingResponse(
+        stream_progress_events(
+            tracker=container.rag_model_manager.progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @router.post("/api/rag/models/{model_key}/download/cancel", response_model=RagModelResponse)
 def cancel_rag_model_download(model_key: str, container: ApiContainerDep) -> RagModelResponse:
     try:

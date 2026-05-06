@@ -6,6 +6,7 @@ import {
   loadFasterWhisperModels,
   loadRagModels,
   subscribeFasterWhisperModelDownloadProgress,
+  subscribeRagModelDownloadProgress,
   testProviderSettings,
   updateProviderSettings,
   updateWorkspaceSettings,
@@ -203,24 +204,54 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
 
   async function onDownloadRagModel(modelKey) {
     dispatch({ type: "rag_model_download_started", modelKey });
+    let unsubscribe = () => {};
+    const downloadCompleted = new Promise((resolve, reject) => {
+      unsubscribe = subscribeRagModelDownloadProgress(modelKey, (snapshot) => {
+        if (snapshot.status === "running" || snapshot.status === "cancelling" || snapshot.status === "completed") {
+          dispatch({
+            type: "rag_model_download_progress_updated",
+            modelKey,
+            status: snapshot.status,
+            progress: snapshot.progress,
+            detail: snapshot.detail,
+            error: snapshot.error,
+          });
+        }
+
+        if (snapshot.status === "failed") {
+          reject(new Error(snapshot.error ?? "RAG 模型下载失败"));
+        }
+        if (snapshot.status === "cancelled") {
+          dispatch({ type: "rag_model_download_cancelled" });
+          reject(new Error("RAG 模型下载已取消"));
+        }
+        if (snapshot.status === "completed") {
+          resolve();
+        }
+      });
+    });
     try {
       await downloadRagModel(modelKey);
+      await downloadCompleted;
       const models = await loadRagModels();
       dispatch({ type: "rag_models_loaded", models });
     } catch (error) {
+      if (error instanceof Error && error.message.includes("取消")) {
+        dispatch({ type: "rag_model_download_cancelled" });
+        return;
+      }
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "RAG 模型下载失败",
       });
+    } finally {
+      unsubscribe();
     }
   }
 
   async function onCancelRagModelDownload(modelKey) {
     try {
       await cancelRagModelDownload(modelKey);
-      dispatch({ type: "rag_model_download_cancelled" });
-      const models = await loadRagModels();
-      dispatch({ type: "rag_models_loaded", models });
     } catch (error) {
       dispatch({
         type: "load_failed",

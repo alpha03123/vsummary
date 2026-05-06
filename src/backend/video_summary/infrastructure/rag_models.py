@@ -3,9 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Any, Callable
+from typing import Callable
 
 from backend.video_summary.generation.ports import ProgressReporter
+from backend.video_summary.infrastructure.huggingface_model_downloader import (
+    HuggingFaceDownloadSpec,
+    HuggingFaceModelDownloader,
+)
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.settings import load_env_settings
 
@@ -71,11 +75,16 @@ class RagModelManager:
         self._models_root = root_dir / "data" / "models" / "huggingface"
         self._progress_tracker = progress_tracker
         self._downloader = downloader or self._download_from_huggingface
+        self._hf_downloader = HuggingFaceModelDownloader()
         self._lock = Lock()
         self._active_keys: set[str] = set()
 
     def list_models(self) -> list[RagModelStatus]:
         return [self.get_status(key) for key in RAG_MODEL_SPECS]
+
+    @property
+    def progress_tracker(self) -> InMemoryProgressTracker:
+        return self._progress_tracker
 
     def get_status(self, key: str) -> RagModelStatus:
         spec = self._get_spec(key)
@@ -153,28 +162,24 @@ class RagModelManager:
                 self._active_keys.discard(spec.key)
 
     def _download_from_huggingface(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
-        from huggingface_hub import snapshot_download
-
-        reporter.update("download", 5.0, f"正在连接模型仓库：{spec.repo_id}")
         env_settings = load_env_settings(self._root_dir)
         endpoint = env_settings.hf_endpoint.strip() or None
-        total_bytes = _get_expected_download_size(spec.repo_id, endpoint=endpoint)
-        tqdm_class = _build_download_tqdm_class(
-            progress_reporter=reporter,
-            total_bytes=total_bytes,
-            label=spec.label,
+        self._hf_downloader.download(
+            HuggingFaceDownloadSpec(
+                repo_id=spec.repo_id,
+                target_dir=self.local_model_dir(spec.key),
+                required_files=spec.required_files,
+                required_file_patterns=("*.safetensors", "*.bin"),
+                allow_patterns=(),
+                endpoint=endpoint,
+            ),
+            reporter,
         )
-        reporter.raise_if_cancelled()
-        self.local_model_dir(spec.key).mkdir(parents=True, exist_ok=True)
-        snapshot_download(
-            repo_id=spec.repo_id,
-            local_dir=self.local_model_dir(spec.key),
-            endpoint=endpoint,
-            max_workers=4,
-            tqdm_class=tqdm_class,
-        )
-        reporter.raise_if_cancelled()
-        reporter.update("download", 95.0, f"正在校验 RAG 模型：{spec.label}")
+        reporter.update("validate", 95.0, f"正在校验 RAG 模型：{spec.label}")
+
+    def stream_task_id(self, key: str) -> str:
+        spec = self._get_spec(key)
+        return self._task_id(spec.key)
 
     def _get_spec(self, key: str) -> RagModelSpec:
         normalized = key.strip().lower()
@@ -185,103 +190,3 @@ class RagModelManager:
     @staticmethod
     def _task_id(key: str) -> str:
         return f"rag-model-download/{key}"
-
-
-def _get_expected_download_size(repo_id: str, *, endpoint: str | None) -> int | None:
-    from huggingface_hub import HfApi
-
-    api = HfApi(endpoint=endpoint) if endpoint else HfApi()
-    try:
-        info = api.model_info(repo_id, files_metadata=True)
-    except Exception:
-        return None
-    total = 0
-    has_size = False
-    for sibling in info.siblings:
-        size = getattr(sibling, "size", None)
-        if isinstance(size, int):
-            total += size
-            has_size = True
-    return total if has_size else None
-
-
-class _DownloadProgressCoordinator:
-    def __init__(self, progress_reporter: ProgressReporter, total_bytes: int | None, label: str) -> None:
-        self._progress_reporter = progress_reporter
-        self._total_bytes = total_bytes
-        self._label = label
-        self._bars: dict[int, int] = {}
-        self._bar_totals: dict[int, int] = {}
-
-    def update(self, bar: Any) -> None:
-        self._progress_reporter.raise_if_cancelled()
-        key = id(bar)
-        current_n = int(getattr(bar, "n", 0) or 0)
-        total = int(getattr(bar, "total", 0) or 0)
-        if _is_byte_progress_bar(total):
-            self._bars[key] = min(current_n, total)
-            self._bar_totals[key] = total
-
-        if self._total_bytes and self._total_bytes > 0 and self._bars:
-            progress = min(94.0, max(5.0, (sum(self._bars.values()) / self._total_bytes) * 90.0))
-        elif _is_byte_progress_bar(total):
-            progress = min(94.0, max(5.0, 5.0 + (current_n / total) * 89.0))
-        elif self._bar_totals:
-            known_total = sum(self._bar_totals.values())
-            progress = min(94.0, max(5.0, 5.0 + (sum(self._bars.values()) / known_total) * 89.0))
-        else:
-            progress = None
-
-        filename = _extract_filename(getattr(bar, "desc", None))
-        detail = f"正在下载 {filename}" if filename else f"正在下载 RAG 模型：{self._label}"
-        self._progress_reporter.update("download", progress, detail)
-
-    def finalize_bar(self, bar: Any) -> None:
-        key = id(bar)
-        total = int(getattr(bar, "total", 0) or 0)
-        if _is_byte_progress_bar(total):
-            self._bars[key] = total
-            self._bar_totals[key] = total
-
-
-def _build_download_tqdm_class(
-    *,
-    progress_reporter: ProgressReporter,
-    total_bytes: int | None,
-    label: str,
-):
-    from tqdm.auto import tqdm
-
-    coordinator = _DownloadProgressCoordinator(progress_reporter, total_bytes, label)
-
-    class DownloadProgressTqdm(tqdm):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            coordinator.update(self)
-
-        def update(self, n=1):
-            result = super().update(n)
-            coordinator.update(self)
-            return result
-
-        def close(self):
-            coordinator.update(self)
-            try:
-                return super().close()
-            finally:
-                coordinator.finalize_bar(self)
-
-    return DownloadProgressTqdm
-
-
-def _extract_filename(desc: object) -> str | None:
-    if not isinstance(desc, str):
-        return None
-    value = desc.strip()
-    if not value:
-        return None
-    return value.split(":", 1)[0].strip()
-
-
-def _is_byte_progress_bar(total: int) -> bool:
-    return total >= 1024 * 1024

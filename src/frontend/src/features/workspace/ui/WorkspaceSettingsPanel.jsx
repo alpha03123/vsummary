@@ -553,11 +553,12 @@ export function WorkspaceSettingsPanel({
                       </div>
                     ) : (
                       ragModels.map((model) => {
-                        const isDownloading = model.status === "running" || downloadingRagModelKey === model.key;
+                        const isDownloading = model.status === "running" || model.status === "cancelling" || downloadingRagModelKey === model.key;
+                        const isCancelling = model.status === "cancelling";
                         const statusText = model.downloaded
                           ? "已下载到本地"
                           : isDownloading
-                            ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
+                            ? `${isCancelling ? "正在取消 RAG 模型下载..." : "正在下载 RAG 模型..."} ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
                             : "尚未下载";
                         return (
                           <div
@@ -583,10 +584,11 @@ export function WorkspaceSettingsPanel({
                               {isDownloading ? (
                                 <button
                                   type="button"
+                                  disabled={isCancelling}
                                   onClick={() => onCancelRagModelDownload(model.key)}
-                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
                                 >
-                                  取消
+                                  {isCancelling ? "取消中" : "取消"}
                                 </button>
                               ) : model.downloaded ? (
                                 <button

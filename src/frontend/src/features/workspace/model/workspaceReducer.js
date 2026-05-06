@@ -140,6 +140,21 @@ export function workspaceReducer(state, action) {
         ragModelsLoading: true,
         error: "",
       };
+    case "rag_model_download_progress_updated":
+      return {
+        ...state,
+        downloadingRagModelKey: action.modelKey,
+        ragModelsLoading: false,
+        ragModels: state.ragModels.map((model) => model.key === action.modelKey
+          ? {
+            ...model,
+            status: action.status ?? model.status,
+            progress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
+            detail: action.detail ?? model.detail,
+            error: action.error ?? model.error,
+          }
+          : model),
+      };
     case "rag_model_download_cancelled":
       return {
         ...state,

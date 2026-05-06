@@ -145,6 +145,14 @@ export async function cancelRagModelDownload(modelKey) {
   });
 }
 
+export function subscribeRagModelDownloadProgress(modelKey, listener) {
+  return subscribeProgress(
+    `/api/rag/models/${encodeURIComponent(modelKey)}/download/progress`,
+    listener,
+    "RAG 模型下载进度连接已中断",
+  );
+}
+
 export async function downloadFasterWhisperModel(modelId) {
   return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download`, {
     method: "POST",
@@ -158,9 +166,15 @@ export async function cancelFasterWhisperModelDownload(modelId) {
 }
 
 export function subscribeFasterWhisperModelDownloadProgress(modelId, listener) {
-  const eventSource = new EventSource(
+  return subscribeProgress(
     `/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/progress`,
+    listener,
+    "模型下载进度连接已中断",
   );
+}
+
+function subscribeProgress(path, listener, connectionErrorMessage) {
+  const eventSource = new EventSource(path);
   let terminal = false;
 
   eventSource.onmessage = (event) => {
@@ -181,7 +195,7 @@ export function subscribeFasterWhisperModelDownloadProgress(modelId, listener) {
       stage: "failed",
       progress: null,
       detail: null,
-      error: "模型下载进度连接已中断",
+      error: connectionErrorMessage,
     });
     eventSource.close();
   };
