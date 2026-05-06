@@ -128,6 +128,7 @@ export function useWorkspaceController() {
     ragModelsLoading: state.ragModelsLoading,
     downloadingRagModelKey: state.downloadingRagModelKey,
     downloadingModelId: state.downloadingModelId,
+    modelDownloadStatus: state.modelDownloadStatus,
     modelDownloadProgress: state.modelDownloadProgress,
     tools,
     summary,

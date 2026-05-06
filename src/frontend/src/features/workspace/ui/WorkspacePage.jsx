@@ -393,6 +393,7 @@ export function WorkspacePage({ page }) {
                   ragModelsLoading={generation.ragModelsLoading}
                   downloadingRagModelKey={generation.downloadingRagModelKey}
                   downloadingModelId={generation.downloadingModelId}
+                  modelDownloadStatus={generation.modelDownloadStatus}
                   modelDownloadProgress={generation.modelDownloadProgress}
                   onChangeSetting={actions.changeSetting}
                   onSaveApiKey={actions.saveApiKey}

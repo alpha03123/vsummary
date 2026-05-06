@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatch
+import os
 from pathlib import Path
-from typing import Any
+import shutil
 
 from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides
 
@@ -22,6 +24,12 @@ class FasterWhisperModelInfo:
     downloaded: bool
     current: bool
     recommended: bool
+
+
+@dataclass(frozen=True)
+class _RepoFile:
+    path: str
+    size: int | None
 
 
 class FasterWhisperModelManager:
@@ -61,7 +69,7 @@ class FasterWhisperModelManager:
 
         try:
             from faster_whisper.utils import _MODELS
-            from huggingface_hub import HfApi, snapshot_download
+            from huggingface_hub import HfApi
         except ImportError as error:
             raise RuntimeError("faster-whisper is not installed.") from error
 
@@ -72,124 +80,184 @@ class FasterWhisperModelManager:
             return self.resolve_model_dir(model_size)
 
         target_dir = self.resolve_model_dir(model_size)
-        target_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir = target_dir.with_name(f".{target_dir.name}.download")
         apply_runtime_env_overrides(self._root_dir)
         repo_id = _MODELS[model_size]
-        total_bytes = _get_expected_download_size(repo_id)
-        tqdm_class = _build_download_tqdm_class(
-            progress_reporter=progress_reporter,
-            total_bytes=total_bytes,
+        endpoint = os.environ.get("HF_ENDPOINT", "").strip() or None
+        allow_patterns = (
+            "config.json",
+            "preprocessor_config.json",
+            "model.bin",
+            "tokenizer.json",
+            "vocabulary.*",
         )
-        snapshot_download(
-            repo_id,
-            local_dir=str(target_dir),
-            local_dir_use_symlinks=False,
-            allow_patterns=[
-                "config.json",
-                "preprocessor_config.json",
-                "model.bin",
-                "tokenizer.json",
-                "vocabulary.*",
-            ],
-            tqdm_class=tqdm_class,
-            max_workers=1,
-        )
+        api = HfApi(endpoint=endpoint) if endpoint else HfApi()
         if progress_reporter is not None:
-            progress_reporter.completed("模型下载完成")
+            progress_reporter.update("download", 0.0, f"正在连接模型仓库：{repo_id}")
+        files = _list_repo_files(api=api, repo_id=repo_id, allow_patterns=allow_patterns)
+        files = _with_resolved_file_sizes(repo_id=repo_id, files=files, endpoint=endpoint)
+        total_bytes = _sum_known_file_sizes(files)
+        if progress_reporter is not None:
+            progress_reporter.raise_if_cancelled()
+        try:
+            _remove_path(temp_dir)
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            _download_repo_files(
+                repo_id=repo_id,
+                files=files,
+                target_dir=temp_dir,
+                endpoint=endpoint,
+                progress_reporter=progress_reporter,
+                total_bytes=total_bytes,
+            )
+            if progress_reporter is not None:
+                progress_reporter.raise_if_cancelled()
+                progress_reporter.update("download", 99.0, "正在校验模型文件")
+            if not (temp_dir / "model.bin").is_file() or not (temp_dir / "config.json").is_file():
+                raise RuntimeError("模型下载完成但缺少必要文件。")
+            _remove_path(target_dir)
+            temp_dir.replace(target_dir)
+            if progress_reporter is not None:
+                progress_reporter.completed("模型下载完成")
+        except Exception:
+            _remove_path(temp_dir)
+            raise
         return target_dir
 
 
-def _get_expected_download_size(repo_id: str) -> int | None:
-    from huggingface_hub import HfApi
+def _remove_path(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
 
+
+def _list_repo_files(*, api, repo_id: str, allow_patterns: tuple[str, ...]) -> list[_RepoFile]:
     try:
-        info = HfApi().model_info(repo_id, files_metadata=True)
-    except Exception:
-        return None
-    total = 0
-    has_size = False
+        info = api.model_info(repo_id, files_metadata=True)
+    except Exception as error:
+        raise RuntimeError(f"无法读取模型仓库信息：{repo_id}") from error
+    files: list[_RepoFile] = []
     for sibling in info.siblings:
-        if sibling.rfilename in {"config.json", "preprocessor_config.json", "model.bin", "tokenizer.json"} or sibling.rfilename.startswith("vocabulary."):
-            size = getattr(sibling, "size", None)
-            if isinstance(size, int):
-                total += size
-                has_size = True
-    return total if has_size else None
+        path = str(getattr(sibling, "rfilename", "")).strip()
+        if not path or not _matches_any_pattern(path, allow_patterns):
+            continue
+        size = getattr(sibling, "size", None)
+        files.append(_RepoFile(path=path, size=size if isinstance(size, int) else None))
+    if not files:
+        raise RuntimeError(f"模型仓库没有匹配的 faster-whisper 文件：{repo_id}")
+    return sorted(files, key=lambda item: item.path)
 
 
-class _DownloadProgressCoordinator:
-    def __init__(self, progress_reporter, total_bytes: int | None) -> None:
-        self._progress_reporter = progress_reporter
-        self._total_bytes = total_bytes
-        self._bars: dict[int, int] = {}
-        self._bar_totals: dict[int, int] = {}
-
-    def update(self, bar: Any) -> None:
-        if self._progress_reporter is None:
-            return
-        self._progress_reporter.raise_if_cancelled()
-        key = id(bar)
-        filename = _extract_filename(getattr(bar, "desc", None))
-        current_n = int(getattr(bar, "n", 0) or 0)
-        total = int(getattr(bar, "total", 0) or 0)
-        if _is_byte_progress_bar(total):
-            self._bars[key] = min(current_n, total)
-            self._bar_totals[key] = total
-
-        if self._total_bytes and self._total_bytes > 0 and self._bars:
-            progress = min(99.0, (sum(self._bars.values()) / self._total_bytes) * 100.0)
-        elif _is_byte_progress_bar(total):
-            progress = min(99.0, (current_n / total) * 100.0)
-        elif self._bar_totals:
-            known_total = sum(self._bar_totals.values())
-            progress = min(99.0, (sum(self._bars.values()) / known_total) * 100.0)
-        else:
-            progress = None
-        detail = f"正在下载 {filename}" if filename else "正在下载模型文件"
-        self._progress_reporter.update("download", progress, detail)
-
-    def finalize_bar(self, bar: Any) -> None:
-        key = id(bar)
-        total = int(getattr(bar, "total", 0) or 0)
-        if _is_byte_progress_bar(total):
-            self._bars[key] = total
-            self._bar_totals[key] = total
+def _matches_any_pattern(path: str, patterns: tuple[str, ...]) -> bool:
+    return any(fnmatch(path, pattern) for pattern in patterns)
 
 
-def _build_download_tqdm_class(progress_reporter, total_bytes: int | None):
-    try:
-        from tqdm.auto import tqdm
-    except ImportError as error:
-        raise RuntimeError("tqdm is required to report download progress.") from error
-
-    coordinator = _DownloadProgressCoordinator(progress_reporter, total_bytes)
-
-    class DownloadProgressTqdm(tqdm):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            coordinator.update(self)
-
-        def update(self, n=1):
-            result = super().update(n)
-            coordinator.update(self)
-            return result
-
-        def close(self):
-            coordinator.update(self)
-            try:
-                return super().close()
-            finally:
-                coordinator.finalize_bar(self)
-
-    return DownloadProgressTqdm
+def _sum_known_file_sizes(files: list[_RepoFile]) -> int | None:
+    total = sum(file.size for file in files if isinstance(file.size, int))
+    return total if total > 0 else None
 
 
-def _extract_filename(desc: object) -> str | None:
-    if not isinstance(desc, str):
+def _with_resolved_file_sizes(
+    *,
+    repo_id: str,
+    files: list[_RepoFile],
+    endpoint: str | None,
+) -> list[_RepoFile]:
+    if all(isinstance(file.size, int) for file in files):
+        return files
+
+    from huggingface_hub import hf_hub_url
+    import requests
+
+    resolved: list[_RepoFile] = []
+    for file in files:
+        if isinstance(file.size, int):
+            resolved.append(file)
+            continue
+        size = None
+        try:
+            response = requests.head(
+                hf_hub_url(repo_id, file.path, endpoint=endpoint),
+                allow_redirects=True,
+                timeout=(10, 30),
+            )
+            if response.ok:
+                size = _resolve_response_total_bytes(response)
+        except requests.RequestException:
+            size = None
+        resolved.append(_RepoFile(path=file.path, size=size))
+    return resolved
+
+
+def _download_repo_files(
+    *,
+    repo_id: str,
+    files: list[_RepoFile],
+    target_dir: Path,
+    endpoint: str | None,
+    progress_reporter,
+    total_bytes: int | None,
+) -> None:
+    from huggingface_hub import hf_hub_url
+    import requests
+
+    downloaded_bytes = 0
+    for file in files:
+        if progress_reporter is not None:
+            progress_reporter.raise_if_cancelled()
+        destination = target_dir / file.path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        url = hf_hub_url(repo_id, file.path, endpoint=endpoint)
+        detail = f"正在下载 {file.path}"
+        _report_download_progress(
+            progress_reporter=progress_reporter,
+            downloaded_bytes=downloaded_bytes,
+            total_bytes=total_bytes,
+            detail=detail,
+        )
+        with requests.get(url, stream=True, timeout=(10, 30)) as response:
+            response.raise_for_status()
+            fallback_total = _resolve_response_total_bytes(response)
+            with destination.open("wb") as output:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if progress_reporter is not None:
+                        progress_reporter.raise_if_cancelled()
+                    if not chunk:
+                        continue
+                    output.write(chunk)
+                    downloaded_bytes += len(chunk)
+                    _report_download_progress(
+                        progress_reporter=progress_reporter,
+                        downloaded_bytes=downloaded_bytes,
+                        total_bytes=total_bytes or fallback_total,
+                        detail=detail,
+                    )
+        if file.size is not None and destination.stat().st_size != file.size:
+            raise RuntimeError(f"模型文件大小校验失败：{file.path}")
+
+
+def _resolve_response_total_bytes(response) -> int | None:
+    value = response.headers.get("Content-Length")
+    if not value:
         return None
-    parts = desc.strip().split(":")
-    return parts[0].strip() if parts else None
+    try:
+        total = int(value)
+    except ValueError:
+        return None
+    return total if total > 0 else None
 
 
-def _is_byte_progress_bar(total: int) -> bool:
-    return total >= 1024 * 1024
+def _report_download_progress(
+    *,
+    progress_reporter,
+    downloaded_bytes: int,
+    total_bytes: int | None,
+    detail: str,
+) -> None:
+    if progress_reporter is None:
+        return
+    progress = None
+    if total_bytes and total_bytes > 0:
+        progress = min(98.0, (downloaded_bytes / total_bytes) * 98.0)
+    progress_reporter.update("download", progress, detail)

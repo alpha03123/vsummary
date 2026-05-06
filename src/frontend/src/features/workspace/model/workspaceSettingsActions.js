@@ -145,10 +145,11 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     let unsubscribe = () => {};
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
-      if (snapshot.status === "running" || snapshot.status === "completed") {
+      if (snapshot.status === "running" || snapshot.status === "cancelling" || snapshot.status === "completed") {
         dispatch({
           type: "faster_whisper_model_download_progress_updated",
           modelId,
+          status: snapshot.status,
           progress: snapshot.progress,
         });
       }
@@ -192,9 +193,6 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onCancelFasterWhisperModelDownload(modelId) {
     try {
       await cancelFasterWhisperModelDownload(modelId);
-      dispatch({ type: "faster_whisper_model_download_cancelled" });
-      const models = await loadFasterWhisperModels();
-      dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
       dispatch({
         type: "load_failed",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import Lock
 from threading import Thread
 
 from fastapi import APIRouter, HTTPException
@@ -19,6 +20,8 @@ from backend.api.sse import stream_progress_events
 from backend.video_summary.infrastructure.settings import load_settings
 
 router = APIRouter()
+_ASR_DOWNLOAD_LOCK = Lock()
+_ACTIVE_ASR_DOWNLOADS: set[str] = set()
 
 
 @router.get("/api/settings", response_model=WorkspaceSettingsResponse)
@@ -172,12 +175,17 @@ def download_faster_whisper_model(model_id: str, container: ApiContainerDep) -> 
         raise HTTPException(status_code=400, detail=f"unsupported faster-whisper model '{model_id}'")
 
     task_id = _build_model_download_task_id(model_id)
-    snapshot = container.model_download_progress_tracker.get_snapshot(task_id)
-    if snapshot.status not in {"running", "cancelling"}:
+    should_start = False
+    with _ASR_DOWNLOAD_LOCK:
+        if task_id not in _ACTIVE_ASR_DOWNLOADS:
+            _ACTIVE_ASR_DOWNLOADS.add(task_id)
+            should_start = True
+
+    if should_start:
         reporter = container.model_download_progress_tracker.create_reporter(task_id)
         Thread(
             target=_run_faster_whisper_model_download,
-            args=(model_id, container, reporter),
+            args=(model_id, task_id, container, reporter),
             daemon=True,
         ).start()
 
@@ -218,8 +226,14 @@ async def stream_faster_whisper_model_download_progress(
 
 @router.post("/api/asr/faster-whisper/models/{model_id}/download/cancel")
 def cancel_faster_whisper_model_download(model_id: str, container: ApiContainerDep) -> dict[str, object]:
-    container.model_download_progress_tracker.request_cancel(_build_model_download_task_id(model_id))
-    return {"status": "cancelled"}
+    task_id = _build_model_download_task_id(model_id)
+    with _ASR_DOWNLOAD_LOCK:
+        is_active = task_id in _ACTIVE_ASR_DOWNLOADS
+    if is_active:
+        container.model_download_progress_tracker.request_cancel(task_id)
+        return {"status": "cancelling"}
+    snapshot = container.model_download_progress_tracker.get_snapshot(task_id)
+    return {"status": snapshot.status}
 
 
 @router.get("/api/rag/models", response_model=list[RagModelResponse])
@@ -249,7 +263,7 @@ def _build_model_download_task_id(model_id: str) -> str:
     return f"asr-download/{model_id}"
 
 
-def _run_faster_whisper_model_download(model_id: str, container: ApiContainerDep, reporter) -> None:
+def _run_faster_whisper_model_download(model_id: str, task_id: str, container: ApiContainerDep, reporter) -> None:
     try:
         container.faster_whisper_model_manager.download(model_id, progress_reporter=reporter)
     except Exception as error:
@@ -257,6 +271,9 @@ def _run_faster_whisper_model_download(model_id: str, container: ApiContainerDep
             reporter.cancelled("模型下载已取消")
             return
         reporter.failed(str(error))
+    finally:
+        with _ASR_DOWNLOAD_LOCK:
+            _ACTIVE_ASR_DOWNLOADS.discard(task_id)
 
 
 def _to_rag_model_response(model) -> RagModelResponse:

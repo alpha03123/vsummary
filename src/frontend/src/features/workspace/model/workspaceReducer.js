@@ -99,6 +99,7 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         downloadingModelId: action.modelId,
+        modelDownloadStatus: "running",
         modelDownloadProgress: 0,
         fasterWhisperModelsLoading: false,
         error: "",
@@ -107,12 +108,14 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         downloadingModelId: action.modelId,
+        modelDownloadStatus: action.status ?? state.modelDownloadStatus,
         modelDownloadProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
       };
     case "faster_whisper_model_download_cancelled":
       return {
         ...state,
         downloadingModelId: null,
+        modelDownloadStatus: null,
         modelDownloadProgress: null,
         fasterWhisperModelsLoading: false,
       };
@@ -122,6 +125,7 @@ export function workspaceReducer(state, action) {
         fasterWhisperModels: action.models,
         fasterWhisperModelsLoading: false,
         downloadingModelId: null,
+        modelDownloadStatus: null,
         modelDownloadProgress: null,
       };
     case "rag_models_loading_started":
@@ -171,6 +175,7 @@ export function workspaceReducer(state, action) {
         downloadingVideoKey: null,
         videoDownloadProgress: null,
         downloadingModelId: null,
+        modelDownloadStatus: null,
         modelDownloadProgress: null,
         contextUsageLoading: false,
         error: action.message,

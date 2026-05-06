@@ -48,6 +48,7 @@ export function buildWorkspacePageModel(controller) {
       ragModelsLoading: controller.ragModelsLoading,
       downloadingRagModelKey: controller.downloadingRagModelKey,
       downloadingModelId: controller.downloadingModelId,
+      modelDownloadStatus: controller.modelDownloadStatus,
       modelDownloadProgress: controller.modelDownloadProgress,
       progress: generationSnapshot?.progress ?? null,
       snapshot: generationSnapshot,

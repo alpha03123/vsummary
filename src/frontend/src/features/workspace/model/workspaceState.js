@@ -427,6 +427,7 @@ export function createInitialWorkspaceState() {
     downloadingVideoKey: null,
     videoDownloadProgress: null,
     downloadingModelId: null,
+    modelDownloadStatus: null,
     modelDownloadProgress: null,
     toolsLoading: false,
     summaryLoading: false,

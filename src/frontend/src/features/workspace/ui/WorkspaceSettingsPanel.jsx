@@ -18,6 +18,7 @@ export function WorkspaceSettingsPanel({
   ragModelsLoading = false,
   downloadingRagModelKey = null,
   downloadingModelId,
+  modelDownloadStatus = null,
   modelDownloadProgress,
   onChangeSetting,
   onSaveApiKey,
@@ -197,6 +198,7 @@ export function WorkspaceSettingsPanel({
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
                         const isDownloading = downloadingModelId === model.id;
+                        const isCancelling = isDownloading && modelDownloadStatus === "cancelling";
                         const isReady = model.downloaded === true;
                         const statusText = model.downloaded
                           ? "已下载到本地"
@@ -223,7 +225,7 @@ export function WorkspaceSettingsPanel({
                                 </div>
                                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                                   {isDownloading
-                                    ? `正在下载... ${typeof modelDownloadProgress === "number" ? `${Math.round(modelDownloadProgress)}%` : ""}`.trim()
+                                    ? `${isCancelling ? "正在取消..." : "正在下载..."} ${typeof modelDownloadProgress === "number" ? `${Math.round(modelDownloadProgress)}%` : ""}`.trim()
                                     : statusText}
                                 </p>
                                 {isDownloading ? (
@@ -238,10 +240,11 @@ export function WorkspaceSettingsPanel({
                               {isDownloading ? (
                                 <button
                                   type="button"
+                                  disabled={isCancelling}
                                   onClick={() => onCancelFasterWhisperModelDownload(model.id)}
-                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
                                 >
-                                  取消
+                                  {isCancelling ? "取消中" : "取消"}
                                 </button>
                               ) : isCurrent && isReady ? (
                                 <button
