@@ -49,13 +49,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
 
         {/* Header Section */}
         <motion.div variants={blurVariant} className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200 dark:border-white/5 w-fit shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-success-muted shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Workspace Active</span>
-            </div>
 
-          </div>
           <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
             Welcome to your{" "}
             <span className="text-stone-400 dark:text-zinc-500">Knowledge Base.</span>
@@ -74,7 +68,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
               </p>
               <div className="flex items-baseline gap-3 mb-2">
                 <h3 className="text-5xl font-black text-stone-900 dark:text-stone-100 tracking-tighter">{progressPercentage}%</h3>
-                <p className="text-sm font-semibold text-stone-500 dark:text-zinc-400 pb-1">AI 覆盖率</p>
+                <p className="text-sm font-semibold text-stone-500 dark:text-zinc-400 pb-1">processed</p>
               </div>
 
               <div className="h-3 w-full bg-stone-200/60 dark:bg-neutral-900/80 rounded-full overflow-hidden mt-4 shadow-inner relative">
@@ -147,7 +141,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
               <div>
                 <h3 className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">排练场</h3>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-stone-500 dark:text-zinc-400">
-                  处理日常非系列视频
+                  处理非系列视频
                 </p>
               </div>
               <div className="mt-2">
@@ -176,7 +170,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
                 onClick={() => onSelectSeries(playgroundSeries.id)}
                 className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-2xl bg-accent hover:bg-accent/90 text-white text-sm font-bold shadow-sm transition-colors"
               >
-                <PlusCircle size={15} /> 进入 Playground 工作区
+                <PlusCircle size={15} /> 进入 Playground
               </button>
             </div>
           </motion.article>

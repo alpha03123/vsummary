@@ -70,7 +70,7 @@ function PanelFooter({
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">Playground Workspace</h3>
         </div>
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-          添加或选择一个视频，再进入 AI 概况、预览、笔记和知识工具。
+          添加或选择一个视频
         </p>
       </div>
     );
@@ -103,8 +103,8 @@ function PanelFooter({
             type="button"
             onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
             className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${isGeneratingSeries
-                ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
-                : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
+              ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+              : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
               }`}
           >
             {isGeneratingSeries ? (

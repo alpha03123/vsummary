@@ -51,7 +51,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
           </p>
           <h2 className="text-2xl font-extrabold text-stone-900 dark:text-stone-100 tracking-tight">All Shelves</h2>
           <p className="mt-2 text-[13px] font-medium leading-relaxed text-stone-500 dark:text-zinc-400">
-            承载首页的 series 主内容。点击一个shelf进入该系列视频的工作区。
+            点击下方任一系列来进入工作区
           </p>
 
           {onAddSeries ? (

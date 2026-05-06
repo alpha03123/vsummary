@@ -283,7 +283,6 @@ export function WorkspacePage({ page }) {
                 <WorkspaceStateBlock
                   eyebrow="Playground"
                   title="选择一个视频开始分析"
-                  description="Playground 不提供 series 级分析。这里的每个视频都是一次独立的单视频工作区。"
                   dashed
                 />
               </div>

@@ -164,7 +164,7 @@ export function WorkspaceReadingPane({
                         <WorkspaceStateBlock
                           eyebrow="Playground"
                           title="选择一个 Playground 视频"
-                          description="Playground 不提供 series 级工具。左侧每个视频都会作为一次独立的单视频分析进入。"
+                      description=""
                           dashed
                         />
                       ) : (
