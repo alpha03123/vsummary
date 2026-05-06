@@ -165,6 +165,8 @@ class TaskProgressReporter:
         self._task_id = task_id
 
     def update(self, stage: str, progress: float | None = None, detail: str | None = None) -> None:
+        if self.is_cancel_requested():
+            return
         self._tracker._write(
             self._task_id,
             status="running",
