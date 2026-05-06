@@ -1,6 +1,4 @@
 import {
-  cancelFasterWhisperModelDownload,
-  cancelRagModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
   loadFasterWhisperModels,
@@ -146,7 +144,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     let unsubscribe = () => {};
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
-      if (snapshot.status === "running" || snapshot.status === "cancelling" || snapshot.status === "completed") {
+      if (snapshot.status === "running" || snapshot.status === "completed") {
         dispatch({
           type: "faster_whisper_model_download_progress_updated",
           modelId,
@@ -157,10 +155,6 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
 
       if (snapshot.status === "failed") {
         reject(new Error(snapshot.error ?? "语音模型下载失败"));
-      }
-      if (snapshot.status === "cancelled") {
-        dispatch({ type: "faster_whisper_model_download_cancelled" });
-        reject(new Error("模型下载已取消"));
       }
       if (snapshot.status === "completed") {
         resolve();
@@ -178,10 +172,6 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       const models = await loadFasterWhisperModels();
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
-      if (error instanceof Error && (error.message.includes("409") || error.message.includes("取消"))) {
-        dispatch({ type: "faster_whisper_model_download_cancelled" });
-        return;
-      }
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "语音模型下载失败",
@@ -191,23 +181,12 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
-  async function onCancelFasterWhisperModelDownload(modelId) {
-    try {
-      await cancelFasterWhisperModelDownload(modelId);
-    } catch (error) {
-      dispatch({
-        type: "load_failed",
-        message: error instanceof Error ? error.message : "取消语音模型下载失败",
-      });
-    }
-  }
-
   async function onDownloadRagModel(modelKey) {
     dispatch({ type: "rag_model_download_started", modelKey });
     let unsubscribe = () => {};
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeRagModelDownloadProgress(modelKey, (snapshot) => {
-        if (snapshot.status === "running" || snapshot.status === "cancelling" || snapshot.status === "completed") {
+        if (snapshot.status === "running" || snapshot.status === "completed") {
           dispatch({
             type: "rag_model_download_progress_updated",
             modelKey,
@@ -221,10 +200,6 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         if (snapshot.status === "failed") {
           reject(new Error(snapshot.error ?? "RAG 模型下载失败"));
         }
-        if (snapshot.status === "cancelled") {
-          dispatch({ type: "rag_model_download_cancelled" });
-          reject(new Error("RAG 模型下载已取消"));
-        }
         if (snapshot.status === "completed") {
           resolve();
         }
@@ -236,27 +211,12 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       const models = await loadRagModels();
       dispatch({ type: "rag_models_loaded", models });
     } catch (error) {
-      if (error instanceof Error && error.message.includes("取消")) {
-        dispatch({ type: "rag_model_download_cancelled" });
-        return;
-      }
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "RAG 模型下载失败",
       });
     } finally {
       unsubscribe();
-    }
-  }
-
-  async function onCancelRagModelDownload(modelKey) {
-    try {
-      await cancelRagModelDownload(modelKey);
-    } catch (error) {
-      dispatch({
-        type: "load_failed",
-        message: error instanceof Error ? error.message : "取消 RAG 模型下载失败",
-      });
     }
   }
 
@@ -269,8 +229,6 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onTestProviderConnection,
     onResetSettings,
     onDownloadFasterWhisperModel,
-    onCancelFasterWhisperModelDownload,
     onDownloadRagModel,
-    onCancelRagModelDownload,
   };
 }

@@ -110,17 +110,12 @@ class RagModelManager:
             if spec.key in self._active_keys:
                 return self.get_status(spec.key)
             snapshot = self._progress_tracker.get_snapshot(self._task_id(spec.key))
-            if snapshot.status in {"running", "cancelling"}:
+            if snapshot.status == "running":
                 return self.get_status(spec.key)
             self._active_keys.add(spec.key)
             reporter = self._progress_tracker.create_reporter(self._task_id(spec.key))
             reporter.update("download", 0.0, f"正在下载 RAG 模型：{spec.label}")
         Thread(target=self._run_download, args=(spec, reporter), daemon=True).start()
-        return self.get_status(spec.key)
-
-    def cancel_download(self, key: str) -> RagModelStatus:
-        spec = self._get_spec(key)
-        self._progress_tracker.request_cancel(self._task_id(spec.key))
         return self.get_status(spec.key)
 
     def has_active_download(self) -> bool:
@@ -153,9 +148,6 @@ class RagModelManager:
             self._downloader(spec, reporter)
             reporter.completed(f"RAG 模型已下载：{spec.label}")
         except Exception as error:
-            if "取消" in str(error) or "cancel" in str(error).lower():
-                reporter.cancelled("RAG 模型下载已取消")
-                return
             reporter.failed(str(error))
         finally:
             with self._lock:

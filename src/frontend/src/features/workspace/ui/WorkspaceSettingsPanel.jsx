@@ -24,9 +24,7 @@ export function WorkspaceSettingsPanel({
   onSaveApiKey,
   onTestProviderConnection,
   onDownloadFasterWhisperModel,
-  onCancelFasterWhisperModelDownload,
   onDownloadRagModel,
-  onCancelRagModelDownload,
   onResetSettings,
   onClose,
 }) {
@@ -198,7 +196,6 @@ export function WorkspaceSettingsPanel({
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
                         const isDownloading = downloadingModelId === model.id;
-                        const isCancelling = isDownloading && modelDownloadStatus === "cancelling";
                         const isReady = model.downloaded === true;
                         const statusText = model.downloaded
                           ? "已下载到本地"
@@ -225,7 +222,7 @@ export function WorkspaceSettingsPanel({
                                 </div>
                                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                                   {isDownloading
-                                    ? `${isCancelling ? "正在取消..." : "正在下载..."} ${typeof modelDownloadProgress === "number" ? `${Math.round(modelDownloadProgress)}%` : ""}`.trim()
+                                    ? `正在下载... ${typeof modelDownloadProgress === "number" ? `${Math.round(modelDownloadProgress)}%` : ""}`.trim()
                                     : statusText}
                                 </p>
                                 {isDownloading ? (
@@ -240,11 +237,10 @@ export function WorkspaceSettingsPanel({
                               {isDownloading ? (
                                 <button
                                   type="button"
-                                  disabled={isCancelling}
-                                  onClick={() => onCancelFasterWhisperModelDownload(model.id)}
-                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                  disabled
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-400 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
                                 >
-                                  {isCancelling ? "取消中" : "取消"}
+                                  下载中
                                 </button>
                               ) : isCurrent && isReady ? (
                                 <button
@@ -553,12 +549,11 @@ export function WorkspaceSettingsPanel({
                       </div>
                     ) : (
                       ragModels.map((model) => {
-                        const isDownloading = model.status === "running" || model.status === "cancelling" || downloadingRagModelKey === model.key;
-                        const isCancelling = model.status === "cancelling";
+                        const isDownloading = model.status === "running" || downloadingRagModelKey === model.key;
                         const statusText = model.downloaded
                           ? "已下载到本地"
                           : isDownloading
-                            ? `${isCancelling ? "正在取消 RAG 模型下载..." : "正在下载 RAG 模型..."} ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
+                            ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
                             : "尚未下载";
                         return (
                           <div
@@ -584,11 +579,10 @@ export function WorkspaceSettingsPanel({
                               {isDownloading ? (
                                 <button
                                   type="button"
-                                  disabled={isCancelling}
-                                  onClick={() => onCancelRagModelDownload(model.key)}
-                                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+                                  disabled
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-400 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
                                 >
-                                  {isCancelling ? "取消中" : "取消"}
+                                  下载中
                                 </button>
                               ) : model.downloaded ? (
                                 <button

@@ -224,18 +224,6 @@ async def stream_faster_whisper_model_download_progress(
     )
 
 
-@router.post("/api/asr/faster-whisper/models/{model_id}/download/cancel")
-def cancel_faster_whisper_model_download(model_id: str, container: ApiContainerDep) -> dict[str, object]:
-    task_id = _build_model_download_task_id(model_id)
-    with _ASR_DOWNLOAD_LOCK:
-        is_active = task_id in _ACTIVE_ASR_DOWNLOADS
-    if is_active:
-        container.model_download_progress_tracker.request_cancel(task_id)
-        return {"status": "cancelling"}
-    snapshot = container.model_download_progress_tracker.get_snapshot(task_id)
-    return {"status": snapshot.status}
-
-
 @router.get("/api/rag/models", response_model=list[RagModelResponse])
 def list_rag_models(container: ApiContainerDep) -> list[RagModelResponse]:
     return [_to_rag_model_response(model) for model in container.rag_model_manager.list_models()]
@@ -273,15 +261,6 @@ async def stream_rag_model_download_progress(
     )
 
 
-@router.post("/api/rag/models/{model_key}/download/cancel", response_model=RagModelResponse)
-def cancel_rag_model_download(model_key: str, container: ApiContainerDep) -> RagModelResponse:
-    try:
-        status = container.rag_model_manager.cancel_download(model_key)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return _to_rag_model_response(status)
-
-
 def _build_model_download_task_id(model_id: str) -> str:
     return f"asr-download/{model_id}"
 
@@ -290,9 +269,6 @@ def _run_faster_whisper_model_download(model_id: str, task_id: str, container: A
     try:
         container.faster_whisper_model_manager.download(model_id, progress_reporter=reporter)
     except Exception as error:
-        if "取消" in str(error):
-            reporter.cancelled("模型下载已取消")
-            return
         reporter.failed(str(error))
     finally:
         with _ASR_DOWNLOAD_LOCK:
