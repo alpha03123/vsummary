@@ -1,11 +1,11 @@
 export function WorkspaceSettingRow({ title, description, children }) {
   return (
-    <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 sm:flex-row sm:items-center">
-      <div className="max-w-[400px]">
+    <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 2xl:flex-row 2xl:items-center">
+      <div className="min-w-0 max-w-none 2xl:w-[260px] 2xl:shrink-0">
         <strong className="mb-1.5 block text-base font-bold text-stone-900 dark:text-stone-100">{title}</strong>
         <span className="block text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">{description}</span>
       </div>
-      <div className="flex shrink-0 items-center justify-end">{children}</div>
+      <div className="flex min-w-0 w-full items-center justify-end 2xl:w-auto 2xl:shrink-0">{children}</div>
     </div>
   );
 }
@@ -32,7 +32,7 @@ export function WorkspaceToggleSwitch({ checked, disabled = false, onChange }) {
 
 export function WorkspaceSegmentedControl({ value, options, onChange }) {
   return (
-    <div className="flex rounded-xl bg-stone-100 p-1 dark:bg-stone-800/60" role="group">
+    <div className="flex flex-wrap rounded-xl bg-stone-100 p-1 dark:bg-stone-800/60" role="group">
       {options.map((option) => {
         const active = option.id === value;
         return (
@@ -67,7 +67,7 @@ export function WorkspaceTextInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className={`rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
+      className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     />
   );
 }

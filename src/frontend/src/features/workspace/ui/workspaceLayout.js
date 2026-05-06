@@ -6,6 +6,7 @@ export const WORKSPACE_LAYOUT_LIMITS = {
   sidebarMinWidth: 260,
   middleDefaultWidth: 640,
   middleMinWidth: 320,
+  middleMaxShare: 0.52,
   rightMinWidth: 320,
   contentMinWidth: 480,
 };
@@ -57,9 +58,13 @@ export function clampSidebarWidth({ proposedWidth, containerWidth, hasRightPane 
 
 export function clampMiddleWidth({ proposedWidth, containerWidth, sidebarWidth }) {
   const limits = WORKSPACE_LAYOUT_LIMITS;
+  const availableWidth = containerWidth - sidebarWidth;
   const maxWidth = Math.max(
     limits.middleMinWidth,
-    containerWidth - sidebarWidth - limits.rightMinWidth,
+    Math.min(
+      availableWidth - limits.rightMinWidth,
+      availableWidth * limits.middleMaxShare,
+    ),
   );
   return clamp(proposedWidth, limits.middleMinWidth, maxWidth);
 }

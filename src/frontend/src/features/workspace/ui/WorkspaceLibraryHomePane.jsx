@@ -45,7 +45,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
       exit="exit"
       className="flex-1 min-w-0 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 bg-stone-50/30 dark:bg-transparent"
     >
-      <div className="w-full max-w-5xl mx-auto px-8 xl:px-10 py-6 xl:py-8 flex flex-col gap-5 h-full">
+      <div className="w-full max-w-5xl mx-auto px-8 xl:px-10 py-6 xl:py-8 flex min-h-full flex-col gap-5">
 
         {/* Header Section */}
         <motion.div variants={blurVariant} className="flex flex-col gap-3">
@@ -64,7 +64,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
         </motion.div>
 
         {/* Bento Grid Layout */}
-        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1 min-h-0">
+        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
 
           {/* Main Progress Card (Spans 8 cols) */}
           <motion.article variants={blurVariant} className="md:col-span-8 workspace-elevated-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-between overflow-hidden relative">

@@ -16,18 +16,18 @@ export function WorkspaceToolGrid({ items, onSelect }) {
             }`}
             style={{ "--stagger-index": index }}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
+            <div className="relative pr-12">
+              <div className="flex min-w-0 items-start gap-3">
                 <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm shadow-slate-950/10 transition-colors group-hover:brightness-105 ${meta.iconShell}`}>
                   <Icon size={18} />
                 </span>
-                <span className="flex flex-col">
+                <span className="flex min-w-0 flex-col">
                   <span className="text-base font-bold">{meta.label}</span>
                   <span className="mt-1 text-xs text-stone-500 dark:text-stone-400">{meta.description}</span>
                   {hint ? <span className="mt-3 text-xs font-semibold text-stone-600 dark:text-stone-300">{hint}</span> : null}
                 </span>
               </div>
-              <span className={`motion-arrow-shift flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/40 dark:border-stone-800 transition-colors group-hover:brightness-105 ${meta.arrowShell}`}>
+              <span className={`motion-arrow-shift absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/40 dark:border-stone-800 transition-colors group-hover:brightness-105 ${meta.arrowShell}`}>
                 <ArrowRight size={18} />
               </span>
             </div>

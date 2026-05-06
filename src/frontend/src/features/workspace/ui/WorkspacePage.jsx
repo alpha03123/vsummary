@@ -253,7 +253,7 @@ export function WorkspacePage({ page }) {
         <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
           {activeSeries && !isPlaygroundHome ? (
             <section
-              style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
+              style={hasRightPane ? { width: `clamp(320px, ${layout.middleWidth}px, 52%)` } : undefined}
               className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
             >
               <WorkspaceChatPanel

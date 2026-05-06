@@ -312,7 +312,7 @@ function WorkspaceContextUsageInline({ usage, loading }) {
 
   return (
     <div className="relative group">
-      <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold cursor-default transition-colors ${resolveUsageToneClass(usage.level)}`}>
+      <div className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold cursor-default transition-colors ${resolveUsageToneClass(usage.level)}`}>
         {thresholdLabel}
         <span className="opacity-60">{usage.usagePercent.toFixed(1)}%</span>
       </div>

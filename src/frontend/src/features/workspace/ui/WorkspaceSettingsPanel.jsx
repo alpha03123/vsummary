@@ -187,7 +187,7 @@ export function WorkspaceSettingsPanel({
                   title="语音模型质量"
                   description="控制转写精确度"
                 >
-                  <div className="w-full min-w-[320px] flex flex-col gap-3">
+                  <div className="w-full flex flex-col gap-3">
                     {fasterWhisperModelsLoading && !fasterWhisperModels.length ? (
                       <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
                         <LoaderCircle size={16} className="animate-spin" />
@@ -213,10 +213,10 @@ export function WorkspaceSettingsPanel({
                               : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <strong className="text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
+                                  <strong className="min-w-0 break-words text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
                                   {model.recommended ? (
                                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
                                       推荐
@@ -301,7 +301,7 @@ export function WorkspaceSettingsPanel({
                     value={String(ui.windowTokens)}
                     onChange={(nextValue) => onChangeSetting("windowTokens", Number.parseInt(nextValue, 10) || 1)}
                     placeholder="1000000"
-                    className="w-[180px]"
+                    className="w-full sm:w-[180px]"
                     type="number"
                   />
                 </WorkspaceSettingRow>
@@ -314,7 +314,7 @@ export function WorkspaceSettingsPanel({
                     value={String(ui.videoGenerationConcurrency)}
                     onChange={(nextValue) => onChangeSetting("videoGenerationConcurrency", Number.parseInt(nextValue, 10) || 1)}
                     placeholder="1"
-                    className="w-[180px]"
+                    className="w-full sm:w-[180px]"
                     type="number"
                   />
                 </WorkspaceSettingRow>
@@ -387,7 +387,7 @@ export function WorkspaceSettingsPanel({
                     value={String(ui.ragMaxHits)}
                     onChange={(nextValue) => onChangeSetting("ragMaxHits", Number.parseInt(nextValue, 10) || 1)}
                     placeholder="5"
-                    className="w-[180px]"
+                    className="w-full sm:w-[180px]"
                     type="number"
                   />
                 </WorkspaceSettingRow>
@@ -419,7 +419,7 @@ export function WorkspaceSettingsPanel({
                     value={ui.openaiBaseUrl}
                     onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
                     placeholder="https://api.openai.com/v1"
-                    className="w-[340px]"
+                    className="w-full sm:w-[340px]"
                   />
                 </WorkspaceSettingRow>
 
@@ -431,7 +431,7 @@ export function WorkspaceSettingsPanel({
                     value={ui.openaiModel}
                     onChange={(nextValue) => onChangeSetting("openaiModel", nextValue)}
                     placeholder="gpt-5.4"
-                    className="w-[240px]"
+                    className="w-full sm:w-[240px]"
                   />
                 </WorkspaceSettingRow>
 
@@ -439,8 +439,8 @@ export function WorkspaceSettingsPanel({
                   title="API Key"
                   description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。"
                 >
-                  <div className="w-[340px] rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
-                    <div className="flex items-center justify-between gap-3">
+                  <div className="mx-auto w-full max-w-[460px] rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-500 dark:text-stone-400"}`}>
                           {hasApiKey ? "已配置" : "未配置"}
@@ -455,7 +455,7 @@ export function WorkspaceSettingsPanel({
                         type="button"
                         onClick={() => setShowApiKeyValue((value) => !value)}
                         disabled={!apiKeyStatus}
-                        className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                        className="w-full rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800 sm:w-auto"
                       >
                         {showApiKeyValue ? "隐藏" : "显示"}
                       </button>
@@ -472,7 +472,7 @@ export function WorkspaceSettingsPanel({
                         type="button"
                         onClick={onSaveApiKey}
                         disabled={!ui.openaiApiKey.trim()}
-                        className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
+                        className="w-full rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 sm:w-auto"
                       >
                         保存 Key
                       </button>
@@ -484,7 +484,7 @@ export function WorkspaceSettingsPanel({
                   title="连接测试"
                   description="发起一次模型请求"
                 >
-                  <div className="w-[340px]">
+                  <div className="w-full sm:w-[340px]">
                     <button
                       type="button"
                       onClick={async () => {
@@ -537,7 +537,7 @@ export function WorkspaceSettingsPanel({
                     value={ui.hfEndpoint}
                     onChange={(nextValue) => onChangeSetting("hfEndpoint", nextValue)}
                     placeholder="https://hf-mirror.com"
-                    className="w-[340px]"
+                    className="w-full sm:w-[340px]"
                   />
                 </WorkspaceSettingRow>
 
@@ -545,7 +545,7 @@ export function WorkspaceSettingsPanel({
                   title="RAG 检索模型"
                   description="Series 对话需要embdding模型，reranking模型强化检索能力(可选)"
                 >
-                  <div className="w-full min-w-[320px] flex flex-col gap-3">
+                  <div className="w-full flex flex-col gap-3">
                     {ragModelsLoading && !ragModels.length ? (
                       <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
                         <LoaderCircle size={16} className="animate-spin" />
@@ -568,9 +568,9 @@ export function WorkspaceSettingsPanel({
                               : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <strong className="text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <strong className="break-words text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
                                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{statusText}</p>
                                 {isDownloading ? (
                                   <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
