@@ -82,6 +82,14 @@ export function workspaceReducer(state, action) {
         ...state,
         ui: normalizeUiSettings(action.settings),
       };
+    case "workspace_setting_edited":
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          [action.key]: action.value,
+        },
+      };
     case "provider_settings_loaded":
       return {
         ...state,
@@ -608,6 +616,88 @@ export function workspaceReducer(state, action) {
         ),
         error: "",
       };
+    case "series_generation_queue_started":
+      return {
+        ...state,
+        seriesGenerationQueue: {
+          seriesId: action.seriesId,
+          total: action.total,
+          completed: 0,
+          currentIndex: 0,
+          currentVideoId: null,
+          currentVideoTitle: null,
+          activeVideos: [],
+          detail: `已结束 0/${action.total}`,
+          status: "running",
+        },
+        error: "",
+      };
+    case "series_generation_queue_item_started":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          state.seriesGenerationQueue?.seriesId !== action.seriesId
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                currentIndex: action.currentIndex,
+                currentVideoId: action.videoId,
+                currentVideoTitle: action.videoTitle,
+                activeVideos: [
+                  ...(state.seriesGenerationQueue.activeVideos ?? []).filter((video) => video.id !== action.videoId),
+                  { id: action.videoId, title: action.videoTitle, index: action.currentIndex },
+                ],
+                status: "running",
+              },
+      };
+    case "series_generation_queue_item_finished":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          state.seriesGenerationQueue?.seriesId !== action.seriesId
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                activeVideos: (state.seriesGenerationQueue.activeVideos ?? []).filter(
+                  (video) => video.id !== action.videoId,
+                ),
+              },
+      };
+    case "series_generation_queue_item_completed":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          state.seriesGenerationQueue?.seriesId !== action.seriesId
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                completed: Math.min(state.seriesGenerationQueue.total, state.seriesGenerationQueue.completed + 1),
+              },
+      };
+    case "series_generation_queue_cancelling":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          state.seriesGenerationQueue?.seriesId !== action.seriesId
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                status: "cancelling",
+              },
+      };
+    case "series_generation_queue_finished":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          state.seriesGenerationQueue?.seriesId !== action.seriesId
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                status: action.status ?? "completed",
+                currentVideoId: null,
+                currentVideoTitle: null,
+              },
+      };
     case "series_generation_started":
       return {
         ...state,
@@ -628,22 +718,41 @@ export function workspaceReducer(state, action) {
         error: "",
       };
     case "generation_progress_updated":
-      return {
-        ...state,
-        generationProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
-        generationSnapshot: action.snapshot,
-        generationTasksByKey: setGenerationTaskForKey(
-          state.generationTasksByKey,
-          createGenerationTaskRecord({
-            taskKey: action.taskKey,
-            mode: action.mode,
-            seriesId: action.seriesId,
-            videoId: action.videoId ?? null,
-            snapshot: action.snapshot,
-            subscriptionActive: action.subscriptionActive ?? false,
-          }),
-        ),
-      };
+      {
+        const boundedProgress = action.progress == null ? null : Math.max(0, Math.min(100, action.progress));
+        const nextState = {
+          ...state,
+          generationProgress: boundedProgress,
+          generationSnapshot: action.snapshot,
+          generationTasksByKey: setGenerationTaskForKey(
+            state.generationTasksByKey,
+            createGenerationTaskRecord({
+              taskKey: action.taskKey,
+              mode: action.mode,
+              seriesId: action.seriesId,
+              videoId: action.videoId ?? null,
+              snapshot: action.snapshot,
+              subscriptionActive: action.subscriptionActive ?? false,
+            }),
+          ),
+        };
+        if (action.mode !== "series" || state.seriesGenerationQueue?.seriesId !== action.seriesId) {
+          return nextState;
+        }
+        const total = state.seriesGenerationQueue.total;
+        const completed = boundedProgress == null
+          ? state.seriesGenerationQueue.completed
+          : Math.min(total, Math.floor((boundedProgress / 100) * total));
+        return {
+          ...nextState,
+          seriesGenerationQueue: {
+            ...state.seriesGenerationQueue,
+            completed,
+            detail: action.snapshot?.detail ?? state.seriesGenerationQueue.detail,
+            status: action.snapshot?.status === "cancelling" ? "cancelling" : state.seriesGenerationQueue.status,
+          },
+        };
+      }
     case "generation_status_loaded":
       return {
         ...state,

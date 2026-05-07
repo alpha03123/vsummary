@@ -421,6 +421,7 @@ export function createInitialWorkspaceState() {
     generatingSeriesId: null,
     generationMode: null,
     generatingMindmapKey: null,
+    seriesGenerationQueue: null,
     generationTasksByKey: {},
     generationProgress: null,
     generationSnapshot: null,

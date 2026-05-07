@@ -1,11 +1,13 @@
-export function WorkspaceSettingRow({ title, description, children }) {
+export function WorkspaceSettingRow({ title, description, children, contentClassName = "" }) {
+  const contentLayoutClassName = contentClassName || "2xl:w-auto 2xl:shrink-0";
+
   return (
     <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 2xl:flex-row 2xl:items-center">
       <div className="min-w-0 max-w-none 2xl:w-[260px] 2xl:shrink-0">
         <strong className="mb-1.5 block text-base font-bold text-stone-900 dark:text-stone-100">{title}</strong>
         <span className="block text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">{description}</span>
       </div>
-      <div className="flex min-w-0 w-full items-center justify-end 2xl:w-auto 2xl:shrink-0">{children}</div>
+      <div className={`flex min-w-0 w-full items-center justify-end ${contentLayoutClassName}`}>{children}</div>
     </div>
   );
 }

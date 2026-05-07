@@ -51,6 +51,11 @@ export async function loadProviderSettings() {
   };
 }
 
+export async function loadOpenaiApiKey() {
+  const payload = await fetchJson("/api/provider-settings/openai-api-key");
+  return typeof payload.openai_api_key === "string" ? payload.openai_api_key : "";
+}
+
 export async function updateWorkspaceSettings(settings) {
   const payload = await fetchJson("/api/settings", {
     method: "PUT",
@@ -110,19 +115,26 @@ export async function updateProviderSettings(settings) {
 }
 
 export async function testProviderSettings(settings) {
-  return fetchJson("/api/provider-settings/test", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      llm_provider: settings.llmProvider,
-      openai_base_url: settings.openaiBaseUrl,
-      openai_model: settings.openaiModel,
-      openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
-      hf_endpoint: settings.hfEndpoint,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+  try {
+    return await fetchJson("/api/provider-settings/test", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        llm_provider: settings.llmProvider,
+        openai_base_url: settings.openaiBaseUrl,
+        openai_model: settings.openaiModel,
+        openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
+        hf_endpoint: settings.hfEndpoint,
+      }),
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function loadFasterWhisperModels() {

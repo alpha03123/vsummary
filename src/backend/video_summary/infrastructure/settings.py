@@ -3,10 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 import os
 from pathlib import Path
-import re
 import tomllib
-from urllib.parse import urlparse
 
+from backend.shared.llm.base_url import normalize_provider_base_url
 from backend.shared.filesystem import atomic_write_text
 
 
@@ -386,25 +385,7 @@ def _normalize_transcription_mode(value: object) -> str:
 
 
 def normalize_openai_base_url(value: str) -> str:
-    normalized = value.strip().rstrip("/")
-    if not normalized:
-        return normalized
-    if normalized.endswith("/chat/completions"):
-        normalized = normalized[: -len("/chat/completions")]
-    if normalized.endswith("/responses"):
-        normalized = normalized[: -len("/responses")]
-    if normalized.endswith("/completions"):
-        normalized = normalized[: -len("/completions")]
-
-    parsed = urlparse(normalized)
-    if not parsed.scheme or not parsed.netloc:
-        return normalized
-
-    path = parsed.path.rstrip("/")
-    if not re.search(r"/v\d+$", path):
-        path = f"{path}/v1" if path else "/v1"
-
-    return f"{parsed.scheme}://{parsed.netloc}{path}"
+    return normalize_provider_base_url(value)
 
 
 def apply_runtime_env_overrides(root_dir: Path) -> None:

@@ -153,6 +153,7 @@ export function WorkspacePage({ page }) {
               selectedVideo={selectedVideo}
               isGeneratingSelectedVideo={generation.isGeneratingSummary}
               isGeneratingSeries={generation.isGeneratingSeries}
+              seriesGenerationQueue={generation.seriesGenerationQueue}
               onEnterLibraryHome={actions.enterLibraryHome}
               onSelectSeriesContext={actions.selectSeriesContext}
               onSelectVideo={actions.selectVideo}
@@ -396,6 +397,7 @@ export function WorkspacePage({ page }) {
                   modelDownloadProgress={generation.modelDownloadProgress}
                   onChangeSetting={actions.changeSetting}
                   onSaveApiKey={actions.saveApiKey}
+                  onRevealOpenaiApiKey={actions.revealOpenaiApiKey}
                   onTestProviderConnection={actions.testProviderConnection}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onDownloadRagModel={actions.downloadRagModel}

@@ -2,6 +2,7 @@ import {
   downloadFasterWhisperModel,
   downloadRagModel,
   loadFasterWhisperModels,
+  loadOpenaiApiKey,
   loadRagModels,
   subscribeFasterWhisperModelDownloadProgress,
   subscribeRagModelDownloadProgress,
@@ -25,6 +26,25 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   }
 
   async function onChangeSetting(key, value) {
+    if (key === "openaiBaseUrl") {
+      dispatch({ type: "workspace_setting_edited", key, value });
+      if (!isSaveableOpenaiBaseUrl(value)) {
+        return;
+      }
+      try {
+        await updateProviderSettings({
+          ...normalizeUiSettings(state.ui),
+          openaiBaseUrl: value,
+        });
+      } catch (error) {
+        dispatch({
+          type: "load_failed",
+          message: error instanceof Error ? error.message : "设置保存失败",
+        });
+      }
+      return;
+    }
+
     const nextUi = normalizeUiSettings({
       ...state.ui,
       [key]: value,
@@ -89,6 +109,24 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
+  async function onRevealOpenaiApiKey() {
+    try {
+      const openaiApiKey = await loadOpenaiApiKey();
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...state.ui,
+          openaiApiKey,
+        },
+      });
+      return openaiApiKey;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "API Key 读取失败";
+      dispatch({ type: "load_failed", message });
+      return "";
+    }
+  }
+
   async function onTestProviderConnection() {
     const nextUi = normalizeUiSettings(state.ui);
     try {
@@ -98,7 +136,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         message: typeof result.message === "string" ? result.message : "模型连接成功",
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "模型连接测试失败";
+      const message = toProviderTestErrorMessage(error);
       dispatch({ type: "load_failed", message });
       return {
         ok: false,
@@ -226,9 +264,34 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onCloseSettingsPanel,
     onChangeSetting,
     onSaveApiKey,
+    onRevealOpenaiApiKey,
     onTestProviderConnection,
     onResetSettings,
     onDownloadFasterWhisperModel,
     onDownloadRagModel,
   };
+}
+
+export function toProviderTestErrorMessage(error) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "模型超时";
+  }
+  const message = error instanceof Error ? error.message : "模型连接测试失败";
+  if (/^\d{3}\s+模型超时$/.test(message)) {
+    return "模型超时";
+  }
+  return message;
+}
+
+export function isSaveableOpenaiBaseUrl(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+    return false;
+  }
+  try {
+    const parsed = new URL(normalized);
+    return Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
 }

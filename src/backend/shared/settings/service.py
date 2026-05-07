@@ -79,6 +79,9 @@ class SettingsServicePort(Protocol):
     def get_provider_settings(self) -> ProviderSettings:
         ...
 
+    def get_openai_api_key(self) -> str:
+        ...
+
     def update_provider_settings(
         self,
         *,
@@ -214,6 +217,9 @@ class SettingsService:
             hf_endpoint=env_settings.hf_endpoint,
         )
 
+    def get_openai_api_key(self) -> str:
+        return load_env_settings(self._root_dir).api_key
+
     def update_provider_settings(
         self,
         *,
@@ -262,7 +268,12 @@ class SettingsService:
             model=provider_settings.openai_model,
             api_key=self._resolve_openai_api_key(openai_api_key),
         )
-        response = gateway.test_connection()
+        try:
+            response = gateway.test_connection()
+        except Exception as error:
+            if _is_model_timeout(error):
+                raise RuntimeError("模型超时") from error
+            raise
         return response or "ok"
 
     def _save_provider_settings(
@@ -331,3 +342,10 @@ def _mask_api_key(api_key: str) -> str:
     if len(normalized) <= 8:
         return "*" * len(normalized)
     return f"{normalized[:4]}{'*' * max(4, len(normalized) - 8)}{normalized[-4:]}"
+
+
+def _is_model_timeout(error: Exception) -> bool:
+    if isinstance(error, TimeoutError):
+        return True
+    message = str(error).lower()
+    return "timeout" in message or "timed out" in message

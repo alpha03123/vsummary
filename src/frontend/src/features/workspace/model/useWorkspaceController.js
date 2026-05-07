@@ -47,8 +47,8 @@ export function useWorkspaceController() {
     currentGenerationTask?.mode === "video" &&
     isGenerationSnapshotActive(currentGenerationTask.snapshot);
   const isGeneratingSelectedSeries =
-    currentGenerationTask?.mode === "series" &&
-    isGenerationSnapshotActive(currentGenerationTask.snapshot);
+    state.seriesGenerationQueue?.seriesId === state.selectedSeriesId &&
+    (state.seriesGenerationQueue.status === "running" || state.seriesGenerationQueue.status === "cancelling");
   const isGeneratingMindmapSelectedVideo =
     state.generatingMindmapKey != null &&
     state.generatingMindmapKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
@@ -121,6 +121,7 @@ export function useWorkspaceController() {
   return {
     state,
     currentGenerationTask,
+    seriesGenerationQueue: state.seriesGenerationQueue,
     ui: state.ui,
     fasterWhisperModels: state.fasterWhisperModels,
     fasterWhisperModelsLoading: state.fasterWhisperModelsLoading,
@@ -180,6 +181,7 @@ export function useWorkspaceController() {
     onCloseSettingsPanel: settingsActions.onCloseSettingsPanel,
     onChangeSetting: settingsActions.onChangeSetting,
     onSaveApiKey: settingsActions.onSaveApiKey,
+    onRevealOpenaiApiKey: settingsActions.onRevealOpenaiApiKey,
     onTestProviderConnection: settingsActions.onTestProviderConnection,
     onDownloadFasterWhisperModel: settingsActions.onDownloadFasterWhisperModel,
     onDownloadRagModel: settingsActions.onDownloadRagModel,

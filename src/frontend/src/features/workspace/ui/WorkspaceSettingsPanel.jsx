@@ -8,6 +8,7 @@ import {
   WorkspaceTextInput,
   WorkspaceToggleSwitch,
 } from "./shared/WorkspaceSettingsControls";
+import { buildOpenAICompatibleChatCompletionsUrl } from "../model/providerRequestUrl";
 
 export function WorkspaceSettingsPanel({
   ui,
@@ -22,6 +23,7 @@ export function WorkspaceSettingsPanel({
   modelDownloadProgress,
   onChangeSetting,
   onSaveApiKey,
+  onRevealOpenaiApiKey,
   onTestProviderConnection,
   onDownloadFasterWhisperModel,
   onDownloadRagModel,
@@ -32,13 +34,19 @@ export function WorkspaceSettingsPanel({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmDownloadModelId, setConfirmDownloadModelId] = useState(null);
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
+  const [apiKeyRevealLoading, setApiKeyRevealLoading] = useState(false);
   const [providerTest, setProviderTest] = useState({ status: "idle", message: "" });
   const hasApiKey = ui.hasOpenaiApiKey;
-  const apiKeyStatus = ui.openaiApiKey.trim() || ui.openaiApiKeyMasked;
+  const draftApiKey = ui.openaiApiKey.trim();
+  const apiKeyDisplayValue = draftApiKey
+    ? (showApiKeyValue ? draftApiKey : ui.openaiApiKeyMasked || "待保存的新密钥")
+    : ui.openaiApiKeyMasked;
+  const apiKeyStatus = draftApiKey || ui.openaiApiKeyMasked;
   const isAnyRagModelDownloading = ragModels.some((model) => model.status === "running");
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
+  const providerTargetUrl = buildOpenAICompatibleChatCompletionsUrl(ui.openaiBaseUrl);
 
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
@@ -411,12 +419,20 @@ export function WorkspaceSettingsPanel({
                   title="API 根地址"
                   description="填写 OpenAI 兼容 API 根地址，例如 `https://api.deepseek.com` 或 `https://api.deepseek.com/v1`。"
                 >
-                  <WorkspaceTextInput
-                    value={ui.openaiBaseUrl}
-                    onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
-                    placeholder="https://api.openai.com/v1"
-                    className="w-full sm:w-[340px]"
-                  />
+                  <div className="w-full sm:w-[340px]">
+                    <WorkspaceTextInput
+                      value={ui.openaiBaseUrl}
+                      onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
+                      placeholder="https://api.openai.com/v1"
+                      className="w-full"
+                    />
+                    {providerTargetUrl ? (
+                      <p className="mt-2 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                        实际请求地址：
+                        <code className="break-all rounded bg-stone-100 px-1 py-0.5 text-stone-700 dark:bg-stone-800 dark:text-stone-300">{providerTargetUrl}</code>
+                      </p>
+                    ) : null}
+                  </div>
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
@@ -434,35 +450,60 @@ export function WorkspaceSettingsPanel({
                 <WorkspaceSettingRow
                   title="API Key"
                   description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。"
+                  contentClassName="2xl:w-full 2xl:flex-1 2xl:shrink"
                 >
-                  <div className="mx-auto w-full max-w-[460px] rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
+                  <div className="w-full min-w-0 max-w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-500 dark:text-stone-400"}`}>
                           {hasApiKey ? "已配置" : "未配置"}
                         </p>
                         {apiKeyStatus ? (
-                          <p className="mt-1 truncate text-xs text-stone-500 dark:text-stone-400">
-                            当前状态：{ui.openaiApiKey.trim() ? "待保存的新密钥" : apiKeyStatus}
+                          <p className="mt-1 max-w-full break-all text-xs text-stone-500 [overflow-wrap:anywhere] dark:text-stone-400">
+                            当前状态：{apiKeyDisplayValue}
                           </p>
                         ) : null}
                       </div>
                       <button
                         type="button"
-                        onClick={() => setShowApiKeyValue((value) => !value)}
-                        disabled={!apiKeyStatus}
+                        onClick={async () => {
+                          if (showApiKeyValue) {
+                            setShowApiKeyValue(false);
+                            return;
+                          }
+                          if (!draftApiKey && typeof onRevealOpenaiApiKey === "function") {
+                            setApiKeyRevealLoading(true);
+                            const revealedKey = await onRevealOpenaiApiKey();
+                            setApiKeyRevealLoading(false);
+                            if (!revealedKey) {
+                              return;
+                            }
+                          }
+                          setShowApiKeyValue(true);
+                        }}
+                        disabled={!apiKeyStatus || apiKeyRevealLoading}
                         className="w-full rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800 sm:w-auto"
                       >
-                        {showApiKeyValue ? "隐藏" : "显示"}
+                        {apiKeyRevealLoading ? "读取中..." : showApiKeyValue ? "隐藏" : "显示"}
                       </button>
                     </div>
-                    <WorkspaceTextInput
-                      type={showApiKeyValue ? "text" : "password"}
-                      value={ui.openaiApiKey}
-                      onChange={(nextValue) => onChangeSetting("openaiApiKey", nextValue)}
-                      placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
-                      className="mt-3 w-full dark:bg-stone-950"
-                    />
+                    {showApiKeyValue ? (
+                      <textarea
+                        value={ui.openaiApiKey}
+                        onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
+                        placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
+                        rows={3}
+                        className="mt-3 block w-full min-w-0 max-w-full resize-none overflow-y-auto break-all rounded-xl border border-stone-200 bg-white px-4 py-2.5 font-mono text-sm leading-6 text-stone-900 outline-none [overflow-wrap:anywhere] focus:border-accent dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
+                      />
+                    ) : (
+                      <WorkspaceTextInput
+                        type="password"
+                        value={ui.openaiApiKey}
+                        onChange={(nextValue) => onChangeSetting("openaiApiKey", nextValue)}
+                        placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
+                        className="mt-3 w-full min-w-0 dark:bg-stone-950"
+                      />
+                    )}
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"

@@ -1,7 +1,25 @@
 import { isGenerationSnapshotActive } from "../model/workspaceState";
 
 export function buildWorkspacePageModel(controller) {
-  const generationSnapshot = controller.currentGenerationTask?.snapshot ?? null;
+  const seriesQueue = controller.seriesGenerationQueue;
+  const seriesQueueActive =
+    controller.selectedContextType === "series" &&
+    seriesQueue?.seriesId === controller.state.selectedSeriesId &&
+    (seriesQueue.status === "running" || seriesQueue.status === "cancelling");
+  const seriesQueueProgress =
+    seriesQueueActive && typeof seriesQueue.total === "number" && seriesQueue.total > 0
+      ? (seriesQueue.completed / seriesQueue.total) * 100
+      : null;
+  const seriesQueueSnapshot = seriesQueueActive
+    ? {
+        status: seriesQueue.status,
+        stage: "batch",
+        progress: seriesQueueProgress,
+        detail: seriesQueue.detail ?? `已结束 ${seriesQueue.completed}/${seriesQueue.total}`,
+        error: null,
+      }
+    : null;
+  const generationSnapshot = seriesQueueSnapshot ?? controller.currentGenerationTask?.snapshot ?? null;
   const showGenerationOverlay = isGenerationSnapshotActive(generationSnapshot);
   return {
     shell: {
@@ -38,6 +56,7 @@ export function buildWorkspacePageModel(controller) {
     generation: {
       isGeneratingSummary: controller.isGeneratingSelectedVideo,
       isGeneratingSeries: controller.isGeneratingSelectedSeries,
+      seriesGenerationQueue: controller.seriesGenerationQueue,
       isGeneratingMindmap: controller.isGeneratingMindmapSelectedVideo,
       knowledgeCardsLoading: controller.knowledgeCardsLoading,
       notesLoading: controller.notesLoading,
@@ -75,6 +94,7 @@ export function buildWorkspacePageModel(controller) {
       closeSettingsPanel: controller.onCloseSettingsPanel,
       changeSetting: controller.onChangeSetting,
       saveApiKey: controller.onSaveApiKey,
+      revealOpenaiApiKey: controller.onRevealOpenaiApiKey,
       testProviderConnection: controller.onTestProviderConnection,
       downloadFasterWhisperModel: controller.onDownloadFasterWhisperModel,
       downloadRagModel: controller.onDownloadRagModel,

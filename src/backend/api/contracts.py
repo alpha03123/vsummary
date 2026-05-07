@@ -53,6 +53,10 @@ class ProviderSettingsResponse(BaseModel):
     hf_endpoint: str
 
 
+class ProviderApiKeyResponse(BaseModel):
+    openai_api_key: str
+
+
 class UpdateProviderSettingsRequest(BaseModel):
     llm_provider: str
     openai_base_url: str

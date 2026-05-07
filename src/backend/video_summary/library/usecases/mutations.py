@@ -65,7 +65,10 @@ class DeleteVideoSource:
     def run(self, series_id: str, video_id: str) -> DeleteVideoResult:
         if (
             self._generation_activity_checker is not None
-            and self._generation_activity_checker.is_video_generation_active(series_id, video_id)
+            and (
+                self._generation_activity_checker.is_video_generation_active(series_id, video_id)
+                or self._generation_activity_checker.is_series_generation_active(series_id)
+            )
         ):
             raise GenerationInProgressError(f"视频 '{series_id}/{video_id}' 正在生成，请先取消生成后再删除。")
         source = self._workspace.get_video_source(series_id, video_id)

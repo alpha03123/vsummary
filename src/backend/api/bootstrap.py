@@ -22,6 +22,7 @@ from backend.agent_graph.dspy.programs import (
     AnswerSynthesisProgram,
 )
 from backend.agent_graph.runtime.service import AgentGraphService
+from backend.shared.llm.base_url import resolve_openai_compatible_api_base_url
 from backend.shared.settings import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.agent_memory import (
     AgentWorkspaceIndexBuilder,
@@ -165,7 +166,6 @@ def build_api_container(
         workspace,
         summary_generation_use_case,
         progress_tracker,
-        video_generation_concurrency=settings.generation.video_generation_concurrency,
     )
     return ApiContainer(
         config_path=config_path,
@@ -414,7 +414,7 @@ class LazyAgentRuntimeProvider:
                 dspy.configure(
                     lm=ProxyStreamingLM(
                         model=f"openai/{env_settings.model.strip()}",
-                        api_base=normalize_openai_base_url(env_settings.base_url),
+                        api_base=resolve_openai_compatible_api_base_url(env_settings.base_url),
                         api_key=env_settings.api_key.strip(),
                     )
                 )

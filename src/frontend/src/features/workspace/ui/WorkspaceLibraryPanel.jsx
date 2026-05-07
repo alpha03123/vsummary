@@ -41,11 +41,59 @@ function VideoBadge({ video }) {
   );
 }
 
+export function getVideoGenerationButtonState({
+  isGeneratingSeries,
+  isGeneratingSelectedVideo,
+  modelNeedsDownload,
+  processed,
+}) {
+  if (isGeneratingSeries) {
+    return {
+      disabled: true,
+      label: "正在处理整个系列",
+      tone: "busy",
+    };
+  }
+  if (isGeneratingSelectedVideo) {
+    return {
+      disabled: false,
+      label: "取消当前视频生成",
+      tone: "danger",
+    };
+  }
+  if (modelNeedsDownload) {
+    return {
+      disabled: false,
+      label: "先下载语音模型",
+      tone: "primary",
+    };
+  }
+  return {
+    disabled: false,
+    label: processed ? "重新生成 AI 概况" : "生成 AI 概况",
+    tone: "primary",
+  };
+}
+
+export function getDeleteButtonState({ isGeneratingSeries, isGeneratingSelectedVideo }) {
+  if (isGeneratingSeries || isGeneratingSelectedVideo) {
+    return {
+      disabled: true,
+      label: "处理中，暂不能删除",
+    };
+  }
+  return {
+    disabled: false,
+    label: "删除当前视频",
+  };
+}
+
 function PanelFooter({
   selectedContextType,
   selectedVideo,
   isGeneratingSelectedVideo,
   isGeneratingSeries,
+  seriesGenerationQueue,
   activeSeries,
   currentAsrModel,
   ragModels,
@@ -77,6 +125,13 @@ function PanelFooter({
   }
 
   if (selectedContextType === "series") {
+    const queueIsActive =
+      seriesGenerationQueue?.seriesId === activeSeries?.id &&
+      (seriesGenerationQueue.status === "running" || seriesGenerationQueue.status === "cancelling");
+    const queueLabel = queueIsActive
+      ? `已结束 ${seriesGenerationQueue.completed}/${seriesGenerationQueue.total}`
+      : null;
+    const currentLabel = queueIsActive ? seriesGenerationQueue.detail : null;
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-1">
@@ -89,6 +144,17 @@ function PanelFooter({
             : `你可以在当前对话栏询问关于整个系列的问题 ： ${activeSeries?.title}。`}
         </p>
         <div className="mt-3">
+          {queueIsActive ? (
+            <div className="mb-3 rounded-2xl border border-accent/20 bg-accent/8 px-3 py-2 text-xs text-stone-600 dark:text-stone-300">
+              <div className="flex items-center justify-between gap-2 font-semibold text-accent">
+                <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : "正在处理全部视频"}</span>
+                <span>{queueLabel}</span>
+              </div>
+              {currentLabel ? (
+                <p className="mt-1 truncate text-stone-500 dark:text-stone-400">{currentLabel}</p>
+              ) : null}
+            </div>
+          ) : null}
           {embeddingNeedsDownload ? (
             <button
               type="button"
@@ -151,6 +217,17 @@ function PanelFooter({
     );
   }
 
+  const videoGenerationButton = getVideoGenerationButtonState({
+    isGeneratingSeries,
+    isGeneratingSelectedVideo,
+    modelNeedsDownload,
+    processed: selectedVideo.processed,
+  });
+  const deleteButton = getDeleteButtonState({
+    isGeneratingSeries,
+    isGeneratingSelectedVideo,
+  });
+
   return (
     <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
       <div className="mb-3">
@@ -164,37 +241,46 @@ function PanelFooter({
       ) : null}
       <button
         type="button"
-        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${isGeneratingSelectedVideo
-          ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
+        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${videoGenerationButton.tone === "danger"
+          ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+          : videoGenerationButton.tone === "busy"
+            ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
           : "bg-accent text-white hover:bg-accent/90 shadow-sm active:scale-[0.98]"
           }`}
-        onClick={modelNeedsDownload ? onOpenSettings : onGenerateVideo}
-        disabled={isGeneratingSelectedVideo}
+        onClick={
+          videoGenerationButton.tone === "danger"
+            ? onCancelGeneration
+            : modelNeedsDownload
+              ? onOpenSettings
+              : onGenerateVideo
+        }
+        disabled={videoGenerationButton.disabled}
       >
-        {isGeneratingSelectedVideo ? (
+        {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
           <>
-            <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin text-stone-500" />
-            正在生成 AI 概况...
+            <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
+            {videoGenerationButton.label}
           </>
         ) : modelNeedsDownload ? (
           <>
             <ArrowDown size={16} strokeWidth={2.5} />
-            先下载语音模型
+            {videoGenerationButton.label}
           </>
         ) : (
           <>
             <Sparkles size={16} strokeWidth={2.5} />
-            {selectedVideo.processed ? "重新生成 AI 概况" : "生成 AI 概况"}
+            {videoGenerationButton.label}
           </>
         )}
       </button>
       <button
         type="button"
         onClick={() => onRequestDeleteCurrentVideo?.()}
-        className="btn-danger-ghost mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
+        disabled={deleteButton.disabled}
+        className="btn-danger-ghost mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Trash2 size={15} />
-        删除当前视频
+        {deleteButton.label}
       </button>
     </div>
   );
@@ -205,6 +291,7 @@ export function WorkspaceLibraryPanel({
   selectedVideo,
   isGeneratingSelectedVideo,
   isGeneratingSeries,
+  seriesGenerationQueue,
   currentAsrModel,
   ragModels,
   onEnterLibraryHome,
@@ -236,6 +323,10 @@ export function WorkspaceLibraryPanel({
       return haystacks.some((value) => value.includes(normalizedFilter));
     });
   }, [normalizedFilter, videos]);
+  const seriesDeleteButton = getDeleteButtonState({
+    isGeneratingSeries,
+    isGeneratingSelectedVideo: false,
+  });
 
   return (
     <section className="flex flex-col h-full w-full bg-transparent relative">
@@ -271,10 +362,11 @@ export function WorkspaceLibraryPanel({
             <button
               type="button"
               onClick={() => onRequestDeleteSeries?.()}
-              className="btn-danger-ghost inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold"
+              disabled={seriesDeleteButton.disabled}
+              className="btn-danger-ghost inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 size={14} />
-              删除整个系列
+              {seriesDeleteButton.disabled ? seriesDeleteButton.label : "删除整个系列"}
             </button>
           </div>
         ) : onAddPlaygroundVideo ? (
@@ -391,6 +483,7 @@ export function WorkspaceLibraryPanel({
         selectedVideo={selectedVideo}
         isGeneratingSelectedVideo={isGeneratingSelectedVideo}
         isGeneratingSeries={isGeneratingSeries}
+        seriesGenerationQueue={seriesGenerationQueue}
         activeSeries={activeSeries}
         currentAsrModel={currentAsrModel}
         ragModels={ragModels}

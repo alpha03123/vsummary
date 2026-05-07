@@ -4,6 +4,7 @@ import {
   buildSeriesGenerationTaskKey,
   buildVideoGenerationTaskKey,
   createInitialWorkspaceState,
+  getGenerationTaskForSelection,
   loadChatSessionIdsByScope,
   loadChatSessionListsByScope,
   removeChatSessionForScope,
@@ -11,6 +12,7 @@ import {
   resolveChatSessionsForScope,
 } from "./workspaceState";
 import { workspaceReducer } from "./workspaceReducer";
+import { getPendingVideosForSeriesGeneration } from "./workspaceContentActions";
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
 
@@ -221,6 +223,33 @@ describe("workspaceReducer generation task state", () => {
     );
   });
 
+  it("does not show a series generation task as the selected video's own generation task", () => {
+    const state = {
+      ...createInitialWorkspaceState(),
+      selectedContextType: "video",
+      selectedSeriesId: "series-a",
+      selectedVideoId: "video-1",
+      generationTasksByKey: {
+        [buildSeriesGenerationTaskKey("series-a")]: {
+          taskKey: buildSeriesGenerationTaskKey("series-a"),
+          mode: "series",
+          seriesId: "series-a",
+          videoId: null,
+          snapshot: {
+            status: "running",
+            stage: "transcribe",
+            progress: 35,
+            detail: "正在处理 1/3：Video 1",
+            error: null,
+          },
+          subscriptionActive: true,
+        },
+      },
+    };
+
+    expect(getGenerationTaskForSelection(state)).toBeNull();
+  });
+
   it("does not replace the currently selected summary with a stale background success", () => {
     const initialState = {
       ...createInitialWorkspaceState(),
@@ -266,5 +295,61 @@ describe("workspaceReducer generation task state", () => {
     expect(
       nextState.library.series[0].videos.find((video) => video.id === "video-1"),
     ).toEqual(expect.objectContaining({ processed: true, status: "ready" }));
+  });
+});
+
+describe("workspaceContentActions series generation", () => {
+  it("selects only unprocessed videos for one-click sequential generation", () => {
+    const library = {
+      series: [
+        {
+          id: "series-a",
+          videos: [
+            { id: "video-1", processed: true },
+            { id: "video-2", processed: false },
+            { id: "video-3", processed: false },
+          ],
+        },
+      ],
+    };
+
+    expect(getPendingVideosForSeriesGeneration(library, "series-a").map((video) => video.id)).toEqual([
+      "video-2",
+      "video-3",
+    ]);
+  });
+
+  it("tracks one-click series queue from backend series progress", () => {
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      total: 3,
+    });
+    state = workspaceReducer(state, {
+      type: "generation_progress_updated",
+      taskKey: buildSeriesGenerationTaskKey("series-a"),
+      mode: "series",
+      seriesId: "series-a",
+      videoId: null,
+      progress: 66.67,
+      snapshot: {
+        status: "running",
+        stage: "batch",
+        progress: 66.67,
+        detail: "已结束 2 / 3，完成 1，取消 1",
+        error: null,
+      },
+      subscriptionActive: true,
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(
+      expect.objectContaining({
+        seriesId: "series-a",
+        total: 3,
+        completed: 2,
+        detail: "已结束 2 / 3，完成 1，取消 1",
+        status: "running",
+      }),
+    );
   });
 });

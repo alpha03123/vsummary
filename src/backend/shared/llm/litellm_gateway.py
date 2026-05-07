@@ -9,6 +9,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
+from backend.shared.llm.base_url import resolve_openai_compatible_api_base_url
 from backend.shared.llm.json_mode import describe_validation_error, validate_json_response
 
 
@@ -48,7 +49,7 @@ class LiteLLMCompletionGateway:
 
         self._provider = provider.strip()
         self._model = _normalize_litellm_model(self._provider, model)
-        self._base_url = base_url.rstrip("/")
+        self._base_url = resolve_openai_compatible_api_base_url(base_url)
         self._api_key = normalized_api_key
         self._structured_mode_cache_key = _build_structured_mode_cache_key(
             provider=self._provider,
@@ -178,7 +179,7 @@ class LiteLLMCompletionGateway:
             [{"role": "user", "content": "Reply with exactly: ok"}],
             temperature=0,
             max_tokens=8,
-            timeout=15,
+            timeout=5,
         )
 
     async def astream_text(

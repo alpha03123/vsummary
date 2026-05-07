@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from backend.api.container import ApiContainerDep
 from backend.api.contracts import (
     FasterWhisperModelResponse,
+    ProviderApiKeyResponse,
     ProviderSettingsResponse,
     RagModelResponse,
     TestProviderSettingsResponse,
@@ -68,9 +69,6 @@ async def update_workspace_settings(
     container.generate_video_summary.update_video_generation_concurrency(
         settings.video_generation_concurrency
     )
-    container.generate_series_summaries.update_video_generation_concurrency(
-        settings.video_generation_concurrency
-    )
 
     return WorkspaceSettingsResponse(
         theme=settings.theme,
@@ -100,6 +98,11 @@ def get_provider_settings(container: ApiContainerDep) -> ProviderSettingsRespons
         openai_api_key_masked=env_settings.openai_api_key_masked,
         hf_endpoint=env_settings.hf_endpoint,
     )
+
+
+@router.get("/api/provider-settings/openai-api-key", response_model=ProviderApiKeyResponse)
+def get_provider_openai_api_key(container: ApiContainerDep) -> ProviderApiKeyResponse:
+    return ProviderApiKeyResponse(openai_api_key=container.settings_service.get_openai_api_key())
 
 
 @router.put("/api/provider-settings", response_model=ProviderSettingsResponse)

@@ -5,9 +5,9 @@ import {
   deleteSeries,
   deleteVideoNote,
   deleteVideoSource,
-  generateSeriesSummaries,
   generateVideoKnowledgeCards,
   generateVideoMindmap,
+  generateSeriesSummaries,
   generateVideoSummary,
   importLocalPlaygroundVideos,
   importLocalSeries,
@@ -18,6 +18,11 @@ import {
 import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection } from "./workspaceState";
+
+export function getPendingVideosForSeriesGeneration(library, seriesId) {
+  const series = library?.series?.find((item) => item.id === seriesId);
+  return series?.videos?.filter((video) => !video.processed) ?? [];
+}
 
 export function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
   async function reloadWorkspaceLibrary() {
@@ -99,16 +104,35 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
 
     const seriesId = state.selectedSeriesId;
-    dispatch({ type: "series_generation_started", seriesId });
+    const pendingVideos = getPendingVideosForSeriesGeneration(state.library, seriesId);
+    if (!pendingVideos.length) {
+      return;
+    }
+    const currentTask = getGenerationTaskForSelection(state);
+    if (currentTask?.mode === "series" && currentTask.snapshot?.status === "running") {
+      return;
+    }
 
+    dispatch({ type: "series_generation_queue_started", seriesId, total: pendingVideos.length });
+    dispatch({ type: "series_generation_started", seriesId });
     try {
       await generateSeriesSummaries(seriesId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
       });
       const library = await reloadWorkspaceLibrary();
-      dispatch({ type: "series_generation_succeeded", taskKey: buildSeriesGenerationTaskKey(seriesId), seriesId, library });
+      dispatch({
+        type: "series_generation_succeeded",
+        taskKey: buildSeriesGenerationTaskKey(seriesId),
+        seriesId,
+        library,
+      });
+      dispatch({
+        type: "series_generation_queue_finished",
+        seriesId,
+        status: "completed",
+      });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "系列处理失败";
+      const message = error instanceof Error ? error.message : "生成失败";
       dispatch({ type: "load_failed", message });
       dispatch({
         type: "generation_status_loaded",
@@ -125,16 +149,30 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         },
         subscriptionActive: false,
       });
+      dispatch({ type: "series_generation_queue_finished", seriesId, status: "failed" });
     }
   }
 
   async function onCancelGeneration() {
     try {
-      const currentTask = getGenerationTaskForSelection(state);
-      if (currentTask?.mode === "series" && state.selectedSeriesId) {
+      if (
+        state.seriesGenerationQueue?.seriesId === state.selectedSeriesId &&
+        (state.seriesGenerationQueue.status === "running" || state.seriesGenerationQueue.status === "cancelling") &&
+        state.selectedSeriesId
+      ) {
+        dispatch({ type: "series_generation_queue_cancelling", seriesId: state.selectedSeriesId });
         await cancelSeriesSummaries(state.selectedSeriesId);
         return;
       }
+      if (
+        state.selectedContextType === "series" &&
+        state.selectedSeriesId
+      ) {
+        dispatch({ type: "series_generation_queue_cancelling", seriesId: state.selectedSeriesId });
+        await cancelSeriesSummaries(state.selectedSeriesId);
+        return;
+      }
+      const currentTask = getGenerationTaskForSelection(state);
       if (currentTask?.mode === "video" && state.selectedSeriesId && state.selectedVideoId) {
         await cancelVideoSummary(state.selectedSeriesId, state.selectedVideoId);
       }

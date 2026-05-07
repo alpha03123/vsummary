@@ -25,6 +25,7 @@ class SeriesGenerationResult:
     series_id: str
     completed_videos: list[str]
     skipped_videos: list[str]
+    cancelled_videos: list[str]
     cancelled_video_id: str | None = None
 
 
@@ -54,6 +55,10 @@ class GenerateVideoSummaryFromLibrary:
     def update_video_generation_concurrency(self, video_generation_concurrency: int) -> None:
         self._video_generation_slots.total_tokens = max(1, video_generation_concurrency)
 
+    @property
+    def generation_concurrency(self) -> int:
+        return int(self._video_generation_slots.total_tokens)
+
     def is_video_generation_active(self, series_id: str, video_id: str) -> bool:
         with self._activity_lock:
             return (series_id, video_id) in self._active_task_keys
@@ -61,6 +66,14 @@ class GenerateVideoSummaryFromLibrary:
     def is_series_generation_active(self, series_id: str) -> bool:
         with self._activity_lock:
             return any(active_series_id == series_id for active_series_id, _ in self._active_task_keys)
+
+    def get_active_video_ids(self, series_id: str) -> list[str]:
+        with self._activity_lock:
+            return [
+                active_video_id
+                for active_series_id, active_video_id in self._active_task_keys
+                if active_series_id == series_id
+            ]
 
     async def run(
         self,
@@ -116,7 +129,6 @@ class GenerateVideoSummaryFromLibrary:
         transcript_enhancement_enabled: bool | None,
         progress_reporter: ProgressReporter | None,
     ) -> VideoSummaryDTO | None:
-        owns_reporter = progress_reporter is None
         reporter = progress_reporter or self._progress_tracker.create_reporter(f"{series_id}/{video_id}")
         try:
             if self._video_generation_slots.available_tokens <= 0:
@@ -134,14 +146,12 @@ class GenerateVideoSummaryFromLibrary:
                         self._series_memory_refresher.refresh(series_id, video_id)
                     except Exception:
                         LOGGER.exception("series knowledge memory refresh failed for %s", series_id)
-            if owns_reporter:
-                reporter.completed("AI 概况已生成")
+            reporter.completed("AI 概况已生成")
             return self._workspace.get_video_summary(series_id, video_id)
         except LookupError:
             return None
         except GenerateCancelledError:
-            if owns_reporter:
-                reporter.cancelled("AI 概况生成已取消")
+            reporter.cancelled("AI 概况生成已取消")
             return None
         except RuntimeError as error:
             reporter.failed(str(error))
@@ -171,19 +181,14 @@ class GenerateSeriesSummaryFromLibrary:
         workspace: VideoLibraryReader,
         generator: GenerateVideoSummaryFromLibrary,
         progress_tracker: VideoGenerationProgressTracker,
-        video_generation_concurrency: int = 1,
     ) -> None:
         self._workspace = workspace
         self._generator = generator
         self._progress_tracker = progress_tracker
-        self._video_generation_concurrency = max(1, video_generation_concurrency)
         self._active_series_tasks: dict[str, asyncio.Task[SeriesGenerationResult]] = {}
         self._active_series_tasks_lock = asyncio.Lock()
         self._active_series_ids: set[str] = set()
         self._activity_lock = Lock()
-
-    def update_video_generation_concurrency(self, video_generation_concurrency: int) -> None:
-        self._video_generation_concurrency = max(1, video_generation_concurrency)
 
     def is_video_generation_active(self, series_id: str, video_id: str) -> bool:
         return self._generator.is_video_generation_active(series_id, video_id)
@@ -193,6 +198,9 @@ class GenerateSeriesSummaryFromLibrary:
             if series_id in self._active_series_ids:
                 return True
         return self._generator.is_series_generation_active(series_id)
+
+    def get_active_video_ids(self, series_id: str) -> list[str]:
+        return self._generator.get_active_video_ids(series_id)
 
     async def run(
         self,
@@ -246,20 +254,37 @@ class GenerateSeriesSummaryFromLibrary:
 
             if not pending_videos:
                 reporter.completed("该系列下所有视频都已生成概况")
-                return SeriesGenerationResult(series_id=series_id, completed_videos=[], skipped_videos=[])
+                return SeriesGenerationResult(
+                    series_id=series_id,
+                    completed_videos=[],
+                    skipped_videos=[],
+                    cancelled_videos=[],
+                )
 
-            results: dict[str, str] = {}
-            cancelled_video_id: str | None = None
+            completed_video_ids: set[str] = set()
+            cancelled_video_ids: set[str] = set()
             failure: Exception | None = None
             cancellation_requested = asyncio.Event()
+            results_lock = asyncio.Lock()
             queue: asyncio.Queue[tuple[int, object]] = asyncio.Queue()
             for index, video in enumerate(pending_videos, start=1):
                 queue.put_nowait((index, video))
 
-            worker_count = min(self._video_generation_concurrency, len(pending_videos))
+            worker_count = min(self._generator.generation_concurrency, len(pending_videos))
+
+            async def update_series_progress(detail: str | None = None) -> None:
+                async with results_lock:
+                    ended_count = len(completed_video_ids) + len(cancelled_video_ids)
+                    progress = (ended_count / len(pending_videos)) * 100.0
+                    counts = (
+                        f"已结束 {ended_count} / {len(pending_videos)}"
+                        f"，完成 {len(completed_video_ids)}"
+                        f"，取消 {len(cancelled_video_ids)}"
+                    )
+                    reporter.update("batch", progress, detail or counts)
 
             async def worker() -> None:
-                nonlocal cancelled_video_id, failure
+                nonlocal failure
                 while (
                     failure is None
                     and not reporter.is_cancel_requested()
@@ -277,9 +302,11 @@ class GenerateSeriesSummaryFromLibrary:
                     )
                     child_reporter = _SeriesVideoProgressReporter(
                         base_reporter=reporter,
+                        video_reporter=self._progress_tracker.create_reporter(f"{series_id}/{video.id}"),
                         current_index=current_index,
                         total_videos=len(pending_videos),
                         current_title=video.title,
+                        cancellation_requested=cancellation_requested,
                     )
                     try:
                         result = await self._generator.run(
@@ -289,13 +316,18 @@ class GenerateSeriesSummaryFromLibrary:
                             progress_reporter=child_reporter,
                         )
                         if result is None:
-                            cancelled_video_id = cancelled_video_id or video.id
-                            results[video.id] = "cancelled"
-                            cancellation_requested.set()
-                            return
-                        results[video.id] = "completed"
+                            if failure is not None:
+                                return
+                            async with results_lock:
+                                cancelled_video_ids.add(video.id)
+                            await update_series_progress()
+                            continue
+                        async with results_lock:
+                            completed_video_ids.add(video.id)
+                        await update_series_progress()
                     except Exception as error:
                         failure = error
+                        cancellation_requested.set()
                         return
                     finally:
                         queue.task_done()
@@ -311,25 +343,37 @@ class GenerateSeriesSummaryFromLibrary:
             if failure is not None:
                 raise failure
 
-            completed_videos = [video.id for video in pending_videos if results.get(video.id) == "completed"]
+            completed_videos = [video.id for video in pending_videos if video.id in completed_video_ids]
+            cancelled_videos = [video.id for video in pending_videos if video.id in cancelled_video_ids]
             skipped_videos = [
                 video.id
                 for video in pending_videos
-                if results.get(video.id) != "completed" and video.id != cancelled_video_id
+                if video.id not in completed_video_ids and video.id not in cancelled_video_ids
             ]
-            if cancelled_video_id is not None or reporter.is_cancel_requested():
+            if reporter.is_cancel_requested():
                 reporter.cancelled(
-                    f"批量处理已取消，已完成 {len(completed_videos)} / {len(pending_videos)} 个视频"
+                    f"系列处理已取消，已结束 {len(completed_videos) + len(cancelled_videos)} / {len(pending_videos)}"
+                    f"，完成 {len(completed_videos)}，取消 {len(cancelled_videos)}"
                 )
                 return SeriesGenerationResult(
                     series_id=series_id,
                     completed_videos=completed_videos,
                     skipped_videos=skipped_videos,
-                    cancelled_video_id=cancelled_video_id,
+                    cancelled_videos=cancelled_videos,
+                    cancelled_video_id=cancelled_videos[0] if cancelled_videos else None,
                 )
 
-            reporter.completed(f"批量处理完成，已生成 {len(completed_videos)} 个视频")
-            return SeriesGenerationResult(series_id=series_id, completed_videos=completed_videos, skipped_videos=[])
+            reporter.completed(
+                f"系列处理完成，已结束 {len(completed_videos) + len(cancelled_videos)} / {len(pending_videos)}"
+                f"，完成 {len(completed_videos)}，取消 {len(cancelled_videos)}"
+            )
+            return SeriesGenerationResult(
+                series_id=series_id,
+                completed_videos=completed_videos,
+                skipped_videos=[],
+                cancelled_videos=cancelled_videos,
+                cancelled_video_id=cancelled_videos[0] if cancelled_videos else None,
+            )
         finally:
             await self._clear_series_task(task_id)
 
@@ -354,16 +398,21 @@ class _SeriesVideoProgressReporter:
         self,
         *,
         base_reporter: ProgressReporter,
+        video_reporter: ProgressReporter,
         current_index: int,
         total_videos: int,
         current_title: str,
+        cancellation_requested: asyncio.Event,
     ) -> None:
         self._base_reporter = base_reporter
+        self._video_reporter = video_reporter
         self._current_index = current_index
         self._total_videos = max(1, total_videos)
         self._current_title = current_title
+        self._cancellation_requested = cancellation_requested
 
     def update(self, stage: str, progress: float | None = None, detail: str | None = None) -> None:
+        self._video_reporter.update(stage, progress, detail)
         if progress is None:
             overall_progress = ((self._current_index - 1) / self._total_videos) * 100.0
         else:
@@ -375,16 +424,24 @@ class _SeriesVideoProgressReporter:
         self._base_reporter.update(stage, overall_progress, merged_detail)
 
     def completed(self, detail: str | None = None) -> None:
-        return None
+        self._video_reporter.completed(detail)
 
     def failed(self, message: str) -> None:
+        self._video_reporter.failed(message)
         self._base_reporter.failed(message)
 
     def cancelled(self, detail: str | None = None) -> None:
-        self._base_reporter.cancelled(detail)
+        self._video_reporter.cancelled(detail)
 
     def is_cancel_requested(self) -> bool:
-        return self._base_reporter.is_cancel_requested()
+        return (
+            self._cancellation_requested.is_set()
+            or self._base_reporter.is_cancel_requested()
+            or self._video_reporter.is_cancel_requested()
+        )
 
     def raise_if_cancelled(self) -> None:
+        if self._cancellation_requested.is_set():
+            raise RuntimeError("系列处理已停止")
+        self._video_reporter.raise_if_cancelled()
         self._base_reporter.raise_if_cancelled()

@@ -240,6 +240,7 @@ async def generate_series_summaries(
         "series_id": result.series_id,
         "completed_videos": result.completed_videos,
         "skipped_videos": result.skipped_videos,
+        "cancelled_videos": result.cancelled_videos,
         "cancelled_video_id": result.cancelled_video_id,
     }
 
@@ -250,7 +251,14 @@ def cancel_series_summaries_generation(
     container: ApiContainerDep,
 ) -> dict[str, object]:
     container.generation_progress_tracker.request_cancel(_build_series_task_id(series_id))
-    return {"status": "cancelled", "task_id": _build_series_task_id(series_id)}
+    active_video_ids = container.generate_series_summaries.get_active_video_ids(series_id)
+    for video_id in active_video_ids:
+        container.generation_progress_tracker.request_cancel(_build_task_id(series_id, video_id))
+    return {
+        "status": "cancelled",
+        "task_id": _build_series_task_id(series_id),
+        "cancelled_video_ids": active_video_ids,
+    }
 
 
 @router.post("/api/videos/{series_id}/{video_id}/mindmap/generate")
