@@ -205,11 +205,46 @@ def _stream_rag_block_message(message: str):
 
 def _format_agent_error(error: Exception) -> str:
     message = str(error).strip()
+    if _is_web_search_timeout(error, message):
+        return "联网搜索失败：请求超时，请稍后重试或关闭联网搜索。"
+    if _is_unsupported_web_search_error(message):
+        return "联网搜索失败：当前模型或供应商不支持联网搜索，请关闭联网搜索或更换支持搜索的模型。"
+    if _is_web_search_error(message):
+        return f"联网搜索失败：{message}" if message else "联网搜索失败。"
     if "Your request was blocked" in message:
         return "模型请求被上游网关拦截，请检查模型供应商、API 网关或更换官方 API 地址。"
     if "APIError" in message or "OpenAIException" in message or "litellm" in type(error).__module__:
         return f"模型服务调用失败：{message}" if message else "模型服务调用失败。"
     return message or "AI 对话失败。"
+
+
+def _is_web_search_timeout(error: Exception, message: str) -> bool:
+    normalized = message.lower()
+    return (
+        ("web_search" in normalized or "联网搜索" in message)
+        and (isinstance(error, TimeoutError) or "timeout" in normalized or "timed out" in normalized)
+    )
+
+
+def _is_unsupported_web_search_error(message: str) -> bool:
+    normalized = message.lower()
+    if "web_search_options" not in normalized and "web_search" not in normalized and "联网搜索" not in message:
+        return False
+    unsupported_markers = (
+        "unsupported",
+        "not supported",
+        "unrecognized",
+        "unknown parameter",
+        "invalid parameter",
+        "does not support",
+        "不支持",
+    )
+    return any(marker in normalized for marker in unsupported_markers)
+
+
+def _is_web_search_error(message: str) -> bool:
+    normalized = message.lower()
+    return "web_search" in normalized or "web_search_options" in normalized or "联网搜索" in message
 
 
 def _is_agent_debug_enabled(container) -> bool:

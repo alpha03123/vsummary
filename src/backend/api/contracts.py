@@ -29,6 +29,7 @@ class WorkspaceSettingsResponse(BaseModel):
     rag_rerank_enabled: bool
     window_tokens: int
     video_generation_concurrency: int
+    web_search_enabled: bool
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -42,6 +43,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     rag_rerank_enabled: bool
     window_tokens: int
     video_generation_concurrency: int
+    web_search_enabled: bool
 
 
 class ProviderSettingsResponse(BaseModel):

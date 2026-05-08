@@ -16,14 +16,19 @@ class SeriesAnswerSynthesizer:
         *,
         user_message: str,
         query_understanding: SeriesQueryUnderstanding,
-        retrieval_hits: list[RetrievalHit],
+        retrieval_hits: list[RetrievalHit] | None = None,
+        evidence_items: list[dict[str, object]] | None = None,
         series_catalog: dict[str, object] | None = None,
         debug_trace: dict[str, object] | None = None,
     ) -> SeriesAnswerPayload:
+        normalized_evidence_items = _normalize_evidence_items(
+            evidence_items=evidence_items,
+            retrieval_hits=retrieval_hits or [],
+        )
         messages = self._build_messages(
             user_message=user_message,
             query_understanding=query_understanding,
-            retrieval_hits=retrieval_hits,
+            evidence_items=normalized_evidence_items,
             series_catalog=series_catalog or {},
         )
         payload = self._gateway.create_structured_completion(
@@ -36,7 +41,7 @@ class SeriesAnswerSynthesizer:
                     "user_message": user_message,
                     "query_understanding": query_understanding.model_dump(mode="json"),
                     "series_catalog": series_catalog or {},
-                    "retrieval_hits": [item.model_dump(mode="json") for item in retrieval_hits],
+                    "evidence_items": normalized_evidence_items,
                     "messages": [item.model_dump(mode="json") for item in messages],
                 },
                 "output": payload.model_dump(mode="json"),
@@ -48,7 +53,7 @@ class SeriesAnswerSynthesizer:
         *,
         user_message: str,
         query_understanding: SeriesQueryUnderstanding,
-        retrieval_hits: list[RetrievalHit],
+        evidence_items: list[dict[str, object]],
         series_catalog: dict[str, object],
     ) -> list[AgentChatMessage]:
         catalog_videos = series_catalog.get("videos", [])
@@ -69,7 +74,17 @@ class SeriesAnswerSynthesizer:
                     f"user_message:\n{user_message}\n\n"
                     f"query_understanding:\n{json.dumps(query_understanding.model_dump(mode='json'), ensure_ascii=False, indent=2)}\n\n"
                     f"series_catalog:\n{json.dumps(prompt_catalog, ensure_ascii=False, indent=2)}\n\n"
-                    f"retrieval_hits:\n{json.dumps([item.model_dump(mode='json') for item in retrieval_hits], ensure_ascii=False, indent=2)}"
+                    f"evidence_items:\n{json.dumps(evidence_items, ensure_ascii=False, indent=2)}"
                 ),
             ),
         ]
+
+
+def _normalize_evidence_items(
+    *,
+    evidence_items: list[dict[str, object]] | None,
+    retrieval_hits: list[RetrievalHit],
+) -> list[dict[str, object]]:
+    if evidence_items is not None:
+        return [dict(item) for item in evidence_items]
+    return [item.model_dump(mode="json") for item in retrieval_hits]

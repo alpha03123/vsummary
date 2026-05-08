@@ -4,7 +4,7 @@ from backend.agent.schemas.action_plan import CitationReference, CitationSlot, C
 
 
 def build_citations_from_graph_result(result: dict[str, object]) -> list[CitationReference]:
-    retrieval_results = result.get("retrieval_results", [])
+    retrieval_results = result.get("evidence_items", result.get("retrieval_results", []))
     if not isinstance(retrieval_results, list):
         return []
 
@@ -21,6 +21,10 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             next_id = _append_video_graph_items(citations, item.get("items", []), next_id)
             continue
         source_type = str(item.get("source_type", "")).strip()
+        if source_type == "web_search":
+            next_id = _append_web_search_item(citations, item, next_id)
+            continue
+
         video_id = str(item.get("video_id", "")).strip()
         title = str(item.get("title", "")).strip() or video_id
         if not source_type or not video_id:
@@ -90,6 +94,30 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             next_id += 1
 
     return citations
+
+
+def _append_web_search_item(citations: list[CitationReference], item: dict[str, object], next_id: int) -> int:
+    url = _as_str(item.get("url"))
+    if not url:
+        return next_id
+    title = _as_str(item.get("title")) or url
+    citations.append(
+        CitationReference(
+            id=str(next_id),
+            label=title,
+            source_type="web",
+            search_scope="web",
+            slots=[
+                CitationSlot(
+                    slot=1,
+                    target_type="web",
+                    text=_as_str(item.get("snippet")) or _as_str(item.get("text")),
+                    url=url,
+                )
+            ],
+        )
+    )
+    return next_id + 1
 
 
 def _append_summary_items(citations: list[CitationReference], items: object, next_id: int) -> int:

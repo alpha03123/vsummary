@@ -7,6 +7,7 @@ import {
   getGenerationTaskForSelection,
   loadChatSessionIdsByScope,
   loadChatSessionListsByScope,
+  normalizeUiSettings,
   removeChatSessionForScope,
   removeScopedValue,
   resolveChatSessionsForScope,
@@ -15,6 +16,13 @@ import { workspaceReducer } from "./workspaceReducer";
 import { getPendingVideosForSeriesGeneration } from "./workspaceContentActions";
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
+
+describe("workspace UI settings", () => {
+  it("normalizes the web search setting with a safe disabled default", () => {
+    expect(normalizeUiSettings({}).webSearchEnabled).toBe(false);
+    expect(normalizeUiSettings({ webSearchEnabled: true }).webSearchEnabled).toBe(true);
+  });
+});
 
 describe("workspaceState chat session persistence", () => {
   beforeEach(() => {

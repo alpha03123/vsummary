@@ -39,6 +39,7 @@ from backend.video_summary.infrastructure.library_generation_adapters import (
     WorkspaceBackedVideoMindmapGenerator,
     WorkspaceBackedVideoSummaryGenerator,
 )
+from backend.video_summary.infrastructure.litellm_web_search import LiteLLMNativeWebSearchGateway
 from backend.video_summary.infrastructure.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
@@ -455,6 +456,10 @@ class LazyAgentRuntimeProvider:
                 if retrieval_service is None:
                     retrieval_service = self._build_lazy_retrieval_service()
                     self._cached_retrieval_service = retrieval_service
+                web_search_gateway = self._build_web_search_gateway(
+                    settings=app_settings,
+                    env_settings=env_settings,
+                )
                 answer_program = AnswerSynthesisProgram()
                 graph = build_agent_graph(
                     retrieval_service=retrieval_service,
@@ -464,6 +469,10 @@ class LazyAgentRuntimeProvider:
                     workspace=self._workspace,
                     video_action_planner=video_action_planner,
                     tool_executor=tool_executor,
+                    context_window_tokens=app_settings.agent_context.window_tokens,
+                    reserved_output_tokens=app_settings.agent_context.reserved_output_tokens,
+                    web_search_gateway=web_search_gateway,
+                    web_search_settings=app_settings.web_search,
                 )
                 self._cached_agent_graph_service = AgentGraphService(
                     context_loader=self._context_loader,
@@ -552,6 +561,23 @@ class LazyAgentRuntimeProvider:
         return BGEReranker(
             model_name=_resolve_local_reranker_model_name(self._root_dir),
             device=device,
+        )
+
+    def _build_web_search_gateway(self, *, settings, env_settings):
+        web_search_settings = settings.web_search
+        if not web_search_settings.enabled:
+            return None
+        if web_search_settings.provider == "litellm" and web_search_settings.mode == "native":
+            return LiteLLMNativeWebSearchGateway(
+                provider=env_settings.provider,
+                model=env_settings.model,
+                base_url=normalize_openai_base_url(env_settings.base_url),
+                api_key=env_settings.api_key,
+                search_context_size=web_search_settings.search_context_size,
+            )
+        raise RuntimeError(
+            "Unsupported web_search provider/mode: "
+            f"{web_search_settings.provider}/{web_search_settings.mode}"
         )
 
 

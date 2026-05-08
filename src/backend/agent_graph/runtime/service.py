@@ -145,6 +145,12 @@ class AgentGraphService:
         retrieval_results = result.get("retrieval_results")
         if isinstance(retrieval_results, list):
             debug_trace.setdefault("retrieval_response", {"hits": retrieval_results})
+        web_search_results = result.get("web_search_results")
+        if isinstance(web_search_results, list):
+            debug_trace.setdefault("web_search_response", {"hits": web_search_results})
+        evidence_items = result.get("evidence_items")
+        if isinstance(evidence_items, list):
+            debug_trace.setdefault("evidence_items", evidence_items)
         answer_payload = result.get("answer_payload")
         if isinstance(answer_payload, dict):
             debug_trace.setdefault("answer_synthesis", {"output": answer_payload})

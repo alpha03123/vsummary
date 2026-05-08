@@ -14,6 +14,9 @@ VALID_ASR_PROVIDERS = {"faster_whisper"}
 VALID_THEMES = {"light", "dark"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
 VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
+VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
+VALID_WEB_SEARCH_MODES = {"native"}
+VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
 DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
@@ -30,6 +33,11 @@ DEFAULT_AGENT_RETRIEVAL_MAX_HITS = 5
 DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED = True
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
+DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
+DEFAULT_WEB_SEARCH_MODE = "native"
+DEFAULT_WEB_SEARCH_CONTEXT_SIZE = "medium"
+DEFAULT_WEB_SEARCH_MAX_RESULTS = 5
+DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS = 10
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -99,6 +107,16 @@ class GenerationConcurrencySettings:
 
 
 @dataclass(frozen=True)
+class WebSearchSettings:
+    enabled: bool
+    provider: str
+    mode: str
+    search_context_size: str
+    max_results: int
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class AppSettings:
     asr: AsrSettings
     openai: OpenAISettings
@@ -107,6 +125,7 @@ class AppSettings:
     agent_context: AgentContextSettings
     agent_retrieval: AgentRetrievalSettings
     generation: GenerationConcurrencySettings
+    web_search: WebSearchSettings
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
@@ -235,6 +254,38 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             field_name="generation.summary_chunk_concurrency",
         ),
     )
+    web_search_payload = payload.get("web_search", {})
+    web_search_settings = WebSearchSettings(
+        enabled=bool(web_search_payload.get("enabled", False)),
+        provider=_normalize_choice(
+            web_search_payload.get("provider"),
+            default=DEFAULT_WEB_SEARCH_PROVIDER,
+            allowed=VALID_WEB_SEARCH_PROVIDERS,
+            field_name="web_search.provider",
+        ),
+        mode=_normalize_choice(
+            web_search_payload.get("mode"),
+            default=DEFAULT_WEB_SEARCH_MODE,
+            allowed=VALID_WEB_SEARCH_MODES,
+            field_name="web_search.mode",
+        ),
+        search_context_size=_normalize_choice(
+            web_search_payload.get("search_context_size"),
+            default=DEFAULT_WEB_SEARCH_CONTEXT_SIZE,
+            allowed=VALID_WEB_SEARCH_CONTEXT_SIZES,
+            field_name="web_search.search_context_size",
+        ),
+        max_results=_normalize_positive_int(
+            web_search_payload.get("max_results"),
+            default=DEFAULT_WEB_SEARCH_MAX_RESULTS,
+            field_name="web_search.max_results",
+        ),
+        timeout_seconds=_normalize_positive_int(
+            web_search_payload.get("timeout_seconds"),
+            default=DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS,
+            field_name="web_search.timeout_seconds",
+        ),
+    )
 
     return AppSettings(
         asr=asr_settings,
@@ -244,6 +295,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         agent_context=agent_context_settings,
         agent_retrieval=agent_retrieval_settings,
         generation=generation_settings,
+        web_search=web_search_settings,
     )
 
 
@@ -352,6 +404,13 @@ def replace_video_generation_concurrency(settings: AppSettings, video_generation
     )
 
 
+def replace_web_search_enabled(settings: AppSettings, web_search_enabled: bool) -> AppSettings:
+    return replace(
+        settings,
+        web_search=replace(settings.web_search, enabled=bool(web_search_enabled)),
+    )
+
+
 def replace_openai_settings(
     settings: AppSettings,
     *,
@@ -441,6 +500,14 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
         "",
+        "[web_search]",
+        f"enabled = {_toml_bool(settings.web_search.enabled)}",
+        f'provider = "{settings.web_search.provider}"',
+        f'mode = "{settings.web_search.mode}"',
+        f'search_context_size = "{settings.web_search.search_context_size}"',
+        f"max_results = {settings.web_search.max_results}",
+        f"timeout_seconds = {settings.web_search.timeout_seconds}",
+        "",
     ]
     return "\n".join(lines)
 
@@ -473,6 +540,17 @@ def _normalize_planner_transport(value: object) -> str:
         if normalized in VALID_PLANNER_TRANSPORTS:
             return normalized
     return "structured"
+
+
+def _normalize_choice(value: object, *, default: str, allowed: set[str], field_name: str) -> str:
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ValueError(f"Unsupported {field_name}: {value!r}. Supported values: {', '.join(sorted(allowed))}")
+    normalized = value.strip().lower()
+    if normalized in allowed:
+        return normalized
+    raise ValueError(f"Unsupported {field_name}: {value!r}. Supported values: {', '.join(sorted(allowed))}")
 
 
 def _normalize_embedding_provider(value: object) -> str:

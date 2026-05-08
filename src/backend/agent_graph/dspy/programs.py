@@ -12,7 +12,7 @@ class SynthesizeVideoAnswer(dspy.Signature):
     __doc__ = VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT
 
     user_message: str = dspy.InputField()
-    retrieval_results: list[dict[str, object]] = dspy.InputField()
+    evidence_items: list[dict[str, object]] = dspy.InputField()
     meta_state: dict[str, object] = dspy.InputField()
     answer: str = dspy.OutputField()
 
@@ -25,12 +25,14 @@ class AnswerSynthesisProgram:
         self,
         *,
         user_message: str,
-        retrieval_results: list[dict[str, object]],
+        retrieval_results: list[dict[str, object]] | None = None,
+        evidence_items: list[dict[str, object]] | None = None,
         meta_state: dict[str, object] | None = None,
     ) -> str:
+        normalized_evidence_items = evidence_items if evidence_items is not None else retrieval_results or []
         raw = self._predictor(
             user_message=user_message,
-            retrieval_results=retrieval_results,
+            evidence_items=normalized_evidence_items,
             meta_state=meta_state or {},
         )
         payload = _coerce_prediction(raw)

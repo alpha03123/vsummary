@@ -7,6 +7,7 @@ export const defaultUiSettings = {
   ragEmbeddingDevice: "cpu",
   ragMaxHits: 5,
   ragRerankEnabled: true,
+  webSearchEnabled: false,
   llmProvider: "openai_compatible",
   openaiBaseUrl: "http://127.0.0.1:8317/v1",
   openaiModel: "gpt-5.4",
@@ -620,6 +621,8 @@ export function normalizeUiSettings(value) {
         : 5,
     ragRerankEnabled:
       typeof record.ragRerankEnabled === "boolean" ? record.ragRerankEnabled : true,
+    webSearchEnabled:
+      typeof record.webSearchEnabled === "boolean" ? record.webSearchEnabled : false,
     llmProvider: record.llmProvider === "openai_compatible" ? record.llmProvider : "openai_compatible",
     openaiBaseUrl:
       typeof record.openaiBaseUrl === "string" && record.openaiBaseUrl.trim()

@@ -26,5 +26,5 @@ class RetrievalHit(BaseModel):
 
 class SeriesAnswerPayload(BaseModel):
     answer: str
-    citations: list[str] = Field(default_factory=list, description="使用到的 retrieval_hits evidence_id 列表。")
+    citations: list[str] = Field(default_factory=list, description="使用到的 evidence_items evidence_id 列表。")
     used_source_types: list[str] = Field(default_factory=list)

@@ -5,6 +5,8 @@ from langgraph.graph import END, START, StateGraph
 from backend.agent_graph.runtime.nodes import (
     build_route_scope_node,
     build_answer_node,
+    build_evidence_items_node,
+    build_optional_web_search_node,
     build_retrieve_evidence_node,
     build_synthesize_answer_node,
     build_understand_query_node,
@@ -30,6 +32,8 @@ def build_agent_graph(
     tool_executor=None,
     context_window_tokens=1_000_000,
     reserved_output_tokens=20_000,
+    web_search_gateway=None,
+    web_search_settings=None,
 ):
     resolved_retrieval_service = retrieval_service or _MissingRetrievalService()
     resolved_answer_program = answer_program or AnswerSynthesisProgram()
@@ -57,6 +61,14 @@ def build_agent_graph(
         build_retrieve_evidence_node(retrieval_service=resolved_retrieval_service),
     )
     graph.add_node(
+        "optional_web_search",
+        build_optional_web_search_node(
+            web_search_gateway=web_search_gateway,
+            web_search_settings=web_search_settings,
+        ),
+    )
+    graph.add_node("build_evidence_items", build_evidence_items_node())
+    graph.add_node(
         "synthesize_answer",
         build_synthesize_answer_node(series_answer_synthesizer=series_answer_synthesizer),
     )
@@ -83,9 +95,18 @@ def build_agent_graph(
         },
     )
     graph.add_edge("understand_query", "retrieve_evidence")
-    graph.add_edge("retrieve_evidence", "synthesize_answer")
+    graph.add_edge("retrieve_evidence", "optional_web_search")
+    graph.add_edge("optional_web_search", "build_evidence_items")
     graph.add_edge("synthesize_answer", "finalize")
-    graph.add_edge("build_video_context", "plan_and_execute_video_actions")
+    graph.add_edge("build_video_context", "optional_web_search")
+    graph.add_conditional_edges(
+        "build_evidence_items",
+        _route_after_evidence_items,
+        {
+            "series": "synthesize_answer",
+            "video": "plan_and_execute_video_actions",
+        },
+    )
     graph.add_edge("plan_and_execute_video_actions", "answer")
     graph.add_edge("answer", "finalize")
     graph.add_edge("finalize", "update_session_memory")
@@ -107,3 +128,7 @@ def _route_after_scope(state: AgentGraphState) -> str:
     if str(state.get("scope_type", "")).strip() == "video":
         return "video"
     raise ValueError(f"Unsupported scope_type: {state.get('scope_type', '')}")
+
+
+def _route_after_evidence_items(state: AgentGraphState) -> str:
+    return _route_after_scope(state)

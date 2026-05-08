@@ -41,6 +41,9 @@ function formatCitationSlot(slot) {
     const end = typeof slot.end_seconds === "number" ? `-${Math.round(slot.end_seconds)}s` : "";
     parts.push(`${Math.round(slot.start_seconds)}s${end}`);
   }
+  if (typeof slot.url === "string" && slot.url.trim()) {
+    parts.push(slot.url.trim());
+  }
   return parts.join(" · ");
 }
 
@@ -51,11 +54,13 @@ function buildCitationPreview(citation) {
   const firstSlot = Array.isArray(citation.slots) ? citation.slots.find((slot) => slot && typeof slot === "object") : null;
   const detail = formatCitationSlot(firstSlot);
   const text = typeof firstSlot?.text === "string" ? firstSlot.text.trim() : "";
+  const url = typeof firstSlot?.url === "string" ? firstSlot.url.trim() : "";
   return {
     title: `[${citation.id}] ${citation.label}`,
     sourceType: typeof citation.source_type === "string" ? citation.source_type : "",
     detail,
     text,
+    url,
   };
 }
 
@@ -93,6 +98,9 @@ export function WorkspaceMarkdownMessage({ content, citations = null }) {
                       ) : null}
                       {preview.text ? (
                         <span className="mt-2 block leading-relaxed text-stone-600 dark:text-stone-300">{preview.text}</span>
+                      ) : null}
+                      {preview.url ? (
+                        <span className="mt-2 block break-all text-[11px] text-accent">{preview.url}</span>
                       ) : null}
                     </span>
                   ) : null}

@@ -40,3 +40,11 @@ rerank_enabled = false
 [generation]
 video_generation_concurrency = 5
 summary_chunk_concurrency = 3
+
+[web_search]
+enabled = true
+provider = "litellm"
+mode = "native"
+search_context_size = "medium"
+max_results = 5
+timeout_seconds = 10

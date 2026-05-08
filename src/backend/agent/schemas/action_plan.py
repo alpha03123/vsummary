@@ -29,6 +29,7 @@ class CitationSlot(BaseModel):
     start_seconds: float | None = None
     end_seconds: float | None = None
     text: str | None = None
+    url: str | None = None
     candidates: list["CitationSlotCandidate"] = Field(default_factory=list)
 
 

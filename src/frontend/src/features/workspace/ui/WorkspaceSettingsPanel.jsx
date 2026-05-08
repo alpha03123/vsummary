@@ -554,6 +554,16 @@ export function WorkspaceSettingsPanel({
                     ) : null}
                   </div>
                 </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="联网搜索"
+                  description="开启后，Agent 仅在本地内容缺失或你明确要求联网时才会使用联网搜索。需要当前模型或供应商支持联网搜索。"
+                >
+                  <WorkspaceToggleSwitch
+                    checked={ui.webSearchEnabled}
+                    onChange={() => onChangeSetting("webSearchEnabled", !ui.webSearchEnabled)}
+                  />
+                </WorkspaceSettingRow>
               </>
             )}
 

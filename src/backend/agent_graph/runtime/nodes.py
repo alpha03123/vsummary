@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from math import ceil
+from time import monotonic
 
 from backend.agent.memory.context import AgentContext
 from backend.agent_graph.runtime.state import AgentGraphState
@@ -73,7 +74,7 @@ def build_plan_and_execute_video_actions_node(
         plan = video_action_planner.run(
             user_message=str(state["user_message"]),
             retrieval_results=[
-                item for item in state.get("retrieval_results", [])
+                item for item in state.get("evidence_items", state.get("retrieval_results", []))
                 if isinstance(item, dict)
             ],
             history_summary=str(state.get("history_summary", "")),
@@ -128,6 +129,9 @@ def build_understand_query_node(*, series_query_processor, workspace=None) -> Ca
         next_state["series_catalog"] = catalog
         next_state["retrieval_request"] = {}
         next_state["retrieval_results"] = []
+        next_state["web_search_results"] = []
+        next_state["web_search_used"] = False
+        next_state["evidence_items"] = []
         next_state["answer_payload"] = {}
         next_state["tool_results"] = []
         return next_state
@@ -170,19 +174,83 @@ def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphSt
     return retrieve_evidence
 
 
+def build_optional_web_search_node(*, web_search_gateway=None, web_search_settings=None) -> Callable[[AgentGraphState], AgentGraphState]:
+    def optional_web_search(state: AgentGraphState) -> AgentGraphState:
+        if web_search_gateway is None or web_search_settings is None or not bool(getattr(web_search_settings, "enabled", False)):
+            next_state = dict(state)
+            next_state.setdefault("web_search_results", [])
+            next_state.setdefault("web_search_used", False)
+            return next_state
+
+        local_items = [
+            item for item in state.get("retrieval_results", [])
+            if isinstance(item, dict)
+        ]
+        user_message = str(state.get("user_message", "")).strip()
+        if not _should_use_web_search(user_message=user_message, local_items=local_items):
+            next_state = dict(state)
+            next_state.setdefault("web_search_results", [])
+            next_state["web_search_used"] = False
+            return next_state
+
+        started_at = monotonic()
+        try:
+            results = web_search_gateway.search(
+                user_message,
+                max_results=int(getattr(web_search_settings, "max_results", 5)),
+                timeout_seconds=int(getattr(web_search_settings, "timeout_seconds", 10)),
+            )
+        except Exception as error:
+            raise RuntimeError(f"联网搜索失败：{error}") from error
+        normalized_results = [
+            _normalize_web_search_result(item, index=index)
+            for index, item in enumerate(results, start=1)
+            if isinstance(item, dict)
+        ]
+        duration_ms = int((monotonic() - started_at) * 1000)
+        next_state = dict(state)
+        next_state["web_search_results"] = [
+            {**item, "duration_ms": duration_ms}
+            for item in normalized_results
+        ]
+        next_state["web_search_used"] = bool(normalized_results)
+        return next_state
+
+    return optional_web_search
+
+
+def build_evidence_items_node() -> Callable[[AgentGraphState], AgentGraphState]:
+    def build_evidence_items(state: AgentGraphState) -> AgentGraphState:
+        local_items = [
+            _normalize_local_evidence_item(item, index=index)
+            for index, item in enumerate(state.get("retrieval_results", []), start=1)
+            if isinstance(item, dict)
+        ]
+        web_items = [
+            _normalize_web_search_result(item, index=index)
+            for index, item in enumerate(state.get("web_search_results", []), start=1)
+            if isinstance(item, dict)
+        ]
+        next_state = dict(state)
+        next_state["evidence_items"] = [*local_items, *web_items]
+        return next_state
+
+    return build_evidence_items
+
+
 def build_synthesize_answer_node(*, series_answer_synthesizer) -> Callable[[AgentGraphState], AgentGraphState]:
     def synthesize_answer(state: AgentGraphState) -> AgentGraphState:
         if series_answer_synthesizer is None:
             raise RuntimeError("Series answer synthesizer 尚未注入。")
         query_understanding_payload = dict(state.get("query_understanding", {}))
-        retrieval_items = [
-            item for item in state.get("retrieval_results", [])
+        evidence_items = [
+            item for item in state.get("evidence_items", state.get("retrieval_results", []))
             if isinstance(item, dict)
         ]
         payload = series_answer_synthesizer.run(
             user_message=state["user_message"],
             query_understanding=_coerce_query_understanding(query_understanding_payload),
-            retrieval_hits=_coerce_retrieval_hits(retrieval_items),
+            evidence_items=evidence_items,
             series_catalog=dict(state.get("series_catalog", {})),
             debug_trace=None,
         )
@@ -211,10 +279,12 @@ def synthesize_answer_text(
 ) -> str:
     return answer_program.run(
         user_message=state["user_message"],
-        retrieval_results=_project_answer_evidence(list(state.get("retrieval_results", []))),
+        retrieval_results=_project_answer_evidence(list(state.get("evidence_items", state.get("retrieval_results", [])))),
+        evidence_items=_project_answer_evidence(list(state.get("evidence_items", state.get("retrieval_results", [])))),
         meta_state={
             "tool_results": list(state.get("tool_results", [])),
             "action_summary": str(state.get("action_summary", "")).strip(),
+            "web_search_used": bool(state.get("web_search_used", False)),
         },
     )
 
@@ -300,6 +370,67 @@ def _coerce_retrieval_hits(items: list[dict[str, object]]):
         payload.setdefault("text", str(payload.get("text", payload.get("snippet", ""))))
         hits.append(RetrievalHit.model_validate(payload))
     return hits
+
+
+def _should_use_web_search(*, user_message: str, local_items: list[dict[str, object]]) -> bool:
+    if not local_items:
+        return True
+    normalized = user_message.lower()
+    explicit_markers = (
+        "联网",
+        "上网",
+        "搜索",
+        "查一下",
+        "查下",
+        "查找",
+        "外部资料",
+        "官网",
+        "最新",
+        "今天",
+        "现在",
+        "核验",
+        "验证",
+        "web",
+        "internet",
+        "search",
+        "latest",
+    )
+    return any(marker in normalized for marker in explicit_markers)
+
+
+def _normalize_local_evidence_item(item: dict[str, object], *, index: int) -> dict[str, object]:
+    payload = dict(item)
+    payload["evidence_id"] = str(payload.get("evidence_id", f"local-{index}")).strip() or f"local-{index}"
+    payload["source_family"] = str(payload.get("source_family", "local")).strip() or "local"
+    payload["source_type"] = str(payload.get("source_type", "local")).strip() or "local"
+    payload["text"] = str(payload.get("text", payload.get("snippet", ""))).strip()
+    payload["snippet"] = str(payload.get("snippet", payload.get("text", ""))).strip()
+    return payload
+
+
+def _normalize_web_search_result(item: dict[str, object], *, index: int) -> dict[str, object]:
+    title = str(item.get("title", "")).strip()
+    url = str(item.get("url", "")).strip()
+    text = str(item.get("text", item.get("snippet", ""))).strip()
+    snippet = str(item.get("snippet", text)).strip()
+    if not url:
+        raise ValueError("web_search result 缺少 url。")
+    if not text and not snippet:
+        raise ValueError("web_search result 缺少 text 或 snippet。")
+    return {
+        **dict(item),
+        "evidence_id": str(item.get("evidence_id", f"web-{index}")).strip() or f"web-{index}",
+        "doc_id": str(item.get("doc_id", f"web:{index}:{url}")).strip(),
+        "series_id": str(item.get("series_id", "")).strip(),
+        "video_id": str(item.get("video_id", "")).strip(),
+        "source_family": "web",
+        "source_type": "web_search",
+        "title": title or url,
+        "url": url,
+        "text": text or snippet,
+        "snippet": snippet or text,
+        "published_at": str(item.get("published_at", "")).strip(),
+    }
 
 
 def _build_video_summary_context_item(state: AgentGraphState, summary) -> dict[str, object] | None:

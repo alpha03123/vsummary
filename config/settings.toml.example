@@ -75,3 +75,18 @@ rerank_enabled = false
 video_generation_concurrency = 5
 # 单个视频分片摘要阶段允许并发的 LLM 请求数量。
 summary_chunk_concurrency = 3
+
+# 联网搜索设置。
+[web_search]
+# 是否允许 Agent 使用联网搜索。关闭时后端不会注册联网搜索能力。
+enabled = false
+# 联网搜索供应商。目前通过 LiteLLM 调用模型原生 web_search_options。
+provider = "litellm"
+# 联网搜索模式。目前仅支持 "native"。
+mode = "native"
+# 搜索强度，默认中等。"low"、"medium" 或 "high"。
+search_context_size = "medium"
+# 单次联网搜索最多保留的来源数量。
+max_results = 5
+# 单次联网搜索超时时间，单位秒。
+timeout_seconds = 10

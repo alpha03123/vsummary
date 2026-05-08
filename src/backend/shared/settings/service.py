@@ -21,6 +21,7 @@ from backend.video_summary.infrastructure.settings import (
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
     replace_video_generation_concurrency,
+    replace_web_search_enabled,
     replace_workspace_ui_settings,
     save_env_settings,
     save_settings,
@@ -54,6 +55,7 @@ class WorkspaceSettings:
     rag_rerank_enabled: bool
     window_tokens: int
     video_generation_concurrency: int
+    web_search_enabled: bool
 
 
 class SettingsServicePort(Protocol):
@@ -73,6 +75,7 @@ class SettingsServicePort(Protocol):
         rag_rerank_enabled: bool,
         window_tokens: int,
         video_generation_concurrency: int,
+        web_search_enabled: bool,
     ) -> WorkspaceSettings:
         ...
 
@@ -136,6 +139,7 @@ class SettingsService:
             rag_rerank_enabled=rag_rerank_enabled,
             window_tokens=settings.agent_context.window_tokens,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
+            web_search_enabled=settings.web_search.enabled,
         )
 
     def update_workspace_settings(
@@ -151,6 +155,7 @@ class SettingsService:
         rag_rerank_enabled: bool,
         window_tokens: int,
         video_generation_concurrency: int,
+        web_search_enabled: bool,
     ) -> WorkspaceSettings:
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
@@ -191,6 +196,7 @@ class SettingsService:
             )
             next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
+            next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
@@ -204,6 +210,7 @@ class SettingsService:
             rag_rerank_enabled=next_settings.agent_retrieval.rerank_enabled,
             window_tokens=next_settings.agent_context.window_tokens,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
+            web_search_enabled=next_settings.web_search.enabled,
         )
 
     def get_provider_settings(self) -> ProviderSettings:

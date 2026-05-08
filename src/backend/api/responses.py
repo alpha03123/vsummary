@@ -319,6 +319,7 @@ class CitationSlotResponse(BaseModel):
     start_seconds: float | None = None
     end_seconds: float | None = None
     text: str | None = None
+    url: str | None = None
     candidates: list["CitationSlotCandidateResponse"] = Field(default_factory=list)
 
     @classmethod
@@ -333,6 +334,7 @@ class CitationSlotResponse(BaseModel):
             start_seconds=slot.start_seconds,
             end_seconds=slot.end_seconds,
             text=slot.text,
+            url=slot.url,
             candidates=[CitationSlotCandidateResponse.from_model(item) for item in slot.candidates],
         )
 

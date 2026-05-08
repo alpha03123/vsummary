@@ -33,6 +33,7 @@ export async function loadWorkspaceSettings() {
     ragEmbeddingDevice: payload.rag_embedding_device,
     ragMaxHits: payload.rag_max_hits,
     ragRerankEnabled: payload.rag_rerank_enabled,
+    webSearchEnabled: payload.web_search_enabled,
     windowTokens: payload.window_tokens,
     videoGenerationConcurrency: payload.video_generation_concurrency,
   };
@@ -71,6 +72,7 @@ export async function updateWorkspaceSettings(settings) {
       rag_embedding_device: settings.ragEmbeddingDevice,
       rag_max_hits: settings.ragMaxHits,
       rag_rerank_enabled: settings.ragRerankEnabled,
+      web_search_enabled: settings.webSearchEnabled,
       window_tokens: settings.windowTokens,
       video_generation_concurrency: settings.videoGenerationConcurrency,
     }),
@@ -84,6 +86,7 @@ export async function updateWorkspaceSettings(settings) {
     ragEmbeddingDevice: payload.rag_embedding_device,
     ragMaxHits: payload.rag_max_hits,
     ragRerankEnabled: payload.rag_rerank_enabled,
+    webSearchEnabled: payload.web_search_enabled,
     windowTokens: payload.window_tokens,
     videoGenerationConcurrency: payload.video_generation_concurrency,
   };

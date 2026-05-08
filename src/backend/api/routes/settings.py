@@ -42,6 +42,7 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         rag_rerank_enabled=settings.rag_rerank_enabled,
         window_tokens=settings.window_tokens,
         video_generation_concurrency=settings.video_generation_concurrency,
+        web_search_enabled=settings.web_search_enabled,
     )
 
 
@@ -62,7 +63,9 @@ async def update_workspace_settings(
             rag_rerank_enabled=request.rag_rerank_enabled,
             window_tokens=request.window_tokens,
             video_generation_concurrency=request.video_generation_concurrency,
+            web_search_enabled=request.web_search_enabled,
         )
+        container.invalidate_agent_graph_service()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -81,6 +84,7 @@ async def update_workspace_settings(
         rag_rerank_enabled=settings.rag_rerank_enabled,
         window_tokens=settings.window_tokens,
         video_generation_concurrency=settings.video_generation_concurrency,
+        web_search_enabled=settings.web_search_enabled,
     )
 
 
