@@ -118,6 +118,7 @@ def update_provider_settings(
             openai_api_key=request.openai_api_key,
             hf_endpoint=request.hf_endpoint,
         )
+        container.invalidate_agent_graph_service()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

@@ -68,6 +68,9 @@ export function WorkspacePage({ page }) {
   }, [layout]);
 
   function beginResize(type, startEvent) {
+    startEvent.preventDefault();
+    startEvent.stopPropagation();
+
     const container = containerRef.current;
     if (!container) {
       return;
@@ -213,9 +216,9 @@ export function WorkspacePage({ page }) {
           aria-orientation="vertical"
           aria-label="调整来源列表宽度"
           onPointerDown={(event) => beginResize("sidebar", event)}
-          className="group relative hidden w-2 shrink-0 cursor-col-resize rounded-full md:block"
+          className="group relative z-30 -mx-1 hidden w-5 shrink-0 cursor-col-resize touch-none md:block"
         >
-          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-stone-200 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
+          <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
         </div>
       ) : null}
 
@@ -254,7 +257,7 @@ export function WorkspacePage({ page }) {
         <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
           {activeSeries && !isPlaygroundHome ? (
             <section
-              style={hasRightPane ? { width: `clamp(320px, ${layout.middleWidth}px, 52%)` } : undefined}
+              style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
               className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
             >
               <WorkspaceChatPanel
@@ -308,9 +311,9 @@ export function WorkspacePage({ page }) {
                 aria-orientation="vertical"
                 aria-label="调整对话与工具页宽度"
                 onPointerDown={(event) => beginResize("middle", event)}
-                className="group relative hidden w-2 shrink-0 cursor-col-resize md:block"
+                className="group relative z-30 -mx-1 hidden w-5 shrink-0 cursor-col-resize touch-none md:block"
               >
-                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-stone-200 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
+                <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
               </div>
               <motion.section
                 key={`${selectedContextType}:${selectedVideo?.id ?? "series"}:${state.selectedToolId}:pane`}
@@ -473,7 +476,7 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
   const isRunning = snapshot.status === "running";
   const isFailed = snapshot.status === "failed";
   const Icon = isRunning ? LoaderCircle : isFailed ? Database : CheckCircle2;
-  const title = isRunning ? "长期记忆整理中" : isFailed ? "长期记忆整理失败" : "长期记忆已整理";
+  const title = isRunning ? "数据库整理中" : isFailed ? "数据库整理失败" : "数据库已整理";
   const detail = isFailed
     ? snapshot.error ?? "请查看后端日志。"
     : snapshot.detail ?? (isRunning ? "正在重建 RAG 索引与 catalog 记忆。" : "RAG 索引已可用于检索。");

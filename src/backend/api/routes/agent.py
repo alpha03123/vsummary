@@ -42,8 +42,9 @@ def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentCh
             user_message=request.message,
             context_override=context_override,
         )
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        LOGGER.exception("Agent chat failed")
+        raise HTTPException(status_code=503, detail=_format_agent_error(error)) from error
     return AgentChatResponse.from_result(result)
 
 
@@ -67,9 +68,10 @@ def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> 
             ):
                 yield encode_sse_event(event.type, event.payload)
             _log_agent_debug_trace(request, debug_trace)
-        except RuntimeError as error:
+        except Exception as error:
             _log_agent_debug_trace(request, debug_trace)
-            yield encode_sse_event("error", {"message": str(error)})
+            LOGGER.exception("Agent chat stream failed")
+            yield encode_sse_event("error", {"message": _format_agent_error(error)})
 
     return StreamingResponse(
         event_iterator(),
@@ -199,6 +201,15 @@ def _stream_rag_block_message(message: str):
     yield encode_sse_event("answer_started", {"message": "正在检查 RAG 模型"})
     yield encode_sse_event("answer_delta", {"delta": message})
     yield encode_sse_event("answer_completed", {"message": message, "citations": []})
+
+
+def _format_agent_error(error: Exception) -> str:
+    message = str(error).strip()
+    if "Your request was blocked" in message:
+        return "模型请求被上游网关拦截，请检查模型供应商、API 网关或更换官方 API 地址。"
+    if "APIError" in message or "OpenAIException" in message or "litellm" in type(error).__module__:
+        return f"模型服务调用失败：{message}" if message else "模型服务调用失败。"
+    return message or "AI 对话失败。"
 
 
 def _is_agent_debug_enabled(container) -> bool:

@@ -464,7 +464,9 @@ export async function streamAgentChat(sessionId, message, context, listener) {
       if (event != null) {
         if (event.type === "error") {
           listener(event);
-          throw new Error(typeof event.payload?.message === "string" ? event.payload.message : "AI 对话失败");
+          const error = new Error(typeof event.payload?.message === "string" ? event.payload.message : "AI 对话失败");
+          error.streamErrorDispatched = true;
+          throw error;
         }
         listener(event);
       }

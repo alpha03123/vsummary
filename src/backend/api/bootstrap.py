@@ -105,6 +105,7 @@ class ApiContainer:
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
+    invalidate_agent_graph_service: Callable[[], None]
     invalidate_agent_workspace_indexes: Callable[[], None]
     refresh_agent_workspace_indexes: Callable[[], None]
 
@@ -204,6 +205,7 @@ def build_api_container(
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,
+        invalidate_agent_graph_service=agent_runtime.invalidate_agent_graph_service,
         invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
         refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
     )
@@ -296,7 +298,7 @@ class _WorkspaceIndexRefresher:
         self._progress_tracker.create_reporter(self._task_id).update(
             "index",
             5.0,
-            "长期记忆整理任务已进入后台队列",
+            "数据库整理任务已进入后台队列",
         )
         Thread(target=self._run, daemon=True).start()
 
@@ -311,18 +313,18 @@ class _WorkspaceIndexRefresher:
                     return
 
                 if batch["full_rebuild"]:
-                    reporter.update("index", 20.0, "正在重建长期记忆索引")
+                    reporter.update("index", 20.0, "正在重建数据库索引")
                     self._refresh_all()
                 else:
                     operations = batch["operations"]
                     total_operations = len(operations)
-                    reporter.update("index", 0.0, f"正在更新长期记忆索引：0/{total_operations}")
+                    reporter.update("index", 0.0, f"正在更新数据库索引：0/{total_operations}")
                     for completed_count, operation in enumerate(operations, start=1):
                         self._apply_operation(operation)
                         reporter.update(
                             "index",
                             (completed_count / total_operations) * 100.0,
-                            f"正在更新长期记忆索引：{completed_count}/{total_operations}",
+                            f"正在更新数据库索引：{completed_count}/{total_operations}",
                         )
             except Exception as error:
                 LOGGER.exception("workspace index refresh failed")
@@ -341,7 +343,7 @@ class _WorkspaceIndexRefresher:
                 self._in_flight = False
                 break
 
-        reporter.completed("长期记忆整理完成")
+        reporter.completed("数据库整理完成")
 
     def _drain_pending_batch(self) -> dict[str, object] | None:
         with self._lock:
@@ -470,6 +472,11 @@ class LazyAgentRuntimeProvider:
                     dialog_history_compactor=dialog_history_compactor,
                 )
             return self._cached_agent_graph_service
+
+    def invalidate_agent_graph_service(self) -> None:
+        with self._lock:
+            self._cached_agent_graph_service = None
+            self._cached_context_budget_service = None
 
     def invalidate_workspace_indexes(self) -> None:
         with self._lock:

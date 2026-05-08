@@ -385,12 +385,16 @@ function markChatStreamFailed(messages, requestId, errorMessage) {
     const currentMessage = nextMessages[answerIndex];
     nextMessages[answerIndex] = buildStreamingAnswerMessage(
       requestId,
-      currentMessage?.content ?? "",
+      currentMessage?.content || nextErrorMessage,
       "failed",
       null,
       currentMessage?.usage ?? null,
       currentMessage?.citations ?? null,
     );
+  }
+
+  if (thoughtIndex === -1 && toolTraceIndex === -1 && answerIndex === -1) {
+    nextMessages.push(buildStreamingAnswerMessage(requestId, nextErrorMessage, "failed", null, null));
   }
 
   return nextMessages;

@@ -57,10 +57,22 @@ export function createWorkspaceChatActions({
         usage,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 对话失败";
+      if (!error?.streamErrorDispatched) {
+        dispatch({
+          type: "chat_stream_event_received",
+          chatScopeKey: sessionId,
+          requestId,
+          event: {
+            type: "error",
+            payload: { message },
+          },
+        });
+      }
       dispatch({ type: "chat_pending_cleared" });
       dispatch({
         type: "load_failed",
-        message: error instanceof Error ? error.message : "AI 对话失败",
+        message,
       });
     }
   }

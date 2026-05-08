@@ -298,6 +298,39 @@ describe("workspaceReducer generation task state", () => {
   });
 });
 
+describe("workspace chat stream errors", () => {
+  it("adds a failed assistant message when a stream fails before any progress event", () => {
+    const state = {
+      ...createInitialWorkspaceState(),
+      chatScopeKey: "video|series-a|video-a|studio",
+      chatPending: true,
+      chatMessages: [],
+      chatThreads: {
+        "video|series-a|video-a|studio": [],
+      },
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "chat_stream_event_received",
+      chatScopeKey: "video|series-a|video-a|studio",
+      requestId: 123,
+      event: {
+        type: "error",
+        payload: { message: "模型请求被上游网关拦截" },
+      },
+    });
+
+    expect(nextState.chatPending).toBe(false);
+    expect(nextState.chatMessages).toEqual([
+      expect.objectContaining({
+        id: "assistant-123",
+        content: "模型请求被上游网关拦截",
+        streamingStatus: "failed",
+      }),
+    ]);
+  });
+});
+
 describe("workspaceContentActions series generation", () => {
   it("selects only unprocessed videos for one-click sequential generation", () => {
     const library = {

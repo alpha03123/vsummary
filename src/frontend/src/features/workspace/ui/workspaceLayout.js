@@ -6,7 +6,7 @@ export const WORKSPACE_LAYOUT_LIMITS = {
   sidebarMinWidth: 260,
   middleDefaultWidth: 640,
   middleMinWidth: 320,
-  middleMaxShare: 0.52,
+  middleMaxShare: 0.72,
   rightMinWidth: 320,
   contentMinWidth: 480,
 };
