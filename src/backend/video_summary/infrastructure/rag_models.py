@@ -70,11 +70,13 @@ class RagModelManager:
         root_dir: Path,
         progress_tracker: InMemoryProgressTracker,
         downloader: Callable[[RagModelSpec, ProgressReporter], None] | None = None,
+        on_download_completed: Callable[[str], None] | None = None,
     ) -> None:
         self._root_dir = root_dir
         self._models_root = root_dir / "data" / "models" / "huggingface"
         self._progress_tracker = progress_tracker
         self._downloader = downloader or self._download_from_huggingface
+        self._on_download_completed = on_download_completed
         self._hf_downloader = HuggingFaceModelDownloader()
         self._lock = Lock()
         self._active_keys: set[str] = set()
@@ -147,6 +149,8 @@ class RagModelManager:
         try:
             self._downloader(spec, reporter)
             reporter.completed(f"RAG 模型已下载：{spec.label}")
+            if self._on_download_completed is not None:
+                self._on_download_completed(spec.key)
         except Exception as error:
             reporter.failed(str(error))
         finally:

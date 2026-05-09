@@ -125,9 +125,19 @@ def build_api_container(
     model_download_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
     rag_model_progress_tracker = InMemoryProgressTracker()
+    index_refresher_ref: dict[str, _WorkspaceIndexRefresher | None] = {"value": None}
+
+    def on_rag_model_download_completed(model_key: str) -> None:
+        if model_key != "embedding":
+            return
+        index_refresher = index_refresher_ref["value"]
+        if index_refresher is not None:
+            index_refresher.refresh_all()
+
     rag_model_manager = RagModelManager(
         root_dir=root_dir,
         progress_tracker=rag_model_progress_tracker,
+        on_download_completed=on_rag_model_download_completed,
     )
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
@@ -153,6 +163,7 @@ def build_api_container(
         delete_series=agent_runtime.delete_workspace_series,
         progress_tracker=knowledge_memory_progress_tracker,
     )
+    index_refresher_ref["value"] = index_refresher
     series_memory_refresher = RefreshSeriesKnowledgeMemory(
         workspace=workspace,
         index_refresher=index_refresher,
