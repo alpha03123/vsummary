@@ -173,6 +173,7 @@ export function useWorkspaceController() {
     onGenerateSeries: contentActions.onGenerateSeries,
     onCancelGeneration: contentActions.onCancelGeneration,
     onGenerateKnowledgeCards: contentActions.onGenerateKnowledgeCards,
+    onClearKnowledgeCardsFeedback: contentActions.onClearKnowledgeCardsFeedback,
     onCreateNote: contentActions.onCreateNote,
     onUpdateNote: contentActions.onUpdateNote,
     onDeleteNote: contentActions.onDeleteNote,

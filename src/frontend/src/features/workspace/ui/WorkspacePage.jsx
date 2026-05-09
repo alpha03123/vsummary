@@ -352,6 +352,7 @@ export function WorkspacePage({ page }) {
                   onFocusNode={actions.focusNode}
                   onGenerateMindmap={actions.generateMindmap}
                   onGenerateKnowledgeCards={actions.generateKnowledgeCards}
+                  onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
                   onCreateNote={actions.createNote}
                   onUpdateNote={actions.updateNote}
                   onDeleteNote={actions.deleteNote}
@@ -459,7 +460,12 @@ export function WorkspacePage({ page }) {
 }
 
 function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
+  const [dismissedSnapshotKey, setDismissedSnapshotKey] = useState(null);
   if (!snapshot || snapshot.status === "idle") {
+    return null;
+  }
+  const snapshotKey = `${snapshot.status}:${snapshot.sequence ?? 0}:${snapshot.updatedAt ?? 0}`;
+  if (dismissedSnapshotKey === snapshotKey) {
     return null;
   }
   if (
@@ -497,6 +503,15 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
         </div>
         <p className="mt-0.5 truncate text-xs opacity-80">{detail}</p>
       </div>
+      <button
+        type="button"
+        onClick={() => setDismissedSnapshotKey(snapshotKey)}
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-white/60 hover:opacity-100 dark:hover:bg-black/20"
+        title="关闭状态提示"
+        aria-label="关闭状态提示"
+      >
+        <X size={16} />
+      </button>
     </div>
   );
 }

@@ -541,16 +541,25 @@ export function WorkspaceSettingsPanel({
                       {providerTest.status === "testing" ? "测试中..." : "测试"}
                     </button>
                     {providerTest.message ? (
-                      <p
-                        className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${providerTest.status === "success"
+                      <div
+                        className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${providerTest.status === "success"
                           ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
                           : providerTest.status === "failed"
                             ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
                             : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
                           }`}
                       >
-                        {providerTest.message}
-                      </p>
+                        <span className="min-w-0 flex-1">{providerTest.message}</span>
+                        <button
+                          type="button"
+                          onClick={() => setProviderTest({ status: "idle", message: "" })}
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-white/70 hover:opacity-100 dark:hover:bg-black/20"
+                          title="关闭测试结果"
+                          aria-label="关闭测试结果"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                 </WorkspaceSettingRow>

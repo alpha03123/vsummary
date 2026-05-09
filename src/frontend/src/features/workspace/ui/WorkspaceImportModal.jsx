@@ -167,7 +167,19 @@ export function WorkspaceImportModal({
                 className="flex items-start gap-3 rounded-2xl border border-danger bg-danger-subtle p-4"
               >
                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-500" />
-                <p className="text-sm font-medium text-danger">{errorMsg}</p>
+                <p className="min-w-0 flex-1 text-sm font-medium text-danger">{errorMsg}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatus("idle");
+                    setErrorMsg("");
+                  }}
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-950/50 dark:hover:text-red-100"
+                  title="关闭错误提示"
+                  aria-label="关闭错误提示"
+                >
+                  <X size={15} />
+                </button>
               </motion.div>
             ) : null}
           </div>

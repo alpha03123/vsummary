@@ -86,6 +86,7 @@ export function buildWorkspacePageModel(controller) {
       cancelGeneration: controller.onCancelGeneration,
       generateMindmap: controller.onGenerateMindmap,
       generateKnowledgeCards: controller.onGenerateKnowledgeCards,
+      clearKnowledgeCardsFeedback: controller.onClearKnowledgeCardsFeedback,
       createNote: controller.onCreateNote,
       updateNote: controller.onUpdateNote,
       deleteNote: controller.onDeleteNote,

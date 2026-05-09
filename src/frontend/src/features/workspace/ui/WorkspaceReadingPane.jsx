@@ -84,6 +84,7 @@ export function WorkspaceReadingPane({
   onFocusNode,
   onGenerateMindmap,
   onGenerateKnowledgeCards,
+  onClearKnowledgeCardsFeedback,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -210,6 +211,7 @@ export function WorkspaceReadingPane({
                       knowledgeCardsFeedback={knowledgeCardsFeedback}
                       knowledgeCardsLoading={knowledgeCardsLoading}
                       onGenerateKnowledgeCards={onGenerateKnowledgeCards}
+                      onClearKnowledgeCardsFeedback={onClearKnowledgeCardsFeedback}
                     />
                   ) : null}
                   {selectedToolId === "chat-management" || selectedToolId === "series-chat-management" ? (

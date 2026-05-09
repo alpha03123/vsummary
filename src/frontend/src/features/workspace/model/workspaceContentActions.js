@@ -56,6 +56,10 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  function onClearKnowledgeCardsFeedback() {
+    dispatch({ type: "knowledge_cards_feedback_cleared" });
+  }
+
   async function onGenerateVideo() {
     if (!state.selectedSeriesId || !state.selectedVideoId) {
       return;
@@ -345,6 +349,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   return {
     onGenerateKnowledgeCards,
+    onClearKnowledgeCardsFeedback,
     onGenerateVideo,
     onGenerateMindmap,
     onGenerateSeries,

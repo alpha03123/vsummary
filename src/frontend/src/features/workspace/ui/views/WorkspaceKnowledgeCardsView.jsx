@@ -10,6 +10,7 @@ export function WorkspaceKnowledgeCardsView({
   knowledgeCardsFeedback,
   knowledgeCardsLoading,
   onGenerateKnowledgeCards,
+  onClearKnowledgeCardsFeedback,
 }) {
   const hasKnowledgeCards = Boolean(knowledgeCards?.cards?.length);
 
@@ -72,7 +73,7 @@ export function WorkspaceKnowledgeCardsView({
   if (!hasKnowledgeCards) {
     return (
       <div className="flex flex-col gap-4">
-        <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} />
+        <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} onDismiss={onClearKnowledgeCardsFeedback} />
         <WorkspaceStateBlock
           eyebrow="Knowledge Cards"
           title="还没有可展示的卡片"
@@ -84,7 +85,7 @@ export function WorkspaceKnowledgeCardsView({
 
   return (
     <div className="flex flex-col gap-4">
-      <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} />
+      <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} onDismiss={onClearKnowledgeCardsFeedback} />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {knowledgeCards.cards.map((card) => (
           <article
