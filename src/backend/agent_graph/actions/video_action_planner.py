@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.tool_calls import (
@@ -16,29 +16,25 @@ from backend.agent.schemas.tool_calls import (
 from backend.agent_graph.prompts import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
 
 
-class PlannedOpenNotesCall(BaseModel):
-    tool_name: Literal["open_notes"]
-
-
-class PlannedSaveNoteCall(BaseModel):
-    tool_name: Literal["save_note"]
-    note_title: str
-    note_content: str
-
-
-class PlannedVideoSeekCall(BaseModel):
-    tool_name: Literal["video_seek"]
-    seek_seconds: float
+class PlannedVideoToolCall(BaseModel):
+    tool_name: Literal["open_notes", "save_note", "video_seek"]
+    note_title: str = ""
+    note_content: str = ""
+    seek_seconds: float | None = None
     match_end_seconds: float | None = None
     matched_text: str = ""
     chapter_title: str = ""
     query: str = ""
 
-
-PlannedVideoToolCall = Annotated[
-    PlannedOpenNotesCall | PlannedSaveNoteCall | PlannedVideoSeekCall,
-    Field(discriminator="tool_name"),
-]
+    @model_validator(mode="after")
+    def validate_arguments_for_tool(self) -> PlannedVideoToolCall:
+        if self.tool_name == "save_note" and (
+            not self.note_title.strip() or not self.note_content.strip()
+        ):
+            raise ValueError("save_note 需要 note_title 和 note_content。")
+        if self.tool_name == "video_seek" and self.seek_seconds is None:
+            raise ValueError("video_seek 需要 seek_seconds。")
+        return self
 
 
 class VideoActionPlannerPayload(BaseModel):
@@ -102,7 +98,8 @@ class VideoActionPlanner:
 def _coerce_plan(payload: VideoActionPlannerPayload) -> VideoActionPlan:
     calls: list[ToolCall] = []
     for item in payload.tool_calls:
-        call = _TOOL_CALL_ADAPTER.validate_python(item.model_dump(mode="json"))
+        call_payload = _build_tool_call_payload(item)
+        call = _TOOL_CALL_ADAPTER.validate_python(call_payload)
         if call.tool_name not in ALLOWED_VIDEO_ACTIONS:
             raise ValueError(f"video action 不允许工具: {call.tool_name.value}")
         calls.append(call)
@@ -110,6 +107,25 @@ def _coerce_plan(payload: VideoActionPlannerPayload) -> VideoActionPlan:
         tool_calls=calls[:2],
         action_summary=payload.action_summary.strip(),
     )
+
+
+def _build_tool_call_payload(item: PlannedVideoToolCall) -> dict[str, object]:
+    if item.tool_name == "open_notes":
+        return {"tool_name": item.tool_name}
+    if item.tool_name == "save_note":
+        return {
+            "tool_name": item.tool_name,
+            "note_title": item.note_title.strip(),
+            "note_content": item.note_content.strip(),
+        }
+    return {
+        "tool_name": item.tool_name,
+        "seek_seconds": item.seek_seconds,
+        "match_end_seconds": item.match_end_seconds,
+        "matched_text": item.matched_text,
+        "chapter_title": item.chapter_title,
+        "query": item.query,
+    }
 
 
 def _build_messages(

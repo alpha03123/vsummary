@@ -399,7 +399,10 @@ def _build_structured_request_modes(
     if cached_mode is None:
         return modes
     selected = [mode for mode in modes if mode[0] == cached_mode]
-    return selected or modes
+    if not selected:
+        return modes
+    remaining = [mode for mode in modes if mode[0] != cached_mode]
+    return [*selected, *remaining]
 
 
 def _build_json_mode_messages(
