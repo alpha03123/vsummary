@@ -42,13 +42,13 @@
    - 普通电脑或没有 NVIDIA 显卡：下载 CPU 版。
    - NVIDIA 显卡并希望加速本地转写：下载 GPU 版。
 3. 解压压缩包到本地目录。
-4. 进入前端从设置界面设置api key等设置，或者调整或者复制 `.env.example` 为 `.env`并且修改`config\settings.toml`，填写模型供应商配置
+4. 进入前端从设置界面设置api key等设置（推荐）。或者复制 `.env.example` 为 `.env`并且修改`config\settings.toml`，填写模型供应商配置
 5. 双击 `start.bat` 启动。
 6. 浏览器打开 [http://127.0.0.1:4173](http://127.0.0.1:4173)。
 
-一键包已经内置 Python 环境、FFmpeg、后端依赖和前端构建产物，不需要再安装 Conda 或 Node.js。
+整合包已经内置 Python 环境、FFmpeg、后端依赖和前端构建产物，不需要再安装 Conda 或 Node.js。
 
-### 方式 B：源码运行
+### 方式 B：下载源码
 
 源码运行前请先准备：
 
