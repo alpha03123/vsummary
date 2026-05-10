@@ -1,0 +1,44 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">vsummary logo</title>
+  <desc id="desc">A video summary logo combining a play button, document lines, and knowledge graph nodes.</desc>
+  <defs>
+    <linearGradient id="markGradient" x1="108" y1="80" x2="404" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="0.48" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="paperGradient" x1="180" y1="158" x2="324" y2="342" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <filter id="softShadow" x="58" y="58" width="396" height="396" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="#F8FAFC"/>
+
+  <g filter="url(#softShadow)">
+    <path d="M256 78L399 160.5V325.5L256 408L113 325.5V160.5L256 78Z" fill="url(#markGradient)"/>
+    <path d="M256 110L371 176.5V309.5L256 376L141 309.5V176.5L256 110Z" fill="#0F172A" fill-opacity="0.08"/>
+  </g>
+
+  <path d="M183 166C183 152.745 193.745 142 207 142H288L345 199V334C345 347.255 334.255 358 321 358H207C193.745 358 183 347.255 183 334V166Z" fill="url(#paperGradient)"/>
+  <path d="M288 142V190C288 195.523 292.477 200 298 200H345L288 142Z" fill="#BAE6FD"/>
+
+  <path d="M232 218L232 294L294 256L232 218Z" fill="#0F766E"/>
+
+  <rect x="211" y="310" width="100" height="10" rx="5" fill="#38BDF8" fill-opacity="0.9"/>
+  <rect x="211" y="330" width="74" height="10" rx="5" fill="#14B8A6" fill-opacity="0.85"/>
+
+  <circle cx="354" cy="146" r="13" fill="#FFFFFF"/>
+  <circle cx="390" cy="181" r="10" fill="#FFFFFF" fill-opacity="0.95"/>
+  <circle cx="386" cy="244" r="12" fill="#FFFFFF" fill-opacity="0.95"/>
+  <circle cx="338" cy="284" r="9" fill="#FFFFFF" fill-opacity="0.9"/>
+
+  <path d="M354 146L390 181M390 181L386 244M386 244L338 284" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-opacity="0.72"/>
+  <path d="M354 146L390 181M390 181L386 244M386 244L338 284" stroke="#0F766E" stroke-width="3" stroke-linecap="round" stroke-opacity="0.55"/>
+
+  <path d="M147 194C166 150 202 122 253 110" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" stroke-opacity="0.18"/>
+  <path d="M364 322C338 355 304 372 260 374" stroke="#020617" stroke-width="18" stroke-linecap="round" stroke-opacity="0.1"/>
+</svg>
