@@ -79,7 +79,7 @@ export function getDeleteButtonState({ isGeneratingSeries, isGeneratingSelectedV
   if (isGeneratingSeries || isGeneratingSelectedVideo) {
     return {
       disabled: true,
-      label: "处理中，暂不能删除",
+      label: "处理中",
     };
   }
   return {
@@ -245,7 +245,7 @@ function PanelFooter({
           ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
           : videoGenerationButton.tone === "busy"
             ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
-          : "bg-accent text-white hover:bg-accent/90 shadow-sm active:scale-[0.98]"
+            : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60 shadow-none active:scale-[0.98]"
           }`}
         onClick={
           videoGenerationButton.tone === "danger"

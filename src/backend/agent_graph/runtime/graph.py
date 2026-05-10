@@ -12,7 +12,6 @@ from backend.agent_graph.runtime.nodes import (
     build_understand_query_node,
     build_plan_and_execute_video_actions_node,
     build_video_context_node,
-    apply_memory_update,
     finalize_state,
 )
 from backend.agent_graph.dspy.programs import (
@@ -84,7 +83,6 @@ def build_agent_graph(
         ),
     )
     graph.add_node("finalize", finalize_state)
-    graph.add_node("update_session_memory", apply_memory_update)
     graph.add_edge(START, "route_scope")
     graph.add_conditional_edges(
         "route_scope",
@@ -109,8 +107,7 @@ def build_agent_graph(
     )
     graph.add_edge("plan_and_execute_video_actions", "answer")
     graph.add_edge("answer", "finalize")
-    graph.add_edge("finalize", "update_session_memory")
-    graph.add_edge("update_session_memory", END)
+    graph.add_edge("finalize", END)
     return graph.compile()
 
 

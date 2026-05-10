@@ -39,17 +39,3 @@ def extract_tool_results(result: dict[str, object]) -> list[ToolExecutionResult]
             )
         )
     return normalized
-def merge_evidence_history(*, current: dict[str, object], result: dict[str, object]) -> dict[str, object]:
-    merged = dict(current)
-    evidence_history = result.get("evidence_history", {})
-    if isinstance(evidence_history, dict):
-        merged.update(evidence_history)
-    return merged
-
-
-def extract_history_summary_update(
-    result: dict[str, object],
-    *,
-    fallback: str,
-) -> str:
-    return str(result.get("history_summary_update") or fallback or "")

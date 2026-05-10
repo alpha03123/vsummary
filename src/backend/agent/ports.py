@@ -56,9 +56,7 @@ class AgentSessionStore(Protocol):
         session_id: str,
         memory_key: str,
         context: AgentContext,
-        user_message: str,
-        assistant_message: str,
-        tool_results: list[ToolExecutionResult],
+        messages: list[AgentChatMessage],
     ) -> None:
         ...
 

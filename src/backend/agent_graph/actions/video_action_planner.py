@@ -65,15 +65,13 @@ class VideoActionPlanner:
         *,
         user_message: str,
         retrieval_results: list[dict[str, object]],
-        history_summary: str = "",
-        history_messages: list[dict[str, object]] | None = None,
+        memory_messages: list[dict[str, object]] | None = None,
         debug_trace: dict[str, object] | None = None,
     ) -> VideoActionPlan:
         messages = _build_messages(
             user_message=user_message,
             retrieval_results=retrieval_results,
-            history_summary=history_summary,
-            history_messages=history_messages or [],
+            memory_messages=memory_messages or [],
         )
         payload = self._gateway.create_structured_completion(
             messages,
@@ -132,8 +130,7 @@ def _build_messages(
     *,
     user_message: str,
     retrieval_results: list[dict[str, object]],
-    history_summary: str,
-    history_messages: list[dict[str, object]],
+    memory_messages: list[dict[str, object]],
 ) -> list[AgentChatMessage]:
     return [
         AgentChatMessage(
@@ -144,8 +141,7 @@ def _build_messages(
             role="user",
             content=(
                 f"user_message:\n{user_message}\n\n"
-                f"history_summary:\n{history_summary.strip() or '(none)'}\n\n"
-                f"history_messages:\n{json.dumps(history_messages, ensure_ascii=False, indent=2)}\n\n"
+                f"memory_messages:\n{json.dumps(memory_messages, ensure_ascii=False, indent=2)}\n\n"
                 f"allowed_tool_schemas:\n{json.dumps(_build_tool_schema_specs(), ensure_ascii=False, indent=2)}\n\n"
                 f"evidence:\n{json.dumps(_render_evidence(retrieval_results), ensure_ascii=False, indent=2)}"
             ),

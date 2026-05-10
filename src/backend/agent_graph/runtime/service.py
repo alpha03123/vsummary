@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from backend.agent.memory.dialog_history import DialogHistoryCompactor
+from backend.agent.memory.messages import MemoryMessageCompactor
 from backend.agent.ports import AgentContextLoader
 from backend.agent.schemas.action_plan import AgentTurnResult
 from backend.agent.schemas.stream_events import AgentStreamEvent
@@ -21,7 +21,7 @@ class AgentGraphService:
         context_loader: AgentContextLoader,
         graph,
         session_store=None,
-        dialog_history_compactor: DialogHistoryCompactor | None = None,
+        memory_compactor: MemoryMessageCompactor | None = None,
     ) -> None:
         self._graph = graph
         self._input_builder = AgentGraphInputBuilder(
@@ -31,7 +31,7 @@ class AgentGraphService:
         self._turn_builder = AgentGraphTurnBuilder()
         self._session_recorder = AgentGraphSessionRecorder(
             session_store=session_store,
-            dialog_history_compactor=dialog_history_compactor,
+            memory_compactor=memory_compactor,
         )
         self._stream_orchestrator = AgentGraphStreamOrchestrator(
             graph=graph,
@@ -53,10 +53,8 @@ class AgentGraphService:
             "scope_type": graph_input["scope_type"],
             "series_id": graph_input["series_id"],
             "video_id": graph_input["video_id"],
-            "dialog_history_tokens": len(str(graph_input.get("dialog_history", "") or "")),
-            "history_message_count": len(graph_input["history_messages"]),
-            "dialog_history": graph_input["dialog_history"],
-            "evidence_history": graph_input["evidence_history"],
+            "memory_message_count": len(graph_input["memory_messages"]),
+            "memory_messages": graph_input["memory_messages"],
             "user_message": graph_input["user_message"],
         }
 

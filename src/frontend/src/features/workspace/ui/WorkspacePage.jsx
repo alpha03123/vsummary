@@ -274,6 +274,7 @@ export function WorkspacePage({ page }) {
                 contextUsage={chat.contextUsage}
                 contextUsageLoading={chat.contextUsageLoading}
                 ragModels={generation.ragModels}
+                knowledgeMemorySnapshot={state.knowledgeMemorySnapshot}
                 onSelectChatSession={chat.selectChatSession}
                 onOpenSeekReference={chat.openSeekReference}
                 onOpenSettings={() => actions.openSettingsPanel("network")}

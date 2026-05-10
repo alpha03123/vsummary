@@ -10,7 +10,7 @@ import logging
 import dspy
 
 from backend.agent import AgentContextBudgetService, FileAgentSessionStore
-from backend.agent.memory.dialog_history import DialogHistoryCompactor
+from backend.agent.memory.messages import MemoryMessageCompactor
 from backend.agent.infrastructure import LiteLLMChatGateway
 from backend.agent.schemas.tool_calls import ToolName
 from backend.agent_graph.actions.video_action_planner import VideoActionPlanner
@@ -448,7 +448,7 @@ class LazyAgentRuntimeProvider:
                     base_url=normalize_openai_base_url(env_settings.base_url),
                     api_key=env_settings.api_key,
                 )
-                dialog_history_compactor = DialogHistoryCompactor(
+                memory_compactor = MemoryMessageCompactor(
                     gateway=planner_gateway,
                     context_window_tokens=app_settings.agent_context.window_tokens,
                     compression_ratio=0.90,
@@ -489,7 +489,7 @@ class LazyAgentRuntimeProvider:
                     context_loader=self._context_loader,
                     graph=graph,
                     session_store=self.session_store,
-                    dialog_history_compactor=dialog_history_compactor,
+                    memory_compactor=memory_compactor,
                 )
             return self._cached_agent_graph_service
 

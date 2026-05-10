@@ -18,8 +18,7 @@ class SeriesQueryProcessor:
         series_id: str,
         series_title: str,
         series_catalog: dict[str, object],
-        dialog_history: str = "",
-        history_messages: list[dict[str, object]] | None = None,
+        memory_messages: list[dict[str, object]] | None = None,
         debug_trace: dict[str, object] | None = None,
     ) -> SeriesQueryUnderstanding:
         messages = self._build_messages(
@@ -27,8 +26,7 @@ class SeriesQueryProcessor:
             series_id=series_id,
             series_title=series_title,
             series_catalog=series_catalog,
-            dialog_history=dialog_history,
-            history_messages=history_messages or [],
+            memory_messages=memory_messages or [],
         )
         result = self._gateway.create_structured_completion(
             messages,
@@ -53,17 +51,13 @@ class SeriesQueryProcessor:
         series_id: str,
         series_title: str,
         series_catalog: dict[str, object],
-        dialog_history: str,
-        history_messages: list[dict[str, object]],
+        memory_messages: list[dict[str, object]],
     ) -> list[AgentChatMessage]:
-        if dialog_history.strip():
-            history_block = dialog_history.strip()
-        else:
-            history_block = "\n".join(
-                f"{str(item.get('role', '')).strip()}: {str(item.get('content', '')).strip()}"
-                for item in history_messages
-                if isinstance(item, dict) and str(item.get("content", "")).strip()
-            ).strip() or "(none)"
+        memory_block = "\n".join(
+            f"{str(item.get('role', '')).strip()}: {str(item.get('content', '')).strip()}"
+            for item in memory_messages
+            if isinstance(item, dict) and str(item.get("content", "")).strip()
+        ).strip() or "(none)"
         return [
             AgentChatMessage(
                 role="system",
@@ -74,7 +68,7 @@ class SeriesQueryProcessor:
                 content=(
                     f"series_id: {series_id}\n"
                     f"series_title: {series_title}\n\n"
-                    f"dialog_history:\n{history_block}\n\n"
+                    f"memory_messages:\n{memory_block}\n\n"
                     f"series_catalog:\n{json.dumps(series_catalog, ensure_ascii=False, indent=2)}\n\n"
                     f"user_message:\n{user_message}"
                 ),

@@ -19,6 +19,7 @@ class SeriesAnswerSynthesizer:
         retrieval_hits: list[RetrievalHit] | None = None,
         evidence_items: list[dict[str, object]] | None = None,
         series_catalog: dict[str, object] | None = None,
+        memory_messages: list[dict[str, object]] | None = None,
         debug_trace: dict[str, object] | None = None,
     ) -> SeriesAnswerPayload:
         normalized_evidence_items = _normalize_evidence_items(
@@ -30,6 +31,7 @@ class SeriesAnswerSynthesizer:
             query_understanding=query_understanding,
             evidence_items=normalized_evidence_items,
             series_catalog=series_catalog or {},
+            memory_messages=memory_messages or [],
         )
         payload = self._gateway.create_structured_completion(
             messages,
@@ -40,6 +42,7 @@ class SeriesAnswerSynthesizer:
                 "input": {
                     "user_message": user_message,
                     "query_understanding": query_understanding.model_dump(mode="json"),
+                    "memory_messages": memory_messages or [],
                     "series_catalog": series_catalog or {},
                     "evidence_items": normalized_evidence_items,
                     "messages": [item.model_dump(mode="json") for item in messages],
@@ -55,6 +58,7 @@ class SeriesAnswerSynthesizer:
         query_understanding: SeriesQueryUnderstanding,
         evidence_items: list[dict[str, object]],
         series_catalog: dict[str, object],
+        memory_messages: list[dict[str, object]],
     ) -> list[AgentChatMessage]:
         catalog_videos = series_catalog.get("videos", [])
         if not isinstance(catalog_videos, list):
@@ -73,6 +77,7 @@ class SeriesAnswerSynthesizer:
                 content=(
                     f"user_message:\n{user_message}\n\n"
                     f"query_understanding:\n{json.dumps(query_understanding.model_dump(mode='json'), ensure_ascii=False, indent=2)}\n\n"
+                    f"memory_messages:\n{json.dumps(memory_messages, ensure_ascii=False, indent=2)}\n\n"
                     f"series_catalog:\n{json.dumps(prompt_catalog, ensure_ascii=False, indent=2)}\n\n"
                     f"evidence_items:\n{json.dumps(evidence_items, ensure_ascii=False, indent=2)}"
                 ),

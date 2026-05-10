@@ -6,13 +6,12 @@ NODE_ALIASES: dict[str, str] = {
     "build_video_context": "读取视频上下文",
     "plan_and_execute_video_actions": "规划并执行",
     "understand_query": "理解问题",
-    "retrieve_evidence": "统一检索证据",
+    "retrieve_evidence": "检索证据",
     "optional_web_search": "联网搜索",
     "build_evidence_items": "整理回答证据",
     "synthesize_answer": "合成回答",
     "answer": "生成回答",
     "finalize": "整理输出",
-    "update_session_memory": "更新会话记忆",
 }
 
 

@@ -51,6 +51,7 @@ export function WorkspaceChatPanel({
   contextUsage = null,
   contextUsageLoading = false,
   ragModels = [],
+  knowledgeMemorySnapshot = null,
   onSelectChatSession,
   onOpenSeekReference,
   onOpenSettings,
@@ -74,8 +75,11 @@ export function WorkspaceChatPanel({
     !overviewGenerated;
   const embeddingModel = ragModels.find((model) => model.key === "embedding") ?? null;
   const seriesRagLocked = selectedContextType === "series" && embeddingModel != null && !embeddingModel.downloaded;
-  const interactionDisabled = chatPending || chatLocked || seriesRagLocked;
-  const lockedContentClass = chatLocked || seriesRagLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
+  const seriesIndexingLocked =
+    selectedContextType === "series" &&
+    knowledgeMemorySnapshot?.status === "running";
+  const interactionDisabled = chatPending || chatLocked || seriesRagLocked || seriesIndexingLocked;
+  const lockedContentClass = chatLocked || seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
   const suggestedPrompts = [
     { title: "总结核心结论", desc: "给我总结一下这个视频的核心结论", icon: Sparkles },
     { title: "记录重点知识", desc: "帮我记一下这个视频的重点", icon: FileText },
@@ -165,6 +169,18 @@ export function WorkspaceChatPanel({
         </div>
       ) : null}
 
+      {seriesIndexingLocked ? (
+        <div className="border-b border-blue-200/80 bg-blue-50/90 px-6 py-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-100">
+          <div className="flex items-center gap-2 font-semibold">
+            <LoaderCircle size={15} className="animate-spin" />
+            数据库正在整理
+          </div>
+          <p className="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
+            正在重建 RAG 索引，series 问答会在整理完成后恢复。
+          </p>
+        </div>
+      ) : null}
+
 
 
       {/* Chat History Area */}
@@ -187,7 +203,7 @@ export function WorkspaceChatPanel({
                     key={idx}
                     type="button"
                     onClick={() => setDraft(prompt.desc)}
-                    disabled={chatLocked || seriesRagLocked}
+                    disabled={chatLocked || seriesRagLocked || seriesIndexingLocked}
                     className="group flex flex-col items-start gap-2 rounded-2xl border border-stone-200/80 bg-white/60 p-4 text-left transition-all hover:border-accent/40 hover:bg-accent/5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/5 dark:bg-white/5 dark:hover:border-accent/30 dark:hover:bg-accent/10"
                   >
                     <div className="flex items-center gap-2 text-sm font-bold text-stone-700 dark:text-stone-200 group-hover:text-accent transition-colors">
@@ -254,7 +270,15 @@ export function WorkspaceChatPanel({
       >
         <div className="max-w-4xl mx-auto relative rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
-            placeholder={chatLocked ? "请先生成 AI 概况..." : seriesRagLocked ? "请先下载 RAG 向量模型..." : "向 AI 助手提问或下达指令..."}
+            placeholder={
+              chatLocked
+                ? "请先生成 AI 概况..."
+                : seriesRagLocked
+                  ? "请先下载 RAG 向量模型..."
+                  : seriesIndexingLocked
+                    ? "数据库整理完成后可继续提问..."
+                    : "向 AI 助手提问或下达指令..."
+            }
             className="w-full bg-transparent resize-none py-5 pl-6 pr-16 text-[15px] text-stone-800 dark:text-stone-100 outline-none leading-relaxed h-[100px] placeholder:text-stone-400 dark:placeholder:text-stone-500"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -284,6 +308,8 @@ export function WorkspaceChatPanel({
               ? "概况生成完成后，这里会恢复正常提问"
               : seriesRagLocked
                 ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
+                : seriesIndexingLocked
+                  ? "数据库整理完成后，这里会恢复 series 问答"
                 : "AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作"}
           </p>
         </div>

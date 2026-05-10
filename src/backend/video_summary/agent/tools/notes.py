@@ -35,7 +35,7 @@ SAVE_NOTE_TOOL = ToolDefinition(
     plane=ToolPlane.UI_ACTION,
     arguments={
         "note_title": "笔记标题",
-        "note_content": "笔记正文",
+        "note_content": "支持 Markdown 的笔记正文",
     },
     contexts=(ToolContextTag.VIDEO,),
 )

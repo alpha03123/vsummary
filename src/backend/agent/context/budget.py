@@ -17,11 +17,9 @@ GRAPH_RUNTIME_BASELINE = {
         "synthesize_answer",
         "answer",
         "finalize",
-        "update_session_memory",
     ],
     "programs": [
         "dspy_answer",
-        "dspy_memory_update",
     ],
 }
 
@@ -81,19 +79,24 @@ class AgentContextBudgetService:
         context_override: AgentContext | None,
     ) -> AgentContextUsage:
         context = self._context_loader.load(session_id)
+        memory_messages: list[dict[str, object]] = []
         if self._session_store is not None:
             snapshot = self._session_store.get_snapshot(session_id)
             if snapshot is not None:
                 context = _merge_context(context, snapshot.context)
+                memory_messages = [
+                    {"role": message.role, "content": message.content}
+                    for message in snapshot.messages
+                ]
         context = _merge_context(context, context_override)
         memory_key = session_id
         system_prompt_tokens = _estimate_tokens(GRAPH_RUNTIME_BASELINE)
-        dialog_history_tokens = _estimate_dialog_history_tokens(context.dialog_history)
+        memory_tokens = _estimate_tokens(memory_messages)
         workspace_context_tokens = _estimate_workspace_context_tokens(context)
         tool_results_tokens = 0
         estimated_total_tokens = (
             system_prompt_tokens
-            + dialog_history_tokens
+            + memory_tokens
             + workspace_context_tokens
             + tool_results_tokens
         )
@@ -124,9 +127,9 @@ class AgentContextBudgetService:
                     estimated_tokens=system_prompt_tokens,
                 ),
                 AgentContextUsageSource(
-                    id="dialog_history",
+                    id="memory_messages",
                     label="对话记忆",
-                    estimated_tokens=dialog_history_tokens,
+                    estimated_tokens=memory_tokens,
                 ),
                 AgentContextUsageSource(
                     id="tool_results",
@@ -144,7 +147,6 @@ class AgentContextBudgetService:
 
 def _estimate_workspace_context_tokens(context: AgentContext) -> int:
     payload = context.model_dump(mode="json")
-    payload["dialog_history"] = ""
     return _estimate_tokens(payload)
 
 
@@ -155,12 +157,6 @@ def _merge_context(base_context: AgentContext, context_override: AgentContext | 
     override_payload = context_override.model_dump(exclude_unset=True)
     override_payload.pop("session_id", None)
     return base_context.model_copy(update=override_payload)
-
-
-def _estimate_dialog_history_tokens(dialog_history: str) -> int:
-    if not dialog_history:
-        return 0
-    return _estimate_tokens(dialog_history)
 
 
 def _estimate_tokens(value: object) -> int:

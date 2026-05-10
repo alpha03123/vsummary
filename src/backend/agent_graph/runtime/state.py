@@ -9,10 +9,7 @@ class AgentGraphState(TypedDict):
     series_id: str
     video_id: NotRequired[str]
     user_message: str
-    dialog_history: NotRequired[str]
-    evidence_history: NotRequired[dict[str, object]]
-    history_messages: NotRequired[list[dict[str, object]]]
-    history_summary: NotRequired[str]
+    memory_messages: NotRequired[list[dict[str, object]]]
     task_outputs: NotRequired[list[dict[str, object]]]
     query_understanding: NotRequired[dict[str, object]]
     series_catalog: NotRequired[dict[str, object]]
@@ -28,6 +25,5 @@ class AgentGraphState(TypedDict):
     video_context_mode: NotRequired[str]
     video_summary_included: NotRequired[bool]
     assistant_message: NotRequired[str]
-    history_summary_update: NotRequired[str]
     answer: NotRequired[str]
     error: NotRequired[str]

@@ -5,10 +5,8 @@ import json
 from pathlib import Path
 
 from backend.shared.filesystem import KeyedLockManager, atomic_write_text
-from backend.agent.ports import AgentSessionStore
 from backend.agent.memory.context import AgentContext
-from backend.agent.schemas.tool_calls import ToolExecutionResult
-from backend.agent.session.evidence_cache import build_cache_entries
+from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot, utc_now_iso
 
 
@@ -27,9 +25,7 @@ class FileAgentSessionStore:
         session_id: str,
         memory_key: str,
         context: AgentContext,
-        user_message: str,
-        assistant_message: str,
-        tool_results: list[ToolExecutionResult],
+        messages: list[AgentChatMessage],
     ) -> None:
         with self._session_locks.hold(session_id):
             snapshot = self._read_snapshot_unlocked(session_id)
@@ -45,17 +41,10 @@ class FileAgentSessionStore:
 
             snapshot.context = sanitized_context
             snapshot.memory_key = memory_key
-            snapshot.messages.extend(
-                [
-                    AgentSessionMessageEntry(role="user", content=user_message, created_at=timestamp),
-                    AgentSessionMessageEntry(role="assistant", content=assistant_message, created_at=timestamp),
-                ]
-            )
-            snapshot.evidence_entries = build_cache_entries(
-                snapshot.evidence_entries,
-                tool_results,
-                updated_at=timestamp,
-            )
+            snapshot.messages = [
+                AgentSessionMessageEntry(role=message.role, content=message.content, created_at=timestamp)
+                for message in messages
+            ]
             snapshot.updated_at = timestamp
             self._write_snapshot(snapshot)
 

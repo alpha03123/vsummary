@@ -7,7 +7,7 @@ from backend.agent.ports import ChatGateway
 from backend.agent.schemas.messages import AgentChatMessage
 
 
-def render_dialog_history(messages: list[AgentChatMessage]) -> str:
+def render_memory_messages(messages: list[AgentChatMessage]) -> str:
     lines = [
         f"{message.role}: {message.content.strip()}"
         for message in messages
@@ -16,14 +16,14 @@ def render_dialog_history(messages: list[AgentChatMessage]) -> str:
     return "\n".join(lines).strip()
 
 
-def estimate_dialog_history_tokens(dialog_history: str) -> int:
-    text = dialog_history.strip()
+def estimate_memory_message_tokens(messages: list[AgentChatMessage]) -> int:
+    text = render_memory_messages(messages)
     if not text:
         return 0
     return max(1, ceil(len(text.encode("utf-8")) / 3))
 
 
-class DialogHistoryCompactor:
+class MemoryMessageCompactor:
     def __init__(
         self,
         *,
@@ -40,15 +40,14 @@ class DialogHistoryCompactor:
     def compression_threshold_tokens(self) -> int:
         return self._compression_threshold_tokens
 
-    def compact_messages(self, messages: list[AgentChatMessage]) -> str:
+    def compact_messages(self, messages: list[AgentChatMessage]) -> list[AgentChatMessage]:
         payload = compact_conversation_messages(
             gateway=self._gateway,
             messages=messages,
         )
-        return render_compacted_payload(payload)
+        return [AgentChatMessage(role="system", content=render_compacted_payload(payload))]
 
-    def compact_if_needed(self, messages: list[AgentChatMessage]) -> str:
-        dialog_history = render_dialog_history(messages)
-        if estimate_dialog_history_tokens(dialog_history) < self._compression_threshold_tokens:
-            return dialog_history
+    def compact_if_needed(self, messages: list[AgentChatMessage]) -> list[AgentChatMessage]:
+        if estimate_memory_message_tokens(messages) < self._compression_threshold_tokens:
+            return messages
         return self.compact_messages(messages)

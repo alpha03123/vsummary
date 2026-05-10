@@ -12,6 +12,7 @@ class SynthesizeVideoAnswer(dspy.Signature):
     __doc__ = VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT
 
     user_message: str = dspy.InputField()
+    memory_messages: list[dict[str, object]] = dspy.InputField()
     evidence_items: list[dict[str, object]] = dspy.InputField()
     meta_state: dict[str, object] = dspy.InputField()
     answer: str = dspy.OutputField()
@@ -25,6 +26,7 @@ class AnswerSynthesisProgram:
         self,
         *,
         user_message: str,
+        memory_messages: list[dict[str, object]] | None = None,
         retrieval_results: list[dict[str, object]] | None = None,
         evidence_items: list[dict[str, object]] | None = None,
         meta_state: dict[str, object] | None = None,
@@ -32,6 +34,7 @@ class AnswerSynthesisProgram:
         normalized_evidence_items = evidence_items if evidence_items is not None else retrieval_results or []
         raw = self._predictor(
             user_message=user_message,
+            memory_messages=memory_messages or [],
             evidence_items=normalized_evidence_items,
             meta_state=meta_state or {},
         )

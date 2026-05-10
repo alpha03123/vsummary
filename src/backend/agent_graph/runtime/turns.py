@@ -42,20 +42,14 @@ class AgentGraphInputBuilder:
         context_override: AgentContext | None = None,
     ) -> GraphInputBundle:
         context = context_override or self._context_loader.load(session_id)
-        history_messages: list[dict[str, object]] = []
-        dialog_history = str(getattr(context, "dialog_history", "") or "").strip()
-        history_summary = str(getattr(context, "history_summary", "") or "").strip()
-        evidence_history = dict(getattr(context, "evidence_history", {}) or {})
+        memory_messages: list[dict[str, object]] = []
         if self._session_store is not None:
             snapshot = self._session_store.get_snapshot(session_id)
             if snapshot is not None:
-                history_messages = [
+                memory_messages = [
                     {"role": item.role, "content": item.content}
                     for item in snapshot.messages
                 ]
-                dialog_history = str(getattr(snapshot.context, "dialog_history", "") or "").strip()
-                history_summary = str(getattr(snapshot.context, "history_summary", "") or "").strip()
-                evidence_history = dict(getattr(snapshot.context, "evidence_history", {}) or {})
         return GraphInputBundle(
             context=context,
             payload={
@@ -64,10 +58,7 @@ class AgentGraphInputBuilder:
                 "series_id": context.series_id or "",
                 "video_id": context.video_id or "",
                 "user_message": user_message,
-                "dialog_history": dialog_history,
-                "evidence_history": evidence_history,
-                "history_messages": history_messages,
-                "history_summary": history_summary,
+                "memory_messages": memory_messages,
             },
         )
 

@@ -77,9 +77,8 @@ def build_plan_and_execute_video_actions_node(
                 item for item in state.get("evidence_items", state.get("retrieval_results", []))
                 if isinstance(item, dict)
             ],
-            history_summary=str(state.get("history_summary", "")),
-            history_messages=[
-                item for item in state.get("history_messages", [])
+            memory_messages=[
+                item for item in state.get("memory_messages", [])
                 if isinstance(item, dict)
             ],
         )
@@ -120,8 +119,7 @@ def build_understand_query_node(*, series_query_processor, workspace=None) -> Ca
             series_id=series_id,
             series_title=_resolve_series_title(workspace=workspace, series_id=series_id),
             series_catalog=catalog,
-            dialog_history=str(state.get("dialog_history", "")),
-            history_messages=list(state.get("history_messages", [])),
+            memory_messages=list(state.get("memory_messages", [])),
             debug_trace=None,
         )
         next_state = dict(state)
@@ -252,6 +250,10 @@ def build_synthesize_answer_node(*, series_answer_synthesizer) -> Callable[[Agen
             query_understanding=_coerce_query_understanding(query_understanding_payload),
             evidence_items=evidence_items,
             series_catalog=dict(state.get("series_catalog", {})),
+            memory_messages=[
+                item for item in state.get("memory_messages", [])
+                if isinstance(item, dict)
+            ],
             debug_trace=None,
         )
         next_state = dict(state)
@@ -279,6 +281,10 @@ def synthesize_answer_text(
 ) -> str:
     return answer_program.run(
         user_message=state["user_message"],
+        memory_messages=[
+            item for item in state.get("memory_messages", [])
+            if isinstance(item, dict)
+        ],
         retrieval_results=_project_answer_evidence(list(state.get("evidence_items", state.get("retrieval_results", [])))),
         evidence_items=_project_answer_evidence(list(state.get("evidence_items", state.get("retrieval_results", [])))),
         meta_state={
@@ -311,17 +317,6 @@ def finalize_state(state: AgentGraphState) -> AgentGraphState:
     next_state["assistant_message"] = "\n".join(fragments).strip()
     if not next_state.get("answer"):
         next_state["answer"] = next_state["assistant_message"]
-    return next_state
-
-
-def apply_memory_update(state: AgentGraphState, **_) -> AgentGraphState:
-    user_message = str(state.get("user_message", "")).strip()
-    assistant_message = str(state.get("assistant_message", state.get("answer", ""))).strip()
-    prior = str(state.get("history_summary", "")).strip()
-    turn = f"User: {user_message}\nAssistant: {assistant_message}".strip()
-    updated = f"{prior}\n\n{turn}".strip() if prior else turn
-    next_state = dict(state)
-    next_state["history_summary_update"] = updated
     return next_state
 
 
@@ -513,8 +508,7 @@ def _fits_context_budget(
     available = max(0, int(context_window_tokens) - int(reserved_output_tokens))
     payload = {
         "user_message": state.get("user_message", ""),
-        "dialog_history": state.get("dialog_history", ""),
-        "history_summary": state.get("history_summary", ""),
+        "memory_messages": state.get("memory_messages", []),
         "retrieval_results": items,
     }
     return _estimate_tokens(payload) <= available

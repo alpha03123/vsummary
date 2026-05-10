@@ -24,6 +24,3 @@ class AgentContext(BaseModel):
     notes: ToolAvailability = Field(default_factory=ToolAvailability)
     preview: ToolAvailability = Field(default_factory=ToolAvailability)
     chapter_titles: list[str] = Field(default_factory=list)
-    dialog_history: str = ""
-    evidence_history: dict[str, object] = Field(default_factory=dict)
-    history_summary: str = ""
