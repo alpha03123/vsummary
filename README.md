@@ -11,6 +11,7 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=222)
 ![Vite](https://img.shields.io/badge/Vite-Frontend-646CFF?logo=vite&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Agent%20Workflow-1C3C3C)
+![LlamaIndex](https://img.shields.io/badge/LlamaIndex-RAG-8A5CF6)
 ![faster--whisper](https://img.shields.io/badge/faster--whisper-Local%20ASR-2E8B57)
 ![LanceDB](https://img.shields.io/badge/LanceDB-Vector%20Search-FF6B00)
 ![License](https://img.shields.io/github/license/alpha03123/vsummary?label=License)
