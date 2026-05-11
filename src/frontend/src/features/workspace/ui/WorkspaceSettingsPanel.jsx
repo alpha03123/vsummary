@@ -175,6 +175,21 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
+                  title="回复长度"
+                  description="控制回答详略"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.answerDetailLevel}
+                    options={[
+                      { id: "short", label: "短" },
+                      { id: "medium", label: "中" },
+                      { id: "long", label: "长" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("answerDetailLevel", nextValue)}
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
                   title="转写模式"
                   description="控制 faster-whisper 的解码策略"
                 >

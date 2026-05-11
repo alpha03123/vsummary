@@ -7,8 +7,6 @@ from threading import Thread
 from typing import Callable
 import logging
 
-import dspy
-
 from backend.agent import AgentContextBudgetService, FileAgentSessionStore
 from backend.agent.memory.messages import MemoryMessageCompactor
 from backend.agent.infrastructure import LiteLLMChatGateway
@@ -17,12 +15,10 @@ from backend.agent_graph.actions.video_action_planner import VideoActionPlanner
 from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.query.series_answer_synthesizer import SeriesAnswerSynthesizer
 from backend.agent_graph.query.series_query_processor import SeriesQueryProcessor
-from backend.agent_graph.dspy.dspy_lm import ProxyStreamingLM
-from backend.agent_graph.dspy.programs import (
+from backend.agent_graph.query.video_answer_synthesizer import (
     AnswerSynthesisProgram,
 )
 from backend.agent_graph.runtime.service import AgentGraphService
-from backend.shared.llm.base_url import resolve_openai_compatible_api_base_url
 from backend.shared.settings import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.agent_memory import (
     AgentWorkspaceIndexBuilder,
@@ -425,13 +421,6 @@ class LazyAgentRuntimeProvider:
                 env_settings = load_env_settings(self._root_dir)
                 if not env_settings.api_key.strip():
                     raise RuntimeError("缺少 API Key，无法调用 Agent 模型。")
-                dspy.configure(
-                    lm=ProxyStreamingLM(
-                        model=f"openai/{env_settings.model.strip()}",
-                        api_base=resolve_openai_compatible_api_base_url(env_settings.base_url),
-                        api_key=env_settings.api_key.strip(),
-                    )
-                )
                 app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
                 self._cached_context_budget_service = AgentContextBudgetService(
                     context_loader=self._context_loader,
@@ -454,7 +443,10 @@ class LazyAgentRuntimeProvider:
                     compression_ratio=0.90,
                 )
                 series_query_processor = SeriesQueryProcessor(gateway=planner_gateway)
-                series_answer_synthesizer = SeriesAnswerSynthesizer(gateway=planner_gateway)
+                series_answer_synthesizer = SeriesAnswerSynthesizer(
+                    gateway=planner_gateway,
+                    answer_detail_level=app_settings.agent_context.answer_detail_level,
+                )
                 video_action_planner = VideoActionPlanner(gateway=planner_gateway)
                 tool_executor = RegistryAgentToolExecutor(
                     registry={
@@ -471,7 +463,10 @@ class LazyAgentRuntimeProvider:
                     settings=app_settings,
                     env_settings=env_settings,
                 )
-                answer_program = AnswerSynthesisProgram()
+                answer_program = AnswerSynthesisProgram(
+                    gateway=planner_gateway,
+                    answer_detail_level=app_settings.agent_context.answer_detail_level,
+                )
                 graph = build_agent_graph(
                     retrieval_service=retrieval_service,
                     answer_program=answer_program,

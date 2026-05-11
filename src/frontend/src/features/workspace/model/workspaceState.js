@@ -16,6 +16,7 @@ export const defaultUiSettings = {
   hasOpenaiApiKey: false,
   openaiApiKeyMasked: "",
   windowTokens: 1000000,
+  answerDetailLevel: "medium",
   videoGenerationConcurrency: 1,
 };
 
@@ -643,6 +644,10 @@ export function normalizeUiSettings(value) {
       typeof record.windowTokens === "number" && Number.isInteger(record.windowTokens) && record.windowTokens > 0
         ? record.windowTokens
         : 1000000,
+    answerDetailLevel:
+      record.answerDetailLevel === "short" || record.answerDetailLevel === "long"
+        ? record.answerDetailLevel
+        : "medium",
     videoGenerationConcurrency:
       typeof record.videoGenerationConcurrency === "number"
         && Number.isInteger(record.videoGenerationConcurrency)

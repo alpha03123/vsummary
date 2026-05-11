@@ -22,6 +22,13 @@ describe("workspace UI settings", () => {
     expect(normalizeUiSettings({}).webSearchEnabled).toBe(false);
     expect(normalizeUiSettings({ webSearchEnabled: true }).webSearchEnabled).toBe(true);
   });
+
+  it("normalizes the answer detail level with medium as the safe default", () => {
+    expect(normalizeUiSettings({}).answerDetailLevel).toBe("medium");
+    expect(normalizeUiSettings({ answerDetailLevel: "short" }).answerDetailLevel).toBe("short");
+    expect(normalizeUiSettings({ answerDetailLevel: "long" }).answerDetailLevel).toBe("long");
+    expect(normalizeUiSettings({ answerDetailLevel: "verbose" }).answerDetailLevel).toBe("medium");
+  });
 });
 
 describe("workspaceState chat session persistence", () => {

@@ -41,6 +41,7 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         rag_max_hits=settings.rag_max_hits,
         rag_rerank_enabled=settings.rag_rerank_enabled,
         window_tokens=settings.window_tokens,
+        answer_detail_level=settings.answer_detail_level,
         video_generation_concurrency=settings.video_generation_concurrency,
         web_search_enabled=settings.web_search_enabled,
     )
@@ -62,6 +63,7 @@ async def update_workspace_settings(
             rag_max_hits=request.rag_max_hits,
             rag_rerank_enabled=request.rag_rerank_enabled,
             window_tokens=request.window_tokens,
+            answer_detail_level=request.answer_detail_level,
             video_generation_concurrency=request.video_generation_concurrency,
             web_search_enabled=request.web_search_enabled,
         )
@@ -83,6 +85,7 @@ async def update_workspace_settings(
         rag_max_hits=settings.rag_max_hits,
         rag_rerank_enabled=settings.rag_rerank_enabled,
         window_tokens=settings.window_tokens,
+        answer_detail_level=settings.answer_detail_level,
         video_generation_concurrency=settings.video_generation_concurrency,
         web_search_enabled=settings.web_search_enabled,
     )

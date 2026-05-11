@@ -7,6 +7,17 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 
+class NoCacheStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs) -> FileResponse:
+        response = super().file_response(*args, **kwargs)
+        return _with_no_cache(response)
+
+
+def _with_no_cache(response: FileResponse) -> FileResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def mount_frontend_dist(app: FastAPI, root_dir: Path) -> None:
     dist_dir = root_dir / "src" / "frontend" / "dist"
     index_path = dist_dir / "index.html"
@@ -18,13 +29,13 @@ def mount_frontend_dist(app: FastAPI, root_dir: Path) -> None:
     if assets_dir.is_dir():
         app.mount(
             "/assets",
-            StaticFiles(directory=str(assets_dir)),
+            NoCacheStaticFiles(directory=str(assets_dir)),
             name="frontend-assets",
         )
 
     @app.get("/", include_in_schema=False)
     def serve_frontend_index() -> FileResponse:
-        return FileResponse(index_path)
+        return _with_no_cache(FileResponse(index_path))
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_frontend_path(full_path: str) -> FileResponse:
@@ -38,6 +49,6 @@ def mount_frontend_dist(app: FastAPI, root_dir: Path) -> None:
             raise HTTPException(status_code=404, detail="Not Found") from error
 
         if candidate.is_file():
-            return FileResponse(candidate)
+            return _with_no_cache(FileResponse(candidate))
 
-        return FileResponse(index_path)
+        return _with_no_cache(FileResponse(index_path))

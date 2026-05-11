@@ -34,6 +34,8 @@ mode = true
 [agent_context]
 # Agent 对话可使用的最大上下文 token 数。
 window_tokens = 1000000
+# Agent 回复长度偏好。"short" 简短回答，"medium" 默认适中，"long" 适合学习复习时充分展开。
+answer_detail_level = "medium"
 
 # Agent 上下文高级策略。
 [agent_context.advanced]

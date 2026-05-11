@@ -28,6 +28,7 @@ class WorkspaceSettingsResponse(BaseModel):
     rag_max_hits: int
     rag_rerank_enabled: bool
     window_tokens: int
+    answer_detail_level: str = "medium"
     video_generation_concurrency: int
     web_search_enabled: bool
 
@@ -42,6 +43,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     rag_max_hits: int
     rag_rerank_enabled: bool
     window_tokens: int
+    answer_detail_level: str = "medium"
     video_generation_concurrency: int
     web_search_enabled: bool
 

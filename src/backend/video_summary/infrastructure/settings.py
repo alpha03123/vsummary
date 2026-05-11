@@ -17,7 +17,9 @@ VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
 VALID_WEB_SEARCH_MODES = {"native"}
 VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
+VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
 DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
+DEFAULT_AGENT_ANSWER_DETAIL_LEVEL = "medium"
 DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
 DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
@@ -80,6 +82,7 @@ class DebugSettings:
 @dataclass(frozen=True)
 class AgentContextSettings:
     window_tokens: int
+    answer_detail_level: str
     reserved_output_tokens: int
     warning_threshold_ratio: float
     compact_threshold_ratio: float
@@ -181,6 +184,12 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         window_tokens=_normalize_positive_int(
             agent_context_payload.get("window_tokens"),
             default=DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS,
+        ),
+        answer_detail_level=_normalize_choice(
+            agent_context_payload.get("answer_detail_level"),
+            default=DEFAULT_AGENT_ANSWER_DETAIL_LEVEL,
+            allowed=VALID_ANSWER_DETAIL_LEVELS,
+            field_name="agent_context.answer_detail_level",
         ),
         reserved_output_tokens=_normalize_positive_int(
             agent_context_advanced_payload.get("reserved_output_tokens"),
@@ -389,6 +398,22 @@ def replace_agent_context_window_tokens(settings: AppSettings, window_tokens: in
     )
 
 
+def replace_agent_context_answer_detail_level(settings: AppSettings, answer_detail_level: str) -> AppSettings:
+    normalized_answer_detail_level = _normalize_choice(
+        answer_detail_level,
+        default=DEFAULT_AGENT_ANSWER_DETAIL_LEVEL,
+        allowed=VALID_ANSWER_DETAIL_LEVELS,
+        field_name="agent_context.answer_detail_level",
+    )
+    return replace(
+        settings,
+        agent_context=replace(
+            settings.agent_context,
+            answer_detail_level=normalized_answer_detail_level,
+        ),
+    )
+
+
 def replace_video_generation_concurrency(settings: AppSettings, video_generation_concurrency: int) -> AppSettings:
     normalized_concurrency = _normalize_positive_int(
         video_generation_concurrency,
@@ -477,6 +502,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "",
         "[agent_context]",
         f"window_tokens = {settings.agent_context.window_tokens}",
+        f'answer_detail_level = "{settings.agent_context.answer_detail_level}"',
         "",
         "[agent_context.advanced]",
         f"reserved_output_tokens = {settings.agent_context.reserved_output_tokens}",

@@ -14,7 +14,7 @@ from backend.agent_graph.runtime.nodes import (
     build_video_context_node,
     finalize_state,
 )
-from backend.agent_graph.dspy.programs import (
+from backend.agent_graph.query.video_answer_synthesizer import (
     AnswerSynthesisProgram,
 )
 from backend.agent_graph.runtime.state import AgentGraphState
@@ -35,7 +35,7 @@ def build_agent_graph(
     web_search_settings=None,
 ):
     resolved_retrieval_service = retrieval_service or _MissingRetrievalService()
-    resolved_answer_program = answer_program or AnswerSynthesisProgram()
+    resolved_answer_program = answer_program or _MissingAnswerProgram()
 
     graph = StateGraph(AgentGraphState)
     graph.add_node("route_scope", build_route_scope_node())
@@ -117,6 +117,12 @@ class _MissingRetrievalService:
             "Series retrieval service 尚未注入。请在集成阶段传入 retrieval_service，"
             "或在后续任务里接入基于 workspace / LlamaIndex 的默认实现。"
         )
+
+
+class _MissingAnswerProgram:
+    def run(self, **kwargs):
+        del kwargs
+        raise RuntimeError("Video answer synthesis program 尚未注入。")
 
 
 def _route_after_scope(state: AgentGraphState) -> str:

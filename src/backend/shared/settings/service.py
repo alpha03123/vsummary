@@ -11,12 +11,14 @@ from backend.video_summary.infrastructure.settings import (
     EnvSettings,
     VALID_THEMES,
     VALID_TRANSCRIPTION_MODES,
+    VALID_ANSWER_DETAIL_LEVELS,
     WorkspaceUiSettings,
     load_env_settings,
     load_settings,
     normalize_openai_base_url,
     replace_agent_retrieval_runtime_settings,
     replace_agent_context_window_tokens,
+    replace_agent_context_answer_detail_level,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
@@ -54,6 +56,7 @@ class WorkspaceSettings:
     rag_max_hits: int
     rag_rerank_enabled: bool
     window_tokens: int
+    answer_detail_level: str
     video_generation_concurrency: int
     web_search_enabled: bool
 
@@ -74,6 +77,7 @@ class SettingsServicePort(Protocol):
         rag_max_hits: int,
         rag_rerank_enabled: bool,
         window_tokens: int,
+        answer_detail_level: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
     ) -> WorkspaceSettings:
@@ -138,6 +142,7 @@ class SettingsService:
             rag_max_hits=settings.agent_retrieval.max_hits,
             rag_rerank_enabled=rag_rerank_enabled,
             window_tokens=settings.agent_context.window_tokens,
+            answer_detail_level=settings.agent_context.answer_detail_level,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             web_search_enabled=settings.web_search.enabled,
         )
@@ -154,6 +159,7 @@ class SettingsService:
         rag_max_hits: int,
         rag_rerank_enabled: bool,
         window_tokens: int,
+        answer_detail_level: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
     ) -> WorkspaceSettings:
@@ -165,6 +171,8 @@ class SettingsService:
             raise SettingsValidationError(f"unsupported transcription mode '{transcription_mode}'")
         if window_tokens <= 0:
             raise SettingsValidationError("window_tokens 必须是正整数。")
+        if answer_detail_level not in VALID_ANSWER_DETAIL_LEVELS:
+            raise SettingsValidationError("answer_detail_level 必须是 short、medium 或 long。")
         if rag_max_hits <= 0:
             raise SettingsValidationError("rag_max_hits 必须是正整数。")
         if video_generation_concurrency <= 0:
@@ -195,6 +203,7 @@ class SettingsService:
                 rerank_enabled=rag_rerank_enabled,
             )
             next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
+            next_settings = replace_agent_context_answer_detail_level(next_settings, answer_detail_level)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             save_settings(self._config_path, next_settings)
@@ -209,6 +218,7 @@ class SettingsService:
             rag_max_hits=next_settings.agent_retrieval.max_hits,
             rag_rerank_enabled=next_settings.agent_retrieval.rerank_enabled,
             window_tokens=next_settings.agent_context.window_tokens,
+            answer_detail_level=next_settings.agent_context.answer_detail_level,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             web_search_enabled=next_settings.web_search.enabled,
         )

@@ -19,7 +19,7 @@ GRAPH_RUNTIME_BASELINE = {
         "finalize",
     ],
     "programs": [
-        "dspy_answer",
+        "video_answer",
     ],
 }
 
