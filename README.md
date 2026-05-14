@@ -21,6 +21,18 @@
 
 ---
 
+## 功能展示
+
+| 系列级对话 | 视频 AI 概况 |
+|---|---|
+| <img src="./assets/showcase-series-chat.png" alt="系列级对话页面" /> | <img src="./assets/showcase-video-overview.png" alt="视频 AI 概况页面" /> |
+
+| RAG 设置 | 模型供应商设置 |
+|---|---|
+| <img src="./assets/showcase-settings-rag.png" alt="RAG 设置页面" /> | <img src="./assets/showcase-settings-provider.png" alt="模型供应商设置页面" /> |
+
+---
+
 ## 核心特性
 
 - **把视频变成可检索的知识库**：导入本地视频后，自动整理出转写文本、概况、章节和关键结论。后续可以直接围绕内容提问，把视频作为自己的本地知识库。
