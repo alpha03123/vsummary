@@ -17,6 +17,7 @@ from backend.api.responses import (
     AgentSessionClearRequest,
     AgentSessionRecoveryRequest,
     AgentSessionRecoveryResponse,
+    CitationResponse,
 )
 from backend.api.sse import encode_sse_event
 from backend.video_summary.infrastructure.rag_models import (

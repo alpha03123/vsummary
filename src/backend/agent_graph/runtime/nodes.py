@@ -150,15 +150,11 @@ def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphSt
         ]
         filters = dict(query_understanding.get("filters", {}))
         series_id = str(filters.get("series_id", state.get("series_id", ""))).strip()
-        response = retrieval_service.search(
-            scope_type="series",
+        queries = _build_retrieval_queries(normalized_query, subqueries)
+        retrieval_results = _search_series_queries(
+            retrieval_service=retrieval_service,
             series_id=series_id,
-            video_id="",
-            query=normalized_query,
-            target_source="all",
-            source_tags=[],
-            expand_context=True,
-            context_window_seconds=120,
+            queries=queries,
             max_hits=max_hits,
         )
         next_state = dict(state)
@@ -166,8 +162,9 @@ def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphSt
             "query": normalized_query,
             "subqueries": subqueries,
             "filters": {"series_id": series_id},
+            "executed_queries": queries,
         }
-        next_state["retrieval_results"] = list(response.get("hits", []))
+        next_state["retrieval_results"] = retrieval_results
         return next_state
 
     return retrieve_evidence
@@ -392,6 +389,87 @@ def _resolve_series_title(*, workspace, series_id: str) -> str:
     if series is None:
         return ""
     return series.title
+
+
+def _build_retrieval_queries(normalized_query: str, subqueries: list[str], *, max_queries: int = 5) -> list[str]:
+    queries: list[str] = []
+    for query in [normalized_query, *subqueries]:
+        normalized = str(query).strip()
+        if normalized and normalized not in queries:
+            queries.append(normalized)
+        if len(queries) >= max_queries:
+            break
+    return queries
+
+
+def _search_series_queries(
+    *,
+    retrieval_service,
+    series_id: str,
+    queries: list[str],
+    max_hits: int,
+) -> list[dict[str, object]]:
+    hits: list[dict[str, object]] = []
+    for query in queries:
+        response = retrieval_service.search(
+            scope_type="series",
+            series_id=series_id,
+            video_id="",
+            query=query,
+            target_source="all",
+            source_tags=[],
+            expand_context=True,
+            context_window_seconds=120,
+            max_hits=max_hits,
+        )
+        hits.extend(item for item in response.get("hits", []) if isinstance(item, dict))
+    return _diversify_series_hits(_deduplicate_hits(hits), max_hits=max_hits)
+
+
+def _deduplicate_hits(hits: list[dict[str, object]]) -> list[dict[str, object]]:
+    unique_hits: list[dict[str, object]] = []
+    seen_keys: set[str] = set()
+    for hit in hits:
+        key = str(hit.get("doc_id", "")).strip()
+        if not key:
+            key = "|".join(
+                [
+                    str(hit.get("video_id", "")).strip(),
+                    str(hit.get("source_type", "")).strip(),
+                    str(hit.get("start_seconds", "")).strip(),
+                    str(hit.get("text", hit.get("snippet", ""))).strip(),
+                ]
+            )
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique_hits.append(hit)
+    return unique_hits
+
+
+def _diversify_series_hits(hits: list[dict[str, object]], *, max_hits: int) -> list[dict[str, object]]:
+    selected: list[dict[str, object]] = []
+    selected_keys: set[int] = set()
+    seen_videos: set[str] = set()
+
+    for index, hit in enumerate(hits):
+        video_id = str(hit.get("video_id", "")).strip()
+        if video_id and video_id in seen_videos:
+            continue
+        selected.append(hit)
+        selected_keys.add(index)
+        if video_id:
+            seen_videos.add(video_id)
+        if len(selected) >= max_hits:
+            return selected
+
+    for index, hit in enumerate(hits):
+        if index in selected_keys:
+            continue
+        selected.append(hit)
+        if len(selected) >= max_hits:
+            break
+    return selected
 
 
 def _coerce_query_understanding(value: dict[str, object]):
