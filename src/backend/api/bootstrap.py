@@ -485,6 +485,7 @@ class LazyAgentRuntimeProvider:
                     graph=graph,
                     session_store=self.session_store,
                     memory_compactor=memory_compactor,
+                    answer_stream_gateway=planner_gateway,
                 )
             return self._cached_agent_graph_service
 

@@ -24,6 +24,8 @@ class AgentGraphState(TypedDict):
     action_summary: NotRequired[str]
     video_context_mode: NotRequired[str]
     video_summary_included: NotRequired[bool]
+    defer_answer_stream: NotRequired[bool]
+    stream_answer_messages: NotRequired[list[dict[str, object]]]
     assistant_message: NotRequired[str]
     answer: NotRequired[str]
     error: NotRequired[str]

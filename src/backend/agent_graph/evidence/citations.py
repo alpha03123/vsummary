@@ -7,12 +7,19 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
     retrieval_results = result.get("evidence_items", result.get("retrieval_results", []))
     if not isinstance(retrieval_results, list):
         return []
+    used_evidence_ids = _resolve_used_evidence_ids(result)
+    if used_evidence_ids is not None:
+        retrieval_results = [
+            item for item in retrieval_results
+            if isinstance(item, dict) and _evidence_id(item) in used_evidence_ids
+        ]
 
     citations: list[CitationReference] = []
     next_id = 1
     for item in retrieval_results:
         if not isinstance(item, dict):
             continue
+        citation_id = _citation_id(item, next_id)
         depth = str(item.get("depth", "")).strip()
         if depth == "summary":
             next_id = _append_summary_items(citations, item.get("items", []), next_id)
@@ -33,7 +40,7 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
         if source_type in {"summary", "summary_global", "summary_chapter", "series_synopsis"}:
             citations.append(
                 CitationReference(
-                    id=str(next_id),
+                    id=citation_id,
                     label=title,
                     source_type="summary",
                     search_scope="summary",
@@ -52,7 +59,7 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             next_id += 1
             continue
 
-        if source_type == "transcript_chunk":
+        if source_type in {"transcript_chunk", "transcript_full"}:
             slot_candidates = _to_slot_candidates(item.get("matches"))
             best_match = item.get("best_match")
             if isinstance(best_match, dict):
@@ -65,7 +72,7 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
                 best_text = _as_str(item.get("snippet")) or _as_str(item.get("text"))
             citations.append(
                 CitationReference(
-                    id=str(next_id),
+                    id=citation_id,
                     label=_as_str(item.get("slot_label")) or _as_str(item.get("label")) or title,
                     source_type="transcript",
                     search_scope="transcript",
@@ -94,6 +101,35 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             next_id += 1
 
     return citations
+
+
+def _resolve_used_evidence_ids(result: dict[str, object]) -> set[str] | None:
+    raw_ids = result.get("used_evidence_ids")
+    if raw_ids is None:
+        return None
+    if not isinstance(raw_ids, list):
+        raise ValueError("used_evidence_ids 必须是数组。")
+    used_ids = {
+        item.strip()
+        for item in raw_ids
+        if isinstance(item, str) and item.strip()
+    }
+    return used_ids
+
+
+def _evidence_id(item: dict[str, object]) -> str | None:
+    value = item.get("evidence_id")
+    if not isinstance(value, str):
+        return None
+    evidence_id = value.strip()
+    return evidence_id or None
+
+
+def _citation_id(item: dict[str, object], fallback_id: int) -> str:
+    source_number = item.get("source_number")
+    if isinstance(source_number, int) and source_number > 0:
+        return str(source_number)
+    return str(fallback_id)
 
 
 def _append_web_search_item(citations: list[CitationReference], item: dict[str, object], next_id: int) -> int:

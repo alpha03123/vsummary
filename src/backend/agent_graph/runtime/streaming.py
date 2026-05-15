@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from datetime import datetime
 
+from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.stream_events import AgentStreamEvent
+from backend.agent_graph.evidence.inline_citations import filter_inline_citation_markers, resolve_inline_citations
 from backend.agent_graph.runtime.node_catalog import get_node_alias
 from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_tool_results
 
@@ -16,11 +18,13 @@ class AgentGraphStreamOrchestrator:
         invoke_graph: Callable[..., dict[str, object]],
         turn_builder,
         session_recorder,
+        answer_streamer: Callable[[dict[str, object]], Iterator[ChatCompletionStreamChunk]] | None = None,
     ) -> None:
         self._graph = graph
         self._invoke_graph = invoke_graph
         self._turn_builder = turn_builder
         self._session_recorder = session_recorder
+        self._answer_streamer = answer_streamer
 
     def stream(
         self,
@@ -31,12 +35,24 @@ class AgentGraphStreamOrchestrator:
         graph_input: dict[str, object],
         debug_trace: dict[str, object] | None = None,
     ) -> Iterator[AgentStreamEvent]:
+        graph_input = _with_deferred_answer(graph_input, self._answer_streamer is not None)
+
         if not hasattr(self._graph, "stream"):
             result = self._invoke_graph(
                 graph=self._graph,
                 graph_input=graph_input,
                 debug_trace=debug_trace,
             )
+            if self._has_deferred_answer(result):
+                yield from self._stream_deferred_answer_result(
+                    result=result,
+                    session_id=session_id,
+                    user_message=user_message,
+                    context=context,
+                    stream_started_at=None,
+                    debug_trace=debug_trace,
+                )
+                return
             turn_result = self._turn_builder.build(
                 context=context,
                 result=result,
@@ -154,6 +170,17 @@ class AgentGraphStreamOrchestrator:
                 },
             )
 
+        if self._has_deferred_answer(result):
+            yield from self._stream_deferred_answer_result(
+                result=result,
+                session_id=session_id,
+                user_message=user_message,
+                context=context,
+                stream_started_at=stream_started_at,
+                debug_trace=debug_trace,
+            )
+            return
+
         if not str(result.get("assistant_message", "")).strip():
             if debug_trace is not None:
                 debug_trace["graph_result"] = result
@@ -168,6 +195,107 @@ class AgentGraphStreamOrchestrator:
             yield AgentStreamEvent(type="answer_delta", payload={"delta": delta})
         stream_finished_at = _current_time_like(stream_started_at)
 
+        if debug_trace is not None:
+            debug_trace["graph_result"] = result
+            if answer_usage:
+                debug_trace["answer_stream_usage"] = answer_usage
+
+        turn_result = self._turn_builder.build(
+            context=context,
+            result=result,
+            debug_trace=debug_trace,
+        )
+        available_citation_ids = {item.id for item in turn_result.citations}
+        assistant_message = filter_inline_citation_markers(
+            turn_result.assistant_message,
+            available_citation_ids,
+        )
+        if assistant_message != turn_result.assistant_message:
+            result = {
+                **result,
+                "answer": assistant_message,
+                "assistant_message": assistant_message,
+            }
+            turn_result = self._turn_builder.build(
+                context=context,
+                result=result,
+                debug_trace=debug_trace,
+            )
+        self._session_recorder.persist_turn(
+            session_id=session_id,
+            context=context,
+            user_message=user_message,
+            result=result,
+            turn_result=turn_result,
+        )
+
+        total_duration_ms = _duration_ms(stream_started_at, stream_finished_at)
+        yield AgentStreamEvent(
+            type="thinking_completed",
+            payload={"duration_ms": total_duration_ms},
+        )
+        answer_completed_payload: dict[str, object] = {
+            "message": turn_result.assistant_message,
+            "duration_ms": total_duration_ms,
+            "citations": [item.model_dump(mode="json") for item in turn_result.citations],
+        }
+        if answer_usage:
+            answer_completed_payload["usage"] = answer_usage
+        yield AgentStreamEvent(
+            type="answer_completed",
+            payload=answer_completed_payload,
+        )
+
+    def _has_deferred_answer(self, result: dict[str, object]) -> bool:
+        return self._answer_streamer is not None and isinstance(result.get("stream_answer_messages"), list)
+
+    def _stream_deferred_answer_result(
+        self,
+        *,
+        result: dict[str, object],
+        session_id: str,
+        user_message: str,
+        context,
+        stream_started_at: datetime | None,
+        debug_trace: dict[str, object] | None,
+        emitted_tool_count: int = 0,
+    ) -> Iterator[AgentStreamEvent]:
+        if self._answer_streamer is None:
+            raise RuntimeError("回答流式生成器尚未注入。")
+        if emitted_tool_count:
+            yield AgentStreamEvent(
+                type="tool_chain_completed",
+                payload={
+                    "count": emitted_tool_count,
+                    "duration_ms": _sum_tool_durations(extract_tool_results(result)),
+                },
+            )
+        yield AgentStreamEvent(type="answer_started", payload={"message": "正在组织回答"})
+        answer_parts: list[str] = []
+        answer_usage: dict[str, int] = {}
+        for chunk in self._answer_streamer(result):
+            if chunk.usage:
+                answer_usage = dict(chunk.usage)
+            if chunk.delta:
+                answer_parts.append(chunk.delta)
+                yield AgentStreamEvent(type="answer_delta", payload={"delta": chunk.delta})
+        assistant_message = "".join(answer_parts).strip()
+        if not assistant_message:
+            raise RuntimeError("模型流式回答为空。")
+        citation_resolution = resolve_inline_citations(
+            assistant_message,
+            _graph_evidence_items(result),
+        )
+        assistant_message = citation_resolution.answer_text
+        used_evidence_ids = citation_resolution.used_evidence_ids
+
+        stream_finished_at = _current_time_like(stream_started_at)
+        result = {
+            **result,
+            "answer": assistant_message,
+            "assistant_message": assistant_message,
+            "used_evidence_ids": used_evidence_ids,
+        }
         if debug_trace is not None:
             debug_trace["graph_result"] = result
             if answer_usage:
@@ -208,6 +336,22 @@ def _parse_timestamp(value: object) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return datetime.fromisoformat(value)
+
+
+def _with_deferred_answer(graph_input: dict[str, object], enabled: bool) -> dict[str, object]:
+    if not enabled:
+        return graph_input
+    return {
+        **graph_input,
+        "defer_answer_stream": True,
+    }
+
+
+def _graph_evidence_items(result: dict[str, object]) -> list[dict[str, object]]:
+    raw_items = result.get("evidence_items", result.get("retrieval_results", []))
+    if not isinstance(raw_items, list):
+        return []
+    return [item for item in raw_items if isinstance(item, dict)]
 
 
 def _duration_ms(start: datetime | None, end: datetime | None) -> int | None:

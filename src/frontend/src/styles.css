@@ -709,6 +709,22 @@
   color: #7dd3fc;
 }
 
+.markdown-body a.citation-marker,
+.markdown-body a.citation-marker:visited,
+.markdown-body a.citation-marker:hover,
+.markdown-body a.citation-marker:focus {
+  color: rgb(28 25 23);
+  text-decoration: none;
+}
+
+.dark .markdown-body a.citation-marker,
+.dark .markdown-body a.citation-marker:visited,
+.dark .markdown-body a.citation-marker:hover,
+.dark .markdown-body a.citation-marker:focus {
+  color: rgb(255 255 255);
+  text-decoration: none;
+}
+
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;

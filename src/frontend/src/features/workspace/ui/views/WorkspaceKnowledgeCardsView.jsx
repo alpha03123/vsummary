@@ -19,7 +19,7 @@ export function WorkspaceKnowledgeCardsView({
       <WorkspaceStateBlock
         eyebrow="Knowledge Cards"
         title="正在生成知识卡片"
-        description="正在把视频里的核心概念抽成可复习、可检索、可串联的知识原子。"
+        description="正在提炼..."
         loading
       >
         <div className="mt-6 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800">

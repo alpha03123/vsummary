@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from backend.agent.memory.messages import MemoryMessageCompactor
-from backend.agent.ports import AgentContextLoader
+from backend.agent.ports import AgentContextLoader, ChatGateway
 from backend.agent.schemas.action_plan import AgentTurnResult
+from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
+from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.stream_events import AgentStreamEvent
 from backend.agent_graph.runtime.session_recorder import AgentGraphSessionRecorder
 from backend.agent_graph.runtime.streaming import AgentGraphStreamOrchestrator
@@ -22,6 +24,7 @@ class AgentGraphService:
         graph,
         session_store=None,
         memory_compactor: MemoryMessageCompactor | None = None,
+        answer_stream_gateway: ChatGateway | None = None,
     ) -> None:
         self._graph = graph
         self._input_builder = AgentGraphInputBuilder(
@@ -38,7 +41,13 @@ class AgentGraphService:
             invoke_graph=self._invoke_graph,
             turn_builder=self._turn_builder,
             session_recorder=self._session_recorder,
+            answer_streamer=(
+                self._stream_deferred_answer
+                if answer_stream_gateway is not None
+                else None
+            ),
         )
+        self._answer_stream_gateway = answer_stream_gateway
 
     def _record_debug_input(
         self,
@@ -152,6 +161,24 @@ class AgentGraphService:
         answer_payload = result.get("answer_payload")
         if isinstance(answer_payload, dict):
             debug_trace.setdefault("answer_synthesis", {"output": answer_payload})
+
+    def _stream_deferred_answer(
+        self,
+        result: dict[str, object],
+    ) -> Iterator[ChatCompletionStreamChunk]:
+        if self._answer_stream_gateway is None:
+            raise RuntimeError("回答流式网关尚未注入。")
+        raw_messages = result.get("stream_answer_messages")
+        if not isinstance(raw_messages, list) or not raw_messages:
+            raise ValueError("流式回答缺少 stream_answer_messages。")
+        messages = [
+            AgentChatMessage.model_validate(item)
+            for item in raw_messages
+            if isinstance(item, dict)
+        ]
+        if not messages:
+            raise ValueError("流式回答消息为空。")
+        return self._answer_stream_gateway.create_text_completion_stream_with_metadata(messages)
 
     def clear_session(
         self,

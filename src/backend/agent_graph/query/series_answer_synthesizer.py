@@ -53,6 +53,29 @@ class SeriesAnswerSynthesizer:
             }
         return payload
 
+    def build_text_messages(
+        self,
+        *,
+        user_message: str,
+        query_understanding: SeriesQueryUnderstanding,
+        retrieval_hits: list[RetrievalHit] | None = None,
+        evidence_items: list[dict[str, object]] | None = None,
+        series_catalog: dict[str, object] | None = None,
+        memory_messages: list[dict[str, object]] | None = None,
+    ) -> list[AgentChatMessage]:
+        normalized_evidence_items = _normalize_evidence_items(
+            evidence_items=evidence_items,
+            retrieval_hits=retrieval_hits or [],
+        )
+        return self._build_messages(
+            user_message=user_message,
+            query_understanding=query_understanding,
+            evidence_items=_number_evidence_items(normalized_evidence_items),
+            series_catalog=series_catalog or {},
+            memory_messages=memory_messages or [],
+            text_only=True,
+        )
+
     def _build_messages(
         self,
         *,
@@ -61,6 +84,7 @@ class SeriesAnswerSynthesizer:
         evidence_items: list[dict[str, object]],
         series_catalog: dict[str, object],
         memory_messages: list[dict[str, object]],
+        text_only: bool = False,
     ) -> list[AgentChatMessage]:
         catalog_videos = series_catalog.get("videos", [])
         if not isinstance(catalog_videos, list):
@@ -76,6 +100,7 @@ class SeriesAnswerSynthesizer:
                     SERIES_ANSWER_SYNTHESIZER_SYSTEM_PROMPT
                     + "\n"
                     + build_answer_detail_level_prompt(self._answer_detail_level)
+                    + (_STREAMING_CITED_ANSWER_PROMPT if text_only else "")
                 ),
             ),
             AgentChatMessage(
@@ -100,3 +125,24 @@ def _normalize_evidence_items(
     if evidence_items is not None:
         return [dict(item) for item in evidence_items]
     return [item.model_dump(mode="json") for item in retrieval_hits]
+
+
+_STREAMING_CITED_ANSWER_PROMPT = (
+    "\n流式引用输出要求：\n"
+    "- 只输出 answer 字段对应的 Markdown 回答正文。\n"
+    "- evidence_items 已按 Source 1、Source 2 等数字编号。\n"
+    "- 使用某条 Source 支持句子或段落时，在该句或段落末尾插入对应的数字引用，例如 [1] 或 [2]。\n"
+    "- 只能使用真实存在的 Source 编号，不要输出 evidence_id、local-*、web-* 或 e* 这类内部 ID，不要编造引用编号。\n"
+    "- 不要输出 JSON，不要输出 citations 或 used_source_types 字段。\n"
+)
+
+
+def _number_evidence_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {
+            **item,
+            "source_number": index,
+            "source_label": f"Source {index}",
+        }
+        for index, item in enumerate(items, start=1)
+    ]

@@ -5,6 +5,7 @@ from math import ceil
 from time import monotonic
 
 from backend.agent.memory.context import AgentContext
+from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent_graph.runtime.state import AgentGraphState
 from backend.video_summary.library.usecases.series_synopsis_generation import build_series_catalog_payload
 
@@ -245,6 +246,23 @@ def build_synthesize_answer_node(*, series_answer_synthesizer) -> Callable[[Agen
             item for item in state.get("evidence_items", state.get("retrieval_results", []))
             if isinstance(item, dict)
         ]
+        if bool(state.get("defer_answer_stream", False)):
+            next_state = dict(state)
+            next_state["stream_answer_messages"] = [
+                message.model_dump(mode="json")
+                for message in series_answer_synthesizer.build_text_messages(
+                    user_message=state["user_message"],
+                    query_understanding=_coerce_query_understanding(query_understanding_payload),
+                    evidence_items=evidence_items,
+                    series_catalog=dict(state.get("series_catalog", {})),
+                    memory_messages=[
+                        item for item in state.get("memory_messages", [])
+                        if isinstance(item, dict)
+                    ],
+                )
+            ]
+            next_state["answer_payload"] = {}
+            return next_state
         payload = series_answer_synthesizer.run(
             user_message=state["user_message"],
             query_understanding=_coerce_query_understanding(query_understanding_payload),
@@ -265,6 +283,16 @@ def build_synthesize_answer_node(*, series_answer_synthesizer) -> Callable[[Agen
 
 def build_answer_node(*, answer_program) -> Callable[[AgentGraphState], AgentGraphState]:
     def answer(state: AgentGraphState) -> AgentGraphState:
+        if bool(state.get("defer_answer_stream", False)):
+            next_state = dict(state)
+            next_state["stream_answer_messages"] = [
+                message.model_dump(mode="json")
+                for message in build_answer_text_messages(
+                    state,
+                    answer_program=answer_program,
+                )
+            ]
+            return next_state
         answer_text = synthesize_answer_text(
             state,
             answer_program=answer_program,
@@ -280,6 +308,27 @@ def synthesize_answer_text(
     debug_trace: dict[str, object] | None = None,
 ) -> str:
     return answer_program.run(
+        user_message=state["user_message"],
+        memory_messages=[
+            item for item in state.get("memory_messages", [])
+            if isinstance(item, dict)
+        ],
+        retrieval_results=_project_answer_evidence(list(state.get("evidence_items", state.get("retrieval_results", [])))),
+        evidence_items=_project_answer_evidence(list(state.get("evidence_items", state.get("retrieval_results", [])))),
+        meta_state={
+            "tool_results": list(state.get("tool_results", [])),
+            "action_summary": str(state.get("action_summary", "")).strip(),
+            "web_search_used": bool(state.get("web_search_used", False)),
+        },
+    )
+
+
+def build_answer_text_messages(
+    state: AgentGraphState,
+    *,
+    answer_program,
+) -> list[AgentChatMessage]:
+    return answer_program.build_text_messages(
         user_message=state["user_message"],
         memory_messages=[
             item for item in state.get("memory_messages", [])
