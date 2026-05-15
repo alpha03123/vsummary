@@ -139,6 +139,7 @@ def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiCo
                 "role": message.role,
                 "content": message.content,
                 "created_at": message.created_at,
+                "citations": [CitationResponse.from_model(item) for item in message.citations],
             }
             for message in snapshot.messages
         ],

@@ -282,6 +282,7 @@ class AgentSessionMessageResponse(BaseModel):
     role: str
     content: str
     created_at: str
+    citations: list["CitationResponse"] = Field(default_factory=list)
 
 
 class AgentSessionRecoveryRequest(BaseModel):

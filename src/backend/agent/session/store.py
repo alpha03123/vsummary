@@ -42,7 +42,12 @@ class FileAgentSessionStore:
             snapshot.context = sanitized_context
             snapshot.memory_key = memory_key
             snapshot.messages = [
-                AgentSessionMessageEntry(role=message.role, content=message.content, created_at=timestamp)
+                AgentSessionMessageEntry(
+                    role=message.role,
+                    content=message.content,
+                    created_at=timestamp,
+                    citations=message.citations,
+                )
                 for message in messages
             ]
             snapshot.updated_at = timestamp

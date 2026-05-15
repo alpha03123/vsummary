@@ -5,10 +5,14 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
+from backend.agent.schemas.action_plan import CitationReference
+
+
 class AgentSessionMessageEntry(BaseModel):
     role: str
     content: str
     created_at: str
+    citations: list[CitationReference] = Field(default_factory=list)
 
 
 class AgentSessionSnapshot(BaseModel):

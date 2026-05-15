@@ -406,6 +406,7 @@ export async function loadAgentSessionRecovery(sessionId, context) {
         id: `recovered-${payload.session_id}-${index}`,
         role: typeof message.role === "string" ? message.role : "assistant",
         content: typeof message.content === "string" ? message.content : "",
+        citations: Array.isArray(message.citations) ? message.citations : null,
         meta: buildRecoveredMeta(
           typeof message.role === "string" ? message.role : "assistant",
           typeof message.created_at === "string" ? message.created_at : "",
