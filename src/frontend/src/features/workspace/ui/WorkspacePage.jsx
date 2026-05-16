@@ -400,6 +400,8 @@ export function WorkspacePage({ page }) {
                   downloadingModelId={generation.downloadingModelId}
                   modelDownloadStatus={generation.modelDownloadStatus}
                   modelDownloadProgress={generation.modelDownloadProgress}
+                  modelDownloadErrorModelId={generation.modelDownloadErrorModelId}
+                  modelDownloadError={generation.modelDownloadError}
                   onChangeSetting={actions.changeSetting}
                   onSaveApiKey={actions.saveApiKey}
                   onRevealOpenaiApiKey={actions.revealOpenaiApiKey}

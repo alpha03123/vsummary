@@ -125,7 +125,7 @@ def _contains_connection_failure(error: BaseException) -> bool:
 
 
 def _handle_transcribe_progress(progress_reporter: ProgressReporter, ratio: float) -> None:
-    progress_reporter.raise_if_cancelled()
+    _raise_if_cancelled(progress_reporter)
     progress_reporter.update(
         "transcribe",
         20.0 + max(0.0, min(1.0, ratio)) * 55.0,

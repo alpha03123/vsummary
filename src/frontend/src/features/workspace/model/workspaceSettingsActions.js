@@ -10,6 +10,7 @@ import {
   updateProviderSettings,
   updateWorkspaceSettings,
 } from "./workspaceApi";
+import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 
 export function createWorkspaceSettingsActions({ state, dispatch }) {
@@ -192,7 +193,12 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       }
 
       if (snapshot.status === "failed") {
-        reject(new Error(snapshot.error ?? "语音模型下载失败"));
+        dispatch({
+          type: "faster_whisper_model_download_failed",
+          modelId,
+          message: MODEL_DOWNLOAD_FAILED_MESSAGE,
+        });
+        reject(new Error(MODEL_DOWNLOAD_FAILED_MESSAGE));
       }
       if (snapshot.status === "completed") {
         resolve();
@@ -236,7 +242,12 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         }
 
         if (snapshot.status === "failed") {
-          reject(new Error(snapshot.error ?? "RAG 模型下载失败"));
+          dispatch({
+            type: "rag_model_download_failed",
+            modelKey,
+            message: MODEL_DOWNLOAD_FAILED_MESSAGE,
+          });
+          reject(new Error(MODEL_DOWNLOAD_FAILED_MESSAGE));
         }
         if (snapshot.status === "completed") {
           resolve();

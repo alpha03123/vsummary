@@ -8,6 +8,7 @@ import {
   WorkspaceTextInput,
   WorkspaceToggleSwitch,
 } from "./shared/WorkspaceSettingsControls";
+import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "../model/modelDownloadMessages";
 import { buildOpenAICompatibleChatCompletionsUrl } from "../model/providerRequestUrl";
 
 export function WorkspaceSettingsPanel({
@@ -21,6 +22,8 @@ export function WorkspaceSettingsPanel({
   downloadingModelId,
   modelDownloadStatus = null,
   modelDownloadProgress,
+  modelDownloadErrorModelId = null,
+  modelDownloadError = null,
   onChangeSetting,
   onSaveApiKey,
   onRevealOpenaiApiKey,
@@ -219,16 +222,21 @@ export function WorkspaceSettingsPanel({
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
                         const isDownloading = downloadingModelId === model.id;
+                        const downloadFailed = modelDownloadErrorModelId === model.id && Boolean(modelDownloadError);
                         const isReady = model.downloaded === true;
                         const statusText = model.downloaded
                           ? "已下载到本地"
-                          : isCurrent
+                          : downloadFailed
+                            ? "下载失败"
+                            : isCurrent
                             ? "当前默认模型，需先下载"
                             : "尚未下载";
                         return (
                           <div
                             key={model.id}
-                            className={`rounded-2xl border p-4 transition-colors ${isCurrent
+                            className={`rounded-2xl border p-4 transition-colors ${downloadFailed
+                              ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
+                              : isCurrent
                               ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
                               : "border-stone-200 dark:border-stone-800"
                               }`}
@@ -255,6 +263,11 @@ export function WorkspaceSettingsPanel({
                                       style={{ width: `${typeof modelDownloadProgress === "number" ? modelDownloadProgress : 8}%` }}
                                     />
                                   </div>
+                                ) : null}
+                                {downloadFailed ? (
+                                  <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                    {MODEL_DOWNLOAD_FAILED_MESSAGE}
+                                  </p>
                                 ) : null}
                               </div>
                               {isDownloading ? (
@@ -288,7 +301,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (needsConfirm) {
+                                    if (downloadFailed || needsConfirm) {
                                       setConfirmDownloadModelId(null);
                                       onDownloadFasterWhisperModel(model.id);
                                       return;
@@ -301,7 +314,7 @@ export function WorkspaceSettingsPanel({
                                     }`}
                                 >
                                   <Download size={14} />
-                                  {needsConfirm ? "确认下载?" : (isCurrent ? "下载并使用" : "下载")}
+                                  {downloadFailed ? "重试下载" : needsConfirm ? "确认下载?" : (isCurrent ? "下载并使用" : "下载")}
                                 </button>
                               )}
                             </div>
@@ -625,15 +638,20 @@ export function WorkspaceSettingsPanel({
                     ) : (
                       ragModels.map((model) => {
                         const isDownloading = model.status === "running" || downloadingRagModelKey === model.key;
+                        const downloadFailed = model.status === "failed" && Boolean(model.error);
                         const statusText = model.downloaded
                           ? "已下载到本地"
                           : isDownloading
                             ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
+                            : downloadFailed
+                              ? "下载失败"
                             : "尚未下载";
                         return (
                           <div
                             key={model.key}
-                            className={`rounded-2xl border p-4 transition-colors ${model.downloaded
+                            className={`rounded-2xl border p-4 transition-colors ${downloadFailed
+                              ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
+                              : model.downloaded
                               ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
                               : "border-stone-200 dark:border-stone-800"
                               }`}
@@ -649,6 +667,11 @@ export function WorkspaceSettingsPanel({
                                       style={{ width: `${typeof model.progress === "number" ? model.progress : 8}%` }}
                                     />
                                   </div>
+                                ) : null}
+                                {downloadFailed ? (
+                                  <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                    {MODEL_DOWNLOAD_FAILED_MESSAGE}
+                                  </p>
                                 ) : null}
                               </div>
                               {isDownloading ? (
@@ -675,7 +698,7 @@ export function WorkspaceSettingsPanel({
                                   className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                                 >
                                   <Download size={14} />
-                                  下载
+                                  {downloadFailed ? "重试下载" : "下载"}
                                 </button>
                               )}
                             </div>

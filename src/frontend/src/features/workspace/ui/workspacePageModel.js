@@ -69,6 +69,8 @@ export function buildWorkspacePageModel(controller) {
       downloadingModelId: controller.downloadingModelId,
       modelDownloadStatus: controller.modelDownloadStatus,
       modelDownloadProgress: controller.modelDownloadProgress,
+      modelDownloadErrorModelId: controller.modelDownloadErrorModelId,
+      modelDownloadError: controller.modelDownloadError,
       progress: generationSnapshot?.progress ?? null,
       snapshot: generationSnapshot,
       showOverlay: showGenerationOverlay,

@@ -432,6 +432,8 @@ export function createInitialWorkspaceState() {
     downloadingModelId: null,
     modelDownloadStatus: null,
     modelDownloadProgress: null,
+    modelDownloadErrorModelId: null,
+    modelDownloadError: null,
     toolsLoading: false,
     summaryLoading: false,
     mindmapLoading: false,

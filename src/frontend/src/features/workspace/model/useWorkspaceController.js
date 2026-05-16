@@ -131,6 +131,8 @@ export function useWorkspaceController() {
     downloadingModelId: state.downloadingModelId,
     modelDownloadStatus: state.modelDownloadStatus,
     modelDownloadProgress: state.modelDownloadProgress,
+    modelDownloadErrorModelId: state.modelDownloadErrorModelId,
+    modelDownloadError: state.modelDownloadError,
     tools,
     summary,
     mindmap,

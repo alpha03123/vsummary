@@ -156,7 +156,9 @@ def _merge_context(base_context: AgentContext, context_override: AgentContext | 
 
     override_payload = context_override.model_dump(exclude_unset=True)
     override_payload.pop("session_id", None)
-    return base_context.model_copy(update=override_payload)
+    merged_payload = base_context.model_dump(mode="python")
+    merged_payload.update(override_payload)
+    return AgentContext.model_validate(merged_payload)
 
 
 def _estimate_tokens(value: object) -> int:
