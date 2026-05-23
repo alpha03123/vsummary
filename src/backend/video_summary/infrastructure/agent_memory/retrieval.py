@@ -6,7 +6,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from threading import RLock
+from threading import RLock, Thread
 
 import lancedb
 from llama_index.core import Document, StorageContext, VectorStoreIndex
@@ -29,6 +29,8 @@ INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
 LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
 LOGGER = logging.getLogger(__name__)
+SeriesSignature = tuple[str, ...]
+SeriesSignatureMap = dict[str, SeriesSignature]
 COMMON_METADATA_DEFAULTS: dict[str, object] = {
     "doc_id": "",
     "series_id": "",
@@ -70,13 +72,13 @@ class SeriesRetrievalService:
         self._reranker = reranker
         self._rerank_enabled_override = rerank_enabled
         self._index: VectorStoreIndex | None = None
-        self._signature: tuple[tuple[str, ...], tuple[str, ...]] | None = None
+        self._series_signatures: SeriesSignatureMap | None = None
         self._index_lock = RLock()
 
     def invalidate(self) -> None:
         with self._index_lock:
             self._index = None
-            self._signature = None
+            self._series_signatures = None
 
     def refresh(self) -> None:
         self.refresh_all()
@@ -84,35 +86,51 @@ class SeriesRetrievalService:
     def refresh_all(self) -> None:
         with self._index_lock:
             self._index = None
-            self._signature = None
+            self._series_signatures = None
             self._rebuild_index()
+
+    def refresh_series(self, series_id: str) -> None:
+        with self._index_lock:
+            if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
+                documents = _build_documents_for_series(self._workspace, series_id=series_id)
+                if documents:
+                    self._write_documents(documents, mode="overwrite")
+                self._write_series_signature(series_id)
+                self.invalidate()
+                return
+            self._delete_series_rows(series_id=series_id)
+            documents = _build_documents_for_series(self._workspace, series_id=series_id)
+            if documents:
+                self._append_documents(documents)
+            self._write_series_signature(series_id)
+            self.invalidate()
 
     def upsert_video(self, series_id: str, video_id: str) -> None:
         with self._index_lock:
             if not self._is_incremental_mutation_ready():
-                self.refresh_all()
+                self.refresh_series(series_id)
                 return
             self._delete_video_rows(series_id=series_id, video_id=video_id)
             documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
             if documents:
                 self._append_documents(documents)
-            self._finalize_incremental_mutation()
+            self._finalize_incremental_mutation(series_id)
 
     def delete_video(self, series_id: str, video_id: str) -> None:
         with self._index_lock:
             if not self._is_incremental_mutation_ready():
-                self.refresh_all()
+                self.refresh_series(series_id)
                 return
             self._delete_video_rows(series_id=series_id, video_id=video_id)
-            self._finalize_incremental_mutation()
+            self._finalize_incremental_mutation(series_id)
 
     def delete_series(self, series_id: str) -> None:
         with self._index_lock:
             if not self._is_incremental_mutation_ready():
-                self.refresh_all()
+                self._remove_series_signature(series_id)
                 return
             self._delete_series_rows(series_id=series_id)
-            self._finalize_incremental_mutation()
+            self._finalize_incremental_mutation(series_id)
             try:
                 _optimize_lancedb_table(self._db_uri, INDEX_TABLE_NAME)
             except Exception:
@@ -132,7 +150,7 @@ class SeriesRetrievalService:
         max_hits: int | None,
     ) -> dict[str, object]:
         with self._index_lock:
-            index = self._require_index()
+            index = self._require_index(series_id)
             final_max_hits = self._resolve_final_max_hits(max_hits)
             rerank_enabled = self._resolve_rerank_enabled()
             embedding_top_k = (
@@ -212,29 +230,40 @@ class SeriesRetrievalService:
         return self._load_runtime_retrieval_settings().max_hits
 
     def _get_or_build_index(self) -> VectorStoreIndex:
-        signature = _build_workspace_signature(self._workspace)
-        if self._index is not None and self._signature == signature:
+        signatures = _build_series_signatures(self._workspace)
+        if self._index is not None and self._series_signatures == signatures:
             return self._index
-        loaded = self._try_load_existing_index(signature)
+        loaded = self._try_load_existing_index()
         if loaded is not None:
             self._index = loaded
-            self._signature = signature
+            self._series_signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
             return loaded
         return self._rebuild_index()
 
-    def _require_index(self) -> VectorStoreIndex:
+    def _require_index(self, series_id: str) -> VectorStoreIndex:
         if self._index is not None:
+            if self._is_series_signature_stale(series_id):
+                self._refresh_series_async(series_id)
             return self._index
-        signature = _build_workspace_signature(self._workspace)
-        loaded = self._try_load_existing_index(signature)
+        loaded = self._try_load_existing_index()
         if loaded is not None:
             self._index = loaded
-            self._signature = signature
+            self._series_signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+            if self._is_series_signature_stale(series_id):
+                self._refresh_series_async(series_id)
             return loaded
-        raise RuntimeError("Agent retrieval index 尚未就绪，请先执行知识记忆刷新。")
+        self.refresh_series(series_id)
+        if self._index is not None:
+            return self._index
+        loaded = self._try_load_existing_index()
+        if loaded is None:
+            raise RuntimeError("Agent retrieval index 尚未就绪，请先执行知识记忆刷新。")
+        self._index = loaded
+        self._series_signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+        return loaded
 
     def _rebuild_index(self) -> VectorStoreIndex:
-        signature = _build_workspace_signature(self._workspace)
+        signatures = _build_series_signatures(self._workspace)
         documents = _to_llama_documents(_build_documents(self._workspace))
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
@@ -248,15 +277,18 @@ class SeriesRetrievalService:
             embed_model=self._embed_model,
             show_progress=False,
         )
-        self._signature = signature
-        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signature)
+        self._series_signatures = signatures
+        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
         return self._index
 
     def _append_documents(self, documents: list[RetrievalDocument]) -> None:
+        self._write_documents(documents, mode="append")
+
+    def _write_documents(self, documents: list[RetrievalDocument], *, mode: str) -> None:
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
-            mode="append",
+            mode=mode,
         )
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         VectorStoreIndex.from_documents(
@@ -272,10 +304,50 @@ class SeriesRetrievalService:
             and _read_signature_file(self._db_uri, INDEX_TABLE_NAME) is not None
         )
 
-    def _finalize_incremental_mutation(self) -> None:
+    def _finalize_incremental_mutation(self, series_id: str) -> None:
         self.invalidate()
-        signature = _build_workspace_signature(self._workspace)
-        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signature)
+        signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+        current_signature = _build_series_signature(self._workspace, series_id)
+        if current_signature:
+            signatures[series_id] = current_signature
+        else:
+            signatures.pop(series_id, None)
+        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
+
+    def _write_series_signature(self, series_id: str) -> None:
+        signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+        current_signature = _build_series_signature(self._workspace, series_id)
+        if current_signature:
+            signatures[series_id] = current_signature
+        else:
+            signatures.pop(series_id, None)
+        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
+
+    def _remove_series_signature(self, series_id: str) -> None:
+        signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+        signatures.pop(series_id, None)
+        _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
+
+    def _is_series_signature_stale(self, series_id: str) -> bool:
+        if not series_id:
+            return False
+        stored_signatures = self._series_signatures
+        if stored_signatures is None:
+            stored_signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+            self._series_signatures = stored_signatures
+        return stored_signatures.get(series_id) != _build_series_signature(self._workspace, series_id)
+
+    def _refresh_series_async(self, series_id: str) -> None:
+        if not series_id:
+            return
+
+        def refresh() -> None:
+            try:
+                self.refresh_series(series_id)
+            except Exception:
+                LOGGER.exception("series index refresh failed for %s", series_id)
+
+        Thread(target=refresh, daemon=True).start()
 
     def _delete_video_rows(self, *, series_id: str, video_id: str) -> None:
         _delete_rows(
@@ -294,13 +366,7 @@ class SeriesRetrievalService:
             where=f"metadata.series_id = '{_escape_lance_string(series_id)}'",
         )
 
-    def _try_load_existing_index(
-        self,
-        signature: tuple[tuple[str, ...], tuple[str, ...]],
-    ) -> VectorStoreIndex | None:
-        stored_signature = _read_signature_file(self._db_uri, INDEX_TABLE_NAME)
-        if stored_signature != signature:
-            return None
+    def _try_load_existing_index(self) -> VectorStoreIndex | None:
         if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
             return None
         vector_store = LanceDBVectorStore(
@@ -518,25 +584,37 @@ def _build_source_family_filters(
     return []
 
 
-def _build_workspace_signature(workspace: VideoLibraryReader) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    series_parts: list[str] = []
-    video_parts: list[str] = []
+def _build_series_signatures(workspace: VideoLibraryReader) -> SeriesSignatureMap:
+    signatures: SeriesSignatureMap = {}
     for series in workspace.list_series():
-        series_parts.append(series.id)
-        for video in series.videos:
-            summary = workspace.get_video_summary(series.id, video.id)
-            transcript = workspace.get_video_transcript(series.id, video.id)
-            notes = workspace.get_video_notes(series.id, video.id)
-            cards = workspace.get_video_knowledge_cards(series.id, video.id)
-            summary_hash = _artifact_fingerprint(summary)
-            transcript_hash = _artifact_fingerprint(transcript)
-            notes_hash = _artifact_fingerprint(notes)
-            cards_hash = _artifact_fingerprint(cards)
-            video_parts.append(
-                f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:"
-                f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}"
-            )
-    return tuple(sorted(series_parts)), tuple(sorted(video_parts))
+        signatures[series.id] = _build_series_signature(workspace, series.id)
+    return signatures
+
+
+def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> SeriesSignature:
+    series = next((item for item in workspace.list_series() if item.id == series_id), None)
+    if series is None:
+        return ()
+    video_parts: list[str] = []
+    for video in series.videos:
+        summary = workspace.get_video_summary(series.id, video.id)
+        transcript = workspace.get_video_transcript(series.id, video.id)
+        notes = workspace.get_video_notes(series.id, video.id)
+        cards = workspace.get_video_knowledge_cards(series.id, video.id)
+        summary_hash = _artifact_fingerprint(summary)
+        transcript_hash = _artifact_fingerprint(transcript)
+        notes_hash = _artifact_fingerprint(notes)
+        cards_hash = _artifact_fingerprint(cards)
+        video_parts.append(
+            f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:"
+            f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}"
+        )
+    return tuple(sorted(video_parts))
+
+
+def _build_workspace_signature(workspace: VideoLibraryReader) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    signatures = _build_series_signatures(workspace)
+    return tuple(sorted(signatures)), tuple(sorted(item for signature in signatures.values() for item in signature))
 
 
 def _artifact_fingerprint(value: object) -> str:
@@ -559,15 +637,21 @@ def _artifact_fingerprint(value: object) -> str:
 def _build_documents(workspace: VideoLibraryReader) -> list[RetrievalDocument]:
     documents: list[RetrievalDocument] = []
     for series in workspace.list_series():
-        for video in series.videos:
-            documents.extend(
-                _build_documents_for_assets(
-                    summary=workspace.get_video_summary(series.id, video.id),
-                    transcript=workspace.get_video_transcript(series.id, video.id),
-                    notes=workspace.get_video_notes(series.id, video.id),
-                    knowledge_cards=workspace.get_video_knowledge_cards(series.id, video.id),
-                )
-            )
+        documents.extend(_build_documents_for_series(workspace, series_id=series.id))
+    return documents
+
+
+def _build_documents_for_series(
+    workspace: VideoLibraryReader,
+    *,
+    series_id: str,
+) -> list[RetrievalDocument]:
+    series = next((item for item in workspace.list_series() if item.id == series_id), None)
+    if series is None:
+        return []
+    documents: list[RetrievalDocument] = []
+    for video in series.videos:
+        documents.extend(_build_documents_for_video(workspace, series_id=series.id, video_id=video.id))
     return documents
 
 
@@ -827,7 +911,7 @@ def _signature_file_path(db_uri: str, table_name: str) -> Path:
 def _write_signature_file(
     db_uri: str,
     table_name: str,
-    signature: tuple[tuple[str, ...], tuple[str, ...]],
+    signature: SeriesSignatureMap,
 ) -> None:
     signature_path = _signature_file_path(db_uri, table_name)
     signature_path.parent.mkdir(parents=True, exist_ok=True)
@@ -836,7 +920,10 @@ def _write_signature_file(
         json.dumps(
             {
                 "index_schema_version": INDEX_SCHEMA_VERSION,
-                "signature": [list(signature[0]), list(signature[1])],
+                "series_signatures": {
+                    series_id: list(series_signature)
+                    for series_id, series_signature in sorted(signature.items())
+                },
             },
             ensure_ascii=False,
             indent=2,
@@ -847,7 +934,7 @@ def _write_signature_file(
 def _read_signature_file(
     db_uri: str,
     table_name: str,
-) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+) -> SeriesSignatureMap | None:
     signature_path = _signature_file_path(db_uri, table_name)
     if not signature_path.exists():
         return None
@@ -855,6 +942,14 @@ def _read_signature_file(
         payload = json.loads(signature_path.read_text(encoding="utf-8"))
     except Exception:
         return None
+    raw_series_signatures = payload.get("series_signatures")
+    if isinstance(raw_series_signatures, dict):
+        signatures: SeriesSignatureMap = {}
+        for series_id, raw_signature in raw_series_signatures.items():
+            if not isinstance(raw_signature, list):
+                return None
+            signatures[str(series_id)] = tuple(str(item) for item in raw_signature)
+        return signatures
     raw_signature = payload.get("signature")
     if (
         not isinstance(raw_signature, list)
@@ -863,10 +958,24 @@ def _read_signature_file(
         or not isinstance(raw_signature[1], list)
     ):
         return None
-    return (
+    return _series_signatures_from_legacy_workspace_signature(
         tuple(str(item) for item in raw_signature[0]),
         tuple(str(item) for item in raw_signature[1]),
     )
+
+
+def _series_signatures_from_legacy_workspace_signature(
+    series_ids: tuple[str, ...],
+    video_parts: tuple[str, ...],
+) -> SeriesSignatureMap:
+    signatures: SeriesSignatureMap = {series_id: () for series_id in series_ids}
+    grouped_parts: dict[str, list[str]] = {series_id: [] for series_id in series_ids}
+    for part in video_parts:
+        series_id = part.split(":", 1)[0]
+        grouped_parts.setdefault(series_id, []).append(part)
+    for series_id, parts in grouped_parts.items():
+        signatures[series_id] = tuple(sorted(parts))
+    return signatures
 
 
 def _expand_transcript_hit(
