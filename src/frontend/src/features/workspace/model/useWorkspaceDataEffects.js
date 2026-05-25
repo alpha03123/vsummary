@@ -33,6 +33,18 @@ import {
 
 const generationSubscriptions = new Map();
 
+function isLinkedVideo(video) {
+  return video?.isLinked === true || video?.status === "linked";
+}
+
+function clearLocalVideoContent(dispatch) {
+  dispatch({ type: "tools_loaded", tools: null });
+  dispatch({ type: "summary_cleared" });
+  dispatch({ type: "mindmap_cleared" });
+  dispatch({ type: "knowledge_cards_cleared" });
+  dispatch({ type: "notes_cleared" });
+}
+
 function clearGenerationSubscription(taskKey) {
   const unsubscribe = generationSubscriptions.get(taskKey);
   if (typeof unsubscribe === "function") {
@@ -334,6 +346,11 @@ export function useWorkspaceDataEffects(state, dispatch) {
       return;
     }
     if (state.selectedContextType === "video" && state.selectedSeriesId && state.selectedVideoId) {
+      const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
+      if (isLinkedVideo(selectedVideo)) {
+        return;
+      }
+
       let cancelled = false;
       loadVideoGenerationStatus(state.selectedSeriesId, state.selectedVideoId)
         .then(({ snapshot }) => {
@@ -383,6 +400,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
   }, [
     dispatch,
     state.backendReady,
+    state.library,
     state.selectedContextType,
     state.selectedSeriesId,
     state.selectedVideoId,
@@ -525,6 +543,10 @@ export function useWorkspaceDataEffects(state, dispatch) {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
     if (!selectedVideo || state.selectedContextType !== "video") {
       dispatch({ type: "tools_loaded", tools: null });
+      return;
+    }
+    if (isLinkedVideo(selectedVideo)) {
+      clearLocalVideoContent(dispatch);
       return;
     }
 

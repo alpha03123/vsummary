@@ -4,6 +4,7 @@ from typing import Protocol
 
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import (
+    BilibiliUrlInfoDTO,
     KnowledgeCardDTO,
     LibrarySeriesDTO,
     LibraryVideoCardDTO,
@@ -18,6 +19,7 @@ from backend.video_summary.library.models import (
     VideoWorkspaceToolsDTO,
     WorkspaceDTO,
 )
+from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 
 class VideoLibraryReader(Protocol):
@@ -128,6 +130,21 @@ class VideoMutationStore(Protocol):
         ...
 
 
+class LinkedSeriesStore(Protocol):
+    def save_linked_series(self, series: LinkedSeries) -> None:
+        ...
+
+    def get_linked_series(self, series_id: str) -> LinkedSeries | None:
+        ...
+
+    def delete_linked_series(self, series_id: str) -> bool:
+        ...
+
+
+class LinkedSeriesResolverWorkspace(VideoLibraryReader, LinkedSeriesStore, Protocol):
+    pass
+
+
 class VideoSummaryGenerator(Protocol):
     async def run(
         self,
@@ -158,6 +175,24 @@ class KnowledgeCardGenerator(Protocol):
 
 class VideoGenerationProgressTracker(Protocol):
     def create_reporter(self, task_id: str) -> ProgressReporter:
+        ...
+
+
+class LinkedVideoResolver(Protocol):
+    async def resolve_series(self, url_info: BilibiliUrlInfoDTO) -> LinkedSeries:
+        ...
+
+    async def resolve_single_video(self, url_info: BilibiliUrlInfoDTO) -> LinkedVideo:
+        ...
+
+
+class BilibiliUrlParser(Protocol):
+    def parse(self, url: str) -> BilibiliUrlInfoDTO:
+        ...
+
+
+class LinkedVideoDownloadStarter(Protocol):
+    def start(self, *, series_id: str, video_id: str, bvid: str, page: int) -> str:
         ...
 
 

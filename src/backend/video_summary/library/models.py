@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+
+@dataclass(frozen=True)
+class BilibiliUrlInfoDTO:
+    url: str
+    url_type: Literal["unknown"] = "unknown"
 
 
 @dataclass(frozen=True)
@@ -21,6 +27,10 @@ class LibraryVideoCardDTO:
     source_name: str
     processed: bool
     status: str
+    is_linked: bool = False
+    bilibili_bvid: str = ""
+    bilibili_page: int = 0
+    source_url: str = ""
 
 
 @dataclass(frozen=True)

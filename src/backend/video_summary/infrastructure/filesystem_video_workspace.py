@@ -9,6 +9,7 @@ from uuid import uuid4
 from backend.shared.filesystem import KeyedLockManager, atomic_write_text
 from backend.video_summary.infrastructure.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import (
     ChapterCardDTO as ChapterCardDTO,
     KnowledgeCardDTO as KnowledgeCardDTO,
@@ -30,6 +31,7 @@ from backend.video_summary.library.models import (
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 
+LINKED_SERIES_META_FILE = "linked_series.json"
 SERIES_META_FILE = "series_meta.json"
 SERIES_CATALOG_FILE = "series_catalog.json"
 
@@ -60,6 +62,27 @@ class FileSystemVideoWorkspace:
                     id=series_dir.name,
                     title=series_title,
                     videos=self._list_videos_for_series(series_dir),
+                )
+
+        if self._workspace_dir.exists():
+            for ws_dir in sorted(self._workspace_dir.iterdir()):
+                if not ws_dir.is_dir():
+                    continue
+                linked_meta_path = ws_dir / LINKED_SERIES_META_FILE
+                if not linked_meta_path.exists():
+                    continue
+                payload = json.loads(linked_meta_path.read_text(encoding="utf-8"))
+                series_id = ws_dir.name
+                local_series[series_id] = LibrarySeriesDTO(
+                    id=series_id,
+                    title=str(payload.get("title", _to_title(series_id))).strip() or _to_title(series_id),
+                    videos=self._list_videos_for_linked_series(
+                        series_id=series_id,
+                        linked_meta=payload,
+                        local_video_dir=self._videos_dir / series_id,
+                    ),
+                    is_linked=series_id != PLAYGROUND_SERIES_ID,
+                    source_url=str(payload.get("source_url", "")),
                 )
 
         if PLAYGROUND_SERIES_ID not in local_series:
@@ -369,7 +392,8 @@ class FileSystemVideoWorkspace:
         if series_id == PLAYGROUND_SERIES_ID:
             raise ValueError("Playground 请使用单独的“添加 Playground 视频”入口。")
         series_dir = self._videos_dir / series_id
-        if series_dir.exists():
+        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if series_dir.exists() or linked_meta_path.exists():
             raise ValueError(f"系列已存在：{series_id}")
 
         try:
@@ -416,6 +440,66 @@ class FileSystemVideoWorkspace:
 
         return [self._build_local_video_card(series_dir.name, video_path) for video_path in videos]
 
+    def _list_videos_for_linked_series(
+        self,
+        *,
+        series_id: str,
+        linked_meta: dict[str, object],
+        local_video_dir: Path,
+    ) -> list[LibraryVideoCardDTO]:
+        cards: list[LibraryVideoCardDTO] = []
+        consumed_video_ids: set[str] = set()
+        local_paths_by_stem = {
+            path.stem: path
+            for path in sorted(local_video_dir.iterdir())
+            if local_video_dir.exists() and _is_video_file(path)
+        } if local_video_dir.exists() else {}
+
+        videos = linked_meta.get("videos", [])
+        if not isinstance(videos, list):
+            raise ValueError("linked_series.json 格式错误：videos 必须是数组。")
+        for item in videos:
+            if not isinstance(item, dict):
+                raise ValueError("linked_series.json 格式错误：video 必须是对象。")
+            bvid = _require_text(item.get("bvid"), "linked_video.bvid")
+            page = _as_positive_int(item.get("page"), 1)
+            video_id = bvid if page == 1 else f"{bvid}_p{page}"
+            consumed_video_ids.add(video_id)
+            local_file = local_paths_by_stem.get(video_id)
+            if local_file is not None:
+                cards.append(
+                    LibraryVideoCardDTO(
+                        id=video_id,
+                        title=str(item.get("title", video_id)).strip() or video_id,
+                        source_name=local_file.name,
+                        processed=(self._workspace_dir / series_id / video_id / "summary.json").exists(),
+                        status="ready" if (self._workspace_dir / series_id / video_id / "summary.json").exists() else "pending",
+                        is_linked=False,
+                        bilibili_bvid=bvid,
+                        bilibili_page=page,
+                        source_url=str(item.get("source_url", "")),
+                    )
+                )
+                continue
+            cards.append(
+                LibraryVideoCardDTO(
+                    id=video_id,
+                    title=str(item.get("title", video_id)).strip() or video_id,
+                    source_name=f"{video_id}.mp4",
+                    processed=False,
+                    status="linked",
+                    is_linked=True,
+                    bilibili_bvid=bvid,
+                    bilibili_page=page,
+                    source_url=str(item.get("source_url", "")),
+                )
+            )
+
+        for video_id, local_path in local_paths_by_stem.items():
+            if video_id not in consumed_video_ids:
+                cards.append(self._build_local_video_card(series_id, local_path))
+        return cards
+
     def _build_local_video_card(self, series_id: str, video_path: Path) -> LibraryVideoCardDTO:
         processed = (self._workspace_dir / series_id / video_path.stem / "summary.json").exists()
         return LibraryVideoCardDTO(
@@ -449,6 +533,62 @@ class FileSystemVideoWorkspace:
             copied_paths.append(target_path)
         return copied_paths
 
+    def save_linked_series(self, series: LinkedSeries) -> None:
+        payload = {
+            "title": series.title,
+            "cover_url": series.cover_url,
+            "source_url": series.source_url,
+            "videos": [
+                {
+                    "bvid": video.bvid,
+                    "page": video.page,
+                    "title": video.title,
+                    "cover_url": video.cover_url,
+                    "duration_seconds": video.duration_seconds,
+                    "source_url": video.source_url,
+                }
+                for video in series.videos
+            ],
+        }
+        atomic_write_text(
+            self._workspace_dir / series.series_id / LINKED_SERIES_META_FILE,
+            json.dumps(payload, ensure_ascii=False, indent=2),
+        )
+
+    def get_linked_series(self, series_id: str) -> LinkedSeries | None:
+        meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if not meta_path.exists():
+            return None
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        videos = payload.get("videos", [])
+        if not isinstance(videos, list):
+            raise ValueError("linked_series.json 格式错误：videos 必须是数组。")
+        return LinkedSeries(
+            series_id=series_id,
+            title=str(payload.get("title", _to_title(series_id))).strip() or _to_title(series_id),
+            cover_url=str(payload.get("cover_url", "")),
+            source_url=str(payload.get("source_url", "")),
+            videos=[
+                LinkedVideo(
+                    bvid=_require_text(item.get("bvid"), "linked_video.bvid"),
+                    page=_as_positive_int(item.get("page"), 1),
+                    title=str(item.get("title", "")).strip() or _require_text(item.get("bvid"), "linked_video.bvid"),
+                    cover_url=str(item.get("cover_url", "")),
+                    duration_seconds=_as_positive_int(item.get("duration_seconds"), 0),
+                    source_url=str(item.get("source_url", "")),
+                )
+                for item in videos
+                if isinstance(item, dict)
+            ],
+        )
+
+    def delete_linked_series(self, series_id: str) -> bool:
+        meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if not meta_path.exists():
+            return False
+        meta_path.unlink()
+        return True
+
     def delete_series(self, series_id: str) -> bool:
         if series_id == PLAYGROUND_SERIES_ID:
             raise ValueError("Playground 不能整体删除，请按视频删除。")
@@ -480,6 +620,21 @@ class FileSystemVideoWorkspace:
         if output_dir.exists():
             shutil.rmtree(output_dir)
             removed = True
+
+        linked_series = self.get_linked_series(series_id)
+        if linked_series is not None:
+            remaining_videos = [video for video in linked_series.videos if video.video_id != video_id]
+            if len(remaining_videos) != len(linked_series.videos):
+                self.save_linked_series(
+                    LinkedSeries(
+                        series_id=linked_series.series_id,
+                        title=linked_series.title,
+                        cover_url=linked_series.cover_url,
+                        source_url=linked_series.source_url,
+                        videos=remaining_videos,
+                    )
+                )
+                removed = True
 
         return removed
 
@@ -804,6 +959,20 @@ def _require_note_text(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"note.{field_name} 不能为空。")
     return value.strip()
+
+
+def _require_text(value: object, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} 不能为空。")
+    return value.strip()
+
+
+def _as_positive_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)) and value >= 0:
+        return int(value)
+    return default
 
 
 def _require_note_source(value: object) -> str:

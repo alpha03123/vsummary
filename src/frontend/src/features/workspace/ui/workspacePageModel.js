@@ -103,11 +103,15 @@ export function buildWorkspacePageModel(controller) {
       downloadRagModel: controller.onDownloadRagModel,
       resetSettings: controller.onResetSettings,
       clearError: controller.onClearError,
+      resolveLinkedSeries: controller.onResolveLinkedSeries,
+      resolvePlaygroundVideo: controller.onResolvePlaygroundVideo,
+      resolveSeriesVideo: controller.onResolveSeriesVideo,
       importLocalSeries: controller.onImportLocalSeries,
       importLocalPlaygroundVideos: controller.onImportLocalPlaygroundVideos,
       importSeriesVideos: controller.onImportSeriesVideos,
       deleteSeries: controller.onDeleteSeries,
       deleteCurrentVideo: controller.onDeleteCurrentVideo,
+      downloadVideo: controller.onDownloadVideo,
     },
   };
 }

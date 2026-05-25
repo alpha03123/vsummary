@@ -5,7 +5,7 @@ transcript_enhancement_enabled = false
 
 [asr.faster_whisper]
 device = "gpu"
-model_size = "small"
+model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
 

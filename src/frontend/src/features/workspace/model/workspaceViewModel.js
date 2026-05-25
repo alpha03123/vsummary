@@ -38,6 +38,10 @@ function asVideoCard(value, label) {
     sourceName: asString(record.source_name, `${label}.source_name`),
     processed: Boolean(record.processed),
     status: asString(record.status, `${label}.status`),
+    isLinked: Boolean(record.is_linked),
+    bilibiliBvid: typeof record.bilibili_bvid === "string" ? record.bilibili_bvid : "",
+    bilibiliPage: typeof record.bilibili_page === "number" ? record.bilibili_page : 0,
+    sourceUrl: typeof record.source_url === "string" ? record.source_url : "",
   };
 }
 
@@ -253,6 +257,8 @@ export function toWorkspaceLibrary(payload) {
       return {
         id: asString(recordItem.id, `library.series[${index}].id`),
         title: asString(recordItem.title, `library.series[${index}].title`),
+        isLinked: Boolean(recordItem.is_linked),
+        sourceUrl: typeof recordItem.source_url === "string" ? recordItem.source_url : "",
         videos: recordVideos.map((video, videoIndex) =>
           asVideoCard(video, `library.series[${index}].videos[${videoIndex}]`),
         ),

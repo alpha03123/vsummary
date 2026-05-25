@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   CircleDashed,
   FolderKanban,
+  Link2,
+  ExternalLink,
   Trash2,
   X,
 } from "lucide-react";
@@ -17,6 +19,14 @@ import { useMemo, useState } from "react";
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
 
 function VideoBadge({ video }) {
+  if (video.isLinked || video.status === "linked") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+        <Link2 size={11} />
+        未下载
+      </span>
+    );
+  }
   if (video.status === "downloading") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
@@ -101,6 +111,7 @@ function PanelFooter({
   onGenerateVideo,
   onGenerateSeries,
   onCancelGeneration,
+  onDownloadVideo,
   onAddPlaygroundVideo,
   onRequestDeleteCurrentVideo,
   onOpenSettings,
@@ -217,6 +228,46 @@ function PanelFooter({
     );
   }
 
+  if (selectedVideo.isLinked || selectedVideo.status === "linked") {
+    return (
+      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+        <div className="mb-3">
+          <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
+          <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate" title={selectedVideo.title}>{selectedVideo.title}</h3>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/14 hover:border-accent/60"
+            onClick={() => onDownloadVideo?.(selectedVideo)}
+          >
+            <ArrowDown size={16} strokeWidth={2.5} />
+            下载视频
+          </button>
+          {selectedVideo.sourceUrl ? (
+            <a
+              href={selectedVideo.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200 bg-stone-100 text-stone-500 transition-colors hover:border-accent/30 hover:text-accent dark:border-white/10 dark:bg-neutral-800 dark:text-zinc-400"
+              title="在 Bilibili 中查看"
+            >
+              <ExternalLink size={15} />
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => onRequestDeleteCurrentVideo?.()}
+            className="btn-danger-ghost inline-flex h-10 w-10 items-center justify-center rounded-2xl"
+            title="删除当前视频"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const videoGenerationButton = getVideoGenerationButtonState({
     isGeneratingSeries,
     isGeneratingSelectedVideo,
@@ -300,6 +351,7 @@ export function WorkspaceLibraryPanel({
   onGenerateVideo,
   onGenerateSeries,
   onCancelGeneration,
+  onDownloadVideo,
   onAddPlaygroundVideo,
   onAddSeriesVideo,
   onDeleteSeries,
@@ -310,6 +362,7 @@ export function WorkspaceLibraryPanel({
 }) {
   const videos = activeSeries?.videos ?? [];
   const isPlayground = activeSeries?.id === "__playground__";
+  const isLinkedSeries = Boolean(activeSeries?.isLinked);
   const [filterText, setFilterText] = useState("");
   const normalizedFilter = filterText.trim().toLowerCase();
   const filteredVideos = useMemo(() => {
@@ -317,7 +370,7 @@ export function WorkspaceLibraryPanel({
       return videos;
     }
     return videos.filter((video) => {
-      const haystacks = [video.title, video.source_name, video.source_url]
+      const haystacks = [video.title, video.sourceName, video.sourceUrl]
         .filter((value) => typeof value === "string")
         .map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(normalizedFilter));
@@ -336,7 +389,7 @@ export function WorkspaceLibraryPanel({
         <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-[10px] font-bold text-stone-600 dark:text-zinc-400 tracking-wider uppercase mb-1">
-              {isPlayground ? "Playground" : "Sources"}
+              {isPlayground ? "Playground" : isLinkedSeries ? "Linked Series" : "Sources"}
             </p>
             <h2 className="text-lg font-bold text-stone-800 dark:text-stone-100 leading-tight">{activeSeries?.title ?? "未选择 series"}</h2>
           </div>
@@ -466,7 +519,9 @@ export function WorkspaceLibraryPanel({
                 <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
                   {video.title}
                 </strong>
-                <span className="text-xs text-stone-500 dark:text-stone-400 truncate">{video.sourceName}</span>
+                <span className="text-xs text-stone-500 dark:text-stone-400 truncate">
+                  {video.isLinked || video.status === "linked" ? video.sourceUrl || video.sourceName : video.sourceName}
+                </span>
               </div>
             </button>
           );
@@ -491,6 +546,7 @@ export function WorkspaceLibraryPanel({
         onGenerateVideo={onGenerateVideo}
         onGenerateSeries={onGenerateSeries}
         onCancelGeneration={onCancelGeneration}
+        onDownloadVideo={onDownloadVideo}
         onAddPlaygroundVideo={onAddPlaygroundVideo}
         onRequestDeleteCurrentVideo={onRequestDeleteCurrentVideo}
         onOpenSettings={onOpenSettings}

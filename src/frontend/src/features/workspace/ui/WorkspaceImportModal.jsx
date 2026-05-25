@@ -7,10 +7,14 @@ export function WorkspaceImportModal({
   targetSeriesId = null,
   targetSeriesTitle = "",
   onClose,
+  onResolveSeries,
+  onResolveVideo,
   onImportLocalSeries,
   onImportSeriesVideos,
   onImportLocalPlaygroundVideos,
 }) {
+  const [sourceType, setSourceType] = useState("local");
+  const [url, setUrl] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
   const [files, setFiles] = useState([]);
   const [status, setStatus] = useState("idle");
@@ -42,18 +46,30 @@ export function WorkspaceImportModal({
     setPreview(null);
 
     try {
-      if (!files.length) {
-        setStatus("idle");
-        return;
+      let result;
+      if (sourceType === "external") {
+        const trimmed = url.trim();
+        if (!trimmed) {
+          setStatus("idle");
+          return;
+        }
+        result = isSeriesCreation
+          ? await onResolveSeries(trimmed)
+          : await onResolveVideo(trimmed, isSeriesVideo ? targetSeriesId : null);
+      } else {
+        if (!files.length) {
+          setStatus("idle");
+          return;
+        }
+        result = isSeriesCreation
+          ? await onImportLocalSeries(seriesTitle.trim(), files)
+          : isSeriesVideo
+            ? await onImportSeriesVideos(targetSeriesId, files)
+            : await onImportLocalPlaygroundVideos(files);
       }
-      const result = isSeriesCreation
-        ? await onImportLocalSeries(seriesTitle.trim(), files)
-        : isSeriesVideo
-          ? await onImportSeriesVideos(targetSeriesId, files)
-          : await onImportLocalPlaygroundVideos(files);
       setPreview({
-        title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : "Playground"),
-        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? files.length,
+        title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : result.title ?? "Playground"),
+        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? (sourceType === "external" ? 1 : files.length),
       });
       setStatus("success");
     } catch (error) {
@@ -62,7 +78,11 @@ export function WorkspaceImportModal({
     }
   }
 
-  const submitDisabled = status === "loading" || (isSeriesCreation ? !seriesTitle.trim() || !files.length : !files.length);
+  const submitDisabled = status === "loading" || (
+    sourceType === "external"
+      ? !url.trim()
+      : (isSeriesCreation ? !seriesTitle.trim() || !files.length : !files.length)
+  );
 
   return (
     <AnimatePresence>
@@ -104,7 +124,52 @@ export function WorkspaceImportModal({
           </div>
 
           <div className="flex flex-col gap-5 p-6">
-            {isSeriesCreation ? (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setSourceType("local")}
+                className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${
+                  sourceType === "local"
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
+                }`}
+              >
+                本地视频
+                <p className="mt-1 text-xs font-medium opacity-70">复制文件到 videos 目录。</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceType("external")}
+                className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${
+                  sourceType === "external"
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
+                }`}
+              >
+                Bilibili 外链
+                <p className="mt-1 text-xs font-medium opacity-70">先导入链接，按需下载。</p>
+              </button>
+            </div>
+
+            {sourceType === "external" ? (
+              <div>
+                <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                  {isSeriesCreation ? "Bilibili 系列 / 多 P URL" : "Bilibili 视频 URL"}
+                </label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder={isSeriesCreation ? "https://www.bilibili.com/video/BV... 或合集链接" : "https://www.bilibili.com/video/BV..."}
+                  disabled={status === "loading"}
+                  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                  autoFocus
+                />
+                <p className="mt-2 text-[11px] text-stone-400 dark:text-zinc-500">
+                  仅支持无 cookie 可访问的公开视频。
+                </p>
+              </div>
+            ) : isSeriesCreation ? (
               <div>
                 <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
                   系列名称
@@ -121,6 +186,7 @@ export function WorkspaceImportModal({
               </div>
             ) : null}
 
+            {sourceType === "local" ? (
             <div>
               <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
                 选择视频文件
@@ -143,6 +209,7 @@ export function WorkspaceImportModal({
                 />
               </label>
             </div>
+            ) : null}
 
             {status === "success" && preview ? (
               <motion.div
@@ -201,7 +268,7 @@ export function WorkspaceImportModal({
               className="inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : null}
-              {actionLabel}
+              {sourceType === "external" ? "解析" : actionLabel}
             </button>
           </div>
         </motion.div>

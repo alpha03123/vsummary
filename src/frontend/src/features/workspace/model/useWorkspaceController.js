@@ -52,7 +52,8 @@ export function useWorkspaceController() {
   const isGeneratingMindmapSelectedVideo =
     state.generatingMindmapKey != null &&
     state.generatingMindmapKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
-  const previewUrl = state.selectedSeriesId && state.selectedVideoId
+  const selectedVideoIsLinked = selectedVideo?.isLinked === true || selectedVideo?.status === "linked";
+  const previewUrl = state.selectedSeriesId && state.selectedVideoId && !selectedVideoIsLinked
     ? getVideoPreviewUrl(state.selectedSeriesId, state.selectedVideoId)
     : null;
 
@@ -190,10 +191,14 @@ export function useWorkspaceController() {
     onDownloadRagModel: settingsActions.onDownloadRagModel,
     onResetSettings: settingsActions.onResetSettings,
     onClearError,
+    onResolveLinkedSeries: contentActions.onResolveLinkedSeries,
+    onResolvePlaygroundVideo: contentActions.onResolvePlaygroundVideo,
+    onResolveSeriesVideo: contentActions.onResolveSeriesVideo,
     onImportLocalSeries: contentActions.onImportLocalSeries,
     onImportLocalPlaygroundVideos: contentActions.onImportLocalPlaygroundVideos,
     onImportSeriesVideos: contentActions.onImportSeriesVideos,
     onDeleteSeries: contentActions.onDeleteSeries,
     onDeleteCurrentVideo: contentActions.onDeleteCurrentVideo,
+    onDownloadVideo: contentActions.onDownloadVideo,
   };
 }

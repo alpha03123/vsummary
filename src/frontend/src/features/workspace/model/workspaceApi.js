@@ -672,6 +672,22 @@ export async function importLocalSeries(seriesTitle, files) {
   });
 }
 
+export async function resolveBilibiliSeries(url) {
+  return fetchJson("/api/linked/bilibili/resolve/series", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
+
+export async function resolveBilibiliVideo(url, targetSeriesId = null) {
+  return fetchJson("/api/linked/bilibili/resolve/video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, target_series_id: targetSeriesId }),
+  });
+}
+
 export async function importLocalPlaygroundVideos(files) {
   const payload = new FormData();
   for (const file of files) {
@@ -704,4 +720,18 @@ export async function deleteVideoSource(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}`, {
     method: "DELETE",
   });
+}
+
+export async function startVideoDownload(seriesId, videoId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
+    method: "POST",
+  });
+}
+
+export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
+  return subscribeProgress(
+    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/progress`,
+    listener,
+    "视频下载进度连接已中断",
+  );
 }

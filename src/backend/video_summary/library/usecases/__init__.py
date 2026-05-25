@@ -21,6 +21,11 @@ from backend.video_summary.library.usecases.imports import (
     ImportLocalSeries,
     ImportLocalSeriesVideos,
 )
+from backend.video_summary.library.usecases.linked_videos import (
+    ResolveBilibiliSeries,
+    ResolveBilibiliVideo,
+    StartLinkedVideoDownload,
+)
 from backend.video_summary.library.usecases.mutations import (
     DeleteSeries,
     DeleteVideoSource,
@@ -52,6 +57,9 @@ __all__ = [
     "ImportLocalSeries",
     "ImportLocalSeriesVideos",
     "ListVideoLibrary",
+    "ResolveBilibiliSeries",
+    "ResolveBilibiliVideo",
     "RefreshSeriesKnowledgeMemory",
+    "StartLinkedVideoDownload",
     "UpdateVideoNote",
 ]

@@ -19,6 +19,7 @@ from backend.agent_graph.query.video_answer_synthesizer import (
     AnswerSynthesisProgram,
 )
 from backend.agent_graph.runtime.service import AgentGraphService
+from backend.bilibili import BackgroundBilibiliDownloadStarter, BilibiliDownloader, YtDlpBilibiliResolver
 from backend.shared.settings import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.agent_memory import (
     AgentWorkspaceIndexBuilder,
@@ -62,6 +63,9 @@ from backend.video_summary.library.usecases import (
     ImportLocalSeries,
     ImportLocalSeriesVideos,
     ListVideoLibrary,
+    ResolveBilibiliSeries,
+    ResolveBilibiliVideo,
+    StartLinkedVideoDownload,
     CreateVideoNote,
     DeleteVideoNote,
     UpdateVideoNote,
@@ -94,7 +98,11 @@ class ApiContainer:
     import_local_series: ImportLocalSeries
     import_local_playground_videos: ImportLocalPlaygroundVideos
     import_local_series_videos: ImportLocalSeriesVideos
+    resolve_bilibili_series: ResolveBilibiliSeries
+    resolve_bilibili_video: ResolveBilibiliVideo
+    start_linked_video_download: StartLinkedVideoDownload
     generation_progress_tracker: InMemoryProgressTracker
+    video_download_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     knowledge_memory_progress_tracker: InMemoryProgressTracker
     rag_model_manager: RagModelManager
@@ -118,6 +126,7 @@ def build_api_container(
     settings = load_settings(config_path, root_dir)
     workspace = FileSystemVideoWorkspace(root_dir)
     progress_tracker = InMemoryProgressTracker()
+    video_download_progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
     rag_model_progress_tracker = InMemoryProgressTracker()
@@ -159,6 +168,7 @@ def build_api_container(
         delete_series=agent_runtime.delete_workspace_series,
         progress_tracker=knowledge_memory_progress_tracker,
     )
+    workspace_index_invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
     index_refresher_ref["value"] = index_refresher
     series_memory_refresher = RefreshSeriesKnowledgeMemory(
         workspace=workspace,
@@ -175,6 +185,12 @@ def build_api_container(
         workspace,
         summary_generation_use_case,
         progress_tracker,
+    )
+    bilibili_resolver = YtDlpBilibiliResolver()
+    bilibili_download_starter = BackgroundBilibiliDownloadStarter(
+        root_dir=root_dir,
+        downloader=BilibiliDownloader(),
+        progress_tracker=video_download_progress_tracker,
     )
     return ApiContainer(
         config_path=config_path,
@@ -200,7 +216,11 @@ def build_api_container(
         import_local_series=ImportLocalSeries(workspace),
         import_local_playground_videos=ImportLocalPlaygroundVideos(workspace),
         import_local_series_videos=ImportLocalSeriesVideos(workspace),
+        resolve_bilibili_series=ResolveBilibiliSeries(workspace, bilibili_resolver, workspace_index_invalidator),
+        resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
+        start_linked_video_download=StartLinkedVideoDownload(workspace, bilibili_download_starter),
         generation_progress_tracker=progress_tracker,
+        video_download_progress_tracker=video_download_progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
         knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
         rag_model_manager=rag_model_manager,
