@@ -75,6 +75,122 @@ class YtDlpBilibiliResolverTests(unittest.TestCase):
         self.assertEqual(result.title, "课程合集")
         self.assertEqual([video.video_id for video in result.videos], ["BV1xx411c7mD", "BV1yy411c7mE"])
 
+    def test_resolve_series_uses_bilibili_view_titles_when_entries_only_have_bvids(self) -> None:
+        resolver = YtDlpBilibiliResolver(
+            extractor=lambda url: {
+                "id": "playlist-1",
+                "title": "BV1xx411c7mD",
+                "thumbnail": "",
+                "webpage_url": url,
+                "entries": [
+                    {
+                        "id": "BV1xx411c7mD",
+                        "title": "BV1xx411c7mD",
+                        "duration": 123,
+                        "webpage_url": "https://www.bilibili.com/video/BV1xx411c7mD",
+                    },
+                    {
+                        "id": "BV1yy411c7mE",
+                        "title": "BV1yy411c7mE",
+                        "duration": 456,
+                        "webpage_url": "https://www.bilibili.com/video/BV1yy411c7mE",
+                    },
+                ],
+            },
+            view_extractor=lambda bvid: {
+                "title": "课程合集",
+                "ugc_season": {
+                    "title": "课程合集",
+                    "sections": [
+                        {
+                            "episodes": [
+                                {"bvid": "BV1xx411c7mD", "title": "第一讲"},
+                                {"bvid": "BV1yy411c7mE", "title": "第二讲"},
+                            ]
+                        }
+                    ],
+                },
+            },
+        )
+
+        result = asyncio.run(
+            resolver.resolve_series(
+                BilibiliUrlInfoDTO(url="https://space.bilibili.com/1/lists/2?type=season")
+            )
+        )
+
+        self.assertEqual(result.title, "课程合集")
+        self.assertEqual([video.title for video in result.videos], ["第一讲", "第二讲"])
+
+    def test_resolve_series_uses_page_parts_when_entries_are_single_bvid_pages(self) -> None:
+        resolver = YtDlpBilibiliResolver(
+            extractor=lambda url: {
+                "id": "BV1xx411c7mD",
+                "title": "BV1xx411c7mD",
+                "webpage_url": url,
+                "entries": [
+                    {
+                        "id": "BV1xx411c7mD",
+                        "title": "BV1xx411c7mD",
+                        "page_number": 1,
+                        "webpage_url": "https://www.bilibili.com/video/BV1xx411c7mD",
+                    },
+                    {
+                        "id": "BV1xx411c7mD",
+                        "title": "BV1xx411c7mD",
+                        "page_number": 2,
+                        "webpage_url": "https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+                    },
+                ],
+            },
+            view_extractor=lambda bvid: {
+                "title": "多 P 课程",
+                "pages": [
+                    {"page": 1, "part": "第一 P"},
+                    {"page": 2, "part": "第二 P"},
+                ],
+            },
+        )
+
+        result = asyncio.run(
+            resolver.resolve_series(
+                BilibiliUrlInfoDTO(url="https://www.bilibili.com/video/BV1xx411c7mD")
+            )
+        )
+
+        self.assertEqual(result.title, "多 P 课程")
+        self.assertEqual([video.video_id for video in result.videos], ["BV1xx411c7mD", "BV1xx411c7mD_p2"])
+        self.assertEqual([video.title for video in result.videos], ["第一 P", "第二 P"])
+
+    def test_resolve_series_uses_page_parts_when_flat_entries_only_have_page_urls(self) -> None:
+        resolver = YtDlpBilibiliResolver(
+            extractor=lambda url: {
+                "id": "BV1xx411c7mD",
+                "title": "多 P 课程",
+                "webpage_url": url,
+                "entries": [
+                    {"url": "https://www.bilibili.com/video/BV1xx411c7mD?p=1"},
+                    {"url": "https://www.bilibili.com/video/BV1xx411c7mD?p=2"},
+                ],
+            },
+            view_extractor=lambda bvid: {
+                "title": "多 P 课程",
+                "pages": [
+                    {"page": 1, "part": "第一 P"},
+                    {"page": 2, "part": "第二 P"},
+                ],
+            },
+        )
+
+        result = asyncio.run(
+            resolver.resolve_series(
+                BilibiliUrlInfoDTO(url="https://www.bilibili.com/video/BV1xx411c7mD")
+            )
+        )
+
+        self.assertEqual([video.video_id for video in result.videos], ["BV1xx411c7mD", "BV1xx411c7mD_p2"])
+        self.assertEqual([video.title for video in result.videos], ["第一 P", "第二 P"])
+
 
 class FileSystemLinkedSeriesTests(unittest.TestCase):
     def test_list_series_reports_linked_video_until_downloaded_file_exists(self) -> None:

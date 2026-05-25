@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Callable, Protocol
 
+import httpx
+
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
@@ -21,28 +23,51 @@ class ProgressReporter(Protocol):
 
 
 class YtDlpBilibiliResolver:
-    def __init__(self, extractor: Callable[[str], dict[str, object]] | None = None) -> None:
+    def __init__(
+        self,
+        extractor: Callable[[str], dict[str, object]] | None = None,
+        view_extractor: Callable[[str], dict[str, object]] | None = None,
+    ) -> None:
         self._extractor = extractor or _extract_info
+        self._view_extractor = view_extractor or _extract_view_info
 
     async def resolve_series(self, url_info: BilibiliUrlInfoDTO) -> LinkedSeries:
         payload = await asyncio.to_thread(self._extractor, url_info.url)
         entries = [entry for entry in payload.get("entries", []) if isinstance(entry, dict)]
+        should_fetch_view = not entries or _series_needs_view_titles(payload, entries)
+        view_bvid, view_payload = (
+            await _resolve_view_payload(payload, url_info.url, self._view_extractor)
+            if should_fetch_view
+            else ("", {})
+        )
         if not entries:
-            single = _linked_video_from_payload(payload, fallback_url=url_info.url)
-            entries = [
-                {
-                    "id": single.bvid,
-                    "title": single.title,
-                    "duration": single.duration_seconds,
-                    "thumbnail": single.cover_url,
-                    "webpage_url": single.source_url,
-                }
-            ]
-        videos = [_linked_video_from_payload(entry, fallback_url=url_info.url) for entry in entries]
+            entries = _entries_from_view_payload(view_bvid=view_bvid, view_payload=view_payload)
+            if not entries:
+                single = _linked_video_from_payload(payload, fallback_url=url_info.url)
+                entries = [
+                    {
+                        "id": single.bvid,
+                        "title": single.title,
+                        "duration": single.duration_seconds,
+                        "thumbnail": single.cover_url,
+                        "webpage_url": single.source_url,
+                    }
+                ]
+        title_overrides = _extract_title_overrides(view_payload, root_bvid=view_bvid)
+        videos = [
+            _linked_video_from_payload(
+                _merge_entry_title(entry, title_overrides=title_overrides),
+                fallback_url=url_info.url,
+            )
+            for entry in entries
+        ]
         series_key = _safe_series_key(str(payload.get("id") or videos[0].video_id))
+        series_title = _as_text(payload.get("title"))
+        if _is_bvid_title(series_title):
+            series_title = _extract_series_title(view_payload)
         return LinkedSeries(
             series_id=f"bilibili-{series_key}",
-            title=_as_text(payload.get("title")) or videos[0].title,
+            title=series_title or videos[0].title,
             cover_url=_as_text(payload.get("thumbnail")),
             source_url=_as_text(payload.get("webpage_url")) or url_info.url,
             videos=videos,
@@ -165,6 +190,41 @@ def _extract_info(url: str) -> dict[str, object]:
     return payload
 
 
+def _extract_view_info(bvid: str) -> dict[str, object]:
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": f"https://www.bilibili.com/video/{bvid}/",
+    }
+    response = httpx.get(
+        "https://api.bilibili.com/x/web-interface/view",
+        params={"bvid": bvid},
+        headers=headers,
+        timeout=20,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or payload.get("code") != 0:
+        raise RuntimeError(f"Bilibili view API 返回异常：{payload.get('message') if isinstance(payload, dict) else payload}")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError("Bilibili view API 未返回有效 data。")
+    return data
+
+
+async def _resolve_view_payload(
+    payload: dict[str, object],
+    fallback_url: str,
+    view_extractor: Callable[[str], dict[str, object]],
+) -> tuple[str, dict[str, object]]:
+    try:
+        bvid = _extract_bvid(payload)
+    except ValueError:
+        bvid = _extract_bvid_from_entries(payload) or _extract_bvid_from_text(fallback_url)
+        if not bvid:
+            return "", {}
+    return bvid, await asyncio.to_thread(view_extractor, bvid)
+
+
 def _linked_video_from_payload(payload: dict[str, object], *, fallback_url: str) -> LinkedVideo:
     bvid = _extract_bvid(payload)
     page = _extract_page(payload)
@@ -185,13 +245,156 @@ def _linked_video_from_payload(payload: dict[str, object], *, fallback_url: str)
     )
 
 
+def _series_needs_view_titles(payload: dict[str, object], entries: list[dict[str, object]]) -> bool:
+    if _is_bvid_title(_as_text(payload.get("title"))):
+        return True
+    return any(not _as_text(entry.get("title")) or _is_bvid_title(_as_text(entry.get("title"))) for entry in entries)
+
+
+def _entries_from_view_payload(*, view_bvid: str, view_payload: dict[str, object]) -> list[dict[str, object]]:
+    season = view_payload.get("ugc_season")
+    if isinstance(season, dict):
+        entries = _entries_from_ugc_season(season)
+        if entries:
+            return entries
+
+    pages = view_payload.get("pages")
+    if not isinstance(pages, list) or not view_bvid:
+        return []
+    entries: list[dict[str, object]] = []
+    for item in pages:
+        if not isinstance(item, dict):
+            continue
+        page = _as_positive_int(item.get("page"), 1)
+        entries.append(
+            {
+                "id": view_bvid,
+                "title": _as_text(item.get("part")) or _as_text(view_payload.get("title")) or view_bvid,
+                "page_number": page,
+                "duration": _as_int(item.get("duration")),
+                "thumbnail": _as_text(view_payload.get("pic")) or _as_text(view_payload.get("thumbnail")),
+                "webpage_url": _page_url(view_bvid, page),
+            }
+        )
+    return entries
+
+
+def _entries_from_ugc_season(season: dict[str, object]) -> list[dict[str, object]]:
+    sections = season.get("sections")
+    if not isinstance(sections, list):
+        return []
+    entries: list[dict[str, object]] = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        episodes = section.get("episodes")
+        if not isinstance(episodes, list):
+            continue
+        for episode in episodes:
+            if not isinstance(episode, dict):
+                continue
+            bvid = _as_text(episode.get("bvid"))
+            if not bvid:
+                continue
+            entries.append(
+                {
+                    "id": bvid,
+                    "title": _as_text(episode.get("title")) or bvid,
+                    "duration": _as_int(episode.get("duration")),
+                    "thumbnail": _as_text(episode.get("cover")),
+                    "webpage_url": _page_url(bvid, 1),
+                }
+            )
+    return entries
+
+
+def _merge_entry_title(
+    entry: dict[str, object],
+    *,
+    title_overrides: dict[tuple[str, int], str],
+) -> dict[str, object]:
+    bvid = _extract_bvid(entry)
+    page = _extract_page(entry)
+    current_title = _as_text(entry.get("title"))
+    override = title_overrides.get((bvid, page)) or title_overrides.get((bvid, 1))
+    if not override:
+        return entry
+    return {**entry, "title": override}
+
+
+def _extract_title_overrides(view_payload: dict[str, object], *, root_bvid: str) -> dict[tuple[str, int], str]:
+    overrides: dict[tuple[str, int], str] = {}
+    root_bvid = _as_text(view_payload.get("bvid")) or root_bvid
+    pages = view_payload.get("pages")
+    if isinstance(pages, list):
+        for item in pages:
+            if not isinstance(item, dict):
+                continue
+            page = _as_positive_int(item.get("page"), 1)
+            title = _as_text(item.get("part"))
+            if root_bvid and title:
+                overrides[(root_bvid, page)] = title
+
+    season = view_payload.get("ugc_season")
+    if isinstance(season, dict):
+        sections = season.get("sections")
+        if isinstance(sections, list):
+            for section in sections:
+                if not isinstance(section, dict):
+                    continue
+                episodes = section.get("episodes")
+                if not isinstance(episodes, list):
+                    continue
+                for episode in episodes:
+                    if not isinstance(episode, dict):
+                        continue
+                    bvid = _as_text(episode.get("bvid"))
+                    title = _as_text(episode.get("title"))
+                    if bvid and title:
+                        overrides.setdefault((bvid, 1), title)
+    return overrides
+
+
+def _page_url(bvid: str, page: int) -> str:
+    url = f"https://www.bilibili.com/video/{bvid}"
+    return f"{url}?p={page}" if page > 1 else url
+
+
+def _extract_series_title(view_payload: dict[str, object]) -> str:
+    season = view_payload.get("ugc_season")
+    if isinstance(season, dict):
+        title = _as_text(season.get("title"))
+        if title:
+            return title
+    return _as_text(view_payload.get("title"))
+
+
 def _extract_bvid(payload: dict[str, object]) -> str:
     candidates = [payload.get("id"), payload.get("display_id"), payload.get("webpage_url"), payload.get("url")]
     for value in candidates:
-        match = re.search(r"(BV[a-zA-Z0-9]{10})", str(value or ""))
-        if match:
-            return match.group(1)
+        bvid = _extract_bvid_from_text(str(value or ""))
+        if bvid:
+            return bvid
     raise ValueError("yt-dlp 元数据中缺少 Bilibili BV 号。")
+
+
+def _extract_bvid_from_entries(payload: dict[str, object]) -> str:
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return ""
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            return _extract_bvid(entry)
+        except ValueError:
+            continue
+    return ""
+
+
+def _extract_bvid_from_text(value: str) -> str:
+    match = re.search(r"(BV[a-zA-Z0-9]{10})", value)
+    return match.group(1) if match else ""
 
 
 def _extract_page(payload: dict[str, object]) -> int:
@@ -199,7 +402,30 @@ def _extract_page(payload: dict[str, object]) -> int:
         value = payload.get(key)
         if isinstance(value, int) and value > 0:
             return value
+    for key in ("webpage_url", "url"):
+        page = _extract_page_from_text(_as_text(payload.get(key)))
+        if page > 0:
+            return page
     return 1
+
+
+def _extract_page_from_text(value: str) -> int:
+    match = re.search(r"(?:[?&]p=)(\d+)", value)
+    if match is None:
+        return 0
+    return int(match.group(1))
+
+
+def _as_positive_int(value: object, fallback: int) -> int:
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, (int, float)) and value > 0:
+        return int(value)
+    return fallback
+
+
+def _is_bvid_title(value: str) -> bool:
+    return bool(re.fullmatch(r"BV[a-zA-Z0-9]{10}(?:_p\d+)?", value.strip()))
 
 
 def _safe_series_key(value: str) -> str:
