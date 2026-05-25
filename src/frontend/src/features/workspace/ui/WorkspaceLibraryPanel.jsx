@@ -98,6 +98,23 @@ export function getDeleteButtonState({ isGeneratingSeries, isGeneratingSelectedV
   };
 }
 
+function SourceVideoLink({ sourceUrl }) {
+  if (!sourceUrl) {
+    return null;
+  }
+  return (
+    <a
+      href={sourceUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200 bg-stone-100 text-stone-500 transition-colors hover:border-accent/30 hover:text-accent dark:border-white/10 dark:bg-neutral-800 dark:text-zinc-400"
+      title="在 Bilibili 中查看"
+    >
+      <ExternalLink size={15} />
+    </a>
+  );
+}
+
 function PanelFooter({
   selectedContextType,
   selectedVideo,
@@ -244,17 +261,7 @@ function PanelFooter({
             <ArrowDown size={16} strokeWidth={2.5} />
             下载视频
           </button>
-          {selectedVideo.sourceUrl ? (
-            <a
-              href={selectedVideo.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200 bg-stone-100 text-stone-500 transition-colors hover:border-accent/30 hover:text-accent dark:border-white/10 dark:bg-neutral-800 dark:text-zinc-400"
-              title="在 Bilibili 中查看"
-            >
-              <ExternalLink size={15} />
-            </a>
-          ) : null}
+          <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} />
           <button
             type="button"
             onClick={() => onRequestDeleteCurrentVideo?.()}
@@ -290,40 +297,43 @@ function PanelFooter({
           当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概况。
         </div>
       ) : null}
-      <button
-        type="button"
-        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${videoGenerationButton.tone === "danger"
-          ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
-          : videoGenerationButton.tone === "busy"
-            ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
-            : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60 shadow-none active:scale-[0.98]"
-          }`}
-        onClick={
-          videoGenerationButton.tone === "danger"
-            ? onCancelGeneration
-            : modelNeedsDownload
-              ? onOpenSettings
-              : onGenerateVideo
-        }
-        disabled={videoGenerationButton.disabled}
-      >
-        {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
-          <>
-            <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
-            {videoGenerationButton.label}
-          </>
-        ) : modelNeedsDownload ? (
-          <>
-            <ArrowDown size={16} strokeWidth={2.5} />
-            {videoGenerationButton.label}
-          </>
-        ) : (
-          <>
-            <Sparkles size={16} strokeWidth={2.5} />
-            {videoGenerationButton.label}
-          </>
-        )}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${videoGenerationButton.tone === "danger"
+            ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+            : videoGenerationButton.tone === "busy"
+              ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
+              : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60 shadow-none active:scale-[0.98]"
+            }`}
+          onClick={
+            videoGenerationButton.tone === "danger"
+              ? onCancelGeneration
+              : modelNeedsDownload
+                ? onOpenSettings
+                : onGenerateVideo
+          }
+          disabled={videoGenerationButton.disabled}
+        >
+          {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
+            <>
+              <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
+              {videoGenerationButton.label}
+            </>
+          ) : modelNeedsDownload ? (
+            <>
+              <ArrowDown size={16} strokeWidth={2.5} />
+              {videoGenerationButton.label}
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} strokeWidth={2.5} />
+              {videoGenerationButton.label}
+            </>
+          )}
+        </button>
+        <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} />
+      </div>
       <button
         type="button"
         onClick={() => onRequestDeleteCurrentVideo?.()}
