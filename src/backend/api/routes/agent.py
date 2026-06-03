@@ -213,6 +213,8 @@ def _format_agent_error(error: Exception) -> str:
         return "联网搜索失败：当前模型或供应商不支持联网搜索，请关闭联网搜索或更换支持搜索的模型。"
     if _is_web_search_error(message):
         return f"联网搜索失败：{message}" if message else "联网搜索失败。"
+    if _is_model_url_connection_error(message):
+        return "url连接错误，请检查拼写或者地址是否可用"
     if "Your request was blocked" in message:
         return "模型请求被上游网关拦截，请检查模型供应商、API 网关或更换官方 API 地址。"
     if "APIError" in message or "OpenAIException" in message or "litellm" in type(error).__module__:
@@ -247,6 +249,25 @@ def _is_unsupported_web_search_error(message: str) -> bool:
 def _is_web_search_error(message: str) -> bool:
     normalized = message.lower()
     return "web_search" in normalized or "web_search_options" in normalized or "联网搜索" in message
+
+
+def _is_model_url_connection_error(message: str) -> bool:
+    normalized = message.lower()
+    connection_markers = (
+        "connection error",
+        "connecterror",
+        "apiconnectionerror",
+        "connection refused",
+        "name or service not known",
+        "nodename nor servname provided",
+        "failed to resolve",
+        "getaddrinfo failed",
+        "temporary failure in name resolution",
+        "无法连接",
+        "连接失败",
+        "拒绝连接",
+    )
+    return any(marker in normalized for marker in connection_markers)
 
 
 def _is_agent_debug_enabled(container) -> bool:

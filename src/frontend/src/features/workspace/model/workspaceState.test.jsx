@@ -344,6 +344,71 @@ describe("workspace chat stream errors", () => {
       }),
     ]);
   });
+
+  it("marks the understand-query stage as failed when the stream errors after that stage starts", () => {
+    const chatScopeKey = "series|series-a|series-home";
+    const requestId = 123;
+    let state = {
+      ...createInitialWorkspaceState(),
+      chatScopeKey,
+      chatPending: true,
+      chatMessages: [],
+      chatThreads: {
+        [chatScopeKey]: [],
+      },
+    };
+
+    state = workspaceReducer(state, {
+      type: "chat_stream_event_received",
+      chatScopeKey,
+      requestId,
+      event: {
+        type: "thinking_started",
+        payload: { message: "正在执行图节点" },
+      },
+    });
+    state = workspaceReducer(state, {
+      type: "chat_stream_event_received",
+      chatScopeKey,
+      requestId,
+      event: {
+        type: "stage_started",
+        payload: {
+          stage_id: "stage-understand-query",
+          node_id: "understand_query",
+          label: "理解问题",
+        },
+      },
+    });
+    state = workspaceReducer(state, {
+      type: "chat_stream_event_received",
+      chatScopeKey,
+      requestId,
+      event: {
+        type: "error",
+        payload: { message: "模型服务调用失败：APIConnectionError: Connection refused" },
+      },
+    });
+
+    expect(state.chatPending).toBe(false);
+    expect(state.chatMessages).toEqual([
+      expect.objectContaining({
+        id: `thought-${requestId}`,
+        content: "执行失败",
+        thoughtTrace: expect.objectContaining({
+          status: "failed",
+          summary: "模型服务调用失败：APIConnectionError: Connection refused",
+          stages: [
+            expect.objectContaining({
+              nodeId: "understand_query",
+              label: "理解问题",
+              status: "failed",
+            }),
+          ],
+        }),
+      }),
+    ]);
+  });
 });
 
 describe("workspaceContentActions series generation", () => {
