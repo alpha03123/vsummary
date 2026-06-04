@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from backend.agent.schemas.tool_calls import ToolName
 from backend.video_summary.infrastructure.agent_memory.pinpoint import SemanticScorer, _lexical_score, extract_query_terms
+
+
+GET_VIDEO_TRANSCRIPT_TOOL_NAME = "get_video_transcript"
+VIDEO_SEEK_TOOL_NAME = "video_seek"
 
 
 class VideoWorkflowExtractor:
@@ -75,7 +78,7 @@ class VideoWorkflowExtractor:
         }
         tool_results: list[dict[str, object]] = [
             {
-                "tool_name": ToolName.GET_VIDEO_TRANSCRIPT.value,
+                "tool_name": GET_VIDEO_TRANSCRIPT_TOOL_NAME,
                 "status": "ok",
                 "payload": {
                     "series_id": transcript.series_id,
@@ -89,7 +92,7 @@ class VideoWorkflowExtractor:
         for anchor in deduped_anchors:
             tool_results.append(
                 {
-                    "tool_name": ToolName.VIDEO_SEEK.value,
+                    "tool_name": VIDEO_SEEK_TOOL_NAME,
                     "status": "ok",
                     "payload": {
                         "series_id": transcript.series_id,

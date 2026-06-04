@@ -31,15 +31,8 @@ tmp/
 /data/
 .worktrees/
 
-# Tests (local dev only)
-/tests/
-
 # Local dev scripts (environment-specific)
 /scripts/
-
-# Frontend tests
-src/frontend/src/**/*.test.jsx
-src/frontend/src/**/*.test.js
 
 # Local env
 .env

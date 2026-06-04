@@ -1,9 +1,3 @@
-from __future__ import annotations
+from backend.shared.llm.chat_stream import ChatCompletionStreamChunk
 
-from dataclasses import dataclass, field
-
-
-@dataclass(frozen=True)
-class ChatCompletionStreamChunk:
-    delta: str = ""
-    usage: dict[str, int] = field(default_factory=dict)
+__all__ = ["ChatCompletionStreamChunk"]

@@ -5,7 +5,7 @@ import asyncio
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.ports import Summarizer
-from backend.video_summary.infrastructure.structured_generation import (
+from backend.video_summary.generation import (
     SummaryPayload,
     build_chunk_prompt,
     build_document_prompt,

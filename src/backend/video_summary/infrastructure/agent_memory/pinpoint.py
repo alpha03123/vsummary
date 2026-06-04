@@ -5,8 +5,11 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 
-from backend.agent.schemas.tool_calls import ToolName
 from backend.video_summary.library.ports import VideoLibraryReader
+
+
+GET_VIDEO_TRANSCRIPT_TOOL_NAME = "get_video_transcript"
+VIDEO_SEEK_TOOL_NAME = "video_seek"
 
 
 class SemanticScorer:
@@ -123,7 +126,7 @@ class VideoGraphPinpointService:
         }
         tool_results = [
             {
-                "tool_name": ToolName.GET_VIDEO_TRANSCRIPT.value,
+                "tool_name": GET_VIDEO_TRANSCRIPT_TOOL_NAME,
                 "status": "ok",
                 "payload": {
                     "series_id": transcript.series_id,
@@ -137,7 +140,7 @@ class VideoGraphPinpointService:
         for match in flattened_best_matches:
             tool_results.append(
                 {
-                    "tool_name": ToolName.VIDEO_SEEK.value,
+                    "tool_name": VIDEO_SEEK_TOOL_NAME,
                     "status": "ok",
                     "payload": {
                         "series_id": transcript.series_id,

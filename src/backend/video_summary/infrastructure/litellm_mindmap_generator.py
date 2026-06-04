@@ -5,7 +5,7 @@ import json
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.generation.ports import MindmapGenerator
 from backend.video_summary.infrastructure.prompts import MINDMAP_PROMPT_TEMPLATE
-from backend.video_summary.infrastructure.structured_generation import MindmapNodePayload
+from backend.video_summary.generation import MindmapNodePayload
 
 
 class LiteLLMMindmapGenerator(MindmapGenerator):

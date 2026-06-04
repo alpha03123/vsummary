@@ -4,7 +4,7 @@ import json
 
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.domain.models import Transcript, TranscriptSegment, VideoAsset
-from backend.video_summary.infrastructure.structured_generation import TranscriptEnhancementPayload
+from backend.video_summary.generation import TranscriptEnhancementPayload
 
 
 class LiteLLMTranscriptEnhancer:

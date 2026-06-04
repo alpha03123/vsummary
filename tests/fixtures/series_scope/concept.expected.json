@@ -1,0 +1,31 @@
+{
+  "case": "concept",
+  "input": {
+    "session_id": "series|1|series-home|trace-concept",
+    "message": "Copilot 模式是啥"
+  },
+  "assertions": {
+    "must_have_trace_keys": [
+      "graph_input",
+      "series_query_processor",
+      "retrieval_request",
+      "retrieval_response",
+      "answer_synthesis",
+      "graph_result"
+    ],
+    "must_not_have_trace_keys": [
+      "series_planner",
+      "series_planner_attempts",
+      "current_subplan",
+      "query_plan"
+    ],
+    "path_equals": {
+      "series_query_processor.output.filters.series_id": "1"
+    },
+    "hits_must_contain": [
+      {
+        "video_id": "1-1 多Agent融合自主决策，AI发展的必然趋势"
+      }
+    ]
+  }
+}

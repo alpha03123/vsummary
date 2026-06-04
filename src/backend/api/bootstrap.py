@@ -20,15 +20,15 @@ from backend.agent_graph.query.video_answer_synthesizer import (
 )
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.bilibili import BackgroundBilibiliDownloadStarter, BilibiliDownloader, YtDlpBilibiliResolver
-from backend.shared.settings import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.agent_memory import (
     AgentWorkspaceIndexBuilder,
     BGEReranker,
     SeriesRetrievalService,
 )
-from backend.video_summary.agent import RegistryAgentToolExecutor, WorkspaceAgentContextLoader
-from backend.video_summary.agent.tools.notes import execute_open_notes, execute_save_note
-from backend.video_summary.agent.tools.video import execute_video_seek
+from backend.video_summary.agent_adapter import WorkspaceAgentContextLoader
+from backend.video_summary.tool_executor import RegistryAgentToolExecutor
+from backend.video_summary.tools.notes import execute_open_notes, execute_save_note
+from backend.video_summary.tools.video import execute_video_seek
 from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -41,6 +41,7 @@ from backend.video_summary.infrastructure.litellm_knowledge_card_generator impor
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
 from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
+from backend.video_summary.infrastructure.settings_service import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.settings import load_settings
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator

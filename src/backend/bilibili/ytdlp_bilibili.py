@@ -9,7 +9,6 @@ from typing import Callable, Protocol
 
 import httpx
 
-from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
 
@@ -20,6 +19,10 @@ class ProgressReporter(Protocol):
     def failed(self, message: str) -> None: ...
     def cancelled(self, detail: str | None = None) -> None: ...
     def raise_if_cancelled(self) -> None: ...
+
+
+class ProgressTracker(Protocol):
+    def create_reporter(self, task_id: str) -> ProgressReporter: ...
 
 
 class YtDlpBilibiliResolver:
@@ -153,7 +156,7 @@ class BackgroundBilibiliDownloadStarter:
         *,
         root_dir: Path,
         downloader: BilibiliDownloader,
-        progress_tracker: InMemoryProgressTracker,
+        progress_tracker: ProgressTracker,
     ) -> None:
         self._root_dir = root_dir
         self._downloader = downloader

@@ -8,7 +8,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
+from backend.shared.llm.chat_stream import ChatCompletionStreamChunk
 from backend.shared.llm.base_url import resolve_openai_compatible_api_base_url
 from backend.shared.llm.json_mode import describe_validation_error, validate_json_response
 
