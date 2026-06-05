@@ -457,6 +457,7 @@ class LazyAgentRuntimeProvider:
                     model=env_settings.model,
                     base_url=normalize_openai_base_url(env_settings.base_url),
                     api_key=env_settings.api_key,
+                    reasoning_effort=app_settings.agent_context.reasoning_effort,
                 )
                 memory_compactor = MemoryMessageCompactor(
                     gateway=planner_gateway,

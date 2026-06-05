@@ -29,7 +29,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onChangeSetting(key, value) {
     if (key === "openaiBaseUrl") {
       dispatch({ type: "workspace_setting_edited", key, value });
-      if (!isSaveableOpenaiBaseUrl(value)) {
+      if (String(value).trim() && !isSaveableOpenaiBaseUrl(value)) {
         return;
       }
       try {

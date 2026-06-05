@@ -19,7 +19,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             (root_dir / ".env").write_text(
                 "\n".join(
                     [
-                        "OPENAI_PROVIDER=openai_compatible",
+                        "OPENAI_PROVIDER=openai",
                         "OPENAI_BASE_URL=https://example.com/v1",
                         "OPENAI_MODEL=test-model",
                         "OPENAI_API_KEY=test-key",
@@ -41,6 +41,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             current = service.get_workspace_settings()
             self.assertEqual(current.window_tokens, 1_000_000)
             self.assertEqual(current.answer_detail_level, "medium")
+            self.assertEqual(current.reasoning_effort, "none")
             self.assertEqual(current.video_generation_concurrency, 1)
             self.assertEqual(current.rag_max_hits, 5)
             self.assertTrue(current.rag_rerank_enabled)
@@ -57,12 +58,14 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 rag_rerank_enabled=False,
                 window_tokens=222_222,
                 answer_detail_level="long",
+                reasoning_effort="high",
                 video_generation_concurrency=5,
                 web_search_enabled=True,
             )
 
             self.assertEqual(updated.window_tokens, 222_222)
             self.assertEqual(updated.answer_detail_level, "long")
+            self.assertEqual(updated.reasoning_effort, "high")
             self.assertEqual(updated.video_generation_concurrency, 5)
             self.assertEqual(updated.rag_max_hits, 7)
             self.assertFalse(updated.rag_rerank_enabled)
@@ -71,6 +74,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertIn("[agent_context]", rendered)
             self.assertIn("window_tokens = 222222", rendered)
             self.assertIn('answer_detail_level = "long"', rendered)
+            self.assertIn('reasoning_effort = "high"', rendered)
             self.assertIn("[agent_context.advanced]", rendered)
             self.assertIn("direct_summary_threshold_ratio = 0.9", rendered)
             self.assertIn("[generation]", rendered)
@@ -111,6 +115,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                     rag_rerank_enabled=True,
                     window_tokens=1_000_000,
                     answer_detail_level="medium",
+                    reasoning_effort="medium",
                     video_generation_concurrency=1,
                     web_search_enabled=False,
                 )
@@ -142,6 +147,39 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                     rag_rerank_enabled=True,
                     window_tokens=1_000_000,
                     answer_detail_level="verbose",
+                    reasoning_effort="medium",
+                    video_generation_concurrency=1,
+                    web_search_enabled=False,
+                )
+
+    def test_update_workspace_settings_rejects_invalid_reasoning_effort(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+
+            service = SettingsService(
+                config_path=config_path,
+                root_dir=root_dir,
+                faster_whisper_model_manager=FakeFasterWhisperModelManager(),
+                rag_model_manager=FakeRagModelManager(downloaded={"reranker"}),
+            )
+
+        with self.assertRaisesRegex(SettingsValidationError, "reasoning_effort"):
+            service.update_workspace_settings(
+                    theme="light",
+                    show_takeaways=True,
+                    transcript_enhancement_enabled=True,
+                    asr_model_quality="large-v3-turbo",
+                    transcription_mode="accurate",
+                    rag_embedding_device="cpu",
+                    rag_max_hits=5,
+                    rag_rerank_enabled=True,
+                    window_tokens=1_000_000,
+                    answer_detail_level="medium",
+                    reasoning_effort="minimal",
                     video_generation_concurrency=1,
                     web_search_enabled=False,
                 )
@@ -246,7 +284,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             save_env_settings(
                 root_dir,
                 EnvSettings(
-                    provider="openai_compatible",
+                    provider="openai",
                     base_url="https://jiuuij.de5.net",
                     model="test-model",
                     api_key="test-key",
@@ -274,7 +312,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             with patch("backend.video_summary.infrastructure.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
                 with self.assertRaisesRegex(RuntimeError, "^模型超时$"):
                     service.test_provider_settings(
-                        llm_provider="openai_compatible",
+                        llm_provider="openai",
                         openai_base_url="https://jiuuij.de5.net",
                         openai_model="test-model",
                         openai_api_key=None,

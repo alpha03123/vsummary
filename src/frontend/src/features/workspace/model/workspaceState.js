@@ -8,8 +8,8 @@ export const defaultUiSettings = {
   ragMaxHits: 5,
   ragRerankEnabled: true,
   webSearchEnabled: false,
-  llmProvider: "openai_compatible",
-  openaiBaseUrl: "http://127.0.0.1:8317/v1",
+  llmProvider: "openai",
+  openaiBaseUrl: "",
   openaiModel: "gpt-5.4",
   hfEndpoint: "https://hf-mirror.com",
   openaiApiKey: "",
@@ -17,8 +17,88 @@ export const defaultUiSettings = {
   openaiApiKeyMasked: "",
   windowTokens: 1000000,
   answerDetailLevel: "medium",
+  reasoningEffort: "none",
   videoGenerationConcurrency: 1,
 };
+
+const validLlmProviders = new Set([
+  "ai21",
+  "ai21_chat",
+  "aiohttp_openai",
+  "anthropic",
+  "anthropic_text",
+  "assemblyai",
+  "azure",
+  "azure_ai",
+  "azure_text",
+  "baseten",
+  "bedrock",
+  "cerebras",
+  "clarifai",
+  "cloudflare",
+  "codestral",
+  "cohere",
+  "cohere_chat",
+  "custom",
+  "custom_openai",
+  "dashscope",
+  "databricks",
+  "datarobot",
+  "deepgram",
+  "deepinfra",
+  "deepseek",
+  "elevenlabs",
+  "empower",
+  "featherless_ai",
+  "fireworks_ai",
+  "friendliai",
+  "galadriel",
+  "gemini",
+  "github",
+  "github_copilot",
+  "groq",
+  "hosted_vllm",
+  "humanloop",
+  "huggingface",
+  "infinity",
+  "jina_ai",
+  "langfuse",
+  "litellm_proxy",
+  "lm_studio",
+  "maritalk",
+  "meta_llama",
+  "mistral",
+  "nebius",
+  "nlp_cloud",
+  "novita",
+  "nvidia_nim",
+  "nscale",
+  "ollama",
+  "oobabooga",
+  "openai",
+  "openrouter",
+  "perplexity",
+  "petals",
+  "predibase",
+  "replicate",
+  "sagemaker",
+  "sagemaker_chat",
+  "sambanova",
+  "snowflake",
+  "text-completion-codestral",
+  "text-completion-openai",
+  "together_ai",
+  "topaz",
+  "triton",
+  "vertex_ai",
+  "vertex_ai_beta",
+  "volcengine",
+  "voyage",
+  "watsonx",
+  "watsonx_text",
+  "xai",
+  "xinference",
+]);
 
 export function createWelcomeChatMessages() {
   return [
@@ -626,11 +706,11 @@ export function normalizeUiSettings(value) {
       typeof record.ragRerankEnabled === "boolean" ? record.ragRerankEnabled : true,
     webSearchEnabled:
       typeof record.webSearchEnabled === "boolean" ? record.webSearchEnabled : false,
-    llmProvider: record.llmProvider === "openai_compatible" ? record.llmProvider : "openai_compatible",
+    llmProvider: validLlmProviders.has(record.llmProvider) ? record.llmProvider : "openai",
     openaiBaseUrl:
       typeof record.openaiBaseUrl === "string" && record.openaiBaseUrl.trim()
         ? record.openaiBaseUrl.trim()
-        : "http://127.0.0.1:8317/v1",
+        : "",
     openaiModel:
       typeof record.openaiModel === "string" && record.openaiModel.trim()
         ? record.openaiModel.trim()
@@ -650,6 +730,10 @@ export function normalizeUiSettings(value) {
       record.answerDetailLevel === "short" || record.answerDetailLevel === "long"
         ? record.answerDetailLevel
         : "medium",
+    reasoningEffort:
+      record.reasoningEffort === "low" || record.reasoningEffort === "medium" || record.reasoningEffort === "high"
+        ? record.reasoningEffort
+        : "none",
     videoGenerationConcurrency:
       typeof record.videoGenerationConcurrency === "number"
         && Number.isInteger(record.videoGenerationConcurrency)

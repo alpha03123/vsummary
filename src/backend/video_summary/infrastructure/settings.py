@@ -18,8 +18,88 @@ VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
 VALID_WEB_SEARCH_MODES = {"native"}
 VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
 VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
+VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
+VALID_LLM_PROVIDERS = {
+    "ai21",
+    "ai21_chat",
+    "aiohttp_openai",
+    "anthropic",
+    "anthropic_text",
+    "assemblyai",
+    "azure",
+    "azure_ai",
+    "azure_text",
+    "baseten",
+    "bedrock",
+    "cerebras",
+    "clarifai",
+    "cloudflare",
+    "codestral",
+    "cohere",
+    "cohere_chat",
+    "custom",
+    "custom_openai",
+    "dashscope",
+    "databricks",
+    "datarobot",
+    "deepgram",
+    "deepinfra",
+    "deepseek",
+    "elevenlabs",
+    "empower",
+    "featherless_ai",
+    "fireworks_ai",
+    "friendliai",
+    "galadriel",
+    "gemini",
+    "github",
+    "github_copilot",
+    "groq",
+    "hosted_vllm",
+    "humanloop",
+    "huggingface",
+    "infinity",
+    "jina_ai",
+    "langfuse",
+    "litellm_proxy",
+    "lm_studio",
+    "maritalk",
+    "meta_llama",
+    "mistral",
+    "nebius",
+    "nlp_cloud",
+    "novita",
+    "nvidia_nim",
+    "nscale",
+    "ollama",
+    "oobabooga",
+    "openai",
+    "openrouter",
+    "perplexity",
+    "petals",
+    "predibase",
+    "replicate",
+    "sagemaker",
+    "sagemaker_chat",
+    "sambanova",
+    "snowflake",
+    "text-completion-codestral",
+    "text-completion-openai",
+    "together_ai",
+    "topaz",
+    "triton",
+    "vertex_ai",
+    "vertex_ai_beta",
+    "volcengine",
+    "voyage",
+    "watsonx",
+    "watsonx_text",
+    "xai",
+    "xinference",
+}
 DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_AGENT_ANSWER_DETAIL_LEVEL = "medium"
+DEFAULT_AGENT_REASONING_EFFORT = "none"
 DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
 DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
@@ -83,6 +163,7 @@ class DebugSettings:
 class AgentContextSettings:
     window_tokens: int
     answer_detail_level: str
+    reasoning_effort: str
     reserved_output_tokens: int
     warning_threshold_ratio: float
     compact_threshold_ratio: float
@@ -190,6 +271,12 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             default=DEFAULT_AGENT_ANSWER_DETAIL_LEVEL,
             allowed=VALID_ANSWER_DETAIL_LEVELS,
             field_name="agent_context.answer_detail_level",
+        ),
+        reasoning_effort=_normalize_choice(
+            agent_context_payload.get("reasoning_effort"),
+            default=DEFAULT_AGENT_REASONING_EFFORT,
+            allowed=VALID_REASONING_EFFORTS,
+            field_name="agent_context.reasoning_effort",
         ),
         reserved_output_tokens=_normalize_positive_int(
             agent_context_advanced_payload.get("reserved_output_tokens"),
@@ -414,6 +501,22 @@ def replace_agent_context_answer_detail_level(settings: AppSettings, answer_deta
     )
 
 
+def replace_agent_context_reasoning_effort(settings: AppSettings, reasoning_effort: str) -> AppSettings:
+    normalized_reasoning_effort = _normalize_choice(
+        reasoning_effort,
+        default=DEFAULT_AGENT_REASONING_EFFORT,
+        allowed=VALID_REASONING_EFFORTS,
+        field_name="agent_context.reasoning_effort",
+    )
+    return replace(
+        settings,
+        agent_context=replace(
+            settings.agent_context,
+            reasoning_effort=normalized_reasoning_effort,
+        ),
+    )
+
+
 def replace_video_generation_concurrency(settings: AppSettings, video_generation_concurrency: int) -> AppSettings:
     normalized_concurrency = _normalize_positive_int(
         video_generation_concurrency,
@@ -503,6 +606,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[agent_context]",
         f"window_tokens = {settings.agent_context.window_tokens}",
         f'answer_detail_level = "{settings.agent_context.answer_detail_level}"',
+        f'reasoning_effort = "{settings.agent_context.reasoning_effort}"',
         "",
         "[agent_context.advanced]",
         f"reserved_output_tokens = {settings.agent_context.reserved_output_tokens}",
@@ -632,7 +736,7 @@ class EnvSettings:
 def load_env_settings(root_dir: Path) -> EnvSettings:
     values = _load_dotenv(root_dir / ".env")
     return EnvSettings(
-        provider=values.get("OPENAI_PROVIDER", "openai_compatible").strip() or "openai_compatible",
+        provider=_normalize_env_provider(values.get("OPENAI_PROVIDER")),
         base_url=normalize_openai_base_url(values.get("OPENAI_BASE_URL", "").strip()),
         model=values.get("OPENAI_MODEL", "").strip(),
         api_key=values.get("OPENAI_API_KEY", "").strip(),
@@ -689,3 +793,14 @@ def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
         if normalized_key:
             values[normalized_key] = normalized_value
     return values
+
+
+def _normalize_env_provider(value: object) -> str:
+    if not isinstance(value, str):
+        return "openai"
+    normalized = value.strip().lower()
+    if not normalized or normalized == "openai_compatible":
+        return "openai"
+    if normalized == "qwen":
+        return "dashscope"
+    return normalized

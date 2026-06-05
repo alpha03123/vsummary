@@ -11,7 +11,7 @@ class LiteLLMNativeWebSearchGatewayTests(unittest.TestCase):
     def test_search_passes_native_web_search_options_and_extracts_url_citations(self) -> None:
         completion = FakeSearchCompletion()
         gateway = LiteLLMNativeWebSearchGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="gpt-5-search-api",
             base_url="https://api.example.com/v1",
             api_key="test-key",
@@ -34,7 +34,7 @@ class LiteLLMNativeWebSearchGatewayTests(unittest.TestCase):
 
     def test_search_fails_when_provider_returns_no_citable_sources(self) -> None:
         gateway = LiteLLMNativeWebSearchGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="gpt-5-search-api",
             base_url="https://api.example.com/v1",
             api_key="test-key",

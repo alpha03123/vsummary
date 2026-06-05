@@ -195,7 +195,7 @@ class FakeWebSearchSettings:
 
 
 class FakeEnvSettings:
-    provider = "openai_compatible"
+    provider = "openai"
     model = "test-model"
     base_url = "https://api.example.com/v1"
     api_key = "test-key"
@@ -284,7 +284,7 @@ class DisabledWebSearchSettings:
 
 def _build_bad_base_url_agent_service(scope_type: str) -> AgentGraphService:
     gateway = LiteLLMChatGateway(
-        provider="openai_compatible",
+        provider="openai",
         model="gpt-5.4",
         base_url="http://127.0.0.1:9",
         api_key="sk-test",

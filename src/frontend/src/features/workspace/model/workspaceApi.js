@@ -36,6 +36,7 @@ export async function loadWorkspaceSettings() {
     webSearchEnabled: payload.web_search_enabled,
     windowTokens: payload.window_tokens,
     answerDetailLevel: payload.answer_detail_level,
+    reasoningEffort: payload.reasoning_effort,
     videoGenerationConcurrency: payload.video_generation_concurrency,
   };
 }
@@ -76,6 +77,7 @@ export async function updateWorkspaceSettings(settings) {
       web_search_enabled: settings.webSearchEnabled,
       window_tokens: settings.windowTokens,
       answer_detail_level: settings.answerDetailLevel,
+      reasoning_effort: settings.reasoningEffort,
       video_generation_concurrency: settings.videoGenerationConcurrency,
     }),
   });
@@ -91,6 +93,7 @@ export async function updateWorkspaceSettings(settings) {
     webSearchEnabled: payload.web_search_enabled,
     windowTokens: payload.window_tokens,
     answerDetailLevel: payload.answer_detail_level,
+    reasoningEffort: payload.reasoning_effort,
     videoGenerationConcurrency: payload.video_generation_concurrency,
   };
 }

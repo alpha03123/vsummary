@@ -29,6 +29,25 @@ describe("workspace UI settings", () => {
     expect(normalizeUiSettings({ answerDetailLevel: "long" }).answerDetailLevel).toBe("long");
     expect(normalizeUiSettings({ answerDetailLevel: "verbose" }).answerDetailLevel).toBe("medium");
   });
+
+  it("normalizes the reasoning effort with medium as the safe default", () => {
+    expect(normalizeUiSettings({}).reasoningEffort).toBe("none");
+    expect(normalizeUiSettings({ reasoningEffort: "none" }).reasoningEffort).toBe("none");
+    expect(normalizeUiSettings({ reasoningEffort: "low" }).reasoningEffort).toBe("low");
+    expect(normalizeUiSettings({ reasoningEffort: "medium" }).reasoningEffort).toBe("medium");
+    expect(normalizeUiSettings({ reasoningEffort: "high" }).reasoningEffort).toBe("high");
+    expect(normalizeUiSettings({ reasoningEffort: "minimal" }).reasoningEffort).toBe("none");
+  });
+
+  it("normalizes LiteLLM provider values with openai as the default", () => {
+    expect(normalizeUiSettings({}).llmProvider).toBe("openai");
+    expect(normalizeUiSettings({ llmProvider: "deepseek" }).llmProvider).toBe("deepseek");
+    expect(normalizeUiSettings({ llmProvider: "dashscope" }).llmProvider).toBe("dashscope");
+    expect(normalizeUiSettings({ llmProvider: "openai_compatible" }).llmProvider).toBe("openai");
+    expect(normalizeUiSettings({ llmProvider: "openai_like" }).llmProvider).toBe("openai");
+    expect(normalizeUiSettings({ llmProvider: "ollama_chat" }).llmProvider).toBe("openai");
+    expect(normalizeUiSettings({ llmProvider: "vllm" }).llmProvider).toBe("openai");
+  });
 });
 
 describe("workspaceState chat session persistence", () => {

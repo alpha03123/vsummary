@@ -20,13 +20,14 @@ class LiteLLMNativeWebSearchGateway:
         normalized_api_key = api_key.strip()
         if not normalized_api_key:
             raise RuntimeError("缺少 API Key，无法调用联网搜索。")
-        if provider.strip() != "openai_compatible":
-            raise RuntimeError(f"unsupported web search provider '{provider}'")
         normalized_model = model.strip()
         if not normalized_model:
             raise RuntimeError("缺少模型名称，无法调用联网搜索。")
 
-        self._model = normalized_model if "/" in normalized_model else f"openai/{normalized_model}"
+        normalized_provider = provider.strip().lower()
+        if not normalized_provider:
+            raise RuntimeError("缺少模型类型，无法调用联网搜索。")
+        self._model = normalized_model if "/" in normalized_model else f"{normalized_provider}/{normalized_model}"
         self._base_url = resolve_openai_compatible_api_base_url(base_url)
         self._api_key = normalized_api_key
         self._search_context_size = search_context_size.strip() or "medium"

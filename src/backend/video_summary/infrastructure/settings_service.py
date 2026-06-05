@@ -12,6 +12,8 @@ from backend.video_summary.infrastructure.settings import (
     VALID_THEMES,
     VALID_TRANSCRIPTION_MODES,
     VALID_ANSWER_DETAIL_LEVELS,
+    VALID_LLM_PROVIDERS,
+    VALID_REASONING_EFFORTS,
     WorkspaceUiSettings,
     load_env_settings,
     load_settings,
@@ -19,6 +21,7 @@ from backend.video_summary.infrastructure.settings import (
     replace_agent_retrieval_runtime_settings,
     replace_agent_context_window_tokens,
     replace_agent_context_answer_detail_level,
+    replace_agent_context_reasoning_effort,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
@@ -57,6 +60,7 @@ class WorkspaceSettings:
     rag_rerank_enabled: bool
     window_tokens: int
     answer_detail_level: str
+    reasoning_effort: str
     video_generation_concurrency: int
     web_search_enabled: bool
 
@@ -78,6 +82,7 @@ class SettingsServicePort(Protocol):
         rag_rerank_enabled: bool,
         window_tokens: int,
         answer_detail_level: str,
+        reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
     ) -> WorkspaceSettings:
@@ -143,6 +148,7 @@ class SettingsService:
             rag_rerank_enabled=rag_rerank_enabled,
             window_tokens=settings.agent_context.window_tokens,
             answer_detail_level=settings.agent_context.answer_detail_level,
+            reasoning_effort=settings.agent_context.reasoning_effort,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             web_search_enabled=settings.web_search.enabled,
         )
@@ -160,6 +166,7 @@ class SettingsService:
         rag_rerank_enabled: bool,
         window_tokens: int,
         answer_detail_level: str,
+        reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
     ) -> WorkspaceSettings:
@@ -173,6 +180,8 @@ class SettingsService:
             raise SettingsValidationError("window_tokens 必须是正整数。")
         if answer_detail_level not in VALID_ANSWER_DETAIL_LEVELS:
             raise SettingsValidationError("answer_detail_level 必须是 short、medium 或 long。")
+        if reasoning_effort not in VALID_REASONING_EFFORTS:
+            raise SettingsValidationError("reasoning_effort 必须是 none、low、medium 或 high。")
         if rag_max_hits <= 0:
             raise SettingsValidationError("rag_max_hits 必须是正整数。")
         if video_generation_concurrency <= 0:
@@ -204,6 +213,7 @@ class SettingsService:
             )
             next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
             next_settings = replace_agent_context_answer_detail_level(next_settings, answer_detail_level)
+            next_settings = replace_agent_context_reasoning_effort(next_settings, reasoning_effort)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             save_settings(self._config_path, next_settings)
@@ -219,6 +229,7 @@ class SettingsService:
             rag_rerank_enabled=next_settings.agent_retrieval.rerank_enabled,
             window_tokens=next_settings.agent_context.window_tokens,
             answer_detail_level=next_settings.agent_context.answer_detail_level,
+            reasoning_effort=next_settings.agent_context.reasoning_effort,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             web_search_enabled=next_settings.web_search.enabled,
         )
@@ -284,6 +295,7 @@ class SettingsService:
             base_url=provider_settings.openai_base_url,
             model=provider_settings.openai_model,
             api_key=self._resolve_openai_api_key(openai_api_key),
+            reasoning_effort=load_settings(self._config_path, self._root_dir).agent_context.reasoning_effort,
         )
         try:
             response = gateway.test_connection()
@@ -326,13 +338,15 @@ class SettingsService:
         normalized_base_url = openai_base_url.strip()
         normalized_model = openai_model.strip()
 
-        if normalized_provider != "openai_compatible":
-            raise SettingsValidationError(f"unsupported llm provider '{normalized_provider}'")
-        if not normalized_base_url:
-            raise SettingsValidationError("模型接口地址不能为空，例如 https://api.deepseek.com/v1")
-        if not normalized_base_url.startswith(("http://", "https://")):
+        if normalized_provider == "qwen":
+            normalized_provider = "dashscope"
+        if normalized_provider not in VALID_LLM_PROVIDERS:
             raise SettingsValidationError(
-                "模型接口地址必须包含 http:// 或 https://，例如 https://api.deepseek.com/v1"
+                f"unsupported llm provider '{normalized_provider}'"
+            )
+        if normalized_base_url and not normalized_base_url.startswith(("http://", "https://")):
+            raise SettingsValidationError(
+                "模型接口地址必须包含 http:// 或 https://。"
             )
         if not normalized_model:
             raise SettingsValidationError("模型名称不能为空。")

@@ -16,6 +16,7 @@ class LiteLLMChatGateway(ChatGateway):
         model: str,
         base_url: str,
         api_key: str,
+        reasoning_effort: str | None = None,
         completion_fn=None,
         acompletion_fn=None,
     ) -> None:
@@ -25,6 +26,7 @@ class LiteLLMChatGateway(ChatGateway):
                 model=model,
                 base_url=base_url,
                 api_key=api_key,
+                reasoning_effort=reasoning_effort,
                 completion_fn=completion_fn,
                 acompletion_fn=acompletion_fn,
             )
