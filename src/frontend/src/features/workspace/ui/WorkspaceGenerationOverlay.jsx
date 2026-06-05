@@ -117,14 +117,15 @@ export function WorkspaceGenerationOverlay({
               );
             })}
           </div>
-          {typeof onCancel === "function" && generationSnapshot?.status === "running" ? (
+          {typeof onCancel === "function" && (generationSnapshot?.status === "running" || generationSnapshot?.status === "cancelling") ? (
             <button
               type="button"
               onClick={onCancel}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+              disabled={generationSnapshot?.status === "cancelling"}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
             >
               <X size={16} />
-              {cancelLabel}
+              {generationSnapshot?.status === "cancelling" ? "正在停止..." : cancelLabel}
             </button>
           ) : null}
         </div>

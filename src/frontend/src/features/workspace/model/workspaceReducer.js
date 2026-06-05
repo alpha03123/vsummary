@@ -73,6 +73,27 @@ function resolveSeriesQueueStatus(snapshotStatus, currentStatus) {
   return currentStatus;
 }
 
+function matchesCurrentGenerationSelection(state, action) {
+  if (action.mode === "video") {
+    return (
+      state.selectedContextType === "video" &&
+      state.selectedSeriesId === action.seriesId &&
+      state.selectedVideoId === action.videoId
+    );
+  }
+  if (action.mode === "series") {
+    return (
+      state.selectedContextType === "series" &&
+      state.selectedSeriesId === action.seriesId
+    );
+  }
+  return false;
+}
+
+function isTerminalGenerationStatus(status) {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
 export { createInitialWorkspaceState };
 
 export function workspaceReducer(state, action) {
@@ -665,6 +686,21 @@ export function workspaceReducer(state, action) {
         ),
         error: "",
       };
+    case "video_generation_cancelling": {
+      const taskKey = buildVideoGenerationTaskKey(action.seriesId, action.videoId);
+      const existing = state.generationTasksByKey?.[taskKey];
+      if (!existing) return state;
+      return {
+        ...state,
+        generationTasksByKey: setGenerationTaskForKey(
+          state.generationTasksByKey,
+          createGenerationTaskRecord({
+            ...existing,
+            snapshot: { ...(existing.snapshot ?? {}), status: "cancelling", detail: "正在停止当前任务" },
+          }),
+        ),
+      };
+    }
     case "series_generation_queue_started":
       return {
         ...state,
@@ -769,10 +805,26 @@ export function workspaceReducer(state, action) {
     case "generation_progress_updated":
       {
         const boundedProgress = action.progress == null ? null : Math.max(0, Math.min(100, action.progress));
+        const isCurrentSelection = matchesCurrentGenerationSelection(state, action);
+        const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);
         const nextState = {
           ...state,
-          generationProgress: boundedProgress,
-          generationSnapshot: action.snapshot,
+          generatingVideoKey:
+            isCurrentSelection && isTerminal && action.mode === "video"
+              ? null
+              : state.generatingVideoKey,
+          generatingSeriesId:
+            isCurrentSelection && isTerminal && action.mode === "series"
+              ? null
+              : state.generatingSeriesId,
+          generationMode:
+            isCurrentSelection && isTerminal
+              ? null
+              : state.generationMode,
+          generationProgress:
+            isCurrentSelection && isTerminal ? null : boundedProgress,
+          generationSnapshot:
+            isCurrentSelection && isTerminal ? null : action.snapshot,
           generationTasksByKey: setGenerationTaskForKey(
             state.generationTasksByKey,
             createGenerationTaskRecord({
@@ -799,24 +851,55 @@ export function workspaceReducer(state, action) {
             completed,
             detail: action.snapshot?.detail ?? state.seriesGenerationQueue.detail,
             status: resolveSeriesQueueStatus(action.snapshot?.status, state.seriesGenerationQueue.status),
+            currentVideoId: isTerminal ? null : state.seriesGenerationQueue.currentVideoId,
+            currentVideoTitle: isTerminal ? null : state.seriesGenerationQueue.currentVideoTitle,
           },
         };
       }
     case "generation_status_loaded":
-      return {
-        ...state,
-        generationTasksByKey: setGenerationTaskForKey(
-          state.generationTasksByKey,
-          createGenerationTaskRecord({
-            taskKey: action.taskKey,
-            mode: action.mode,
-            seriesId: action.seriesId,
-            videoId: action.videoId ?? null,
-            snapshot: action.snapshot,
-            subscriptionActive: Boolean(action.subscriptionActive),
-          }),
-        ),
-      };
+      {
+        const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);
+        const isCurrentSelection = matchesCurrentGenerationSelection(state, action);
+        return {
+          ...state,
+          generatingVideoKey:
+            isTerminal && isCurrentSelection && action.mode === "video"
+              ? null
+              : state.generatingVideoKey,
+          generatingSeriesId:
+            isTerminal && isCurrentSelection && action.mode === "series"
+              ? null
+              : state.generatingSeriesId,
+          generationMode:
+            isTerminal && isCurrentSelection ? null : state.generationMode,
+          generationProgress:
+            isTerminal && isCurrentSelection ? null : state.generationProgress,
+          generationSnapshot:
+            isTerminal && isCurrentSelection ? null : state.generationSnapshot,
+          seriesGenerationQueue:
+            action.mode === "series" &&
+            state.seriesGenerationQueue?.seriesId === action.seriesId &&
+            isTerminal
+              ? {
+                  ...state.seriesGenerationQueue,
+                  status: action.snapshot?.status ?? state.seriesGenerationQueue.status,
+                  currentVideoId: null,
+                  currentVideoTitle: null,
+                }
+              : state.seriesGenerationQueue,
+          generationTasksByKey: setGenerationTaskForKey(
+            state.generationTasksByKey,
+            createGenerationTaskRecord({
+              taskKey: action.taskKey,
+              mode: action.mode,
+              seriesId: action.seriesId,
+              videoId: action.videoId ?? null,
+              snapshot: action.snapshot,
+              subscriptionActive: Boolean(action.subscriptionActive),
+            }),
+          ),
+        };
+      }
     case "generation_cancelled":
       return {
         ...state,
@@ -825,6 +908,15 @@ export function workspaceReducer(state, action) {
         generationMode: null,
         generationProgress: null,
         generationSnapshot: null,
+        seriesGenerationQueue:
+          action.mode === "series" && state.seriesGenerationQueue?.seriesId === action.seriesId
+            ? {
+                ...state.seriesGenerationQueue,
+                status: "cancelled",
+                currentVideoId: null,
+                currentVideoTitle: null,
+              }
+            : state.seriesGenerationQueue,
         generationTasksByKey: setGenerationTaskForKey(
           state.generationTasksByKey,
           createGenerationTaskRecord({

@@ -28,6 +28,13 @@ export function getPendingVideosForSeriesGeneration(library, seriesId) {
   return series?.videos?.filter((video) => !video.processed && video.status !== "linked" && !video.isLinked) ?? [];
 }
 
+function isGenerationCancelledError(error) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.includes("generation cancelled");
+}
+
 export function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
   async function reloadWorkspaceLibrary() {
     const library = await loadWorkspaceLibrary();
@@ -86,6 +93,23 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         summary: summaryResult,
       });
     } catch (error) {
+      if (isGenerationCancelledError(error)) {
+        dispatch({
+          type: "generation_cancelled",
+          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          mode: "video",
+          seriesId,
+          videoId,
+          snapshot: {
+            status: "cancelled",
+            stage: "cancelled",
+            progress: null,
+            detail: "任务已取消",
+            error: null,
+          },
+        });
+        return;
+      }
       const message = error instanceof Error ? error.message : "生成失败";
       dispatch({ type: "load_failed", message });
       dispatch({
@@ -182,6 +206,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       }
       const currentTask = getGenerationTaskForSelection(state);
       if (currentTask?.mode === "video" && state.selectedSeriesId && state.selectedVideoId) {
+        dispatch({ type: "video_generation_cancelling", seriesId: state.selectedSeriesId, videoId: state.selectedVideoId });
         await cancelVideoSummary(state.selectedSeriesId, state.selectedVideoId);
       }
     } catch (error) {

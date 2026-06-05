@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Protocol
 
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
+
+if TYPE_CHECKING:
+    from backend.video_summary.generation.cancellation import GenerationCancellationContext
 
 
 class MediaProcessor(Protocol):
     def probe_duration(self, video_path: Path) -> float:
         ...
 
-    def extract_audio(self, video_path: Path, audio_path: Path) -> Path:
+    def extract_audio(
+        self,
+        video_path: Path,
+        audio_path: Path,
+        cancellation: "GenerationCancellationContext | None" = None,
+    ) -> Path:
         ...
 
 
@@ -29,6 +37,7 @@ class Summarizer(Protocol):
         self,
         video: VideoAsset,
         transcript: Transcript,
+        cancellation: "GenerationCancellationContext | None" = None,
     ) -> SummaryDocument:
         ...
 
@@ -38,6 +47,7 @@ class TranscriptEnhancer(Protocol):
         self,
         video: VideoAsset,
         transcript: Transcript,
+        cancellation: "GenerationCancellationContext | None" = None,
     ) -> Transcript:
         ...
 

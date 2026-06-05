@@ -23,6 +23,7 @@ from backend.api.responses import (
 )
 from backend.api.sse import stream_progress_events
 from backend.video_summary.infrastructure.runtime import AsrModelNotReadyError
+from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
@@ -198,11 +199,16 @@ async def generate_video_summary(
         )
     except AsrModelNotReadyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except GenerateCancelledError as error:
+        raise HTTPException(status_code=409, detail="generation cancelled") from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     if video_summary is None:
+        snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
+        if snapshot.status == "cancelled":
+            raise HTTPException(status_code=409, detail="generation cancelled")
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     return video_summary.summary
 
@@ -379,7 +385,6 @@ def get_video_generation_status(
     video_id: str,
     container: ApiContainerDep,
 ) -> dict[str, object]:
-    _ensure_video_exists(container, series_id, video_id)
     task_id = _build_task_id(series_id, video_id)
     return {
         "task_id": task_id,
