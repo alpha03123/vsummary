@@ -1,3 +1,78 @@
+import { useState, useRef, useEffect } from "react";
+import { ChevronDown, Check } from "lucide-react";
+
+export function WorkspaceProviderSelect({ value, onChange, options, className = "" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = options.find((o) => o.id === value);
+
+  // Build ordered group list, preserving first-seen order
+  const groups = [];
+  const groupMap = {};
+  for (const opt of options) {
+    const g = opt.group ?? "其他";
+    if (!groupMap[g]) { groupMap[g] = []; groups.push(g); }
+    groupMap[g].push(opt);
+  }
+
+  useEffect(() => {
+    function onOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-left text-sm text-stone-900 outline-none transition-colors hover:border-accent/50 focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+      >
+        <span className="truncate font-medium">{selected?.label ?? value}</span>
+        <ChevronDown size={15} className={`shrink-0 text-stone-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900">
+          {groups.map((group, gi) => (
+            <div key={group}>
+              {gi > 0 && <div className="mx-3 border-t border-stone-100 dark:border-stone-800" />}
+              <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+                {group}
+              </div>
+              {groupMap[group].map((option) => {
+                const active = option.id === value;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => { onChange(option.id); setOpen(false); }}
+                    className={`flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/60 ${active ? "bg-accent/5 dark:bg-accent/10" : ""}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-semibold ${active ? "text-accent" : "text-stone-900 dark:text-stone-100"}`}>
+                        {option.label}
+                      </div>
+                      {option.description && (
+                        <div className="mt-0.5 text-xs leading-snug text-stone-400 dark:text-stone-500">
+                          {option.description}
+                        </div>
+                      )}
+                    </div>
+                    {active && <Check size={14} className="mt-0.5 shrink-0 text-accent" />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WorkspaceSettingRow({ title, description, children, contentClassName = "" }) {
   const contentLayoutClassName = contentClassName || "2xl:w-auto 2xl:shrink-0";
 
@@ -71,5 +146,26 @@ export function WorkspaceTextInput({
       placeholder={placeholder}
       className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     />
+  );
+}
+
+export function WorkspaceSelect({
+  value,
+  onChange,
+  options,
+  className = "",
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
+    >
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }

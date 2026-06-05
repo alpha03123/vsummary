@@ -40,6 +40,7 @@ class LiteLLMCompletionGateway:
         model: str,
         base_url: str,
         api_key: str,
+        reasoning_effort: str | None = None,
         completion_fn: CompletionFn | None = None,
         acompletion_fn: AsyncCompletionFn | None = None,
     ) -> None:
@@ -51,6 +52,7 @@ class LiteLLMCompletionGateway:
         self._model = _normalize_litellm_model(self._provider, model)
         self._base_url = resolve_openai_compatible_api_base_url(base_url)
         self._api_key = normalized_api_key
+        self._reasoning_effort = _normalize_reasoning_effort(reasoning_effort)
         self._structured_mode_cache_key = _build_structured_mode_cache_key(
             provider=self._provider,
             base_url=self._base_url,
@@ -78,8 +80,14 @@ class LiteLLMCompletionGateway:
             response_format=response_format,
             max_tokens=max_tokens,
             timeout=timeout,
+            reasoning_effort=self._reasoning_effort,
         )
-        response = self._completion(**request)
+        try:
+            response = self._completion(**request)
+        except Exception as error:
+            if _is_unsupported_reasoning_effort_error(error):
+                raise RuntimeError("此模型不支持思考强度。") from error
+            raise
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
@@ -107,8 +115,14 @@ class LiteLLMCompletionGateway:
             response_format=response_format,
             max_tokens=max_tokens,
             timeout=timeout,
+            reasoning_effort=self._reasoning_effort,
         )
-        response = await self._acompletion(**request)
+        try:
+            response = await self._acompletion(**request)
+        except Exception as error:
+            if _is_unsupported_reasoning_effort_error(error):
+                raise RuntimeError("此模型不支持思考强度。") from error
+            raise
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
@@ -132,15 +146,23 @@ class LiteLLMCompletionGateway:
         temperature: float = 0,
         response_format: dict[str, Any] | type[BaseModel] | None = None,
     ) -> Iterator[str]:
-        stream = self._completion(
-            model=self._model,
-            messages=_dump_messages(messages),
-            api_base=self._base_url,
-            api_key=self._api_key,
-            temperature=temperature,
-            stream=True,
-            response_format=response_format,
-        )
+        try:
+            stream = self._completion(
+                **_build_stream_request(
+                    model=self._model,
+                    messages=_dump_messages(messages),
+                    api_base=self._base_url,
+                    api_key=self._api_key,
+                    temperature=temperature,
+                    response_format=response_format,
+                    reasoning_effort=self._reasoning_effort,
+                ),
+                stream=True,
+            )
+        except Exception as error:
+            if _is_unsupported_reasoning_effort_error(error):
+                raise RuntimeError("此模型不支持思考强度。") from error
+            raise
         for chunk in stream:
             delta = _extract_stream_delta(chunk)
             if delta:
@@ -153,16 +175,24 @@ class LiteLLMCompletionGateway:
         temperature: float = 0,
         response_format: dict[str, Any] | type[BaseModel] | None = None,
     ) -> Iterator[ChatCompletionStreamChunk]:
-        stream = self._completion(
-            model=self._model,
-            messages=_dump_messages(messages),
-            api_base=self._base_url,
-            api_key=self._api_key,
-            temperature=temperature,
-            stream=True,
-            stream_options={"include_usage": True},
-            response_format=response_format,
-        )
+        try:
+            stream = self._completion(
+                **_build_stream_request(
+                    model=self._model,
+                    messages=_dump_messages(messages),
+                    api_base=self._base_url,
+                    api_key=self._api_key,
+                    temperature=temperature,
+                    response_format=response_format,
+                    reasoning_effort=self._reasoning_effort,
+                ),
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+        except Exception as error:
+            if _is_unsupported_reasoning_effort_error(error):
+                raise RuntimeError("此模型不支持思考强度。") from error
+            raise
         final_usage: dict[str, int] = {}
         for chunk in stream:
             delta = _extract_stream_delta(chunk)
@@ -189,15 +219,23 @@ class LiteLLMCompletionGateway:
         temperature: float = 0,
         response_format: dict[str, Any] | type[BaseModel] | None = None,
     ):
-        stream = await self._acompletion(
-            model=self._model,
-            messages=_dump_messages(messages),
-            api_base=self._base_url,
-            api_key=self._api_key,
-            temperature=temperature,
-            stream=True,
-            response_format=response_format,
-        )
+        try:
+            stream = await self._acompletion(
+                **_build_stream_request(
+                    model=self._model,
+                    messages=_dump_messages(messages),
+                    api_base=self._base_url,
+                    api_key=self._api_key,
+                    temperature=temperature,
+                    response_format=response_format,
+                    reasoning_effort=self._reasoning_effort,
+                ),
+                stream=True,
+            )
+        except Exception as error:
+            if _is_unsupported_reasoning_effort_error(error):
+                raise RuntimeError("此模型不支持思考强度。") from error
+            raise
         async for chunk in stream:
             delta = _extract_stream_delta(chunk)
             if delta:
@@ -330,11 +368,12 @@ def _normalize_litellm_model(provider: str, model: str) -> str:
     normalized_model = model.strip()
     if not normalized_model:
         raise RuntimeError("缺少模型名称，无法调用模型。")
-    if provider != "openai_compatible":
-        raise RuntimeError(f"unsupported llm provider '{provider}'")
     if "/" in normalized_model:
         return normalized_model
-    return f"openai/{normalized_model}"
+    normalized_provider = provider.strip().lower()
+    if not normalized_provider:
+        raise RuntimeError("缺少模型类型，无法调用模型。")
+    return f"{normalized_provider}/{normalized_model}"
 
 
 def _dump_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -351,20 +390,73 @@ def _build_completion_request(
     response_format: dict[str, Any] | type[BaseModel] | None,
     max_tokens: int | None,
     timeout: float | None,
+    reasoning_effort: str | None,
 ) -> dict[str, Any]:
     request: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "api_base": api_base,
         "api_key": api_key,
         "temperature": temperature,
         "response_format": response_format,
     }
+    if api_base:
+        request["api_base"] = api_base
     if max_tokens is not None:
         request["max_tokens"] = max_tokens
     if timeout is not None:
         request["timeout"] = timeout
+    if reasoning_effort is not None:
+        request["reasoning_effort"] = reasoning_effort
+        request["allowed_openai_params"] = ["reasoning_effort"]
     return request
+
+
+def _build_stream_request(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    api_base: str,
+    api_key: str,
+    temperature: float,
+    response_format: dict[str, Any] | type[BaseModel] | None,
+    reasoning_effort: str | None,
+) -> dict[str, Any]:
+    request: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "api_key": api_key,
+        "temperature": temperature,
+        "response_format": response_format,
+    }
+    if api_base:
+        request["api_base"] = api_base
+    if reasoning_effort is not None:
+        request["reasoning_effort"] = reasoning_effort
+        request["allowed_openai_params"] = ["reasoning_effort"]
+    return request
+
+
+def _normalize_reasoning_effort(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized == "none":
+        return None
+    if normalized not in {"low", "medium", "high"}:
+        raise RuntimeError(f"unsupported reasoning_effort '{value}'")
+    return normalized
+
+
+def _is_unsupported_reasoning_effort_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return "reasoning_effort" in message and (
+        "unsupported" in message
+        or "does not support" in message
+        or "not support" in message
+        or "unsupportedparams" in message
+    )
 
 
 def _build_structured_request_modes(

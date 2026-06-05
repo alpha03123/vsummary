@@ -19,6 +19,7 @@ mode = true
 [agent_context]
 window_tokens = 1000000
 answer_detail_level = "medium"
+reasoning_effort = "none"
 
 [agent_context.advanced]
 reserved_output_tokens = 20000

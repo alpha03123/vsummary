@@ -15,12 +15,12 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
     def setUp(self) -> None:
         clear_structured_mode_cache()
 
-    def test_uses_litellm_pydantic_schema_first_for_openai_compatible_models(self) -> None:
+    def test_uses_litellm_pydantic_schema_first_for_openai_models(self) -> None:
         completion = CapturingCompletion(
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}'
         )
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="test-key",
@@ -41,7 +41,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
     def test_adds_v1_suffix_to_root_base_url_for_requests(self) -> None:
         completion = CapturingCompletion("ok")
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://jiuuij.de5.net",
             api_key="test-key",
@@ -57,7 +57,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
     def test_keeps_existing_v1_suffix_for_requests(self) -> None:
         completion = CapturingCompletion("ok")
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://jiuuij.de5.net/v1/",
             api_key="test-key",
@@ -69,13 +69,90 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(completion.api_bases, ["https://jiuuij.de5.net/v1"])
 
+    def test_passes_reasoning_effort_to_litellm_requests(self) -> None:
+        completion = CapturingCompletion("ok")
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            reasoning_effort="high",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        gateway.complete_text([{"role": "user", "content": "ping"}])
+
+        self.assertEqual(completion.reasoning_efforts, ["high"])
+
+    def test_allows_reasoning_effort_for_openai_compatible_custom_models(self) -> None:
+        completion = CapturingCompletion("ok")
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="deepseek-v4-pro",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            reasoning_effort="medium",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        gateway.complete_text([{"role": "user", "content": "ping"}])
+
+        self.assertEqual(completion.allowed_openai_params, [["reasoning_effort"]])
+
+    def test_omits_reasoning_effort_when_disabled(self) -> None:
+        completion = CapturingCompletion("ok")
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            reasoning_effort="none",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        gateway.complete_text([{"role": "user", "content": "ping"}])
+
+        self.assertEqual(completion.reasoning_efforts, [None])
+
+    def test_raises_clear_error_when_reasoning_effort_is_not_supported(self) -> None:
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            reasoning_effort="high",
+            completion_fn=RejectingReasoningEffortCompletion(),
+            acompletion_fn=unused_async_completion,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "此模型不支持思考强度"):
+            gateway.complete_text([{"role": "user", "content": "ping"}])
+
+    def test_uses_litellm_provider_prefix_for_bare_model_names(self) -> None:
+        completion = CapturingCompletion("ok")
+        gateway = LiteLLMCompletionGateway(
+            provider="deepseek",
+            model="deepseek-v4-pro",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        gateway.complete_text([{"role": "user", "content": "ping"}])
+
+        self.assertEqual(completion.models, ["deepseek/deepseek-v4-pro"])
+
     def test_falls_back_to_json_object_when_schema_is_rejected(self) -> None:
         completion = RejectingFirstResponseFormatCompletion(
             SeriesAnswerPayload,
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}',
         )
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="test-key",
@@ -99,7 +176,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}'
         )
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="test-key",
@@ -123,7 +200,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}'
         )
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="test-key",
@@ -152,7 +229,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}',
         )
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="test-key",
@@ -180,7 +257,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}',
         )
         first_gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="first-key",
@@ -191,7 +268,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}'
         )
         second_gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="second-key",
@@ -216,7 +293,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}'
         )
         gateway = LiteLLMCompletionGateway(
-            provider="openai_compatible",
+            provider="openai",
             model="test-model",
             base_url="https://example.invalid/v1",
             api_key="test-key",
@@ -244,11 +321,17 @@ class CapturingCompletion:
         self.messages: list[list[dict[str, object]]] = []
         self.response_formats: list[object] = []
         self.api_bases: list[str] = []
+        self.reasoning_efforts: list[object] = []
+        self.allowed_openai_params: list[object] = []
+        self.models: list[str] = []
 
     def __call__(self, **kwargs):
         self.messages.append(list(kwargs["messages"]))
         self.response_formats.append(kwargs.get("response_format"))
         self.api_bases.append(kwargs["api_base"])
+        self.reasoning_efforts.append(kwargs.get("reasoning_effort"))
+        self.allowed_openai_params.append(kwargs.get("allowed_openai_params"))
+        self.models.append(kwargs["model"])
         return {"choices": [{"message": {"content": self._content}}]}
 
 
@@ -290,6 +373,12 @@ class RejectingBaseModelResponseFormatsCompletion(CapturingCompletion):
                 raise RuntimeError("response_format json_schema is not supported")
             self._has_seen_schema_success = True
         return {"choices": [{"message": {"content": self._content}}]}
+
+
+class RejectingReasoningEffortCompletion:
+    def __call__(self, **kwargs):
+        del kwargs
+        raise RuntimeError("openai does not support parameters: ['reasoning_effort']")
 
 
 async def unused_async_completion(**kwargs):

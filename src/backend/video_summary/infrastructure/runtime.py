@@ -37,6 +37,7 @@ def build_litellm_completion_gateway(settings: AppSettings) -> LiteLLMCompletion
         model=settings.openai.model,
         base_url=settings.openai.base_url,
         api_key=settings.openai.api_key,
+        reasoning_effort=settings.agent_context.reasoning_effort,
     )
 
 

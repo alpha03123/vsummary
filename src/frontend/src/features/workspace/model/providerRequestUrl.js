@@ -27,6 +27,9 @@ function resolveOpenAICompatibleApiBaseUrl(value) {
 }
 
 function normalizeProviderBaseUrl(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
   let normalized = value.trim().replace(/\/+$/, "");
   for (const endpoint of ["/chat/completions", "/responses", "/completions"]) {
     if (normalized.endsWith(endpoint)) {

@@ -21,7 +21,7 @@ class ProviderSettingsApiTests(unittest.TestCase):
             response = client.put(
                 "/api/provider-settings",
                 json={
-                    "llm_provider": "openai_compatible",
+                    "llm_provider": "openai",
                     "openai_base_url": "http://127.0.0.1:8317",
                     "openai_model": "gpt-5.4",
                     "openai_api_key": "sk-test",
@@ -45,7 +45,7 @@ class ProviderSettingsApiTests(unittest.TestCase):
             response = client.post(
                 "/api/provider-settings/test",
                 json={
-                    "llm_provider": "openai_compatible",
+                    "llm_provider": "deepseek",
                     "openai_base_url": "http://127.0.0.1:8317",
                     "openai_model": "gpt-5.4",
                     "openai_api_key": "sk-test",

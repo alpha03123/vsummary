@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { popScaleVariant, blurVariant } from "../../../lib/animations";
 import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download } from "lucide-react";
 import {
+  WorkspaceProviderSelect,
   WorkspaceSegmentedControl,
+  WorkspaceSelect,
   WorkspaceSettingRow,
   WorkspaceTextInput,
   WorkspaceToggleSwitch,
@@ -50,6 +52,25 @@ export function WorkspaceSettingsPanel({
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
   const providerTargetUrl = buildOpenAICompatibleChatCompletionsUrl(ui.openaiBaseUrl);
+  const providerOptions = [
+    { id: "openai", label: "openai", group: "官方", description: "OpenAI 官方 API；大多数中转站也兼容" },
+    { id: "anthropic", label: "anthropic", group: "官方", description: "Anthropic Claude 官方 API" },
+    { id: "gemini", label: "gemini", group: "官方", description: "Google Gemini 官方 API" },
+    { id: "deepseek", label: "deepseek", group: "官方", description: "DeepSeek 官方 API" },
+    { id: "xai", label: "xai", group: "官方", description: "xAI Grok 官方 API" },
+    { id: "mistral", label: "mistral", group: "官方", description: "Mistral AI 官方 API" },
+    { id: "dashscope", label: "dashscope (Qwen)", group: "官方", description: "阿里云通义千问官方通道" },
+    { id: "volcengine", label: "volcengine (字节)", group: "官方", description: "火山引擎豆包官方通道" },
+    { id: "minimax", label: "minimax (MiniMax)", group: "官方", description: "MiniMax 官方 API" },
+    { id: "azure", label: "azure", group: "平台", description: "Azure OpenAI，微软云托管通道" },
+    { id: "vertex_ai", label: "vertex_ai", group: "平台", description: "Google Cloud Vertex AI，谷歌云托管通道" },
+    { id: "bedrock", label: "bedrock", group: "平台", description: "AWS Bedrock，亚马逊云托管模型平台" },
+    { id: "groq", label: "groq", group: "平台", description: "Groq 高速推理平台" },
+    { id: "perplexity", label: "perplexity", group: "平台", description: "Perplexity AI 搜索增强平台，支持联网搜索" },
+    { id: "openrouter", label: "openrouter", group: "平台", description: "OpenRouter 模型路由平台，支持数百个模型" },
+    { id: "ollama", label: "ollama", group: "本地", description: "本地运行，Ollama 默认接口" },
+    { id: "lm_studio", label: "lm_studio", group: "本地", description: "本地运行，LM Studio 内置服务器" },
+  ];
 
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
@@ -433,25 +454,26 @@ export function WorkspaceSettingsPanel({
                 </div>
 
                 <WorkspaceSettingRow
-                  title="供应商协议"
-                  description="目前仅支持openai协议"
+                  title="模型协议"
+                  description="选择 LiteLLM 调用协议；自定义中转通常选 openai。"
                 >
-                  <WorkspaceSegmentedControl
-                    value="openai_compatible"
-                    options={[{ id: "openai_compatible", label: "OpenAI 兼容" }]}
-                    onChange={() => { }}
+                  <WorkspaceProviderSelect
+                    value={ui.llmProvider}
+                    options={providerOptions}
+                    onChange={(nextValue) => onChangeSetting("llmProvider", nextValue)}
+                    className="w-full sm:w-[280px]"
                   />
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
                   title="API 根地址"
-                  description="填写 OpenAI 兼容 API 根地址，例如 `https://api.deepseek.com` 或 `https://api.deepseek.com/v1`。"
+                  description="模型的URL"
                 >
                   <div className="w-full sm:w-[340px]">
                     <WorkspaceTextInput
                       value={ui.openaiBaseUrl}
                       onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
-                      placeholder="https://api.openai.com/v1"
+                      placeholder="留空使用 provider 默认地址"
                       className="w-full"
                     />
                     {providerTargetUrl ? (
@@ -465,13 +487,29 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="模型名称"
-                  description="例如 `gpt-5.4` 或你的 OpenAI 兼容服务实际支持的模型名。"
+                  description="填写模型名称，例如 `gpt-5.4`、`deepseek-v4-pro`、`qwen3-max`"
                 >
                   <WorkspaceTextInput
                     value={ui.openaiModel}
                     onChange={(nextValue) => onChangeSetting("openaiModel", nextValue)}
                     placeholder="gpt-5.4"
                     className="w-full sm:w-[240px]"
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="思考强度"
+                  description="控制模型的思考深度"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.reasoningEffort}
+                    options={[
+                      { id: "none", label: "无" },
+                      { id: "low", label: "低" },
+                      { id: "medium", label: "中" },
+                      { id: "high", label: "高" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("reasoningEffort", nextValue)}
                   />
                 </WorkspaceSettingRow>
 

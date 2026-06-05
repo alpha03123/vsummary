@@ -36,6 +36,8 @@ mode = true
 window_tokens = 1000000
 # Agent 回复长度偏好。"short" 简短回答，"medium" 默认适中，"long" 适合学习复习时充分展开。
 answer_detail_level = "medium"
+# 推理模型思考强度。"none" 不传思考强度，"low" 更快，"medium" 平衡，"high" 更充分但更慢。
+reasoning_effort = "none"
 
 # Agent 上下文高级策略。
 [agent_context.advanced]
