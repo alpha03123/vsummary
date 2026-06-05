@@ -111,6 +111,13 @@ class InMemoryProgressTracker:
         with self._lock:
             return task_id in self._cancelled_tasks
 
+    _TERMINAL_STATES = frozenset({"cancelled", "completed", "failed"})
+    _BLOCKED_WRITES: dict[str, frozenset[str]] = {
+        "cancelling": frozenset({"completed", "running"}),
+        "cancelled": frozenset({"completed", "running"}),
+        "completed": frozenset({"cancelled"}),
+    }
+
     def _write(
         self,
         task_id: str,
@@ -124,6 +131,8 @@ class InMemoryProgressTracker:
         now = time.time()
         with self._lock:
             previous = self._snapshots.get(task_id)
+            if previous is not None and status in self._BLOCKED_WRITES.get(previous.status, frozenset()):
+                return
             sequence = 0 if previous is None else previous.sequence + 1
             normalized_progress = None if progress is None else max(0.0, min(100.0, progress))
             started_at = now if previous is None else previous.started_at
@@ -211,7 +220,7 @@ class TaskProgressReporter:
 
     def raise_if_cancelled(self) -> None:
         if self.is_cancel_requested():
-            raise RuntimeError("下载已取消")
+            raise RuntimeError("任务已取消")
 
 
 def _resolve_stage_started_at(

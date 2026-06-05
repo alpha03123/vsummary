@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
-
 
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 
@@ -56,6 +53,38 @@ class GenerationProgressTrackerTests(unittest.TestCase):
         self.assertGreater(running.sequence, idle.sequence)
         self.assertEqual(running.status, "running")
         reporter.completed("done")
+
+
+class TerminalStateProtectionTests(unittest.TestCase):
+    def test_completed_write_is_dropped_when_status_is_cancelling(self) -> None:
+        tracker = InMemoryProgressTracker()
+        reporter = tracker.create_reporter("series-1/video-1")
+        reporter.update("summarize", 88.0, "正在生成 AI 概况")
+        tracker.request_cancel("series-1/video-1")
+
+        reporter.completed("AI 概况已生成")
+
+        snapshot = tracker.get_snapshot("series-1/video-1")
+        self.assertEqual(snapshot.status, "cancelling")
+
+    def test_completed_write_is_dropped_when_status_is_cancelled(self) -> None:
+        tracker = InMemoryProgressTracker()
+        reporter = tracker.create_reporter("series-1/video-1")
+        tracker.request_cancel("series-1/video-1")
+        reporter.cancelled("已取消")
+
+        reporter.completed("AI 概况已生成")
+
+        snapshot = tracker.get_snapshot("series-1/video-1")
+        self.assertEqual(snapshot.status, "cancelled")
+
+    def test_raise_if_cancelled_message_is_task_cancelled(self) -> None:
+        tracker = InMemoryProgressTracker()
+        reporter = tracker.create_reporter("series-1/video-1")
+        tracker.request_cancel("series-1/video-1")
+
+        with self.assertRaisesRegex(RuntimeError, "任务已取消"):
+            reporter.raise_if_cancelled()
 
 
 if __name__ == "__main__":

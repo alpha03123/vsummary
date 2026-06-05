@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 
 from backend.api.app import create_app
+from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
@@ -40,6 +41,21 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(payload["snapshot"]["status"], "running")
         self.assertEqual(payload["snapshot"]["stage"], "summarize")
         self.assertEqual(payload["snapshot"]["progress"], 88.0)
+
+    def test_video_generation_status_does_not_require_existing_video_source(self) -> None:
+        tracker = InMemoryProgressTracker()
+        reporter = tracker.create_reporter("series-1/video-1")
+        reporter.cancelled("任务已取消")
+        container = _build_container(tracker)
+        container.get_video_source = SimpleNamespace(run=lambda series_id, video_id: None)
+        client = TestClient(create_app(container))
+
+        response = client.get("/api/videos/series-1/video-1/generate/status")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["task_id"], "series-1/video-1")
+        self.assertEqual(payload["snapshot"]["status"], "cancelled")
 
     def test_series_generation_status_returns_running_snapshot(self) -> None:
         tracker = InMemoryProgressTracker()
@@ -83,6 +99,24 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertTrue(tracker.is_cancel_requested("series-1/video-1"))
         self.assertTrue(tracker.is_cancel_requested("series-1/video-2"))
 
+    def test_video_generate_returns_conflict_when_generation_is_cancelled(self) -> None:
+        tracker = InMemoryProgressTracker()
+        reporter = tracker.create_reporter("series-1/video-1")
+        reporter.cancelled("任务已取消")
+        container = _build_container(tracker)
+
+        async def _cancelled_generate(series_id: str, video_id: str, transcript_enhancement_enabled=None):
+            del series_id, video_id, transcript_enhancement_enabled
+            raise GenerateCancelledError("任务已取消")
+
+        container.generate_video_summary = SimpleNamespace(run=_cancelled_generate)
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/videos/series-1/video-1/generate")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "generation cancelled")
+
     def test_sse_progress_stream_emits_current_snapshot_immediately(self) -> None:
         tracker = InMemoryProgressTracker()
         reporter = tracker.create_reporter("series-1/video-1")
@@ -104,6 +138,7 @@ def _build_container(tracker: InMemoryProgressTracker):
         root_dir=None,
         generation_progress_tracker=tracker,
         get_video_source=source_runner,
+        generate_video_summary=SimpleNamespace(run=lambda series_id, video_id, transcript_enhancement_enabled=None: None),
         generate_series_summaries=SimpleNamespace(run=lambda series_id, transcript_enhancement_enabled=None: None),
     )
 

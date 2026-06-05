@@ -5,6 +5,7 @@ import asyncio
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.ports import Summarizer
+from backend.video_summary.generation.cancellation import GenerationCancellationContext, cancellable_await
 from backend.video_summary.generation import (
     SummaryPayload,
     build_chunk_prompt,
@@ -31,7 +32,12 @@ class LiteLLMCompletionSummarizer(Summarizer):
         self._direct_summary_threshold_ratio = direct_summary_threshold_ratio
         self._summary_chunk_concurrency = max(1, summary_chunk_concurrency)
 
-    async def summarize(self, video: VideoAsset, transcript: Transcript) -> SummaryDocument:
+    async def summarize(
+        self,
+        video: VideoAsset,
+        transcript: Transcript,
+        cancellation: GenerationCancellationContext | None = None,
+    ) -> SummaryDocument:
         if _should_use_direct_summary(
             video=video,
             transcript=transcript,
@@ -39,20 +45,22 @@ class LiteLLMCompletionSummarizer(Summarizer):
             reserved_output_tokens=self._reserved_output_tokens,
             direct_summary_threshold_ratio=self._direct_summary_threshold_ratio,
         ):
-            payload = await self._gateway.acomplete_structured(
+            coro = self._gateway.acomplete_structured(
                 [{"role": "user", "content": build_transcript_document_prompt(video, transcript)}],
                 response_model=SummaryPayload,
             )
+            payload = await cancellable_await(coro, cancellation) if cancellation else await coro
             summary_data = payload.model_dump()
             markdown = render_markdown(summary_data)
             return SummaryDocument(markdown=markdown, summary_data=summary_data)
 
         chunks = list(enumerate(chunk_segments(transcript.segments), start=1))
-        chunk_summaries = await self._summarize_chunks(video, chunks)
-        payload = await self._gateway.acomplete_structured(
+        chunk_summaries = await self._summarize_chunks(video, chunks, cancellation)
+        coro = self._gateway.acomplete_structured(
             [{"role": "user", "content": build_document_prompt(video, transcript, chunk_summaries)}],
             response_model=SummaryPayload,
         )
+        payload = await cancellable_await(coro, cancellation) if cancellation else await coro
         summary_data = payload.model_dump()
         markdown = render_markdown(summary_data)
         return SummaryDocument(markdown=markdown, summary_data=summary_data)
@@ -61,14 +69,19 @@ class LiteLLMCompletionSummarizer(Summarizer):
         self,
         video: VideoAsset,
         chunks: list[tuple[int, list]],
+        cancellation: GenerationCancellationContext | None,
     ) -> list[str]:
         semaphore = asyncio.Semaphore(self._summary_chunk_concurrency)
 
         async def summarize_chunk(index: int, chunk: list) -> tuple[int, str]:
             async with semaphore:
-                summary = await self._gateway.acomplete_text(
+                if cancellation is not None and cancellation.cancel_requested:
+                    from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+                    raise GenerateCancelledError("任务已取消")
+                coro = self._gateway.acomplete_text(
                     [{"role": "user", "content": build_chunk_prompt(video, chunk, index)}]
                 )
+                summary = await cancellable_await(coro, cancellation) if cancellation else await coro
                 return index, summary
 
         results = await asyncio.gather(

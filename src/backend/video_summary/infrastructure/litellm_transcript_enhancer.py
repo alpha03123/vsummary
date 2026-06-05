@@ -5,20 +5,33 @@ import json
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.domain.models import Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation import TranscriptEnhancementPayload
+from backend.video_summary.generation.cancellation import GenerationCancellationContext, cancellable_await
 
 
 class LiteLLMTranscriptEnhancer:
     def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
-    async def enhance(self, video: VideoAsset, transcript: Transcript) -> Transcript:
+    async def enhance(
+        self,
+        video: VideoAsset,
+        transcript: Transcript,
+        cancellation: GenerationCancellationContext | None = None,
+    ) -> Transcript:
         chunks = _chunk_segments(transcript.segments)
         enhanced_segments = []
         for index, chunk in enumerate(chunks, start=1):
-            corrected_payload = await self._gateway.acomplete_structured(
+            if cancellation is not None and cancellation.cancel_requested:
+                from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+                raise GenerateCancelledError("任务已取消")
+            coro = self._gateway.acomplete_structured(
                 [{"role": "user", "content": _build_transcript_enhancement_prompt(video, chunk, index, len(chunks))}],
                 response_model=TranscriptEnhancementPayload,
             )
+            if cancellation is not None:
+                corrected_payload = await cancellable_await(coro, cancellation)
+            else:
+                corrected_payload = await coro
             enhanced_segments.extend(_parse_corrected_segments(corrected_payload, chunk))
 
         return Transcript(
