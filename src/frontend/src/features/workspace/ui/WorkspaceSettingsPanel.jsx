@@ -168,16 +168,6 @@ export function WorkspaceSettingsPanel({
                 </div>
 
                 <WorkspaceSettingRow
-                  title="AI 视频内容增强"
-                  description="利用大模型理解上下文后纠正转写文本，让总结结果更加精确。关闭可提高处理速度但会降低准确率。"
-                >
-                  <WorkspaceToggleSwitch
-                    checked={ui.transcriptEnhancementEnabled}
-                    onChange={() => onChangeSetting("transcriptEnhancementEnabled", !ui.transcriptEnhancementEnabled)}
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
                   title="回复长度"
                   description="控制回答详略"
                 >
@@ -348,6 +338,16 @@ export function WorkspaceSettingsPanel({
                     placeholder="1"
                     className="w-full sm:w-[180px]"
                     type="number"
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="AI 视频内容增强(不建议开启)"
+                  description="利用大模型理解上下文后纠正转写文本，让总结结果更加精确。关闭可提高处理速度但会降低准确率。"
+                >
+                  <WorkspaceToggleSwitch
+                    checked={ui.transcriptEnhancementEnabled}
+                    onChange={() => onChangeSetting("transcriptEnhancementEnabled", !ui.transcriptEnhancementEnabled)}
                   />
                 </WorkspaceSettingRow>
               </>
