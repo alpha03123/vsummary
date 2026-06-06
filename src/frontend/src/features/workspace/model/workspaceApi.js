@@ -346,13 +346,20 @@ export async function generateSeriesSummaries(seriesId, options = {}) {
         typeof options.transcriptEnhancementEnabled === "boolean"
           ? options.transcriptEnhancementEnabled
           : undefined,
+      run_id: typeof options.runId === "string" ? options.runId : undefined,
     }),
   });
 }
 
-export async function cancelSeriesSummaries(seriesId) {
+export async function cancelSeriesSummaries(seriesId, options = {}) {
   return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate/cancel`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      run_id: typeof options.runId === "string" ? options.runId : undefined,
+    }),
   });
 }
 
@@ -802,6 +809,12 @@ export async function deleteVideoSource(seriesId, videoId) {
 
 export async function startVideoDownload(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
+    method: "POST",
+  });
+}
+
+export async function cancelVideoDownload(seriesId, videoId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/cancel`, {
     method: "POST",
   });
 }

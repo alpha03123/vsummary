@@ -188,6 +188,7 @@ class GenerateSeriesSummaryFromLibrary:
         self._active_series_tasks: dict[str, asyncio.Task[SeriesGenerationResult]] = {}
         self._active_series_tasks_lock = asyncio.Lock()
         self._active_series_ids: set[str] = set()
+        self._active_series_run_ids: dict[str, str | None] = {}
         self._activity_lock = Lock()
 
     def is_video_generation_active(self, series_id: str, video_id: str) -> bool:
@@ -202,17 +203,23 @@ class GenerateSeriesSummaryFromLibrary:
     def get_active_video_ids(self, series_id: str) -> list[str]:
         return self._generator.get_active_video_ids(series_id)
 
+    def get_active_run_id(self, series_id: str) -> str | None:
+        with self._activity_lock:
+            return self._active_series_run_ids.get(series_id)
+
     async def run(
         self,
         series_id: str,
         *,
         transcript_enhancement_enabled: bool | None = None,
+        run_id: str | None = None,
     ) -> SeriesGenerationResult:
         task_id = f"series/{series_id}"
         task = await self._get_or_create_series_task(
             task_id=task_id,
             series_id=series_id,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
+            run_id=run_id,
         )
         return await asyncio.shield(task)
 
@@ -222,6 +229,7 @@ class GenerateSeriesSummaryFromLibrary:
         task_id: str,
         series_id: str,
         transcript_enhancement_enabled: bool | None,
+        run_id: str | None,
     ) -> asyncio.Task[SeriesGenerationResult]:
         async with self._active_series_tasks_lock:
             existing = self._active_series_tasks.get(task_id)
@@ -238,6 +246,7 @@ class GenerateSeriesSummaryFromLibrary:
             self._active_series_tasks[task_id] = task
             with self._activity_lock:
                 self._active_series_ids.add(series_id)
+                self._active_series_run_ids[series_id] = run_id
             return task
 
     async def _run_series_generation(
@@ -272,16 +281,15 @@ class GenerateSeriesSummaryFromLibrary:
 
             worker_count = min(self._generator.generation_concurrency, len(pending_videos))
 
-            async def update_series_progress(detail: str | None = None) -> None:
+            async def update_series_progress() -> None:
                 async with results_lock:
-                    ended_count = len(completed_video_ids) + len(cancelled_video_ids)
-                    progress = (ended_count / len(pending_videos)) * 100.0
+                    progress = (len(completed_video_ids) / len(pending_videos)) * 100.0
                     counts = (
-                        f"已结束 {ended_count} / {len(pending_videos)}"
+                        f"已完成 {len(completed_video_ids)} / {len(pending_videos)}"
                         f"，完成 {len(completed_video_ids)}"
                         f"，取消 {len(cancelled_video_ids)}"
                     )
-                    reporter.update("batch", progress, detail or counts)
+                    reporter.update("batch", progress, counts)
 
             async def worker() -> None:
                 nonlocal failure
@@ -291,21 +299,13 @@ class GenerateSeriesSummaryFromLibrary:
                     and not cancellation_requested.is_set()
                 ):
                     try:
-                        current_index, video = queue.get_nowait()
+                        _, video = queue.get_nowait()
                     except asyncio.QueueEmpty:
                         return
 
-                    reporter.update(
-                        "prepare",
-                        ((current_index - 1) / len(pending_videos)) * 100.0,
-                        f"正在处理 {current_index}/{len(pending_videos)}：{video.title}",
-                    )
                     child_reporter = _SeriesVideoProgressReporter(
                         base_reporter=reporter,
                         video_reporter=self._progress_tracker.create_reporter(f"{series_id}/{video.id}"),
-                        current_index=current_index,
-                        total_videos=len(pending_videos),
-                        current_title=video.title,
                         cancellation_requested=cancellation_requested,
                     )
                     try:
@@ -385,6 +385,7 @@ class GenerateSeriesSummaryFromLibrary:
                 series_id = task_id.removeprefix("series/")
                 with self._activity_lock:
                     self._active_series_ids.discard(series_id)
+                    self._active_series_run_ids.pop(series_id, None)
 
     def _get_series(self, series_id: str) -> LibrarySeriesDTO:
         series = next((item for item in self._workspace.list_series() if item.id == series_id), None)
@@ -399,29 +400,14 @@ class _SeriesVideoProgressReporter:
         *,
         base_reporter: ProgressReporter,
         video_reporter: ProgressReporter,
-        current_index: int,
-        total_videos: int,
-        current_title: str,
         cancellation_requested: asyncio.Event,
     ) -> None:
         self._base_reporter = base_reporter
         self._video_reporter = video_reporter
-        self._current_index = current_index
-        self._total_videos = max(1, total_videos)
-        self._current_title = current_title
         self._cancellation_requested = cancellation_requested
 
     def update(self, stage: str, progress: float | None = None, detail: str | None = None) -> None:
         self._video_reporter.update(stage, progress, detail)
-        if progress is None:
-            overall_progress = ((self._current_index - 1) / self._total_videos) * 100.0
-        else:
-            bounded = max(0.0, min(100.0, progress))
-            overall_progress = ((self._current_index - 1) + (bounded / 100.0)) / self._total_videos * 100.0
-
-        detail_prefix = f"正在处理 {self._current_index}/{self._total_videos}：{self._current_title}"
-        merged_detail = detail_prefix if not detail else f"{detail_prefix} · {detail}"
-        self._base_reporter.update(stage, overall_progress, merged_detail)
 
     def completed(self, detail: str | None = None) -> None:
         self._video_reporter.completed(detail)
@@ -442,6 +428,9 @@ class _SeriesVideoProgressReporter:
 
     def raise_if_cancelled(self) -> None:
         if self._cancellation_requested.is_set():
-            raise RuntimeError("系列处理已停止")
-        self._video_reporter.raise_if_cancelled()
-        self._base_reporter.raise_if_cancelled()
+            raise GenerateCancelledError("系列处理已停止")
+        try:
+            self._video_reporter.raise_if_cancelled()
+            self._base_reporter.raise_if_cancelled()
+        except RuntimeError as error:
+            raise GenerateCancelledError(str(error) or "任务已取消") from error

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, ExternalLink } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, ExternalLink, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function WorkspaceImportModal({
@@ -30,6 +30,7 @@ export function WorkspaceImportModal({
   const [preview, setPreview] = useState(null);
   const [chaoxingStatus, setChaoxingStatus] = useState(null);
   const [chaoxingCourses, setChaoxingCourses] = useState([]);
+  const [chaoxingCourseSearch, setChaoxingCourseSearch] = useState("");
   const [selectedChaoxingCourseKey, setSelectedChaoxingCourseKey] = useState("");
   const [chaoxingLoading, setChaoxingLoading] = useState(false);
   const [chaoxingImportProgress, setChaoxingImportProgress] = useState(null);
@@ -51,6 +52,18 @@ export function WorkspaceImportModal({
   const actionLabel = "导入";
   const chaoxingChromiumDownloaded = chaoxingChromium?.downloaded === true;
   const chaoxingEnabledForMode = isSeriesCreation;
+  const normalizedChaoxingCourseSearch = chaoxingCourseSearch.trim().toLowerCase();
+  const filteredChaoxingCourses = useMemo(() => {
+    if (!normalizedChaoxingCourseSearch) {
+      return chaoxingCourses;
+    }
+    return chaoxingCourses.filter((course) => {
+      const haystacks = [course.title, course.teacher, course.openTime]
+        .filter((value) => typeof value === "string")
+        .map((value) => value.toLowerCase());
+      return haystacks.some((value) => value.includes(normalizedChaoxingCourseSearch));
+    });
+  }, [chaoxingCourses, normalizedChaoxingCourseSearch]);
   const selectedFileSummary = useMemo(() => {
     if (!files.length) {
       return "未选择文件";
@@ -403,8 +416,29 @@ export function WorkspaceImportModal({
                     ) : (
                       <div>
                         <p className="mb-3 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">选择要导入的课程</p>
+                        <div className="relative mb-3">
+                          <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-zinc-500" />
+                          <input
+                            type="text"
+                            value={chaoxingCourseSearch}
+                            onChange={(event) => setChaoxingCourseSearch(event.target.value)}
+                            placeholder="搜索课程或教师"
+                            className="w-full rounded-2xl border border-stone-200 bg-white px-10 py-2.5 pr-10 text-sm font-medium text-stone-800 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/50 focus:ring-2 focus:ring-accent/10 dark:border-stone-700 dark:bg-neutral-950 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                          />
+                          {chaoxingCourseSearch ? (
+                            <button
+                              type="button"
+                              onClick={() => setChaoxingCourseSearch("")}
+                              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                              aria-label="清空课程搜索"
+                              title="清空课程搜索"
+                            >
+                              <X size={14} />
+                            </button>
+                          ) : null}
+                        </div>
                         <div className="max-h-56 space-y-2 overflow-auto pr-1">
-                          {chaoxingCourses.length ? chaoxingCourses.map((course) => (
+                          {filteredChaoxingCourses.length ? filteredChaoxingCourses.map((course) => (
                             <button
                               key={course.courseKey}
                               type="button"
@@ -421,7 +455,9 @@ export function WorkspaceImportModal({
                               </p>
                             </button>
                           )) : (
-                            <p className="text-sm font-semibold text-stone-600 dark:text-zinc-300">没有读取到可导入课程。</p>
+                            <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm font-semibold text-stone-600 dark:border-stone-700 dark:text-zinc-300">
+                              {chaoxingCourses.length ? "没有匹配的课程。" : "没有读取到可导入课程。"}
+                            </p>
                           )}
                         </div>
                       </div>

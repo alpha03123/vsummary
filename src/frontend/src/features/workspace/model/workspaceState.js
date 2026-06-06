@@ -141,6 +141,7 @@ export function createGenerationTaskRecord({
   mode,
   seriesId,
   videoId = null,
+  runId = null,
   snapshot,
   subscriptionActive = false,
 }) {
@@ -152,6 +153,7 @@ export function createGenerationTaskRecord({
     mode,
     seriesId,
     videoId,
+    runId,
     snapshot,
     subscriptionActive,
   };

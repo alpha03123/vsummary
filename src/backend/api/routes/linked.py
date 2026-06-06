@@ -53,6 +53,13 @@ async def start_video_download(series_id: str, video_id: str, container: ApiCont
     return LinkedVideoDownloadResponse.started(result.task_id)
 
 
+@router.post("/api/videos/{series_id}/{video_id}/download/cancel")
+async def cancel_video_download(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
+    task_id = build_video_download_task_id(series_id, video_id)
+    container.video_download_progress_tracker.request_cancel(task_id)
+    return {"status": "cancelling"}
+
+
 @router.get("/api/videos/{series_id}/{video_id}/download/progress")
 async def stream_video_download_progress(series_id: str, video_id: str, container: ApiContainerDep) -> StreamingResponse:
     task_id = build_video_download_task_id(series_id, video_id)

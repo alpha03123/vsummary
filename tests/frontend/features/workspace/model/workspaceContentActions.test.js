@@ -1,0 +1,204 @@
+import { describe, expect, it, vi } from "vitest";
+
+describe("workspaceContentActions series cancellation", () => {
+  it("keeps the series queue cancelling until backend cancellation finishes", async () => {
+    vi.resetModules();
+    let resolveDownloadCancel;
+    const cancelVideoDownload = vi.fn(() => new Promise((resolve) => {
+      resolveDownloadCancel = resolve;
+    }));
+    const cancelSeriesSummaries = vi.fn(() => Promise.resolve({ status: "cancelled" }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelVideoDownload,
+      cancelSeriesSummaries,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        seriesGenerationQueue: {
+          seriesId: "series-a",
+          status: "running",
+          downloadVideoId: "video-1",
+        },
+      },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    const cancelTask = actions.onCancelGeneration();
+    await Promise.resolve();
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "series_generation_queue_cancelling",
+      seriesId: "series-a",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "series_generation_queue_finished",
+      seriesId: "series-a",
+      status: "cancelled",
+    });
+    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: undefined });
+
+    resolveDownloadCancel({});
+    await cancelTask;
+
+    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "video-1");
+    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: undefined });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "series_generation_queue_finished",
+      seriesId: "series-a",
+      status: "cancelled",
+    });
+  });
+
+  it("does not let an old cancel completion finish a newer series run", async () => {
+    vi.resetModules();
+    let resolveSeriesCancel;
+    const cancelSeriesSummaries = vi.fn(() => new Promise((resolve) => {
+      resolveSeriesCancel = resolve;
+    }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelSeriesSummaries,
+      cancelVideoDownload: vi.fn(() => Promise.resolve({})),
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const firstDispatch = vi.fn();
+    const firstActions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        seriesGenerationQueue: {
+          runId: "series-a:old",
+          seriesId: "series-a",
+          status: "running",
+          downloadVideoId: null,
+        },
+      },
+      dispatch: firstDispatch,
+      selectedVideo: null,
+    });
+
+    const cancelTask = firstActions.onCancelGeneration();
+    await Promise.resolve();
+
+    const secondDispatch = vi.fn();
+    const secondActions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        library: {
+          series: [
+            {
+              id: "series-a",
+              videos: [{ id: "video-1", processed: false, status: "pending" }],
+            },
+          ],
+        },
+        ui: { transcriptEnhancementEnabled: true },
+        seriesGenerationQueue: null,
+        generationTasksByKey: {},
+      },
+      dispatch: secondDispatch,
+      selectedVideo: null,
+    });
+
+    await secondActions.onGenerateSeries();
+    resolveSeriesCancel({});
+    await cancelTask;
+
+    const secondStart = secondDispatch.mock.calls.find(([action]) => action.type === "series_generation_queue_started")?.[0];
+    const staleFinish = firstDispatch.mock.calls.find(([action]) => action.type === "series_generation_queue_finished")?.[0];
+    expect(secondStart?.runId).toBeTruthy();
+    expect(staleFinish?.runId).not.toBe(secondStart?.runId);
+  });
+
+  it("cancels every pending linked video download when cancelling a series run", async () => {
+    vi.resetModules();
+    const cancelVideoDownload = vi.fn(() => Promise.resolve({ status: "cancelling" }));
+    const cancelSeriesSummaries = vi.fn(() => Promise.resolve({ status: "cancelled" }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelVideoDownload,
+      cancelSeriesSummaries,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        library: {
+          series: [
+            {
+              id: "series-a",
+              videos: [
+                { id: "linked-1", processed: false, status: "linked", isLinked: true },
+                { id: "linked-2", processed: false, status: "linked", isLinked: true },
+                { id: "local-1", processed: false, status: "pending" },
+                { id: "ready-1", processed: true, status: "linked", isLinked: true },
+              ],
+            },
+          ],
+        },
+        seriesGenerationQueue: {
+          runId: "series-a:1",
+          seriesId: "series-a",
+          status: "running",
+          downloadVideoId: "linked-1",
+        },
+      },
+      dispatch: vi.fn(),
+      selectedVideo: null,
+    });
+
+    await actions.onCancelGeneration();
+
+    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: "series-a:1" });
+    expect(cancelVideoDownload).toHaveBeenCalledTimes(2);
+    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
+    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-2");
+  });
+});
+
+function createWorkspaceApiMock() {
+  return {
+    cancelChaoxingInit: vi.fn(),
+    cancelVideoSummary: vi.fn(),
+    createVideoNote: vi.fn(),
+    deleteSeries: vi.fn(),
+    deleteVideoNote: vi.fn(),
+    deleteVideoSource: vi.fn(),
+    generateSeriesSummaries: vi.fn(),
+    generateVideoKnowledgeCards: vi.fn(),
+    generateVideoMindmap: vi.fn(),
+    generateVideoSummary: vi.fn(),
+    importChaoxingCourse: vi.fn(),
+    importLocalPlaygroundVideos: vi.fn(),
+    importLocalSeries: vi.fn(),
+    importLocalSeriesVideos: vi.fn(),
+    initChaoxing: vi.fn(),
+    loadChaoxingCourses: vi.fn(),
+    loadChaoxingStatus: vi.fn(),
+    loadWorkspaceLibrary: vi.fn(),
+    resolveBilibiliSeries: vi.fn(),
+    resolveBilibiliVideo: vi.fn(),
+    startVideoDownload: vi.fn(),
+    subscribeChaoxingImportProgress: vi.fn(),
+    subscribeVideoDownloadProgress: vi.fn(),
+    updateVideoNote: vi.fn(),
+  };
+}

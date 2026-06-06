@@ -1,4 +1,5 @@
-import { ArrowRight, FolderKanban, PlayCircle, Sparkles, LayoutGrid, CheckCircle2, Link2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowRight, FolderKanban, PlayCircle, Sparkles, LayoutGrid, CheckCircle2, Link2, Search, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { staggerContainer, blurVariant } from "../../../lib/animations";
 
@@ -8,9 +9,23 @@ function getProcessedCount(series) {
 
 export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compact = false }) {
   const allSeries = library?.series ?? [];
-  const series = allSeries.filter((item) => item.id !== "__playground__");
+  const sourceSeries = allSeries.filter((item) => item.id !== "__playground__");
+  const [searchText, setSearchText] = useState("");
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const series = useMemo(() => {
+    if (!normalizedSearch) {
+      return sourceSeries;
+    }
+    return sourceSeries.filter((seriesItem) => {
+      const latestVideo = seriesItem.videos.at(-1);
+      const haystacks = [seriesItem.title, seriesItem.id, latestVideo?.title]
+        .filter((value) => typeof value === "string")
+        .map((value) => value.toLowerCase());
+      return haystacks.some((value) => value.includes(normalizedSearch));
+    });
+  }, [normalizedSearch, sourceSeries]);
 
-  if (!series.length) {
+  if (!sourceSeries.length) {
     return (
       <section className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto text-center p-12 workspace-panel rounded-[2rem] border m-6">
         <div className="w-16 h-16 workspace-muted-panel rounded-2xl border flex items-center justify-center text-stone-400 mb-6 shadow-sm">
@@ -63,9 +78,31 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
               <Link2 size={15} /> 添加系列
             </button>
           ) : null}
+          <div className="relative mt-4">
+            <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+            <input
+              type="text"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="搜索系列"
+              className="w-full rounded-2xl border border-stone-200/80 bg-white px-10 py-2.5 pr-10 text-sm font-medium text-stone-700 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500"
+            />
+            {searchText ? (
+              <button
+                type="button"
+                onClick={() => setSearchText("")}
+                className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                aria-label="清空系列搜索"
+                title="清空系列搜索"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5" aria-label="series 列表">
+          {series.length ? (
           <motion.div className="flex flex-col gap-4" variants={staggerContainer} initial="initial" animate="animate">
             {series.map((seriesItem) => {
               const processedCount = getProcessedCount(seriesItem);
@@ -106,6 +143,11 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
               );
             })}
           </motion.div>
+          ) : (
+            <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm font-semibold text-stone-500 dark:border-stone-800 dark:text-stone-400">
+              没有匹配的系列。
+            </div>
+          )}
         </div>
       </section>
     );
@@ -124,13 +166,34 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
           <p className="text-stone-600 dark:text-zinc-400 text-[15px] font-medium leading-relaxed">
             首页总览所有的视频分类。点击进入某个分类后，可以查看具体视频、生成 AI 总结，并在右侧阅读核心要点。
           </p>
+          <div className="relative mt-6 max-w-md">
+            <Search size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-zinc-500" />
+            <input
+              type="text"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="搜索系列标题、目录或最近视频"
+              className="w-full rounded-2xl border border-stone-200/80 bg-white px-11 py-3 pr-11 text-sm font-medium text-stone-700 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500"
+            />
+            {searchText ? (
+              <button
+                type="button"
+                onClick={() => setSearchText("")}
+                className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                aria-label="清空系列搜索"
+                title="清空系列搜索"
+              >
+                <X size={15} />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {/* Top Right Quick Stat */}
         <div className="flex-shrink-0">
           <span className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-2xl workspace-panel border shadow-sm font-bold text-stone-800 dark:text-stone-200">
             <LayoutGrid size={18} className="text-accent" />
-            {series.length} 个分类
+            {series.length} / {sourceSeries.length} 个分类
           </span>
         </div>
       </div>
@@ -155,6 +218,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
       </div>
 
       {/* Series Grid */}
+      {series.length ? (
       <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-label="series 列表" variants={staggerContainer} initial="initial" animate="animate">
         {series.map((seriesItem) => {
           const processedCount = getProcessedCount(seriesItem);
@@ -205,6 +269,11 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
           );
         })}
       </motion.div>
+      ) : (
+        <div className="workspace-elevated-panel rounded-[2rem] border border-dashed border-stone-200/80 px-6 py-12 text-center text-sm font-semibold text-stone-500 dark:border-stone-800 dark:text-stone-400">
+          没有匹配的系列。
+        </div>
+      )}
     </section>
   );
 }

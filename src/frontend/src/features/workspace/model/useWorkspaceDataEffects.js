@@ -80,9 +80,10 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, dispatch }) {
   generationSubscriptions.set(taskKey, unsubscribe);
 }
 
-function ensureSeriesGenerationSubscription({ seriesId, dispatch }) {
+function ensureSeriesGenerationSubscription({ seriesId, runId, dispatch }) {
   const taskKey = buildSeriesGenerationTaskKey(seriesId);
-  if (!taskKey || generationSubscriptions.has(taskKey)) {
+  const subscriptionKey = runId ? `${taskKey}:${runId}` : taskKey;
+  if (!taskKey || generationSubscriptions.has(subscriptionKey)) {
     return;
   }
   const unsubscribe = subscribeSeriesGenerationProgress(seriesId, (snapshot) => {
@@ -91,19 +92,20 @@ function ensureSeriesGenerationSubscription({ seriesId, dispatch }) {
       taskKey,
       mode: "series",
       seriesId,
+      runId,
       videoId: null,
       progress: snapshot.progress,
       snapshot,
       subscriptionActive: isGenerationSnapshotActive(snapshot),
     });
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      clearGenerationSubscription(taskKey);
+      clearGenerationSubscription(subscriptionKey);
     }
     if (snapshot.status === "failed" && snapshot.error) {
       dispatch({ type: "load_failed", message: snapshot.error });
     }
   });
-  generationSubscriptions.set(taskKey, unsubscribe);
+  generationSubscriptions.set(subscriptionKey, unsubscribe);
 }
 
 export function useWorkspaceDataEffects(state, dispatch) {
@@ -419,6 +421,9 @@ export function useWorkspaceDataEffects(state, dispatch) {
             taskKey: buildSeriesGenerationTaskKey(state.selectedSeriesId),
             mode: "series",
             seriesId: state.selectedSeriesId,
+            runId: state.seriesGenerationQueue?.seriesId === state.selectedSeriesId
+              ? state.seriesGenerationQueue.runId
+              : null,
             videoId: null,
             snapshot,
             subscriptionActive: isGenerationSnapshotActive(snapshot),
@@ -462,6 +467,9 @@ export function useWorkspaceDataEffects(state, dispatch) {
       if (isGenerationSnapshotActive(currentTask.snapshot)) {
         ensureSeriesGenerationSubscription({
           seriesId: currentTask.seriesId,
+          runId: state.seriesGenerationQueue?.seriesId === currentTask.seriesId
+            ? state.seriesGenerationQueue.runId
+            : null,
           dispatch,
         });
       } else {

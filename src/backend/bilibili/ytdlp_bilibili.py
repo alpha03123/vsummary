@@ -25,6 +25,10 @@ class ProgressTracker(Protocol):
     def create_reporter(self, task_id: str) -> ProgressReporter: ...
 
 
+class DownloadCancelled(RuntimeError):
+    pass
+
+
 class YtDlpBilibiliResolver:
     def __init__(
         self,
@@ -105,6 +109,7 @@ class BilibiliDownloader:
             url,
         ]
         reporter.update("download", 0.0, "开始下载")
+        process = None
         try:
             process = subprocess.Popen(
                 cmd,
@@ -118,7 +123,9 @@ class BilibiliDownloader:
                 raise RuntimeError("无法读取 yt-dlp 输出。")
             last_percent = -1.0
             for line in process.stdout:
-                reporter.raise_if_cancelled()
+                if _download_cancel_requested(reporter):
+                    process.terminate()
+                    raise DownloadCancelled("下载已取消")
                 match = self._PROGRESS_RE.search(line.rstrip())
                 if match is None:
                     continue
@@ -130,6 +137,15 @@ class BilibiliDownloader:
             process.wait()
             if process.returncode != 0:
                 raise RuntimeError(f"yt-dlp 退出码 {process.returncode}")
+        except DownloadCancelled as exc:
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+            reporter.cancelled(str(exc))
+            raise
         except Exception as exc:
             reporter.failed(str(exc))
             raise
@@ -148,6 +164,14 @@ class BilibiliDownloader:
 
 def build_video_download_task_id(series_id: str, video_id: str) -> str:
     return f"download/{series_id}/{video_id}"
+
+
+def _download_cancel_requested(reporter: ProgressReporter) -> bool:
+    try:
+        reporter.raise_if_cancelled()
+    except RuntimeError:
+        return True
+    return False
 
 
 class BackgroundBilibiliDownloadStarter:

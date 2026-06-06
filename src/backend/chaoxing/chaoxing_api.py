@@ -49,6 +49,10 @@ class ChaoxingInitCancelled(RuntimeError):
     pass
 
 
+class ChaoxingDownloadCancelled(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class ChaoxingCourseRecord:
     course_key: str
@@ -377,9 +381,11 @@ class ChaoxingLinkedVideoDownloadStarter:
                     video.download_key,
                     output_dir=dest_dir,
                     filename=f"{video.video_id}.mp4",
-                    progress=lambda downloaded, total: _report_download_progress(reporter, downloaded, total),
+                    progress=lambda downloaded, total: _report_download_progress_or_cancel(reporter, downloaded, total),
                 )
                 reporter.completed(f"下载完成：{video.video_id}.mp4")
+            except ChaoxingDownloadCancelled as error:
+                reporter.cancelled(str(error))
             except Exception as error:
                 reporter.failed(str(error))
 
@@ -400,6 +406,14 @@ def _report_download_progress(reporter: ProgressReporter, downloaded: int, total
         reporter.update("download", progress, f"下载中 {progress:.1f}%")
         return
     reporter.update("download", None, f"已下载 {downloaded} bytes")
+
+
+def _report_download_progress_or_cancel(reporter: ProgressReporter, downloaded: int, total: int | None) -> None:
+    try:
+        reporter.raise_if_cancelled()
+    except RuntimeError as error:
+        raise ChaoxingDownloadCancelled("下载已取消") from error
+    _report_download_progress(reporter, downloaded, total)
 
 
 def _import_progress(completed: int, total: int) -> float | None:

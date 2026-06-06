@@ -439,7 +439,7 @@ describe("workspaceContentActions series generation", () => {
           videos: [
             { id: "video-1", processed: true },
             { id: "video-2", processed: false },
-            { id: "video-3", processed: false },
+            { id: "video-3", processed: false, status: "linked", isLinked: true },
           ],
         },
       ],
@@ -467,8 +467,8 @@ describe("workspaceContentActions series generation", () => {
       snapshot: {
         status: "running",
         stage: "batch",
-        progress: 66.67,
-        detail: "已结束 2 / 3，完成 1，取消 1",
+        progress: 33.34,
+        detail: "已完成 1 / 3，完成 1，取消 0",
         error: null,
       },
       subscriptionActive: true,
@@ -478,8 +478,225 @@ describe("workspaceContentActions series generation", () => {
       expect.objectContaining({
         seriesId: "series-a",
         total: 3,
-        completed: 2,
-        detail: "已结束 2 / 3，完成 1，取消 1",
+        completed: 1,
+        detail: "已完成 1/3",
+        status: "running",
+      }),
+    );
+  });
+
+  it("ignores per-worker series progress detail for queue completed count", () => {
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      total: 4,
+    });
+    state = workspaceReducer(state, {
+      type: "generation_progress_updated",
+      taskKey: buildSeriesGenerationTaskKey("series-a"),
+      mode: "series",
+      seriesId: "series-a",
+      videoId: null,
+      progress: 75,
+      snapshot: {
+        status: "running",
+        stage: "transcribe",
+        progress: 75,
+        detail: "正在处理 3/4：Video 3",
+        error: null,
+      },
+      subscriptionActive: true,
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(
+      expect.objectContaining({
+        completed: 0,
+        detail: "已完成 0/4",
+      }),
+    );
+  });
+
+  it("clears active linked video download when series queue is cancelled", () => {
+    let state = workspaceReducer(
+      {
+        ...createInitialWorkspaceState(),
+        library: {
+          series: [
+            {
+              id: "series-a",
+              title: "Series A",
+              videos: [
+                {
+                  id: "video-1",
+                  title: "Video 1",
+                  sourceName: "video-1.mp4",
+                  processed: false,
+                  status: "linked",
+                  isLinked: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        type: "series_generation_queue_started",
+        seriesId: "series-a",
+        total: 1,
+      },
+    );
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_download_started",
+      seriesId: "series-a",
+      videoId: "video-1",
+      videoTitle: "Video 1",
+      detail: "正在下载未缓存视频 1/1",
+    });
+    state = workspaceReducer(state, {
+      type: "video_download_started",
+      seriesId: "series-a",
+      videoId: "video-1",
+    });
+
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_finished",
+      seriesId: "series-a",
+      status: "cancelled",
+    });
+
+    expect(state.downloadingVideoKey).toBeNull();
+    expect(state.videoDownloadProgress).toBeNull();
+    expect(state.library.series[0].videos[0].status).toBe("linked");
+  });
+
+  it("clears series queue download marker when terminal series progress arrives", () => {
+    let state = workspaceReducer(
+      {
+        ...createInitialWorkspaceState(),
+        library: {
+          series: [
+            {
+              id: "series-a",
+              title: "Series A",
+              videos: [
+                {
+                  id: "video-1",
+                  title: "Video 1",
+                  sourceName: "video-1.mp4",
+                  processed: false,
+                  status: "linked",
+                  isLinked: true,
+                },
+              ],
+            },
+          ],
+        },
+        selectedContextType: "series",
+        selectedSeriesId: "series-a",
+      },
+      {
+        type: "series_generation_queue_started",
+        seriesId: "series-a",
+        total: 1,
+      },
+    );
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_download_started",
+      seriesId: "series-a",
+      videoId: "video-1",
+      videoTitle: "Video 1",
+      detail: "正在下载未缓存视频 1/1",
+    });
+
+    state = workspaceReducer(state, {
+      type: "generation_progress_updated",
+      taskKey: buildSeriesGenerationTaskKey("series-a"),
+      mode: "series",
+      seriesId: "series-a",
+      videoId: null,
+      progress: null,
+      snapshot: {
+        status: "cancelled",
+        stage: "cancelled",
+        progress: null,
+        detail: "任务已取消",
+        error: null,
+      },
+      subscriptionActive: false,
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(
+      expect.objectContaining({
+        status: "cancelled",
+        downloadVideoId: null,
+        downloadVideoTitle: null,
+      }),
+    );
+  });
+
+  it("ignores stale series cancellation from an older queue run", () => {
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-a",
+      total: 2,
+    });
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_cancelling",
+      seriesId: "series-a",
+      runId: "run-a",
+    });
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-b",
+      total: 2,
+    });
+
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_finished",
+      seriesId: "series-a",
+      runId: "run-a",
+      status: "cancelled",
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(
+      expect.objectContaining({
+        runId: "run-b",
+        status: "running",
+      }),
+    );
+  });
+
+  it("ignores stale terminal series progress from an older queue run", () => {
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-b",
+      total: 2,
+    });
+
+    state = workspaceReducer(state, {
+      type: "generation_progress_updated",
+      taskKey: buildSeriesGenerationTaskKey("series-a"),
+      mode: "series",
+      seriesId: "series-a",
+      runId: "run-a",
+      videoId: null,
+      progress: null,
+      snapshot: {
+        status: "cancelled",
+        stage: "cancelled",
+        progress: null,
+        detail: "任务已取消",
+        error: null,
+      },
+      subscriptionActive: false,
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(
+      expect.objectContaining({
+        runId: "run-b",
         status: "running",
       }),
     );

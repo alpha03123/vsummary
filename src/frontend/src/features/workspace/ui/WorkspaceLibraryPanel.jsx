@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
+import { buildVideoKey } from "../model/workspaceControllerUtils";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
 
@@ -121,6 +122,7 @@ function PanelFooter({
   isGeneratingSelectedVideo,
   isGeneratingSeries,
   seriesGenerationQueue,
+  downloadingVideoKey,
   activeSeries,
   currentAsrModel,
   ragModels,
@@ -137,6 +139,8 @@ function PanelFooter({
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
   const embeddingModel = ragModels?.find((model) => model.key === "embedding") ?? null;
   const embeddingNeedsDownload = embeddingModel != null && !embeddingModel.downloaded;
+  const selectedVideoIsDownloading =
+    activeSeries?.id && selectedVideo?.id && downloadingVideoKey === buildVideoKey(activeSeries.id, selectedVideo.id);
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -157,9 +161,8 @@ function PanelFooter({
       seriesGenerationQueue?.seriesId === activeSeries?.id &&
       (seriesGenerationQueue.status === "running" || seriesGenerationQueue.status === "cancelling");
     const queueLabel = queueIsActive
-      ? `已结束 ${seriesGenerationQueue.completed}/${seriesGenerationQueue.total}`
+      ? `已完成 ${seriesGenerationQueue.completed}/${seriesGenerationQueue.total}`
       : null;
-    const currentLabel = queueIsActive ? seriesGenerationQueue.detail : null;
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-1">
@@ -178,9 +181,6 @@ function PanelFooter({
                 <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : "正在处理全部视频"}</span>
                 <span>{queueLabel}</span>
               </div>
-              {currentLabel ? (
-                <p className="mt-1 truncate text-stone-500 dark:text-stone-400">{currentLabel}</p>
-              ) : null}
             </div>
           ) : null}
           {embeddingNeedsDownload ? (
@@ -227,20 +227,40 @@ function PanelFooter({
   }
 
   if (selectedVideo.status === "downloading") {
-    const pct = downloadProgress ?? 0;
+    const hasDownloadProgress = typeof downloadProgress === "number" && Number.isFinite(downloadProgress) && downloadProgress > 0;
+    const pct = hasDownloadProgress ? Math.max(0, Math.min(100, downloadProgress)) : null;
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-3">
           <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">{selectedVideo.title}</h3>
         </div>
-        <div className="w-full bg-stone-200 dark:bg-neutral-800 rounded-full h-2.5 mb-1.5">
-          <div
-            className="bg-accent h-2.5 rounded-full transition-all duration-300"
-            style={{ width: `${pct}%` }}
-          />
+        <div className="relative w-full overflow-hidden rounded-full bg-stone-200 h-2.5 mb-1.5 dark:bg-neutral-800">
+          {hasDownloadProgress ? (
+            <div
+              className="bg-accent h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          ) : (
+            <motion.div
+              className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-accent"
+              initial={{ x: "-120%" }}
+              animate={{ x: "320%" }}
+              transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+            />
+          )}
         </div>
-        <p className="text-xs text-stone-500 dark:text-zinc-400 font-medium">{pct.toFixed(0)}% 完成</p>
+        <p className="text-xs text-stone-500 dark:text-zinc-400 font-medium">
+          {hasDownloadProgress ? `${pct.toFixed(0)}% 完成` : "下载中"}
+        </p>
+        <button
+          type="button"
+          onClick={() => onDownloadVideo?.(selectedVideo)}
+          className="btn-danger-ghost mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold"
+        >
+          <X size={15} />
+          取消下载
+        </button>
       </div>
     );
   }
@@ -255,11 +275,15 @@ function PanelFooter({
         <div className="flex gap-2">
           <button
             type="button"
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/14 hover:border-accent/60"
+            className={`flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+              selectedVideoIsDownloading
+                ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+                : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
+            }`}
             onClick={() => onDownloadVideo?.(selectedVideo)}
           >
-            <ArrowDown size={16} strokeWidth={2.5} />
-            下载视频
+            {selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
+            {selectedVideoIsDownloading ? "取消下载" : "下载视频"}
           </button>
           <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} provider={selectedVideo.provider} />
           <button
@@ -353,6 +377,7 @@ export function WorkspaceLibraryPanel({
   isGeneratingSelectedVideo,
   isGeneratingSeries,
   seriesGenerationQueue,
+  downloadingVideoKey,
   currentAsrModel,
   ragModels,
   onEnterLibraryHome,
@@ -549,6 +574,7 @@ export function WorkspaceLibraryPanel({
         isGeneratingSelectedVideo={isGeneratingSelectedVideo}
         isGeneratingSeries={isGeneratingSeries}
         seriesGenerationQueue={seriesGenerationQueue}
+        downloadingVideoKey={downloadingVideoKey}
         activeSeries={activeSeries}
         currentAsrModel={currentAsrModel}
         ragModels={ragModels}

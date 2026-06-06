@@ -73,6 +73,14 @@ function resolveSeriesQueueStatus(snapshotStatus, currentStatus) {
   return currentStatus;
 }
 
+function parseSeriesCompletedCount(detail) {
+  if (typeof detail !== "string") {
+    return null;
+  }
+  const match = detail.match(/已完成\s+(\d+)\s*\/\s*\d+/);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
 function matchesCurrentGenerationSelection(state, action) {
   if (action.mode === "video") {
     return (
@@ -92,6 +100,25 @@ function matchesCurrentGenerationSelection(state, action) {
 
 function isTerminalGenerationStatus(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+function matchesSeriesQueueRun(queue, action) {
+  if (queue?.seriesId !== action.seriesId) {
+    return false;
+  }
+  if (queue.runId != null) {
+    return action.runId === queue.runId;
+  }
+  return action.runId == null;
+}
+
+function isStaleSeriesRunAction(state, action) {
+  return (
+    action.mode === "series" &&
+    state.seriesGenerationQueue?.seriesId === action.seriesId &&
+    state.seriesGenerationQueue.runId != null &&
+    action.runId !== state.seriesGenerationQueue.runId
+  );
 }
 
 export { createInitialWorkspaceState };
@@ -763,6 +790,7 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         seriesGenerationQueue: {
+          runId: action.runId ?? null,
           seriesId: action.seriesId,
           total: action.total,
           completed: 0,
@@ -770,7 +798,9 @@ export function workspaceReducer(state, action) {
           currentVideoId: null,
           currentVideoTitle: null,
           activeVideos: [],
-          detail: `已结束 0/${action.total}`,
+          downloadVideoId: null,
+          downloadVideoTitle: null,
+          detail: `已完成 0/${action.total}`,
           status: "running",
         },
         error: "",
@@ -779,7 +809,7 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         seriesGenerationQueue:
-          state.seriesGenerationQueue?.seriesId !== action.seriesId
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
             ? state.seriesGenerationQueue
             : {
                 ...state.seriesGenerationQueue,
@@ -797,7 +827,7 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         seriesGenerationQueue:
-          state.seriesGenerationQueue?.seriesId !== action.seriesId
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
             ? state.seriesGenerationQueue
             : {
                 ...state.seriesGenerationQueue,
@@ -810,18 +840,60 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         seriesGenerationQueue:
-          state.seriesGenerationQueue?.seriesId !== action.seriesId
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
             ? state.seriesGenerationQueue
             : {
                 ...state.seriesGenerationQueue,
                 completed: Math.min(state.seriesGenerationQueue.total, state.seriesGenerationQueue.completed + 1),
               },
       };
+    case "series_generation_queue_detail_updated":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                detail: action.detail,
+              },
+      };
+    case "series_generation_queue_download_started":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                downloadVideoId: action.videoId,
+                downloadVideoTitle: action.videoTitle,
+                detail: action.detail,
+              },
+      };
+    case "series_generation_queue_download_finished":
+      return {
+        ...state,
+        seriesGenerationQueue:
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
+            ? state.seriesGenerationQueue
+            : {
+                ...state.seriesGenerationQueue,
+                downloadVideoId:
+                  state.seriesGenerationQueue.downloadVideoId === action.videoId
+                    ? null
+                    : state.seriesGenerationQueue.downloadVideoId,
+                downloadVideoTitle:
+                  state.seriesGenerationQueue.downloadVideoId === action.videoId
+                    ? null
+                    : state.seriesGenerationQueue.downloadVideoTitle,
+              },
+      };
     case "series_generation_queue_cancelling":
       return {
         ...state,
         seriesGenerationQueue:
-          state.seriesGenerationQueue?.seriesId !== action.seriesId
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
             ? state.seriesGenerationQueue
             : {
                 ...state.seriesGenerationQueue,
@@ -829,18 +901,40 @@ export function workspaceReducer(state, action) {
               },
       };
     case "series_generation_queue_finished":
-      return {
+      {
+        const downloadVideoId = state.seriesGenerationQueue?.downloadVideoId ?? null;
+        const clearDownloadState =
+          matchesSeriesQueueRun(state.seriesGenerationQueue, action) &&
+          action.status === "cancelled" &&
+          downloadVideoId != null;
+        return {
         ...state,
+        downloadingVideoKey: clearDownloadState ? null : state.downloadingVideoKey,
+        videoDownloadProgress: clearDownloadState ? null : state.videoDownloadProgress,
+        library: clearDownloadState
+          ? updateVideoCardInLibrary(
+              state.library,
+              action.seriesId,
+              downloadVideoId,
+              (video) => ({
+                ...video,
+                status: video.isLinked ? "linked" : video.status,
+              }),
+            )
+          : state.library,
         seriesGenerationQueue:
-          state.seriesGenerationQueue?.seriesId !== action.seriesId
+          !matchesSeriesQueueRun(state.seriesGenerationQueue, action)
             ? state.seriesGenerationQueue
             : {
                 ...state.seriesGenerationQueue,
                 status: action.status ?? "completed",
                 currentVideoId: null,
                 currentVideoTitle: null,
+                downloadVideoId: null,
+                downloadVideoTitle: null,
               },
-      };
+        };
+      }
     case "series_generation_started":
       return {
         ...state,
@@ -855,6 +949,7 @@ export function workspaceReducer(state, action) {
             taskKey: buildSeriesGenerationTaskKey(action.seriesId),
             mode: "series",
             seriesId: action.seriesId,
+            runId: action.runId ?? null,
             snapshot: createRunningSnapshot("系列任务已开始"),
           }),
         ),
@@ -865,6 +960,9 @@ export function workspaceReducer(state, action) {
         const boundedProgress = action.progress == null ? null : Math.max(0, Math.min(100, action.progress));
         const isCurrentSelection = matchesCurrentGenerationSelection(state, action);
         const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);
+        if (isStaleSeriesRunAction(state, action)) {
+          return state;
+        }
         const nextState = {
           ...state,
           generatingVideoKey:
@@ -890,27 +988,31 @@ export function workspaceReducer(state, action) {
               mode: action.mode,
               seriesId: action.seriesId,
               videoId: action.videoId ?? null,
+              runId: action.runId ?? null,
               snapshot: action.snapshot,
               subscriptionActive: action.subscriptionActive ?? false,
             }),
           ),
         };
-        if (action.mode !== "series" || state.seriesGenerationQueue?.seriesId !== action.seriesId) {
+        if (action.mode !== "series" || !matchesSeriesQueueRun(state.seriesGenerationQueue, action)) {
           return nextState;
         }
         const total = state.seriesGenerationQueue.total;
-        const completed = boundedProgress == null
+        const completedFromDetail = parseSeriesCompletedCount(action.snapshot?.detail);
+        const completed = completedFromDetail == null
           ? state.seriesGenerationQueue.completed
-          : Math.min(total, Math.floor((boundedProgress / 100) * total));
+          : Math.min(total, completedFromDetail);
         return {
           ...nextState,
           seriesGenerationQueue: {
             ...state.seriesGenerationQueue,
             completed,
-            detail: action.snapshot?.detail ?? state.seriesGenerationQueue.detail,
+            detail: `已完成 ${completed}/${total}`,
             status: resolveSeriesQueueStatus(action.snapshot?.status, state.seriesGenerationQueue.status),
             currentVideoId: isTerminal ? null : state.seriesGenerationQueue.currentVideoId,
             currentVideoTitle: isTerminal ? null : state.seriesGenerationQueue.currentVideoTitle,
+            downloadVideoId: isTerminal ? null : state.seriesGenerationQueue.downloadVideoId,
+            downloadVideoTitle: isTerminal ? null : state.seriesGenerationQueue.downloadVideoTitle,
           },
         };
       }
@@ -918,6 +1020,9 @@ export function workspaceReducer(state, action) {
       {
         const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);
         const isCurrentSelection = matchesCurrentGenerationSelection(state, action);
+        if (isStaleSeriesRunAction(state, action)) {
+          return state;
+        }
         return {
           ...state,
           generatingVideoKey:
@@ -936,7 +1041,7 @@ export function workspaceReducer(state, action) {
             isTerminal && isCurrentSelection ? null : state.generationSnapshot,
           seriesGenerationQueue:
             action.mode === "series" &&
-            state.seriesGenerationQueue?.seriesId === action.seriesId &&
+            matchesSeriesQueueRun(state.seriesGenerationQueue, action) &&
             isTerminal
               ? {
                   ...state.seriesGenerationQueue,
@@ -952,6 +1057,7 @@ export function workspaceReducer(state, action) {
               mode: action.mode,
               seriesId: action.seriesId,
               videoId: action.videoId ?? null,
+              runId: action.runId ?? null,
               snapshot: action.snapshot,
               subscriptionActive: Boolean(action.subscriptionActive),
             }),
@@ -959,6 +1065,9 @@ export function workspaceReducer(state, action) {
         };
       }
     case "generation_cancelled":
+      if (isStaleSeriesRunAction(state, action)) {
+        return state;
+      }
       return {
         ...state,
         generatingVideoKey: null,
@@ -982,6 +1091,7 @@ export function workspaceReducer(state, action) {
             mode: action.mode,
             seriesId: action.seriesId,
             videoId: action.videoId ?? null,
+            runId: action.runId ?? null,
             snapshot: action.snapshot ?? { status: "cancelled", stage: "cancelled", progress: null, detail: "任务已取消", error: null },
             subscriptionActive: false,
           }),
@@ -1044,6 +1154,9 @@ export function workspaceReducer(state, action) {
         return isCurrentVideo ? createSummaryLoadedState(action.summary, nextState) : nextState;
       }
     case "series_generation_succeeded":
+      if (isStaleSeriesRunAction(state, { ...action, mode: "series" })) {
+        return state;
+      }
       return {
         ...state,
         library: action.library ?? state.library,
@@ -1058,6 +1171,7 @@ export function workspaceReducer(state, action) {
             taskKey: action.taskKey ?? buildSeriesGenerationTaskKey(action.seriesId),
             mode: "series",
             seriesId: action.seriesId,
+            runId: action.runId ?? null,
             snapshot: {
               status: "completed",
               stage: "completed",
@@ -1073,7 +1187,7 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         downloadingVideoKey: buildVideoKey(action.seriesId, action.videoId),
-        videoDownloadProgress: 0,
+        videoDownloadProgress: null,
         library: updateVideoCardInLibrary(
           state.library,
           action.seriesId,

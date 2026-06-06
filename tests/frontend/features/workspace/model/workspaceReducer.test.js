@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "@src/features/workspace/model/modelDownloadMessages";
 import { workspaceReducer } from "@src/features/workspace/model/workspaceReducer";
-import { buildVideoGenerationTaskKey, createInitialWorkspaceState } from "@src/features/workspace/model/workspaceState";
+import {
+  buildSeriesGenerationTaskKey,
+  buildVideoGenerationTaskKey,
+  createInitialWorkspaceState,
+} from "@src/features/workspace/model/workspaceState";
 
 describe("workspaceReducer model download failures", () => {
   it("keeps faster-whisper download failure on the matching model", () => {
@@ -89,5 +93,107 @@ describe("workspaceReducer video generation cancellation", () => {
     });
 
     expect(state.seriesGenerationQueue.status).toBe("cancelling");
+  });
+
+  it("ignores series status without run id while a run-scoped queue is active", () => {
+    const taskKey = buildSeriesGenerationTaskKey("series-a");
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-b",
+      total: 3,
+    });
+    state = workspaceReducer(state, {
+      type: "series_generation_started",
+      seriesId: "series-a",
+      runId: "run-b",
+    });
+
+    state = workspaceReducer(state, {
+      type: "generation_status_loaded",
+      taskKey,
+      mode: "series",
+      seriesId: "series-a",
+      videoId: null,
+      snapshot: {
+        status: "cancelled",
+        stage: "cancelled",
+        progress: null,
+        detail: "任务已取消",
+        error: null,
+      },
+      subscriptionActive: false,
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(expect.objectContaining({
+      runId: "run-b",
+      status: "running",
+    }));
+    expect(state.generationTasksByKey[taskKey]).toEqual(expect.objectContaining({
+      runId: "run-b",
+      snapshot: expect.objectContaining({ status: "running" }),
+    }));
+  });
+
+  it("ignores stale series cancellation action from an older run", () => {
+    const taskKey = buildSeriesGenerationTaskKey("series-a");
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-b",
+      total: 3,
+    });
+    state = workspaceReducer(state, {
+      type: "series_generation_started",
+      seriesId: "series-a",
+      runId: "run-b",
+    });
+
+    state = workspaceReducer(state, {
+      type: "generation_cancelled",
+      taskKey,
+      mode: "series",
+      seriesId: "series-a",
+      runId: "run-a",
+      videoId: null,
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(expect.objectContaining({
+      runId: "run-b",
+      status: "running",
+    }));
+    expect(state.generationTasksByKey[taskKey]).toEqual(expect.objectContaining({
+      runId: "run-b",
+      snapshot: expect.objectContaining({ status: "running" }),
+    }));
+  });
+
+  it("ignores stale series success action from an older run", () => {
+    const taskKey = buildSeriesGenerationTaskKey("series-a");
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-b",
+      total: 3,
+    });
+    state = workspaceReducer(state, {
+      type: "series_generation_started",
+      seriesId: "series-a",
+      runId: "run-b",
+    });
+
+    state = workspaceReducer(state, {
+      type: "series_generation_succeeded",
+      taskKey,
+      seriesId: "series-a",
+      runId: "run-a",
+      library: { series: [] },
+    });
+
+    expect(state.generationMode).toBe("series");
+    expect(state.generationTasksByKey[taskKey]).toEqual(expect.objectContaining({
+      runId: "run-b",
+      snapshot: expect.objectContaining({ status: "running" }),
+    }));
   });
 });

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.api.container import ApiContainerDep
 from backend.api.contracts import (
+    CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
+    GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
     UpdateVideoNoteRequest,
 )
@@ -22,12 +25,14 @@ from backend.api.responses import (
     VideoWorkspaceToolsResponse,
 )
 from backend.api.sse import stream_progress_events
+from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
 router = APIRouter()
+LOGGER = logging.getLogger(__name__)
 
 
 @router.get("/api/videos", response_model=VideoLibraryResponse)
@@ -226,13 +231,14 @@ def cancel_video_summary_generation(
 @router.post("/api/series/{series_id}/generate")
 async def generate_series_summaries(
     series_id: str,
-    request: GenerateVideoSummaryRequest | None = None,
+    request: GenerateSeriesSummariesRequest | None = None,
     container: ApiContainerDep = None,
 ) -> dict[str, object]:
     try:
         result = await container.generate_series_summaries.run(
             series_id,
             transcript_enhancement_enabled=(None if request is None else request.transcript_enhancement_enabled),
+            run_id=(None if request is None else request.run_id),
         )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -255,15 +261,51 @@ async def generate_series_summaries(
 def cancel_series_summaries_generation(
     series_id: str,
     container: ApiContainerDep,
+    request: CancelSeriesSummariesRequest | None = None,
 ) -> dict[str, object]:
-    container.generation_progress_tracker.request_cancel(_build_series_task_id(series_id))
+    series_task_id = _build_series_task_id(series_id)
+    requested_run_id = None if request is None else request.run_id
+    get_active_run_id = getattr(container.generate_series_summaries, "get_active_run_id", None)
+    active_run_id = get_active_run_id(series_id) if callable(get_active_run_id) else None
+    if requested_run_id is not None and active_run_id is not None and requested_run_id != active_run_id:
+        LOGGER.info(
+            "Ignoring stale series cancel: series_id=%s requested_run_id=%s active_run_id=%s",
+            series_id,
+            requested_run_id,
+            active_run_id,
+        )
+        return {
+            "status": "stale",
+            "task_id": series_task_id,
+            "active_run_id": active_run_id,
+            "cancelled_video_ids": [],
+        }
+    container.generation_progress_tracker.request_cancel(series_task_id)
+    pending_videos = _get_pending_series_videos(container, series_id)
     active_video_ids = container.generate_series_summaries.get_active_video_ids(series_id)
+    linked_video_ids = {video.id for video in pending_videos if video.is_linked or video.status == "linked"}
+    cancelled_video_ids = list(dict.fromkeys([*active_video_ids, *linked_video_ids]))
+    LOGGER.info(
+        "Cancelling series generation: series_id=%s requested_run_id=%s active_run_id=%s "
+        "pending_video_ids=%s active_video_ids=%s linked_video_ids=%s cancelled_video_ids=%s",
+        series_id,
+        requested_run_id,
+        active_run_id,
+        [video.id for video in pending_videos],
+        active_video_ids,
+        sorted(linked_video_ids),
+        cancelled_video_ids,
+    )
     for video_id in active_video_ids:
         container.generation_progress_tracker.request_cancel(_build_task_id(series_id, video_id))
+    for video_id in linked_video_ids:
+        container.video_download_progress_tracker.request_cancel(build_video_download_task_id(series_id, video_id))
+    if not active_video_ids:
+        container.generation_progress_tracker.create_reporter(series_task_id).cancelled("任务已取消")
     return {
         "status": "cancelled",
-        "task_id": _build_series_task_id(series_id),
-        "cancelled_video_ids": active_video_ids,
+        "task_id": series_task_id,
+        "cancelled_video_ids": cancelled_video_ids,
     }
 
 
@@ -430,6 +472,14 @@ def _build_task_id(series_id: str, video_id: str) -> str:
 
 def _build_series_task_id(series_id: str) -> str:
     return f"series/{series_id}"
+
+
+def _get_pending_series_videos(container, series_id: str) -> list[object]:
+    library = container.list_video_library.run()
+    series = next((item for item in library.series if item.id == series_id), None)
+    if series is None:
+        raise HTTPException(status_code=404, detail=f"series not found '{series_id}'")
+    return [video for video in series.videos if not video.processed]
 
 
 def _ensure_video_exists(container, series_id: str, video_id: str) -> None:

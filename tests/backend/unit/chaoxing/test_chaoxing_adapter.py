@@ -323,6 +323,33 @@ class ChaoxingLinkedVideoDownloadStarterTests(unittest.TestCase):
             self.assertEqual(downloader.calls[0]["filename"], "chaoxing-video-1.mp4")
             self.assertEqual(downloader.calls[0]["output_dir"], Path(tmp) / "videos" / "chaoxing-course-1")
 
+    def test_cancelled_download_reports_cancelled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tracker = InMemoryProgressTracker()
+            downloader = _CancellingDownloadClient(tracker)
+            starter = ChaoxingLinkedVideoDownloadStarter(
+                root_dir=Path(tmp),
+                client=downloader,
+                progress_tracker=tracker,
+                run_in_background=False,
+            )
+            video = LinkedVideo(
+                bvid="chaoxing-video-1",
+                page=1,
+                title="第一讲",
+                cover_url="",
+                duration_seconds=0,
+                source_url="chaoxing://video/video-1",
+                provider="chaoxing",
+                download_key="video-1",
+            )
+
+            task_id = starter.start(series_id="chaoxing-course-1", video=video)
+
+            snapshot = tracker.get_snapshot(task_id)
+            self.assertEqual(snapshot.status, "cancelled")
+            self.assertEqual(snapshot.detail, "下载已取消")
+
 
 class _FakeClient:
     def __init__(self, *, courses, chapters, videos) -> None:
@@ -486,6 +513,16 @@ class _RecordingDownloadClient:
         output.write_bytes(b"video")
         progress(1, 1)
         return output
+
+
+class _CancellingDownloadClient:
+    def __init__(self, tracker: InMemoryProgressTracker) -> None:
+        self._tracker = tracker
+
+    def download_video(self, video_key, *, output_dir, filename, progress):
+        del video_key, output_dir, filename
+        self._tracker.request_cancel("download/chaoxing-course-1/chaoxing-video-1")
+        progress(0, 1)
 
 
 if __name__ == "__main__":

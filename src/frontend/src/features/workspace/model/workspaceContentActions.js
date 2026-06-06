@@ -1,6 +1,7 @@
 import {
   cancelSeriesSummaries,
   cancelChaoxingInit,
+  cancelVideoDownload,
   cancelVideoSummary,
   createVideoNote,
   deleteSeries,
@@ -29,9 +30,21 @@ import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection } from "./workspaceState";
 
+const activeSeriesCancellationRef = { current: null };
+let nextSeriesRunSequence = 0;
+
+function createSeriesRunId(seriesId) {
+  nextSeriesRunSequence += 1;
+  return `${seriesId}:${nextSeriesRunSequence}`;
+}
+
 export function getPendingVideosForSeriesGeneration(library, seriesId) {
   const series = library?.series?.find((item) => item.id === seriesId);
-  return series?.videos?.filter((video) => !video.processed && video.status !== "linked" && !video.isLinked) ?? [];
+  return series?.videos?.filter((video) => !video.processed) ?? [];
+}
+
+function isLinkedVideo(video) {
+  return video?.isLinked === true || video?.status === "linked";
 }
 
 function isGenerationCancelledError(error) {
@@ -39,6 +52,13 @@ function isGenerationCancelledError(error) {
     return false;
   }
   return error.message.includes("generation cancelled");
+}
+
+function isDownloadCancelledError(error) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.includes("下载已取消") || error.message.includes("任务已取消");
 }
 
 export function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
@@ -151,25 +171,79 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return;
     }
 
-    dispatch({ type: "series_generation_queue_started", seriesId, total: pendingVideos.length });
-    dispatch({ type: "series_generation_started", seriesId });
+    const runId = createSeriesRunId(seriesId);
+    dispatch({ type: "series_generation_queue_started", seriesId, runId, total: pendingVideos.length });
+    dispatch({ type: "series_generation_started", seriesId, runId });
+    const cancellation = { requested: false, runId };
+    activeSeriesCancellationRef.current = cancellation;
     try {
+      const linkedVideos = pendingVideos.filter(isLinkedVideo);
+      for (const [index, video] of linkedVideos.entries()) {
+        dispatch({
+          type: "series_generation_queue_download_started",
+          seriesId,
+          runId,
+          videoId: video.id,
+          videoTitle: video.title,
+          detail: `正在下载未缓存视频 ${index + 1}/${linkedVideos.length}`,
+        });
+        await downloadLinkedVideo(seriesId, video.id, { cancelCheck: () => cancellation.requested });
+        if (cancellation.requested) {
+          throw new Error("任务已取消");
+        }
+        dispatch({ type: "series_generation_queue_download_finished", seriesId, runId, videoId: video.id });
+      }
+      if (linkedVideos.length) {
+        await reloadWorkspaceLibrary();
+      }
+      dispatch({
+        type: "series_generation_queue_detail_updated",
+        seriesId,
+        runId,
+        detail: `已完成 0/${pendingVideos.length}`,
+      });
+      if (cancellation.requested) {
+        throw new Error("任务已取消");
+      }
       await generateSeriesSummaries(seriesId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
+        runId,
       });
       const library = await reloadWorkspaceLibrary();
       dispatch({
         type: "series_generation_succeeded",
         taskKey: buildSeriesGenerationTaskKey(seriesId),
         seriesId,
+        runId,
         library,
       });
       dispatch({
         type: "series_generation_queue_finished",
         seriesId,
+        runId,
         status: "completed",
       });
     } catch (error) {
+      if (isDownloadCancelledError(error)) {
+        dispatch({
+          type: "generation_status_loaded",
+          taskKey: buildSeriesGenerationTaskKey(seriesId),
+          mode: "series",
+          seriesId,
+          runId,
+          videoId: null,
+          snapshot: {
+            status: "cancelled",
+            stage: "cancelled",
+            progress: null,
+            detail: "任务已取消",
+            error: null,
+          },
+          subscriptionActive: false,
+        });
+        dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "cancelled" });
+        return;
+      }
       const message = error instanceof Error ? error.message : "生成失败";
       dispatch({ type: "load_failed", message });
       dispatch({
@@ -177,6 +251,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         taskKey: buildSeriesGenerationTaskKey(seriesId),
         mode: "series",
         seriesId,
+        runId,
         videoId: null,
         snapshot: {
           status: "failed",
@@ -187,8 +262,49 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         },
         subscriptionActive: false,
       });
-      dispatch({ type: "series_generation_queue_finished", seriesId, status: "failed" });
+      dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "failed" });
+    } finally {
+      if (activeSeriesCancellationRef.current === cancellation) {
+        activeSeriesCancellationRef.current = null;
+      }
     }
+  }
+
+  async function downloadLinkedVideo(seriesId, videoId, options = {}) {
+    dispatch({ type: "video_download_started", seriesId, videoId });
+    await startVideoDownload(seriesId, videoId);
+    await new Promise((resolve, reject) => {
+      const cancelTimer = options.cancelCheck
+        ? window.setInterval(() => {
+            if (options.cancelCheck()) {
+              cleanup();
+              dispatch({ type: "video_download_failed", seriesId, videoId });
+              reject(new Error("任务已取消"));
+            }
+          }, 250)
+        : null;
+      let unsubscribe = null;
+      function cleanup() {
+        unsubscribe?.();
+        if (cancelTimer != null) {
+          window.clearInterval(cancelTimer);
+        }
+      }
+      unsubscribe = subscribeVideoDownloadProgress(seriesId, videoId, async (snapshot) => {
+        if (snapshot.status === "running" || snapshot.status === "completed") {
+          dispatch({ type: "video_download_progress_updated", seriesId, videoId, progress: snapshot.progress });
+        }
+        if (snapshot.status === "completed") {
+          cleanup();
+          resolve();
+        }
+        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+          cleanup();
+          dispatch({ type: "video_download_failed", seriesId, videoId });
+          reject(new Error(snapshot.error || snapshot.detail || "视频下载失败"));
+        }
+      });
+    });
   }
 
   async function onCancelGeneration() {
@@ -198,16 +314,36 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         (state.seriesGenerationQueue.status === "running" || state.seriesGenerationQueue.status === "cancelling") &&
         state.selectedSeriesId
       ) {
-        dispatch({ type: "series_generation_queue_cancelling", seriesId: state.selectedSeriesId });
-        await cancelSeriesSummaries(state.selectedSeriesId);
+        if (activeSeriesCancellationRef.current != null) {
+          activeSeriesCancellationRef.current.requested = true;
+        }
+        dispatch({
+          type: "series_generation_queue_cancelling",
+          seriesId: state.selectedSeriesId,
+          runId: state.seriesGenerationQueue.runId,
+        });
+        await cancelSeriesWork({
+          seriesId: state.selectedSeriesId,
+          runId: state.seriesGenerationQueue.runId,
+        });
         return;
       }
       if (
         state.selectedContextType === "series" &&
         state.selectedSeriesId
       ) {
-        dispatch({ type: "series_generation_queue_cancelling", seriesId: state.selectedSeriesId });
-        await cancelSeriesSummaries(state.selectedSeriesId);
+        if (activeSeriesCancellationRef.current != null) {
+          activeSeriesCancellationRef.current.requested = true;
+        }
+        dispatch({
+          type: "series_generation_queue_cancelling",
+          seriesId: state.selectedSeriesId,
+          runId: state.seriesGenerationQueue?.runId,
+        });
+        await cancelSeriesWork({
+          seriesId: state.selectedSeriesId,
+          runId: state.seriesGenerationQueue?.runId,
+        });
         return;
       }
       const currentTask = getGenerationTaskForSelection(state);
@@ -221,6 +357,36 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         message: error instanceof Error ? error.message : "取消生成失败",
       });
     }
+  }
+
+  async function cancelSeriesWork({ seriesId, runId }) {
+    await cancelSeriesSummaries(seriesId, { runId });
+    const linkedVideoIds = new Set(
+      getPendingVideosForSeriesGeneration(state.library, seriesId)
+        .filter(isLinkedVideo)
+        .map((video) => video.id),
+    );
+    if (state.seriesGenerationQueue?.seriesId === seriesId && state.seriesGenerationQueue.downloadVideoId) {
+      linkedVideoIds.add(state.seriesGenerationQueue.downloadVideoId);
+    }
+    await Promise.allSettled(Array.from(linkedVideoIds, (videoId) => cancelVideoDownload(seriesId, videoId)));
+    dispatch({
+      type: "generation_status_loaded",
+      taskKey: buildSeriesGenerationTaskKey(seriesId),
+      mode: "series",
+      seriesId,
+      runId,
+      videoId: null,
+      snapshot: {
+        status: "cancelled",
+        stage: "cancelled",
+        progress: null,
+        detail: "任务已取消",
+        error: null,
+      },
+      subscriptionActive: false,
+    });
+    dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "cancelled" });
   }
 
   async function onGenerateMindmap() {
@@ -428,26 +594,18 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
     const seriesId = state.selectedSeriesId;
     const videoId = video.id;
-    dispatch({ type: "video_download_started", seriesId, videoId });
+    if (state.downloadingVideoKey === buildVideoKey(seriesId, videoId)) {
+      try {
+        await cancelVideoDownload(seriesId, videoId);
+      } catch (error) {
+        dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "取消下载失败" });
+      }
+      return;
+    }
     try {
-      await startVideoDownload(seriesId, videoId);
-      const unsubscribe = subscribeVideoDownloadProgress(seriesId, videoId, async (snapshot) => {
-        if (snapshot.status === "running" || snapshot.status === "completed") {
-          dispatch({ type: "video_download_progress_updated", seriesId, videoId, progress: snapshot.progress });
-        }
-        if (snapshot.status === "completed") {
-          unsubscribe();
-          const library = await reloadWorkspaceLibrary();
-          dispatch({ type: "video_download_completed", seriesId, videoId, library });
-        }
-        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
-          unsubscribe();
-          dispatch({ type: "video_download_failed", seriesId, videoId });
-          if (snapshot.status === "failed") {
-            dispatch({ type: "load_failed", message: snapshot.error ?? "视频下载失败" });
-          }
-        }
-      });
+      await downloadLinkedVideo(seriesId, videoId);
+      const library = await reloadWorkspaceLibrary();
+      dispatch({ type: "video_download_completed", seriesId, videoId, library });
     } catch (error) {
       dispatch({ type: "video_download_failed", seriesId, videoId });
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "视频下载失败" });

@@ -157,6 +157,7 @@ export function WorkspacePage({ page }) {
               isGeneratingSelectedVideo={generation.isGeneratingSummary}
               isGeneratingSeries={generation.isGeneratingSeries}
               seriesGenerationQueue={generation.seriesGenerationQueue}
+              downloadingVideoKey={generation.downloadingVideoKey}
               onEnterLibraryHome={actions.enterLibraryHome}
               onSelectSeriesContext={actions.selectSeriesContext}
               onSelectVideo={actions.selectVideo}

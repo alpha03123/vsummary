@@ -173,7 +173,7 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         reporter = tracker.reporters["series/series-1"]
         self.assertEqual(reporter.completed_calls, ["系列处理完成，已结束 3 / 3，完成 2，取消 1"])
 
-    async def test_series_batch_propagates_child_stage_progress(self) -> None:
+    async def test_series_batch_keeps_child_stage_progress_on_video_task(self) -> None:
         tracker = FakeProgressTracker()
         workspace = FakeWorkspace(
             series=[
@@ -192,11 +192,12 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
 
         await batch_use_case.run("series-1")
 
-        reporter = tracker.reporters["series/series-1"]
+        reporter = tracker.reporters["series-1/video-1"]
         stage_names = [stage for stage, _, _ in reporter.updates]
         self.assertIn("probe", stage_names)
         self.assertIn("transcribe", stage_names)
-        self.assertTrue(any(detail and "正在处理 1/1：Video 1" in detail for _, _, detail in reporter.updates))
+        series_reporter = tracker.reporters["series/series-1"]
+        self.assertFalse(any(detail and "正在处理 1/1：Video 1" in detail for _, _, detail in series_reporter.updates))
 
     async def test_series_batch_reuses_single_video_concurrency_limit(self) -> None:
         tracker = FakeProgressTracker()
@@ -410,6 +411,39 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.skipped_videos, ["video-2", "video-3"])
         self.assertEqual(generator.calls, [("series-1", "video-1")])
 
+    async def test_series_batch_cancel_marks_running_child_cancelled(self) -> None:
+        tracker = FakeProgressTracker()
+        workspace = FakeWorkspace(
+            series=[
+                LibrarySeriesDTO(
+                    id="series-1",
+                    title="Series 1",
+                    videos=[
+                        LibraryVideoCardDTO(id="video-1", title="Video 1", source_name="video-1.mp4", processed=False, status="pending"),
+                        LibraryVideoCardDTO(id="video-2", title="Video 2", source_name="video-2.mp4", processed=False, status="pending"),
+                    ],
+                )
+            ]
+        )
+        generator = ProgressCheckingGenerator()
+        single_use_case = GenerateVideoSummaryFromLibrary(
+            workspace,
+            generator,
+            tracker,
+            video_generation_concurrency=1,
+        )
+        batch_use_case = GenerateSeriesSummaryFromLibrary(workspace, single_use_case, tracker)
+
+        task = asyncio.create_task(batch_use_case.run("series-1"))
+        await asyncio.wait_for(generator.started.wait(), timeout=1.0)
+        tracker.reporters["series/series-1"].cancel_requested = True
+        generator.release.set()
+        result = await task
+
+        self.assertEqual(result.completed_videos, [])
+        self.assertEqual(result.cancelled_videos, ["video-1"])
+        self.assertEqual(result.skipped_videos, ["video-2"])
+
     async def test_series_batch_failure_propagates_error(self) -> None:
         tracker = FakeProgressTracker()
         workspace = FakeWorkspace(
@@ -574,6 +608,18 @@ class BlockingGenerator:
 
     def release_one(self) -> None:
         self._release_next.put_nowait(None)
+
+
+class ProgressCheckingGenerator:
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
+        del series_id, video_id, transcript_enhancement_enabled
+        self.started.set()
+        await self.release.wait()
+        progress_reporter.raise_if_cancelled()
 
 
 class OutOfOrderCompletionGenerator:

@@ -7,7 +7,7 @@ export function buildWorkspacePageModel(controller) {
     seriesQueue?.seriesId === controller.state.selectedSeriesId &&
     (seriesQueue.status === "running" || seriesQueue.status === "cancelling");
   const seriesQueueProgress =
-    seriesQueueActive && typeof seriesQueue.total === "number" && seriesQueue.total > 0
+    seriesQueueActive && !seriesQueue.downloadVideoId && typeof seriesQueue.total === "number" && seriesQueue.total > 0
       ? (seriesQueue.completed / seriesQueue.total) * 100
       : null;
   const seriesQueueSnapshot = seriesQueueActive
@@ -15,7 +15,7 @@ export function buildWorkspacePageModel(controller) {
         status: seriesQueue.status,
         stage: "batch",
         progress: seriesQueueProgress,
-        detail: seriesQueue.detail ?? `已结束 ${seriesQueue.completed}/${seriesQueue.total}`,
+        detail: seriesQueue.detail ?? `已完成 ${seriesQueue.completed}/${seriesQueue.total}`,
         error: null,
       }
     : null;
@@ -78,6 +78,7 @@ export function buildWorkspacePageModel(controller) {
       snapshot: generationSnapshot,
       showOverlay: showGenerationOverlay,
       videoDownloadProgress: controller.state.videoDownloadProgress ?? null,
+      downloadingVideoKey: controller.state.downloadingVideoKey,
     },
     actions: {
       selectSeries: controller.onSelectSeries,

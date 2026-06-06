@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from backend.api.app import create_app
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
 
@@ -99,6 +100,24 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertTrue(tracker.is_cancel_requested("series-1/video-1"))
         self.assertTrue(tracker.is_cancel_requested("series-1/video-2"))
 
+    def test_stale_series_cancel_run_id_does_not_cancel_current_series_task(self) -> None:
+        tracker = InMemoryProgressTracker()
+        tracker.create_reporter("series/series-1").update("batch", 10.0, "new run")
+        container = _build_container(tracker)
+        container.generate_series_summaries = SimpleNamespace(
+            get_active_video_ids=lambda series_id: ["video-1"] if series_id == "series-1" else [],
+            get_active_run_id=lambda series_id: "new-run" if series_id == "series-1" else None,
+        )
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/series/series-1/generate/cancel", json={"run_id": "old-run"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "stale")
+        self.assertFalse(tracker.is_cancel_requested("series/series-1"))
+        self.assertFalse(tracker.is_cancel_requested("series-1/video-1"))
+        self.assertEqual(tracker.get_snapshot("series/series-1").status, "running")
+
     def test_video_generate_returns_conflict_when_generation_is_cancelled(self) -> None:
         tracker = InMemoryProgressTracker()
         reporter = tracker.create_reporter("series-1/video-1")
@@ -134,17 +153,43 @@ class GenerationStatusApiTests(unittest.TestCase):
 
 def _build_container(tracker: InMemoryProgressTracker):
     source_runner = SimpleNamespace(run=lambda series_id, video_id: object())
+    library = SimpleNamespace(
+        series=[
+            LibrarySeriesDTO(
+                id="series-1",
+                title="Series 1",
+                videos=[
+                    LibraryVideoCardDTO(
+                        id="video-1",
+                        title="Video 1",
+                        source_name="video-1.mp4",
+                        processed=False,
+                        status="pending",
+                    ),
+                    LibraryVideoCardDTO(
+                        id="video-2",
+                        title="Video 2",
+                        source_name="video-2.mp4",
+                        processed=False,
+                        status="pending",
+                    ),
+                ],
+            ),
+        ],
+    )
     return SimpleNamespace(
         root_dir=None,
         generation_progress_tracker=tracker,
+        video_download_progress_tracker=InMemoryProgressTracker(),
+        list_video_library=SimpleNamespace(run=lambda: library),
         get_video_source=source_runner,
         generate_video_summary=SimpleNamespace(run=lambda series_id, video_id, transcript_enhancement_enabled=None: None),
         generate_series_summaries=SimpleNamespace(run=lambda series_id, transcript_enhancement_enabled=None: None),
     )
 
 
-async def _raise_duplicate_series(series_id: str, transcript_enhancement_enabled=None):
-    del transcript_enhancement_enabled
+async def _raise_duplicate_series(series_id: str, transcript_enhancement_enabled=None, run_id=None):
+    del transcript_enhancement_enabled, run_id
     raise DuplicateSeriesGenerationError(f"series '{series_id}' generation is already running")
 
 
