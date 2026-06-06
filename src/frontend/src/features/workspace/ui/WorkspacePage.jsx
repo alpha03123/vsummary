@@ -398,6 +398,9 @@ export function WorkspacePage({ page }) {
                   ragModels={generation.ragModels}
                   ragModelsLoading={generation.ragModelsLoading}
                   downloadingRagModelKey={generation.downloadingRagModelKey}
+                  chaoxingChromium={generation.chaoxingChromium}
+                  chaoxingChromiumLoading={generation.chaoxingChromiumLoading}
+                  chaoxingChromiumDownloading={generation.chaoxingChromiumDownloading}
                   downloadingModelId={generation.downloadingModelId}
                   modelDownloadStatus={generation.modelDownloadStatus}
                   modelDownloadProgress={generation.modelDownloadProgress}
@@ -409,6 +412,7 @@ export function WorkspacePage({ page }) {
                   onTestProviderConnection={actions.testProviderConnection}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onDownloadRagModel={actions.downloadRagModel}
+                  onDownloadChaoxingChromium={actions.downloadChaoxingChromium}
                   onResetSettings={actions.resetSettings}
                   onClose={actions.closeSettingsPanel}
                 />
@@ -430,6 +434,13 @@ export function WorkspacePage({ page }) {
               ? actions.resolveSeriesVideo(url, targetSeriesId)
               : actions.resolvePlaygroundVideo(url)
           )}
+          chaoxingChromium={generation.chaoxingChromium}
+          onOpenDownloadManager={() => actions.openSettingsPanel("network")}
+          onLoadChaoxingStatus={actions.loadChaoxingStatus}
+          onInitChaoxing={actions.initChaoxing}
+          onCancelChaoxingInit={actions.cancelChaoxingInit}
+          onLoadChaoxingCourses={actions.loadChaoxingCourses}
+          onImportChaoxingCourse={actions.importChaoxingCourse}
           onImportLocalSeries={async (seriesTitle, files) => actions.importLocalSeries(seriesTitle, files)}
           onImportSeriesVideos={async (seriesId, files) => actions.importSeriesVideos(seriesId, files)}
           onImportLocalPlaygroundVideos={async (files) => actions.importLocalPlaygroundVideos(files)}

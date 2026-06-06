@@ -60,6 +60,7 @@ def render_start_bat() -> str:
             'if not exist "%ROOT%\\.env" copy /y "%ROOT%\\.env.example" "%ROOT%\\.env" >nul',
             'set "HF_HOME=%ROOT%\\data\\huggingface"',
             'set "HUGGINGFACE_HUB_CACHE=%ROOT%\\data\\huggingface\\hub"',
+            'set "PLAYWRIGHT_BROWSERS_PATH=%ROOT%\\data\\playwright-browsers"',
             'set "PATH=%ROOT%\\runtime;%ROOT%\\runtime\\Library\\bin;%ROOT%\\runtime\\Scripts;%PATH%"',
             'set "PYTHONPATH=%ROOT%\\src"',
             "",

@@ -1,5 +1,6 @@
 import {
   cancelSeriesSummaries,
+  cancelChaoxingInit,
   cancelVideoSummary,
   createVideoNote,
   deleteSeries,
@@ -9,12 +10,17 @@ import {
   generateVideoMindmap,
   generateSeriesSummaries,
   generateVideoSummary,
+  importChaoxingCourse,
   importLocalPlaygroundVideos,
   importLocalSeries,
   importLocalSeriesVideos,
   loadWorkspaceLibrary,
+  initChaoxing,
+  loadChaoxingCourses,
+  loadChaoxingStatus,
   resolveBilibiliSeries,
   resolveBilibiliVideo,
+  subscribeChaoxingImportProgress,
   startVideoDownload,
   subscribeVideoDownloadProgress,
   updateVideoNote,
@@ -346,6 +352,76 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onLoadChaoxingStatus() {
+    try {
+      return await loadChaoxingStatus();
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "读取超星状态失败" });
+      throw error;
+    }
+  }
+
+  async function onInitChaoxing(options = {}) {
+    try {
+      return await initChaoxing(options);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "超星初始化失败" });
+      throw error;
+    }
+  }
+
+  async function onCancelChaoxingInit() {
+    try {
+      await cancelChaoxingInit();
+    } catch {
+      // 取消是清理动作，失败时不覆盖用户当前操作反馈。
+    }
+  }
+
+  async function onLoadChaoxingCourses() {
+    try {
+      return await loadChaoxingCourses();
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "读取超星课程失败" });
+      throw error;
+    }
+  }
+
+  async function onImportChaoxingCourse(courseKey, onProgress = null) {
+    try {
+      const task = await importChaoxingCourse(courseKey);
+      if (!task.taskId) {
+        throw new Error("超星导入任务未返回 task_id");
+      }
+      return await new Promise((resolve, reject) => {
+        let unsubscribe = null;
+        unsubscribe = subscribeChaoxingImportProgress(task.taskId, async (snapshot) => {
+          onProgress?.(snapshot);
+          if (snapshot.status === "completed") {
+            unsubscribe?.();
+            const library = await reloadWorkspaceLibrary();
+            const importedSeries = library?.series?.find((series) => series.id === task.seriesId);
+            resolve(importedSeries ?? { title: "超星课程", videos: [] });
+          }
+          if (snapshot.status === "failed") {
+            unsubscribe?.();
+            reject(new Error(snapshot.error || "导入超星课程失败"));
+          }
+          if (snapshot.status === "cancelled") {
+            unsubscribe?.();
+            reject(new Error(snapshot.detail || "超星课程导入已取消"));
+          }
+        });
+      });
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入超星课程失败" });
+      throw error;
+    }
+  }
+
   async function onDownloadVideo(video) {
     if (!state.selectedSeriesId || !video?.id) {
       return;
@@ -454,6 +530,11 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onResolveLinkedSeries,
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
+    onLoadChaoxingStatus,
+    onInitChaoxing,
+    onCancelChaoxingInit,
+    onLoadChaoxingCourses,
+    onImportChaoxingCourse,
     onImportLocalSeries,
     onImportLocalPlaygroundVideos,
     onImportSeriesVideos,

@@ -176,6 +176,30 @@ class BackgroundBilibiliDownloadStarter:
         asyncio.create_task(_run())
         return task_id
 
+    def start_video(self, *, series_id: str, video) -> str:
+        return self.start(series_id=series_id, video_id=video.video_id, bvid=video.bvid, page=video.page)
+
+
+class BilibiliLinkedVideoDownloadStarter:
+    def __init__(self, starter: BackgroundBilibiliDownloadStarter) -> None:
+        self._starter = starter
+
+    def start(self, *, series_id: str, video) -> str:
+        if video.provider != "bilibili":
+            raise RuntimeError(f"unsupported linked video provider '{video.provider}'")
+        return self._starter.start_video(series_id=series_id, video=video)
+
+
+class CompositeLinkedVideoDownloadStarter:
+    def __init__(self, starters: dict[str, object]) -> None:
+        self._starters = starters
+
+    def start(self, *, series_id: str, video) -> str:
+        starter = self._starters.get(video.provider)
+        if starter is None:
+            raise RuntimeError(f"unsupported linked video provider '{video.provider}'")
+        return starter.start(series_id=series_id, video=video)
+
 
 def _extract_info(url: str) -> dict[str, object]:
     from yt_dlp import YoutubeDL

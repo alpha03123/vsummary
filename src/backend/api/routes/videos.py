@@ -22,7 +22,7 @@ from backend.api.responses import (
     VideoWorkspaceToolsResponse,
 )
 from backend.api.sse import stream_progress_events
-from backend.video_summary.infrastructure.runtime import AsrModelNotReadyError
+from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError

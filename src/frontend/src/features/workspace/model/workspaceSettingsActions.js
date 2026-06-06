@@ -1,17 +1,22 @@
 import {
   downloadFasterWhisperModel,
   downloadRagModel,
+  downloadChaoxingChromium,
   loadFasterWhisperModels,
   loadOpenaiApiKey,
   loadRagModels,
+  loadChaoxingChromium,
   subscribeFasterWhisperModelDownloadProgress,
   subscribeRagModelDownloadProgress,
+  subscribeChaoxingChromiumDownloadProgress,
   testProviderSettings,
   updateProviderSettings,
   updateWorkspaceSettings,
 } from "./workspaceApi";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
+
+const CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE = "Chromium 内核下载失败，请检查网络或 Playwright 安装环境";
 
 export function createWorkspaceSettingsActions({ state, dispatch }) {
   function onToggleSettingsPanel() {
@@ -269,6 +274,49 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
+  async function onDownloadChaoxingChromium() {
+    dispatch({ type: "chaoxing_chromium_download_started" });
+    let unsubscribe = () => {};
+    const downloadCompleted = new Promise((resolve, reject) => {
+      unsubscribe = subscribeChaoxingChromiumDownloadProgress((snapshot) => {
+        if (snapshot.status === "running" || snapshot.status === "completed") {
+          dispatch({
+            type: "chaoxing_chromium_download_progress_updated",
+            status: snapshot.status,
+            progress: snapshot.progress,
+            detail: snapshot.detail,
+            error: snapshot.error,
+          });
+        }
+
+        if (snapshot.status === "failed") {
+          const message = snapshot.error || CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE;
+          dispatch({
+            type: "chaoxing_chromium_download_failed",
+            message,
+          });
+          reject(new Error(message));
+        }
+        if (snapshot.status === "completed") {
+          resolve();
+        }
+      });
+    });
+    try {
+      await downloadChaoxingChromium();
+      await downloadCompleted;
+      const chromium = await loadChaoxingChromium();
+      dispatch({ type: "chaoxing_chromium_loaded", chromium });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "超星 Chromium 下载失败",
+      });
+    } finally {
+      unsubscribe();
+    }
+  }
+
   return {
     onToggleSettingsPanel,
     onOpenSettingsPanel,
@@ -280,6 +328,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onResetSettings,
     onDownloadFasterWhisperModel,
     onDownloadRagModel,
+    onDownloadChaoxingChromium,
   };
 }
 

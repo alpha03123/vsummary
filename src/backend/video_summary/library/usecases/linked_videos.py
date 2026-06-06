@@ -98,9 +98,7 @@ class StartLinkedVideoDownload:
         video = next((item for item in linked_series.videos if item.video_id == video_id), None)
         if video is None:
             raise LookupError(f"video not found in linked series: {video_id}")
-        return StartLinkedVideoDownloadResult(
-            task_id=self._starter.start(series_id=series_id, video_id=video_id, bvid=video.bvid, page=video.page)
-        )
+        return StartLinkedVideoDownloadResult(task_id=self._starter.start(series_id=series_id, video=video))
 
 
 def _to_series_dto(linked_series: LinkedSeries) -> LibrarySeriesDTO:
@@ -124,4 +122,5 @@ def _to_video_card_dto(video) -> LibraryVideoCardDTO:
         bilibili_bvid=video.bvid,
         bilibili_page=video.page,
         source_url=video.source_url,
+        provider=video.provider,
     )

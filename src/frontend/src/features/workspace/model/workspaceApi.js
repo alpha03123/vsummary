@@ -154,8 +154,18 @@ export async function loadRagModels() {
   return fetchJson("/api/rag/models");
 }
 
+export async function loadChaoxingChromium() {
+  return fetchJson("/api/linked/chaoxing/chromium");
+}
+
 export async function downloadRagModel(modelKey) {
   return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download`, {
+    method: "POST",
+  });
+}
+
+export async function downloadChaoxingChromium() {
+  return fetchJson("/api/linked/chaoxing/chromium/download", {
     method: "POST",
   });
 }
@@ -165,6 +175,14 @@ export function subscribeRagModelDownloadProgress(modelKey, listener) {
     `/api/rag/models/${encodeURIComponent(modelKey)}/download/progress`,
     listener,
     "RAG 模型下载进度连接已中断",
+  );
+}
+
+export function subscribeChaoxingChromiumDownloadProgress(listener) {
+  return subscribeProgress(
+    "/api/linked/chaoxing/chromium/download/progress",
+    listener,
+    "超星 Chromium 下载进度连接已中断",
   );
 }
 
@@ -689,6 +707,63 @@ export async function resolveBilibiliVideo(url, targetSeriesId = null) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, target_series_id: targetSeriesId }),
   });
+}
+
+export async function loadChaoxingStatus() {
+  const payload = await fetchJson("/api/linked/chaoxing/status");
+  return {
+    initialized: payload.initialized === true,
+    chromiumDownloaded: payload.chromium_downloaded === true,
+  };
+}
+
+export async function initChaoxing(options = {}) {
+  const payload = await fetchJson("/api/linked/chaoxing/init", {
+    method: "POST",
+    signal: options.signal,
+  });
+  return {
+    initialized: payload.initialized === true,
+    chromiumDownloaded: payload.chromium_downloaded === true,
+  };
+}
+
+export async function cancelChaoxingInit() {
+  return fetchJson("/api/linked/chaoxing/init/cancel", {
+    method: "POST",
+  });
+}
+
+export async function loadChaoxingCourses() {
+  const payload = await fetchJson("/api/linked/chaoxing/courses");
+  return Array.isArray(payload)
+    ? payload.map((course) => ({
+      courseKey: typeof course.course_key === "string" ? course.course_key : "",
+      title: typeof course.title === "string" ? course.title : "",
+      teacher: typeof course.teacher === "string" ? course.teacher : "",
+      openTime: typeof course.open_time === "string" ? course.open_time : "",
+    })).filter((course) => course.courseKey && course.title)
+    : [];
+}
+
+export async function importChaoxingCourse(courseKey) {
+  const payload = await fetchJson("/api/linked/chaoxing/import/course", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ course_key: courseKey }),
+  });
+  return {
+    taskId: typeof payload.task_id === "string" ? payload.task_id : "",
+    seriesId: typeof payload.series_id === "string" ? payload.series_id : "",
+  };
+}
+
+export function subscribeChaoxingImportProgress(taskId, listener) {
+  return subscribeProgress(
+    `/api/linked/chaoxing/import/course/${encodeURIComponent(taskId)}/progress`,
+    listener,
+    "超星课程导入进度连接已中断",
+  );
 }
 
 export async function importLocalPlaygroundVideos(files) {

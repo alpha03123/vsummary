@@ -42,6 +42,7 @@ function asVideoCard(value, label) {
     bilibiliBvid: typeof record.bilibili_bvid === "string" ? record.bilibili_bvid : "",
     bilibiliPage: typeof record.bilibili_page === "number" ? record.bilibili_page : 0,
     sourceUrl: typeof record.source_url === "string" ? record.source_url : "",
+    provider: typeof record.provider === "string" ? record.provider : "",
   };
 }
 

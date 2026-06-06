@@ -19,7 +19,15 @@ from backend.agent_graph.query.video_answer_synthesizer import (
     AnswerSynthesisProgram,
 )
 from backend.agent_graph.runtime.service import AgentGraphService
-from backend.bilibili import BackgroundBilibiliDownloadStarter, BilibiliDownloader, YtDlpBilibiliResolver
+from backend.bilibili import (
+    BackgroundBilibiliDownloadStarter,
+    BilibiliDownloader,
+    BilibiliLinkedVideoDownloadStarter,
+    CompositeLinkedVideoDownloadStarter,
+    YtDlpBilibiliResolver,
+)
+from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
+from backend.chaoxing.chromium import ChaoxingChromiumManager
 from backend.video_summary.infrastructure.agent_memory import (
     AgentWorkspaceIndexBuilder,
     BGEReranker,
@@ -105,8 +113,14 @@ class ApiContainer:
     generation_progress_tracker: InMemoryProgressTracker
     video_download_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
+    chaoxing_chromium_progress_tracker: InMemoryProgressTracker
+    chaoxing_import_progress_tracker: InMemoryProgressTracker
     knowledge_memory_progress_tracker: InMemoryProgressTracker
     rag_model_manager: RagModelManager
+    chaoxing_chromium_manager: ChaoxingChromiumManager
+    chaoxing_importer: ChaoxingCourseImporter
+    linked_series_workspace: FileSystemVideoWorkspace
+    workspace_index_invalidator: object
     settings_service: SettingsServicePort
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
@@ -129,6 +143,8 @@ def build_api_container(
     progress_tracker = InMemoryProgressTracker()
     video_download_progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
+    chaoxing_chromium_progress_tracker = InMemoryProgressTracker()
+    chaoxing_import_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
     rag_model_progress_tracker = InMemoryProgressTracker()
     index_refresher_ref: dict[str, _WorkspaceIndexRefresher | None] = {"value": None}
@@ -144,6 +160,10 @@ def build_api_container(
         root_dir=root_dir,
         progress_tracker=rag_model_progress_tracker,
         on_download_completed=on_rag_model_download_completed,
+    )
+    chaoxing_chromium_manager = ChaoxingChromiumManager(
+        root_dir=root_dir,
+        progress_tracker=chaoxing_chromium_progress_tracker,
     )
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
@@ -193,6 +213,21 @@ def build_api_container(
         downloader=BilibiliDownloader(),
         progress_tracker=video_download_progress_tracker,
     )
+    chaoxing_client = ChaoxingDownloaderClient(
+        state_dir=root_dir / "data" / "chaoxing" / "state",
+        chromium_downloaded=chaoxing_chromium_manager.is_downloaded,
+    )
+    chaoxing_importer = ChaoxingCourseImporter(client=chaoxing_client)
+    linked_download_starter = CompositeLinkedVideoDownloadStarter(
+        {
+            "bilibili": BilibiliLinkedVideoDownloadStarter(bilibili_download_starter),
+            "chaoxing": ChaoxingLinkedVideoDownloadStarter(
+                root_dir=root_dir,
+                client=chaoxing_client,
+                progress_tracker=video_download_progress_tracker,
+            ),
+        }
+    )
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
@@ -219,12 +254,18 @@ def build_api_container(
         import_local_series_videos=ImportLocalSeriesVideos(workspace),
         resolve_bilibili_series=ResolveBilibiliSeries(workspace, bilibili_resolver, workspace_index_invalidator),
         resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
-        start_linked_video_download=StartLinkedVideoDownload(workspace, bilibili_download_starter),
+        start_linked_video_download=StartLinkedVideoDownload(workspace, linked_download_starter),
         generation_progress_tracker=progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
+        chaoxing_chromium_progress_tracker=chaoxing_chromium_progress_tracker,
+        chaoxing_import_progress_tracker=chaoxing_import_progress_tracker,
         knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
         rag_model_manager=rag_model_manager,
+        chaoxing_chromium_manager=chaoxing_chromium_manager,
+        chaoxing_importer=chaoxing_importer,
+        linked_series_workspace=workspace,
+        workspace_index_invalidator=workspace_index_invalidator,
         settings_service=SettingsService(
             config_path=config_path,
             root_dir=root_dir,

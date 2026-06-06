@@ -33,6 +33,7 @@ class VideoCardResponse(BaseModel):
     bilibili_bvid: str = ""
     bilibili_page: int = 0
     source_url: str = ""
+    provider: str = ""
 
     @classmethod
     def from_model(cls, video: LibraryVideoCardDTO) -> "VideoCardResponse":
@@ -46,6 +47,7 @@ class VideoCardResponse(BaseModel):
             bilibili_bvid=video.bilibili_bvid,
             bilibili_page=video.bilibili_page,
             source_url=video.source_url,
+            provider=video.provider,
         )
 
 class SeriesResponse(BaseModel):

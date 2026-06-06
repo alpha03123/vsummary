@@ -11,6 +11,8 @@ class LinkedVideo:
     cover_url: str
     duration_seconds: int
     source_url: str
+    provider: str = "bilibili"
+    download_key: str = ""
 
     @property
     def video_id(self) -> str:

@@ -9,7 +9,10 @@ from backend.video_summary.infrastructure.filesystem_generation_artifact_store i
 from backend.video_summary.infrastructure.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
-from backend.video_summary.infrastructure.runtime import build_litellm_completion_gateway, build_video_summary_runtime
+from backend.video_summary.infrastructure.video_summary_runtime import (
+    build_litellm_completion_gateway,
+    build_video_summary_runtime,
+)
 from backend.video_summary.infrastructure.settings import AppSettings, load_settings
 
 

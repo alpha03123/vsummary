@@ -13,6 +13,8 @@ import {
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "../model/modelDownloadMessages";
 import { buildOpenAICompatibleChatCompletionsUrl } from "../model/providerRequestUrl";
 
+const CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE = "Chromium 内核下载失败，请检查网络或 Playwright 安装环境";
+
 export function WorkspaceSettingsPanel({
   ui,
   initialTab = "general",
@@ -21,6 +23,9 @@ export function WorkspaceSettingsPanel({
   ragModels = [],
   ragModelsLoading = false,
   downloadingRagModelKey = null,
+  chaoxingChromium = null,
+  chaoxingChromiumLoading = false,
+  chaoxingChromiumDownloading = false,
   downloadingModelId,
   modelDownloadStatus = null,
   modelDownloadProgress,
@@ -32,6 +37,7 @@ export function WorkspaceSettingsPanel({
   onTestProviderConnection,
   onDownloadFasterWhisperModel,
   onDownloadRagModel,
+  onDownloadChaoxingChromium,
   onResetSettings,
   onClose,
 }) {
@@ -48,6 +54,8 @@ export function WorkspaceSettingsPanel({
     : ui.openaiApiKeyMasked;
   const apiKeyStatus = draftApiKey || ui.openaiApiKeyMasked;
   const isAnyRagModelDownloading = ragModels.some((model) => model.status === "running");
+  const isChaoxingChromiumDownloading =
+    chaoxingChromiumDownloading || chaoxingChromium?.status === "running";
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
@@ -743,6 +751,87 @@ export function WorkspaceSettingsPanel({
                           </div>
                         );
                       })
+                    )}
+                  </div>
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="超星 Chromium"
+                  description="学习通登录初始化所需的浏览器内核"
+                >
+                  <div className="w-full flex flex-col gap-3">
+                    {chaoxingChromiumLoading && chaoxingChromium == null ? (
+                      <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+                        <LoaderCircle size={16} className="animate-spin" />
+                        正在读取 Chromium 状态...
+                      </div>
+                    ) : chaoxingChromium != null ? (
+                      (() => {
+                        const isDownloading = isChaoxingChromiumDownloading;
+                        const downloadFailed = chaoxingChromium.status === "failed" && Boolean(chaoxingChromium.error);
+                        const statusText = chaoxingChromium.downloaded
+                          ? "已下载到本地"
+                          : isDownloading
+                            ? "正在下载 Chromium"
+                            : downloadFailed
+                              ? "下载失败"
+                              : "尚未下载";
+                        return (
+                          <div
+                            className={`rounded-2xl border p-4 transition-colors ${downloadFailed
+                              ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
+                              : chaoxingChromium.downloaded
+                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                              : "border-stone-200 dark:border-stone-800"
+                              }`}
+                          >
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <strong className="break-words text-sm font-bold text-stone-900 dark:text-stone-100">
+                                  {chaoxingChromium.label}
+                                </strong>
+                                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                                  {chaoxingChromium.purpose}  {statusText}
+                                </p>
+                                {downloadFailed ? (
+                                  <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                    {chaoxingChromium.error || CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE}
+                                  </p>
+                                ) : null}
+                              </div>
+                              {isDownloading ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-400 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
+                                >
+                                  下载中
+                                </button>
+                              ) : chaoxingChromium.downloaded ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+                                >
+                                  可用
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={onDownloadChaoxingChromium}
+                                  disabled={isChaoxingChromiumDownloading}
+                                  className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
+                                >
+                                  <Download size={14} />
+                                  {downloadFailed ? "重试下载" : "下载"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <p className="text-sm text-stone-500 dark:text-stone-400">未读取到 Chromium 状态。</p>
                     )}
                   </div>
                 </WorkspaceSettingRow>

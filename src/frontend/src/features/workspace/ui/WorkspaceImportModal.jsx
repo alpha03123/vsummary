@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function WorkspaceImportModal({
@@ -9,17 +9,36 @@ export function WorkspaceImportModal({
   onClose,
   onResolveSeries,
   onResolveVideo,
+  chaoxingChromium = null,
+  onOpenDownloadManager,
+  onLoadChaoxingStatus,
+  onInitChaoxing,
+  onCancelChaoxingInit,
+  onLoadChaoxingCourses,
+  onImportChaoxingCourse,
   onImportLocalSeries,
   onImportSeriesVideos,
   onImportLocalPlaygroundVideos,
 }) {
   const [sourceType, setSourceType] = useState("local");
+  const [externalProvider, setExternalProvider] = useState("bilibili");
   const [url, setUrl] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
   const [files, setFiles] = useState([]);
   const [status, setStatus] = useState("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [preview, setPreview] = useState(null);
+  const [chaoxingStatus, setChaoxingStatus] = useState(null);
+  const [chaoxingCourses, setChaoxingCourses] = useState([]);
+  const [selectedChaoxingCourseKey, setSelectedChaoxingCourseKey] = useState("");
+  const [chaoxingLoading, setChaoxingLoading] = useState(false);
+  const [chaoxingImportProgress, setChaoxingImportProgress] = useState(null);
+  const loadChaoxingStatusRef = useRef(onLoadChaoxingStatus);
+  const loadChaoxingCoursesRef = useRef(onLoadChaoxingCourses);
+  const cancelChaoxingInitRef = useRef(onCancelChaoxingInit);
+  const initAbortControllerRef = useRef(null);
+  const initInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const isSeriesCreation = mode === "series";
   const isSeriesVideo = mode === "series-video";
@@ -28,8 +47,10 @@ export function WorkspaceImportModal({
     : isSeriesVideo
       ? `添加视频到 ${targetSeriesTitle || "当前系列"}`
       : "添加 Playground 视频";
-  const subtitle = isSeriesCreation ? "本地导入" : "视频导入";
+  const subtitle = sourceType === "external" ? "外部来源" : (isSeriesCreation ? "本地导入" : "视频导入");
   const actionLabel = "导入";
+  const chaoxingChromiumDownloaded = chaoxingChromium?.downloaded === true;
+  const chaoxingEnabledForMode = isSeriesCreation;
   const selectedFileSummary = useMemo(() => {
     if (!files.length) {
       return "未选择文件";
@@ -40,22 +61,152 @@ export function WorkspaceImportModal({
     return `已选择 ${files.length} 个文件`;
   }, [files]);
 
+  useEffect(() => {
+    loadChaoxingStatusRef.current = onLoadChaoxingStatus;
+    loadChaoxingCoursesRef.current = onLoadChaoxingCourses;
+    cancelChaoxingInitRef.current = onCancelChaoxingInit;
+  }, [onLoadChaoxingStatus, onLoadChaoxingCourses, onCancelChaoxingInit]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestChaoxingInitCancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (sourceType !== "external" || externalProvider !== "chaoxing") {
+      requestChaoxingInitCancel();
+    }
+  }, [sourceType, externalProvider]);
+
+  useEffect(() => {
+    if (sourceType !== "external" || externalProvider !== "chaoxing" || !chaoxingEnabledForMode || !chaoxingChromiumDownloaded) {
+      return;
+    }
+    const loadStatus = loadChaoxingStatusRef.current;
+    const loadCourses = loadChaoxingCoursesRef.current;
+    if (!loadStatus) {
+      return;
+    }
+    let cancelled = false;
+    setChaoxingLoading(true);
+    loadStatus()
+      .then(async (nextStatus) => {
+        if (cancelled) {
+          return;
+        }
+        setChaoxingStatus(nextStatus);
+        if (nextStatus.initialized && loadCourses) {
+          const courses = await loadCourses();
+          if (!cancelled) {
+            setChaoxingCourses(courses);
+            setSelectedChaoxingCourseKey((current) => current || courses[0]?.courseKey || "");
+          }
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setErrorMsg(error instanceof Error ? error.message : "读取超星状态失败");
+          setStatus("error");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setChaoxingLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceType, externalProvider, chaoxingEnabledForMode, chaoxingChromiumDownloaded]);
+
+  async function handleInitChaoxing() {
+    if (!onInitChaoxing || !onLoadChaoxingCourses) {
+      return;
+    }
+    const controller = new AbortController();
+    initAbortControllerRef.current = controller;
+    initInFlightRef.current = true;
+    setStatus("loading");
+    setErrorMsg("");
+    setChaoxingLoading(true);
+    try {
+      const nextStatus = await onInitChaoxing({ signal: controller.signal });
+      if (!mountedRef.current) {
+        return;
+      }
+      setChaoxingStatus(nextStatus);
+      const courses = nextStatus.initialized ? await onLoadChaoxingCourses() : [];
+      if (!mountedRef.current) {
+        return;
+      }
+      setChaoxingCourses(courses);
+      setSelectedChaoxingCourseKey(courses[0]?.courseKey || "");
+      setStatus("idle");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      if (!mountedRef.current) {
+        return;
+      }
+      setStatus("error");
+      setErrorMsg(toChaoxingInitErrorMessage(error));
+    } finally {
+      if (initAbortControllerRef.current === controller) {
+        initAbortControllerRef.current = null;
+        initInFlightRef.current = false;
+      }
+      if (mountedRef.current) {
+        setChaoxingLoading(false);
+      }
+    }
+  }
+
+  function requestChaoxingInitCancel() {
+    initAbortControllerRef.current?.abort();
+    if (initInFlightRef.current) {
+      cancelChaoxingInitRef.current?.();
+    }
+  }
+
+  function handleClose() {
+    requestChaoxingInitCancel();
+    onClose();
+  }
+
+  function handleOpenDownloadManager() {
+    onOpenDownloadManager?.();
+    handleClose();
+  }
+
   async function handleSubmit() {
     setStatus("loading");
     setErrorMsg("");
     setPreview(null);
+    setChaoxingImportProgress(null);
 
     try {
       let result;
       if (sourceType === "external") {
-        const trimmed = url.trim();
-        if (!trimmed) {
-          setStatus("idle");
-          return;
+        if (externalProvider === "chaoxing") {
+          if (!selectedChaoxingCourseKey || !onImportChaoxingCourse) {
+            setStatus("idle");
+            return;
+          }
+          result = await onImportChaoxingCourse(selectedChaoxingCourseKey, setChaoxingImportProgress);
+        } else {
+          const trimmed = url.trim();
+          if (!trimmed) {
+            setStatus("idle");
+            return;
+          }
+          result = isSeriesCreation
+            ? await onResolveSeries(trimmed)
+            : await onResolveVideo(trimmed, isSeriesVideo ? targetSeriesId : null);
         }
-        result = isSeriesCreation
-          ? await onResolveSeries(trimmed)
-          : await onResolveVideo(trimmed, isSeriesVideo ? targetSeriesId : null);
       } else {
         if (!files.length) {
           setStatus("idle");
@@ -80,7 +231,7 @@ export function WorkspaceImportModal({
 
   const submitDisabled = status === "loading" || (
     sourceType === "external"
-      ? !url.trim()
+      ? (externalProvider === "chaoxing" ? !selectedChaoxingCourseKey || !chaoxingStatus?.initialized : !url.trim())
       : (isSeriesCreation ? !seriesTitle.trim() || !files.length : !files.length)
   );
 
@@ -93,7 +244,7 @@ export function WorkspaceImportModal({
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
         onClick={(event) => {
           if (event.target === event.currentTarget) {
-            onClose();
+            handleClose();
           }
         }}
       >
@@ -116,7 +267,7 @@ export function WorkspaceImportModal({
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-neutral-800 dark:hover:text-stone-200"
             >
               <X size={18} />
@@ -128,7 +279,7 @@ export function WorkspaceImportModal({
               <button
                 type="button"
                 onClick={() => setSourceType("local")}
-                className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${
+                className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${
                   sourceType === "local"
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
@@ -140,19 +291,48 @@ export function WorkspaceImportModal({
               <button
                 type="button"
                 onClick={() => setSourceType("external")}
-                className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${
+                className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${
                   sourceType === "external"
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
                 }`}
               >
-                Bilibili 外链
-                <p className="mt-1 text-xs font-medium opacity-70">先导入链接，按需下载。</p>
+                外部来源
+                <p className="mt-1 text-xs font-medium opacity-70">外部API下载</p>
               </button>
             </div>
 
             {sourceType === "external" ? (
-              <div>
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">渠道</p>
+                  <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100 p-1 dark:border-stone-700 dark:bg-neutral-900">
+                  <button
+                    type="button"
+                    onClick={() => setExternalProvider("bilibili")}
+                    className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${
+                      externalProvider === "bilibili"
+                        ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
+                        : "text-stone-500 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                    }`}
+                  >
+                    Bilibili
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExternalProvider("chaoxing")}
+                    className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${
+                      externalProvider === "chaoxing"
+                        ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
+                        : "text-stone-500 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                    }`}
+                  >
+                    ChaoXing
+                  </button>
+                  </div>
+                </div>
+                {externalProvider === "bilibili" ? (
+                <>
                 <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
                   {isSeriesCreation ? "Bilibili 系列 / 多 P URL" : "Bilibili 视频 URL"}
                 </label>
@@ -168,6 +348,86 @@ export function WorkspaceImportModal({
                 <p className="mt-2 text-[11px] text-stone-400 dark:text-zinc-500">
                   仅支持无 cookie 可访问的公开视频。
                 </p>
+                </>
+                ) : (
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-700 dark:bg-neutral-900">
+                    {!chaoxingEnabledForMode ? (
+                      <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+                        超星按课程导入为系列，请从“添加系列”入口使用。
+                      </p>
+                    ) : !chaoxingChromiumDownloaded ? (
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-stone-900 dark:text-stone-100">请先下载 Chromium 浏览器内核</p>
+                          <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
+                            用于登录初始化获取必要内容
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenDownloadManager}
+                          className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90"
+                        >
+                          去下载管理
+                          <ExternalLink size={14} />
+                        </button>
+                      </div>
+                    ) : status === "error" && errorMsg ? (
+                      <div className="flex items-center gap-2 text-sm font-semibold text-danger">
+                        <AlertCircle size={16} />
+                        {errorMsg}
+                      </div>
+                    ) : chaoxingLoading ? (
+                      <div className="flex items-center gap-2 text-sm font-semibold text-stone-600 dark:text-zinc-300">
+                        <Loader2 size={16} className="animate-spin" />
+                        等待登录...
+                      </div>
+                    ) : !chaoxingStatus?.initialized ? (
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-stone-900 dark:text-stone-100">需要初始化超星登录</p>
+                          <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
+                            点击后会打开 Chromium，请在浏览器中完成学习通登录。
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleInitChaoxing}
+                          disabled={status === "loading"}
+                          className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {status === "loading" ? <Loader2 size={14} className="animate-spin" /> : null}
+                          开始登陆
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="mb-3 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">选择要导入的课程</p>
+                        <div className="max-h-56 space-y-2 overflow-auto pr-1">
+                          {chaoxingCourses.length ? chaoxingCourses.map((course) => (
+                            <button
+                              key={course.courseKey}
+                              type="button"
+                              onClick={() => setSelectedChaoxingCourseKey(course.courseKey)}
+                              className={`w-full cursor-pointer rounded-2xl border px-4 py-3 text-left transition-colors ${
+                                selectedChaoxingCourseKey === course.courseKey
+                                  ? "border-accent bg-accent/10"
+                                  : "border-stone-200 bg-white dark:border-stone-700 dark:bg-neutral-950"
+                              }`}
+                            >
+                              <p className="text-sm font-bold text-stone-900 dark:text-stone-100">{course.title}</p>
+                              <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
+                                {[course.teacher, course.openTime].filter(Boolean).join(" · ") || "超星课程"}
+                              </p>
+                            </button>
+                          )) : (
+                            <p className="text-sm font-semibold text-stone-600 dark:text-zinc-300">没有读取到可导入课程。</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : isSeriesCreation ? (
               <div>
@@ -227,6 +487,31 @@ export function WorkspaceImportModal({
               </motion.div>
             ) : null}
 
+            {status === "loading" && sourceType === "external" && externalProvider === "chaoxing" ? (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-accent/20 bg-accent/5 p-4"
+              >
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-xs font-bold text-stone-700 dark:text-stone-200">
+                    {chaoxingImportProgress?.detail || "正在导入超星课程..."}
+                  </p>
+                  <p className="shrink-0 text-xs font-bold text-accent">
+                    {typeof chaoxingImportProgress?.progress === "number"
+                      ? `${Math.round(chaoxingImportProgress.progress)}%`
+                      : "处理中"}
+                  </p>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-stone-200 dark:bg-neutral-800">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-300"
+                    style={{ width: `${Math.max(4, Math.min(100, chaoxingImportProgress?.progress ?? 8))}%` }}
+                  />
+                </div>
+              </motion.div>
+            ) : null}
+
             {status === "error" ? (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
@@ -254,7 +539,7 @@ export function WorkspaceImportModal({
           <div className="flex justify-end gap-3 px-6 pb-6">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className={status === "success"
                 ? "rounded-2xl bg-stone-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 dark:bg-white dark:text-stone-900"
                 : "rounded-2xl bg-stone-100 px-5 py-2.5 text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-200 dark:bg-neutral-800 dark:text-zinc-300 dark:hover:bg-neutral-700"}
@@ -268,11 +553,19 @@ export function WorkspaceImportModal({
               className="inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : null}
-              {sourceType === "external" ? "解析" : actionLabel}
+              {sourceType === "external" ? (externalProvider === "chaoxing" ? "导入课程" : "解析") : actionLabel}
             </button>
           </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
   );
+}
+
+function toChaoxingInitErrorMessage(error) {
+  const message = error instanceof Error ? error.message : "超星初始化失败";
+  if (message.includes("超星初始化已中断")) {
+    return "超星初始化已中断";
+  }
+  return message;
 }

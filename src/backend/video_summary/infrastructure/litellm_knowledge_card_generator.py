@@ -7,7 +7,7 @@ from threading import Lock
 from pydantic import BaseModel, Field
 
 from backend.shared.llm import LiteLLMCompletionGateway
-from backend.video_summary.infrastructure.runtime import build_litellm_completion_gateway
+from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 from backend.video_summary.infrastructure.settings import load_settings
 from backend.video_summary.infrastructure.prompts import KNOWLEDGE_CARD_PROMPT_TEMPLATE
 from backend.video_summary.library.models import KnowledgeCardDTO

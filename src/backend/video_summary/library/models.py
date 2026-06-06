@@ -31,6 +31,7 @@ class LibraryVideoCardDTO:
     bilibili_bvid: str = ""
     bilibili_page: int = 0
     source_url: str = ""
+    provider: str = ""
 
 
 @dataclass(frozen=True)

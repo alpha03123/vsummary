@@ -7,6 +7,7 @@ import {
   loadAgentSessionRecovery,
   loadFasterWhisperModels,
   loadRagModels,
+  loadChaoxingChromium,
   loadSeriesGenerationStatus,
   loadProviderSettings,
   loadVideoKnowledgeCards,
@@ -164,6 +165,38 @@ export function useWorkspaceDataEffects(state, dispatch) {
 
     return () => {
       cancelled = true;
+    };
+  }, [dispatch, state.backendReady]);
+
+  useEffect(() => {
+    if (!state.backendReady) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId = null;
+
+    const pollChaoxingChromium = async () => {
+      try {
+        const chromium = await loadChaoxingChromium();
+        if (cancelled) {
+          return;
+        }
+        dispatch({ type: "chaoxing_chromium_loaded", chromium });
+        if (chromium.status === "running") {
+          timeoutId = window.setTimeout(pollChaoxingChromium, 1000);
+        }
+      } catch {}
+    };
+
+    dispatch({ type: "chaoxing_chromium_loading_started" });
+    pollChaoxingChromium();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [dispatch, state.backendReady]);
 

@@ -192,7 +192,7 @@ class BilibiliUrlParser(Protocol):
 
 
 class LinkedVideoDownloadStarter(Protocol):
-    def start(self, *, series_id: str, video_id: str, bvid: str, page: int) -> str:
+    def start(self, *, series_id: str, video: LinkedVideo) -> str:
         ...
 
 

@@ -1,3 +1,15 @@
-from backend.bilibili.ytdlp_bilibili import BackgroundBilibiliDownloadStarter, BilibiliDownloader, YtDlpBilibiliResolver
+from backend.bilibili.ytdlp_bilibili import (
+    BackgroundBilibiliDownloadStarter,
+    BilibiliDownloader,
+    BilibiliLinkedVideoDownloadStarter,
+    CompositeLinkedVideoDownloadStarter,
+    YtDlpBilibiliResolver,
+)
 
-__all__ = ["BackgroundBilibiliDownloadStarter", "BilibiliDownloader", "YtDlpBilibiliResolver"]
+__all__ = [
+    "BackgroundBilibiliDownloadStarter",
+    "BilibiliDownloader",
+    "BilibiliLinkedVideoDownloadStarter",
+    "CompositeLinkedVideoDownloadStarter",
+    "YtDlpBilibiliResolver",
+]

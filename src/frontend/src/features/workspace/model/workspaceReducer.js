@@ -233,6 +233,62 @@ export function workspaceReducer(state, action) {
           ? (state.downloadingRagModelKey ?? action.models.find((model) => model.status === "running")?.key ?? null)
           : null,
       };
+    case "chaoxing_chromium_loading_started":
+      return {
+        ...state,
+        chaoxingChromiumLoading: true,
+      };
+    case "chaoxing_chromium_download_started":
+      return {
+        ...state,
+        chaoxingChromiumDownloading: true,
+        chaoxingChromiumLoading: true,
+        chaoxingChromium: state.chaoxingChromium == null
+          ? state.chaoxingChromium
+          : {
+            ...state.chaoxingChromium,
+            status: "running",
+            progress: null,
+            error: null,
+          },
+        error: "",
+      };
+    case "chaoxing_chromium_download_progress_updated":
+      return {
+        ...state,
+        chaoxingChromiumDownloading: action.status === "running",
+        chaoxingChromiumLoading: false,
+        chaoxingChromium: state.chaoxingChromium == null
+          ? state.chaoxingChromium
+          : {
+            ...state.chaoxingChromium,
+            status: action.status ?? state.chaoxingChromium.status,
+            progress: null,
+            detail: action.detail ?? state.chaoxingChromium.detail,
+            error: action.error ?? state.chaoxingChromium.error,
+          },
+      };
+    case "chaoxing_chromium_download_failed":
+      return {
+        ...state,
+        chaoxingChromiumDownloading: false,
+        chaoxingChromiumLoading: false,
+        chaoxingChromium: state.chaoxingChromium == null
+          ? state.chaoxingChromium
+          : {
+            ...state.chaoxingChromium,
+            status: "failed",
+            progress: null,
+            error: action.message,
+          },
+      };
+    case "chaoxing_chromium_loaded":
+      return {
+        ...state,
+        chaoxingChromium: action.chromium,
+        chaoxingChromiumLoading: false,
+        chaoxingChromiumDownloading: action.chromium?.status === "running",
+      };
     case "load_failed":
       return {
         ...state,
@@ -256,10 +312,12 @@ export function workspaceReducer(state, action) {
         modelDownloadStatus: null,
         modelDownloadProgress: null,
         downloadingRagModelKey: null,
+        chaoxingChromiumDownloading: false,
         contextUsageLoading: false,
         error: action.message,
         fasterWhisperModelsLoading: false,
         ragModelsLoading: false,
+        chaoxingChromiumLoading: false,
       };
     case "error_cleared":
       return {

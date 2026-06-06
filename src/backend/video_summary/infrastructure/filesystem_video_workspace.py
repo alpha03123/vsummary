@@ -478,6 +478,7 @@ class FileSystemVideoWorkspace:
                         bilibili_bvid=bvid,
                         bilibili_page=page,
                         source_url=str(item.get("source_url", "")),
+                        provider=str(item.get("provider", "bilibili")).strip() or "bilibili",
                     )
                 )
                 continue
@@ -492,6 +493,7 @@ class FileSystemVideoWorkspace:
                     bilibili_bvid=bvid,
                     bilibili_page=page,
                     source_url=str(item.get("source_url", "")),
+                    provider=str(item.get("provider", "bilibili")).strip() or "bilibili",
                 )
             )
 
@@ -546,6 +548,8 @@ class FileSystemVideoWorkspace:
                     "cover_url": video.cover_url,
                     "duration_seconds": video.duration_seconds,
                     "source_url": video.source_url,
+                    "provider": video.provider,
+                    "download_key": video.download_key,
                 }
                 for video in series.videos
             ],
@@ -576,6 +580,8 @@ class FileSystemVideoWorkspace:
                     cover_url=str(item.get("cover_url", "")),
                     duration_seconds=_as_positive_int(item.get("duration_seconds"), 0),
                     source_url=str(item.get("source_url", "")),
+                    provider=str(item.get("provider", "bilibili")).strip() or "bilibili",
+                    download_key=str(item.get("download_key", "")).strip(),
                 )
                 for item in videos
                 if isinstance(item, dict)

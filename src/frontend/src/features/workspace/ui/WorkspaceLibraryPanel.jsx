@@ -98,8 +98,8 @@ export function getDeleteButtonState({ isGeneratingSeries, isGeneratingSelectedV
   };
 }
 
-function SourceVideoLink({ sourceUrl }) {
-  if (!sourceUrl) {
+function SourceVideoLink({ sourceUrl, provider }) {
+  if (!sourceUrl || provider === "chaoxing") {
     return null;
   }
   return (
@@ -261,7 +261,7 @@ function PanelFooter({
             <ArrowDown size={16} strokeWidth={2.5} />
             下载视频
           </button>
-          <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} />
+          <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} provider={selectedVideo.provider} />
           <button
             type="button"
             onClick={() => onRequestDeleteCurrentVideo?.()}
@@ -332,7 +332,7 @@ function PanelFooter({
             </>
           )}
         </button>
-        <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} />
+        <SourceVideoLink sourceUrl={selectedVideo.sourceUrl} provider={selectedVideo.provider} />
       </div>
       <button
         type="button"
