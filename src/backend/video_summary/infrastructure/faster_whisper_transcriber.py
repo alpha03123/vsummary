@@ -25,6 +25,17 @@ class FasterWhisperTranscriber:
         if resolved_device == "cuda":
             _ensure_windows_cuda_dll_dirs()
 
+        self.cache_identity = "|".join(
+            [
+                type(self).__module__,
+                type(self).__qualname__,
+                str(model_size),
+                resolved_device,
+                compute_type,
+                transcription_mode,
+                language,
+            ]
+        )
         try:
             from faster_whisper import WhisperModel
         except ImportError as error:

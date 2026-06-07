@@ -33,6 +33,10 @@ class DuplicateSeriesGenerationError(RuntimeError):
     pass
 
 
+class GenerationScopeBusyError(RuntimeError):
+    pass
+
+
 class GenerateVideoSummaryFromLibrary:
     def __init__(
         self,
@@ -49,6 +53,7 @@ class GenerateVideoSummaryFromLibrary:
         self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
         self._active_task_keys: set[tuple[str, str]] = set()
+        self._active_series_generation_ids: set[str] = set()
         self._activity_lock = Lock()
         self._video_generation_slots = CapacityLimiter(max(1, video_generation_concurrency))
 
@@ -65,7 +70,10 @@ class GenerateVideoSummaryFromLibrary:
 
     def is_series_generation_active(self, series_id: str) -> bool:
         with self._activity_lock:
-            return any(active_series_id == series_id for active_series_id, _ in self._active_task_keys)
+            return (
+                series_id in self._active_series_generation_ids
+                or any(active_series_id == series_id for active_series_id, _ in self._active_task_keys)
+            )
 
     def get_active_video_ids(self, series_id: str) -> list[str]:
         with self._activity_lock:
@@ -81,6 +89,7 @@ class GenerateVideoSummaryFromLibrary:
         video_id: str,
         transcript_enhancement_enabled: bool | None = None,
         progress_reporter: ProgressReporter | None = None,
+        internal_series_generation: bool = False,
     ) -> VideoSummaryDTO | None:
         task_id = f"{series_id}/{video_id}"
         task = await self._get_or_create_task(
@@ -89,8 +98,21 @@ class GenerateVideoSummaryFromLibrary:
             video_id=video_id,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
             progress_reporter=progress_reporter,
+            internal_series_generation=internal_series_generation,
         )
         return await asyncio.shield(task)
+
+    def begin_series_generation(self, series_id: str) -> None:
+        with self._activity_lock:
+            if series_id in self._active_series_generation_ids:
+                raise GenerationScopeBusyError(f"series '{series_id}' generation is already running")
+            if self._active_task_keys:
+                raise GenerationScopeBusyError("video generation is already running")
+            self._active_series_generation_ids.add(series_id)
+
+    def end_series_generation(self, series_id: str) -> None:
+        with self._activity_lock:
+            self._active_series_generation_ids.discard(series_id)
 
     async def _get_or_create_task(
         self,
@@ -100,8 +122,13 @@ class GenerateVideoSummaryFromLibrary:
         video_id: str,
         transcript_enhancement_enabled: bool | None,
         progress_reporter: ProgressReporter | None,
+        internal_series_generation: bool,
     ) -> asyncio.Task[VideoSummaryDTO | None]:
         async with self._active_tasks_lock:
+            with self._activity_lock:
+                if not internal_series_generation and self._active_series_generation_ids:
+                    raise GenerationScopeBusyError("series generation is already running")
+
             existing = self._active_tasks.get(task_id)
             if existing is not None:
                 return existing
@@ -235,6 +262,7 @@ class GenerateSeriesSummaryFromLibrary:
             existing = self._active_series_tasks.get(task_id)
             if existing is not None and not existing.done():
                 raise DuplicateSeriesGenerationError(f"series '{series_id}' generation is already running")
+            self._generator.begin_series_generation(series_id)
 
             task = asyncio.create_task(
                 self._run_series_generation(
@@ -314,6 +342,7 @@ class GenerateSeriesSummaryFromLibrary:
                             video.id,
                             transcript_enhancement_enabled=transcript_enhancement_enabled,
                             progress_reporter=child_reporter,
+                            internal_series_generation=True,
                         )
                         if result is None:
                             if failure is not None:
@@ -386,6 +415,7 @@ class GenerateSeriesSummaryFromLibrary:
                 with self._activity_lock:
                     self._active_series_ids.discard(series_id)
                     self._active_series_run_ids.pop(series_id, None)
+                self._generator.end_series_generation(series_id)
 
     def _get_series(self, series_id: str) -> LibrarySeriesDTO:
         series = next((item for item in self._workspace.list_series() if item.id == series_id), None)

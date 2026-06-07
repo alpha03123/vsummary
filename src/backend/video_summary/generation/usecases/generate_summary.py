@@ -16,6 +16,7 @@ from backend.video_summary.generation.ports import (
     TranscriptEnhancer,
     Transcriber,
 )
+from backend.video_summary.generation.stage_cache import GenerationStageCache
 
 
 class GenerateCancelledError(RuntimeError):
@@ -99,6 +100,14 @@ class GenerateVideoSummary:
     ) -> SummaryDocument:
         audio_path = staging_dir / "audio.wav"
         transcript_stem = staging_dir / "transcript"
+        stage_cache = GenerationStageCache(output_dir / ".cache", video_path)
+        media_identity = _cache_identity(self._media_processor)
+        transcriber_identity = _cache_identity(self._transcriber)
+        enhancer_identity = (
+            _cache_identity(self._transcript_enhancer)
+            if self._transcript_enhancer is not None
+            else ""
+        )
 
         if progress_reporter is not None:
             progress_reporter.update("probe", 5.0, "正在分析视频信息")
@@ -111,31 +120,58 @@ class GenerateVideoSummary:
 
         if progress_reporter is not None:
             progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
-        await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
+        audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
+        if not audio_restored:
+            await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
+            _raise_if_cancelled(progress_reporter)
+            await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
         _raise_if_cancelled(progress_reporter)
 
         if progress_reporter is not None:
             progress_reporter.update("transcribe", 20.0, "正在使用 Whisper 转写音频")
-        transcript = await asyncio.to_thread(
-            self._transcriber.transcribe,
-            audio_path,
-            transcript_stem,
-            None
-            if progress_reporter is None
-            else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
-        )
+        transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
+        if transcript is None:
+            transcript = await asyncio.to_thread(
+                self._transcriber.transcribe,
+                audio_path,
+                transcript_stem,
+                None
+                if progress_reporter is None
+                else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
+            )
+            _raise_if_cancelled(progress_reporter)
+            await asyncio.to_thread(
+                stage_cache.store_transcript,
+                "whisper",
+                transcript,
+                identity=transcriber_identity,
+            )
         _raise_if_cancelled(progress_reporter)
 
         if self._transcript_enhancer is not None:
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
             _raise_if_cancelled(progress_reporter)
-            try:
-                transcript = await self._transcript_enhancer.enhance(video, transcript, cancellation)
-            except GenerateCancelledError:
-                raise
-            except Exception as error:
-                raise RuntimeError(_build_llm_stage_error("AI 内容增强", error)) from error
+            enhanced_transcript = await asyncio.to_thread(
+                stage_cache.load_transcript,
+                "transcript-enhance",
+                identity=enhancer_identity,
+            )
+            if enhanced_transcript is None:
+                try:
+                    enhanced_transcript = await self._transcript_enhancer.enhance(video, transcript, cancellation)
+                except GenerateCancelledError:
+                    raise
+                except Exception as error:
+                    raise RuntimeError(_build_llm_stage_error("AI 内容增强", error)) from error
+                _raise_if_cancelled(progress_reporter)
+                await asyncio.to_thread(
+                    stage_cache.store_transcript,
+                    "transcript-enhance",
+                    enhanced_transcript,
+                    identity=enhancer_identity,
+                )
+            transcript = enhanced_transcript
             _raise_if_cancelled(progress_reporter)
             await self._artifact_store.save_enhanced_transcript(
                 transcript=transcript,
@@ -170,6 +206,14 @@ def _build_llm_stage_error(stage_label: str, error: Exception) -> str:
     if _contains_connection_failure(error):
         return f"{stage_label}失败：无法连接到模型网关，请检查模型服务是否已启动，以及 provider settings 中的 Base URL 是否可用。"
     return f"{stage_label}失败：{error}"
+
+
+def _cache_identity(component: object) -> str:
+    explicit_identity = getattr(component, "cache_identity", None)
+    if isinstance(explicit_identity, str) and explicit_identity.strip():
+        return explicit_identity.strip()
+    component_type = type(component)
+    return f"{component_type.__module__}.{component_type.__qualname__}"
 
 
 def _contains_connection_failure(error: BaseException) -> bool:

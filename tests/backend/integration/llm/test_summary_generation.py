@@ -14,6 +14,7 @@ from backend.video_summary.library.models import (
     WorkspaceDTO,
 )
 from backend.video_summary.library.usecases.summary_generation import (
+    GenerationScopeBusyError,
     GenerateSeriesSummaryFromLibrary,
     GenerateVideoSummaryFromLibrary,
 )
@@ -302,6 +303,74 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
 
         generator.release.set()
         await first_task
+
+    async def test_single_video_request_is_rejected_while_series_batch_is_running(self) -> None:
+        tracker = FakeProgressTracker()
+        workspace = FakeWorkspace(
+            series=[
+                LibrarySeriesDTO(
+                    id="series-1",
+                    title="Series 1",
+                    videos=[
+                        LibraryVideoCardDTO(id="video-1", title="Video 1", source_name="video-1.mp4", processed=False, status="pending"),
+                        LibraryVideoCardDTO(id="video-2", title="Video 2", source_name="video-2.mp4", processed=False, status="pending"),
+                    ],
+                ),
+                LibrarySeriesDTO(
+                    id="series-2",
+                    title="Series 2",
+                    videos=[
+                        LibraryVideoCardDTO(id="video-3", title="Video 3", source_name="video-3.mp4", processed=False, status="pending"),
+                    ],
+                ),
+            ]
+        )
+        generator = BlockingGenerator()
+        single_use_case = GenerateVideoSummaryFromLibrary(workspace, generator, tracker)
+        batch_use_case = GenerateSeriesSummaryFromLibrary(workspace, single_use_case, tracker)
+
+        task = asyncio.create_task(batch_use_case.run("series-1"))
+        await asyncio.wait_for(generator.started.wait(), timeout=1.0)
+
+        with self.assertRaisesRegex(GenerationScopeBusyError, "series generation"):
+            await single_use_case.run("series-2", "video-3")
+
+        generator.release.set()
+        await task
+
+    async def test_series_batch_request_is_rejected_while_single_video_is_running(self) -> None:
+        tracker = FakeProgressTracker()
+        workspace = FakeWorkspace(
+            series=[
+                LibrarySeriesDTO(
+                    id="series-1",
+                    title="Series 1",
+                    videos=[
+                        LibraryVideoCardDTO(id="video-1", title="Video 1", source_name="video-1.mp4", processed=False, status="pending"),
+                        LibraryVideoCardDTO(id="video-2", title="Video 2", source_name="video-2.mp4", processed=False, status="pending"),
+                    ],
+                ),
+                LibrarySeriesDTO(
+                    id="series-2",
+                    title="Series 2",
+                    videos=[
+                        LibraryVideoCardDTO(id="video-3", title="Video 3", source_name="video-3.mp4", processed=False, status="pending"),
+                    ],
+                ),
+            ]
+        )
+        generator = BlockingGenerator()
+        single_use_case = GenerateVideoSummaryFromLibrary(workspace, generator, tracker)
+        batch_use_case = GenerateSeriesSummaryFromLibrary(workspace, single_use_case, tracker)
+
+        task = asyncio.create_task(single_use_case.run("series-1", "video-1"))
+        await asyncio.wait_for(generator.started.wait(), timeout=1.0)
+
+        with self.assertRaisesRegex(GenerationScopeBusyError, "video generation"):
+            await batch_use_case.run("series-2")
+
+        generator.release.set()
+        await task
 
     async def test_series_batch_reports_generation_active_until_task_finishes(self) -> None:
         tracker = FakeProgressTracker()

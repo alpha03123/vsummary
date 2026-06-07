@@ -11,6 +11,8 @@ from backend.video_summary.generation.cancellation import GenerationCancellation
 class LiteLLMTranscriptEnhancer:
     def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
+        gateway_identity = getattr(gateway, "cache_identity", type(gateway).__qualname__)
+        self.cache_identity = "|".join([type(self).__module__, type(self).__qualname__, str(gateway_identity)])
 
     async def enhance(
         self,

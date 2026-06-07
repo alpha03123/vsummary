@@ -59,6 +59,16 @@ class LiteLLMCompletionGateway:
             model=self._model,
             api_key=self._api_key,
         )
+        self.cache_identity = "|".join(
+            [
+                type(self).__module__,
+                type(self).__qualname__,
+                self._provider,
+                self._base_url.rstrip("/"),
+                self._model,
+                self._reasoning_effort or "",
+            ]
+        )
         self._completion = completion_fn or _load_litellm_completion()
         self._acompletion = acompletion_fn or _load_litellm_acompletion()
 

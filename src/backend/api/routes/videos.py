@@ -35,6 +35,7 @@ from backend.video_summary.library.markdown_exports import render_notes_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
+from backend.video_summary.library.usecases.summary_generation import GenerationScopeBusyError
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
@@ -274,6 +275,8 @@ async def generate_video_summary(
         raise HTTPException(status_code=409, detail=str(error)) from error
     except GenerateCancelledError as error:
         raise HTTPException(status_code=409, detail="generation cancelled") from error
+    except GenerationScopeBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
@@ -313,6 +316,8 @@ async def generate_series_summaries(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except DuplicateSeriesGenerationError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except GenerationScopeBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
