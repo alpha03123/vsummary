@@ -59,6 +59,7 @@ export function WorkspaceSettingsPanel({
     chaoxingChromiumDownloading || chaoxingChromium?.status === "running";
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
+  const isRerankerDownloading = rerankerModel?.status === "running" || downloadingRagModelKey === "reranker";
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
   const providerTargetUrl = buildOpenAICompatibleChatCompletionsUrl(ui.openaiBaseUrl);
   const saveProviderSettingsOnEnter = (event) => {
@@ -458,7 +459,7 @@ export function WorkspaceSettingsPanel({
                       <button
                         type="button"
                         onClick={() => onDownloadRagModel("reranker")}
-                        disabled={isAnyRagModelDownloading}
+                        disabled={isRerankerDownloading}
                         className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                       >
                         <Download size={14} />
