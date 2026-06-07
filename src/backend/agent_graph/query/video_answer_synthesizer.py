@@ -5,7 +5,11 @@ import json
 from pydantic import BaseModel
 
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.agent_graph.prompts import VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT, build_answer_detail_level_prompt
+from backend.agent_graph.prompts import (
+    VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT,
+    build_answer_detail_level_prompt,
+    build_talk_custom_prompt,
+)
 
 
 class VideoAnswerPayload(BaseModel):
@@ -13,9 +17,10 @@ class VideoAnswerPayload(BaseModel):
 
 
 class AnswerSynthesisProgram:
-    def __init__(self, *, gateway, answer_detail_level: str = "medium") -> None:
+    def __init__(self, *, gateway, answer_detail_level: str = "medium", talk_custom_prompt: str = "") -> None:
         self._gateway = gateway
         self._answer_detail_level = answer_detail_level
+        self._talk_custom_prompt = talk_custom_prompt
 
     def run(
         self,
@@ -74,6 +79,7 @@ class AnswerSynthesisProgram:
                     VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT
                     + "\n"
                     + build_answer_detail_level_prompt(self._answer_detail_level)
+                    + build_talk_custom_prompt(self._talk_custom_prompt)
                     + (_STREAMING_CITED_ANSWER_PROMPT if text_only else "")
                 ),
             ),

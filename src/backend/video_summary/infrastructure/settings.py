@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 import os
 from pathlib import Path
 import tomllib
@@ -100,6 +101,7 @@ VALID_LLM_PROVIDERS = {
 DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_AGENT_ANSWER_DETAIL_LEVEL = "medium"
 DEFAULT_AGENT_REASONING_EFFORT = "none"
+DEFAULT_AGENT_TALK_CUSTOM_PROMPT = ""
 DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
 DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
@@ -166,6 +168,7 @@ class AgentContextSettings:
     window_tokens: int
     answer_detail_level: str
     reasoning_effort: str
+    talk_custom_prompt: str
     reserved_output_tokens: int
     warning_threshold_ratio: float
     compact_threshold_ratio: float
@@ -291,6 +294,10 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             default=DEFAULT_AGENT_REASONING_EFFORT,
             allowed=VALID_REASONING_EFFORTS,
             field_name="agent_context.reasoning_effort",
+        ),
+        talk_custom_prompt=_normalize_string(
+            agent_context_payload.get("talk_custom_prompt"),
+            default=DEFAULT_AGENT_TALK_CUSTOM_PROMPT,
         ),
         reserved_output_tokens=_normalize_positive_int(
             agent_context_advanced_payload.get("reserved_output_tokens"),
@@ -548,6 +555,19 @@ def replace_agent_context_reasoning_effort(settings: AppSettings, reasoning_effo
     )
 
 
+def replace_agent_context_talk_custom_prompt(settings: AppSettings, talk_custom_prompt: str) -> AppSettings:
+    return replace(
+        settings,
+        agent_context=replace(
+            settings.agent_context,
+            talk_custom_prompt=_normalize_string(
+                talk_custom_prompt,
+                default=DEFAULT_AGENT_TALK_CUSTOM_PROMPT,
+            ),
+        ),
+    )
+
+
 def replace_video_generation_concurrency(settings: AppSettings, video_generation_concurrency: int) -> AppSettings:
     normalized_concurrency = _normalize_positive_int(
         video_generation_concurrency,
@@ -664,6 +684,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"window_tokens = {settings.agent_context.window_tokens}",
         f'answer_detail_level = "{settings.agent_context.answer_detail_level}"',
         f'reasoning_effort = "{settings.agent_context.reasoning_effort}"',
+        f"talk_custom_prompt = {_toml_string(settings.agent_context.talk_custom_prompt)}",
         "",
         "[agent_context.advanced]",
         f"reserved_output_tokens = {settings.agent_context.reserved_output_tokens}",
@@ -705,6 +726,18 @@ def _render_settings_toml(settings: AppSettings) -> str:
 
 def _toml_bool(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _normalize_string(value: object, *, default: str) -> str:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip()
+    return default
 
 
 def _normalize_positive_int(value: object, *, default: int, field_name: str | None = None) -> int:

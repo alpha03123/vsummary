@@ -39,6 +39,7 @@ class WorkspaceSettingsResponse(BaseModel):
     window_tokens: int
     answer_detail_level: str = "medium"
     reasoning_effort: str = "none"
+    talk_custom_prompt: str = ""
     video_generation_concurrency: int
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
@@ -57,6 +58,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     window_tokens: int
     answer_detail_level: str = "medium"
     reasoning_effort: str = "none"
+    talk_custom_prompt: str = ""
     video_generation_concurrency: int
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
