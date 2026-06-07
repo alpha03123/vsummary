@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -8,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError, GenerateVideoSummary
+from backend.video_summary.infrastructure.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
 
 
 class FakeArtifactStore:
@@ -52,6 +54,12 @@ class FakeMediaProcessor:
                 self.kill_called = True
             finally:
                 cancellation.unregister(handle)
+        return audio_path
+
+
+class WritingMediaProcessor(FakeMediaProcessor):
+    def extract_audio(self, video_path: Path, audio_path: Path, cancellation=None) -> Path:
+        audio_path.write_text("partial audio", encoding="utf-8")
         return audio_path
 
 
@@ -193,6 +201,39 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
         with patch("asyncio.to_thread", side_effect=_fake_to_thread):
             with self.assertRaises(GenerateCancelledError):
                 await use_case.run(Path("v.mp4"), Path("out"), cancellation=cancellation)
+
+    async def test_cancelled_generation_does_not_commit_partial_artifacts(self) -> None:
+        cancellation = GenerationCancellationContext("series-1/video-1")
+
+        class CancelAfterTranscriptSummarizer:
+            async def summarize(self, video, transcript, cancellation=None):
+                if cancellation is not None:
+                    cancellation.request_cancel()
+                raise GenerateCancelledError("任务已取消")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            video_path = root / "v.mp4"
+            video_path.write_text("video", encoding="utf-8")
+            output_dir = root / "workspace" / "series-1" / "video-1"
+            output_dir.mkdir(parents=True)
+            existing_note = output_dir / "notes.json"
+            existing_note.write_text('{"notes":[]}', encoding="utf-8")
+            use_case = GenerateVideoSummary(
+                media_processor=WritingMediaProcessor(),
+                transcriber=FakeTranscriber(),
+                transcript_enhancer=None,
+                summarizer=CancelAfterTranscriptSummarizer(),
+                artifact_store=FileSystemGenerationArtifactStore(),
+            )
+
+            with self.assertRaises(GenerateCancelledError):
+                await use_case.run(video_path, output_dir, cancellation=cancellation)
+
+            self.assertTrue(existing_note.exists())
+            self.assertFalse((output_dir / "audio.wav").exists())
+            self.assertFalse((output_dir / "transcript.cleaned.json").exists())
+            self.assertFalse((output_dir / "summary.json").exists())
 
 
 async def _fake_to_thread(func, *args, **kwargs):
