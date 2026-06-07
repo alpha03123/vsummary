@@ -25,6 +25,7 @@ from backend.video_summary.infrastructure.settings import (
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
+    replace_chaoxing_import_settings,
     replace_video_generation_concurrency,
     replace_web_search_enabled,
     replace_workspace_ui_settings,
@@ -63,6 +64,8 @@ class WorkspaceSettings:
     reasoning_effort: str
     video_generation_concurrency: int
     web_search_enabled: bool
+    chaoxing_request_delay_seconds: float
+    chaoxing_init_course_delay_seconds: float
 
 
 class SettingsServicePort(Protocol):
@@ -85,6 +88,8 @@ class SettingsServicePort(Protocol):
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        chaoxing_request_delay_seconds: float = 0.2,
+        chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
         ...
 
@@ -151,6 +156,8 @@ class SettingsService:
             reasoning_effort=settings.agent_context.reasoning_effort,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             web_search_enabled=settings.web_search.enabled,
+            chaoxing_request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
+            chaoxing_init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
         )
 
     def update_workspace_settings(
@@ -169,6 +176,8 @@ class SettingsService:
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        chaoxing_request_delay_seconds: float = 0.2,
+        chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
@@ -186,6 +195,10 @@ class SettingsService:
             raise SettingsValidationError("rag_max_hits 必须是正整数。")
         if video_generation_concurrency <= 0:
             raise SettingsValidationError("video_generation_concurrency 必须是正整数。")
+        if chaoxing_request_delay_seconds < 0:
+            raise SettingsValidationError("chaoxing_request_delay_seconds 必须是大于等于 0 的数字。")
+        if chaoxing_init_course_delay_seconds < 0:
+            raise SettingsValidationError("chaoxing_init_course_delay_seconds 必须是大于等于 0 的数字。")
         if (
             rag_rerank_enabled
             and self._rag_model_manager is not None
@@ -216,6 +229,11 @@ class SettingsService:
             next_settings = replace_agent_context_reasoning_effort(next_settings, reasoning_effort)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
+            next_settings = replace_chaoxing_import_settings(
+                next_settings,
+                request_delay_seconds=chaoxing_request_delay_seconds,
+                init_course_delay_seconds=chaoxing_init_course_delay_seconds,
+            )
             save_settings(self._config_path, next_settings)
 
         return WorkspaceSettings(
@@ -232,6 +250,8 @@ class SettingsService:
             reasoning_effort=next_settings.agent_context.reasoning_effort,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             web_search_enabled=next_settings.web_search.enabled,
+            chaoxing_request_delay_seconds=next_settings.external_import.chaoxing.request_delay_seconds,
+            chaoxing_init_course_delay_seconds=next_settings.external_import.chaoxing.init_course_delay_seconds,
         )
 
     def get_provider_settings(self) -> ProviderSettings:

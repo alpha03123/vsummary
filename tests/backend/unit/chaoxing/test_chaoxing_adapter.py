@@ -5,6 +5,7 @@ import unittest
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event, Thread
 
 from backend.chaoxing.chaoxing_api import (
     CHAOXING_ANTISPIDER_MESSAGE,
@@ -13,6 +14,7 @@ from backend.chaoxing.chaoxing_api import (
     ChaoxingCourseImporter,
     ChaoxingCourseRecord,
     ChaoxingDownloaderClient,
+    ChaoxingImportCancelled,
     ChaoxingLinkedVideoDownloadStarter,
     ChaoxingVideoRecord,
 )
@@ -102,6 +104,48 @@ class ChaoxingCourseImporterTests(unittest.TestCase):
 
         self.assertEqual(len(series.videos), 1)
         self.assertEqual(series.videos[0].download_key, "video-1")
+
+    def test_import_course_stops_between_chapters_when_cancel_requested(self) -> None:
+        tracker = InMemoryProgressTracker()
+        task_id = "chaoxing-import-1"
+        reporter = tracker.create_reporter(task_id)
+        client = _CancelAfterFirstChapterClient(tracker=tracker, task_id=task_id)
+        importer = ChaoxingCourseImporter(client=client)
+
+        with self.assertRaisesRegex(ChaoxingImportCancelled, "超星课程导入已取消"):
+            importer.import_course("course-1", progress=reporter)
+
+        self.assertEqual(client.video_calls, ["chapter-1"])
+
+    def test_import_course_cancel_wins_over_late_video_error(self) -> None:
+        tracker = InMemoryProgressTracker()
+        task_id = "chaoxing-import-1"
+        reporter = tracker.create_reporter(task_id)
+        client = _CancelThenFailVideoClient(tracker=tracker, task_id=task_id)
+        importer = ChaoxingCourseImporter(client=client)
+
+        with self.assertRaisesRegex(ChaoxingImportCancelled, "超星课程导入已取消"):
+            importer.import_course("course-1", progress=reporter)
+
+    def test_list_videos_waits_for_running_import(self) -> None:
+        client = _BlockingImportClient()
+        importer = ChaoxingCourseImporter(client=client)
+
+        import_thread = Thread(target=lambda: importer.import_course("course-1"), daemon=True)
+        import_thread.start()
+        self.assertTrue(client.import_entered.wait(timeout=1.0))
+
+        list_thread = Thread(target=lambda: importer.list_videos("chapter-2"), daemon=True)
+        list_thread.start()
+
+        self.assertFalse(client.list_entered.wait(timeout=0.1))
+        client.release_import.set()
+        import_thread.join(timeout=1.0)
+        list_thread.join(timeout=1.0)
+
+        self.assertFalse(import_thread.is_alive())
+        self.assertFalse(list_thread.is_alive())
+        self.assertTrue(client.list_entered.is_set())
 
 
 class ChaoxingDownloaderClientTests(unittest.TestCase):
@@ -464,6 +508,78 @@ class _MixedChapterClient:
     def list_videos(self, chapter_key: str):
         if chapter_key == "chapter-text":
             raise self._unsupported_error
+        return [_Video(video_key="video-1", chapter_key=chapter_key, title="第一讲", duration=123)]
+
+    def list_cached_course_videos(self, course_key: str):
+        del course_key
+        return []
+
+
+class _CancelAfterFirstChapterClient:
+    def __init__(self, *, tracker: InMemoryProgressTracker, task_id: str) -> None:
+        self._tracker = tracker
+        self._task_id = task_id
+        self.video_calls: list[str] = []
+
+    def list_courses(self):
+        return [_Course(course_key="course-1", title="线性代数")]
+
+    def list_chapters(self, course_key: str):
+        del course_key
+        return [
+            _Chapter(chapter_key="chapter-1", title="第一章", order="1"),
+            _Chapter(chapter_key="chapter-2", title="第二章", order="2"),
+        ]
+
+    def list_videos(self, chapter_key: str):
+        self.video_calls.append(chapter_key)
+        self._tracker.request_cancel(self._task_id)
+        return [_Video(video_key="video-1", chapter_key=chapter_key, title="第一讲", duration=123)]
+
+    def list_cached_course_videos(self, course_key: str):
+        del course_key
+        return []
+
+
+class _CancelThenFailVideoClient:
+    def __init__(self, *, tracker: InMemoryProgressTracker, task_id: str) -> None:
+        self._tracker = tracker
+        self._task_id = task_id
+
+    def list_courses(self):
+        return [_Course(course_key="course-1", title="线性代数")]
+
+    def list_chapters(self, course_key: str):
+        del course_key
+        return [_Chapter(chapter_key="chapter-1", title="第一章", order="1")]
+
+    def list_videos(self, chapter_key: str):
+        del chapter_key
+        self._tracker.request_cancel(self._task_id)
+        raise RuntimeError("触发超星访问验证")
+
+    def list_cached_course_videos(self, course_key: str):
+        del course_key
+        return []
+
+
+class _BlockingImportClient:
+    def __init__(self) -> None:
+        self.import_entered = Event()
+        self.release_import = Event()
+        self.list_entered = Event()
+
+    def list_courses(self):
+        return [_Course(course_key="course-1", title="线性代数")]
+
+    def list_chapters(self, course_key: str):
+        del course_key
+        self.import_entered.set()
+        self.release_import.wait(timeout=1.0)
+        return [_Chapter(chapter_key="chapter-1", title="第一章", order="1")]
+
+    def list_videos(self, chapter_key: str):
+        self.list_entered.set()
         return [_Video(video_key="video-1", chapter_key=chapter_key, title="第一讲", duration=123)]
 
     def list_cached_course_videos(self, course_key: str):

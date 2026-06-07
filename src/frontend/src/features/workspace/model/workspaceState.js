@@ -19,6 +19,8 @@ export const defaultUiSettings = {
   answerDetailLevel: "medium",
   reasoningEffort: "none",
   videoGenerationConcurrency: 1,
+  chaoxingRequestDelaySeconds: 0.2,
+  chaoxingInitCourseDelaySeconds: 0.3,
 };
 
 const validLlmProviders = new Set([
@@ -745,5 +747,11 @@ export function normalizeUiSettings(value) {
         && record.videoGenerationConcurrency > 0
         ? record.videoGenerationConcurrency
         : 1,
+    chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
+    chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),
   };
+}
+
+function normalizeNonNegativeNumber(value, fallback) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
 }

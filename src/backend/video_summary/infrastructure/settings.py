@@ -120,6 +120,8 @@ DEFAULT_WEB_SEARCH_MODE = "native"
 DEFAULT_WEB_SEARCH_CONTEXT_SIZE = "medium"
 DEFAULT_WEB_SEARCH_MAX_RESULTS = 5
 DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS = 10
+DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS = 0.2
+DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS = 0.3
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -201,6 +203,17 @@ class WebSearchSettings:
 
 
 @dataclass(frozen=True)
+class ChaoxingImportSettings:
+    request_delay_seconds: float
+    init_course_delay_seconds: float
+
+
+@dataclass(frozen=True)
+class ExternalImportSettings:
+    chaoxing: ChaoxingImportSettings
+
+
+@dataclass(frozen=True)
 class AppSettings:
     asr: AsrSettings
     openai: OpenAISettings
@@ -210,6 +223,7 @@ class AppSettings:
     agent_retrieval: AgentRetrievalSettings
     generation: GenerationConcurrencySettings
     web_search: WebSearchSettings
+    external_import: ExternalImportSettings
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
@@ -382,6 +396,22 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             field_name="web_search.timeout_seconds",
         ),
     )
+    external_import_payload = payload.get("external_import", {})
+    chaoxing_import_payload = external_import_payload.get("chaoxing", {})
+    external_import_settings = ExternalImportSettings(
+        chaoxing=ChaoxingImportSettings(
+            request_delay_seconds=_normalize_non_negative_float(
+                chaoxing_import_payload.get("request_delay_seconds"),
+                default=DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS,
+                field_name="external_import.chaoxing.request_delay_seconds",
+            ),
+            init_course_delay_seconds=_normalize_non_negative_float(
+                chaoxing_import_payload.get("init_course_delay_seconds"),
+                default=DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS,
+                field_name="external_import.chaoxing.init_course_delay_seconds",
+            ),
+        ),
+    )
 
     return AppSettings(
         asr=asr_settings,
@@ -392,6 +422,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         agent_retrieval=agent_retrieval_settings,
         generation=generation_settings,
         web_search=web_search_settings,
+        external_import=external_import_settings,
     )
 
 
@@ -539,6 +570,32 @@ def replace_web_search_enabled(settings: AppSettings, web_search_enabled: bool) 
     )
 
 
+def replace_chaoxing_import_settings(
+    settings: AppSettings,
+    *,
+    request_delay_seconds: float,
+    init_course_delay_seconds: float,
+) -> AppSettings:
+    return replace(
+        settings,
+        external_import=replace(
+            settings.external_import,
+            chaoxing=ChaoxingImportSettings(
+                request_delay_seconds=_normalize_non_negative_float(
+                    request_delay_seconds,
+                    default=DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS,
+                    field_name="external_import.chaoxing.request_delay_seconds",
+                ),
+                init_course_delay_seconds=_normalize_non_negative_float(
+                    init_course_delay_seconds,
+                    default=DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS,
+                    field_name="external_import.chaoxing.init_course_delay_seconds",
+                ),
+            ),
+        ),
+    )
+
+
 def replace_openai_settings(
     settings: AppSettings,
     *,
@@ -638,6 +695,10 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"max_results = {settings.web_search.max_results}",
         f"timeout_seconds = {settings.web_search.timeout_seconds}",
         "",
+        "[external_import.chaoxing]",
+        f"request_delay_seconds = {settings.external_import.chaoxing.request_delay_seconds}",
+        f"init_course_delay_seconds = {settings.external_import.chaoxing.init_course_delay_seconds}",
+        "",
     ]
     return "\n".join(lines)
 
@@ -654,6 +715,18 @@ def _normalize_positive_int(value: object, *, default: int, field_name: str | No
     if field_name is not None:
         raise ValueError(f"{field_name} 必须是大于 0 的整数。")
     return default
+
+
+def _normalize_non_negative_float(value: object, *, default: float, field_name: str) -> float:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} 必须是大于等于 0 的数字。")
+    if isinstance(value, (int, float)):
+        normalized = float(value)
+        if normalized >= 0:
+            return normalized
+    raise ValueError(f"{field_name} 必须是大于等于 0 的数字。")
 
 
 def _normalize_ratio(value: object, *, default: float) -> float:

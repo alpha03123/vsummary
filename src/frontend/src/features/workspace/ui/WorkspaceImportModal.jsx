@@ -14,6 +14,7 @@ export function WorkspaceImportModal({
   onLoadChaoxingStatus,
   onInitChaoxing,
   onCancelChaoxingInit,
+  onCancelChaoxingImport,
   onLoadChaoxingCourses,
   onImportChaoxingCourse,
   onImportLocalSeries,
@@ -37,6 +38,8 @@ export function WorkspaceImportModal({
   const loadChaoxingStatusRef = useRef(onLoadChaoxingStatus);
   const loadChaoxingCoursesRef = useRef(onLoadChaoxingCourses);
   const cancelChaoxingInitRef = useRef(onCancelChaoxingInit);
+  const cancelChaoxingImportRef = useRef(onCancelChaoxingImport);
+  const chaoxingImportTaskRef = useRef(null);
   const initAbortControllerRef = useRef(null);
   const initInFlightRef = useRef(false);
   const mountedRef = useRef(true);
@@ -78,13 +81,15 @@ export function WorkspaceImportModal({
     loadChaoxingStatusRef.current = onLoadChaoxingStatus;
     loadChaoxingCoursesRef.current = onLoadChaoxingCourses;
     cancelChaoxingInitRef.current = onCancelChaoxingInit;
-  }, [onLoadChaoxingStatus, onLoadChaoxingCourses, onCancelChaoxingInit]);
+    cancelChaoxingImportRef.current = onCancelChaoxingImport;
+  }, [onLoadChaoxingStatus, onLoadChaoxingCourses, onCancelChaoxingInit, onCancelChaoxingImport]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       requestChaoxingInitCancel();
+      requestChaoxingImportCancel();
     };
   }, []);
 
@@ -185,8 +190,17 @@ export function WorkspaceImportModal({
     }
   }
 
+  function requestChaoxingImportCancel() {
+    const taskId = chaoxingImportTaskRef.current?.taskId;
+    if (taskId) {
+      cancelChaoxingImportRef.current?.(taskId);
+      chaoxingImportTaskRef.current = null;
+    }
+  }
+
   function handleClose() {
     requestChaoxingInitCancel();
+    requestChaoxingImportCancel();
     onClose();
   }
 
@@ -209,7 +223,12 @@ export function WorkspaceImportModal({
             setStatus("idle");
             return;
           }
-          result = await onImportChaoxingCourse(selectedChaoxingCourseKey, setChaoxingImportProgress);
+          result = await onImportChaoxingCourse(selectedChaoxingCourseKey, setChaoxingImportProgress, {
+            onTaskStarted: (task) => {
+              chaoxingImportTaskRef.current = task;
+            },
+          });
+          chaoxingImportTaskRef.current = null;
         } else {
           const trimmed = url.trim();
           if (!trimmed) {
@@ -237,6 +256,7 @@ export function WorkspaceImportModal({
       });
       setStatus("success");
     } catch (error) {
+      chaoxingImportTaskRef.current = null;
       setStatus("error");
       setErrorMsg(error instanceof Error ? error.message : "导入失败，请检查输入内容");
     }

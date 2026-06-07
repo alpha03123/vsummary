@@ -94,3 +94,10 @@ search_context_size = "medium"
 max_results = 5
 # 单次联网搜索超时时间，单位秒。
 timeout_seconds = 10
+
+# 外部课程导入设置。
+[external_import.chaoxing]
+# 超星普通请求间隔，单位秒。提高该值可降低触发访问验证的概率，但导入会更慢。
+request_delay_seconds = 0.2
+# 超星 Init 阶段逐课程预热间隔，单位秒。课程多时可适当调高。
+init_course_delay_seconds = 0.3

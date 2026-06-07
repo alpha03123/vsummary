@@ -85,7 +85,8 @@ export function WorkspaceSettingsPanel({
     { id: "ai", label: "AI 总结能力", icon: Cpu },
     { id: "rag", label: "RAG 处理", icon: FileText },
     { id: "keys", label: "模型供应商", icon: Key },
-    { id: "network", label: "下载管理 ", icon: Globe },
+    { id: "external-import", label: "外部导入", icon: Globe },
+    { id: "network", label: "下载管理 ", icon: Download },
   ];
   return (
     <motion.section
@@ -834,6 +835,43 @@ export function WorkspaceSettingsPanel({
                       <p className="text-sm text-stone-500 dark:text-stone-400">未读取到 Chromium 状态。</p>
                     )}
                   </div>
+                </WorkspaceSettingRow>
+              </>
+            )}
+
+            {activeTab === "external-import" && (
+              <>
+                <div className="mb-2">
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">外部API</h3>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">
+                    控制外部API的设置。
+                  </p>
+                </div>
+
+                <WorkspaceSettingRow
+                  title="超星请求间隔"
+                  description="正常列举课程、章节、视频时的请求间隔，单位秒。越小获取越快。默认 0.2。"
+                >
+                  <WorkspaceTextInput
+                    type="number"
+                    value={String(ui.chaoxingRequestDelaySeconds)}
+                    onChange={(nextValue) => onChangeSetting("chaoxingRequestDelaySeconds", Number(nextValue))}
+                    placeholder="0.2"
+                    className="w-full sm:w-[180px]"
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="超星初始化获取间隔"
+                  description="初始化登录后获取课程的间隔。越小获取越快。默认 0.3。"
+                >
+                  <WorkspaceTextInput
+                    type="number"
+                    value={String(ui.chaoxingInitCourseDelaySeconds)}
+                    onChange={(nextValue) => onChangeSetting("chaoxingInitCourseDelaySeconds", Number(nextValue))}
+                    placeholder="0.3"
+                    className="w-full sm:w-[180px]"
+                  />
                 </WorkspaceSettingRow>
               </>
             )}

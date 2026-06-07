@@ -41,6 +41,8 @@ class WorkspaceSettingsResponse(BaseModel):
     reasoning_effort: str = "none"
     video_generation_concurrency: int
     web_search_enabled: bool
+    chaoxing_request_delay_seconds: float = 0.2
+    chaoxing_init_course_delay_seconds: float = 0.3
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):
@@ -57,6 +59,8 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     reasoning_effort: str = "none"
     video_generation_concurrency: int
     web_search_enabled: bool
+    chaoxing_request_delay_seconds: float = 0.2
+    chaoxing_init_course_delay_seconds: float = 0.3
 
 
 class ProviderSettingsResponse(BaseModel):

@@ -53,6 +53,10 @@ class ChaoxingDownloadCancelled(RuntimeError):
     pass
 
 
+class ChaoxingImportCancelled(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class ChaoxingCourseRecord:
     course_key: str
@@ -123,6 +127,12 @@ class ChaoxingDownloaderClient:
 
     def cancel_init(self) -> None:
         self._init_cancel_event.set()
+
+    def configure_delays(self, *, request_delay_seconds: float, init_course_delay_seconds: float) -> None:
+        with self._lock:
+            self._request_delay_seconds = request_delay_seconds
+            self._init_course_delay_seconds = init_course_delay_seconds
+            self._downloader = None
 
     def load(self):
         with self._lock:
@@ -273,6 +283,7 @@ class ChaoxingDownloaderClient:
 class ChaoxingCourseImporter:
     def __init__(self, *, client: ChaoxingDownloaderClient) -> None:
         self._client = client
+        self._import_lock = Lock()
 
     def is_initialized(self) -> bool:
         return self._client.is_initialized()
@@ -283,16 +294,35 @@ class ChaoxingCourseImporter:
     def cancel_init(self) -> None:
         self._client.cancel_init()
 
+    def configure_delays(self, *, request_delay_seconds: float, init_course_delay_seconds: float) -> None:
+        with self._import_lock:
+            self._client.configure_delays(
+                request_delay_seconds=request_delay_seconds,
+                init_course_delay_seconds=init_course_delay_seconds,
+            )
+
     def list_courses(self) -> list[ChaoxingCourseRecord]:
-        return [_to_course_record(course) for course in self._client.list_courses()]
+        with self._import_lock:
+            return [_to_course_record(course) for course in self._client.list_courses()]
 
     def list_chapters(self, course_key: str) -> list[ChaoxingChapterRecord]:
-        return [_to_chapter_record(chapter) for chapter in self._client.list_chapters(course_key)]
+        with self._import_lock:
+            return [_to_chapter_record(chapter) for chapter in self._client.list_chapters(course_key)]
 
     def list_videos(self, chapter_key: str) -> list[ChaoxingVideoRecord]:
-        return [_to_video_record(video) for video in self._client.list_videos(chapter_key)]
+        with self._import_lock:
+            return [_to_video_record(video) for video in self._client.list_videos(chapter_key)]
 
     def import_course(self, course_key: str, *, progress: ProgressReporter | None = None) -> LinkedSeries:
+        while not self._import_lock.acquire(timeout=0.1):
+            _raise_if_import_cancelled(progress)
+        try:
+            return self._import_course_unlocked(course_key, progress=progress)
+        finally:
+            self._import_lock.release()
+
+    def _import_course_unlocked(self, course_key: str, *, progress: ProgressReporter | None = None) -> LinkedSeries:
+        _raise_if_import_cancelled(progress)
         courses = list(self._client.list_courses())
         course = next((item for item in courses if _text(getattr(item, "course_key", "")) == course_key), None)
         if course is None:
@@ -301,8 +331,10 @@ class ChaoxingCourseImporter:
 
         videos: list[LinkedVideo] = []
         try:
+            _raise_if_import_cancelled(progress)
             chapters = self._client.list_chapters(course_key)
         except RuntimeError as error:
+            _raise_if_import_cancelled(progress)
             raise RuntimeError(f"读取超星课程章节失败：{course_title}；{error}") from error
 
         total_chapters = len(chapters)
@@ -324,6 +356,7 @@ class ChaoxingCourseImporter:
 
         skipped_chapters = 0
         for chapter_index, chapter in enumerate(chapters, start=1):
+            _raise_if_import_cancelled(progress)
             chapter_title = _text(getattr(chapter, "title", ""))
             chapter_key = _text(getattr(chapter, "chapter_key", ""))
             if progress is not None:
@@ -335,6 +368,7 @@ class ChaoxingCourseImporter:
             try:
                 chapter_videos = self._client.list_videos(chapter_key)
             except Exception as error:
+                _raise_if_import_cancelled(progress)
                 if _is_unsupported_chapter(error):
                     skipped_chapters += 1
                     if progress is not None:
@@ -347,6 +381,7 @@ class ChaoxingCourseImporter:
                 if not isinstance(error, RuntimeError):
                     raise
                 raise RuntimeError(f"读取超星章节视频失败：{chapter_title or chapter_key}；{error}") from error
+            _raise_if_import_cancelled(progress)
             for video in chapter_videos:
                 videos.append(_to_linked_video(video, chapter_title=chapter_title))
             if progress is not None:
@@ -356,6 +391,7 @@ class ChaoxingCourseImporter:
                     f"正在解析视频章节 {chapter_index}/{total_chapters}，已发现 {len(videos)} 个视频，已跳过 {skipped_chapters} 个非视频章节",
                 )
 
+        _raise_if_import_cancelled(progress)
         if not videos:
             raise RuntimeError(f"超星课程没有可导入视频：{course_title}")
 
@@ -518,6 +554,11 @@ def _to_linked_series(*, course_key: str, course_title: str, videos: list[Linked
         source_url=f"chaoxing://course/{course_key}",
         videos=videos,
     )
+
+
+def _raise_if_import_cancelled(progress: ProgressReporter | None) -> None:
+    if progress is not None and progress.is_cancel_requested():
+        raise ChaoxingImportCancelled("超星课程导入已取消")
 
 
 def _safe_key(value: str) -> str:

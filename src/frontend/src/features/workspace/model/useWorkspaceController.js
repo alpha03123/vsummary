@@ -201,6 +201,7 @@ export function useWorkspaceController() {
     onLoadChaoxingStatus: contentActions.onLoadChaoxingStatus,
     onInitChaoxing: contentActions.onInitChaoxing,
     onCancelChaoxingInit: contentActions.onCancelChaoxingInit,
+    onCancelChaoxingImport: contentActions.onCancelChaoxingImport,
     onLoadChaoxingCourses: contentActions.onLoadChaoxingCourses,
     onImportChaoxingCourse: contentActions.onImportChaoxingCourse,
     onImportLocalSeries: contentActions.onImportLocalSeries,

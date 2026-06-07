@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import time
+from threading import Event
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -47,6 +48,36 @@ class ChaoxingApiTests(unittest.TestCase):
         self.assertEqual(snapshot.status, "completed")
         self.assertEqual(container.saved_series.series_id, "chaoxing-course-1")
         self.assertEqual(container.invalidate_calls, 1)
+
+    def test_cancel_import_course_stops_background_save(self) -> None:
+        container = _build_container()
+        import_started = Event()
+        release_import = Event()
+
+        def import_course(course_key, progress=None):
+            del course_key
+            if progress is not None:
+                progress.update("import", 50.0, "正在解析视频章节 1/1")
+            import_started.set()
+            release_import.wait(timeout=1.0)
+            return container.sample_series
+
+        container.chaoxing_importer.import_course = import_course
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/linked/chaoxing/import/course", json={"course_key": "course-1"})
+        payload = response.json()
+        self.assertTrue(import_started.wait(timeout=1.0))
+
+        cancel_response = client.post(f"/api/linked/chaoxing/import/course/{payload['task_id']}/cancel")
+        release_import.set()
+        snapshot = _wait_for_import_completion(container, payload["task_id"])
+
+        self.assertEqual(cancel_response.status_code, 200)
+        self.assertEqual(cancel_response.json(), {"status": "cancelling", "task_id": payload["task_id"]})
+        self.assertEqual(snapshot.status, "cancelled")
+        self.assertIsNone(container.saved_series)
+        self.assertEqual(container.invalidate_calls, 0)
 
     def test_init_returns_conflict_when_login_is_cancelled(self) -> None:
         container = _build_container()
@@ -102,6 +133,7 @@ def _build_container():
         chaoxing_import_progress_tracker=InMemoryProgressTracker(),
     )
     container.saved_series = None
+    container.sample_series = series
     container.invalidate_calls = 0
     container.cancel_init_calls = 0
     container.chaoxing_importer.cancel_init = lambda: setattr(container, "cancel_init_calls", container.cancel_init_calls + 1)

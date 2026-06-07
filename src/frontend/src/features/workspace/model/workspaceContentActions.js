@@ -1,6 +1,7 @@
 import {
   cancelSeriesSummaries,
   cancelChaoxingInit,
+  cancelChaoxingImport,
   cancelVideoDownload,
   cancelVideoSummary,
   createVideoNote,
@@ -571,12 +572,13 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onImportChaoxingCourse(courseKey, onProgress = null) {
+  async function onImportChaoxingCourse(courseKey, onProgress = null, options = {}) {
     try {
       const task = await importChaoxingCourse(courseKey);
       if (!task.taskId) {
         throw new Error("超星导入任务未返回 task_id");
       }
+      options.onTaskStarted?.(task);
       return await new Promise((resolve, reject) => {
         let unsubscribe = null;
         unsubscribe = subscribeChaoxingImportProgress(task.taskId, async (snapshot) => {
@@ -599,6 +601,18 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       });
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入超星课程失败" });
+      throw error;
+    }
+  }
+
+  async function onCancelChaoxingImport(taskId) {
+    if (!taskId) {
+      return;
+    }
+    try {
+      await cancelChaoxingImport(taskId);
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "取消超星课程导入失败" });
       throw error;
     }
   }
@@ -706,6 +720,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onLoadChaoxingStatus,
     onInitChaoxing,
     onCancelChaoxingInit,
+    onCancelChaoxingImport,
     onLoadChaoxingCourses,
     onImportChaoxingCourse,
     onImportLocalSeries,

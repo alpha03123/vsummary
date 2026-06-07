@@ -114,6 +114,7 @@ export function buildWorkspacePageModel(controller) {
       loadChaoxingStatus: controller.onLoadChaoxingStatus,
       initChaoxing: controller.onInitChaoxing,
       cancelChaoxingInit: controller.onCancelChaoxingInit,
+      cancelChaoxingImport: controller.onCancelChaoxingImport,
       loadChaoxingCourses: controller.onLoadChaoxingCourses,
       importChaoxingCourse: controller.onImportChaoxingCourse,
       importLocalSeries: controller.onImportLocalSeries,

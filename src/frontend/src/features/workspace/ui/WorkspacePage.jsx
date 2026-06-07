@@ -440,6 +440,7 @@ export function WorkspacePage({ page }) {
           onLoadChaoxingStatus={actions.loadChaoxingStatus}
           onInitChaoxing={actions.initChaoxing}
           onCancelChaoxingInit={actions.cancelChaoxingInit}
+          onCancelChaoxingImport={actions.cancelChaoxingImport}
           onLoadChaoxingCourses={actions.loadChaoxingCourses}
           onImportChaoxingCourse={actions.importChaoxingCourse}
           onImportLocalSeries={async (seriesTitle, files) => actions.importLocalSeries(seriesTitle, files)}

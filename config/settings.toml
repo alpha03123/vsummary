@@ -50,3 +50,7 @@ mode = "native"
 search_context_size = "medium"
 max_results = 5
 timeout_seconds = 10
+
+[external_import.chaoxing]
+request_delay_seconds = 0.2
+init_course_delay_seconds = 0.3

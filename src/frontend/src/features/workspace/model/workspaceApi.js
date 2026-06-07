@@ -38,6 +38,8 @@ export async function loadWorkspaceSettings() {
     answerDetailLevel: payload.answer_detail_level,
     reasoningEffort: payload.reasoning_effort,
     videoGenerationConcurrency: payload.video_generation_concurrency,
+    chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
+    chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
   };
 }
 
@@ -79,6 +81,8 @@ export async function updateWorkspaceSettings(settings) {
       answer_detail_level: settings.answerDetailLevel,
       reasoning_effort: settings.reasoningEffort,
       video_generation_concurrency: settings.videoGenerationConcurrency,
+      chaoxing_request_delay_seconds: settings.chaoxingRequestDelaySeconds,
+      chaoxing_init_course_delay_seconds: settings.chaoxingInitCourseDelaySeconds,
     }),
   });
   return {
@@ -95,6 +99,8 @@ export async function updateWorkspaceSettings(settings) {
     answerDetailLevel: payload.answer_detail_level,
     reasoningEffort: payload.reasoning_effort,
     videoGenerationConcurrency: payload.video_generation_concurrency,
+    chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
+    chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
   };
 }
 
@@ -763,6 +769,12 @@ export async function importChaoxingCourse(courseKey) {
     taskId: typeof payload.task_id === "string" ? payload.task_id : "",
     seriesId: typeof payload.series_id === "string" ? payload.series_id : "",
   };
+}
+
+export async function cancelChaoxingImport(taskId) {
+  return fetchJson(`/api/linked/chaoxing/import/course/${encodeURIComponent(taskId)}/cancel`, {
+    method: "POST",
+  });
 }
 
 export function subscribeChaoxingImportProgress(taskId, listener) {

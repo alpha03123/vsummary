@@ -229,11 +229,53 @@ describe("workspaceContentActions series cancellation", () => {
     expect(loadWorkspaceLibrary).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith({ type: "workspace_loaded", library: refreshedLibrary });
   });
+
+  it("exposes and cancels a running chaoxing import task", async () => {
+    vi.resetModules();
+    let progressListener;
+    const importChaoxingCourse = vi.fn(() => Promise.resolve({
+      taskId: "chaoxing-import-1",
+      seriesId: "chaoxing-course-1",
+    }));
+    const cancelChaoxingImport = vi.fn(() => Promise.resolve({ status: "cancelling" }));
+    const subscribeChaoxingImportProgress = vi.fn((taskId, listener) => {
+      progressListener = listener;
+      return vi.fn();
+    });
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelChaoxingImport,
+      importChaoxingCourse,
+      subscribeChaoxingImportProgress,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const actions = createWorkspaceContentActions({
+      state: {},
+      dispatch: vi.fn(),
+      selectedVideo: null,
+    });
+    const onTaskStarted = vi.fn();
+
+    const importTask = actions.onImportChaoxingCourse("course-1", null, { onTaskStarted });
+    await Promise.resolve();
+    await actions.onCancelChaoxingImport("chaoxing-import-1");
+    progressListener({ status: "cancelled", detail: "超星课程导入已取消" });
+
+    await expect(importTask).rejects.toThrow("超星课程导入已取消");
+    expect(onTaskStarted).toHaveBeenCalledWith({
+      taskId: "chaoxing-import-1",
+      seriesId: "chaoxing-course-1",
+    });
+    expect(cancelChaoxingImport).toHaveBeenCalledWith("chaoxing-import-1");
+  });
 });
 
 function createWorkspaceApiMock() {
   return {
     cancelChaoxingInit: vi.fn(),
+    cancelChaoxingImport: vi.fn(),
     cancelVideoSummary: vi.fn(),
     createVideoNote: vi.fn(),
     deleteSeries: vi.fn(),

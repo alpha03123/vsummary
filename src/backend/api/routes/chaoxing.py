@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from backend.api.container import ApiContainerDep
 from backend.api.sse import stream_progress_events
-from backend.chaoxing.chaoxing_api import ChaoxingInitCancelled
+from backend.chaoxing.chaoxing_api import ChaoxingImportCancelled, ChaoxingInitCancelled
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 
@@ -121,15 +121,29 @@ async def import_chaoxing_course(request: ImportChaoxingCourseRequest, container
     def _run_import() -> None:
         try:
             linked_series = container.chaoxing_importer.import_course(request.course_key, progress=reporter)
+            if reporter.is_cancel_requested():
+                reporter.cancelled("超星课程导入已取消")
+                return
             reporter.update("save", 95.0, "正在保存导入结果")
+            if reporter.is_cancel_requested():
+                reporter.cancelled("超星课程导入已取消")
+                return
             container.linked_series_workspace.save_linked_series(linked_series)
             container.workspace_index_invalidator.invalidate()
             reporter.completed(f"导入完成：{len(linked_series.videos)} 个视频")
+        except ChaoxingImportCancelled as error:
+            reporter.cancelled(str(error))
         except Exception as error:
             reporter.failed(str(error))
 
     Thread(target=_run_import, daemon=True).start()
     return ImportChaoxingCourseResponse(task_id=task_id, series_id=series_id)
+
+
+@router.post("/api/linked/chaoxing/import/course/{task_id}/cancel")
+async def cancel_chaoxing_course_import(task_id: str, container: ApiContainerDep) -> dict[str, str]:
+    container.chaoxing_import_progress_tracker.request_cancel(task_id)
+    return {"status": "cancelling", "task_id": task_id}
 
 
 @router.get("/api/linked/chaoxing/import/course/{task_id}/progress")

@@ -45,6 +45,8 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         reasoning_effort=settings.reasoning_effort,
         video_generation_concurrency=settings.video_generation_concurrency,
         web_search_enabled=settings.web_search_enabled,
+        chaoxing_request_delay_seconds=settings.chaoxing_request_delay_seconds,
+        chaoxing_init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
     )
 
 
@@ -68,6 +70,8 @@ async def update_workspace_settings(
             reasoning_effort=request.reasoning_effort,
             video_generation_concurrency=request.video_generation_concurrency,
             web_search_enabled=request.web_search_enabled,
+            chaoxing_request_delay_seconds=request.chaoxing_request_delay_seconds,
+            chaoxing_init_course_delay_seconds=request.chaoxing_init_course_delay_seconds,
         )
         container.invalidate_agent_graph_service()
     except ValueError as error:
@@ -75,6 +79,10 @@ async def update_workspace_settings(
 
     container.generate_video_summary.update_video_generation_concurrency(
         settings.video_generation_concurrency
+    )
+    container.chaoxing_importer.configure_delays(
+        request_delay_seconds=settings.chaoxing_request_delay_seconds,
+        init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
     )
 
     return WorkspaceSettingsResponse(
@@ -91,6 +99,8 @@ async def update_workspace_settings(
         reasoning_effort=settings.reasoning_effort,
         video_generation_concurrency=settings.video_generation_concurrency,
         web_search_enabled=settings.web_search_enabled,
+        chaoxing_request_delay_seconds=settings.chaoxing_request_delay_seconds,
+        chaoxing_init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
     )
 
 

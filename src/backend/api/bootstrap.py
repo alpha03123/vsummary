@@ -216,6 +216,8 @@ def build_api_container(
     chaoxing_client = ChaoxingDownloaderClient(
         state_dir=root_dir / "data" / "chaoxing" / "state",
         chromium_downloaded=chaoxing_chromium_manager.is_downloaded,
+        request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
+        init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
     )
     chaoxing_importer = ChaoxingCourseImporter(client=chaoxing_client)
     linked_download_starter = CompositeLinkedVideoDownloadStarter(
