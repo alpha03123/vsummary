@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from pathlib import Path
+import shutil
+from uuid import uuid4
 
 from backend.video_summary.domain.models import SummaryDocument, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
@@ -73,8 +75,30 @@ class GenerateVideoSummary:
     ) -> SummaryDocument:
         _raise_if_cancelled(progress_reporter)
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
-        audio_path = output_dir / "audio.wav"
-        transcript_stem = output_dir / "transcript"
+        staging_dir = output_dir.parent / f".{output_dir.name}.generation-{uuid4().hex}.tmp"
+        await asyncio.to_thread(staging_dir.mkdir, parents=True, exist_ok=False)
+        try:
+            return await self._run_to_staging(
+                video_path=video_path,
+                output_dir=output_dir,
+                staging_dir=staging_dir,
+                progress_reporter=progress_reporter,
+                cancellation=cancellation,
+            )
+        finally:
+            await asyncio.to_thread(_remove_tree_if_exists, staging_dir)
+
+    async def _run_to_staging(
+        self,
+        *,
+        video_path: Path,
+        output_dir: Path,
+        staging_dir: Path,
+        progress_reporter: ProgressReporter | None,
+        cancellation: GenerationCancellationContext | None,
+    ) -> SummaryDocument:
+        audio_path = staging_dir / "audio.wav"
+        transcript_stem = staging_dir / "transcript"
 
         if progress_reporter is not None:
             progress_reporter.update("probe", 5.0, "正在分析视频信息")
@@ -115,14 +139,14 @@ class GenerateVideoSummary:
             _raise_if_cancelled(progress_reporter)
             await self._artifact_store.save_enhanced_transcript(
                 transcript=transcript,
-                output_dir=output_dir,
+                output_dir=staging_dir,
             )
             _raise_if_cancelled(progress_reporter)
 
         await self._artifact_store.save_cleaned_transcript(
             video=video,
             transcript=transcript,
-            output_dir=output_dir,
+            output_dir=staging_dir,
         )
         _raise_if_cancelled(progress_reporter)
 
@@ -136,7 +160,9 @@ class GenerateVideoSummary:
         except Exception as error:
             raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         _raise_if_cancelled(progress_reporter)
-        await self._artifact_store.save_summary_document(document=summary_document, output_dir=output_dir)
+        await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
+        _raise_if_cancelled(progress_reporter)
+        await asyncio.to_thread(_commit_generation_artifacts, staging_dir, output_dir)
         return summary_document
 
 
@@ -190,3 +216,20 @@ def _raise_if_cancelled(progress_reporter: ProgressReporter | None) -> None:
         progress_reporter.raise_if_cancelled()
     except RuntimeError as error:
         raise GenerateCancelledError(str(error) or "生成已取消") from error
+
+
+def _commit_generation_artifacts(staging_dir: Path, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for source in staging_dir.iterdir():
+        target = output_dir / source.name
+        if source.is_dir():
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.move(str(source), str(target))
+            continue
+        source.replace(target)
+
+
+def _remove_tree_if_exists(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)

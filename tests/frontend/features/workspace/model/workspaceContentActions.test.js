@@ -172,6 +172,63 @@ describe("workspaceContentActions series cancellation", () => {
     expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
     expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-2");
   });
+
+  it("reloads library after series cancellation so completed partial results stay visible", async () => {
+    vi.resetModules();
+    const refreshedLibrary = {
+      series: [
+        {
+          id: "series-a",
+          videos: [
+            { id: "video-1", processed: true, status: "ready" },
+            { id: "video-2", processed: false, status: "pending" },
+          ],
+        },
+      ],
+    };
+    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve(refreshedLibrary));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelSeriesSummaries: vi.fn(() => Promise.resolve({ status: "cancelled" })),
+      cancelVideoDownload: vi.fn(() => Promise.resolve({})),
+      loadWorkspaceLibrary,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        library: {
+          series: [
+            {
+              id: "series-a",
+              videos: [
+                { id: "video-1", processed: false, status: "pending" },
+                { id: "video-2", processed: false, status: "pending" },
+              ],
+            },
+          ],
+        },
+        seriesGenerationQueue: {
+          runId: "series-a:1",
+          seriesId: "series-a",
+          status: "running",
+          downloadVideoId: null,
+        },
+      },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    await actions.onCancelGeneration();
+
+    expect(loadWorkspaceLibrary).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({ type: "workspace_loaded", library: refreshedLibrary });
+  });
 });
 
 function createWorkspaceApiMock() {

@@ -68,6 +68,18 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     return library;
   }
 
+  async function reloadWorkspaceLibraryAfterSeriesStop() {
+    try {
+      return await reloadWorkspaceLibrary();
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "刷新系列状态失败",
+      });
+      return null;
+    }
+  }
+
   async function onGenerateKnowledgeCards() {
     if (!state.selectedSeriesId || !state.selectedVideoId) {
       return;
@@ -225,6 +237,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       });
     } catch (error) {
       if (isDownloadCancelledError(error)) {
+        await reloadWorkspaceLibraryAfterSeriesStop();
         dispatch({
           type: "generation_status_loaded",
           taskKey: buildSeriesGenerationTaskKey(seriesId),
@@ -245,6 +258,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         return;
       }
       const message = error instanceof Error ? error.message : "生成失败";
+      await reloadWorkspaceLibraryAfterSeriesStop();
       dispatch({ type: "load_failed", message });
       dispatch({
         type: "generation_status_loaded",
@@ -370,6 +384,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       linkedVideoIds.add(state.seriesGenerationQueue.downloadVideoId);
     }
     await Promise.allSettled(Array.from(linkedVideoIds, (videoId) => cancelVideoDownload(seriesId, videoId)));
+    await reloadWorkspaceLibraryAfterSeriesStop();
     dispatch({
       type: "generation_status_loaded",
       taskKey: buildSeriesGenerationTaskKey(seriesId),
