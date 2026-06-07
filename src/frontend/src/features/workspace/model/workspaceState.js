@@ -18,6 +18,7 @@ export const defaultUiSettings = {
   windowTokens: 1000000,
   answerDetailLevel: "medium",
   reasoningEffort: "none",
+  talkCustomPrompt: "",
   videoGenerationConcurrency: 1,
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
@@ -741,6 +742,7 @@ export function normalizeUiSettings(value) {
       record.reasoningEffort === "low" || record.reasoningEffort === "medium" || record.reasoningEffort === "high"
         ? record.reasoningEffort
         : "none",
+    talkCustomPrompt: typeof record.talkCustomPrompt === "string" ? record.talkCustomPrompt : "",
     videoGenerationConcurrency:
       typeof record.videoGenerationConcurrency === "number"
         && Number.isInteger(record.videoGenerationConcurrency)

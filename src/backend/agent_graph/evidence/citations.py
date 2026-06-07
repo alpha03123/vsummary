@@ -7,6 +7,7 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
     retrieval_results = result.get("evidence_items", result.get("retrieval_results", []))
     if not isinstance(retrieval_results, list):
         return []
+    retrieval_results = _with_source_numbers(retrieval_results)
     used_evidence_ids = _resolve_used_evidence_ids(result)
     if used_evidence_ids is not None:
         retrieval_results = [
@@ -101,6 +102,19 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             next_id += 1
 
     return citations
+
+
+def _with_source_numbers(items: list[object]) -> list[object]:
+    numbered_items: list[object] = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            numbered_items.append(item)
+            continue
+        if isinstance(item.get("source_number"), int):
+            numbered_items.append(item)
+            continue
+        numbered_items.append({**item, "source_number": index})
+    return numbered_items
 
 
 def _resolve_used_evidence_ids(result: dict[str, object]) -> set[str] | None:

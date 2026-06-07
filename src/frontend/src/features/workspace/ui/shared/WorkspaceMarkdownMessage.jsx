@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import rehypeKatex from "rehype-katex";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 
 const CITATION_PREVIEW_TEXT_MAX_LENGTH = 300;
 const CITATION_PREVIEW_WIDTH = 360;
@@ -41,6 +43,16 @@ function injectCitationLinks(content, citations) {
     }
     return `[${citationId}](#citation-${citationId})`;
   });
+}
+
+function normalizeMathDelimiters(content) {
+  if (typeof content !== "string" || !content) {
+    return "";
+  }
+  return content
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_match, expression) => `\n\n$$\n${expression.trim()}\n$$\n\n`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_match, expression) => `$${expression.trim()}$`)
+    .replace(/^[ \t]*\[\s*([^\]\n]*(?:\\[A-Za-z]+|[A-Za-z]\([^)]*\)|[A-Za-z]\s*[=+\-*/^]|[=+\-*/^]\s*[A-Za-z]|[{}_^])[^\]\n]*)\s*\][ \t]*$/gm, (_match, expression) => `$$\n${expression.trim()}\n$$`);
 }
 
 function formatCitationSlot(slot) {
@@ -180,12 +192,13 @@ function CitationLink({ href, children, preview, ...props }) {
 
 export function WorkspaceMarkdownMessage({ content, citations = null }) {
   const normalizedCitations = normalizeCitations(citations);
-  const renderedContent = injectCitationLinks(content, normalizedCitations);
+  const renderedContent = injectCitationLinks(normalizeMathDelimiters(content), normalizedCitations);
   const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
   return (
     <div className="flex flex-col gap-4">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           a: ({ node: _node, href, children, ...props }) => {
             if (typeof href === "string" && href.startsWith("#citation-")) {

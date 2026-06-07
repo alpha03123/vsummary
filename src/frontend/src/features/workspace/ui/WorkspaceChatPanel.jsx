@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle } from "lucide-react";
+import { Sparkles, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Copy } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 const WorkspaceMarkdownMessage = lazy(() =>
@@ -58,6 +58,7 @@ export function WorkspaceChatPanel({
   onSubmitChat,
 }) {
   const [draft, setDraft] = useState("");
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
   const scopeLabel = selectedContextType === "series"
     ? activeSeries?.title ?? "当前系列"
     : selectedVideo?.title ?? activeSeries?.title ?? workspaceTitle ?? "当前视频";
@@ -94,6 +95,17 @@ export function WorkspaceChatPanel({
     }
     onSubmitChat(trimmed);
     setDraft("");
+  }
+
+  async function handleCopyMessage(message) {
+    if (typeof message.content !== "string" || !message.content.trim()) {
+      return;
+    }
+    await copyText(message.content);
+    setCopiedMessageId(message.id);
+    window.setTimeout(() => {
+      setCopiedMessageId((currentId) => currentId === message.id ? null : currentId);
+    }, 1600);
   }
 
   function renderMessageContent(message, isAssistant) {
@@ -222,6 +234,8 @@ export function WorkspaceChatPanel({
 
         {chatMessages.map((message) => {
           const isAssistant = message.role === "assistant";
+          const canCopy = message.kind == null && typeof message.content === "string" && message.content.trim();
+          const isCopied = copiedMessageId === message.id;
           return (
             <div
               key={message.id}
@@ -246,7 +260,19 @@ export function WorkspaceChatPanel({
                 >
                   {renderMessageContent(message, isAssistant)}
                 </div>
-                <span className={`text-xs text-stone-400 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>{message.meta}</span>
+                <div className={`flex items-center gap-2 text-xs text-stone-400 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
+                  <span>{message.meta}</span>
+                  {canCopy ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyMessage(message)}
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                    >
+                      <Copy size={12} />
+                      {isCopied ? "已复制" : "复制"}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
           );
@@ -316,6 +342,22 @@ export function WorkspaceChatPanel({
       </div>
     </div>
   );
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }
 
 function AssistantMessageFallback({ content }) {

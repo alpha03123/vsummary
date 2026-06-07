@@ -4,6 +4,39 @@ import { describe, expect, it } from "vitest";
 import { WorkspaceMarkdownMessage } from "@src/features/workspace/ui/shared/WorkspaceMarkdownMessage";
 
 describe("WorkspaceMarkdownMessage", () => {
+  it("links citation markers by citation id", () => {
+    render(
+      <WorkspaceMarkdownMessage
+        content="这个结论来自第四条证据。[4]"
+        citations={[
+          {
+            id: "4",
+            label: "Video 4",
+            source_type: "summary",
+            slots: [
+              {
+                slot: 1,
+                target_type: "summary",
+                video_title: "Video 4",
+                text: "第四条证据",
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "4" })).toHaveAttribute("href", "#citation-4");
+  });
+
+  it("renders bracketed latex expressions with katex", () => {
+    const { container } = render(
+      <WorkspaceMarkdownMessage content={String.raw`[ \frac{dX}{dt}=X(2-AY) ]`} />,
+    );
+
+    expect(container.querySelector(".katex")).not.toBeNull();
+  });
+
   it("truncates long citation preview text", () => {
     const longText = "字幕内容".repeat(120);
 

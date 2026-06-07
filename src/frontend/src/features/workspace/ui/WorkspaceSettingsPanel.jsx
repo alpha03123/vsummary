@@ -83,7 +83,7 @@ export function WorkspaceSettingsPanel({
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
     { id: "ai", label: "AI 总结能力", icon: Cpu },
-    { id: "rag", label: "RAG 处理", icon: FileText },
+    { id: "rag", label: "对话管理", icon: FileText },
     { id: "keys", label: "模型供应商", icon: Key },
     { id: "external-import", label: "外部导入", icon: Globe },
     { id: "network", label: "下载管理 ", icon: Download },
@@ -386,9 +386,23 @@ export function WorkspaceSettingsPanel({
             {activeTab === "rag" && (
               <>
                 <div className="mb-2">
-                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">RAG 处理</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">控制 Series 对话的证据召回与重排策略，会写入 `settings.toml`。</p>
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">对话管理</h3>
+                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">控制对话流程以及功能，会写入 `settings.toml`。</p>
                 </div>
+
+                <WorkspaceSettingRow
+                  title="用户提示词"
+                  description="自定义修改对话输出偏好"
+                  contentClassName="2xl:flex-1"
+                >
+                  <textarea
+                    value={ui.talkCustomPrompt}
+                    onChange={(event) => onChangeSetting("talkCustomPrompt", event.target.value)}
+                    placeholder="如：回答时先给结论，再用表格对比关键概念。"
+                    rows={5}
+                    className="block w-full min-w-0 resize-y rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm leading-6 text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                  />
+                </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
                   title="检索模型"
@@ -656,7 +670,7 @@ export function WorkspaceSettingsPanel({
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">下载管理</h3>
                   <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">
-                    这里的配置会写入项目根目录 `.env` 并实时生效。
+                    管理内容下载
                   </p>
                 </div>
 

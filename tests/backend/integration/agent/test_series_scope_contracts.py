@@ -952,6 +952,57 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         self.assertEqual(turn.citations[0].id, "2")
 
+    def test_citation_builder_preserves_original_source_number_when_filtering_used_evidence(self) -> None:
+        turn = AgentGraphTurnBuilder().build(
+            context=AgentContext(session_id="s1", scope_type="series", series_id="series-1", video_id=""),
+            result={
+                "assistant_message": "answer [4]",
+                "answer": "answer [4]",
+                "used_evidence_ids": ["local-4"],
+                "evidence_items": [
+                    {
+                        "evidence_id": "local-1",
+                        "series_id": "series-1",
+                        "video_id": "video-1",
+                        "title": "Video 1",
+                        "source_type": "summary_global",
+                        "text": "one",
+                        "snippet": "one",
+                    },
+                    {
+                        "evidence_id": "local-2",
+                        "series_id": "series-1",
+                        "video_id": "video-2",
+                        "title": "Video 2",
+                        "source_type": "summary_global",
+                        "text": "two",
+                        "snippet": "two",
+                    },
+                    {
+                        "evidence_id": "local-3",
+                        "series_id": "series-1",
+                        "video_id": "video-3",
+                        "title": "Video 3",
+                        "source_type": "summary_global",
+                        "text": "three",
+                        "snippet": "three",
+                    },
+                    {
+                        "evidence_id": "local-4",
+                        "series_id": "series-1",
+                        "video_id": "video-4",
+                        "title": "Video 4",
+                        "source_type": "summary_global",
+                        "text": "four",
+                        "snippet": "four",
+                    },
+                ],
+            },
+        )
+
+        self.assertEqual(len(turn.citations), 1)
+        self.assertEqual(turn.citations[0].id, "4")
+
     def test_citation_builder_includes_full_transcript_citation(self) -> None:
         turn = AgentGraphTurnBuilder().build(
             context=AgentContext(session_id="s1", scope_type="video", series_id="series-1", video_id="video-1"),
