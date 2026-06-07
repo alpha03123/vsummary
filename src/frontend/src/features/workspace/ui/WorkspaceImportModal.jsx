@@ -444,7 +444,7 @@ export function WorkspaceImportModal({
                             className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {status === "loading" ? <Loader2 size={14} className="animate-spin" /> : null}
-                            重新初始化超星
+                            重新登录初始化
                           </button>
                         </div>
                         <div className="relative mb-3">
