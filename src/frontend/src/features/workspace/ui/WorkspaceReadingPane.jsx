@@ -123,6 +123,13 @@ export function WorkspaceReadingPane({
                 <WorkspaceToolHeader
                   meta={currentToolMeta}
                   onBack={() => onSelectTool(selectedContextType === "series" ? "series-home" : "studio")}
+                  exportActions={buildExportActions({
+                    activeSeries,
+                    notes,
+                    selectedToolId,
+                    selectedVideo,
+                    tools,
+                  })}
                 />
               )}
             </header>
@@ -238,6 +245,60 @@ export function WorkspaceReadingPane({
       </div>
     </section>
   );
+}
+
+function buildExportActions({ activeSeries, notes, selectedToolId, selectedVideo, tools }) {
+  if (!activeSeries || !selectedVideo) {
+    return [];
+  }
+  if (selectedToolId === "overview") {
+    const overviewGenerated = tools?.overview?.generated === true;
+    return [
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"),
+        enabled: overviewGenerated,
+        label: "概况导出",
+        disabledReason: "AI 概况生成后才能导出",
+      },
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"),
+        enabled: overviewGenerated,
+        label: "转写导出",
+        disabledReason: "AI 概况生成后才能导出",
+      },
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"),
+        enabled: overviewGenerated,
+        label: "混合导出",
+        disabledReason: "AI 概况生成后才能导出",
+      },
+    ];
+  }
+  if (selectedToolId === "knowledge-cards") {
+    return [
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "knowledge-cards"),
+        enabled: tools?.knowledgeCards?.generated === true,
+        label: "知识卡片导出",
+        disabledReason: "知识卡片生成后才能导出",
+      },
+    ];
+  }
+  if (selectedToolId === "notes") {
+    return [
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "notes"),
+        enabled: Boolean(notes?.notes?.length),
+        label: "笔记导出",
+        disabledReason: "有笔记后才能导出",
+      },
+    ];
+  }
+  return [];
+}
+
+function videoExportUrl(seriesId, videoId, exportName) {
+  return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;
 }
 
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {

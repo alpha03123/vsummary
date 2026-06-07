@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import json
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from backend.api.container import ApiContainerDep
 from backend.api.contracts import (
@@ -28,6 +29,10 @@ from backend.api.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.library.markdown_exports import render_knowledge_cards_markdown
+from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
+from backend.video_summary.library.markdown_exports import render_notes_markdown
+from backend.video_summary.library.markdown_exports import render_transcript_markdown
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
@@ -48,6 +53,69 @@ def get_video_summary(series_id: str, video_id: str, container: ApiContainerDep)
     if video_summary is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
     return video_summary.summary
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/summary.md")
+def export_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> FileResponse:
+    source = _ensure_video_exists(container, series_id, video_id)
+    summary_path = source.output_dir / "summary.md"
+    if not summary_path.exists():
+        raise HTTPException(status_code=404, detail=f"summary markdown not found for video '{series_id}/{video_id}'")
+    return FileResponse(
+        summary_path,
+        media_type="text/markdown; charset=utf-8",
+        filename=_export_filename(video_id, "summary"),
+    )
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/transcript.md")
+def export_video_transcript_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    source = _ensure_video_exists(container, series_id, video_id)
+    transcript_path = source.output_dir / "transcript.cleaned.json"
+    if not transcript_path.exists():
+        raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
+    markdown = render_transcript_markdown(json.loads(transcript_path.read_text(encoding="utf-8")))
+    return _markdown_response(markdown, _export_filename(video_id, "transcript"))
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/mixed.md")
+def export_video_mixed_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    source = _ensure_video_exists(container, series_id, video_id)
+    summary_path = source.output_dir / "summary.json"
+    transcript_path = source.output_dir / "transcript.cleaned.json"
+    if not summary_path.exists():
+        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+    if not transcript_path.exists():
+        raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
+    markdown = render_mixed_overview_markdown(
+        json.loads(summary_path.read_text(encoding="utf-8")),
+        json.loads(transcript_path.read_text(encoding="utf-8")),
+    )
+    return _markdown_response(markdown, _export_filename(video_id, "mixed"))
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/knowledge-cards.md")
+def export_video_knowledge_cards_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    source = _ensure_video_exists(container, series_id, video_id)
+    cards_path = source.output_dir / "knowledge_cards.json"
+    if not cards_path.exists():
+        raise HTTPException(status_code=404, detail=f"knowledge cards not found for video '{series_id}/{video_id}'")
+    markdown = render_knowledge_cards_markdown(json.loads(cards_path.read_text(encoding="utf-8")))
+    return _markdown_response(markdown, _export_filename(video_id, "knowledge-cards"))
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/notes.md")
+def export_video_notes_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    source = _ensure_video_exists(container, series_id, video_id)
+    notes_path = source.output_dir / "notes.json"
+    if not notes_path.exists():
+        raise HTTPException(status_code=404, detail=f"notes not found for video '{series_id}/{video_id}'")
+    payload = json.loads(notes_path.read_text(encoding="utf-8"))
+    notes = payload.get("notes")
+    if not isinstance(notes, list) or not notes:
+        raise HTTPException(status_code=404, detail=f"notes not found for video '{series_id}/{video_id}'")
+    markdown = render_notes_markdown(source.title, payload)
+    return _markdown_response(markdown, _export_filename(video_id, "notes"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/mindmap")
@@ -482,6 +550,30 @@ def _get_pending_series_videos(container, series_id: str) -> list[object]:
     return [video for video in series.videos if not video.processed]
 
 
-def _ensure_video_exists(container, series_id: str, video_id: str) -> None:
-    if container.get_video_source.run(series_id, video_id) is None:
+def _ensure_video_exists(container, series_id: str, video_id: str):
+    source = container.get_video_source.run(series_id, video_id)
+    if source is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    return source
+
+
+def _markdown_response(markdown: str, filename: str) -> Response:
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _export_filename(video_id: str, export_name: str) -> str:
+    return f"{_safe_filename_part(video_id)}-{export_name}.md"
+
+
+def _safe_filename_part(value: str) -> str:
+    result = []
+    for char in value.strip():
+        if char.isalnum() or char in {"-", "_"}:
+            result.append(char)
+        else:
+            result.append("-")
+    return "".join(result).strip("-") or "video"
