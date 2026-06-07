@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import json
+import mimetypes
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -66,6 +67,17 @@ def export_video_summary_markdown(series_id: str, video_id: str, container: ApiC
         summary_path,
         media_type="text/markdown; charset=utf-8",
         filename=_export_filename(video_id, "summary"),
+    )
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/video")
+def export_video_source(series_id: str, video_id: str, container: ApiContainerDep) -> FileResponse:
+    source = _ensure_video_exists(container, series_id, video_id)
+    media_type, _ = mimetypes.guess_type(source.source_path.name)
+    return FileResponse(
+        source.source_path,
+        media_type=media_type or "application/octet-stream",
+        filename=_video_export_filename(video_id, source.source_path.suffix),
     )
 
 
@@ -572,6 +584,10 @@ def _markdown_response(markdown: str, filename: str) -> Response:
 
 def _export_filename(video_id: str, export_name: str) -> str:
     return f"{_safe_filename_part(video_id)}-{export_name}.md"
+
+
+def _video_export_filename(video_id: str, suffix: str) -> str:
+    return f"{_safe_filename_part(video_id)}{suffix}"
 
 
 def _safe_filename_part(value: str) -> str:

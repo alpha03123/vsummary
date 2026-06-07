@@ -151,6 +151,9 @@ class ChaoxingDownloaderClient:
             return cached_videos
         return self._call_chaoxing_read(f"list_videos:{chapter_key}", lambda: self.load().list_videos(chapter_key))
 
+    def list_cached_course_videos(self, course_key: str) -> list[ChaoxingVideoRecord]:
+        return self._load_cached_course_videos(course_key)
+
     def download_video(self, video_key: str, *, output_dir: Path, filename: str, progress):
         return _call_chaoxing(
             lambda: self.load().download_video(video_key, output_dir=output_dir, filename=filename, progress=progress)
@@ -216,6 +219,19 @@ class ChaoxingDownloaderClient:
             _video_record_from_cache(video, cache_path=self._cache_path())
             for video in videos
             if isinstance(video, dict) and _text(video.get("chapter_key", "")) == chapter_key
+        ]
+
+    def _load_cached_course_videos(self, course_key: str) -> list[ChaoxingVideoRecord]:
+        cache = self._load_cache()
+        videos = cache.get("videos")
+        if videos is None:
+            return []
+        if not isinstance(videos, list):
+            raise RuntimeError(f"超星视频缓存格式错误：{self._cache_path()}")
+        return [
+            _video_record_from_cache(video, cache_path=self._cache_path())
+            for video in videos
+            if isinstance(video, dict) and _text(video.get("course_key", "")) == course_key
         ]
 
     def _load_cache(self) -> dict:
@@ -290,6 +306,22 @@ class ChaoxingCourseImporter:
             raise RuntimeError(f"读取超星课程章节失败：{course_title}；{error}") from error
 
         total_chapters = len(chapters)
+        cached_course_videos = self._client.list_cached_course_videos(course_key)
+        if cached_course_videos:
+            chapter_titles = {
+                _text(getattr(chapter, "chapter_key", "")): _text(getattr(chapter, "title", ""))
+                for chapter in chapters
+            }
+            for video in cached_course_videos:
+                videos.append(_to_linked_video(video, chapter_title=chapter_titles.get(video.chapter_key, "")))
+            if progress is not None:
+                progress.update(
+                    "import",
+                    _import_progress(total_chapters, total_chapters),
+                    f"已从超星课程缓存读取 {len(videos)} 个视频",
+                )
+            return _to_linked_series(course_key=course_key, course_title=course_title, videos=videos)
+
         skipped_chapters = 0
         for chapter_index, chapter in enumerate(chapters, start=1):
             chapter_title = _text(getattr(chapter, "title", ""))
@@ -316,22 +348,7 @@ class ChaoxingCourseImporter:
                     raise
                 raise RuntimeError(f"读取超星章节视频失败：{chapter_title or chapter_key}；{error}") from error
             for video in chapter_videos:
-                video_key = _text(getattr(video, "video_key", ""))
-                if not video_key:
-                    raise RuntimeError("chaoxing video missing video_key")
-                title = _text(getattr(video, "title", "")) or _text(getattr(video, "filename", "")) or video_key
-                videos.append(
-                    LinkedVideo(
-                        bvid=f"chaoxing-{_safe_key(video_key)}",
-                        page=1,
-                        title=f"{chapter_title} - {title}" if chapter_title and chapter_title not in title else title,
-                        cover_url="",
-                        duration_seconds=_positive_int(getattr(video, "duration", 0)),
-                        source_url=f"chaoxing://video/{video_key}",
-                        provider=CHAOXING_PROVIDER,
-                        download_key=video_key,
-                    )
-                )
+                videos.append(_to_linked_video(video, chapter_title=chapter_title))
             if progress is not None:
                 progress.update(
                     "import",
@@ -342,13 +359,7 @@ class ChaoxingCourseImporter:
         if not videos:
             raise RuntimeError(f"超星课程没有可导入视频：{course_title}")
 
-        return LinkedSeries(
-            series_id=f"chaoxing-{_safe_key(course_key)}",
-            title=course_title,
-            cover_url="",
-            source_url=f"chaoxing://course/{course_key}",
-            videos=videos,
-        )
+        return _to_linked_series(course_key=course_key, course_title=course_title, videos=videos)
 
 
 class ChaoxingLinkedVideoDownloadStarter:
@@ -479,6 +490,33 @@ def _to_video_record(video) -> ChaoxingVideoRecord:
         title=_text(getattr(video, "title", "")),
         duration=_positive_int(getattr(video, "duration", 0)),
         filename=_text(getattr(video, "filename", "")),
+    )
+
+
+def _to_linked_video(video, *, chapter_title: str) -> LinkedVideo:
+    video_key = _text(getattr(video, "video_key", ""))
+    if not video_key:
+        raise RuntimeError("chaoxing video missing video_key")
+    title = _text(getattr(video, "title", "")) or _text(getattr(video, "filename", "")) or video_key
+    return LinkedVideo(
+        bvid=f"chaoxing-{_safe_key(video_key)}",
+        page=1,
+        title=f"{chapter_title} - {title}" if chapter_title and chapter_title not in title else title,
+        cover_url="",
+        duration_seconds=_positive_int(getattr(video, "duration", 0)),
+        source_url=f"chaoxing://video/{video_key}",
+        provider=CHAOXING_PROVIDER,
+        download_key=video_key,
+    )
+
+
+def _to_linked_series(*, course_key: str, course_title: str, videos: list[LinkedVideo]) -> LinkedSeries:
+    return LinkedSeries(
+        series_id=f"chaoxing-{_safe_key(course_key)}",
+        title=course_title,
+        cover_url="",
+        source_url=f"chaoxing://course/{course_key}",
+        videos=videos,
     )
 
 

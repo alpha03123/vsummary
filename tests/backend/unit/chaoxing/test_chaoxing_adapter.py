@@ -294,6 +294,54 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
                 ],
             )
 
+    def test_import_course_uses_cached_course_videos_when_chapter_mapping_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp)
+            (state_dir / "cache.json").write_text(
+                json.dumps(
+                    {
+                        "courses": [
+                            {
+                                "course_key": "course-1",
+                                "title": "离散数学",
+                                "teacher": "老师",
+                                "open_time": "",
+                            }
+                        ],
+                        "chapters": [
+                            {
+                                "course_key": "course-1",
+                                "chapter_key": "chapter-1",
+                                "title": "第一章",
+                                "order": "1",
+                            }
+                        ],
+                        "videos": [
+                            {
+                                "course_key": "course-1",
+                                "video_key": "video-1",
+                                "title": "命题逻辑",
+                                "duration": 123,
+                                "filename": "命题逻辑.mp4",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            client = ChaoxingDownloaderClient(
+                state_dir=state_dir,
+                chromium_downloaded=lambda: True,
+                downloader_cls=_NetworkShouldNotBeCalledDownloader,
+            )
+            importer = ChaoxingCourseImporter(client=client)
+
+            series = importer.import_course("course-1")
+
+            self.assertEqual(series.title, "离散数学")
+            self.assertEqual(len(series.videos), 1)
+            self.assertEqual(series.videos[0].download_key, "video-1")
+
 
 class ChaoxingLinkedVideoDownloadStarterTests(unittest.TestCase):
     def test_downloads_with_video_id_filename(self) -> None:
@@ -367,6 +415,10 @@ class _FakeClient:
     def list_videos(self, chapter_key: str):
         return [video for video in self._videos if video.chapter_key == chapter_key]
 
+    def list_cached_course_videos(self, course_key: str):
+        del course_key
+        return []
+
 
 class _FailingStageClient:
     def __init__(self, *, courses, chapters=None, chapter_error=None, video_error=None) -> None:
@@ -390,6 +442,10 @@ class _FailingStageClient:
             raise self._video_error
         return []
 
+    def list_cached_course_videos(self, course_key: str):
+        del course_key
+        return []
+
 
 class _MixedChapterClient:
     def __init__(self, unsupported_error=None) -> None:
@@ -409,6 +465,10 @@ class _MixedChapterClient:
         if chapter_key == "chapter-text":
             raise self._unsupported_error
         return [_Video(video_key="video-1", chapter_key=chapter_key, title="第一讲", duration=123)]
+
+    def list_cached_course_videos(self, course_key: str):
+        del course_key
+        return []
 
 
 class UnsupportedChapterError(Exception):
