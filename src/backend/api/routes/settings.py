@@ -185,13 +185,7 @@ def list_faster_whisper_models(container: ApiContainerDep) -> list[FasterWhisper
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return [
-        FasterWhisperModelResponse(
-            id=model.id,
-            label=model.label,
-            downloaded=model.downloaded,
-            current=model.current,
-            recommended=model.recommended,
-        )
+        _to_faster_whisper_model_response(model, container)
         for model in container.faster_whisper_model_manager.list_models(settings.asr.faster_whisper.model_size)
     ]
 
@@ -222,13 +216,7 @@ def download_faster_whisper_model(model_id: str, container: ApiContainerDep) -> 
         for model in container.faster_whisper_model_manager.list_models(settings.asr.faster_whisper.model_size)
         if model.id == model_id
     )
-    return FasterWhisperModelResponse(
-        id=downloaded_model.id,
-        label=downloaded_model.label,
-        downloaded=downloaded_model.downloaded,
-        current=downloaded_model.current,
-        recommended=downloaded_model.recommended,
-    )
+    return _to_faster_whisper_model_response(downloaded_model, container)
 
 
 @router.get("/api/asr/faster-whisper/models/{model_id}/download/progress")
@@ -300,6 +288,21 @@ def _run_faster_whisper_model_download(model_id: str, task_id: str, container: A
     finally:
         with _ASR_DOWNLOAD_LOCK:
             _ACTIVE_ASR_DOWNLOADS.discard(task_id)
+
+
+def _to_faster_whisper_model_response(model, container: ApiContainerDep) -> FasterWhisperModelResponse:
+    snapshot = container.model_download_progress_tracker.get_snapshot(_build_model_download_task_id(model.id))
+    return FasterWhisperModelResponse(
+        id=model.id,
+        label=model.label,
+        downloaded=model.downloaded,
+        current=model.current,
+        recommended=model.recommended,
+        status=snapshot.status,
+        progress=snapshot.progress,
+        detail=snapshot.detail,
+        error=snapshot.error,
+    )
 
 
 def _to_rag_model_response(model) -> RagModelResponse:

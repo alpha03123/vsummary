@@ -655,9 +655,13 @@ def normalize_openai_base_url(value: str) -> str:
 def apply_runtime_env_overrides(root_dir: Path) -> None:
     values = _load_dotenv(root_dir / ".env")
     for key in SUPPORTED_HUGGINGFACE_ENV_KEYS:
-        value = values.get(key, "").strip()
+        if key not in values:
+            continue
+        value = values[key].strip()
         if value:
             os.environ[key] = value
+        else:
+            os.environ.pop(key, None)
 
 
 def _render_settings_toml(settings: AppSettings) -> str:

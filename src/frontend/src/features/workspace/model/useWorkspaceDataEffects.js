@@ -279,24 +279,36 @@ export function useWorkspaceDataEffects(state, dispatch) {
     }
 
     let cancelled = false;
-    dispatch({ type: "faster_whisper_models_loading_started" });
-    loadFasterWhisperModels()
-      .then((models) => {
-        if (!cancelled) {
-          dispatch({ type: "faster_whisper_models_loaded", models });
+    let timeoutId = null;
+
+    const pollFasterWhisperModels = async () => {
+      try {
+        const models = await loadFasterWhisperModels();
+        if (cancelled) {
+          return;
         }
-      })
-      .catch((error) => {
+        dispatch({ type: "faster_whisper_models_loaded", models });
+        if (models.some((model) => model.status === "running")) {
+          timeoutId = window.setTimeout(pollFasterWhisperModels, 1000);
+        }
+      } catch (error) {
         if (!cancelled) {
           dispatch({
             type: "load_failed",
             message: error instanceof Error ? error.message : "语音模型列表加载失败",
           });
         }
-      });
+      }
+    };
+
+    dispatch({ type: "faster_whisper_models_loading_started" });
+    pollFasterWhisperModels();
 
     return () => {
       cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [dispatch, state.backendReady]);
 

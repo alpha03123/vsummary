@@ -27,11 +27,13 @@ export function WorkspaceSettingsPanel({
   chaoxingChromiumLoading = false,
   chaoxingChromiumDownloading = false,
   downloadingModelId,
+  modelDownloadsById = {},
   modelDownloadStatus = null,
   modelDownloadProgress,
   modelDownloadErrorModelId = null,
   modelDownloadError = null,
   onChangeSetting,
+  onSaveProviderSettings,
   onSaveApiKey,
   onRevealOpenaiApiKey,
   onTestProviderConnection,
@@ -53,13 +55,19 @@ export function WorkspaceSettingsPanel({
     ? (showApiKeyValue ? draftApiKey : ui.openaiApiKeyMasked || "待保存的新密钥")
     : ui.openaiApiKeyMasked;
   const apiKeyStatus = draftApiKey || ui.openaiApiKeyMasked;
-  const isAnyRagModelDownloading = ragModels.some((model) => model.status === "running");
   const isChaoxingChromiumDownloading =
     chaoxingChromiumDownloading || chaoxingChromium?.status === "running";
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
   const providerTargetUrl = buildOpenAICompatibleChatCompletionsUrl(ui.openaiBaseUrl);
+  const saveProviderSettingsOnEnter = (event) => {
+    if (event.key !== "Enter" || typeof onSaveProviderSettings !== "function") {
+      return;
+    }
+    event.preventDefault();
+    onSaveProviderSettings();
+  };
   const providerOptions = [
     { id: "openai", label: "openai", group: "官方", description: "OpenAI 官方 API；大多数中转站也兼容" },
     { id: "anthropic", label: "anthropic", group: "官方", description: "Anthropic Claude 官方 API" },
@@ -241,8 +249,17 @@ export function WorkspaceSettingsPanel({
                       fasterWhisperModels.map((model) => {
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
-                        const isDownloading = downloadingModelId === model.id;
-                        const downloadFailed = modelDownloadErrorModelId === model.id && Boolean(modelDownloadError);
+                        const modelDownload = modelDownloadsById?.[model.id] ?? null;
+                        const isDownloading =
+                          modelDownload?.status === "running" ||
+                          (downloadingModelId === model.id && modelDownloadStatus === "running");
+                        const downloadFailed =
+                          modelDownload?.status === "failed" ||
+                          (modelDownloadErrorModelId === model.id && Boolean(modelDownloadError));
+                        const downloadProgress =
+                          typeof modelDownload?.progress === "number"
+                            ? modelDownload.progress
+                            : modelDownloadProgress;
                         const isReady = model.downloaded === true;
                         const statusText = model.downloaded
                           ? "已下载到本地"
@@ -273,14 +290,14 @@ export function WorkspaceSettingsPanel({
                                 </div>
                                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                                   {isDownloading
-                                    ? `正在下载... ${typeof modelDownloadProgress === "number" ? `${Math.round(modelDownloadProgress)}%` : ""}`.trim()
+                                    ? `正在下载... ${typeof downloadProgress === "number" ? `${Math.round(downloadProgress)}%` : ""}`.trim()
                                     : statusText}
                                 </p>
                                 {isDownloading ? (
                                   <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
                                     <div
                                       className="h-full bg-accent transition-[width] duration-200 ease-out"
-                                      style={{ width: `${typeof modelDownloadProgress === "number" ? modelDownloadProgress : 8}%` }}
+                                      style={{ width: `${typeof downloadProgress === "number" ? downloadProgress : 8}%` }}
                                     />
                                   </div>
                                 ) : null}
@@ -496,6 +513,8 @@ export function WorkspaceSettingsPanel({
                     <WorkspaceTextInput
                       value={ui.openaiBaseUrl}
                       onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
+                      onBlur={onSaveProviderSettings}
+                      onKeyDown={saveProviderSettingsOnEnter}
                       placeholder="留空使用 provider 默认地址"
                       className="w-full"
                     />
@@ -515,6 +534,8 @@ export function WorkspaceSettingsPanel({
                   <WorkspaceTextInput
                     value={ui.openaiModel}
                     onChange={(nextValue) => onChangeSetting("openaiModel", nextValue)}
+                    onBlur={onSaveProviderSettings}
+                    onKeyDown={saveProviderSettingsOnEnter}
                     placeholder="gpt-5.4"
                     className="w-full sm:w-[240px]"
                   />
@@ -681,6 +702,8 @@ export function WorkspaceSettingsPanel({
                   <WorkspaceTextInput
                     value={ui.hfEndpoint}
                     onChange={(nextValue) => onChangeSetting("hfEndpoint", nextValue)}
+                    onBlur={onSaveProviderSettings}
+                    onKeyDown={saveProviderSettingsOnEnter}
                     placeholder="https://hf-mirror.com"
                     className="w-full sm:w-[340px]"
                   />
@@ -755,7 +778,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   onClick={() => onDownloadRagModel(model.key)}
-                                  disabled={isAnyRagModelDownloading}
+                                  disabled={isDownloading}
                                   className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                                 >
                                   <Download size={14} />
@@ -810,7 +833,7 @@ export function WorkspaceSettingsPanel({
                                 </p>
                                 {downloadFailed ? (
                                   <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-                                    {chaoxingChromium.error || CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE}
+                                    {CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE}
                                   </p>
                                 ) : null}
                               </div>

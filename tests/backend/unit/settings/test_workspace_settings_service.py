@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,10 +9,33 @@ from unittest.mock import patch
 
 
 from backend.video_summary.infrastructure.settings_service import SettingsService, SettingsValidationError
-from backend.video_summary.infrastructure.settings import EnvSettings, load_env_settings, load_settings, save_env_settings
+from backend.video_summary.infrastructure.settings import (
+    EnvSettings,
+    apply_runtime_env_overrides,
+    load_env_settings,
+    load_settings,
+    save_env_settings,
+)
 
 
 class WorkspaceSettingsServiceTests(unittest.TestCase):
+    def test_runtime_env_overrides_clear_explicit_empty_hf_endpoint(self) -> None:
+        previous = os.environ.get("HF_ENDPOINT")
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                root_dir = Path(temp_dir)
+                (root_dir / ".env").write_text("HF_ENDPOINT=\n", encoding="utf-8")
+                os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
+                apply_runtime_env_overrides(root_dir)
+
+                self.assertNotIn("HF_ENDPOINT", os.environ)
+        finally:
+            if previous is None:
+                os.environ.pop("HF_ENDPOINT", None)
+            else:
+                os.environ["HF_ENDPOINT"] = previous
+
     def test_get_and_update_workspace_settings_include_window_tokens_video_concurrency_rag_and_web_search_controls(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)

@@ -97,6 +97,10 @@ class FasterWhisperModelResponse(BaseModel):
     downloaded: bool
     current: bool
     recommended: bool
+    status: str = "idle"
+    progress: float | None = None
+    detail: str | None = None
+    error: str | None = None
 
 
 class RagModelResponse(BaseModel):

@@ -57,7 +57,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& set "PLAYWRIGHT_BROWSERS_PATH=%ROOT%\data\playwright-browsers" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m uvicorn backend.api.app:app --host 127.0.0.1 --port 8001
+start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& set "PLAYWRIGHT_BROWSERS_PATH=%ROOT%\data\playwright-browsers" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.server --host 127.0.0.1 --port 8001
 start "vsummary-frontend" cmd /k cd /d "%FRONTEND%" ^&^& npm run dev
 
 echo Backend:  http://127.0.0.1:8001

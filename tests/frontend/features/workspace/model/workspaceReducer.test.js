@@ -30,9 +30,90 @@ describe("workspaceReducer model download failures", () => {
     expect(nextState.modelDownloadError).toBe(MODEL_DOWNLOAD_FAILED_MESSAGE);
   });
 
+  it("clears faster-whisper download failure back to regular state", () => {
+    const state = {
+      downloadingModelId: null,
+      modelDownloadStatus: "failed",
+      modelDownloadProgress: null,
+      modelDownloadErrorModelId: "large-v3-turbo",
+      modelDownloadError: "ConnectTimeout",
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "faster_whisper_model_download_failure_cleared",
+      modelId: "large-v3-turbo",
+    });
+
+    expect(nextState.modelDownloadStatus).toBeNull();
+    expect(nextState.modelDownloadErrorModelId).toBeNull();
+    expect(nextState.modelDownloadError).toBeNull();
+  });
+
+  it("tracks multiple faster-whisper model downloads independently", () => {
+    let state = {
+      modelDownloadsById: {},
+      downloadingModelId: null,
+      modelDownloadStatus: null,
+      modelDownloadProgress: null,
+      modelDownloadErrorModelId: null,
+      modelDownloadError: null,
+      fasterWhisperModelsLoading: false,
+      error: "",
+    };
+
+    state = workspaceReducer(state, {
+      type: "faster_whisper_model_download_started",
+      modelId: "medium",
+    });
+    state = workspaceReducer(state, {
+      type: "faster_whisper_model_download_started",
+      modelId: "large-v3",
+    });
+    state = workspaceReducer(state, {
+      type: "faster_whisper_model_download_progress_updated",
+      modelId: "medium",
+      status: "running",
+      progress: 5,
+    });
+
+    expect(state.modelDownloadsById).toEqual({
+      medium: expect.objectContaining({ status: "running", progress: 5, error: null }),
+      "large-v3": expect.objectContaining({ status: "running", progress: 0, error: null }),
+    });
+  });
+
+  it("preserves running faster-whisper downloads when model list refreshes", () => {
+    const state = {
+      fasterWhisperModels: [],
+      fasterWhisperModelsLoading: false,
+      downloadingModelId: "large-v3",
+      modelDownloadsById: {
+        "large-v3": { status: "running", progress: 5, error: null },
+      },
+      modelDownloadStatus: "running",
+      modelDownloadProgress: 5,
+      modelDownloadErrorModelId: null,
+      modelDownloadError: null,
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "faster_whisper_models_loaded",
+      models: [
+        { id: "small", downloaded: true, current: false },
+        { id: "large-v3", downloaded: false, current: false },
+      ],
+    });
+
+    expect(nextState.modelDownloadsById["large-v3"]).toEqual({
+      status: "running",
+      progress: 5,
+      error: null,
+    });
+  });
+
   it("stores RAG download failure on the matching model", () => {
     const state = {
-      downloadingRagModelKey: "embedding",
+      downloadingRagModelKeys: ["embedding", "reranker"],
       ragModelsLoading: true,
       ragModels: [
         {
@@ -50,13 +131,75 @@ describe("workspaceReducer model download failures", () => {
       message: MODEL_DOWNLOAD_FAILED_MESSAGE,
     });
 
-    expect(nextState.downloadingRagModelKey).toBeNull();
+    expect(nextState.downloadingRagModelKeys).toEqual(["reranker"]);
     expect(nextState.ragModelsLoading).toBe(false);
     expect(nextState.ragModels[0]).toMatchObject({
       status: "failed",
       progress: null,
       error: MODEL_DOWNLOAD_FAILED_MESSAGE,
     });
+  });
+
+  it("clears RAG download failure back to regular state", () => {
+    const state = {
+      downloadingRagModelKeys: [],
+      downloadingRagModelKey: null,
+      ragModelsLoading: false,
+      ragModels: [
+        {
+          key: "embedding",
+          status: "failed",
+          progress: null,
+          detail: null,
+          error: "LocalEntryNotFoundError",
+        },
+      ],
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "rag_model_download_failure_cleared",
+      modelKey: "embedding",
+    });
+
+    expect(nextState.ragModels[0]).toMatchObject({
+      status: "idle",
+      progress: null,
+      detail: null,
+      error: null,
+    });
+  });
+
+  it("tracks multiple RAG model downloads independently", () => {
+    let state = {
+      downloadingRagModelKeys: [],
+      ragModelsLoading: false,
+      ragModels: [
+        { key: "embedding", status: "idle", progress: null, error: null },
+        { key: "reranker", status: "idle", progress: null, error: null },
+      ],
+      error: "",
+    };
+
+    state = workspaceReducer(state, {
+      type: "rag_model_download_started",
+      modelKey: "embedding",
+    });
+    state = workspaceReducer(state, {
+      type: "rag_model_download_started",
+      modelKey: "reranker",
+    });
+    state = workspaceReducer(state, {
+      type: "rag_model_download_progress_updated",
+      modelKey: "embedding",
+      status: "completed",
+      progress: 100,
+    });
+
+    expect(state.downloadingRagModelKeys).toEqual(["reranker"]);
+    expect(state.ragModels).toEqual([
+      expect.objectContaining({ key: "embedding", status: "completed", progress: 100 }),
+      expect.objectContaining({ key: "reranker", status: "running", progress: 0 }),
+    ]);
   });
 });
 

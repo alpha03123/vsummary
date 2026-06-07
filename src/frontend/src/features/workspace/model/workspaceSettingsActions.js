@@ -17,6 +17,20 @@ import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 
 const CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE = "Chromium 内核下载失败，请检查网络或 Playwright 安装环境";
+const PROVIDER_TEXT_SETTING_KEYS = new Set(["openaiBaseUrl", "openaiModel", "hfEndpoint"]);
+const DOWNLOAD_FAILURE_VISIBLE_MS = 4000;
+
+function isCompletedDownloadStatus(payload) {
+  return payload?.status === "completed" || payload?.downloaded === true;
+}
+
+function isFailedDownloadStatus(payload) {
+  return payload?.status === "failed";
+}
+
+function scheduleFailureClear(dispatch, action) {
+  window.setTimeout(() => dispatch(action), DOWNLOAD_FAILURE_VISIBLE_MS);
+}
 
 export function createWorkspaceSettingsActions({ state, dispatch }) {
   function onToggleSettingsPanel() {
@@ -32,22 +46,8 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   }
 
   async function onChangeSetting(key, value) {
-    if (key === "openaiBaseUrl") {
+    if (PROVIDER_TEXT_SETTING_KEYS.has(key)) {
       dispatch({ type: "workspace_setting_edited", key, value });
-      if (String(value).trim() && !isSaveableOpenaiBaseUrl(value)) {
-        return;
-      }
-      try {
-        await updateProviderSettings({
-          ...normalizeUiSettings(state.ui),
-          openaiBaseUrl: value,
-        });
-      } catch (error) {
-        dispatch({
-          type: "load_failed",
-          message: error instanceof Error ? error.message : "设置保存失败",
-        });
-      }
       return;
     }
 
@@ -77,7 +77,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         dispatch({
           type: "workspace_settings_loaded",
           settings: {
-            ...state.ui,
+            ...nextUi,
             ...savedSettings,
           },
         });
@@ -111,6 +111,30 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "API Key 保存失败",
+      });
+    }
+  }
+
+  async function onSaveProviderSettings() {
+    const nextUi = normalizeUiSettings(state.ui);
+    if (nextUi.openaiBaseUrl && !isSaveableOpenaiBaseUrl(nextUi.openaiBaseUrl)) {
+      dispatch({ type: "load_failed", message: "模型接口地址必须包含 http:// 或 https://。" });
+      return;
+    }
+    try {
+      const savedProviderSettings = await updateProviderSettings(nextUi);
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...nextUi,
+          ...savedProviderSettings,
+          openaiApiKey: "",
+        },
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "设置保存失败",
       });
     }
   }
@@ -186,44 +210,78 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onDownloadFasterWhisperModel(modelId) {
     dispatch({ type: "faster_whisper_model_download_started", modelId });
     let unsubscribe = () => {};
+    let failedDispatched = false;
+    const dispatchFailure = (message) => {
+      failedDispatched = true;
+      dispatch({
+        type: "faster_whisper_model_download_failed",
+        modelId,
+        message,
+      });
+      scheduleFailureClear(dispatch, {
+        type: "faster_whisper_model_download_failure_cleared",
+        modelId,
+      });
+    };
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
-      if (snapshot.status === "running" || snapshot.status === "completed") {
-        dispatch({
-          type: "faster_whisper_model_download_progress_updated",
-          modelId,
-          status: snapshot.status,
-          progress: snapshot.progress,
-        });
-      }
+        if (snapshot.status === "running" || snapshot.status === "completed") {
+          dispatch({
+            type: "faster_whisper_model_download_progress_updated",
+            modelId,
+            status: snapshot.status,
+            progress: snapshot.progress,
+          });
+        }
 
-      if (snapshot.status === "failed") {
-        dispatch({
-          type: "faster_whisper_model_download_failed",
-          modelId,
-          message: MODEL_DOWNLOAD_FAILED_MESSAGE,
-        });
-        reject(new Error(MODEL_DOWNLOAD_FAILED_MESSAGE));
-      }
-      if (snapshot.status === "completed") {
-        resolve();
-      }
+        if (snapshot.status === "failed") {
+          const message = snapshot.error || MODEL_DOWNLOAD_FAILED_MESSAGE;
+          dispatchFailure(message);
+          reject(new Error(message));
+        }
+        if (snapshot.status === "completed") {
+          resolve();
+        }
       });
     });
     try {
-      await downloadFasterWhisperModel(modelId);
-      await downloadCompleted;
-      const savedSettings = await updateWorkspaceSettings({
-        ...state.ui,
-        asrModelQuality: modelId,
-      });
-      dispatch({ type: "workspace_settings_loaded", settings: savedSettings });
+      const started = await downloadFasterWhisperModel(modelId);
+      if (isFailedDownloadStatus(started)) {
+        throw new Error(started.error || MODEL_DOWNLOAD_FAILED_MESSAGE);
+      }
+      if (isCompletedDownloadStatus(started)) {
+        dispatch({
+          type: "faster_whisper_model_download_progress_updated",
+          modelId,
+          status: "completed",
+          progress: 100,
+        });
+      } else {
+        await downloadCompleted;
+      }
+      if (state.ui.asrModelQuality === modelId) {
+        const savedSettings = await updateWorkspaceSettings({
+          ...state.ui,
+          asrModelQuality: modelId,
+        });
+        dispatch({
+          type: "workspace_settings_loaded",
+          settings: {
+            ...state.ui,
+            ...savedSettings,
+          },
+        });
+      }
       const models = await loadFasterWhisperModels();
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "语音模型下载失败";
+      if (!failedDispatched) {
+        dispatchFailure(message);
+      }
       dispatch({
         type: "load_failed",
-        message: error instanceof Error ? error.message : "语音模型下载失败",
+        message,
       });
     } finally {
       unsubscribe();
@@ -233,6 +291,19 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onDownloadRagModel(modelKey) {
     dispatch({ type: "rag_model_download_started", modelKey });
     let unsubscribe = () => {};
+    let failedDispatched = false;
+    const dispatchFailure = (message) => {
+      failedDispatched = true;
+      dispatch({
+        type: "rag_model_download_failed",
+        modelKey,
+        message,
+      });
+      scheduleFailureClear(dispatch, {
+        type: "rag_model_download_failure_cleared",
+        modelKey,
+      });
+    };
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeRagModelDownloadProgress(modelKey, (snapshot) => {
         if (snapshot.status === "running" || snapshot.status === "completed") {
@@ -247,12 +318,9 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         }
 
         if (snapshot.status === "failed") {
-          dispatch({
-            type: "rag_model_download_failed",
-            modelKey,
-            message: MODEL_DOWNLOAD_FAILED_MESSAGE,
-          });
-          reject(new Error(MODEL_DOWNLOAD_FAILED_MESSAGE));
+          const message = snapshot.error || MODEL_DOWNLOAD_FAILED_MESSAGE;
+          dispatchFailure(message);
+          reject(new Error(message));
         }
         if (snapshot.status === "completed") {
           resolve();
@@ -260,14 +328,32 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       });
     });
     try {
-      await downloadRagModel(modelKey);
-      await downloadCompleted;
+      const started = await downloadRagModel(modelKey);
+      if (isFailedDownloadStatus(started)) {
+        throw new Error(started.error || MODEL_DOWNLOAD_FAILED_MESSAGE);
+      }
+      if (isCompletedDownloadStatus(started)) {
+        dispatch({
+          type: "rag_model_download_progress_updated",
+          modelKey,
+          status: "completed",
+          progress: 100,
+          detail: started.detail,
+          error: started.error,
+        });
+      } else {
+        await downloadCompleted;
+      }
       const models = await loadRagModels();
       dispatch({ type: "rag_models_loaded", models });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "RAG 模型下载失败";
+      if (!failedDispatched) {
+        dispatchFailure(message);
+      }
       dispatch({
         type: "load_failed",
-        message: error instanceof Error ? error.message : "RAG 模型下载失败",
+        message,
       });
     } finally {
       unsubscribe();
@@ -277,6 +363,17 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onDownloadChaoxingChromium() {
     dispatch({ type: "chaoxing_chromium_download_started" });
     let unsubscribe = () => {};
+    let failedDispatched = false;
+    const dispatchFailure = (message) => {
+      failedDispatched = true;
+      dispatch({
+        type: "chaoxing_chromium_download_failed",
+        message,
+      });
+      scheduleFailureClear(dispatch, {
+        type: "chaoxing_chromium_download_failure_cleared",
+      });
+    };
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeChaoxingChromiumDownloadProgress((snapshot) => {
         if (snapshot.status === "running" || snapshot.status === "completed") {
@@ -291,10 +388,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
 
         if (snapshot.status === "failed") {
           const message = snapshot.error || CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE;
-          dispatch({
-            type: "chaoxing_chromium_download_failed",
-            message,
-          });
+          dispatchFailure(message);
           reject(new Error(message));
         }
         if (snapshot.status === "completed") {
@@ -303,14 +397,31 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       });
     });
     try {
-      await downloadChaoxingChromium();
-      await downloadCompleted;
+      const started = await downloadChaoxingChromium();
+      if (isFailedDownloadStatus(started)) {
+        throw new Error(started.error || CHAOXING_CHROMIUM_DOWNLOAD_FAILED_MESSAGE);
+      }
+      if (isCompletedDownloadStatus(started)) {
+        dispatch({
+          type: "chaoxing_chromium_download_progress_updated",
+          status: "completed",
+          progress: 100,
+          detail: started.detail,
+          error: started.error,
+        });
+      } else {
+        await downloadCompleted;
+      }
       const chromium = await loadChaoxingChromium();
       dispatch({ type: "chaoxing_chromium_loaded", chromium });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "超星 Chromium 下载失败";
+      if (!failedDispatched) {
+        dispatchFailure(message);
+      }
       dispatch({
         type: "load_failed",
-        message: error instanceof Error ? error.message : "超星 Chromium 下载失败",
+        message,
       });
     } finally {
       unsubscribe();
@@ -322,6 +433,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onOpenSettingsPanel,
     onCloseSettingsPanel,
     onChangeSetting,
+    onSaveProviderSettings,
     onSaveApiKey,
     onRevealOpenaiApiKey,
     onTestProviderConnection,

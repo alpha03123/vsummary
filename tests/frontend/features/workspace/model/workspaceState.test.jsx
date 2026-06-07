@@ -48,6 +48,12 @@ describe("workspace UI settings", () => {
     expect(normalizeUiSettings({ llmProvider: "ollama_chat" }).llmProvider).toBe("openai");
     expect(normalizeUiSettings({ llmProvider: "vllm" }).llmProvider).toBe("openai");
   });
+
+  it("preserves an empty HuggingFace endpoint to use the official source", () => {
+    expect(normalizeUiSettings({ hfEndpoint: "" }).hfEndpoint).toBe("");
+    expect(normalizeUiSettings({ hfEndpoint: "   " }).hfEndpoint).toBe("");
+    expect(normalizeUiSettings({ hfEndpoint: " https://hf-mirror.com " }).hfEndpoint).toBe("https://hf-mirror.com");
+  });
 });
 
 describe("workspaceState chat session persistence", () => {

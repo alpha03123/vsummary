@@ -134,6 +134,8 @@ export function WorkspaceSegmentedControl({ value, options, onChange }) {
 export function WorkspaceTextInput({
   value,
   onChange,
+  onBlur,
+  onKeyDown,
   placeholder,
   className = "",
   type = "text",
@@ -143,6 +145,8 @@ export function WorkspaceTextInput({
       type={type}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
       placeholder={placeholder}
       className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     />

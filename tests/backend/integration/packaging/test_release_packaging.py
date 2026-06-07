@@ -90,7 +90,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
         self.assertIn("HF_HOME", script)
         self.assertIn("HUGGINGFACE_HUB_CACHE", script)
-        self.assertIn("uvicorn backend.api.app:app", script)
+        self.assertIn("-m backend.api.server", script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
     def test_resolve_local_reranker_model_name_prefers_packaged_directory(self) -> None:

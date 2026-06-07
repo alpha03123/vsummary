@@ -63,6 +63,39 @@ function createRunningSnapshot(detail) {
   };
 }
 
+function addDownloadingKey(keys, key) {
+  const nextKeys = Array.isArray(keys) ? keys : [];
+  return nextKeys.includes(key) ? nextKeys : [...nextKeys, key];
+}
+
+function removeDownloadingKey(keys, key) {
+  return Array.isArray(keys) ? keys.filter((item) => item !== key) : [];
+}
+
+function resolveDownloadingKey(keys) {
+  return Array.isArray(keys) && keys.length ? keys[0] : null;
+}
+
+function isTerminalDownloadStatus(status) {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+function setModelDownloadForId(downloadsById, modelId, download) {
+  if (!modelId) {
+    return { ...(downloadsById ?? {}) };
+  }
+  return {
+    ...(downloadsById ?? {}),
+    [modelId]: download,
+  };
+}
+
+function removeModelDownloadForId(downloadsById, modelId) {
+  const nextDownloads = { ...(downloadsById ?? {}) };
+  delete nextDownloads[modelId];
+  return nextDownloads;
+}
+
 function resolveSeriesQueueStatus(snapshotStatus, currentStatus) {
   if (snapshotStatus === "cancelling") {
     return "cancelling";
@@ -138,7 +171,10 @@ export function workspaceReducer(state, action) {
     case "workspace_settings_loaded":
       return {
         ...state,
-        ui: normalizeUiSettings(action.settings),
+        ui: normalizeUiSettings({
+          ...state.ui,
+          ...action.settings,
+        }),
       };
     case "workspace_setting_edited":
       return {
@@ -162,8 +198,15 @@ export function workspaceReducer(state, action) {
         fasterWhisperModelsLoading: true,
       };
     case "faster_whisper_model_download_started":
-      return {
+      {
+        const modelDownloadsById = setModelDownloadForId(state.modelDownloadsById, action.modelId, {
+          status: "running",
+          progress: 0,
+          error: null,
+        });
+        return {
         ...state,
+        modelDownloadsById,
         downloadingModelId: action.modelId,
         modelDownloadStatus: "running",
         modelDownloadProgress: 0,
@@ -172,18 +215,38 @@ export function workspaceReducer(state, action) {
         fasterWhisperModelsLoading: false,
         error: "",
       };
+      }
     case "faster_whisper_model_download_progress_updated":
-      return {
+      {
+        const status = action.status ?? state.modelDownloadsById?.[action.modelId]?.status ?? state.modelDownloadStatus;
+        const progress = action.progress == null ? null : Math.max(0, Math.min(100, action.progress));
+        const modelDownloadsById = isTerminalDownloadStatus(status)
+          ? removeModelDownloadForId(state.modelDownloadsById, action.modelId)
+          : setModelDownloadForId(state.modelDownloadsById, action.modelId, {
+              status,
+              progress,
+              error: null,
+            });
+        return {
         ...state,
+        modelDownloadsById,
         downloadingModelId: action.modelId,
-        modelDownloadStatus: action.status ?? state.modelDownloadStatus,
-        modelDownloadProgress: action.progress == null ? null : Math.max(0, Math.min(100, action.progress)),
+        modelDownloadStatus: status,
+        modelDownloadProgress: progress,
         modelDownloadErrorModelId: null,
         modelDownloadError: null,
       };
+      }
     case "faster_whisper_model_download_failed":
-      return {
+      {
+        const modelDownloadsById = setModelDownloadForId(state.modelDownloadsById, action.modelId, {
+          status: "failed",
+          progress: null,
+          error: action.message,
+        });
+        return {
         ...state,
+        modelDownloadsById,
         downloadingModelId: null,
         modelDownloadStatus: "failed",
         modelDownloadProgress: null,
@@ -191,26 +254,68 @@ export function workspaceReducer(state, action) {
         modelDownloadError: action.message,
         fasterWhisperModelsLoading: false,
       };
+      }
+    case "faster_whisper_model_download_failure_cleared":
+      {
+        const modelDownloadsById = state.modelDownloadsById?.[action.modelId]?.status === "failed"
+          ? removeModelDownloadForId(state.modelDownloadsById, action.modelId)
+          : state.modelDownloadsById;
+        return state.modelDownloadStatus === "failed" && state.modelDownloadErrorModelId === action.modelId
+          ? {
+              ...state,
+              modelDownloadsById,
+              modelDownloadStatus: null,
+              modelDownloadProgress: null,
+              modelDownloadErrorModelId: null,
+              modelDownloadError: null,
+            }
+          : {
+              ...state,
+              modelDownloadsById,
+            };
+      }
     case "faster_whisper_models_loaded":
+      {
+        const refreshedDownloadsById = Object.fromEntries(
+          action.models
+            .filter((model) => model.status === "running")
+            .map((model) => [model.id, {
+              status: "running",
+              progress: typeof model.progress === "number" ? model.progress : null,
+              error: null,
+            }]),
+        );
+        const runningDownloadsById = Object.fromEntries(
+          Object.entries(state.modelDownloadsById ?? {})
+            .filter(([, download]) => download?.status === "running"),
+        );
       return {
         ...state,
         fasterWhisperModels: action.models,
         fasterWhisperModelsLoading: false,
         downloadingModelId: null,
+        modelDownloadsById: {
+          ...runningDownloadsById,
+          ...refreshedDownloadsById,
+        },
         modelDownloadStatus: null,
         modelDownloadProgress: null,
         modelDownloadErrorModelId: null,
         modelDownloadError: null,
       };
+      }
     case "rag_models_loading_started":
       return {
         ...state,
         ragModelsLoading: true,
       };
     case "rag_model_download_started":
-      return {
+      {
+        const downloadingRagModelKeys = addDownloadingKey(state.downloadingRagModelKeys, action.modelKey);
+        return {
         ...state,
-        downloadingRagModelKey: action.modelKey,
+        downloadingRagModelKeys,
+        downloadingRagModelKey: resolveDownloadingKey(downloadingRagModelKeys),
         ragModelsLoading: true,
         ragModels: state.ragModels.map((model) => model.key === action.modelKey
           ? {
@@ -222,10 +327,16 @@ export function workspaceReducer(state, action) {
           : model),
         error: "",
       };
+      }
     case "rag_model_download_progress_updated":
-      return {
+      {
+        const downloadingRagModelKeys = isTerminalDownloadStatus(action.status)
+          ? removeDownloadingKey(state.downloadingRagModelKeys, action.modelKey)
+          : addDownloadingKey(state.downloadingRagModelKeys, action.modelKey);
+        return {
         ...state,
-        downloadingRagModelKey: action.modelKey,
+        downloadingRagModelKeys,
+        downloadingRagModelKey: resolveDownloadingKey(downloadingRagModelKeys),
         ragModelsLoading: false,
         ragModels: state.ragModels.map((model) => model.key === action.modelKey
           ? {
@@ -237,10 +348,14 @@ export function workspaceReducer(state, action) {
           }
           : model),
       };
+      }
     case "rag_model_download_failed":
-      return {
+      {
+        const downloadingRagModelKeys = removeDownloadingKey(state.downloadingRagModelKeys, action.modelKey);
+        return {
         ...state,
-        downloadingRagModelKey: null,
+        downloadingRagModelKeys,
+        downloadingRagModelKey: resolveDownloadingKey(downloadingRagModelKeys),
         ragModelsLoading: false,
         ragModels: state.ragModels.map((model) => model.key === action.modelKey
           ? {
@@ -251,15 +366,33 @@ export function workspaceReducer(state, action) {
           }
           : model),
       };
+      }
+    case "rag_model_download_failure_cleared":
+      return {
+        ...state,
+        ragModels: state.ragModels.map((model) => model.key === action.modelKey && model.status === "failed"
+          ? {
+              ...model,
+              status: "idle",
+              progress: null,
+              detail: null,
+              error: null,
+            }
+          : model),
+      };
     case "rag_models_loaded":
+      {
+        const downloadingRagModelKeys = action.models
+          .filter((model) => model.status === "running")
+          .map((model) => model.key);
       return {
         ...state,
         ragModels: action.models,
         ragModelsLoading: false,
-        downloadingRagModelKey: action.models.some((model) => model.status === "running")
-          ? (state.downloadingRagModelKey ?? action.models.find((model) => model.status === "running")?.key ?? null)
-          : null,
+        downloadingRagModelKeys,
+        downloadingRagModelKey: resolveDownloadingKey(downloadingRagModelKeys),
       };
+      }
     case "chaoxing_chromium_loading_started":
       return {
         ...state,
@@ -309,6 +442,18 @@ export function workspaceReducer(state, action) {
             error: action.message,
           },
       };
+    case "chaoxing_chromium_download_failure_cleared":
+      return state.chaoxingChromium?.status === "failed"
+        ? {
+            ...state,
+            chaoxingChromium: {
+              ...state.chaoxingChromium,
+              status: "idle",
+              progress: null,
+              error: null,
+            },
+          }
+        : state;
     case "chaoxing_chromium_loaded":
       return {
         ...state,
@@ -335,11 +480,6 @@ export function workspaceReducer(state, action) {
         generationSnapshot: null,
         downloadingVideoKey: null,
         videoDownloadProgress: null,
-        downloadingModelId: null,
-        modelDownloadStatus: null,
-        modelDownloadProgress: null,
-        downloadingRagModelKey: null,
-        chaoxingChromiumDownloading: false,
         contextUsageLoading: false,
         error: action.message,
         fasterWhisperModelsLoading: false,

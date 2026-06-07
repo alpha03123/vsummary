@@ -65,7 +65,7 @@ def render_start_bat() -> str:
             'set "PYTHONPATH=%ROOT%\\src"',
             "",
             "start \"\" http://127.0.0.1:4173",
-            'call "%ROOT%\\runtime\\python.exe" -m uvicorn backend.api.app:app --host 127.0.0.1 --port 4173',
+            'call "%ROOT%\\runtime\\python.exe" -m backend.api.server --host 127.0.0.1 --port 4173',
             "if errorlevel 1 pause",
         ]
     )

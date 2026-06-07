@@ -11,7 +11,7 @@ from backend.video_summary.infrastructure.huggingface_model_downloader import (
     HuggingFaceModelDownloader,
 )
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.settings import load_env_settings
+from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides, load_env_settings
 
 
 RAG_MODEL_DOWNLOAD_MESSAGE = "正在下载 RAG 模型，请等待下载完成后再提问。"
@@ -158,6 +158,7 @@ class RagModelManager:
                 self._active_keys.discard(spec.key)
 
     def _download_from_huggingface(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
+        apply_runtime_env_overrides(self._root_dir)
         env_settings = load_env_settings(self._root_dir)
         endpoint = env_settings.hf_endpoint.strip() or None
         self._hf_downloader.download(

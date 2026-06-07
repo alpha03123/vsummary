@@ -403,11 +403,13 @@ export function WorkspacePage({ page }) {
                   chaoxingChromiumLoading={generation.chaoxingChromiumLoading}
                   chaoxingChromiumDownloading={generation.chaoxingChromiumDownloading}
                   downloadingModelId={generation.downloadingModelId}
+                  modelDownloadsById={generation.modelDownloadsById}
                   modelDownloadStatus={generation.modelDownloadStatus}
                   modelDownloadProgress={generation.modelDownloadProgress}
                   modelDownloadErrorModelId={generation.modelDownloadErrorModelId}
                   modelDownloadError={generation.modelDownloadError}
                   onChangeSetting={actions.changeSetting}
+                  onSaveProviderSettings={actions.saveProviderSettings}
                   onSaveApiKey={actions.saveApiKey}
                   onRevealOpenaiApiKey={actions.revealOpenaiApiKey}
                   onTestProviderConnection={actions.testProviderConnection}

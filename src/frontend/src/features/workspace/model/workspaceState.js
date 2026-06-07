@@ -515,6 +515,7 @@ export function createInitialWorkspaceState() {
     downloadingVideoKey: null,
     videoDownloadProgress: null,
     downloadingModelId: null,
+    modelDownloadsById: {},
     modelDownloadStatus: null,
     modelDownloadProgress: null,
     modelDownloadErrorModelId: null,
@@ -531,6 +532,7 @@ export function createInitialWorkspaceState() {
     fasterWhisperModelsLoading: false,
     ragModels: [],
     ragModelsLoading: false,
+    downloadingRagModelKeys: [],
     downloadingRagModelKey: null,
     chaoxingChromium: null,
     chaoxingChromiumLoading: false,
@@ -724,7 +726,7 @@ export function normalizeUiSettings(value) {
         ? record.openaiModel.trim()
         : "gpt-5.4",
     hfEndpoint:
-      typeof record.hfEndpoint === "string" && record.hfEndpoint.trim()
+      typeof record.hfEndpoint === "string"
         ? record.hfEndpoint.trim()
         : "https://hf-mirror.com",
     openaiApiKey: typeof record.openaiApiKey === "string" ? record.openaiApiKey : "",
