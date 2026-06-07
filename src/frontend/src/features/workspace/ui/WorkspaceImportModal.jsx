@@ -435,7 +435,18 @@ export function WorkspaceImportModal({
                       </div>
                     ) : (
                       <div>
-                        <p className="mb-3 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">选择要导入的课程</p>
+                        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">选择要导入的课程</p>
+                          <button
+                            type="button"
+                            onClick={handleInitChaoxing}
+                            disabled={status === "loading"}
+                            className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {status === "loading" ? <Loader2 size={14} className="animate-spin" /> : null}
+                            重新初始化超星
+                          </button>
+                        </div>
                         <div className="relative mb-3">
                           <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-zinc-500" />
                           <input

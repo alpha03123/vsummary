@@ -186,17 +186,7 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
         self.assertEqual(_RecordingInitDownloader.request_delay, 0.2)
         self.assertEqual(_RecordingInitDownloader.course_delay, 0.3)
 
-    def test_antispider_response_is_reported_as_clear_runtime_error(self) -> None:
-        client = ChaoxingDownloaderClient(
-            state_dir=Path("state"),
-            chromium_downloaded=lambda: True,
-            downloader_cls=_AntispiderDownloader,
-        )
-
-        with self.assertRaisesRegex(RuntimeError, CHAOXING_ANTISPIDER_MESSAGE):
-            client.list_courses()
-
-    def test_same_target_antispider_three_times_clears_state_and_requires_reinit(self) -> None:
+    def test_antispider_clears_state_and_requires_reinit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp)
             (state_dir / "session.json").write_text("{}", encoding="utf-8")
@@ -207,10 +197,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
                 downloader_cls=_AntispiderDownloader,
             )
 
-            with self.assertRaisesRegex(RuntimeError, CHAOXING_ANTISPIDER_MESSAGE):
-                client.list_videos("chapter-1")
-            with self.assertRaisesRegex(RuntimeError, CHAOXING_ANTISPIDER_MESSAGE):
-                client.list_videos("chapter-1")
             with self.assertRaisesRegex(RuntimeError, CHAOXING_REINIT_REQUIRED_MESSAGE):
                 client.list_videos("chapter-1")
 
