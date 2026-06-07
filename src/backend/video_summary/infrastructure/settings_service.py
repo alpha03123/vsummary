@@ -22,6 +22,7 @@ from backend.video_summary.infrastructure.settings import (
     replace_agent_context_window_tokens,
     replace_agent_context_answer_detail_level,
     replace_agent_context_reasoning_effort,
+    replace_agent_context_talk_custom_prompt,
     replace_faster_whisper_model_size,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
@@ -62,6 +63,7 @@ class WorkspaceSettings:
     window_tokens: int
     answer_detail_level: str
     reasoning_effort: str
+    talk_custom_prompt: str
     video_generation_concurrency: int
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float
@@ -88,6 +90,7 @@ class SettingsServicePort(Protocol):
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        talk_custom_prompt: str = "",
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
@@ -154,6 +157,7 @@ class SettingsService:
             window_tokens=settings.agent_context.window_tokens,
             answer_detail_level=settings.agent_context.answer_detail_level,
             reasoning_effort=settings.agent_context.reasoning_effort,
+            talk_custom_prompt=settings.agent_context.talk_custom_prompt,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             web_search_enabled=settings.web_search.enabled,
             chaoxing_request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
@@ -176,6 +180,7 @@ class SettingsService:
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        talk_custom_prompt: str = "",
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
@@ -227,6 +232,7 @@ class SettingsService:
             next_settings = replace_agent_context_window_tokens(next_settings, window_tokens)
             next_settings = replace_agent_context_answer_detail_level(next_settings, answer_detail_level)
             next_settings = replace_agent_context_reasoning_effort(next_settings, reasoning_effort)
+            next_settings = replace_agent_context_talk_custom_prompt(next_settings, talk_custom_prompt)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             next_settings = replace_chaoxing_import_settings(
@@ -248,6 +254,7 @@ class SettingsService:
             window_tokens=next_settings.agent_context.window_tokens,
             answer_detail_level=next_settings.agent_context.answer_detail_level,
             reasoning_effort=next_settings.agent_context.reasoning_effort,
+            talk_custom_prompt=next_settings.agent_context.talk_custom_prompt,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             web_search_enabled=next_settings.web_search.enabled,
             chaoxing_request_delay_seconds=next_settings.external_import.chaoxing.request_delay_seconds,

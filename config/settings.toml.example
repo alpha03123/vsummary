@@ -38,6 +38,8 @@ window_tokens = 1000000
 answer_detail_level = "medium"
 # 推理模型思考强度。"none" 不传思考强度，"low" 更快，"medium" 平衡，"high" 更充分但更慢。
 reasoning_effort = "none"
+# Video Talk / Series Talk 的用户自定义回答要求。只影响对话回答，不影响视频摘要、知识卡片或导图生成。
+talk_custom_prompt = ""
 
 # Agent 上下文高级策略。
 [agent_context.advanced]

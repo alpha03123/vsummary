@@ -29,6 +29,18 @@ def build_answer_detail_level_prompt(answer_detail_level: str) -> str:
     return ANSWER_DETAIL_LEVEL_PROMPTS.get(answer_detail_level, ANSWER_DETAIL_LEVEL_PROMPTS["medium"])
 
 
+def build_talk_custom_prompt(custom_prompt: str | None) -> str:
+    normalized = (custom_prompt or "").strip()
+    if not normalized:
+        return ""
+    return (
+        "\n用户自定义 Talk 回答要求：\n"
+        f"{normalized}\n"
+        "约束：这些要求只影响 video talk / series talk 的回答风格、结构和侧重点；"
+        "不得覆盖证据约束、来源约束、联网规则、Markdown 输出和不编造规则。\n"
+    )
+
+
 # 两个 synthesizer 共享的基础规则
 _SYNTHESIZER_BASE = (
     "回答规则：\n"
@@ -41,7 +53,7 @@ _SYNTHESIZER_BASE = (
     "- evidence_items 是内部证据输入。不要在 answer 中解释 evidence_items、命中数量、证据覆盖范围或内部检索策略。\n"
     "- 除非用户明确询问依据或来源，否则不要输出「补充说明」「证据说明」「本次证据」等面向内部检索过程的段落。\n"
     "- 如果用户明确询问依据或来源，可以用「根据当前课程资料」或「根据联网资料」说明来源类型，"
-    "但不要暴露内部字段名或内部 ID；使用证据时按系统引用规则输出真实 Source 编号，不要编造引用编号。\n"
+    "但不要暴露内部字段名或内部 ID；不要编造引用编号。\n"
     "- 只有使用联网证据时，才允许输出「联网补充」，且必须列出 URL；不得把联网内容表述为视频或系列课程本身说过的内容。\n"
     "- 如果本地证据和联网证据冲突，应说明冲突，不要强行合并。\n"
     "- 避免在回答中使用 emoji。\n\n"

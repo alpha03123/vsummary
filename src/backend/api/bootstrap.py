@@ -511,6 +511,7 @@ class LazyAgentRuntimeProvider:
                 series_answer_synthesizer = SeriesAnswerSynthesizer(
                     gateway=planner_gateway,
                     answer_detail_level=app_settings.agent_context.answer_detail_level,
+                    talk_custom_prompt=app_settings.agent_context.talk_custom_prompt,
                 )
                 video_action_planner = VideoActionPlanner(gateway=planner_gateway)
                 tool_executor = RegistryAgentToolExecutor(
@@ -531,6 +532,7 @@ class LazyAgentRuntimeProvider:
                 answer_program = AnswerSynthesisProgram(
                     gateway=planner_gateway,
                     answer_detail_level=app_settings.agent_context.answer_detail_level,
+                    talk_custom_prompt=app_settings.agent_context.talk_custom_prompt,
                 )
                 graph = build_agent_graph(
                     retrieval_service=retrieval_service,
