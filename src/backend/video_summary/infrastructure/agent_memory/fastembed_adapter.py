@@ -126,8 +126,6 @@ def _add_python_environment_cuda_dll_directories() -> None:
 def _prepare_cuda_runtime() -> None:
     if sys.platform != "win32":
         return
-    if _can_load_cuda_runtime_from_current_process():
-        return
     _add_python_environment_cuda_dll_directories()
     _preload_python_environment_cuda_dlls()
 
@@ -153,17 +151,6 @@ def _find_cuda_dll(dll_dirs: list[Path], dll_name: str) -> Path | None:
             if child.name.lower() == normalized:
                 return child
     return None
-
-
-def _can_load_cuda_runtime_from_current_process() -> bool:
-    if sys.platform != "win32":
-        return True
-    try:
-        ctypes.WinDLL("cublasLt64_12.dll")
-        ctypes.WinDLL("cudnn64_9.dll")
-    except OSError:
-        return False
-    return True
 
 
 def _iter_python_environment_cuda_dll_dirs() -> list[Path]:

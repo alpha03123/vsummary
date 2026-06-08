@@ -26,21 +26,28 @@ class FastEmbedEmbeddingTests(unittest.TestCase):
     def test_gpu_device_uses_cuda_provider_without_cpu_fallback(self) -> None:
         _FakeTextEmbedding.created = []
         _FakeTextEmbedding.active_providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        with patch(
-            "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
-            return_value=_FakeTextEmbedding,
+        with (
+            patch(
+                "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
+                return_value=_FakeTextEmbedding,
+            ),
+            patch("backend.video_summary.infrastructure.agent_memory.fastembed_adapter._prepare_cuda_runtime") as prepare,
         ):
             FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
 
         self.assertEqual(_FakeTextEmbedding.created[-1]["providers"], ["CUDAExecutionProvider"])
         self.assertNotIn("cuda", _FakeTextEmbedding.created[-1]["kwargs"])
+        prepare.assert_called_once_with()
 
     def test_gpu_device_rejects_cpu_fallback(self) -> None:
         _FakeTextEmbedding.created = []
         _FakeTextEmbedding.active_providers = ["CPUExecutionProvider"]
-        with patch(
-            "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
-            return_value=_FakeTextEmbedding,
+        with (
+            patch(
+                "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
+                return_value=_FakeTextEmbedding,
+            ),
+            patch("backend.video_summary.infrastructure.agent_memory.fastembed_adapter._prepare_cuda_runtime"),
         ):
             with self.assertRaisesRegex(RuntimeError, "CUDAExecutionProvider 未激活"):
                 FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
