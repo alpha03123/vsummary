@@ -32,7 +32,10 @@ tmp/
 .worktrees/
 
 # Local dev scripts (environment-specific)
-/scripts/
+/scripts/*
+!/scripts/build_release.ps1
+!/scripts/package/
+!/scripts/package/**
 
 # Local env
 .env
