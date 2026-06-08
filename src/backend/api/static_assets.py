@@ -6,6 +6,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+FRONTEND_ASSET_MEDIA_TYPES = {
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+}
+
 
 class NoCacheStaticFiles(StaticFiles):
     def file_response(self, *args, **kwargs) -> FileResponse:
@@ -14,6 +20,12 @@ class NoCacheStaticFiles(StaticFiles):
 
 
 def _with_no_cache(response: FileResponse) -> FileResponse:
+    suffix = Path(response.path).suffix.lower()
+    media_type = FRONTEND_ASSET_MEDIA_TYPES.get(suffix)
+    if media_type is not None:
+        response.media_type = media_type
+        response.headers["Content-Type"] = media_type
+
     response.headers["Cache-Control"] = "no-store"
     return response
 
