@@ -31,7 +31,7 @@ class ChaoxingDownloaderProtocol(Protocol):
         timeout_seconds: int = 300,
         login_url: str | None = None,
         browser_port: int | None = None,
-        collect_impl: object | None = None,
+        collect_impl: object,
         cancel_check: Callable[[], bool] | None = None,
         request_delay: float = 0.0,
         course_delay: float = 0.0,
@@ -175,7 +175,6 @@ class ChaoxingDownloaderClient:
             return downloader_cls.init(
                 state_dir=str(self._state_dir),
                 timeout_seconds=timeout_seconds,
-                collect_impl=None,
                 cancel_check=self._init_cancel_event.is_set,
                 request_delay=self._request_delay_seconds,
                 course_delay=self._init_course_delay_seconds,
