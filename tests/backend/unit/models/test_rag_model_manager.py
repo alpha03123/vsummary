@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -27,6 +28,17 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertEqual([model.key for model in models], ["embedding", "reranker"])
             self.assertTrue(models[0].downloaded)
             self.assertFalse(models[1].downloaded)
+
+    def test_list_models_accepts_fastembed_url_cache_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            _write_model_marker(root_dir, "fast-bge-small-zh-v1.5", extra_files=("model_optimized.onnx",))
+            manager = RagModelManager(root_dir=root_dir, progress_tracker=InMemoryProgressTracker())
+
+            models = manager.list_models()
+
+            self.assertTrue(models[0].downloaded)
+            self.assertTrue(models[0].local_path.endswith("fast-bge-small-zh-v1.5"))
 
     def test_partial_model_directory_is_not_reported_as_downloaded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -62,6 +74,29 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertEqual(first.status, "running")
             self.assertEqual(second.status, "running")
             self.assertEqual(calls, ["embedding"])
+
+    def test_download_fails_when_fastembed_cache_validation_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            completed: list[str] = []
+
+            def no_op_downloader(spec, reporter) -> None:
+                del spec, reporter
+
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                downloader=no_op_downloader,
+                on_download_completed=completed.append,
+            )
+
+            manager.start_download("embedding")
+            _wait_until(lambda: not manager.has_active_download())
+            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
+
+            self.assertEqual(snapshot.status, "failed")
+            self.assertIn("RAG 模型下载后校验失败", snapshot.error or "")
+            self.assertEqual(completed, [])
 
 
 class RagModelAgentRouteTests(unittest.TestCase):
@@ -173,7 +208,18 @@ def _write_model_marker(root_dir: Path, model_dir_name: str, extra_files: tuple[
     model_dir.mkdir(parents=True, exist_ok=True)
     (model_dir / "config.json").write_text("{}", encoding="utf-8")
     for file_name in extra_files:
-        (model_dir / file_name).write_text("{}", encoding="utf-8")
+        file_path = model_dir / file_name
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text("{}", encoding="utf-8")
+
+
+def _wait_until(predicate, *, timeout_seconds: float = 2.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition was not met before timeout")
 
 
 if __name__ == "__main__":
