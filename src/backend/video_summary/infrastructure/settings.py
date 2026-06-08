@@ -109,8 +109,8 @@ DEFAULT_AGENT_BLOCKING_THRESHOLD_RATIO = 0.92
 DEFAULT_AGENT_KEEP_TAIL_MESSAGES = 6
 DEFAULT_AGENT_PROJECTION_MAX_TOKENS_RATIO = 0.08
 DEFAULT_AGENT_DIRECT_SUMMARY_THRESHOLD_RATIO = 0.90
-DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "local_huggingface"
-DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-base-zh-v1.5"
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER = "fastembed"
+DEFAULT_AGENT_RETRIEVAL_EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_DEVICE = "cpu"
 DEFAULT_AGENT_RETRIEVAL_EMBEDDING_BATCH_SIZE = 8
 DEFAULT_AGENT_RETRIEVAL_MAX_HITS = 5
@@ -798,7 +798,7 @@ def _normalize_embedding_provider(value: object) -> str:
         value,
         default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER,
     )
-    if normalized != "local_huggingface":
+    if normalized != "fastembed":
         raise ValueError(f"Unsupported agent_retrieval.embedding_provider: {normalized}")
     return normalized
 

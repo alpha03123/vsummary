@@ -3,13 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isSaveableOpenaiBaseUrl, toProviderTestErrorMessage, createWorkspaceSettingsActions } from "@src/features/workspace/model/workspaceSettingsActions";
 import {
   downloadFasterWhisperModel,
-  downloadChaoxingChromium,
   downloadRagModel,
   loadFasterWhisperModels,
-  loadChaoxingChromium,
   loadRagModels,
   subscribeFasterWhisperModelDownloadProgress,
-  subscribeChaoxingChromiumDownloadProgress,
   subscribeRagModelDownloadProgress,
   updateProviderSettings,
   updateWorkspaceSettings,
@@ -18,14 +15,11 @@ import {
 vi.mock("@src/features/workspace/model/workspaceApi", () => ({
   downloadFasterWhisperModel: vi.fn(),
   downloadRagModel: vi.fn(),
-  downloadChaoxingChromium: vi.fn(),
   loadFasterWhisperModels: vi.fn(),
   loadOpenaiApiKey: vi.fn(),
   loadRagModels: vi.fn(),
-  loadChaoxingChromium: vi.fn(),
   subscribeFasterWhisperModelDownloadProgress: vi.fn(),
   subscribeRagModelDownloadProgress: vi.fn(),
-  subscribeChaoxingChromiumDownloadProgress: vi.fn(),
   testProviderSettings: vi.fn(),
   updateProviderSettings: vi.fn(),
   updateWorkspaceSettings: vi.fn(),
@@ -214,38 +208,6 @@ describe("createWorkspaceSettingsActions downloads", () => {
       modelKey: "embedding",
     });
     vi.useRealTimers();
-  });
-
-  it("finishes Chromium download when POST already returns a completed status", async () => {
-    const actions = [];
-    subscribeChaoxingChromiumDownloadProgress.mockReturnValue(() => {});
-    downloadChaoxingChromium.mockResolvedValue({
-      key: "chaoxing-chromium",
-      status: "completed",
-      downloaded: true,
-    });
-    loadChaoxingChromium.mockResolvedValue({
-      key: "chaoxing-chromium",
-      status: "completed",
-      downloaded: true,
-    });
-
-    const controller = createWorkspaceSettingsActions({
-      state: { ui: {} },
-      dispatch: (action) => actions.push(action),
-    });
-
-    await controller.onDownloadChaoxingChromium();
-
-    expect(loadChaoxingChromium).toHaveBeenCalled();
-    expect(actions).toContainEqual({
-      type: "chaoxing_chromium_loaded",
-      chromium: {
-        key: "chaoxing-chromium",
-        status: "completed",
-        downloaded: true,
-      },
-    });
   });
 
   it("finishes RAG download when POST already returns a completed status", async () => {

@@ -149,20 +149,18 @@ class ChaoxingCourseImporterTests(unittest.TestCase):
 
 
 class ChaoxingDownloaderClientTests(unittest.TestCase):
-    def test_requires_chromium_before_init(self) -> None:
+    def test_init_rejects_legacy_downloader_without_collect_impl(self) -> None:
         client = ChaoxingDownloaderClient(
             state_dir=Path("state"),
-            chromium_downloaded=lambda: False,
             downloader_cls=_UnusedDownloader,
         )
 
-        with self.assertRaisesRegex(RuntimeError, "Chromium"):
+        with self.assertRaisesRegex(RuntimeError, "chaoxing-downloader 0.1.3"):
             client.init()
 
     def test_is_initialized_delegates_to_downloader(self) -> None:
         client = ChaoxingDownloaderClient(
             state_dir=Path("state"),
-            chromium_downloaded=lambda: True,
             downloader_cls=_InitializedDownloader,
         )
 
@@ -174,7 +172,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
         _RecordingInitDownloader.course_delay = None
         client = ChaoxingDownloaderClient(
             state_dir=Path("state"),
-            chromium_downloaded=lambda: True,
             downloader_cls=_RecordingInitDownloader,
         )
 
@@ -193,7 +190,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
             (state_dir / "cache.json").write_text("{}", encoding="utf-8")
             client = ChaoxingDownloaderClient(
                 state_dir=state_dir,
-                chromium_downloaded=lambda: True,
                 downloader_cls=_AntispiderDownloader,
             )
 
@@ -222,7 +218,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
             )
             client = ChaoxingDownloaderClient(
                 state_dir=state_dir,
-                chromium_downloaded=lambda: True,
                 downloader_cls=_NetworkShouldNotBeCalledDownloader,
             )
 
@@ -236,7 +231,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
             (state_dir / "cache.json").write_text(json.dumps({"courses": {}}), encoding="utf-8")
             client = ChaoxingDownloaderClient(
                 state_dir=state_dir,
-                chromium_downloaded=lambda: True,
                 downloader_cls=_NetworkShouldNotBeCalledDownloader,
             )
 
@@ -269,7 +263,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
             )
             client = ChaoxingDownloaderClient(
                 state_dir=state_dir,
-                chromium_downloaded=lambda: True,
                 downloader_cls=_NetworkShouldNotBeCalledDownloader,
             )
 
@@ -305,7 +298,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
             )
             client = ChaoxingDownloaderClient(
                 state_dir=state_dir,
-                chromium_downloaded=lambda: True,
                 downloader_cls=_NetworkShouldNotBeCalledDownloader,
             )
 
@@ -361,7 +353,6 @@ class ChaoxingDownloaderClientTests(unittest.TestCase):
             )
             client = ChaoxingDownloaderClient(
                 state_dir=state_dir,
-                chromium_downloaded=lambda: True,
                 downloader_cls=_NetworkShouldNotBeCalledDownloader,
             )
             importer = ChaoxingCourseImporter(client=client)
@@ -602,11 +593,12 @@ class _RecordingInitDownloader:
         *,
         state_dir: str,
         timeout_seconds: int = 300,
+        collect_impl=None,
         cancel_check=None,
         request_delay: float = 0.0,
         course_delay: float = 0.0,
     ):
-        del state_dir, timeout_seconds
+        del state_dir, timeout_seconds, collect_impl
         cls.cancel_check = cancel_check
         cls.request_delay = request_delay
         cls.course_delay = course_delay

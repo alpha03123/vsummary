@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import shutil
@@ -15,7 +16,6 @@ from backend.video_summary.library.linked_models import LinkedSeries, LinkedVide
 
 
 CHAOXING_PROVIDER = "chaoxing"
-CHAOXING_CHROMIUM_REQUIRED_MESSAGE = "超星 Chromium 浏览器内核未下载，请先到下载管理下载。"
 CHAOXING_INIT_CANCELLED_MESSAGE = "超星初始化已中断"
 CHAOXING_ANTISPIDER_MESSAGE = "触发超星访问验证，请稍后重试，或重新 Init 超星后再导入。"
 CHAOXING_REINIT_REQUIRED_MESSAGE = "超星登录态已失效，已清空本地 state，请重新 Init 后再导入。"
@@ -29,6 +29,9 @@ class ChaoxingDownloaderProtocol(Protocol):
         *,
         state_dir: str,
         timeout_seconds: int = 300,
+        login_url: str | None = None,
+        browser_port: int | None = None,
+        collect_impl: object | None = None,
         cancel_check: Callable[[], bool] | None = None,
         request_delay: float = 0.0,
         course_delay: float = 0.0,
@@ -86,13 +89,11 @@ class ChaoxingDownloaderClient:
         self,
         *,
         state_dir: Path,
-        chromium_downloaded: Callable[[], bool],
         request_delay_seconds: float = 0.2,
         init_course_delay_seconds: float = 0.3,
         downloader_cls: ChaoxingDownloaderProtocol | None = None,
     ) -> None:
         self._state_dir = state_dir
-        self._chromium_downloaded = chromium_downloaded
         self._request_delay_seconds = request_delay_seconds
         self._init_course_delay_seconds = init_course_delay_seconds
         self._downloader_cls = downloader_cls
@@ -114,8 +115,6 @@ class ChaoxingDownloaderClient:
         )
 
     def init(self, *, timeout_seconds: int = 300):
-        if not self._chromium_downloaded():
-            raise RuntimeError(CHAOXING_CHROMIUM_REQUIRED_MESSAGE)
         with self._lock:
             self._init_cancel_event.clear()
             try:
@@ -171,16 +170,18 @@ class ChaoxingDownloaderClient:
 
     def _init_downloader(self, *, timeout_seconds: int):
         downloader_cls = self._require_downloader_cls()
+        _validate_downloader_init_signature(downloader_cls)
         try:
             return downloader_cls.init(
                 state_dir=str(self._state_dir),
                 timeout_seconds=timeout_seconds,
+                collect_impl=None,
                 cancel_check=self._init_cancel_event.is_set,
                 request_delay=self._request_delay_seconds,
                 course_delay=self._init_course_delay_seconds,
             )
         except Exception as error:
-            if _is_chaoxing_init_cancelled(error) or _is_playwright_target_closed(error):
+            if _is_chaoxing_init_cancelled(error):
                 raise ChaoxingInitCancelled(CHAOXING_INIT_CANCELLED_MESSAGE) from error
             raise
 
@@ -578,12 +579,17 @@ def _positive_int(value: object) -> int:
     return 0
 
 
-def _is_playwright_target_closed(error: BaseException) -> bool:
-    return error.__class__.__name__ == "TargetClosedError"
-
-
 def _is_chaoxing_init_cancelled(error: BaseException) -> bool:
     return error.__class__.__name__ == "InitCancelled"
+
+
+def _validate_downloader_init_signature(downloader_cls) -> None:
+    try:
+        parameters = inspect.signature(downloader_cls.init).parameters
+    except (AttributeError, TypeError, ValueError) as error:
+        raise RuntimeError("当前 Python 环境缺少 chaoxing-downloader 0.1.3，请先安装项目依赖。") from error
+    if "collect_impl" not in parameters:
+        raise RuntimeError("当前 Python 环境缺少 chaoxing-downloader 0.1.3，请先安装项目依赖。")
 
 
 def _is_unsupported_chapter(error: BaseException) -> bool:

@@ -22,9 +22,10 @@ from backend.video_summary.infrastructure.settings import (
     apply_runtime_env_overrides,
     load_settings,
 )
+from backend.video_summary.infrastructure.agent_memory.fastembed_adapter import build_fastembed_embedding
 from backend.video_summary.library.ports import VideoLibraryReader
 
-INDEX_SCHEMA_VERSION = 4
+INDEX_SCHEMA_VERSION = 5
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
 LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
@@ -393,8 +394,8 @@ class SeriesRetrievalService:
     def _load_runtime_retrieval_settings(self) -> AgentRetrievalSettings:
         if self._root_dir is None:
             return AgentRetrievalSettings(
-                embedding_provider="local_huggingface",
-                embedding_model="BAAI/bge-base-zh-v1.5",
+                embedding_provider="fastembed",
+                embedding_model="BAAI/bge-small-zh-v1.5",
                 embedding_device="cpu",
                 embedding_batch_size=8,
                 max_hits=DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
@@ -447,85 +448,27 @@ def _build_default_embed_model(root_dir: Path | None):
         return MockEmbedding(embed_dim=32)
     apply_runtime_env_overrides(root_dir)
     settings = load_settings(root_dir / "config" / "settings.toml", root_dir)
-    retrieval_settings = settings.agent_retrieval
-    local_embedding_dir = root_dir / "data" / "models" / "huggingface" / "bge-base-zh-v1.5"
-    if retrieval_settings.embedding_model == "BAAI/bge-base-zh-v1.5" and local_embedding_dir.is_dir():
-        from dataclasses import replace
-
-        retrieval_settings = replace(
-            retrieval_settings,
-            embedding_model=str(local_embedding_dir),
-        )
     return _build_embed_model_from_settings(
-        retrieval_settings=retrieval_settings,
+        retrieval_settings=settings.agent_retrieval,
+        cache_dir=root_dir / "data" / "models" / "fastembed",
     )
 
 
-def _build_embed_model_from_settings(*, retrieval_settings: AgentRetrievalSettings):
-    if retrieval_settings.embedding_provider == "local_huggingface":
-        return _build_local_huggingface_embedding(retrieval_settings)
+def _build_embed_model_from_settings(
+    *,
+    retrieval_settings: AgentRetrievalSettings,
+    cache_dir: Path | None = None,
+):
+    if retrieval_settings.embedding_provider == "fastembed":
+        return build_fastembed_embedding(
+            model_name=retrieval_settings.embedding_model,
+            device=retrieval_settings.embedding_device,
+            embed_batch_size=retrieval_settings.embedding_batch_size,
+            cache_dir=str(cache_dir) if cache_dir is not None else None,
+        )
     raise ValueError(
         f"Unsupported embedding provider: {retrieval_settings.embedding_provider}"
     )
-
-
-def _build_local_huggingface_embedding(
-    retrieval_settings: AgentRetrievalSettings,
-):
-    try:
-        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-    except ImportError as exc:
-        raise RuntimeError(
-            "缺少本地 embedding 依赖。请安装 `llama-index-embeddings-huggingface` 和 `sentence-transformers`。"
-        ) from exc
-
-    resolved_device = _resolve_embedding_device(retrieval_settings.embedding_device)
-    try:
-        return HuggingFaceEmbedding(
-            model_name=retrieval_settings.embedding_model,
-            device=resolved_device,
-            embed_batch_size=retrieval_settings.embedding_batch_size,
-        )
-    except Exception as exc:
-        if resolved_device != "cpu" and _looks_like_torch_cuda_error(exc):
-            raise RuntimeError(
-                "当前向量检索配置为 GPU，但当前 PyTorch 环境未启用 CUDA。"
-                "请安装支持 CUDA 的 PyTorch，或将 config/settings.toml 中"
-                " [agent_retrieval].embedding_device 改为 \"cpu\"。"
-            ) from exc
-        raise
-
-
-def _resolve_embedding_device(device: str) -> str:
-    normalized = (device or "cpu").strip().lower()
-    if normalized == "auto":
-        return "cuda" if _torch_cuda_available() else "cpu"
-    if normalized == "gpu":
-        return "cuda"
-    return normalized
-
-
-def _torch_cuda_available() -> bool:
-    try:
-        import torch
-    except Exception:
-        return False
-    try:
-        return bool(torch.cuda.is_available())
-    except Exception:
-        return False
-
-
-def _looks_like_torch_cuda_error(error: BaseException) -> bool:
-    message = str(error).lower()
-    if "torch not compiled with cuda enabled" in message:
-        return True
-    if "cuda" in message and "not available" in message:
-        return True
-    current = error.__cause__ or error.__context__
-    if current is not None and current is not error:
-        return _looks_like_torch_cuda_error(current)
-    return False
 
 
 def _build_filters(

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, ExternalLink, Search } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function WorkspaceImportModal({
@@ -9,8 +9,6 @@ export function WorkspaceImportModal({
   onClose,
   onResolveSeries,
   onResolveVideo,
-  chaoxingChromium = null,
-  onOpenDownloadManager,
   onLoadChaoxingStatus,
   onInitChaoxing,
   onCancelChaoxingInit,
@@ -53,7 +51,6 @@ export function WorkspaceImportModal({
       : "添加 Playground 视频";
   const subtitle = sourceType === "external" ? "外部来源" : (isSeriesCreation ? "本地导入" : "视频导入");
   const actionLabel = "导入";
-  const chaoxingChromiumDownloaded = chaoxingChromium?.downloaded === true;
   const chaoxingEnabledForMode = isSeriesCreation;
   const normalizedChaoxingCourseSearch = chaoxingCourseSearch.trim().toLowerCase();
   const filteredChaoxingCourses = useMemo(() => {
@@ -100,7 +97,7 @@ export function WorkspaceImportModal({
   }, [sourceType, externalProvider]);
 
   useEffect(() => {
-    if (sourceType !== "external" || externalProvider !== "chaoxing" || !chaoxingEnabledForMode || !chaoxingChromiumDownloaded) {
+    if (sourceType !== "external" || externalProvider !== "chaoxing" || !chaoxingEnabledForMode) {
       return;
     }
     const loadStatus = loadChaoxingStatusRef.current;
@@ -138,7 +135,7 @@ export function WorkspaceImportModal({
     return () => {
       cancelled = true;
     };
-  }, [sourceType, externalProvider, chaoxingEnabledForMode, chaoxingChromiumDownloaded]);
+  }, [sourceType, externalProvider, chaoxingEnabledForMode]);
 
   async function handleInitChaoxing() {
     if (!onInitChaoxing || !onLoadChaoxingCourses) {
@@ -202,11 +199,6 @@ export function WorkspaceImportModal({
     requestChaoxingInitCancel();
     requestChaoxingImportCancel();
     onClose();
-  }
-
-  function handleOpenDownloadManager() {
-    onOpenDownloadManager?.();
-    handleClose();
   }
 
   async function handleSubmit() {
@@ -388,23 +380,6 @@ export function WorkspaceImportModal({
                       <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
                         超星按课程导入为系列，请从“添加系列”入口使用。
                       </p>
-                    ) : !chaoxingChromiumDownloaded ? (
-                      <div className="flex flex-col gap-3">
-                        <div>
-                          <p className="text-sm font-bold text-stone-900 dark:text-stone-100">请先下载 Chromium 浏览器内核</p>
-                          <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
-                            用于登录初始化获取必要内容
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleOpenDownloadManager}
-                          className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90"
-                        >
-                          去下载管理
-                          <ExternalLink size={14} />
-                        </button>
-                      </div>
                     ) : status === "error" && errorMsg ? (
                       <div className="flex items-center gap-2 text-sm font-semibold text-danger">
                         <AlertCircle size={16} />
@@ -420,7 +395,7 @@ export function WorkspaceImportModal({
                         <div>
                           <p className="text-sm font-bold text-stone-900 dark:text-stone-100">需要初始化超星登录</p>
                           <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
-                            点击后会打开 Chromium，请在浏览器中完成学习通登录。
+                            点击后会打开浏览器，请在浏览器中完成学习通登录。
                           </p>
                         </div>
                         <button

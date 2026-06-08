@@ -19,7 +19,7 @@ class RagModelManagerTests(unittest.TestCase):
     def test_list_models_reports_embedding_and_reranker_download_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
-            _write_model_marker(root_dir, "bge-base-zh-v1.5", extra_files=("modules.json", "model.safetensors"))
+            _write_model_marker(root_dir, "models--Qdrant--bge-small-zh-v1.5", extra_files=("model_optimized.onnx",))
             manager = RagModelManager(root_dir=root_dir, progress_tracker=InMemoryProgressTracker())
 
             models = manager.list_models()
@@ -31,7 +31,7 @@ class RagModelManagerTests(unittest.TestCase):
     def test_partial_model_directory_is_not_reported_as_downloaded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
-            _write_model_marker(root_dir, "bge-base-zh-v1.5")
+            _write_model_marker(root_dir, "models--Qdrant--bge-small-zh-v1.5")
             manager = RagModelManager(root_dir=root_dir, progress_tracker=InMemoryProgressTracker())
 
             models = manager.list_models()
@@ -169,7 +169,7 @@ class FakeSessionStore:
 
 
 def _write_model_marker(root_dir: Path, model_dir_name: str, extra_files: tuple[str, ...] = ()) -> None:
-    model_dir = root_dir / "data" / "models" / "huggingface" / model_dir_name
+    model_dir = root_dir / "data" / "models" / "fastembed" / model_dir_name
     model_dir.mkdir(parents=True, exist_ok=True)
     (model_dir / "config.json").write_text("{}", encoding="utf-8")
     for file_name in extra_files:

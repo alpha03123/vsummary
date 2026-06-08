@@ -163,18 +163,8 @@ export async function loadRagModels() {
   return fetchJson("/api/rag/models");
 }
 
-export async function loadChaoxingChromium() {
-  return fetchJson("/api/linked/chaoxing/chromium");
-}
-
 export async function downloadRagModel(modelKey) {
   return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download`, {
-    method: "POST",
-  });
-}
-
-export async function downloadChaoxingChromium() {
-  return fetchJson("/api/linked/chaoxing/chromium/download", {
     method: "POST",
   });
 }
@@ -184,14 +174,6 @@ export function subscribeRagModelDownloadProgress(modelKey, listener) {
     `/api/rag/models/${encodeURIComponent(modelKey)}/download/progress`,
     listener,
     "RAG 模型下载进度连接已中断",
-  );
-}
-
-export function subscribeChaoxingChromiumDownloadProgress(listener) {
-  return subscribeProgress(
-    "/api/linked/chaoxing/chromium/download/progress",
-    listener,
-    "超星 Chromium 下载进度连接已中断",
   );
 }
 
@@ -729,7 +711,6 @@ export async function loadChaoxingStatus() {
   const payload = await fetchJson("/api/linked/chaoxing/status");
   return {
     initialized: payload.initialized === true,
-    chromiumDownloaded: payload.chromium_downloaded === true,
   };
 }
 
@@ -740,7 +721,6 @@ export async function initChaoxing(options = {}) {
   });
   return {
     initialized: payload.initialized === true,
-    chromiumDownloaded: payload.chromium_downloaded === true,
   };
 }
 

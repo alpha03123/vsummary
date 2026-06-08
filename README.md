@@ -146,8 +146,8 @@ compute_type = "float16"
 transcription_mode = "accurate"
 
 [agent_retrieval]
-embedding_provider = "local_huggingface"
-embedding_model = "BAAI/bge-base-zh-v1.5"
+embedding_provider = "fastembed"
+embedding_model = "BAAI/bge-small-zh-v1.5"
 embedding_device = "cpu"
 embedding_batch_size = 8
 ```

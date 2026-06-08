@@ -11,8 +11,7 @@ lancedb>=0.24,<1
 llama-index-core>=0.12,<1
 llama-index-vector-stores-lancedb>=0.4,<1
 llama-index-embeddings-openai>=0.3,<1
-llama-index-embeddings-huggingface>=0.5,<1
-sentence-transformers>=3.0,<4
+fastembed>=0.7,<1
 yt-dlp>=2024.1,<2027
 playwright>=1.44,<2
-chaoxing-downloader==0.1.2
+chaoxing-downloader==0.1.3

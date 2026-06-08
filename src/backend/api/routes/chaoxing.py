@@ -19,7 +19,6 @@ router = APIRouter()
 
 class ChaoxingStatusResponse(BaseModel):
     initialized: bool
-    chromium_downloaded: bool
 
 
 class ChaoxingCourseResponse(BaseModel):
@@ -60,7 +59,6 @@ async def get_chaoxing_status(container: ApiContainerDep) -> ChaoxingStatusRespo
         raise HTTPException(status_code=409, detail=str(error)) from error
     return ChaoxingStatusResponse(
         initialized=initialized,
-        chromium_downloaded=container.chaoxing_chromium_manager.is_downloaded(),
     )
 
 
@@ -74,7 +72,6 @@ async def init_chaoxing(container: ApiContainerDep) -> ChaoxingStatusResponse:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return ChaoxingStatusResponse(
         initialized=await asyncio.to_thread(container.chaoxing_importer.is_initialized),
-        chromium_downloaded=container.chaoxing_chromium_manager.is_downloaded(),
     )
 
 

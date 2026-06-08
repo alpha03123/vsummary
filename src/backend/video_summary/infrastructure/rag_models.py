@@ -6,12 +6,8 @@ from threading import Lock, Thread
 from typing import Callable
 
 from backend.video_summary.generation.ports import ProgressReporter
-from backend.video_summary.infrastructure.huggingface_model_downloader import (
-    HuggingFaceDownloadSpec,
-    HuggingFaceModelDownloader,
-)
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides, load_env_settings
+from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides
 
 
 RAG_MODEL_DOWNLOAD_MESSAGE = "正在下载 RAG 模型，请等待下载完成后再提问。"
@@ -46,19 +42,19 @@ class RagModelStatus:
 RAG_MODEL_SPECS: dict[str, RagModelSpec] = {
     "embedding": RagModelSpec(
         key="embedding",
-        label="bge-base-zh-v1.5(embedding)",
-        repo_id="BAAI/bge-base-zh-v1.5",
-        local_dir_name="bge-base-zh-v1.5",
+        label="bge-small-zh-v1.5 (FastEmbed)",
+        repo_id="BAAI/bge-small-zh-v1.5",
+        local_dir_name="models--Qdrant--bge-small-zh-v1.5",
         purpose="向量化检索候选内容",
-        required_files=("config.json", "modules.json"),
+        required_files=("model_optimized.onnx",),
     ),
     "reranker": RagModelSpec(
         key="reranker",
-        label="bge-reranker-v2-m3(reranker)",
-        repo_id="BAAI/bge-reranker-v2-m3",
-        local_dir_name="bge-reranker-v2-m3",
+        label="bge-reranker-base (FastEmbed)",
+        repo_id="BAAI/bge-reranker-base",
+        local_dir_name="models--BAAI--bge-reranker-base",
         purpose="对检索候选内容进行重排序",
-        required_files=("config.json",),
+        required_files=("onnx/model.onnx",),
     ),
 }
 
@@ -73,11 +69,10 @@ class RagModelManager:
         on_download_completed: Callable[[str], None] | None = None,
     ) -> None:
         self._root_dir = root_dir
-        self._models_root = root_dir / "data" / "models" / "huggingface"
+        self._models_root = root_dir / "data" / "models" / "fastembed"
         self._progress_tracker = progress_tracker
         self._downloader = downloader or self._download_from_huggingface
         self._on_download_completed = on_download_completed
-        self._hf_downloader = HuggingFaceModelDownloader()
         self._lock = Lock()
         self._active_keys: set[str] = set()
 
@@ -137,9 +132,9 @@ class RagModelManager:
         model_dir = self.local_model_dir(key)
         if not model_dir.is_dir():
             return False
-        if not all((model_dir / file_name).is_file() for file_name in spec.required_files):
+        if not all(_has_required_file(model_dir, file_name) for file_name in spec.required_files):
             return False
-        return any(model_dir.glob("*.safetensors")) or any(model_dir.glob("*.bin"))
+        return True
 
     def local_model_dir(self, key: str) -> Path:
         spec = self._get_spec(key)
@@ -159,19 +154,17 @@ class RagModelManager:
 
     def _download_from_huggingface(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
         apply_runtime_env_overrides(self._root_dir)
-        env_settings = load_env_settings(self._root_dir)
-        endpoint = env_settings.hf_endpoint.strip() or None
-        self._hf_downloader.download(
-            HuggingFaceDownloadSpec(
-                repo_id=spec.repo_id,
-                target_dir=self.local_model_dir(spec.key),
-                required_files=spec.required_files,
-                required_file_patterns=("*.safetensors", "*.bin"),
-                allow_patterns=(),
-                endpoint=endpoint,
-            ),
-            reporter,
-        )
+        reporter.update("download", 5.0, f"正在下载模型文件：{spec.repo_id}")
+        if spec.key == "embedding":
+            from fastembed import TextEmbedding
+
+            TextEmbedding(model_name=spec.repo_id, cache_dir=str(self._models_root))
+        elif spec.key == "reranker":
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+            TextCrossEncoder(model_name=spec.repo_id, cache_dir=str(self._models_root))
+        else:
+            raise ValueError(f"unsupported RAG model '{spec.key}'")
         reporter.update("validate", 95.0, f"正在校验 RAG 模型：{spec.label}")
 
     def stream_task_id(self, key: str) -> str:
@@ -187,3 +180,11 @@ class RagModelManager:
     @staticmethod
     def _task_id(key: str) -> str:
         return f"rag-model-download/{key}"
+
+
+def _has_required_file(model_dir: Path, file_name: str) -> bool:
+    direct_path = model_dir / file_name
+    if direct_path.is_file():
+        return True
+    normalized = file_name.replace("\\", "/")
+    return any(path.is_file() and path.as_posix().endswith(normalized) for path in model_dir.rglob(Path(file_name).name))
