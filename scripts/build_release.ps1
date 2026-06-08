@@ -227,15 +227,22 @@ function Pack-CondaEnvironment {
     Invoke-External -FilePath $CondaPackExe -Arguments @("-n", $Variant.EnvName, "-o", $archivePath, "--format", "zip", "--force", "--ignore-missing-files")
     Invoke-External -FilePath $SevenZipExe -Arguments @("x", $archivePath, "-o$runtimeRoot", "-y")
 
-    $condaUnpack = Join-Path $runtimeRoot "Scripts\conda-unpack.exe"
-    if (Test-Path -LiteralPath $condaUnpack) {
-        Push-Location $runtimeRoot
-        try {
-            Invoke-External -FilePath $condaUnpack -Arguments @() -WorkingDirectory $runtimeRoot
-        }
-        finally {
-            Pop-Location
-        }
+}
+
+function Invoke-CondaUnpack {
+    param([string]$RuntimeRoot)
+
+    $condaUnpack = Join-Path $RuntimeRoot "Scripts\conda-unpack.exe"
+    if (-not (Test-Path -LiteralPath $condaUnpack)) {
+        return
+    }
+
+    Push-Location $RuntimeRoot
+    try {
+        Invoke-External -FilePath $condaUnpack -Arguments @() -WorkingDirectory $RuntimeRoot
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -352,6 +359,7 @@ function Build-Package {
     Copy-DirectoryIfExists -Source $FrontendDistDir -Destination (Join-Path $Variant.PackageRoot "src\frontend\dist")
 
     Copy-DirectoryIfExists -Source (Join-Path $Variant.BuildRoot "runtime") -Destination (Join-Path $Variant.PackageRoot "runtime")
+    Invoke-CondaUnpack -RuntimeRoot (Join-Path $Variant.PackageRoot "runtime")
     Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "start.bat") -Value (Render-StartScript) -Encoding ASCII
 
     Write-Host "Checking packaged dependency contract"
