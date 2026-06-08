@@ -25,6 +25,7 @@ class FastEmbedEmbeddingTests(unittest.TestCase):
 
     def test_gpu_device_uses_cuda_provider_without_cpu_fallback(self) -> None:
         _FakeTextEmbedding.created = []
+        _FakeTextEmbedding.active_providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         with patch(
             "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
             return_value=_FakeTextEmbedding,
@@ -32,11 +33,22 @@ class FastEmbedEmbeddingTests(unittest.TestCase):
             FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
 
         self.assertEqual(_FakeTextEmbedding.created[-1]["providers"], ["CUDAExecutionProvider"])
-        self.assertTrue(_FakeTextEmbedding.created[-1]["cuda"])
+        self.assertNotIn("cuda", _FakeTextEmbedding.created[-1]["kwargs"])
+
+    def test_gpu_device_rejects_cpu_fallback(self) -> None:
+        _FakeTextEmbedding.created = []
+        _FakeTextEmbedding.active_providers = ["CPUExecutionProvider"]
+        with patch(
+            "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
+            return_value=_FakeTextEmbedding,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "CUDAExecutionProvider 未激活"):
+                FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
 
 
 class _FakeTextEmbedding:
     created = []
+    active_providers = ["CPUExecutionProvider"]
 
     def __init__(self, *, model_name: str, cache_dir=None, providers=None, cuda=False, **kwargs) -> None:
         self.created.append(
@@ -48,6 +60,7 @@ class _FakeTextEmbedding:
                 "kwargs": kwargs,
             }
         )
+        self.model = _FakeFastEmbedInnerModel(self.active_providers)
 
     def embed(self, texts, batch_size=256):
         del batch_size
@@ -56,6 +69,19 @@ class _FakeTextEmbedding:
 
     def query_embed(self, query):
         return iter([[float(len(query)), float(len(query) + 1)]])
+
+
+class _FakeFastEmbedInnerModel:
+    def __init__(self, active_providers: list[str]) -> None:
+        self.model = _FakeOnnxSession(active_providers)
+
+
+class _FakeOnnxSession:
+    def __init__(self, active_providers: list[str]) -> None:
+        self._active_providers = active_providers
+
+    def get_providers(self) -> list[str]:
+        return self._active_providers
 
 
 if __name__ == "__main__":
