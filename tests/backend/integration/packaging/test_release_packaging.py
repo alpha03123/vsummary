@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -39,6 +40,30 @@ class FrontendStaticMountTests(unittest.TestCase):
             self.assertIn("console.log", asset_response.text)
             self.assertEqual(deep_link_response.status_code, 200)
             self.assertIn("frontend", deep_link_response.text)
+
+    def test_frontend_js_assets_are_served_with_javascript_content_type(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            dist_dir = root_dir / "src" / "frontend" / "dist"
+            assets_dir = dist_dir / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            (dist_dir / "index.html").write_text(
+                '<script type="module" src="/assets/app.js"></script>',
+                encoding="utf-8",
+            )
+            (assets_dir / "app.js").write_text("console.log('ok');", encoding="utf-8")
+
+            with patch("starlette.responses.guess_type", return_value=("text/plain", None)):
+                app = create_app(container=DummyContainer(root_dir))
+
+                with TestClient(app) as client:
+                    asset_response = client.get("/assets/app.js")
+
+            self.assertEqual(asset_response.status_code, 200)
+            self.assertIn(
+                asset_response.headers["content-type"].split(";")[0],
+                {"application/javascript", "text/javascript"},
+            )
 
 
 class DummyContainer:
