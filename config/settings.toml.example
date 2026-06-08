@@ -62,12 +62,12 @@ planner_transport = "structured"
 
 # Agent 检索设置。
 [agent_retrieval]
-# 向量模型供应商。目前默认使用本地 HuggingFace 模型。
-embedding_provider = "local_huggingface"
-# 向量模型名称或本地路径。
-embedding_model = "BAAI/bge-base-zh-v1.5"
+# 向量模型供应商。目前默认使用 FastEmbed，避免依赖 PyTorch。
+embedding_provider = "fastembed"
+# 向量模型名称。
+embedding_model = "BAAI/bge-small-zh-v1.5"
 # 向量化设备。"cpu"、"gpu" 或 "auto"。
-embedding_device = "cpu"
+embedding_device = "gpu"
 # 向量化批大小。数值越大吞吐越高，但占用内存或显存更多。
 embedding_batch_size = 8
 # 每次检索最终返回给回答节点的证据数量。

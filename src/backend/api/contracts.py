@@ -114,15 +114,3 @@ class RagModelResponse(BaseModel):
     progress: float | None = None
     detail: str | None = None
     error: str | None = None
-
-
-class ChaoxingChromiumResponse(BaseModel):
-    key: str
-    label: str
-    local_path: str
-    purpose: str
-    downloaded: bool
-    status: str
-    progress: float | None = None
-    detail: str | None = None
-    error: str | None = None

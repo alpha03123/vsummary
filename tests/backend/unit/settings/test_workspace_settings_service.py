@@ -399,8 +399,8 @@ planner_transport = "structured"
 direct_summary_threshold_ratio = 0.9
 
 [agent_retrieval]
-embedding_provider = "local_huggingface"
-embedding_model = "BAAI/bge-base-zh-v1.5"
+embedding_provider = "fastembed"
+embedding_model = "BAAI/bge-small-zh-v1.5"
 embedding_device = "cpu"
 embedding_batch_size = 8
 max_hits = 5

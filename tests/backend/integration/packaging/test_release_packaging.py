@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from tests import _path_setup
 from backend.api.app import create_app
-from backend.api.bootstrap import _resolve_local_reranker_model_name
+from backend.api.bootstrap import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
     PACKAGE_VARIANTS,
     build_release_layout,
@@ -72,7 +72,8 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         cpu = PACKAGE_VARIANTS["cpu"]
         rendered = (self.repo_root / cpu.settings_template).read_text(encoding="utf-8")
 
-        self.assertIn('embedding_model = "data/models/huggingface/bge-base-zh-v1.5"', rendered)
+        self.assertIn('embedding_provider = "fastembed"', rendered)
+        self.assertIn('embedding_model = "BAAI/bge-small-zh-v1.5"', rendered)
 
     def test_build_release_layout_targets_external_pack_root(self) -> None:
         layout = build_release_layout(
@@ -93,15 +94,15 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("-m backend.api.server", script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
-    def test_resolve_local_reranker_model_name_prefers_packaged_directory(self) -> None:
+    def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
-            local_dir = root_dir / "data" / "models" / "huggingface" / "bge-reranker-v2-m3"
+            local_dir = root_dir / "data" / "models" / "fastembed" / "models--BAAI--bge-reranker-base"
             local_dir.mkdir(parents=True, exist_ok=True)
 
-            model_name = _resolve_local_reranker_model_name(root_dir)
+            cache_dir = _resolve_local_reranker_cache_dir(root_dir)
 
-            self.assertEqual(model_name, str(local_dir))
+            self.assertEqual(cache_dir, str(root_dir / "data" / "models" / "fastembed"))
 
 
 if __name__ == "__main__":

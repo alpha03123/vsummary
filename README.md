@@ -146,16 +146,16 @@ compute_type = "float16"
 transcription_mode = "accurate"
 
 [agent_retrieval]
-embedding_provider = "local_huggingface"
-embedding_model = "BAAI/bge-base-zh-v1.5"
-embedding_device = "cpu"
+embedding_provider = "fastembed"
+embedding_model = "BAAI/bge-small-zh-v1.5"
+embedding_device = "gpu"
 embedding_batch_size = 8
 ```
 
 说明：
 
 - `device` 控制 **视频转写（fast whisper模型）** 用 CPU 还是 NVIDIA GPU（建议GPU）
-- `embedding_device` 控制 **RAG 向量检索模型** 用 CPU 还是 GPU (建议CPU)
+- `embedding_device` 控制 **RAG 向量检索模型** 用 CPU 还是 GPU（默认 GPU）
 
 #### 7. 启动服务
 
@@ -213,12 +213,17 @@ device = "gpu"
 
 ### RAG / embedding GPU
 
-`embedding_device` 默认建议保持为：
+默认依赖使用 `fastembed-gpu` 和 `onnxruntime-gpu`，`embedding_device` 默认使用：
+
+```toml
+embedding_device = "gpu"
+```
+
+如果使用 CPU 整合包或没有 NVIDIA GPU，可以改回：
 
 ```toml
 embedding_device = "cpu"
 ```
-- 当前环境变量配置的是cpu的torch，如果你自己安装了GPU TORCH，可以改为GPU.
 
 
 ---
@@ -272,9 +277,9 @@ HF_ENDPOINT=https://hf-mirror.com
 
 然后重启后端。
 
-### 4. RAG 报 `Torch not compiled with CUDA enabled`
+### 4. RAG GPU 初始化失败
 
-说明你把 embedding 设备设成了 GPU，但当前 PyTorch 不是 CUDA 版。
+说明当前 FastEmbed GPU 运行时没有就绪，或环境安装的是 CPU 版 embedding 依赖。
 
 请改回：
 

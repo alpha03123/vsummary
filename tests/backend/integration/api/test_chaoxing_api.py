@@ -14,13 +14,13 @@ from backend.video_summary.library.linked_models import LinkedSeries, LinkedVide
 
 
 class ChaoxingApiTests(unittest.TestCase):
-    def test_status_reports_initialization_and_chromium_state(self) -> None:
+    def test_status_reports_initialization_state(self) -> None:
         client = TestClient(create_app(_build_container()))
 
         response = client.get("/api/linked/chaoxing/status")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"initialized": True, "chromium_downloaded": True})
+        self.assertEqual(response.json(), {"initialized": True})
 
     def test_status_returns_clear_error_when_dependency_is_missing(self) -> None:
         container = _build_container()
@@ -128,7 +128,6 @@ def _build_container():
             list_videos=lambda chapter_key: [SimpleNamespace(video_key="video-1", chapter_key=chapter_key, title="第一讲", duration=123, filename="")],
             import_course=lambda course_key, progress=None: _import_course(series, progress),
         ),
-        chaoxing_chromium_manager=SimpleNamespace(is_downloaded=lambda: True),
         video_download_progress_tracker=InMemoryProgressTracker(),
         chaoxing_import_progress_tracker=InMemoryProgressTracker(),
     )

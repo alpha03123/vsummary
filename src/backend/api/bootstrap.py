@@ -27,7 +27,6 @@ from backend.bilibili import (
     YtDlpBilibiliResolver,
 )
 from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
-from backend.chaoxing.chromium import ChaoxingChromiumManager
 from backend.video_summary.infrastructure.agent_memory import (
     AgentWorkspaceIndexBuilder,
     BGEReranker,
@@ -113,11 +112,9 @@ class ApiContainer:
     generation_progress_tracker: InMemoryProgressTracker
     video_download_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
-    chaoxing_chromium_progress_tracker: InMemoryProgressTracker
     chaoxing_import_progress_tracker: InMemoryProgressTracker
     knowledge_memory_progress_tracker: InMemoryProgressTracker
     rag_model_manager: RagModelManager
-    chaoxing_chromium_manager: ChaoxingChromiumManager
     chaoxing_importer: ChaoxingCourseImporter
     linked_series_workspace: FileSystemVideoWorkspace
     workspace_index_invalidator: object
@@ -143,7 +140,6 @@ def build_api_container(
     progress_tracker = InMemoryProgressTracker()
     video_download_progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
-    chaoxing_chromium_progress_tracker = InMemoryProgressTracker()
     chaoxing_import_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
     rag_model_progress_tracker = InMemoryProgressTracker()
@@ -160,10 +156,6 @@ def build_api_container(
         root_dir=root_dir,
         progress_tracker=rag_model_progress_tracker,
         on_download_completed=on_rag_model_download_completed,
-    )
-    chaoxing_chromium_manager = ChaoxingChromiumManager(
-        root_dir=root_dir,
-        progress_tracker=chaoxing_chromium_progress_tracker,
     )
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
@@ -214,8 +206,7 @@ def build_api_container(
         progress_tracker=video_download_progress_tracker,
     )
     chaoxing_client = ChaoxingDownloaderClient(
-        state_dir=root_dir / "data" / "chaoxing" / "state",
-        chromium_downloaded=chaoxing_chromium_manager.is_downloaded,
+        state_dir=root_dir / "data" / "chaoxing",
         request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
         init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
     )
@@ -260,11 +251,9 @@ def build_api_container(
         generation_progress_tracker=progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
-        chaoxing_chromium_progress_tracker=chaoxing_chromium_progress_tracker,
         chaoxing_import_progress_tracker=chaoxing_import_progress_tracker,
         knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
         rag_model_manager=rag_model_manager,
-        chaoxing_chromium_manager=chaoxing_chromium_manager,
         chaoxing_importer=chaoxing_importer,
         linked_series_workspace=workspace,
         workspace_index_invalidator=workspace_index_invalidator,
@@ -629,13 +618,11 @@ class LazyAgentRuntimeProvider:
             if not self._rag_model_manager.is_downloaded("reranker"):
                 return None
             return BGEReranker(
-                model_name=str(self._rag_model_manager.local_model_dir("reranker")),
+                model_name="BAAI/bge-reranker-base",
+                cache_dir=str(self._rag_model_manager.local_model_dir("reranker").parent),
                 device=device,
             )
-        return BGEReranker(
-            model_name=_resolve_local_reranker_model_name(self._root_dir),
-            device=device,
-        )
+        return BGEReranker(device=device, cache_dir=_resolve_local_reranker_cache_dir(self._root_dir))
 
     def _build_web_search_gateway(self, *, settings, env_settings):
         web_search_settings = settings.web_search
@@ -715,8 +702,9 @@ class _RagModelAwareRetrievalService:
         )
 
 
-def _resolve_local_reranker_model_name(root_dir: Path) -> str:
-    local_dir = root_dir / "data" / "models" / "huggingface" / "bge-reranker-v2-m3"
+def _resolve_local_reranker_cache_dir(root_dir: Path) -> str | None:
+    cache_dir = root_dir / "data" / "models" / "fastembed"
+    local_dir = cache_dir / "models--BAAI--bge-reranker-base"
     if local_dir.is_dir():
-        return str(local_dir)
-    return "BAAI/bge-reranker-v2-m3"
+        return str(cache_dir)
+    return None

@@ -19,22 +19,28 @@ class SemanticScorer:
 
 @dataclass(frozen=True)
 class BGEReranker(SemanticScorer):
-    model_name: str = "BAAI/bge-reranker-v2-m3"
+    model_name: str = "BAAI/bge-reranker-base"
     device: str = "cpu"
+    cache_dir: str | None = None
 
     @cached_property
     def _model(self):
-        from sentence_transformers import CrossEncoder
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
 
-        return CrossEncoder(self.model_name, device=_normalize_reranker_device(self.device))
+        kwargs: dict[str, object] = {"model_name": self.model_name}
+        if self.cache_dir is not None:
+            kwargs["cache_dir"] = self.cache_dir
+        if _normalize_reranker_device(self.device) == "gpu":
+            kwargs["providers"] = ["CUDAExecutionProvider"]
+            kwargs["cuda"] = True
+        else:
+            kwargs["providers"] = ["CPUExecutionProvider"]
+        return TextCrossEncoder(**kwargs)
 
     def score(self, *, query: str, texts: list[str]) -> list[float]:
         if not texts:
             return []
-        raw_scores = self._model.predict(
-            [(query, text) for text in texts],
-            show_progress_bar=False,
-        )
+        raw_scores = list(self._model.rerank(query, texts))
         return [float(_sigmoid(score)) for score in raw_scores]
 
 
@@ -333,13 +339,8 @@ def _sigmoid(value: float) -> float:
 
 def _normalize_reranker_device(device: str) -> str:
     normalized = device.strip().lower()
-    if normalized in {"gpu", "cuda", "auto"}:
-        try:
-            import torch
-
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        except Exception:
-            return "cpu"
+    if normalized in {"gpu", "cuda"}:
+        return "gpu"
     return "cpu"
 
 

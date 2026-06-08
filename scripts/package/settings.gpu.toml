@@ -14,7 +14,7 @@ theme = "light"
 show_takeaways = true
 
 [debug]
-mode = true
+mode = false
 
 [agent_context]
 window_tokens = 1000000
@@ -41,11 +41,11 @@ max_hits = 5
 rerank_enabled = false
 
 [generation]
-video_generation_concurrency = 5
-summary_chunk_concurrency = 3
+video_generation_concurrency = 1
+summary_chunk_concurrency = 1
 
 [web_search]
-enabled = true
+enabled = false
 provider = "litellm"
 mode = "native"
 search_context_size = "medium"
