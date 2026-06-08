@@ -311,7 +311,7 @@ if kind == "cpu":
     forbid({"fastembed-gpu", "onnxruntime-gpu"})
 elif kind == "gpu":
     require({"faster-whisper", "fastembed-gpu", "onnxruntime-gpu", "yt-dlp", "chaoxing-downloader"})
-    forbid({"fastembed", "onnxruntime"})
+    forbid({"fastembed"})
 else:
     raise SystemExit(f"unsupported package kind: {kind}")
 

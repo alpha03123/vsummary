@@ -11,6 +11,7 @@ lancedb>=0.24,<1
 llama-index-core>=0.12,<1
 llama-index-vector-stores-lancedb>=0.4,<1
 llama-index-embeddings-openai>=0.3,<1
-fastembed>=0.7,<1
+fastembed-gpu>=0.7,<1
+onnxruntime-gpu>=1.20,<2
 yt-dlp>=2024.1,<2027
 chaoxing-downloader==0.1.3
