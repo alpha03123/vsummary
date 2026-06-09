@@ -88,11 +88,37 @@ def _create_text_embedding(*, model_name: str, device: str, cache_dir: str | Non
     kwargs: dict[str, object] = {"model_name": model_name}
     if cache_dir is not None:
         kwargs["cache_dir"] = cache_dir
+        specific_model_path = _resolve_specific_model_path(model_name, Path(cache_dir))
+        if specific_model_path is not None:
+            kwargs["specific_model_path"] = str(specific_model_path)
     if device == "gpu":
         kwargs["providers"] = ["CUDAExecutionProvider"]
     elif device == "cpu":
         kwargs["providers"] = ["CPUExecutionProvider"]
     return text_embedding_cls(**kwargs)
+
+
+def _resolve_specific_model_path(model_name: str, cache_dir: Path) -> Path | None:
+    model_basename = model_name.rstrip("/").split("/")[-1]
+    candidates = [
+        cache_dir / f"fast-{model_basename}",
+        cache_dir / model_basename,
+    ]
+    for candidate in candidates:
+        if _is_complete_fastembed_model_dir(candidate):
+            return candidate
+    return None
+
+
+def _is_complete_fastembed_model_dir(model_dir: Path) -> bool:
+    required_files = (
+        "config.json",
+        "model_optimized.onnx",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "tokenizer.json",
+    )
+    return model_dir.is_dir() and all((model_dir / name).is_file() for name in required_files)
 
 
 def _require_cuda_provider(embedding) -> None:

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import json
 import mimetypes
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -578,8 +579,15 @@ def _markdown_response(markdown: str, filename: str) -> Response:
     return Response(
         content=markdown,
         media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition_attachment(filename)},
     )
+
+
+def _content_disposition_attachment(filename: str) -> str:
+    ascii_filename = filename.encode("ascii", errors="ignore").decode("ascii") or "export.md"
+    quoted_filename = ascii_filename.replace("\\", "\\\\").replace('"', r"\"")
+    encoded_filename = quote(filename, safe="")
+    return f'attachment; filename="{quoted_filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
 
 def _export_filename(video_id: str, export_name: str) -> str:

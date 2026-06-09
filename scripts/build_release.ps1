@@ -184,6 +184,30 @@ function Ensure-CondaEnvironment {
     Invoke-External -FilePath $CondaExe -Arguments @("env", "update", "-n", $Variant.EnvName, "-f", $Variant.EnvFile, "--prune")
 }
 
+function Repair-GpuProviderWheel {
+    param(
+        [string]$CondaExe,
+        [hashtable]$Variant
+    )
+
+    if ($Variant.Kind -ne "gpu") {
+        return
+    }
+
+    Invoke-External -FilePath $CondaExe -Arguments @(
+        "run",
+        "-n",
+        $Variant.EnvName,
+        "python",
+        "-m",
+        "pip",
+        "install",
+        "--force-reinstall",
+        "--no-deps",
+        "onnxruntime-gpu>=1.20,<2"
+    )
+}
+
 function Ensure-FrontendDist {
     $null = Require-Command -Name "npm"
 
@@ -314,11 +338,32 @@ def forbid(names):
 
 forbid(legacy_forbidden)
 if kind == "cpu":
-    require({"faster-whisper", "fastembed", "onnxruntime", "yt-dlp", "chaoxing-downloader"})
+    require({"faster-whisper", "fastembed", "onnxruntime", "pandas", "yt-dlp", "chaoxing-downloader"})
     forbid({"fastembed-gpu", "onnxruntime-gpu"})
 elif kind == "gpu":
-    require({"faster-whisper", "fastembed-gpu", "onnxruntime-gpu", "yt-dlp", "chaoxing-downloader"})
+    require({
+        "faster-whisper",
+        "fastembed-gpu",
+        "onnxruntime-gpu",
+        "pandas",
+        "nvidia-cublas-cu12",
+        "nvidia-cuda-nvrtc-cu12",
+        "nvidia-cuda-runtime-cu12",
+        "nvidia-cudnn-cu12",
+        "nvidia-cufft-cu12",
+        "nvidia-curand-cu12",
+        "yt-dlp",
+        "chaoxing-downloader",
+    })
     forbid({"fastembed"})
+    import onnxruntime as ort
+
+    providers = set(ort.get_available_providers())
+    if "CUDAExecutionProvider" not in providers:
+        raise SystemExit(
+            "gpu package CUDAExecutionProvider unavailable; providers: "
+            + ", ".join(sorted(providers))
+        )
 else:
     raise SystemExit(f"unsupported package kind: {kind}")
 
@@ -344,6 +389,7 @@ function Build-Package {
 
     Write-Host "Preparing environment $($Variant.EnvName)"
     Ensure-CondaEnvironment -CondaExe $CondaExe -Variant $Variant
+    Repair-GpuProviderWheel -CondaExe $CondaExe -Variant $Variant
 
     Write-Host "Packing environment $($Variant.EnvName)"
     Pack-CondaEnvironment -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe -Variant $Variant

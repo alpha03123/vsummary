@@ -25,6 +25,20 @@ class MarkdownExportApiTests(unittest.TestCase):
             self.assertEqual(response.content, "# 已有摘要\n".encode("utf-8"))
             self.assertIn("text/markdown", response.headers["content-type"])
 
+    def test_export_header_supports_non_ascii_video_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            video_id = "1-4 准备工作：百度地图API秘钥(AK)"
+            video_dir = root / "workspace" / "series-1" / video_id
+            video_dir.mkdir(parents=True)
+            (video_dir / "summary.md").write_text("# 第一讲\n", encoding="utf-8")
+            client = TestClient(create_app(_build_container(root, video_id=video_id)))
+
+            response = client.get(f"/api/videos/series-1/{video_id}/exports/summary.md")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("filename*=", response.headers["content-disposition"])
+
     def test_exports_transcript_markdown_from_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -139,8 +153,8 @@ def _prepare_video_dir(root: Path) -> Path:
     return video_dir
 
 
-def _build_container(root: Path, title: str = "Video 1"):
-    source = SimpleNamespace(output_dir=root / "workspace" / "series-1" / "video-1", title=title)
+def _build_container(root: Path, title: str = "Video 1", video_id: str = "video-1"):
+    source = SimpleNamespace(output_dir=root / "workspace" / "series-1" / video_id, title=title)
     return SimpleNamespace(
         root_dir=root,
         get_video_source=SimpleNamespace(run=lambda series_id, video_id: source),
