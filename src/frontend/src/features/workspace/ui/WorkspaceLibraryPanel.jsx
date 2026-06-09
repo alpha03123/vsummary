@@ -465,7 +465,7 @@ export function WorkspaceLibraryPanel({
               className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-4 py-3 text-sm font-semibold text-accent shadow-none transition-colors hover:bg-accent/14 hover:border-accent/60"
             >
               <ArrowDown size={16} strokeWidth={2.5} />
-              添加 Playground 视频
+              添加 Playground 媒体
             </button>
           </div>
         ) : null}

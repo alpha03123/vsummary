@@ -36,6 +36,7 @@ function asVideoCard(value, label) {
     id: asString(record.id, `${label}.id`),
     title: asString(record.title, `${label}.title`),
     sourceName: asString(record.source_name, `${label}.source_name`),
+    sourceType: record.source_type === "audio" ? "audio" : "video",
     processed: Boolean(record.processed),
     status: asString(record.status, `${label}.status`),
     isLinked: Boolean(record.is_linked),

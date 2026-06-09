@@ -647,7 +647,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       await reloadWorkspaceLibrary();
       return rawVideos;
     } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入 Playground 视频失败" });
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入 Playground 媒体失败" });
       throw error;
     }
   }
@@ -658,7 +658,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       await reloadWorkspaceLibrary();
       return rawVideos;
     } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列导入视频失败" });
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列导入媒体失败" });
       throw error;
     }
   }

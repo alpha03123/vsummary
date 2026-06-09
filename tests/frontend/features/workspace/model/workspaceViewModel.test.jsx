@@ -38,4 +38,30 @@ describe("toWorkspaceLibrary", () => {
       sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
     });
   });
+
+  it("maps audio source type to workspace video cards", () => {
+    const library = toWorkspaceLibrary({
+      workspace: { id: "ws", title: "Workspace" },
+      series: [
+        {
+          id: "__playground__",
+          title: "Playground",
+          is_linked: false,
+          source_url: "",
+          videos: [
+            {
+              id: "lesson-1",
+              title: "lesson-1",
+              source_name: "lesson-1.mp3",
+              source_type: "audio",
+              processed: false,
+              status: "pending",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(library.series[0].videos[0].sourceType).toBe("audio");
+  });
 });

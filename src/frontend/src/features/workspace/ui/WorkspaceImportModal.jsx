@@ -48,8 +48,8 @@ export function WorkspaceImportModal({
     ? "添加系列"
     : isSeriesVideo
       ? `添加视频到 ${targetSeriesTitle || "当前系列"}`
-      : "添加 Playground 视频";
-  const subtitle = sourceType === "external" ? "外部来源" : (isSeriesCreation ? "本地导入" : "视频导入");
+      : "添加 Playground 媒体";
+  const subtitle = sourceType === "external" ? "外部来源" : (isSeriesCreation ? "本地导入" : "媒体导入");
   const actionLabel = "导入";
   const chaoxingEnabledForMode = isSeriesCreation;
   const normalizedChaoxingCourseSearch = chaoxingCourseSearch.trim().toLowerCase();
@@ -310,7 +310,7 @@ export function WorkspaceImportModal({
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
                 }`}
               >
-                本地视频
+                本地媒体
                 <p className="mt-1 text-xs font-medium opacity-70">复制文件到 videos 目录。</p>
               </button>
               <button
@@ -491,7 +491,7 @@ export function WorkspaceImportModal({
             {sourceType === "local" ? (
             <div>
               <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                选择视频文件
+                选择媒体文件
               </label>
               <label className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 transition hover:border-accent hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900">
                 <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
@@ -499,11 +499,11 @@ export function WorkspaceImportModal({
                   {selectedFileSummary}
                 </div>
                 <p className="text-xs text-stone-500 dark:text-zinc-400">
-                  支持多选，导入时会复制到项目的 videos 目录。
+                  支持多选，导入时会复制到项目媒体目录。
                 </p>
                 <input
                   type="file"
-                  accept="video/*,.mp4,.mov,.mkv,.avi,.webm,.m4v"
+                  accept="video/*,audio/*,.mp4,.mov,.mkv,.avi,.webm,.m4v,.mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.wma"
                   multiple
                   disabled={status === "loading"}
                   onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
