@@ -27,6 +27,7 @@ class LibraryVideoCardDTO:
     source_name: str
     processed: bool
     status: str
+    source_type: str = "video"
     is_linked: bool = False
     bilibili_bvid: str = ""
     bilibili_page: int = 0
@@ -55,6 +56,7 @@ class VideoSourceDTO:
     source_path: Path
     output_dir: Path
     processed: bool
+    source_type: str = "video"
     duration_seconds: float | None = None
 
 

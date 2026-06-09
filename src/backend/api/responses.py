@@ -27,6 +27,7 @@ class VideoCardResponse(BaseModel):
     id: str
     title: str
     source_name: str
+    source_type: str
     processed: bool
     status: str
     is_linked: bool = False
@@ -41,6 +42,7 @@ class VideoCardResponse(BaseModel):
             id=video.id,
             title=video.title,
             source_name=video.source_name,
+            source_type=video.source_type,
             processed=video.processed,
             status=video.status,
             is_linked=video.is_linked,

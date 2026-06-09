@@ -111,7 +111,7 @@ export function WorkspaceReadingPane({
                 <WorkspaceHomeHeader
                   eyebrow="Studio"
                   title={isPlaygroundHome ? activeSeries.title : summary?.title ?? selectedVideo?.title}
-                  description={isPlaygroundHome ? "从左侧选择一个视频，进入对应的单视频工具页。" : "选择下方任意卡片进入独立工具页"}
+                  description={isPlaygroundHome ? "从左侧选择一个媒体文件，进入对应的单项工具页。" : "选择下方任意卡片进入独立工具页"}
                 />
               ) : isSeriesHome ? (
                 <WorkspaceHomeHeader
@@ -171,8 +171,8 @@ export function WorkspaceReadingPane({
                       {isPlaygroundHome ? (
                         <WorkspaceStateBlock
                           eyebrow="Playground"
-                          title="选择一个 Playground 视频"
-                      description=""
+                          title="选择一个 Playground 媒体文件"
+                          description=""
                           dashed
                         />
                       ) : (
@@ -235,7 +235,11 @@ export function WorkspaceReadingPane({
                     />
                   ) : null}
                   {selectedToolId === "preview" ? (
-                    <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={previewSeekRequest} />
+                    <WorkspacePreviewView
+                      previewSource={previewSource}
+                      previewSeekRequest={previewSeekRequest}
+                      previewSourceType={selectedVideo?.sourceType}
+                    />
                   ) : null}
                 </Suspense>
               ) : null}

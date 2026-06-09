@@ -30,6 +30,8 @@ from backend.video_summary.library.models import (
 )
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
+AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
+MEDIA_SUFFIXES = VIDEO_SUFFIXES | AUDIO_SUFFIXES
 
 LINKED_SERIES_META_FILE = "linked_series.json"
 SERIES_META_FILE = "series_meta.json"
@@ -101,11 +103,11 @@ class FileSystemVideoWorkspace:
         if not series_dir.exists() or not series_dir.is_dir():
             return None
 
-        matches = [path for path in sorted(series_dir.iterdir()) if _is_video_file(path) and path.stem == video_id]
+        matches = [path for path in sorted(series_dir.iterdir()) if _is_media_file(path) and path.stem == video_id]
         if not matches:
             return None
         if len(matches) > 1:
-            raise ValueError(f"Series '{series_id}' contains duplicate video stem '{video_id}'")
+            raise ValueError(f"Series '{series_id}' contains duplicate media stem '{video_id}'")
 
         video_path = matches[0]
         output_dir = self._workspace_dir / series_id / video_id
@@ -114,6 +116,7 @@ class FileSystemVideoWorkspace:
             video_id=video_id,
             title=video_path.stem,
             source_name=video_path.name,
+            source_type=_source_type_for_path(video_path),
             source_path=video_path,
             output_dir=output_dir,
             processed=(output_dir / "summary.json").exists(),
@@ -345,6 +348,7 @@ class FileSystemVideoWorkspace:
         knowledge_cards_exists = (video.output_dir / "knowledge_cards.json").exists()
         mindmap_exists = (video.output_dir / "mindmap.json").exists()
         preview_url = f"/api/videos/{series_id}/{video_id}/preview"
+        preview_title = "音频预览" if video.source_type == "audio" else "视频预览"
         return VideoWorkspaceToolsDTO(
             series_id=series_id,
             video_id=video_id,
@@ -378,19 +382,19 @@ class FileSystemVideoWorkspace:
             ),
             preview=WorkspaceToolDTO(
                 id="preview",
-                title="视频预览",
+                title=preview_title,
                 available=True,
                 generated=True,
                 status="ready",
                 preview_url=preview_url,
             ),
-            ai_todo="当前已支持 AI 切换概况、知识卡片、笔记和视频预览，并可定位时间点或整理笔记。",
+            ai_todo="当前已支持 AI 切换概况、知识卡片、笔记和媒体预览，并可定位时间点或整理笔记。",
         )
 
     def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
         series_id = _normalize_series_id(title)
         if series_id == PLAYGROUND_SERIES_ID:
-            raise ValueError("Playground 请使用单独的“添加 Playground 视频”入口。")
+            raise ValueError("Playground 请使用单独的“添加 Playground 媒体”入口。")
         series_dir = self._videos_dir / series_id
         linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
         if series_dir.exists() or linked_meta_path.exists():
@@ -430,12 +434,12 @@ class FileSystemVideoWorkspace:
         return [self._build_local_video_card(series_id, path) for path in imported_paths]
 
     def _list_videos_for_series(self, series_dir: Path) -> list[LibraryVideoCardDTO]:
-        videos = [path for path in sorted(series_dir.iterdir()) if _is_video_file(path)]
+        videos = [path for path in sorted(series_dir.iterdir()) if _is_media_file(path)]
         stems = [path.stem for path in videos]
         duplicate_stems = sorted({stem for stem in stems if stems.count(stem) > 1})
         if duplicate_stems:
             raise ValueError(
-                f"Series '{series_dir.name}' contains duplicate video stems: {', '.join(duplicate_stems)}"
+                f"Series '{series_dir.name}' contains duplicate media stems: {', '.join(duplicate_stems)}"
             )
 
         return [self._build_local_video_card(series_dir.name, video_path) for video_path in videos]
@@ -452,7 +456,7 @@ class FileSystemVideoWorkspace:
         local_paths_by_stem = {
             path.stem: path
             for path in sorted(local_video_dir.iterdir())
-            if local_video_dir.exists() and _is_video_file(path)
+            if local_video_dir.exists() and _is_media_file(path)
         } if local_video_dir.exists() else {}
 
         videos = linked_meta.get("videos", [])
@@ -472,6 +476,7 @@ class FileSystemVideoWorkspace:
                         id=video_id,
                         title=str(item.get("title", video_id)).strip() or video_id,
                         source_name=local_file.name,
+                        source_type=_source_type_for_path(local_file),
                         processed=(self._workspace_dir / series_id / video_id / "summary.json").exists(),
                         status="ready" if (self._workspace_dir / series_id / video_id / "summary.json").exists() else "pending",
                         is_linked=False,
@@ -487,6 +492,7 @@ class FileSystemVideoWorkspace:
                     id=video_id,
                     title=str(item.get("title", video_id)).strip() or video_id,
                     source_name=f"{video_id}.mp4",
+                    source_type="video",
                     processed=False,
                     status="linked",
                     is_linked=True,
@@ -508,20 +514,21 @@ class FileSystemVideoWorkspace:
             id=video_path.stem,
             title=video_path.stem,
             source_name=video_path.name,
+            source_type=_source_type_for_path(video_path),
             processed=processed,
             status="ready" if processed else "pending",
         )
 
     def _copy_video_streams(self, *, series_dir: Path, files: list[tuple[str, object]]) -> list[Path]:
         normalized_files = _normalize_import_files(files)
-        existing_stems = {path.stem for path in series_dir.iterdir() if _is_video_file(path)} if series_dir.exists() else set()
+        existing_stems = {path.stem for path in series_dir.iterdir() if _is_media_file(path)} if series_dir.exists() else set()
         incoming_stems = [Path(filename).stem for filename, _ in normalized_files]
         duplicate_stems = sorted({stem for stem in incoming_stems if incoming_stems.count(stem) > 1})
         if duplicate_stems:
-            raise ValueError(f"导入文件存在重复视频名：{', '.join(duplicate_stems)}")
+            raise ValueError(f"导入文件存在重复媒体名：{', '.join(duplicate_stems)}")
         conflicting_stems = sorted(existing_stems.intersection(incoming_stems))
         if conflicting_stems:
-            raise ValueError(f"目标目录中已存在同名视频：{', '.join(conflicting_stems)}")
+            raise ValueError(f"目标目录中已存在同名媒体：{', '.join(conflicting_stems)}")
 
         copied_paths: list[Path] = []
         for filename, stream in normalized_files:
@@ -617,7 +624,7 @@ class FileSystemVideoWorkspace:
         removed = False
         local_dir = self._videos_dir / series_id
         if local_dir.exists():
-            matches = [path for path in local_dir.iterdir() if _is_video_file(path) and path.stem == video_id]
+            matches = [path for path in local_dir.iterdir() if _is_media_file(path) and path.stem == video_id]
             for match in matches:
                 match.unlink()
                 removed = True
@@ -703,8 +710,8 @@ class FileSystemVideoWorkspace:
         )
 
 
-def _is_video_file(path: Path) -> bool:
-    return path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
+def _is_media_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in MEDIA_SUFFIXES
 
 
 def _notes_lock_key(series_id: str, video_id: str) -> str:
@@ -733,20 +740,26 @@ def _normalize_series_id(value: str) -> str:
 
 def _normalize_import_files(files: list[tuple[str, object]]) -> list[tuple[str, object]]:
     if not files:
-        raise ValueError("至少选择一个视频文件。")
+        raise ValueError("至少选择一个媒体文件。")
     normalized: list[tuple[str, object]] = []
     for filename, stream in files:
         path = Path(filename or "")
         if not path.name:
             raise ValueError("存在缺少文件名的导入项。")
-        if not _is_video_suffix(path.suffix):
-            raise ValueError(f"不支持的视频格式：{path.name}")
+        if not _is_media_suffix(path.suffix):
+            raise ValueError(f"不支持的媒体格式：{path.name}")
         normalized.append((path.name, stream))
     return normalized
 
 
-def _is_video_suffix(suffix: str) -> bool:
-    return suffix.lower() in VIDEO_SUFFIXES
+def _is_media_suffix(suffix: str) -> bool:
+    return suffix.lower() in MEDIA_SUFFIXES
+
+
+def _source_type_for_path(path: Path) -> str:
+    if path.suffix.lower() in AUDIO_SUFFIXES:
+        return "audio"
+    return "video"
 
 
 def _to_title(raw_value: str) -> str:
