@@ -18,7 +18,7 @@ from backend.api.contracts import (
     WorkspaceSettingsResponse,
 )
 from backend.api.sse import stream_progress_events
-from backend.video_summary.infrastructure.settings import load_settings
+from backend.video_summary.configuration.settings import load_settings
 
 router = APIRouter()
 _ASR_DOWNLOAD_LOCK = Lock()

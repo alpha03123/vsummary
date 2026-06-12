@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from backend.video_summary.infrastructure.settings_service import SettingsService, SettingsValidationError
-from backend.video_summary.infrastructure.settings import (
+from backend.video_summary.configuration.settings_service import SettingsService, SettingsValidationError
+from backend.video_summary.configuration.settings import (
     EnvSettings,
     apply_runtime_env_overrides,
     load_env_settings,
@@ -127,7 +127,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 rag_model_manager=FakeRagModelManager(downloaded=set()),
             )
 
-            with self.assertRaisesRegex(SettingsValidationError, "重排序模型尚未下载"):
+            with self.assertRaisesRegex(SettingsValidationError, "启用重排需要先下载 RAG 重排模型"):
                 service.update_workspace_settings(
                     theme="light",
                     show_takeaways=True,
@@ -333,7 +333,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 faster_whisper_model_manager=FakeFasterWhisperModelManager(),
             )
 
-            with patch("backend.video_summary.infrastructure.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
+            with patch("backend.video_summary.configuration.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
                 with self.assertRaisesRegex(RuntimeError, "^模型超时$"):
                     service.test_provider_settings(
                         llm_provider="openai",

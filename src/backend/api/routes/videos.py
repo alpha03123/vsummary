@@ -29,15 +29,15 @@ from backend.api.responses import (
 )
 from backend.api.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
-from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
-from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
-from backend.video_summary.library.markdown_exports import render_knowledge_cards_markdown
-from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
-from backend.video_summary.library.markdown_exports import render_notes_markdown
-from backend.video_summary.library.markdown_exports import render_transcript_markdown
-from backend.video_summary.library.usecases.mutations import GenerationInProgressError
-from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
-from backend.video_summary.library.usecases.summary_generation import GenerationScopeBusyError
+from backend.video_summary.composition.video_summary_runtime import AsrModelNotReadyError
+from backend.video_summary.summary_generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.workspace.markdown_exports import render_knowledge_cards_markdown
+from backend.video_summary.workspace.markdown_exports import render_mixed_overview_markdown
+from backend.video_summary.workspace.markdown_exports import render_notes_markdown
+from backend.video_summary.workspace.markdown_exports import render_transcript_markdown
+from backend.video_summary.workspace.usecases.mutations import GenerationInProgressError
+from backend.video_summary.workspace.usecases.summary_generation import DuplicateSeriesGenerationError
+from backend.video_summary.workspace.usecases.summary_generation import GenerationScopeBusyError
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)

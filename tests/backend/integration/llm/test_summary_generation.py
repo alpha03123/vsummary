@@ -6,14 +6,14 @@ import unittest
 from pathlib import Path
 
 
-from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
-from backend.video_summary.library.models import (
+from backend.video_summary.summary_generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.workspace.models import (
     LibrarySeriesDTO,
     LibraryVideoCardDTO,
     VideoSummaryDTO,
     WorkspaceDTO,
 )
-from backend.video_summary.library.usecases.summary_generation import (
+from backend.video_summary.workspace.usecases.summary_generation import (
     GenerationScopeBusyError,
     GenerateSeriesSummaryFromLibrary,
     GenerateVideoSummaryFromLibrary,

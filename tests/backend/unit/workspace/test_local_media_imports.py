@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.adapters.filesystem.video_workspace import FileSystemVideoWorkspace
 
 
 class LocalMediaImportTests(unittest.TestCase):

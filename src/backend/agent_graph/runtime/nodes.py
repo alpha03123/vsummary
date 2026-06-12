@@ -7,7 +7,7 @@ from time import monotonic
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent_graph.runtime.state import AgentGraphState
-from backend.video_summary.library.usecases.series_synopsis_generation import build_series_catalog_payload
+from backend.video_summary.workspace.usecases.series_synopsis_generation import build_series_catalog_payload
 
 
 def build_video_context_node(

@@ -7,9 +7,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from backend.video_summary.domain.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
-from backend.video_summary.infrastructure.litellm_summarizer import LiteLLMCompletionSummarizer
-from backend.video_summary.generation import SummaryPayload
+from backend.video_summary.summary_generation.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
+from backend.video_summary.adapters.llm.summarizer import LiteLLMCompletionSummarizer
+from backend.video_summary.summary_generation import SummaryPayload
 
 
 class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
@@ -75,7 +75,7 @@ class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
         transcript = _build_large_transcript()
 
         with patch(
-            "backend.video_summary.infrastructure.litellm_summarizer.chunk_segments",
+            "backend.video_summary.adapters.llm.summarizer.chunk_segments",
             return_value=[
                 [transcript.segments[0]],
                 [transcript.segments[1]],
@@ -100,7 +100,7 @@ class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
         transcript = _build_large_transcript()
 
         with patch(
-            "backend.video_summary.infrastructure.litellm_summarizer.chunk_segments",
+            "backend.video_summary.adapters.llm.summarizer.chunk_segments",
             return_value=[
                 [transcript.segments[0]],
                 [transcript.segments[1]],
@@ -125,7 +125,7 @@ class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
         transcript = _build_large_transcript()
 
         with patch(
-            "backend.video_summary.infrastructure.litellm_summarizer.chunk_segments",
+            "backend.video_summary.adapters.llm.summarizer.chunk_segments",
             return_value=[
                 [transcript.segments[0]],
                 [transcript.segments[1]],

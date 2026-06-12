@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from backend.api.container import ApiContainerDep
 from backend.api.sse import stream_progress_events
 from backend.chaoxing.chaoxing_api import ChaoxingImportCancelled, ChaoxingInitCancelled
-from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
-from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.workspace.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.workspace.models import LibrarySeriesDTO, LibraryVideoCardDTO
 
 router = APIRouter()
 

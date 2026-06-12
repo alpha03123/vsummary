@@ -7,7 +7,7 @@ import unittest
 
 from pydantic import BaseModel
 
-from backend.shared.llm.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
+from backend.llm_gateway.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
 from backend.agent_graph.query.models import SeriesAnswerPayload
 
 

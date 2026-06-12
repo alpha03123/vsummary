@@ -8,11 +8,11 @@ from pathlib import Path
 
 
 from backend.bilibili.ytdlp_bilibili import YtDlpBilibiliResolver
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
-from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
-from backend.video_summary.library.models import BilibiliUrlInfoDTO
-from backend.video_summary.library.usecases.linked_videos import ResolveBilibiliVideo
+from backend.video_summary.adapters.filesystem.video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.workspace.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.workspace.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.workspace.models import BilibiliUrlInfoDTO
+from backend.video_summary.workspace.usecases.linked_videos import ResolveBilibiliVideo
 
 
 class YtDlpBilibiliResolverTests(unittest.TestCase):

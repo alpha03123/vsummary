@@ -7,6 +7,11 @@ class GenerateVideoSummaryRequest(BaseModel):
     transcript_enhancement_enabled: bool | None = None
 
 
+class GenerateBilibiliPluginSummaryRequest(BaseModel):
+    url: str
+    transcript_enhancement_enabled: bool | None = None
+
+
 class GenerateSeriesSummariesRequest(BaseModel):
     transcript_enhancement_enabled: bool | None = None
     run_id: str | None = None

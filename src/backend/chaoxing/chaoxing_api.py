@@ -11,8 +11,8 @@ from threading import Event, Lock, Thread
 from typing import Callable, Protocol
 
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
-from backend.video_summary.generation.ports import ProgressReporter
-from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.summary_generation.ports import ProgressReporter
+from backend.video_summary.workspace.linked_models import LinkedSeries, LinkedVideo
 
 
 CHAOXING_PROVIDER = "chaoxing"

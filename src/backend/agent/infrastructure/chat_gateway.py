@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from backend.agent.ports import ChatGateway, StructuredResponseT
 from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.shared.llm import LiteLLMCompletionGateway
+from backend.llm_gateway import LiteLLMCompletionGateway
 
 
 class LiteLLMChatGateway(ChatGateway):

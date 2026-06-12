@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from backend.shared.filesystem import KeyedLockManager, atomic_write_text
+from backend.common.filesystem import KeyedLockManager, atomic_write_text
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot, utc_now_iso

@@ -11,10 +11,10 @@ from fastapi.testclient import TestClient
 
 
 from backend.api.app import create_app
-from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
-from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
-from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
+from backend.video_summary.summary_generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.adapters.progress.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.workspace.models import LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.workspace.usecases.summary_generation import DuplicateSeriesGenerationError
 
 
 class GenerationStatusApiTests(unittest.TestCase):

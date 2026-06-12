@@ -27,32 +27,32 @@ from backend.bilibili import (
     YtDlpBilibiliResolver,
 )
 from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
-from backend.video_summary.infrastructure.agent_memory import (
+from backend.video_summary.adapters.rag.agent_memory import (
     AgentWorkspaceIndexBuilder,
     BGEReranker,
     SeriesRetrievalService,
 )
-from backend.video_summary.agent_adapter import WorkspaceAgentContextLoader
-from backend.video_summary.tool_executor import RegistryAgentToolExecutor
-from backend.video_summary.tools.notes import execute_open_notes, execute_save_note
-from backend.video_summary.tools.video import execute_video_seek
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
-from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.library_generation_adapters import (
+from backend.video_summary.adapters.agent.context_loader import WorkspaceAgentContextLoader
+from backend.video_summary.adapters.agent.tool_executor import RegistryAgentToolExecutor
+from backend.video_summary.adapters.agent.tools.notes import execute_open_notes, execute_save_note
+from backend.video_summary.adapters.agent.tools.video import execute_video_seek
+from backend.video_summary.adapters.filesystem.video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.adapters.media.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.adapters.progress.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.composition.workspace_generation import (
     WorkspaceBackedVideoMindmapGenerator,
     WorkspaceBackedVideoSummaryGenerator,
 )
-from backend.video_summary.infrastructure.litellm_web_search import LiteLLMNativeWebSearchGateway
-from backend.video_summary.infrastructure.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
-from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
-from backend.video_summary.infrastructure.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
-from backend.video_summary.infrastructure.settings import load_env_settings, normalize_openai_base_url
-from backend.video_summary.infrastructure.settings_service import SettingsService, SettingsServicePort
-from backend.video_summary.infrastructure.settings import load_settings
-from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
-from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
-from backend.video_summary.library.usecases import (
+from backend.video_summary.adapters.llm.web_search import LiteLLMNativeWebSearchGateway
+from backend.video_summary.composition.knowledge_cards import ConfiguredKnowledgeCardGenerator
+from backend.video_summary.composition.mindmap_workflow import ConfiguredMindmapWorkflow
+from backend.video_summary.adapters.rag.models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
+from backend.video_summary.configuration.settings import load_env_settings, normalize_openai_base_url
+from backend.video_summary.configuration.settings_service import SettingsService, SettingsServicePort
+from backend.video_summary.configuration.settings import load_settings
+from backend.video_summary.composition.video_summary_workflow import ConfiguredVideoSummaryWorkflow
+from backend.video_summary.summary_generation.service_ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
+from backend.video_summary.workspace.usecases import (
     DeleteSeries,
     DeleteVideoSource,
     GenerateVideoKnowledgeCards,
@@ -78,6 +78,7 @@ from backend.video_summary.library.usecases import (
     DeleteVideoNote,
     UpdateVideoNote,
 )
+from backend.video_summary.adapters.plugin import BilibiliPluginSummaryService, BilibiliPluginWorkspace
 
 LOGGER = logging.getLogger(__name__)
 
@@ -109,8 +110,10 @@ class ApiContainer:
     resolve_bilibili_series: ResolveBilibiliSeries
     resolve_bilibili_video: ResolveBilibiliVideo
     start_linked_video_download: StartLinkedVideoDownload
+    generate_bilibili_plugin_summary: BilibiliPluginSummaryService
     generation_progress_tracker: InMemoryProgressTracker
     video_download_progress_tracker: InMemoryProgressTracker
+    plugin_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     chaoxing_import_progress_tracker: InMemoryProgressTracker
     knowledge_memory_progress_tracker: InMemoryProgressTracker
@@ -139,6 +142,7 @@ def build_api_container(
     workspace = FileSystemVideoWorkspace(root_dir)
     progress_tracker = InMemoryProgressTracker()
     video_download_progress_tracker = InMemoryProgressTracker()
+    plugin_progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
     chaoxing_import_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
@@ -205,6 +209,13 @@ def build_api_container(
         downloader=BilibiliDownloader(),
         progress_tracker=video_download_progress_tracker,
     )
+    bilibili_plugin_summary_service = BilibiliPluginSummaryService(
+        workspace=BilibiliPluginWorkspace(root_dir),
+        resolver=bilibili_resolver,
+        downloader=BilibiliDownloader(),
+        workflow=ConfiguredVideoSummaryWorkflow(root_dir),
+        progress_tracker=plugin_progress_tracker,
+    )
     chaoxing_client = ChaoxingDownloaderClient(
         state_dir=root_dir / "data" / "chaoxing",
         request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
@@ -248,8 +259,10 @@ def build_api_container(
         resolve_bilibili_series=ResolveBilibiliSeries(workspace, bilibili_resolver, workspace_index_invalidator),
         resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
         start_linked_video_download=StartLinkedVideoDownload(workspace, linked_download_starter),
+        generate_bilibili_plugin_summary=bilibili_plugin_summary_service,
         generation_progress_tracker=progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
+        plugin_progress_tracker=plugin_progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
         chaoxing_import_progress_tracker=chaoxing_import_progress_tracker,
         knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,

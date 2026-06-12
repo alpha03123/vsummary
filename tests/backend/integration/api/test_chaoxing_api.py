@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 
 from backend.api.app import create_app
 from backend.chaoxing.chaoxing_api import ChaoxingInitCancelled
-from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.adapters.progress.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.workspace.linked_models import LinkedSeries, LinkedVideo
 
 
 class ChaoxingApiTests(unittest.TestCase):

@@ -18,8 +18,8 @@ from backend.chaoxing.chaoxing_api import (
     ChaoxingLinkedVideoDownloadStarter,
     ChaoxingVideoRecord,
 )
-from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.library.linked_models import LinkedVideo
+from backend.video_summary.adapters.progress.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.workspace.linked_models import LinkedVideo
 
 
 @dataclass(frozen=True)

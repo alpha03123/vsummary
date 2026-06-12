@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from backend.agent.schemas.action_plan import AgentTurnResult, CitationReference, CitationSlot, CitationSlotCandidate
-from backend.video_summary.library.models import (
+from backend.video_summary.workspace.models import (
     ChapterCardDTO,
     KnowledgeCardDTO,
     LibrarySeriesDTO,
@@ -273,6 +273,38 @@ class LinkedVideoDownloadResponse(BaseModel):
     @classmethod
     def started(cls, task_id: str) -> "LinkedVideoDownloadResponse":
         return cls(status="started", task_id=task_id)
+
+
+class BilibiliPluginVideoMetaResponse(BaseModel):
+    bvid: str
+    page: int
+    video_id: str
+    title: str
+    source_url: str
+    cover_url: str
+    duration_seconds: int
+
+
+class BilibiliPluginSummaryResponse(BaseModel):
+    task_id: str
+    meta: BilibiliPluginVideoMetaResponse
+    summary: dict[str, object]
+
+    @classmethod
+    def from_model(cls, result) -> "BilibiliPluginSummaryResponse":
+        return cls(
+            task_id=result.key.task_id,
+            meta=BilibiliPluginVideoMetaResponse(
+                bvid=result.meta.bvid,
+                page=result.meta.page,
+                video_id=result.meta.video_id,
+                title=result.meta.title,
+                source_url=result.meta.source_url,
+                cover_url=result.meta.cover_url,
+                duration_seconds=result.meta.duration_seconds,
+            ),
+            summary=result.summary,
+        )
 
 
 class AgentChatRequest(BaseModel):

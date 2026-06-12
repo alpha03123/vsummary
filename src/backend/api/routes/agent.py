@@ -20,11 +20,11 @@ from backend.api.responses import (
     CitationResponse,
 )
 from backend.api.sse import encode_sse_event
-from backend.video_summary.infrastructure.rag_models import (
+from backend.video_summary.adapters.rag.models import (
     RAG_EMBEDDING_REQUIRED_MESSAGE,
     RAG_MODEL_DOWNLOAD_MESSAGE,
 )
-from backend.video_summary.infrastructure.settings import load_settings
+from backend.video_summary.configuration.settings import load_settings
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter()

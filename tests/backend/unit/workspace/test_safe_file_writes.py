@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 
-from backend.shared.filesystem import atomic_write_text
+from backend.common.filesystem import atomic_write_text
 
 
 class SafeFileWriteTests(unittest.TestCase):

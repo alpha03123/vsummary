@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from tests import _path_setup  # noqa: F401
 
 from backend.api.app import create_app
-from backend.video_summary.infrastructure.settings_service import ProviderSettings
+from backend.video_summary.configuration.settings_service import ProviderSettings
 
 
 class ProviderSettingsApiTests(unittest.TestCase):

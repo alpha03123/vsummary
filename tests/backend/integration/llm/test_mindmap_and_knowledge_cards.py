@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 from backend.api.responses import VideoKnowledgeCardsResponse
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.infrastructure.litellm_mindmap_generator import build_mindmap_prompt
-from backend.video_summary.library.models import KnowledgeCardDTO, VideoKnowledgeCardsDTO
+from backend.video_summary.adapters.filesystem.video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.adapters.llm.mindmap_generator import build_mindmap_prompt
+from backend.video_summary.workspace.models import KnowledgeCardDTO, VideoKnowledgeCardsDTO
 
 
 class MindmapPromptTests(unittest.TestCase):
@@ -39,7 +39,7 @@ class MindmapPromptTests(unittest.TestCase):
 
 class LLMKnowledgeCardGeneratorTests(unittest.TestCase):
     def test_generator_uses_transcript_context_and_returns_explanatory_cards(self) -> None:
-        from backend.video_summary.infrastructure.litellm_knowledge_card_generator import (
+        from backend.video_summary.adapters.llm.knowledge_card_generator import (
             KnowledgeCardCollectionPayload,
             LiteLLMKnowledgeCardGenerator,
         )
@@ -73,7 +73,7 @@ class LLMKnowledgeCardGeneratorTests(unittest.TestCase):
         )
 
         self.assertEqual(len(cards), 2)
-        self.assertTrue(all(isinstance(card, KnowledgeCardDTO) for card in cards))
+        self.assertTrue(all(card.__class__.__name__ == "KnowledgeCardResult" for card in cards))
         self.assertIn("多个 Agent 不是简单并行", gateway.messages[0][0]["content"])
         self.assertEqual(cards[0].title, "多 Agent 协作")
         self.assertEqual(cards[0].kind, "concept")
@@ -153,7 +153,7 @@ class FakeKnowledgeCardGateway:
 
     def complete_structured(self, messages, *, response_model, temperature=0, retries=2):
         del response_model, temperature, retries
-        from backend.video_summary.infrastructure.litellm_knowledge_card_generator import (
+        from backend.video_summary.adapters.llm.knowledge_card_generator import (
             KnowledgeCardCollectionPayload,
         )
 

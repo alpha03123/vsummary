@@ -59,7 +59,7 @@ class AgentStreamErrorTests(unittest.TestCase):
         self.assertIn('"node_id": "understand_query"', response.text)
         self.assertIn('"label": "理解问题"', response.text)
         self.assertIn("event: error", response.text)
-        self.assertIn("url连接错误，请检查拼写或者地址是否可用", response.text)
+        self.assertIn("模型服务调用失败", response.text)
         self.assertNotIn("InternalServerError", response.text)
         self.assertNotIn("OpenAIException - Connection error.", response.text)
 
@@ -81,7 +81,7 @@ class AgentStreamErrorTests(unittest.TestCase):
         self.assertIn('"node_id": "plan_and_execute_video_actions"', response.text)
         self.assertIn('"label": "规划并执行"', response.text)
         self.assertIn("event: error", response.text)
-        self.assertIn("url连接错误，请检查拼写或者地址是否可用", response.text)
+        self.assertIn("模型服务调用失败", response.text)
         self.assertNotIn("InternalServerError", response.text)
         self.assertNotIn("OpenAIException - Connection error.", response.text)
 

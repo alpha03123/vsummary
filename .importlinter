@@ -13,13 +13,13 @@ ancestors =
     backend
 depth = 1
 
-[importlinter:contract:agent_graph_must_not_read_video_summary_infra]
-name = agent_graph must not depend on video_summary infrastructure
+[importlinter:contract:agent_graph_must_not_read_video_summary_adapters]
+name = agent_graph must not depend on video_summary adapters
 type = forbidden
 source_modules =
     backend.agent_graph
 forbidden_modules =
-    backend.video_summary.infrastructure
+    backend.video_summary.adapters
 
 [importlinter:contract:agent_core_must_not_read_orchestration_or_product]
 name = agent core must not depend on orchestration or product packages
@@ -30,22 +30,24 @@ forbidden_modules =
     backend.agent_graph
     backend.video_summary
 
-[importlinter:contract:video_summary_infra_must_not_read_agent_graph]
-name = video_summary infrastructure must not depend on agent_graph
+[importlinter:contract:video_summary_adapters_must_not_read_agent_graph]
+name = video_summary adapters must not depend on agent_graph
 type = forbidden
 source_modules =
-    backend.video_summary.infrastructure
+    backend.video_summary.adapters
 forbidden_modules =
     backend.agent_graph
 
-[importlinter:contract:domain_must_not_depend_on_infra_or_api]
-name = video_summary domain must not depend on api or infrastructure
+[importlinter:contract:summary_generation_must_not_depend_on_api_or_adapters]
+name = summary_generation must not depend on api or adapters
 type = forbidden
 source_modules =
-    backend.video_summary.domain
+    backend.video_summary.summary_generation
 forbidden_modules =
     backend.api
-    backend.video_summary.infrastructure
+    backend.video_summary.adapters
+    backend.video_summary.composition
+    backend.video_summary.configuration
 
 [importlinter:contract:video_summary_layers]
 name = video_summary package must keep inward dependency direction
@@ -53,42 +55,55 @@ type = layers
 containers =
     backend.video_summary
 layers =
-    infrastructure
-    library
-    generation
-    domain
+    composition
+    adapters
+    configuration
+    workspace
+    summary_generation
 
-[importlinter:contract:generation_must_not_read_library]
-name = generation must not depend on library
+[importlinter:contract:summary_generation_must_not_read_workspace]
+name = summary_generation must not depend on workspace
 type = forbidden
 source_modules =
-    backend.video_summary.generation
+    backend.video_summary.summary_generation
 forbidden_modules =
-    backend.video_summary.library
+    backend.video_summary.workspace
 
-[importlinter:contract:video_summary_tools_must_not_read_infrastructure]
-name = video_summary tools must not depend on infrastructure
+[importlinter:contract:video_summary_agent_tools_must_not_read_technical_adapters]
+name = video_summary agent tools must not depend on technical adapters
 type = forbidden
 source_modules =
-    backend.video_summary.tools
+    backend.video_summary.adapters.agent.tools
 forbidden_modules =
-    backend.video_summary.infrastructure
+    backend.video_summary.adapters.filesystem
+    backend.video_summary.adapters.llm
+    backend.video_summary.adapters.media
+    backend.video_summary.adapters.progress
+    backend.video_summary.adapters.rag
+    backend.video_summary.composition
+    backend.video_summary.configuration
 
 [importlinter:contract:video_summary_agent_adapter_must_be_only_agent_bridge]
-name = tool executor and agent adapter are the only video_summary modules allowed to depend on backend.agent
+name = agent adapters are the only video_summary modules allowed to depend on backend.agent
 type = forbidden
 source_modules =
-    backend.video_summary.domain
-    backend.video_summary.generation
-    backend.video_summary.library
-    backend.video_summary.infrastructure
+    backend.video_summary.summary_generation
+    backend.video_summary.workspace
+    backend.video_summary.adapters.filesystem
+    backend.video_summary.adapters.llm
+    backend.video_summary.adapters.media
+    backend.video_summary.adapters.plugin
+    backend.video_summary.adapters.progress
+    backend.video_summary.adapters.rag
+    backend.video_summary.composition
+    backend.video_summary.configuration
 forbidden_modules =
     backend.agent
 
-[importlinter:contract:bilibili_must_not_read_video_summary_infra]
-name = bilibili must not depend on video_summary infrastructure directly
+[importlinter:contract:bilibili_must_not_read_video_summary_adapters]
+name = bilibili must not depend on video_summary adapters directly
 type = forbidden
 source_modules =
     backend.bilibili
 forbidden_modules =
-    backend.video_summary.infrastructure
+    backend.video_summary.adapters

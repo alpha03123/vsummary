@@ -9,8 +9,8 @@ from typing import Callable, Protocol
 
 import httpx
 
-from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
-from backend.video_summary.library.models import BilibiliUrlInfoDTO
+from backend.video_summary.workspace.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.workspace.models import BilibiliUrlInfoDTO
 
 
 class ProgressReporter(Protocol):

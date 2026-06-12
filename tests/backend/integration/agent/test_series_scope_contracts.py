@@ -23,7 +23,7 @@ from backend.agent_graph.runtime.turns import AgentGraphTurnBuilder
 from backend.agent_graph.runtime.turns import AgentGraphInputBuilder
 from backend.agent_graph.runtime.session_recorder import AgentGraphSessionRecorder
 from backend.agent_graph.evidence.inline_citations import extract_inline_source_numbers, resolve_inline_citations
-from backend.video_summary.tool_executor import RegistryAgentToolExecutor
+from backend.video_summary.adapters.agent.tool_executor import RegistryAgentToolExecutor
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
@@ -37,18 +37,18 @@ from backend.agent.schemas.tool_calls import (
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot
 from backend.agent.session.store import FileAgentSessionStore
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
-from backend.video_summary.tools.notes import execute_save_note
-from backend.video_summary.tools.notes import execute_open_notes
-from backend.video_summary.tools.video import execute_video_seek
+from backend.video_summary.adapters.agent.tools.notes import execute_save_note
+from backend.video_summary.adapters.agent.tools.notes import execute_open_notes
+from backend.video_summary.adapters.agent.tools.video import execute_video_seek
 from backend.agent_graph.actions.video_action_planner import (
     VideoActionPlanner,
     VideoActionPlannerPayload,
 )
 from backend.agent_graph.prompts import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
 from backend.api.responses import AgentChatResponse
-from backend.shared.llm.json_mode import validate_json_response
-from backend.video_summary.tools.notes import SAVE_NOTE_TOOL
-from backend.video_summary.library.models import TranscriptSegmentDTO, VideoSummaryDTO, VideoTranscriptDTO
+from backend.llm_gateway.json_mode import validate_json_response
+from backend.video_summary.adapters.agent.tools.notes import SAVE_NOTE_TOOL
+from backend.video_summary.workspace.models import TranscriptSegmentDTO, VideoSummaryDTO, VideoTranscriptDTO
 
 
 class SeriesScopeContractTests(unittest.TestCase):
