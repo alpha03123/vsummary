@@ -119,6 +119,31 @@ export function useWorkspaceController() {
     dispatch({ type: "error_cleared" });
   }
 
+  function onSeekToTime({ seconds, endSeconds = null, chapterTitle = "" } = {}) {
+    if (!Number.isFinite(seconds)) {
+      return;
+    }
+    dispatch({
+      type: "player_seek_requested",
+      seconds,
+      endSeconds,
+      chapterTitle,
+      requestId: Date.now(),
+    });
+  }
+
+  function onToggleChatDrawer() {
+    dispatch({ type: "chat_drawer_toggled" });
+  }
+
+  function onOpenChatDrawer() {
+    dispatch({ type: "chat_drawer_opened" });
+  }
+
+  function onCloseChatDrawer() {
+    dispatch({ type: "chat_drawer_closed" });
+  }
+
   return {
     state,
     currentGenerationTask,
@@ -146,12 +171,13 @@ export function useWorkspaceController() {
     selectedVideo,
     selectedNode,
     previewUrl,
-    previewSeekRequest: state.previewSeekRequest,
+    playerSeekRequest: state.playerSeekRequest,
     chatMessages: state.chatMessages,
     chatSessions: getChatSessionListForScope(state.chatSessionListsByScope, state.chatBaseScopeKey),
     activeChatSessionId: state.chatScopeKey,
     chatPending: state.chatPending,
     chatRecoveryLoading: state.chatRecoveryLoading,
+    chatDrawerOpen: state.chatDrawerOpen,
     contextUsage: state.contextUsage,
     contextUsageLoading: state.contextUsageLoading,
     isGeneratingMindmapSelectedVideo,
@@ -193,6 +219,10 @@ export function useWorkspaceController() {
     onDownloadRagModel: settingsActions.onDownloadRagModel,
     onResetSettings: settingsActions.onResetSettings,
     onClearError,
+    onSeekToTime,
+    onToggleChatDrawer,
+    onOpenChatDrawer,
+    onCloseChatDrawer,
     onResolveLinkedSeries: contentActions.onResolveLinkedSeries,
     onResolvePlaygroundVideo: contentActions.onResolvePlaygroundVideo,
     onResolveSeriesVideo: contentActions.onResolveSeriesVideo,
