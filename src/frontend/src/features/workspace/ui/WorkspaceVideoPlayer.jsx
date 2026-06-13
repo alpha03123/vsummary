@@ -1,27 +1,28 @@
 import { useEffect, useRef } from "react";
 
-import { formatRange } from "../../../../shared/lib/time";
+import { formatRange } from "../../../shared/lib/time";
 
-export function WorkspacePreviewView({ previewSource, previewSeekRequest, previewSourceType = "video" }) {
-  const previewVideoRef = useRef(null);
-  const isAudioSource = previewSourceType === "audio";
+export function WorkspaceVideoPlayer({ videoSource, playerSeekRequest, videoSourceType = "video" }) {
+  const videoRef = useRef(null);
+  const isAudioSource = videoSourceType === "audio";
 
   useEffect(() => {
-    if (isAudioSource || !previewSeekRequest || !previewVideoRef.current) {
+    if (isAudioSource || !playerSeekRequest || !videoRef.current) {
       return;
     }
 
-    const video = previewVideoRef.current;
+    const video = videoRef.current;
     const seekTo = () => {
-      if (!Number.isFinite(previewSeekRequest.seconds)) {
+      if (!Number.isFinite(playerSeekRequest.seconds)) {
         return;
       }
       const duration = Number.isFinite(video.duration) ? video.duration : null;
       const nextSeconds =
         duration == null
-          ? Math.max(0, previewSeekRequest.seconds)
-          : Math.min(Math.max(0, previewSeekRequest.seconds), duration);
+          ? Math.max(0, playerSeekRequest.seconds)
+          : Math.min(Math.max(0, playerSeekRequest.seconds), duration);
       video.currentTime = nextSeconds;
+      video.play().catch(() => { /* user-gesture rules; ignore failures (e.g., past-end) */ });
     };
 
     if (video.readyState >= 1) {
@@ -33,23 +34,23 @@ export function WorkspacePreviewView({ previewSource, previewSeekRequest, previe
     return () => {
       video.removeEventListener("loadedmetadata", seekTo);
     };
-  }, [isAudioSource, previewSeekRequest, previewSource]);
+  }, [isAudioSource, playerSeekRequest, videoSource]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="workspace-muted-panel rounded-3xl border p-4">
         <p className="mb-2 text-xs font-bold uppercase text-stone-500 dark:text-stone-400">Media Preview</p>
-        {previewSeekRequest ? (
+        {playerSeekRequest ? (
           <div className="mt-3 rounded-2xl border border-info/20 bg-info-subtle px-4 py-3 text-sm text-stone-800 dark:text-stone-100">
             <p className="font-semibold">
-              已定位到 {formatRange(previewSeekRequest.seconds, previewSeekRequest.endSeconds ?? previewSeekRequest.seconds)}
-              {previewSeekRequest.chapterTitle ? ` · ${previewSeekRequest.chapterTitle}` : ""}
+              已定位到 {formatRange(playerSeekRequest.seconds, playerSeekRequest.endSeconds ?? playerSeekRequest.seconds)}
+              {playerSeekRequest.chapterTitle ? ` · ${playerSeekRequest.chapterTitle}` : ""}
             </p>
-            {previewSeekRequest.query ? (
-              <p className="mt-1 text-stone-600 dark:text-stone-300">检索问题：{previewSeekRequest.query}</p>
+            {playerSeekRequest.query ? (
+              <p className="mt-1 text-stone-600 dark:text-stone-300">检索问题：{playerSeekRequest.query}</p>
             ) : null}
-            {previewSeekRequest.matchedText ? (
-              <p className="mt-2 line-clamp-3 text-stone-700 dark:text-stone-200">{previewSeekRequest.matchedText}</p>
+            {playerSeekRequest.matchedText ? (
+              <p className="mt-2 line-clamp-3 text-stone-700 dark:text-stone-200">{playerSeekRequest.matchedText}</p>
             ) : null}
           </div>
         ) : null}
@@ -60,8 +61,8 @@ export function WorkspacePreviewView({ previewSource, previewSeekRequest, previe
         </div>
       ) : (
         <div className="workspace-elevated-panel overflow-hidden rounded-3xl border bg-black shadow-sm">
-          <video key={previewSource} ref={previewVideoRef} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
-            <source src={previewSource} />
+          <video key={videoSource} ref={videoRef} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
+            <source src={videoSource} />
           </video>
         </div>
       )}
