@@ -1,0 +1,36 @@
+{
+  "case": "overview",
+  "input": {
+    "session_id": "series|1|series-home|trace-overview",
+    "message": "这个系列讲了啥"
+  },
+  "assertions": {
+    "must_have_trace_keys": [
+      "graph_input",
+      "series_query_processor",
+      "retrieval_request",
+      "retrieval_response",
+      "answer_synthesis",
+      "graph_result"
+    ],
+    "must_not_have_trace_keys": [
+      "series_planner",
+      "series_planner_attempts",
+      "current_subplan",
+      "query_plan"
+    ],
+    "path_equals": {
+      "series_query_processor.output.filters.series_id": "1"
+    },
+    "path_contains_values": {
+      "answer_synthesis.output.used_source_types": [
+        "summary_global"
+      ]
+    },
+    "hits_must_contain": [
+      {
+        "source_type": "summary_global"
+      }
+    ]
+  }
+}

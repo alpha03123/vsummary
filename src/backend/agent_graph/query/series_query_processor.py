@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+import json
+
+from backend.agent.schemas.messages import AgentChatMessage
+from backend.agent_graph.prompts import SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT
+from backend.agent_graph.query.models import SeriesQueryUnderstanding
+
+
+class SeriesQueryProcessor:
+    def __init__(self, *, gateway) -> None:
+        self._gateway = gateway
+
+    def run(
+        self,
+        *,
+        user_message: str,
+        series_id: str,
+        series_title: str,
+        series_catalog: dict[str, object],
+        memory_messages: list[dict[str, object]] | None = None,
+        debug_trace: dict[str, object] | None = None,
+    ) -> SeriesQueryUnderstanding:
+        messages = self._build_messages(
+            user_message=user_message,
+            series_id=series_id,
+            series_title=series_title,
+            series_catalog=series_catalog,
+            memory_messages=memory_messages or [],
+        )
+        result = self._gateway.create_structured_completion(
+            messages,
+            response_model=SeriesQueryUnderstanding,
+        )
+        result.filters["series_id"] = series_id
+        if debug_trace is not None:
+            debug_trace["series_query_processor"] = {
+                "input": {
+                    "user_message": user_message,
+                    "series_id": series_id,
+                    "series_title": series_title,
+                },
+                "output": result.model_dump(mode="json"),
+            }
+        return result
+
+    def _build_messages(
+        self,
+        *,
+        user_message: str,
+        series_id: str,
+        series_title: str,
+        series_catalog: dict[str, object],
+        memory_messages: list[dict[str, object]],
+    ) -> list[AgentChatMessage]:
+        memory_block = "\n".join(
+            f"{str(item.get('role', '')).strip()}: {str(item.get('content', '')).strip()}"
+            for item in memory_messages
+            if isinstance(item, dict) and str(item.get("content", "")).strip()
+        ).strip() or "(none)"
+        return [
+            AgentChatMessage(
+                role="system",
+                content=SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT,
+            ),
+            AgentChatMessage(
+                role="user",
+                content=(
+                    f"series_id: {series_id}\n"
+                    f"series_title: {series_title}\n\n"
+                    f"memory_messages:\n{memory_block}\n\n"
+                    f"series_catalog:\n{json.dumps(series_catalog, ensure_ascii=False, indent=2)}\n\n"
+                    f"user_message:\n{user_message}"
+                ),
+            ),
+        ]
