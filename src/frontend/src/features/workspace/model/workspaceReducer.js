@@ -762,6 +762,12 @@ export function workspaceReducer(state, action) {
           requestId: action.requestId,
         },
       };
+    case "chat_drawer_toggled":
+      return { ...state, chatDrawerOpen: !state.chatDrawerOpen };
+    case "chat_drawer_opened":
+      return { ...state, chatDrawerOpen: true };
+    case "chat_drawer_closed":
+      return { ...state, chatDrawerOpen: false };
     case "settings_panel_toggled":
       return {
         ...state,
