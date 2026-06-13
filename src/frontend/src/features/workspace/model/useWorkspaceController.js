@@ -128,7 +128,7 @@ export function useWorkspaceController() {
       seconds,
       endSeconds,
       chapterTitle,
-      requestId: Date.now(),
+      requestId: `${Date.now()}-${seconds}`,
     });
   }
 

@@ -14,7 +14,8 @@ describe("useWorkspaceController.onSeekToTime", () => {
       endSeconds: 50,
       chapterTitle: "Intro",
     });
-    expect(typeof result.current.playerSeekRequest.requestId).toBe("number");
+    expect(typeof result.current.playerSeekRequest.requestId).toBe("string");
+    expect(result.current.playerSeekRequest.requestId).toMatch(/^\d+-\d+(\.\d+)?$/);
   });
 
   it("defaults endSeconds to null and chapterTitle to empty string", () => {
