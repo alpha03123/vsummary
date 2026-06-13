@@ -340,3 +340,39 @@ describe("workspaceReducer video generation cancellation", () => {
     }));
   });
 });
+
+describe("workspaceReducer chat drawer", () => {
+  it("starts with chatDrawerOpen=false in initial state", () => {
+    const state = createInitialWorkspaceState();
+    expect(state.chatDrawerOpen).toBe(false);
+  });
+
+  it("chat_drawer_toggled flips the field", () => {
+    const start = createInitialWorkspaceState();
+    const opened = workspaceReducer(start, { type: "chat_drawer_toggled" });
+    expect(opened.chatDrawerOpen).toBe(true);
+    const closed = workspaceReducer(opened, { type: "chat_drawer_toggled" });
+    expect(closed.chatDrawerOpen).toBe(false);
+  });
+
+  it("chat_drawer_opened sets the field to true", () => {
+    const state = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
+    expect(state.chatDrawerOpen).toBe(true);
+  });
+
+  it("chat_drawer_closed sets the field to false", () => {
+    const opened = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
+    const closed = workspaceReducer(opened, { type: "chat_drawer_closed" });
+    expect(closed.chatDrawerOpen).toBe(false);
+  });
+
+  it("video_selected resets playerSeekRequest but keeps chatDrawerOpen", () => {
+    const start = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
+    const request = { seconds: 5, endSeconds: null, query: "", matchedText: "", chapterTitle: "x", requestId: 1 };
+    const withRequest = workspaceReducer(start, { type: "player_seek_requested", ...request });
+    expect(withRequest.playerSeekRequest).toEqual(request);
+    const afterVideo = workspaceReducer(withRequest, { type: "video_selected", seriesId: "s", videoId: "v" });
+    expect(afterVideo.playerSeekRequest).toBeNull();
+    expect(afterVideo.chatDrawerOpen).toBe(true);
+  });
+});

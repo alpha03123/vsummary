@@ -550,6 +550,7 @@ export function createInitialWorkspaceState() {
     knowledgeMemorySnapshot: null,
     settingsPanelOpen: false,
     settingsPanelInitialTab: "general",
+    chatDrawerOpen: false,
     backendReady: false,
     error: "",
     loading: true,
