@@ -1,0 +1,94 @@
+[importlinter]
+root_packages =
+    backend
+source_roots =
+    src
+include_external_packages = false
+exclude_type_checking_imports = true
+
+[importlinter:contract:backend_top_level_acyclic]
+name = backend top-level siblings must be acyclic
+type = acyclic_siblings
+ancestors =
+    backend
+depth = 1
+
+[importlinter:contract:agent_graph_must_not_read_video_summary_infra]
+name = agent_graph must not depend on video_summary infrastructure
+type = forbidden
+source_modules =
+    backend.agent_graph
+forbidden_modules =
+    backend.video_summary.infrastructure
+
+[importlinter:contract:agent_core_must_not_read_orchestration_or_product]
+name = agent core must not depend on orchestration or product packages
+type = forbidden
+source_modules =
+    backend.agent
+forbidden_modules =
+    backend.agent_graph
+    backend.video_summary
+
+[importlinter:contract:video_summary_infra_must_not_read_agent_graph]
+name = video_summary infrastructure must not depend on agent_graph
+type = forbidden
+source_modules =
+    backend.video_summary.infrastructure
+forbidden_modules =
+    backend.agent_graph
+
+[importlinter:contract:domain_must_not_depend_on_infra_or_api]
+name = video_summary domain must not depend on api or infrastructure
+type = forbidden
+source_modules =
+    backend.video_summary.domain
+forbidden_modules =
+    backend.api
+    backend.video_summary.infrastructure
+
+[importlinter:contract:video_summary_layers]
+name = video_summary package must keep inward dependency direction
+type = layers
+containers =
+    backend.video_summary
+layers =
+    infrastructure
+    library
+    generation
+    domain
+
+[importlinter:contract:generation_must_not_read_library]
+name = generation must not depend on library
+type = forbidden
+source_modules =
+    backend.video_summary.generation
+forbidden_modules =
+    backend.video_summary.library
+
+[importlinter:contract:video_summary_tools_must_not_read_infrastructure]
+name = video_summary tools must not depend on infrastructure
+type = forbidden
+source_modules =
+    backend.video_summary.tools
+forbidden_modules =
+    backend.video_summary.infrastructure
+
+[importlinter:contract:video_summary_agent_adapter_must_be_only_agent_bridge]
+name = tool executor and agent adapter are the only video_summary modules allowed to depend on backend.agent
+type = forbidden
+source_modules =
+    backend.video_summary.domain
+    backend.video_summary.generation
+    backend.video_summary.library
+    backend.video_summary.infrastructure
+forbidden_modules =
+    backend.agent
+
+[importlinter:contract:bilibili_must_not_read_video_summary_infra]
+name = bilibili must not depend on video_summary infrastructure directly
+type = forbidden
+source_modules =
+    backend.bilibili
+forbidden_modules =
+    backend.video_summary.infrastructure

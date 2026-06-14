@@ -1,0 +1,105 @@
+# 语音转写设置。
+[asr]
+# 转写引擎。目前支持 "faster_whisper"。
+provider = "faster_whisper"
+# 默认转写语言。中文使用 "zh"，英文使用 "en"。
+language = "zh"
+# 是否启用转写增强。开启后会调用 LLM 对转写文本做语义修正和分段。
+transcript_enhancement_enabled = false
+
+# Faster-Whisper 转写引擎配置。
+[asr.faster_whisper]
+# 运行设备。"gpu" 使用 NVIDIA 显卡，"cpu" 使用 CPU，"auto" 由运行时自动选择。
+device = "gpu"
+# Whisper 模型大小。可按机器性能调整，例如 "small"、"medium"、"large-v3"、"large-v3-turbo"。
+model_size = "large-v3-turbo"
+# 计算精度。"float16" 适合 GPU，"int8" 更适合 CPU 或显存较小的环境。
+compute_type = "float16"
+# 转写策略。"fast" 更快，"balanced" 平衡速度和质量，"accurate" 更重视准确度。
+transcription_mode = "accurate"
+
+# 前端工作区显示设置。
+[workspace_ui]
+# 主题模式。"light" 为亮色，"dark" 为暗色。
+theme = "light"
+# 是否在视频详情页默认显示关键结论。
+show_takeaways = true
+
+# 调试设置。
+[debug]
+# 是否开启调试模式。开启后会输出更详细的后端追踪信息。
+mode = true
+
+# Agent 上下文窗口设置。
+[agent_context]
+# Agent 对话可使用的最大上下文 token 数。
+window_tokens = 1000000
+# Agent 回复长度偏好。"short" 简短回答，"medium" 默认适中，"long" 适合学习复习时充分展开。
+answer_detail_level = "medium"
+# 推理模型思考强度。"none" 不传思考强度，"low" 更快，"medium" 平衡，"high" 更充分但更慢。
+reasoning_effort = "none"
+# Video Talk / Series Talk 的用户自定义回答要求。只影响对话回答，不影响视频摘要、知识卡片或导图生成。
+talk_custom_prompt = ""
+
+# Agent 上下文高级策略。
+[agent_context.advanced]
+# 为模型输出预留的 token 数，避免上下文挤占回复空间。
+reserved_output_tokens = 20000
+# 上下文占用超过该比例时进入警告状态。
+warning_threshold_ratio = 0.6
+# 上下文占用超过该比例时触发历史压缩。
+compact_threshold_ratio = 0.8
+# 上下文占用超过该比例时阻断继续输入，避免请求失败或输出不可控。
+blocking_threshold_ratio = 0.92
+# 历史压缩时保留的最近消息条数。
+keep_tail_messages = 6
+# 投影内容或相关上下文最多占用总窗口的比例。
+projection_max_tokens_ratio = 0.08
+# 当前视频摘要直接放入上下文的阈值比例，超过后改用检索方式控制上下文体积。
+direct_summary_threshold_ratio = 0.9
+# 规划器传输模式。"structured" 使用结构化响应，"stream_buffered" 使用流式缓冲。
+planner_transport = "structured"
+
+# Agent 检索设置。
+[agent_retrieval]
+# 向量模型供应商。目前默认使用 FastEmbed，避免依赖 PyTorch。
+embedding_provider = "fastembed"
+# 向量模型名称。
+embedding_model = "BAAI/bge-small-zh-v1.5"
+# 向量化设备。"cpu"、"gpu" 或 "auto"。
+embedding_device = "gpu"
+# 向量化批大小。数值越大吞吐越高，但占用内存或显存更多。
+embedding_batch_size = 8
+# 每次检索最终返回给回答节点的证据数量。
+max_hits = 5
+# 是否启用 reranker 重排。开启后会先召回更多候选再做语义重排。
+rerank_enabled = false
+
+# 生成任务并发设置。
+[generation]
+# 全局同时运行的视频生成任务数量。
+video_generation_concurrency = 5
+# 单个视频分片摘要阶段允许并发的 LLM 请求数量。
+summary_chunk_concurrency = 3
+
+# 联网搜索设置。
+[web_search]
+# 是否允许 Agent 使用联网搜索。关闭时后端不会注册联网搜索能力。
+enabled = false
+# 联网搜索供应商。目前通过 LiteLLM 调用模型原生 web_search_options。
+provider = "litellm"
+# 联网搜索模式。目前仅支持 "native"。
+mode = "native"
+# 搜索强度，默认中等。"low"、"medium" 或 "high"。
+search_context_size = "medium"
+# 单次联网搜索最多保留的来源数量。
+max_results = 5
+# 单次联网搜索超时时间，单位秒。
+timeout_seconds = 10
+
+# 外部课程导入设置。
+[external_import.chaoxing]
+# 超星普通请求间隔，单位秒。提高该值可降低触发访问验证的概率，但导入会更慢。
+request_delay_seconds = 0.2
+# 超星 Init 阶段逐课程预热间隔，单位秒。课程多时可适当调高。
+init_course_delay_seconds = 0.3

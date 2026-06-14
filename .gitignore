@@ -1,0 +1,43 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.claude/
+.python-version
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Logs / Temp
+*.log
+tmp/
+/temp/
+/unused/
+/sample/
+
+# Local data (user videos, workspace products, models)
+/videos/
+/workspace/
+/data/
+.worktrees/
+
+# Local dev scripts (environment-specific)
+/scripts/*
+!/scripts/build_release.ps1
+!/scripts/package/
+!/scripts/package/**
+
+# Local env
+.env
+.env.*
+!.env.example
