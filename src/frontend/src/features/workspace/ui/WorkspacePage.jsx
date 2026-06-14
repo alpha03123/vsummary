@@ -4,7 +4,8 @@ import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
-import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
+import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
+import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
 import { motion, AnimatePresence } from "framer-motion";
@@ -50,7 +51,7 @@ export function WorkspacePage({ page }) {
     selectedVideo,
     selectedNode,
     previewUrl,
-    previewSeekRequest,
+    playerSeekRequest,
     selectedContextType,
   } = shell;
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -233,6 +234,8 @@ export function WorkspacePage({ page }) {
           onToggleSettingsPanel={actions.toggleSettingsPanel}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onToggleChatDrawer={chat.toggleDrawer}
+          chatDrawerOpen={chat.drawerOpen}
         />
 
         {state.error && (
@@ -262,26 +265,22 @@ export function WorkspacePage({ page }) {
               style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
               className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
             >
-              <WorkspaceChatPanel
-                workspaceTitle={library?.workspace?.title}
-                activeSeries={activeSeries}
-                selectedVideo={selectedVideo}
-                selectedContextType={selectedContextType}
-                selectedToolId={state.selectedToolId}
-                tools={tools}
-                chatMessages={chat.messages}
-                chatSessions={chat.sessions}
-                activeSessionId={chat.activeSessionId}
-                chatPending={chat.pending}
-                contextUsage={chat.contextUsage}
-                contextUsageLoading={chat.contextUsageLoading}
-                ragModels={generation.ragModels}
-                knowledgeMemorySnapshot={state.knowledgeMemorySnapshot}
-                onSelectChatSession={chat.selectChatSession}
-                onOpenSeekReference={chat.openSeekReference}
-                onOpenSettings={() => actions.openSettingsPanel("network")}
-                onSubmitChat={chat.submit}
-              />
+              {selectedVideo ? (
+                <WorkspaceVideoPlayer
+                  videoSource={tools?.preview?.previewUrl ?? previewUrl}
+                  playerSeekRequest={playerSeekRequest}
+                  videoSourceType={selectedVideo?.sourceType}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center p-8">
+                  <WorkspaceStateBlock
+                    eyebrow="Player"
+                    title="选择视频以开始预览"
+                    description="选中左侧的视频后,这里会显示可跳转的视频播放器。"
+                    dashed
+                  />
+                </div>
+              )}
             </section>
           ) : null}
           {isPlaygroundHome ? (
@@ -339,8 +338,7 @@ export function WorkspacePage({ page }) {
                   selectedVideo={selectedVideo}
                   selectedContextType={selectedContextType}
                   selectedNode={selectedNode}
-                  previewUrl={previewUrl}
-                  previewSeekRequest={previewSeekRequest}
+                  onSeek={shell.player.seekToTime}
                   selectedToolId={state.selectedToolId}
                   selectedChapterId={state.selectedChapterId}
                   toolsLoading={state.toolsLoading}
@@ -420,6 +418,29 @@ export function WorkspacePage({ page }) {
           )}
         </AnimatePresence>
       </main>
+
+      <ChatDrawer
+        isOpen={chat.drawerOpen}
+        onClose={chat.closeDrawer}
+        workspaceTitle={library?.workspace?.title}
+        activeSeries={activeSeries}
+        selectedVideo={selectedVideo}
+        selectedContextType={selectedContextType}
+        selectedToolId={state.selectedToolId}
+        tools={tools}
+        chatMessages={chat.messages}
+        chatSessions={chat.sessions}
+        activeSessionId={chat.activeSessionId}
+        chatPending={chat.pending}
+        contextUsage={chat.contextUsage}
+        contextUsageLoading={chat.contextUsageLoading}
+        ragModels={generation.ragModels}
+        knowledgeMemorySnapshot={state.knowledgeMemorySnapshot}
+        onSelectChatSession={chat.selectChatSession}
+        onOpenSeekReference={chat.openSeekReference}
+        onOpenSettings={() => actions.openSettingsPanel("network")}
+        onSubmitChat={chat.submit}
+      />
 
       {importModalState && (
         <WorkspaceImportModal
