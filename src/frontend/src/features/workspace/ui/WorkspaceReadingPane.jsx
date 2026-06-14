@@ -285,25 +285,11 @@ function buildExportActions({ activeSeries, notes, selectedToolId, selectedVideo
       },
     ];
   }
-  if (selectedToolId === "preview") {
-    return [
-      {
-        href: videoSourceExportUrl(activeSeries.id, selectedVideo.id),
-        enabled: tools?.preview?.available === true,
-        label: "视频导出",
-        disabledReason: "视频源存在后才能导出",
-      },
-    ];
-  }
   return [];
 }
 
 function videoExportUrl(seriesId, videoId, exportName) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;
-}
-
-function videoSourceExportUrl(seriesId, videoId) {
-  return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/video`;
 }
 
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
