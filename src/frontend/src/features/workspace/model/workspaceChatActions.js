@@ -134,7 +134,6 @@ export function createWorkspaceChatActions({
     if (!reference || typeof reference.seconds !== "number") {
       return;
     }
-    dispatch({ type: "tool_selected", toolId: "preview" });
     dispatch({
       type: "player_seek_requested",
       seconds: reference.seconds,
