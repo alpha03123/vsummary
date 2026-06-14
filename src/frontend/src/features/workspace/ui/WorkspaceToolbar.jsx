@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   BookOpenText,
+  MessageSquare,
   Settings2,
   PanelLeftClose,
   PanelLeftOpen
@@ -13,6 +14,8 @@ export function WorkspaceToolbar({
   onToggleSettingsPanel,
   isSidebarOpen,
   onToggleSidebar,
+  onToggleChatDrawer,
+  chatDrawerOpen,
 }) {
   const settingsButtonRef = useRef(null);
 
@@ -59,6 +62,20 @@ export function WorkspaceToolbar({
         <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400">
           Settings
         </span>
+        <button
+          type="button"
+          className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
+            chatDrawerOpen
+              ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm"
+              : "text-stone-500 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"
+          }`}
+          onClick={onToggleChatDrawer}
+          title="打开分析助手"
+          aria-label="打开分析助手"
+          aria-expanded={chatDrawerOpen ?? false}
+        >
+          <MessageSquare size={18} strokeWidth={2.2} />
+        </button>
         <button
           ref={settingsButtonRef}
           className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-500 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"}`}
