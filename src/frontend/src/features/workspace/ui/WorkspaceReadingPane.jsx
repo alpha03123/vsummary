@@ -31,11 +31,6 @@ const WorkspaceOverviewView = lazy(() =>
     default: module.WorkspaceOverviewView,
   })),
 );
-const WorkspacePreviewView = lazy(() =>
-  import("./views/WorkspacePreviewView").then((module) => ({
-    default: module.WorkspacePreviewView,
-  })),
-);
 const WorkspaceSeriesHomeView = lazy(() =>
   import("./views/WorkspaceSeriesHomeView").then((module) => ({
     default: module.WorkspaceSeriesHomeView,
@@ -68,8 +63,6 @@ export function WorkspaceReadingPane({
   selectedVideo,
   selectedContextType,
   selectedNode,
-  previewUrl,
-  previewSeekRequest,
   selectedToolId,
   selectedChapterId,
   toolsLoading,
@@ -82,6 +75,7 @@ export function WorkspaceReadingPane({
   isGeneratingSelectedVideo,
   onSelectTool,
   onFocusNode,
+  onSeek,
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
@@ -93,7 +87,6 @@ export function WorkspaceReadingPane({
   const isSeriesHome = selectedToolId === "series-home";
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
-  const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
 
   return (
     <section className="relative flex h-full w-full flex-col bg-transparent">
@@ -197,6 +190,7 @@ export function WorkspaceReadingPane({
                       selectedChapterId={selectedChapterId}
                       summaryLoading={summaryLoading}
                       isGeneratingSelectedVideo={isGeneratingSelectedVideo}
+                      onSeek={onSeek}
                     />
                   ) : null}
                   {selectedToolId === "mindmap" ? (
@@ -232,13 +226,6 @@ export function WorkspaceReadingPane({
                       onCreateNote={onCreateNote}
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}
-                    />
-                  ) : null}
-                  {selectedToolId === "preview" ? (
-                    <WorkspacePreviewView
-                      previewSource={previewSource}
-                      previewSeekRequest={previewSeekRequest}
-                      previewSourceType={selectedVideo?.sourceType}
                     />
                   ) : null}
                 </Suspense>
