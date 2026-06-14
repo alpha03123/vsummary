@@ -902,6 +902,11 @@ def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
         normalized_value = value.strip().strip('"').strip("'")
         if normalized_key:
             values[normalized_key] = normalized_value
+    # 顺手把 .env 里的值灌进 os.environ——这样 BILIBILI_COOKIE / BILIBILI_SESSDATA
+    # 这类不需要 EnvSettings 显式建模的变量也能被子进程和 os.environ.get 拿到。
+    # 用 setdefault 尊重 shell 里已经显式设的值。
+    for k, v in values.items():
+        os.environ.setdefault(k, v)
     return values
 
 
