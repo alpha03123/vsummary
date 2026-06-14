@@ -31,7 +31,7 @@
 
 在 AI 概况里，**点击章节卡片**或展开后的**转写段**即可直接跳到视频对应时间并自动播放。
 
-<img src="./assets/showcase-video-overview.png" alt="视频 AI 概况页面" />
+<img src="assets/showcase-video-overview.gif" alt="视频 AI 概况页面" />
 
 ### 视频播放器
 
