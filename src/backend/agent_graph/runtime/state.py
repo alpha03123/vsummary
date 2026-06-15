@@ -40,7 +40,7 @@ class AgentGraphState(TypedDict):
         stream_answer_messages: 流式输出过程中已发送的消息分片。
         assistant_message: 单条助手消息（非流式场景下使用）。
         answer: 最终回复文本。
-        error: 节点执行失败时的错误信息；正常路径下为 `NotRequired` 且不填充。
+        error: 节点执行失败时的错误信息；若执行成功则该键不出现。
     """
 
     session_id: str
