@@ -64,7 +64,9 @@ cat src/backend/video_summary/domain/models.py
 
 - [ ] **Step 2：应用中文 docstring**
 
-文件极小（36 行），全部内容改为如下：
+**⚠️ 必须先 Read 实际文件！** 文件实际是 4 个 frozen dataclass（`VideoAsset` / `TranscriptSegment` / `Transcript` / `SummaryDocument`），不是模板里假设的 3 个。保留所有原始字段名、装饰器、属性，不做任何结构改动。
+
+完整替换文件内容为：
 
 ```python
 """视频资产领域值对象。
@@ -74,64 +76,75 @@ cat src/backend/video_summary/domain/models.py
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
+class VideoAsset:
+    """视频资产不可变值对象。
+
+    表示一个已索引的视频条目：源文件路径 + 标题 + 时长。
+    一旦构造不允许修改，作为业务键比较的标识由 `source_path` 承担。
+    """
+
+    source_path: Path
+    title: str
+    duration_seconds: float
+
+
+@dataclass(frozen=True)
 class TranscriptSegment:
     """单条转写片段。
 
     Attributes:
-        start: 起始时间（秒）。
-        end: 结束时间（秒）。
+        start_seconds: 起始时间（秒）。
+        end_seconds: 结束时间（秒）。
         text: 片段文本。
     """
 
-    start: float
-    end: float
+    start_seconds: float
+    end_seconds: float
     text: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class Transcript:
     """视频转写结果。
 
     Attributes:
         language: 检测到的语言代码（如 "zh"、"en"）。
         segments: 按时间顺序排列的转写片段列表。
-        raw_text: 拼接后的纯文本（可能与 segments 拼接结果不完全一致，保留原始标点）。
+
+    Properties:
+        full_text: 把所有片段按换行拼接的纯文本，自动跳过空片段。
     """
 
     language: str
-    segments: list[TranscriptSegment] = field(default_factory=list)
-    raw_text: str = ""
+    segments: list[TranscriptSegment]
+
+    @property
+    def full_text(self) -> str:
+        return "\n".join(segment.text.strip() for segment in self.segments if segment.text.strip())
 
 
-@dataclass
-class VideoAsset:
-    """视频资产不可变值对象。
+@dataclass(frozen=True)
+class SummaryDocument:
+    """结构化总结文档。
 
-    表示一个已索引的视频条目：基本元数据 + 转写文本 + 总结文档。
-    一旦构造不允许修改，等值比较按业务键 (asset_id) 进行。
+    把视频总结拆成可独立消费的三部分：人类可读的 Markdown、
+    机器可读的结构化字段、知识图谱思维导图（可选）。
 
     Attributes:
-        asset_id: 业务唯一 ID。
-        source_uri: 原始视频的 URI（本地路径或远端 URL）。
-        title: 视频标题，可为空。
-        duration_seconds: 时长（秒），未知时为 None。
-        transcript: 转写结果，可能为空。
-        summary: 结构化总结，可能为空。
-        metadata: 任意附加元数据（来源、标签等）。
+        markdown: 人类可读的总结 Markdown 文本。
+        summary_data: 结构化字段（如要点、关键词、问答对）。
+        mindmap_data: 思维导图节点/边数据，可能为空。
     """
 
-    asset_id: str
-    source_uri: str
-    title: str = ""
-    duration_seconds: float | None = None
-    transcript: Transcript | None = None
-    summary: Any | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    markdown: str
+    summary_data: dict[str, Any]
+    mindmap_data: dict[str, Any] | None = None
 ```
 
 - [ ] **Step 3：语法检查**
@@ -178,56 +191,81 @@ cat src/backend/agent_graph/runtime/state.py
 
 - [ ] **Step 2：应用中文 docstring**
 
-31 行的 TypedDict 状态定义。完整替换为如下：
+**⚠️ 必须先 Read 实际文件！** 文件实际包含 1 个 `AgentGraphState` TypedDict，25 个字段（其中 17 个用 `NotRequired` 标记为可选，4 个是必填）。**不要**把 `NotRequired` 改成 `total=False`，**不要**改字段名或类型，**不要**添加/删除字段。
+
+完整替换文件内容为：
 
 ```python
 """LangGraph 工作流的全局状态定义。
 
-本模块定义 `AgentGraphState`——Agent 在多轮对话中累积的全部上下文。
+本模块定义 `AgentGraphState`——Agent 在多轮对话与多次节点执行中累积的全部上下文。
 """
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import NotRequired, TypedDict
 
 
-class AgentGraphState(TypedDict, total=False):
-    """LangGraph 工作流的全局状态。
+class AgentGraphState(TypedDict):
+    """LangGraph 工作流跨节点的全局状态。
 
-    在 `series` 与 `video` 两种 scope 下被节点读写。`total=False`
-    表示字段均可选，节点按需填充。
+    在 `series`（跨视频）与 `video`（单视频）两种 scope 下被节点读写。
+    必填字段由入口节点填入；可选字段（`NotRequired`）由后续节点按需追加，
+    不保证所有节点都执行过的状态被填齐。
 
     Attributes:
-        scope_type: 当前会话作用域，"series"（跨视频）或 "video"（单视频）。
-        video_id: 视频作用域下的目标视频 ID。
-        series_id: 系列作用域下的目标系列 ID。
-        user_query: 用户最新问题原文。
-        session_id: 会话唯一 ID，用于跨调用关联上下文。
-        memory_turns: 已发生的多轮对话历史，按时间顺序。
-        evidence_items: 检索到的证据片段列表。
-        web_results: 可选的网页搜索结果。
-        video_context: 视频作用域下构建的上下文（总结 + 转写）。
-        action_plan: 视频作用域下 LLM 规划出的工具调用计划。
-        action_outputs: 工具调用的实际返回结果列表。
-        final_answer: 最终生成的回复文本。
-        status: 当前节点执行状态。
-        error: 错误信息字符串（如果有）。
+        session_id: 会话唯一 ID，用于跨调用关联同一段对话。
+        scope_type: 当前会话作用域，"series" 或 "video"。
+        series_id: `series` scope 下的目标系列 ID。
+        video_id: `video` scope 下的目标视频 ID；非 `video` scope 时为 `NotRequired`。
+        user_message: 用户最新问题原文。
+        memory_messages: 多轮对话历史（已发生的消息），按时间顺序。
+        task_outputs: 推理节点产出的结构化中间结果（如 query understanding 后的产物）。
+        query_understanding: 查询理解节点对用户问题的解析结果（意图、关键实体等）。
+        series_catalog: `series` scope 下的视频目录索引。
+        retrieval_request: 检索节点即将发起的检索请求参数。
+        retrieval_results: 检索节点返回的原始结果。
+        web_search_results: 启用网页搜索时的搜索结果列表。
+        web_search_used: 是否实际触发了网页搜索。
+        evidence_items: 跨多源汇总后的证据片段（带引用），供答案合成使用。
+        answer_payload: 已组装的答案结构（标题、章节、引用等），未发出。
+        tool_calls: 视频 scope 下 LLM 规划出的工具调用计划。
+        tool_results: 工具调用的实际返回结果列表。
+        action_summary: 工具调用链路的自然语言总结。
+        video_context_mode: 视频上下文构建模式（"summary"/"transcript"/"rag" 等）。
+        video_summary_included: 最终答案是否包含了视频总结内容。
+        defer_answer_stream: 是否延迟到所有工具完成后再流式输出答案。
+        stream_answer_messages: 流式输出过程中已发送的消息分片。
+        assistant_message: 单条助手消息（非流式场景下使用）。
+        answer: 最终回复文本。
+        error: 节点执行失败时的错误信息；正常路径下为 `NotRequired` 且不填充。
     """
 
-    scope_type: str
-    video_id: str | None
-    series_id: str | None
-    user_query: str
     session_id: str
-    memory_turns: list[dict[str, Any]]
-    evidence_items: list[dict[str, Any]]
-    web_results: list[dict[str, Any]]
-    video_context: dict[str, Any]
-    action_plan: dict[str, Any]
-    action_outputs: list[dict[str, Any]]
-    final_answer: str
-    status: str
-    error: str | None
+    scope_type: str
+    series_id: str
+    video_id: NotRequired[str]
+    user_message: str
+    memory_messages: NotRequired[list[dict[str, object]]]
+    task_outputs: NotRequired[list[dict[str, object]]]
+    query_understanding: NotRequired[dict[str, object]]
+    series_catalog: NotRequired[dict[str, object]]
+    retrieval_request: NotRequired[dict[str, object]]
+    retrieval_results: NotRequired[list[dict[str, object]]]
+    web_search_results: NotRequired[list[dict[str, object]]]
+    web_search_used: NotRequired[bool]
+    evidence_items: NotRequired[list[dict[str, object]]]
+    answer_payload: NotRequired[dict[str, object]]
+    tool_calls: NotRequired[list[dict[str, object]]]
+    tool_results: NotRequired[list[dict[str, object]]]
+    action_summary: NotRequired[str]
+    video_context_mode: NotRequired[str]
+    video_summary_included: NotRequired[bool]
+    defer_answer_stream: NotRequired[bool]
+    stream_answer_messages: NotRequired[list[dict[str, object]]]
+    assistant_message: NotRequired[str]
+    answer: NotRequired[str]
+    error: NotRequired[str]
 ```
 
 - [ ] **Step 3：语法检查**
