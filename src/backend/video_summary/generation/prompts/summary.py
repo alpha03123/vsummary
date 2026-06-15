@@ -1,3 +1,10 @@
+"""视频总结相关的 LLM 提示词与文本辅助函数。
+
+集中维护「单片段总结」「整篇总结」「转写直接总结」三套提示词模板，
+以及时间格式化、片段分片、模板渲染等共用工具。提示词模板使用
+`string.Template` 占位符，由同模块的 `build_*` 函数负责注入。
+"""
+
 from __future__ import annotations
 
 from string import Template
@@ -5,6 +12,11 @@ from string import Template
 from backend.video_summary.domain.models import Transcript, TranscriptSegment, VideoAsset
 
 
+# 用于让 LLM 提取单个转写片段章节大纲的提示词。
+#
+# 输入一段连续转写，输出该片段的主题、要点、术语以及可用于思维
+# 导图的两级层级。占位符：`$video_title`、`$chunk_index`、
+# `$transcript_text`。对应 `build_chunk_prompt`。
 CHUNK_SUMMARY_PROMPT_TEMPLATE = (
     "你正在整理一个中文技术视频的转写片段。\n"
     "视频标题：$video_title\n"
@@ -25,6 +37,11 @@ CHUNK_SUMMARY_PROMPT_TEMPLATE = (
 )
 
 
+# 用于让 LLM 把多个片段总结聚合成结构化总结文档的提示词。
+#
+# 输入已生成的片段总结列表，输出包含章节、关键结论的结构化 JSON；
+# 章节必须给出秒级时间区间。占位符：`$video_title`、`$video_duration`、
+# `$transcript_language`、`$chunk_summaries`。对应 `build_document_prompt`。
 DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "请基于以下中文视频片段总结，生成结构化 JSON。\n"
     "视频标题：$video_title\n"
@@ -58,6 +75,12 @@ DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
 )
 
 
+# 用于让 LLM 直接基于完整转写一次性生成结构化总结文档的提示词。
+#
+# 与 `DOCUMENT_SUMMARY_PROMPT_TEMPLATE` 的差别是：跳过片段总结聚合步骤，
+# 直接由 LLM 在转写全文上完成总结；适合较短的视频。占位符：
+# `$video_title`、`$video_duration`、`$transcript_language`、`$transcript_text`。
+# 对应 `build_transcript_document_prompt`。
 TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "请基于以下中文视频转写，生成结构化 JSON。\n"
     "视频标题：$video_title\n"
@@ -92,6 +115,16 @@ TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
 
 
 def format_timestamp(seconds: float) -> str:
+    """把秒数格式化为 `HH:MM:SS` 或 `MM:SS` 文本。
+
+    负数会被夹到 0；超过一小时时切换到 `HH:MM:SS` 形态。
+
+    Args:
+        seconds: 时间长度（秒）。
+
+    Returns:
+        格式化后的时间字符串。
+    """
     total_seconds = max(0, int(seconds))
     minutes, remaining_seconds = divmod(total_seconds, 60)
     hours, minutes = divmod(minutes, 60)
@@ -101,6 +134,19 @@ def format_timestamp(seconds: float) -> str:
 
 
 def chunk_segments(segments: list[TranscriptSegment], max_chars: int = 12000) -> list[list[TranscriptSegment]]:
+    """把转写片段按字符预算切分成多个分片。
+
+    累计加入片段会让当前分片超过 `max_chars` 时，先把已积累的分片
+    提交为一份，再开始新的分片；空文本片段会被跳过；不会把单个
+    片段切碎（即使它本身就超过 `max_chars`）。
+
+    Args:
+        segments: 按时间顺序排列的转写片段。
+        max_chars: 单个分片的字符数预算（含 32 字符/片段的固定开销估算）。
+
+    Returns:
+        分片后的转写片段列表；输入为空时返回空列表。
+    """
     chunks: list[list[TranscriptSegment]] = []
     current: list[TranscriptSegment] = []
     current_size = 0
@@ -124,6 +170,16 @@ def chunk_segments(segments: list[TranscriptSegment], max_chars: int = 12000) ->
 
 
 def build_chunk_prompt(video: VideoAsset, chunk: list[TranscriptSegment], index: int) -> str:
+    """基于「单片段总结」模板构造提示词。
+
+    Args:
+        video: 视频资产，用于提供标题。
+        chunk: 单个转写分片。
+        index: 分片序号（从 1 开始），会作为「第 N 个片段」注入。
+
+    Returns:
+        替换好占位符的最终提示词字符串。
+    """
     return _render_template(
         CHUNK_SUMMARY_PROMPT_TEMPLATE,
         video_title=video.title,
@@ -137,6 +193,16 @@ def build_document_prompt(
     transcript: Transcript,
     chunk_summaries: list[str],
 ) -> str:
+    """基于「整篇总结」模板构造提示词。
+
+    Args:
+        video: 视频资产，用于提供标题与时长。
+        transcript: 完整转写，用于提供识别语言。
+        chunk_summaries: 已生成的各片段总结文本，会用空行连接。
+
+    Returns:
+        替换好占位符的最终提示词字符串。
+    """
     return _render_template(
         DOCUMENT_SUMMARY_PROMPT_TEMPLATE,
         video_title=video.title,
@@ -147,6 +213,15 @@ def build_document_prompt(
 
 
 def build_transcript_document_prompt(video: VideoAsset, transcript: Transcript) -> str:
+    """基于「转写直接总结」模板构造提示词（跳过片段聚合步骤）。
+
+    Args:
+        video: 视频资产，用于提供标题与时长。
+        transcript: 完整转写，用于提供语言与全部片段。
+
+    Returns:
+        替换好占位符的最终提示词字符串。
+    """
     return _render_template(
         TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE,
         video_title=video.title,
@@ -157,6 +232,16 @@ def build_transcript_document_prompt(video: VideoAsset, transcript: Transcript) 
 
 
 def segments_to_text(segments: list[TranscriptSegment]) -> str:
+    """把转写片段序列化为带时间戳前缀的纯文本。
+
+    每行形如 `[HH:MM:SS-HH:MM:SS] 文本`；片段之间用换行分隔。
+
+    Args:
+        segments: 转写片段列表。
+
+    Returns:
+        可直接注入 LLM 提示词的纯文本。
+    """
     lines: list[str] = []
     for segment in segments:
         start = format_timestamp(segment.start_seconds)
@@ -166,4 +251,16 @@ def segments_to_text(segments: list[TranscriptSegment]) -> str:
 
 
 def _render_template(template: str, **values: str) -> str:
+    """用 `string.Template` 的语法把占位符替换为 `values`。
+
+    Args:
+        template: 含 `$name` 风格占位符的模板字符串。
+        **values: 占位符名称到字符串的映射。
+
+    Returns:
+        替换完毕的字符串。
+
+    Raises:
+        KeyError: 模板中存在 `values` 未提供的占位符。
+    """
     return Template(template).substitute(values)
