@@ -1,3 +1,30 @@
+"""以本地文件系统为后端的工作区存储与导入/删除实现。
+
+本模块是 `VideoLibraryReader/VideoLibraryWriter/VideoImporter` 等端口的
+`FileSystem` 适配器，负责：
+
+- 把视频库中的"系列 / 视频 / 制品"以目录 + JSON 文件的形式落到磁盘；
+- 提供笔记等需要"按视频串行化"的写入能力（基于 `KeyedLockManager`）；
+- 在导入系列 / 视频时做去重、原子复制与失败回滚；
+- 在删除系列 / 视频时同步清理本地媒体与制品目录，必要时回写 linked 元数据。
+
+目录布局约定：
+    ``<root_dir>/videos/<series_id>/<video_stem>.<ext>``     # 原始媒体
+    ``<root_dir>/workspace/<series_id>/series_meta.json``   # 系列元数据
+    ``<root_dir>/workspace/<series_id>/linked_series.json`` # 外部链接系列的元数据
+    ``<root_dir>/workspace/<series_id>/series_catalog.json``# 系列目录（Agent 知识记忆用）
+    ``<root_dir>/workspace/<series_id>/<video_id>/summary.json``
+    ``<root_dir>/workspace/<series_id>/<video_id>/summary.md``
+    ``<root_dir>/workspace/<series_id>/<video_id>/transcript.cleaned.json``
+    ``<root_dir>/workspace/<series_id>/<video_id>/transcript.enhanced.json``
+    ``<root_dir>/workspace/<series_id>/<video_id>/knowledge_cards.json``
+    ``<root_dir>/workspace/<series_id>/<video_id>/mindmap.json``
+    ``<root_dir>/workspace/<series_id>/<video_id>/notes.json``
+
+线程安全：笔记的 CRUD 通过 `KeyedLockManager` 按 `(series_id, video_id)`
+串行化；其他路径不做并发控制，依赖上层用例的互斥。
+"""
+
 from __future__ import annotations
 
 import json
@@ -39,13 +66,31 @@ SERIES_CATALOG_FILE = "series_catalog.json"
 
 
 class FileSystemVideoWorkspace:
+    """以本地目录树为后端的工作区适配器。
+
+    业务目的：为上层用例（视频库读取、制品写入、本地导入、笔记 CRUD 等）提供
+    一套以"目录 + JSON 文件"为基本存储介质的实现，使得整个视频库在无数据库
+    依赖的情况下也能完成列表 / 检索 / 编辑 / 删除等操作。
+
+    关键不变量：
+        - `videos/<series_id>/` 内的媒体文件名（不含后缀）即 `video_id`；
+        - `workspace/<series_id>/<video_id>/` 存放该视频的所有制品；
+        - 笔记的并发写受 `KeyedLockManager` 保护，其他写操作依赖上层互斥。
+    """
+
     def __init__(self, root_dir: Path) -> None:
+        """记录工作区根目录、计算 `videos/` 与 `workspace/` 子目录路径。
+
+        Args:
+            root_dir: 工作区根目录（包含 `videos/` 与 `workspace/` 两个子目录）。
+        """
         self._root_dir = root_dir
         self._videos_dir = root_dir / "videos"
         self._workspace_dir = root_dir / "workspace"
         self._notes_locks = KeyedLockManager()
 
     def get_workspace(self) -> WorkspaceDTO:
+        """返回工作区自身的 DTO：id 取根目录名，title 经标题化处理。"""
         workspace_id = self._root_dir.name
         return WorkspaceDTO(
             id=workspace_id,
@@ -53,6 +98,18 @@ class FileSystemVideoWorkspace:
         )
 
     def list_series(self) -> list[LibrarySeriesDTO]:
+        """列出工作区内的所有系列，合并本地系列与 linked 系列并去重。
+
+        关键规则：
+            - 优先扫描 `videos/<series_id>/`，每个子目录视为一个本地系列；
+            - 再扫描 `workspace/<series_id>/linked_series.json`，存在则视为
+              linked 系列，标题/source_url 从元数据回填；
+            - 同一 `series_id` 在两边都存在时，linked 元数据覆盖本地目录；
+            - 若不存在 `PLAYGROUND_SERIES_ID` 则补一条空的 Playground 占位记录。
+
+        Returns:
+            按目录遍历顺序（`sorted`）汇总的 `LibrarySeriesDTO` 列表。
+        """
         local_series: dict[str, LibrarySeriesDTO] = {}
 
         if self._videos_dir.exists():
@@ -99,6 +156,22 @@ class FileSystemVideoWorkspace:
         return list(local_series.values())
 
     def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
+        """按 `(series_id, video_id)` 找到原始媒体文件并返回视频源 DTO。
+
+        `video_id` 约定等于媒体文件名（不含扩展名）。当系列不存在、没有匹配
+        文件或匹配到多个同名 stem 时返回 `None` / 抛 `ValueError`。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID（即媒体文件 stem）。
+
+        Returns:
+            含 source 路径、output_dir、`processed` 标记的 `VideoSourceDTO`；
+            系列或视频不存在时返回 `None`。
+
+        Raises:
+            ValueError: 同一系列下出现重复的媒体 stem。
+        """
         series_dir = self._videos_dir / series_id
         if not series_dir.exists() or not series_dir.is_dir():
             return None
@@ -123,6 +196,16 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
+        """读取视频总结 JSON 并把对应章节的转写片段附加到 chapters 上。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            含完整 summary（含 `transcript_segments`）的 `VideoSummaryDTO`；
+            视频不存在或 `summary.json` 缺失时返回 `None`。
+        """
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -143,6 +226,14 @@ class FileSystemVideoWorkspace:
         )
 
     def get_series_catalog(self, series_id: str) -> dict[str, object] | None:
+        """读取系列目录（Agent 知识记忆用）并按 `SeriesCatalogPayload` 校验。
+
+        Args:
+            series_id: 目标系列 ID。
+
+        Returns:
+            通过 Pydantic 校验后 `model_dump` 得到的 dict；文件不存在时返回 `None`。
+        """
         payload_path = self._workspace_dir / series_id / SERIES_CATALOG_FILE
         if not payload_path.exists():
             return None
@@ -150,6 +241,12 @@ class FileSystemVideoWorkspace:
         return SeriesCatalogPayload.model_validate(payload).model_dump(mode="json")
 
     def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
+        """校验 + 序列化 + 原子写系列目录 payload（自动创建 series 目录）。
+
+        Args:
+            series_id: 目标系列 ID。
+            payload: 任意可被 `SeriesCatalogPayload` 校验的字典。
+        """
         normalized = SeriesCatalogPayload.model_validate(payload).model_dump(mode="json")
         output_dir = self._workspace_dir / series_id
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -159,6 +256,16 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
+        """读取 `transcript.cleaned.json` 并反序列化为转写 DTO。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            含 `segments` / `duration_seconds` 等字段的 `VideoTranscriptDTO`；
+            视频不存在或文件缺失时返回 `None`。
+        """
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -185,6 +292,15 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
+        """读取 `mindmap.json` 并以总结标题（缺失时退回视频标题）组装 DTO。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            思维导图 DTO；视频不存在或 `mindmap.json` 缺失时返回 `None`。
+        """
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -203,6 +319,15 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_chapter_cards(self, series_id: str, video_id: str) -> VideoChapterCardsDTO | None:
+        """从视频总结中提取章节卡 + 关键结论卡，统一包装为章节卡列表。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            含章节与关键结论卡片的 DTO；视频总结缺失时返回 `None`。
+        """
         summary = self.get_video_summary(series_id, video_id)
         if summary is None:
             return None
@@ -215,6 +340,15 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_knowledge_cards(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
+        """读取 `knowledge_cards.json` 并把每条卡片解析为 `KnowledgeCardDTO`。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            含 `cards` 列表的知识卡 DTO；视频不存在或文件缺失时返回 `None`。
+        """
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -243,6 +377,14 @@ class FileSystemVideoWorkspace:
         title: str,
         cards: list[KnowledgeCardDTO],
     ) -> None:
+        """把知识卡列表原子写为 `knowledge_cards.json`（自动创建 output 目录）。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+            title: 卡片所属的"视频级"标题。
+            cards: 待写入的 `KnowledgeCardDTO` 列表。
+        """
         cards_payload = {
             "title": title,
             "cards": [_serialize_knowledge_card(card) for card in cards],
@@ -255,6 +397,15 @@ class FileSystemVideoWorkspace:
         )
 
     def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
+        """读取 `notes.json` 并以视频标题为标题包装为 DTO。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            含全部笔记的 `VideoNotesDTO`；视频不存在时返回 `None`。
+        """
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -279,6 +430,20 @@ class FileSystemVideoWorkspace:
         content: str,
         source: str,
     ) -> VideoNoteDTO | None:
+        """在指定视频下追加一条笔记，全程在 `KeyedLockManager` 保护下完成。
+
+        笔记 ID 形如 `note-<uuid4 hex>`，创建/更新时间均以 UTC ISO 字符串记录。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+            title: 笔记标题（不能为空）。
+            content: 笔记正文（不能为空）。
+            source: 笔记来源（仅允许 `manual` / `agent`）。
+
+        Returns:
+            新建后的 `VideoNoteDTO`；视频不存在时返回 `None`。
+        """
         if self.get_video_source(series_id, video_id) is None:
             return None
 
@@ -309,6 +474,19 @@ class FileSystemVideoWorkspace:
         title: str,
         content: str,
     ) -> VideoNoteDTO | None:
+        """按 `note_id` 原地更新笔记的标题/正文并刷新 `updated_at` 字段。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+            note_id: 目标笔记 ID。
+            title: 新标题（不能为空）。
+            content: 新正文（不能为空）。
+
+        Returns:
+            更新后的 `VideoNoteDTO`；视频不存在返回 `None`，未找到 `note_id` 时
+            同样返回 `None`。
+        """
         if self.get_video_source(series_id, video_id) is None:
             return None
 
@@ -327,6 +505,18 @@ class FileSystemVideoWorkspace:
         return None
 
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
+        """按 `note_id` 从 `notes.json` 中删除该笔记。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+            note_id: 目标笔记 ID。
+
+        Returns:
+            - `True` 删除成功；
+            - `False` 未找到 `note_id`（视频存在但笔记已被删）；
+            - `None` 视频本身不存在。
+        """
         if self.get_video_source(series_id, video_id) is None:
             return None
 
@@ -340,6 +530,21 @@ class FileSystemVideoWorkspace:
         return True
 
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
+        """汇总视频工作区侧栏五个工具的"是否可用 / 是否已生成 / 当前状态"。
+
+        状态机：
+            - 概览（AI概况）依赖 `summary.json` 存在；
+            - 知识卡、思维导图需"先有概览"才能解锁（`available`），
+              再各自检查对应制品是否存在（`generated` + `ready`）；
+            - 笔记与预览始终可用。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            含五个工具 + AI 提示语的 DTO；视频不存在时返回 `None`。
+        """
         video = self.get_video_source(series_id, video_id)
         if video is None:
             return None
@@ -392,6 +597,26 @@ class FileSystemVideoWorkspace:
         )
 
     def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
+        """在 `videos/<series_id>/` 下创建新系列目录并把所有媒体复制进去。
+
+        关键步骤：
+            1. 规范化 `title` 得到 `series_id`；命中 `PLAYGROUND_SERIES_ID` 时
+               抛错，提示走"添加 Playground 媒体"入口；
+            2. 若目标系列目录或 `linked_series.json` 已存在则抛错；
+            3. `mkdir(parents=True, exist_ok=False)` 创建目录后写入
+               `series_meta.json` 并复制媒体流；
+            4. 任意步骤失败时回滚：删除新建目录与残留元数据文件并重抛异常。
+
+        Args:
+            title: 用户填写的系列标题（用于生成 `series_id` 与 `series_meta`）。
+            files: `[(filename, file_like), ...]` 形式的待复制媒体。
+
+        Returns:
+            创建成功的 `LibrarySeriesDTO`。
+
+        Raises:
+            ValueError: 标题为空/不合法、命名空间冲突或媒体重复。
+        """
         series_id = _normalize_series_id(title)
         if series_id == PLAYGROUND_SERIES_ID:
             raise ValueError("Playground 请使用单独的“添加 Playground 媒体”入口。")
@@ -418,12 +643,32 @@ class FileSystemVideoWorkspace:
             raise
 
     def import_local_playground_videos(self, *, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
+        """把媒体导入到 Playground 系列（无独立 series_id 标题，不检查去重）。
+
+        Args:
+            files: `[(filename, file_like), ...]` 形式的待复制媒体。
+
+        Returns:
+            新增到 Playground 系列下的视频卡片列表。
+        """
         series_dir = self._videos_dir / PLAYGROUND_SERIES_ID
         series_dir.mkdir(parents=True, exist_ok=True)
         imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
         return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
 
     def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
+        """把媒体追加到既有本地系列；Playground 系列则转交 playground 入口。
+
+        Args:
+            series_id: 目标系列 ID。
+            files: `[(filename, file_like), ...]` 形式的待复制媒体。
+
+        Returns:
+            新增的视频卡片列表。
+
+        Raises:
+            ValueError: 系列不存在或导入文件名与现有媒体冲突。
+        """
         if series_id == PLAYGROUND_SERIES_ID:
             return self.import_local_playground_videos(files=files)
         if not self._series_exists(series_id):
@@ -434,6 +679,7 @@ class FileSystemVideoWorkspace:
         return [self._build_local_video_card(series_id, path) for path in imported_paths]
 
     def _list_videos_for_series(self, series_dir: Path) -> list[LibraryVideoCardDTO]:
+        """把系列目录下的所有媒体文件包装为本地视频卡片；同 stem 重复则抛错。"""
         videos = [path for path in sorted(series_dir.iterdir()) if _is_media_file(path)]
         stems = [path.stem for path in videos]
         duplicate_stems = sorted({stem for stem in stems if stems.count(stem) > 1})
@@ -451,6 +697,22 @@ class FileSystemVideoWorkspace:
         linked_meta: dict[str, object],
         local_video_dir: Path,
     ) -> list[LibraryVideoCardDTO]:
+        """把 `linked_series.json` 中的视频逐条解析为卡片，本地已下载则合并。
+
+        关键规则：
+            - `bvid` + `page=1` 组成 `video_id`，多 page 时拼接 `_p<page>`；
+            - 若 `videos/<series_id>/<video_id>.<ext>` 已存在，本地副本覆盖
+              元数据中的标题/封面/状态；
+            - 元数据中存在的条目而本地没有的，按"linked 但未下载"展示。
+
+        Args:
+            series_id: 所属系列 ID。
+            linked_meta: `linked_series.json` 解析后的字典。
+            local_video_dir: `videos/<series_id>/` 路径。
+
+        Returns:
+            合并后的视频卡片列表（linked + 本地额外视频）。
+        """
         cards: list[LibraryVideoCardDTO] = []
         consumed_video_ids: set[str] = set()
         local_paths_by_stem = {
@@ -509,6 +771,7 @@ class FileSystemVideoWorkspace:
         return cards
 
     def _build_local_video_card(self, series_id: str, video_path: Path) -> LibraryVideoCardDTO:
+        """按媒体文件路径构造本地视频卡片，状态以 `summary.json` 是否存在为判据。"""
         processed = (self._workspace_dir / series_id / video_path.stem / "summary.json").exists()
         return LibraryVideoCardDTO(
             id=video_path.stem,
@@ -520,6 +783,20 @@ class FileSystemVideoWorkspace:
         )
 
     def _copy_video_streams(self, *, series_dir: Path, files: list[tuple[str, object]]) -> list[Path]:
+        """把 `[(filename, stream), ...]` 复制到目标系列目录中。
+
+        校验与处理：
+            - 文件名 / 扩展名校验在 `_normalize_import_files` 内完成；
+            - 同批次内 stem 重复 / 与既有媒体冲突立即抛错；
+            - 复制前 `stream.seek(0)`，保证 `shutil.copyfileobj` 从头开始读。
+
+        Args:
+            series_dir: 目标系列目录。
+            files: 规范化前的 `[(filename, stream), ...]`。
+
+        Returns:
+            成功写入的 `Path` 列表（按入参顺序）。
+        """
         normalized_files = _normalize_import_files(files)
         existing_stems = {path.stem for path in series_dir.iterdir() if _is_media_file(path)} if series_dir.exists() else set()
         incoming_stems = [Path(filename).stem for filename, _ in normalized_files]
@@ -543,6 +820,7 @@ class FileSystemVideoWorkspace:
         return copied_paths
 
     def save_linked_series(self, series: LinkedSeries) -> None:
+        """把 linked 系列（含其视频列表）原子写为 `linked_series.json`。"""
         payload = {
             "title": series.title,
             "cover_url": series.cover_url,
@@ -567,6 +845,17 @@ class FileSystemVideoWorkspace:
         )
 
     def get_linked_series(self, series_id: str) -> LinkedSeries | None:
+        """读取 `linked_series.json` 并把每条视频反序列化为 `LinkedVideo`。
+
+        Args:
+            series_id: 目标系列 ID。
+
+        Returns:
+            解析后的 `LinkedSeries`；文件不存在时返回 `None`。
+
+        Raises:
+            ValueError: JSON 结构不符合预期（videos 不是数组 / 条目不是对象）。
+        """
         meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
         if not meta_path.exists():
             return None
@@ -596,6 +885,7 @@ class FileSystemVideoWorkspace:
         )
 
     def delete_linked_series(self, series_id: str) -> bool:
+        """删除 `linked_series.json`（不动其他目录），文件不存在则返回 `False`。"""
         meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
         if not meta_path.exists():
             return False
@@ -603,6 +893,19 @@ class FileSystemVideoWorkspace:
         return True
 
     def delete_series(self, series_id: str) -> bool:
+        """整系列删除：`videos/<series_id>/` 与 `workspace/<series_id>/` 一并清空。
+
+        Playground 系列因无独立元数据不允许整批删除。
+
+        Args:
+            series_id: 目标系列 ID。
+
+        Returns:
+            是否有任意路径被删除（`videos/` 或 `workspace/` 存在即视为成功）。
+
+        Raises:
+            ValueError: 尝试删除 Playground 系列。
+        """
         if series_id == PLAYGROUND_SERIES_ID:
             raise ValueError("Playground 不能整体删除，请按视频删除。")
 
@@ -621,6 +924,15 @@ class FileSystemVideoWorkspace:
         return removed
 
     def delete_video(self, series_id: str, video_id: str) -> bool:
+        """删除单个视频：清掉原始媒体、制品目录；必要时回写 linked 元数据。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID。
+
+        Returns:
+            是否有任意文件被删除（媒体 / 制品 / linked 元数据）。
+        """
         removed = False
         local_dir = self._videos_dir / series_id
         if local_dir.exists():
@@ -652,9 +964,11 @@ class FileSystemVideoWorkspace:
         return removed
 
     def _series_exists(self, series_id: str) -> bool:
+        """判断系列是否存在于 `videos/` 或 `workspace/` 任一目录。"""
         return (self._videos_dir / series_id).exists() or (self._workspace_dir / series_id).exists()
 
     def _read_series_title(self, series_id: str) -> str | None:
+        """从 `series_meta.json` 读取系列标题；文件不存在或 title 为空时返回 `None`。"""
         meta_path = self._workspace_dir / series_id / SERIES_META_FILE
         if not meta_path.exists():
             return None
@@ -665,6 +979,7 @@ class FileSystemVideoWorkspace:
         return title.strip()
 
     def _write_series_title(self, series_id: str, title: str) -> None:
+        """把系列标题原子写为 `series_meta.json`，按需创建 series 目录。"""
         output_dir = self._workspace_dir / series_id
         output_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_text(
@@ -673,9 +988,11 @@ class FileSystemVideoWorkspace:
         )
 
     def _get_video_output_dir(self, series_id: str, video_id: str) -> Path:
+        """返回 `workspace/<series_id>/<video_id>/`（不保证目录已存在）。"""
         return self._workspace_dir / series_id / video_id
 
     def _read_notes_payload(self, series_id: str, video_id: str) -> dict[str, list[dict[str, str]]]:
+        """读取并校验 `notes.json`；文件不存在返回 `{"notes": []}`，格式错误抛 `ValueError`。"""
         notes_path = self._get_video_output_dir(series_id, video_id) / "notes.json"
         if not notes_path.exists():
             return {"notes": []}
@@ -702,6 +1019,7 @@ class FileSystemVideoWorkspace:
         return {"notes": normalized_notes}
 
     def _write_notes_payload(self, series_id: str, video_id: str, payload: dict[str, list[dict[str, str]]]) -> None:
+        """把笔记 payload 原子写为 `notes.json`，按需创建 output 目录。"""
         output_dir = self._get_video_output_dir(series_id, video_id)
         output_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_text(
@@ -711,14 +1029,33 @@ class FileSystemVideoWorkspace:
 
 
 def _is_media_file(path: Path) -> bool:
+    """判断路径是否指向一个支持的媒体文件（白名单后缀 + is_file）。"""
     return path.is_file() and path.suffix.lower() in MEDIA_SUFFIXES
 
 
 def _notes_lock_key(series_id: str, video_id: str) -> str:
+    """构造 `KeyedLockManager` 用的笔记锁 key：`{series_id}/{video_id}`。"""
     return f"{series_id}/{video_id}"
 
 
 def _normalize_series_id(value: str) -> str:
+    """把用户输入的系列标题规范化为合法的 `series_id`。
+
+    校验规则：
+        - 去除两端空白，且不能为空；
+        - 拒绝相对路径符号 `.` / `..`、路径分隔符、`<>:"/\\|?*`、末尾
+          空格/句点；
+        - 拒绝 Windows 系统保留名（`CON/PRN/AUX/NUL/COMx/LPTx`）。
+
+    Args:
+        value: 用户输入的系列标题。
+
+    Returns:
+        去除两端空白的字符串。
+
+    Raises:
+        ValueError: 违反任一规则时。
+    """
     normalized = value.strip()
     if not normalized:
         raise ValueError("系列名称不能为空。")
@@ -739,6 +1076,17 @@ def _normalize_series_id(value: str) -> str:
 
 
 def _normalize_import_files(files: list[tuple[str, object]]) -> list[tuple[str, object]]:
+    """对导入文件做最少一项目 / 文件名 / 扩展名校验。
+
+    Args:
+        files: `[(filename, stream), ...]`，`stream` 一般为 FastAPI `UploadFile`。
+
+    Returns:
+        过滤后的 `[(filename, stream), ...]`，`filename` 仅保留 `Path.name`。
+
+    Raises:
+        ValueError: 列表为空、文件名缺失或扩展名不在 `MEDIA_SUFFIXES` 中。
+    """
     if not files:
         raise ValueError("至少选择一个媒体文件。")
     normalized: list[tuple[str, object]] = []
@@ -753,20 +1101,24 @@ def _normalize_import_files(files: list[tuple[str, object]]) -> list[tuple[str, 
 
 
 def _is_media_suffix(suffix: str) -> bool:
+    """判断扩展名（大小写不敏感）是否在受支持的媒体白名单中。"""
     return suffix.lower() in MEDIA_SUFFIXES
 
 
 def _source_type_for_path(path: Path) -> str:
+    """按文件扩展名把媒体分类为 `audio` / `video`，用于 `VideoSourceDTO.source_type`。"""
     if path.suffix.lower() in AUDIO_SUFFIXES:
         return "audio"
     return "video"
 
 
 def _to_title(raw_value: str) -> str:
+    """把 series_id / workspace_id 这类下划线/连字符命名转成人类可读标题。"""
     return raw_value.replace("_", " ").replace("-", " ").title()
 
 
 def _load_transcript_segments(transcript_path: Path) -> list[dict[str, object]]:
+    """从 `transcript.cleaned.json` 读出 segments（文件缺失时返回空列表）。"""
     if not transcript_path.exists():
         return []
 
@@ -775,6 +1127,11 @@ def _load_transcript_segments(transcript_path: Path) -> list[dict[str, object]]:
 
 
 def _normalize_transcript_segments(value: object) -> list[dict[str, object]]:
+    """把转写 segments 规范化为 `{start_seconds, end_seconds, text}` 字典列表。
+
+    过滤规则：跳过非字典条目、缺起止时间或文本为空的 segment；最终 `text` 会
+    去除两端空白。
+    """
     if not isinstance(value, list):
         return []
 
@@ -800,6 +1157,15 @@ def _normalize_transcript_segments(value: object) -> list[dict[str, object]]:
 
 
 def _attach_chapter_transcript(summary: dict[str, object], transcript_segments: list[dict[str, object]]) -> dict[str, object]:
+    """为 summary 中每个章节附加对应时间窗内的转写分片（不修改原 summary）。
+
+    Args:
+        summary: 视频总结的原始字典（含 `chapters` 字段）。
+        transcript_segments: 全部转写 segments。
+
+    Returns:
+        新字典；`chapters` 字段中每条多了 `transcript_segments`。
+    """
     chapters = summary.get("chapters", [])
     if not isinstance(chapters, list):
         return summary
@@ -833,6 +1199,16 @@ def _slice_transcript_segments(
     start_seconds: float | None,
     end_seconds: float | None,
 ) -> list[dict[str, object]]:
+    """按时间窗 `[start, end]` 切出与章节对齐的转写分片。
+
+    Args:
+        transcript_segments: 全部转写 segments。
+        start_seconds: 章节起秒；为 `None` 时返回空列表。
+        end_seconds: 章节止秒；为 `None` 时返回空列表。
+
+    Returns:
+        与章节时间区间有重叠的 segments（保持原顺序）。
+    """
     if start_seconds is None or end_seconds is None:
         return []
 
@@ -856,12 +1232,20 @@ def _slice_transcript_segments(
 
 
 def _as_seconds(value: object) -> float | None:
+    """把任意值转成秒数（`int` / `float`），其他类型（含 `bool`）返回 `None`。"""
     if isinstance(value, (int, float)):
         return float(value)
     return None
 
 
 def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardDTO]:
+    """把 summary 里的 `chapters` + `key_takeaways` 展开为统一的章节卡列表。
+
+    - 章节卡 `kind=chapter`；
+    - 关键结论卡 `kind=takeaway`，id 形如 `takeaway-<n>`。
+
+    过滤掉 id/title/summary 缺失或非字符串的章节；非字符串的要点被丢弃。
+    """
     cards: list[ChapterCardDTO] = []
 
     chapters = summary.get("chapters", [])
@@ -916,6 +1300,7 @@ def _build_chapter_cards(summary: dict[str, object]) -> list[ChapterCardDTO]:
 
 
 def _serialize_knowledge_card(card: KnowledgeCardDTO) -> dict[str, object]:
+    """把 `KnowledgeCardDTO` 序列化为可被 `json.dumps` 持久化的字典（拷贝 list 字段）。"""
     return {
         "id": card.id,
         "title": card.title,
@@ -929,6 +1314,11 @@ def _serialize_knowledge_card(card: KnowledgeCardDTO) -> dict[str, object]:
 
 
 def _to_knowledge_card_view(card_record: dict[str, object]) -> KnowledgeCardDTO:
+    """把 `knowledge_cards.json` 中的一条 card 反序列化为 `KnowledgeCardDTO`。
+
+    Raises:
+        ValueError: 记录不是字典、必填字段为空或字段类型不合法。
+    """
     if not isinstance(card_record, dict):
         raise ValueError("knowledge_cards.json 格式错误：card 必须是对象。")
     return KnowledgeCardDTO(
@@ -944,6 +1334,10 @@ def _to_knowledge_card_view(card_record: dict[str, object]) -> KnowledgeCardDTO:
 
 
 def _require_string_list(value: object, field_name: str) -> list[str]:
+    """校验一个列表字段：必须为数组且每项是非空字符串。
+
+    `value` 为 `None` 时返回空列表。
+    """
     if value is None:
         return []
     if not isinstance(value, list):
@@ -957,6 +1351,7 @@ def _require_string_list(value: object, field_name: str) -> list[str]:
 
 
 def _require_knowledge_card_kind(value: object) -> str:
+    """校验知识卡 `kind` 字段必须是允许的枚举值之一（`concept`/`method`/...）。"""
     allowed = {"concept", "method", "case", "term", "conclusion", "insight"}
     if not isinstance(value, str) or value not in allowed:
         raise ValueError(f"knowledge_cards.json 格式错误：kind 必须是 {', '.join(sorted(allowed))}。")
@@ -964,6 +1359,7 @@ def _require_knowledge_card_kind(value: object) -> str:
 
 
 def _to_note_view(note_record: dict[str, str]) -> VideoNoteDTO:
+    """把内存中的笔记字典构造为 `VideoNoteDTO`（字段必须齐全且非空）。"""
     return VideoNoteDTO(
         id=note_record["id"],
         title=note_record["title"],
@@ -975,18 +1371,24 @@ def _to_note_view(note_record: dict[str, str]) -> VideoNoteDTO:
 
 
 def _require_note_text(value: object, field_name: str) -> str:
+    """校验笔记相关字段为非空字符串；为空时抛 `ValueError`，错误信息含 `note.` 前缀。"""
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"note.{field_name} 不能为空。")
     return value.strip()
 
 
 def _require_text(value: object, field_name: str) -> str:
+    """校验通用字段为非空字符串（与 `_require_note_text` 仅错误前缀不同）。"""
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} 不能为空。")
     return value.strip()
 
 
 def _as_positive_int(value: object, default: int) -> int:
+    """把任意值解析为非负整数；类型不匹配 / 负数 / `bool` 时回落到 `default`。
+
+    `bool` 显式回落避免 `True` 被当作 `1` 这种误用。
+    """
     if isinstance(value, bool):
         return default
     if isinstance(value, (int, float)) and value >= 0:
@@ -995,10 +1397,12 @@ def _as_positive_int(value: object, default: int) -> int:
 
 
 def _require_note_source(value: object) -> str:
+    """校验笔记 `source` 字段必须是 `manual` 或 `agent`。"""
     if value not in {"manual", "agent"}:
         raise ValueError("note.source 必须是 manual 或 agent。")
     return str(value)
 
 
 def _now_iso() -> str:
+    """返回当前 UTC 时间的 ISO-8601 字符串（`Z` 后缀，替代 `+00:00`）。"""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

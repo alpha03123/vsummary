@@ -1,3 +1,20 @@
+"""知识卡生成相关的 LLM 提示词模板。
+
+集中维护「根据视频结构化概况生成知识卡」所需的提示词；
+模板由同调用方使用 `str.format` 注入占位符。
+"""
+
+# 用途：根据单视频的结构化总结（chapters / key_takeaways 等）生成 3~8 张高价值知识卡。
+#
+# 业务定位：知识卡是"可脱离视频独立理解的知识资产"，而不是章节摘要；
+# 通过限定 `kind` 为 `concept` / `method` / `insight` 三类约束 LLM 的输出形态。
+#
+# 输入占位符：`{title}`（视频标题）、`{summary_json}`（结构化总结 JSON 字符串）。
+#
+# 输出形态：JSON `{"cards": [...]}`，每张卡包含 `id` / `title` / `kind` /
+# `summary` / `details` / `tags` / `keywords`；`kind` 限定为
+# `concept` / `method` / `insight` 之一，`related_card_ids` 由系统后处理
+# （不再要求 LLM 输出）。
 KNOWLEDGE_CARD_PROMPT_TEMPLATE = (
     "请根据以下视频结构化概况，生成适合复习记忆的知识卡片 JSON。\n"
     "这些卡片的目标不是章节摘要，而是筛选出真正值得长期记住、可脱离视频独立理解的知识资产。\n"

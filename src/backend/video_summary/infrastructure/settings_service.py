@@ -1,3 +1,12 @@
+"""设置面板的服务层：`SettingsService` + `SettingsServicePort` Protocol。
+
+本模块负责"把工作区设置/LLM provider 持久化并对外暴露安全视图"：
+- `SettingsServicePort` 是供 API 路由、Agent 适配层依赖注入的 Port；
+- `SettingsService` 是其实现：校验 + 落盘 `settings.toml` / `.env` +
+  跑 LiteLLM 连通性测试。
+所有写入都走原子写并由 `self._settings_lock` 串行化，避免并发覆盖。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,11 +46,22 @@ from backend.shared.llm import LiteLLMCompletionGateway
 
 
 class SettingsValidationError(ValueError):
-    pass
+    """设置面板输入校验失败时抛出（区别于 `load_settings` 内部的 `ValueError`）。"""
 
 
 @dataclass(frozen=True)
 class ProviderSettings:
+    """LLM provider / `.env` 配置的对外只读视图。
+
+    Attributes:
+        llm_provider: LLM provider 标识。
+        openai_base_url: 归一化后的 OpenAI 兼容 base_url。
+        openai_model: 模型名称。
+        has_openai_api_key: 是否已配置 API Key（仅布尔，不暴露原文）。
+        openai_api_key_masked: 脱敏后的 API Key，前 4 后 4 可见。
+        hf_endpoint: HuggingFace 镜像 URL。
+    """
+
     llm_provider: str
     openai_base_url: str
     openai_model: str
@@ -52,6 +72,27 @@ class ProviderSettings:
 
 @dataclass(frozen=True)
 class WorkspaceSettings:
+    """工作区可调配置的对外只读视图。
+
+    Attributes:
+        theme: UI 主题（`light` / `dark`）。
+        show_takeaways: 是否在工作区显示"关键结论"区。
+        transcript_enhancement_enabled: 是否启用 LLM 转写增强。
+        asr_model_quality: faster-whisper 模型 ID。
+        transcription_mode: 转写模式（`fast` / `balanced` / `accurate`）。
+        rag_embedding_device: RAG embedding 计算设备。
+        rag_max_hits: 单次检索返回的最大命中数。
+        rag_rerank_enabled: 是否启用 BGE 重排序（受 reranker 模型下载状态影响）。
+        window_tokens: LLM 上下文窗口大小。
+        answer_detail_level: 答案详细程度。
+        reasoning_effort: 推理深度。
+        talk_custom_prompt: Agent 自定义问答提示词。
+        video_generation_concurrency: 单视频级并发上限。
+        web_search_enabled: 是否启用 Web 搜索。
+        chaoxing_request_delay_seconds: 超星导入普通请求最小间隔。
+        chaoxing_init_course_delay_seconds: 超星课程初始化额外等待。
+    """
+
     theme: str
     show_takeaways: bool
     transcript_enhancement_enabled: bool
@@ -71,7 +112,14 @@ class WorkspaceSettings:
 
 
 class SettingsServicePort(Protocol):
+    """设置服务对外暴露的 Protocol（供 API 路由/其他模块做依赖注入）。
+
+    业务目的：把"读/写工作区设置"与"读/写 LLM provider 设置"封装成单一服务，
+    避免上层直接耦合到 `settings.toml` 与 `.env` 的具体 IO。
+    """
+
     def get_workspace_settings(self) -> WorkspaceSettings:
+        """返回当前 `settings.toml` 中的工作区可调配置视图。"""
         ...
 
     def update_workspace_settings(
@@ -94,12 +142,15 @@ class SettingsServicePort(Protocol):
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
+        """校验并把新的工作区配置落盘到 `settings.toml`。"""
         ...
 
     def get_provider_settings(self) -> ProviderSettings:
+        """返回当前 `.env` 中的 LLM provider 配置视图（API Key 脱敏）。"""
         ...
 
     def get_openai_api_key(self) -> str:
+        """返回当前 `.env` 中明文保存的 OpenAI API Key（供内部调用 LLM 使用）。"""
         ...
 
     def update_provider_settings(
@@ -111,6 +162,7 @@ class SettingsServicePort(Protocol):
         openai_api_key: str | None,
         hf_endpoint: str | None,
     ) -> ProviderSettings:
+        """校验并把新的 LLM provider 配置落盘到 `.env`。"""
         ...
 
     def test_provider_settings(
@@ -122,10 +174,18 @@ class SettingsServicePort(Protocol):
         openai_api_key: str | None,
         hf_endpoint: str | None,
     ) -> str:
+        """用给定 provider 配置走一次 LiteLLM 连接测试，返回回执文本。"""
         ...
 
 
 class SettingsService:
+    """设置面板的持久化与连通性测试服务。
+
+    业务目的：把"读 + 改 + 落盘 + 测连接"封装为单一服务，作为 API 路由与
+    LangGraph agent 之间的唯一设置入口；通过 `SettingsServicePort` 解耦具体
+    存储实现。
+    """
+
     def __init__(
         self,
         *,
@@ -134,6 +194,15 @@ class SettingsService:
         faster_whisper_model_manager: FasterWhisperModelManager,
         rag_model_manager: RagModelManager | None = None,
     ) -> None:
+        """注入 `settings.toml` 路径、项目根目录与 ASR / RAG 模型管理器。
+
+        Args:
+            config_path: `settings.toml` 文件路径。
+            root_dir: 项目根目录（用于定位 `.env`）。
+            faster_whisper_model_manager: 用于校验 asr_model_quality 是否受支持。
+            rag_model_manager: 用于检测 reranker 模型是否已下载；为 `None` 时
+                视为不强制要求（保留向后兼容）。
+        """
         self._config_path = config_path
         self._root_dir = root_dir
         self._faster_whisper_model_manager = faster_whisper_model_manager
@@ -141,6 +210,13 @@ class SettingsService:
         self._settings_lock = Lock()
 
     def get_workspace_settings(self) -> WorkspaceSettings:
+        """把 `settings.toml` 转换为工作区可调配置视图。
+
+        Returns:
+            包含主题、转写开关、ASR / RAG / Agent / 外部导入等所有工作区可调
+            字段的 `WorkspaceSettings`；`rag_rerank_enabled` 受 reranker 模型
+            下载状态影响。
+        """
         settings = load_settings(self._config_path, self._root_dir)
         rag_rerank_enabled = settings.agent_retrieval.rerank_enabled and (
             self._rag_model_manager is None or self._rag_model_manager.is_downloaded("reranker")
@@ -184,6 +260,37 @@ class SettingsService:
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
+        """校验并把工作区可调配置落盘到 `settings.toml`。
+
+        校验项：主题枚举、ASR 模型是否被 faster-whisper 管理器支持、转写
+        模式枚举、若干正整数 / 非负数约束；启用 rerank 但 reranker 未下载时
+        拒绝。落盘走 `dataclasses.replace` 派生新 `AppSettings`，最终调用
+        `save_settings` 原子写回。
+
+        Args:
+            theme: UI 主题。
+            show_takeaways: 是否显示关键结论。
+            transcript_enhancement_enabled: 是否启用 LLM 转写增强。
+            asr_model_quality: faster-whisper 模型 ID。
+            transcription_mode: 转写模式。
+            rag_embedding_device: RAG embedding 设备。
+            rag_max_hits: 单次检索最大命中数。
+            rag_rerank_enabled: 是否启用 BGE rerank。
+            window_tokens: LLM 上下文窗口大小。
+            answer_detail_level: 答案详细程度。
+            reasoning_effort: 推理深度。
+            video_generation_concurrency: 单视频级并发上限。
+            web_search_enabled: 是否启用 Web 搜索。
+            talk_custom_prompt: Agent 自定义问答提示词。
+            chaoxing_request_delay_seconds: 超星导入普通请求最小间隔。
+            chaoxing_init_course_delay_seconds: 超星课程初始化额外等待。
+
+        Returns:
+            落盘后的 `WorkspaceSettings` 视图（已归一化字段）。
+
+        Raises:
+            SettingsValidationError: 任一字段校验失败。
+        """
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
         if not self._faster_whisper_model_manager.is_supported(asr_model_quality):
@@ -262,6 +369,12 @@ class SettingsService:
         )
 
     def get_provider_settings(self) -> ProviderSettings:
+        """把 `.env` 中的 LLM provider 配置转换为对外视图。
+
+        Returns:
+            含 provider / base_url / model / API Key 是否存在 / 脱敏 Key /
+            HF 镜像的 `ProviderSettings`。
+        """
         env_settings = load_env_settings(self._root_dir)
         return ProviderSettings(
             llm_provider=env_settings.provider,
@@ -273,6 +386,7 @@ class SettingsService:
         )
 
     def get_openai_api_key(self) -> str:
+        """读取 `.env` 中明文保存的 OpenAI API Key（供内部 LLM 调用使用）。"""
         return load_env_settings(self._root_dir).api_key
 
     def update_provider_settings(
@@ -284,6 +398,21 @@ class SettingsService:
         openai_api_key: str | None,
         hf_endpoint: str | None,
     ) -> ProviderSettings:
+        """校验并把新的 LLM provider 配置落盘到 `.env`。
+
+        Args:
+            llm_provider: LLM provider 标识（`qwen` 会被归一为 `dashscope`）。
+            openai_base_url: OpenAI 兼容 base_url。
+            openai_model: 模型名称。
+            openai_api_key: 新 API Key；为 `None` 时保留 `.env` 现有值。
+            hf_endpoint: HuggingFace 镜像 URL；为 `None` 时按空字符串处理。
+
+        Returns:
+            归一化后的 `ProviderSettings`（含脱敏 API Key）。
+
+        Raises:
+            SettingsValidationError: provider 非法 / base_url 缺协议头 / model 为空。
+        """
         provider_settings = self._validate_provider_settings(
             llm_provider=llm_provider,
             openai_base_url=openai_base_url,
@@ -310,6 +439,22 @@ class SettingsService:
         openai_api_key: str | None,
         hf_endpoint: str | None,
     ) -> str:
+        """用给定 provider 配置走一次 LiteLLM 连接测试。
+
+        Args:
+            llm_provider: LLM provider 标识。
+            openai_base_url: OpenAI 兼容 base_url。
+            openai_model: 模型名称。
+            openai_api_key: 候选 API Key；为 `None` 时使用 `.env` 现有值。
+            hf_endpoint: HuggingFace 镜像 URL；为 `None` 时按空字符串处理。
+
+        Returns:
+            模型回执文本（网关为空时返回 `"ok"`）。
+
+        Raises:
+            SettingsValidationError: provider 非法 / base_url 缺协议头 / model 为空。
+            RuntimeError: 模型超时（包装为"模型超时"）。
+        """
         provider_settings = self._validate_provider_settings(
             llm_provider=llm_provider,
             openai_base_url=openai_base_url,
@@ -341,6 +486,7 @@ class SettingsService:
         openai_api_key: str,
         hf_endpoint: str,
     ) -> None:
+        """把 LLM provider 配置封装为 `EnvSettings` 并落盘到 `.env`（原子写）。"""
         save_env_settings(
             self._root_dir,
             EnvSettings(
@@ -361,6 +507,26 @@ class SettingsService:
         openai_api_key: str | None,
         hf_endpoint: str | None,
     ) -> ProviderSettings:
+        """归一化并校验 LLM provider 配置，返回可对外暴露的 `ProviderSettings`。
+
+        校验项：provider 枚举（`qwen` → `dashscope`）、base_url 必须以
+        `http://` 或 `https://` 开头（允许空字符串）、model 不能为空。`api_key`
+        用于派生 `has_openai_api_key` / `openai_api_key_masked`，原文不出现在
+        返回值中。
+
+        Args:
+            llm_provider: LLM provider 标识。
+            openai_base_url: OpenAI 兼容 base_url（允许空字符串）。
+            openai_model: 模型名称。
+            openai_api_key: 候选 API Key；为 `None` 时回落到 `.env` 现有值。
+            hf_endpoint: HuggingFace 镜像 URL；为 `None` 时按空字符串处理。
+
+        Returns:
+            归一化后的 `ProviderSettings`（API Key 脱敏）。
+
+        Raises:
+            SettingsValidationError: provider 非法 / base_url 缺协议头 / model 为空。
+        """
         normalized_provider = llm_provider.strip()
         normalized_base_url = openai_base_url.strip()
         normalized_model = openai_model.strip()
@@ -388,12 +554,14 @@ class SettingsService:
         )
 
     def _resolve_openai_api_key(self, openai_api_key: str | None) -> str:
+        """解析"本次传入"的 API Key：`None` 时回落到 `.env` 现有值，其他值做 strip。"""
         if openai_api_key is None:
             return load_env_settings(self._root_dir).api_key
         return openai_api_key.strip()
 
 
 def _mask_api_key(api_key: str) -> str:
+    """把 API Key 脱敏：长度 ≤ 8 全部 `*`，否则保留前 4 后 4 + 中间 `*`；空串返回空串。"""
     normalized = api_key.strip()
     if not normalized:
         return ""
@@ -403,6 +571,7 @@ def _mask_api_key(api_key: str) -> str:
 
 
 def _is_model_timeout(error: Exception) -> bool:
+    """判断异常是否表示"模型超时"：匹配 `TimeoutError` 或 message 中含 `timeout` / `timed out`。"""
     if isinstance(error, TimeoutError):
         return True
     message = str(error).lower()
