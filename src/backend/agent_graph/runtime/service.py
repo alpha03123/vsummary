@@ -1,3 +1,9 @@
+"""Agent 图服务的公开 API，提供回合执行与流式回答的统一入口。
+
+本模块定义 `AgentGraphService`——将 LangGraph 图调用、回合构建、会话记录
+与流式编排封装为唯一的对外调用面，供 FastAPI 路由与 SSE 端点消费。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -17,6 +23,18 @@ from backend.agent_graph.runtime.turns import (
 
 
 class AgentGraphService:
+    """Agent 图服务的公开 API，封装 LangGraph 工作流的完整调用闭环。
+
+    业务意图：将"构建图形输入 → 执行图 → 构建回合结果 → 持久化会话 → 流式回答"
+    收敛到 `run_turn` 与 `stream_with_context` 两个公开方法，路由层无需
+    感知内部编排细节。
+
+    关键不变式：
+    - 每个回合必定通过 `AgentGraphTurnBuilder` 构建结构化的 `AgentTurnResult`；
+    - 每个回合必定通过 `AgentGraphSessionRecorder` 持久化到会话存储；
+    - 流式路径与非流式路径共享同一套回合构建与会话记录逻辑；
+    - `answer_stream_gateway` 为 `None` 时走图内文本切分流式兜底。
+    """
     def __init__(
         self,
         *,
@@ -26,6 +44,17 @@ class AgentGraphService:
         memory_compactor: MemoryMessageCompactor | None = None,
         answer_stream_gateway: ChatGateway | None = None,
     ) -> None:
+        """注入图实例、上下文加载器、会话存储等依赖。
+
+        Args:
+            context_loader: 从会话 ID 加载 `AgentContext` 的端口。
+            graph: 已编译的 LangGraph StateGraph 实例（含节点与路由）。
+            session_store: 可选的会话持久化端口；为 `None` 时不记录多轮历史。
+            memory_compactor: 可选的消息压缩器，在会话记录后触发压缩；为 `None`
+                时不压缩。
+            answer_stream_gateway: 可选的 LLM 流式网关，用于延迟流式回答场景；
+                为 `None` 时流式路径走图内文本切分兜底。
+        """
         self._graph = graph
         self._input_builder = AgentGraphInputBuilder(
             context_loader=context_loader,
@@ -55,6 +84,12 @@ class AgentGraphService:
         debug_trace: dict[str, object] | None,
         graph_input: dict[str, object],
     ) -> None:
+        """将图输入摘要写入 debug_trace（若提供）。
+
+        Args:
+            debug_trace: 外部传入的调试字典；为 `None` 时跳过。
+            graph_input: 即将送入图的完整状态字典。
+        """
         if debug_trace is None:
             return
         debug_trace["graph_input"] = {
@@ -74,6 +109,16 @@ class AgentGraphService:
         graph_input: dict[str, object],
         debug_trace: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        """同步调用 LangGraph 图并返回最终状态。
+
+        Args:
+            graph: 已编译的 LangGraph StateGraph 实例。
+            graph_input: 图的初始状态负载。
+            debug_trace: 为 `None` 时跳过调试记录。
+
+        Returns:
+            图运行结束后的最终状态字典。
+        """
         result = graph.invoke(graph_input)
         if debug_trace is not None:
             debug_trace["graph_result"] = result
@@ -87,6 +132,24 @@ class AgentGraphService:
         context_override=None,
         debug_trace: dict[str, object] | None = None,
     ) -> AgentTurnResult:
+        """执行一次对话回合（非流式），返回结构化的 `AgentTurnResult`。
+
+        完整的调用链路：
+        1. 通过 `AgentGraphInputBuilder` 构建图输入与 AgentContext；
+        2. 同步调用 LangGraph 图；
+        3. 通过 `AgentGraphTurnBuilder` 从图输出构建 `AgentTurnResult`；
+        4. 通过 `AgentGraphSessionRecorder` 持久化本轮对话。
+
+        Args:
+            session_id: 会话唯一 ID。
+            user_message: 用户最新问题原文。
+            context_override: 可选的 `AgentContext` 覆盖值；为 `None` 时从
+                session_store 自动加载。
+            debug_trace: 可选的调试信息收集字典；为 `None` 时不记录。
+
+        Returns:
+            结构化的 `AgentTurnResult`，包含助手消息、工具结果与引用。
+        """
         input_bundle = self._input_builder.build(
             session_id=session_id,
             user_message=user_message,
@@ -119,6 +182,22 @@ class AgentGraphService:
         context_override=None,
         debug_trace: dict[str, object] | None = None,
     ) -> Iterator[AgentStreamEvent]:
+        """执行一次对话回合并以 `AgentStreamEvent` 迭代器流式返回结果。
+
+        与 `run_turn` 的区别：本方法通过 `AgentGraphStreamOrchestrator` 将
+        图执行过程拆解为 `thinking_started`、`stage_started`、`stage_completed`、
+        `tool_completed`、`answer_delta`、`answer_completed` 等 SSE 事件，
+        供前端实时渲染每一步进展。
+
+        Args:
+            session_id: 会话唯一 ID。
+            user_message: 用户最新问题原文。
+            context_override: 可选的 `AgentContext` 覆盖值；为 `None` 时自动加载。
+            debug_trace: 可选的调试信息收集字典；为 `None` 时不记录。
+
+        Yields:
+            `AgentStreamEvent` 序列，按时间顺序描述图执行的各阶段。
+        """
         input_bundle = self._input_builder.build(
             session_id=session_id,
             user_message=user_message,
@@ -141,6 +220,16 @@ class AgentGraphService:
         debug_trace: dict[str, object] | None,
         result: dict[str, object],
     ) -> None:
+        """将图输出中的结构化字段写入 debug_trace（若提供）。
+
+        自动提取 query_understanding、retrieval_request、retrieval_results、
+        web_search_results、evidence_items、answer_payload 等中间产物并分类归入
+        debug_trace 对应键下。
+
+        Args:
+            debug_trace: 外部传入的调试字典；为 `None` 时跳过。
+            result: 图运行结束后的最终状态字典。
+        """
         if debug_trace is None:
             return
         query_understanding = result.get("query_understanding")
@@ -166,6 +255,21 @@ class AgentGraphService:
         self,
         result: dict[str, object],
     ) -> Iterator[ChatCompletionStreamChunk]:
+        """将图结果中的延迟回答消息通过流式网关转为 `ChatCompletionStreamChunk`。
+
+        仅在 `answer_stream_gateway` 已注入且图结果包含 `stream_answer_messages`
+        时可用；典型场景是 LLM 规划了工具调用但回答被推迟到工具执行完毕后流式生成。
+
+        Args:
+            result: 图运行结束后的最终状态字典，必须含 `stream_answer_messages`。
+
+        Returns:
+            `ChatCompletionStreamChunk` 迭代器。
+
+        Raises:
+            RuntimeError: answer_stream_gateway 未注入。
+            ValueError: result 中缺少有效的 stream_answer_messages。
+        """
         if self._answer_stream_gateway is None:
             raise RuntimeError("回答流式网关尚未注入。")
         raw_messages = result.get("stream_answer_messages")
@@ -185,4 +289,9 @@ class AgentGraphService:
         *,
         session_id: str,
     ) -> None:
+        """清除指定会话的全部历史记录。
+
+        Args:
+            session_id: 目标会话 ID。
+        """
         self._session_recorder.clear_session(session_id)

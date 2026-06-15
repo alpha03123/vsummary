@@ -1,3 +1,10 @@
+# 对话压缩器的系统提示词。
+#
+# 用途：作为 `backend.agent.context.semantic_compactor.compact_conversation_messages`
+# 调 LLM 时的 system 角色内容，要求 LLM 把更早的对话消息压成固定 JSON 结构
+# （summary / confirmed_facts / open_threads / constraints）。
+# 关键约束：只复述已有事实、保留对后续回答有影响的"目标/事实/未完成事项/约束"、
+# 删掉寒暄与铺垫、严格输出 JSON 字符串（不带代码块标记）。
 COMPACTOR_SYSTEM_PROMPT = (
     "你是视频知识工作台中的对话压缩器。\n"
     "你的任务是把更早的对话消息压缩成可继续使用的语义摘要。\n"

@@ -1,15 +1,38 @@
+"""解析与过滤 LLM 流式回答中的 inline 数字引用（`[1]` / `[2]` ...）。
+
+提供三个职责单一的工具函数：
+- `resolve_inline_citations`：把回答中的 `[N]` 解析回 `evidence_id`，
+  并剥离任何误输出的内部 ID 标记（`e1`、`local-1`、`web-2` 等）；
+- `extract_inline_source_numbers`：上面那个函数的"只取编号"便捷封装；
+- `filter_inline_citation_markers`：按白名单只保留合法的 citation 编号。
+
+设计原则：引用编号必须与上游 `evidence_items` 顺序对齐；遇到模型"幻觉"
+出来的未知编号必须抛错，而不是静默丢弃。
+"""
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
 
+# 匹配回答正文中的 inline 数字引用 `[N]`（N 为十进制整数，允许带空白）。
 INLINE_NUMBER_PATTERN = re.compile(r"\[(?P<value>\s*\d+\s*)\]")
+
+# 匹配模型在流式输出时可能误输出的内部 ID 标记（命中后直接整段删除）。
 EVIDENCE_ID_MARKER_PATTERN = re.compile(r"\[\s*(?:e+[0-9]+|local-\d+|web-\d+)\s*\]")
 
 
 @dataclass(frozen=True)
 class InlineCitationResolution:
+    """inline 引用解析后的中间结果。
+
+    Attributes:
+        answer_text: 去除内部 ID 标记后的回答正文。
+        used_source_numbers: 回答中实际引用过的 source 编号（按出现顺序）。
+        used_evidence_ids: 与 `used_source_numbers` 一一对应的 evidence_id 列表。
+    """
+
     answer_text: str
     used_source_numbers: list[int]
     used_evidence_ids: list[str]
@@ -19,6 +42,15 @@ def extract_inline_source_numbers(
     answer_text: str,
     evidence_items: list[dict[str, object]],
 ) -> list[int]:
+    """便捷封装：只返回回答中使用到的 source 编号列表。
+
+    Args:
+        answer_text: 模型流式输出的回答正文。
+        evidence_items: 用于把编号映射回 evidence_id 的证据列表。
+
+    Returns:
+        按出现顺序排列的 source 编号列表。
+    """
     return resolve_inline_citations(answer_text, evidence_items).used_source_numbers
 
 
@@ -26,6 +58,27 @@ def resolve_inline_citations(
     answer_text: str,
     evidence_items: list[dict[str, object]],
 ) -> InlineCitationResolution:
+    """把回答中的 `[N]` 解析为 `evidence_id`，并清理内部 ID 标记。
+
+    处理流程：
+    1. 先用 `EVIDENCE_ID_MARKER_PATTERN` 把所有 `e1`、`local-1`、`web-2`
+       这类内部 ID 标记整段删除，避免泄露内部命名；
+    2. 用 `INLINE_NUMBER_PATTERN` 扫描 `[N]`，按出现顺序累计到
+       `used_source_numbers` 与 `used_evidence_ids`；
+    3. 收集"出现但 evidence_items 中不存在"的编号 —— 任何未知编号都
+       会触发 `ValueError`，防止模型幻觉引用导致证据链断裂。
+
+    Args:
+        answer_text: 模型流式输出的回答正文。
+        evidence_items: 顺序与编号一一对应的证据字典列表。
+
+    Returns:
+        解析后的 `InlineCitationResolution`，含去标记正文、引用编号、
+        对应 evidence_id。
+
+    Raises:
+        ValueError: 模型输出了未在 `evidence_items` 中出现的引用编号。
+    """
     source_map = _build_source_number_map(evidence_items)
     used_numbers: list[int] = []
     used_ids: list[str] = []
@@ -60,6 +113,18 @@ def resolve_inline_citations(
 
 
 def filter_inline_citation_markers(answer_text: str, available_ids: set[str]) -> str:
+    """按白名单只保留合法的 inline 引用编号，其余整段删除。
+
+    适用于"已经知道 answer 中允许出现哪些编号"的前置过滤场景（例如
+    用户复制粘贴一段历史回答再次展示时）。
+
+    Args:
+        answer_text: 待过滤的原始回答文本。
+        available_ids: 允许保留的引用编号集合（元素为字符串形式的整数）。
+
+    Returns:
+        过滤后的文本；未知编号的 `[N]` 整段替换为空字符串。
+    """
     def replace_match(match: re.Match[str]) -> str:
         citation_id = match.group("value").strip()
         if citation_id in available_ids:
@@ -70,6 +135,14 @@ def filter_inline_citation_markers(answer_text: str, available_ids: set[str]) ->
 
 
 def _as_evidence_id(item: dict[str, object]) -> str | None:
+    """读取证据项的 `evidence_id` 字段（缺失或空白时为 `None`）。
+
+    Args:
+        item: 证据项字典。
+
+    Returns:
+        非空 `evidence_id` 字符串；为 `None` 时表示该证据不应被编号引用。
+    """
     value = item.get("evidence_id")
     if not isinstance(value, str):
         return None
@@ -78,6 +151,14 @@ def _as_evidence_id(item: dict[str, object]) -> str | None:
 
 
 def _build_source_number_map(evidence_items: list[dict[str, object]]) -> dict[int, str]:
+    """按列表顺序把 `evidence_items` 映射成 `编号 -> evidence_id` 字典。
+
+    Args:
+        evidence_items: 上游注入的证据字典列表。
+
+    Returns:
+        `编号` 从 1 开始、值为对应 `evidence_id` 的字典；缺 ID 的项被跳过。
+    """
     source_map: dict[int, str] = {}
     for index, item in enumerate(evidence_items, start=1):
         evidence_id = _as_evidence_id(item)

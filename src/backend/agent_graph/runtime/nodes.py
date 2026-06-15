@@ -1,3 +1,17 @@
+"""LangGraph 图节点集合 + 共用辅助工具。
+
+本模块包含：
+- 图节点工厂：`build_video_context_node` / `build_plan_and_execute_video_actions_node`
+  / `build_route_scope_node` / `build_understand_query_node` /
+  `build_retrieve_evidence_node` / `build_optional_web_search_node` /
+  `build_evidence_items_node` / `build_synthesize_answer_node` /
+  `build_answer_node`，以及终结点 `finalize_state`；
+- 文本回答相关工具：`synthesize_answer_text` / `build_answer_text_messages` /
+  `append_answer_to_state`；
+- 私有辅助：检索 hits 去重与多视频多样化、上下文预算估算、联网决策、
+  本地/联网证据归一化、视频总结/转写上下文条目构造、秒数格式化等。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -17,6 +31,25 @@ def build_video_context_node(
     context_window_tokens: int,
     reserved_output_tokens: int,
 ) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `build_video_context` 节点函数：构造 video scope 的检索结果。
+
+    业务目的：在 video 链路里，跳过 series 风格的 query understanding，
+    直接把"视频总结 + 完整转写"或"总结 + 转写 RAG"打包为 `retrieval_results`，
+    供后续节点直接消费。
+
+    Args:
+        workspace: 视频工作区只读端口（必须非 `None`）。
+        retrieval_service: 转写 RAG 检索服务（仅在完整转写塞不下时使用）。
+        context_window_tokens: video scope 上下文窗口 token 上限。
+        reserved_output_tokens: 预留输出 token。
+
+    Returns:
+        一个接受 `AgentGraphState` 并返回新 state 的 LangGraph 节点函数。
+
+    Raises:
+        RuntimeError: `workspace` 未注入。
+        ValueError: state 缺少 `series_id` 或 `video_id`。
+    """
     def build_video_context(state: AgentGraphState) -> AgentGraphState:
         if workspace is None:
             raise RuntimeError("Video workspace 尚未注入。")
@@ -63,6 +96,20 @@ def build_plan_and_execute_video_actions_node(
     video_action_planner=None,
     tool_executor=None,
 ) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `plan_and_execute_video_actions` 节点：LLM 规划 + 工具执行。
+
+    业务目的：在 video scope 证据整理之后，让 LLM 基于证据 + 记忆决定
+    要打开/记录/跳转哪些工具，并由 executor 立即执行；结果（tool_calls /
+    tool_results / action_summary）写入 state。
+
+    Args:
+        video_action_planner: 实现 `VideoActionPlanner.run` 接口的规划器；
+            为 `None` 时节点直接透传 state（不规划也不执行）。
+        tool_executor: 工具执行器端口；为 `None` 时同上。
+
+    Returns:
+        LangGraph 节点函数；处理后返回新的 state。
+    """
     def plan_and_execute_video_actions(state: AgentGraphState) -> AgentGraphState:
         if video_action_planner is None or tool_executor is None:
             return dict(state)
@@ -103,6 +150,11 @@ def build_plan_and_execute_video_actions_node(
 
 
 def build_route_scope_node() -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `route_scope` 节点：当前为 identity 透传，仅承担条件边的起点。
+
+    返回的节点函数直接返回 `dict(state)`，真正按 `scope_type` 路由由
+    `graph.add_conditional_edges` + `_route_after_scope` 完成。
+    """
     def route_scope(state: AgentGraphState) -> AgentGraphState:
         return dict(state)
 
@@ -110,6 +162,23 @@ def build_route_scope_node() -> Callable[[AgentGraphState], AgentGraphState]:
 
 
 def build_understand_query_node(*, series_query_processor, workspace=None) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `understand_query` 节点：调用 LLM 解析用户问题。
+
+    业务目的：在 series 链路里，先让 LLM 把用户问题改写为 `normalized_query`
+    + 子问题 + filters，并初始化下游节点的 state 字段（检索 / 联网 /
+    证据 / 回答占位）。
+
+    Args:
+        series_query_processor: 实现 `SeriesQueryProcessor.run` 的处理器；
+            为 `None` 时节点会抛 `RuntimeError`。
+        workspace: 可选的工作区只读端口，用于加载 series catalog 与标题。
+
+    Returns:
+        LangGraph 节点函数。
+
+    Raises:
+        RuntimeError: `series_query_processor` 未注入。
+    """
     def understand_query(state: AgentGraphState) -> AgentGraphState:
         if series_query_processor is None:
             raise RuntimeError("Series query processor 尚未注入。")
@@ -139,6 +208,17 @@ def build_understand_query_node(*, series_query_processor, workspace=None) -> Ca
 
 
 def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `retrieve_evidence` 节点：基于 `query_understanding` 做系列级 RAG 检索。
+
+    流程：拿 `normalized_query` + 子问题拼检索 query 列表 → 调 `retrieval_service`
+    → 对结果做去重 + 多视频多样化 → 写入 `retrieval_results` 与 `retrieval_request`。
+
+    Args:
+        retrieval_service: 系列级 RAG 检索服务（`SeriesRetrievalService` 或兼容实现）。
+
+    Returns:
+        LangGraph 节点函数。
+    """
     def retrieve_evidence(state: AgentGraphState) -> AgentGraphState:
         max_hits = _resolve_retrieval_max_hits(retrieval_service)
         query_understanding = dict(state.get("query_understanding", {}))
@@ -171,6 +251,24 @@ def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphSt
 
 
 def build_optional_web_search_node(*, web_search_gateway=None, web_search_settings=None) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `optional_web_search` 节点：按启发式决定是否触发联网搜索。
+
+    触发条件：网关/配置齐全且 `enabled=True`、本地证据不足或用户消息中
+    包含联网意图关键词。命中后调 `web_search_gateway.search` 并把结果
+    归一化写入 `web_search_results`（附 `duration_ms`）。
+
+    Args:
+        web_search_gateway: 实现 `search(user_message, max_results, timeout_seconds)`
+            的联网网关；为 `None` 时节点透传 state。
+        web_search_settings: 联网配置（启用开关、最大结果数、超时秒数）；
+            为 `None` 或 `enabled=False` 时节点透传 state。
+
+    Returns:
+        LangGraph 节点函数。
+
+    Raises:
+        RuntimeError: 网关调用失败时被包装后抛出。
+    """
     def optional_web_search(state: AgentGraphState) -> AgentGraphState:
         if web_search_gateway is None or web_search_settings is None or not bool(getattr(web_search_settings, "enabled", False)):
             next_state = dict(state)
@@ -216,6 +314,12 @@ def build_optional_web_search_node(*, web_search_gateway=None, web_search_settin
 
 
 def build_evidence_items_node() -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `build_evidence_items` 节点：合并本地证据与联网证据并归一化。
+
+    流程：把 `retrieval_results` 投影成本地证据（带 `evidence_id`），再把
+    `web_search_results` 投影成联网证据；二者拼接写入 `evidence_items`，
+    供下游回答合成与 video 节点统一消费。
+    """
     def build_evidence_items(state: AgentGraphState) -> AgentGraphState:
         local_items = [
             _normalize_local_evidence_item(item, index=index)
@@ -235,6 +339,24 @@ def build_evidence_items_node() -> Callable[[AgentGraphState], AgentGraphState]:
 
 
 def build_synthesize_answer_node(*, series_answer_synthesizer) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `synthesize_answer` 节点：调用 series 回答合成器生成最终回答。
+
+    支持两种模式：
+        - 普通模式：直接调 `series_answer_synthesizer.run`，把 `payload` 与
+          `answer` 写入 state；
+        - 流式延后模式（`defer_answer_stream=True`）：仅构造 `stream_answer_messages`
+          留给 `AgentGraphStreamOrchestrator` 真正发起流式生成。
+
+    Args:
+        series_answer_synthesizer: 实现 `run` / `build_text_messages` 的回答合成器；
+            为 `None` 时节点抛 `RuntimeError`。
+
+    Returns:
+        LangGraph 节点函数。
+
+    Raises:
+        RuntimeError: `series_answer_synthesizer` 未注入。
+    """
     def synthesize_answer(state: AgentGraphState) -> AgentGraphState:
         if series_answer_synthesizer is None:
             raise RuntimeError("Series answer synthesizer 尚未注入。")
@@ -279,6 +401,15 @@ def build_synthesize_answer_node(*, series_answer_synthesizer) -> Callable[[Agen
 
 
 def build_answer_node(*, answer_program) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 `answer` 节点：合成 video scope 的最终回答。
+
+    同样支持延后流式：若 `defer_answer_stream=True` 则只构造
+    `stream_answer_messages`；否则直接调 `synthesize_answer_text` 拿文本
+    并通过 `append_answer_to_state` 写入。
+
+    Args:
+        answer_program: 实现 `run` / `build_text_messages` 的 video scope 回答程序。
+    """
     def answer(state: AgentGraphState) -> AgentGraphState:
         if bool(state.get("defer_answer_stream", False)):
             next_state = dict(state)
@@ -304,6 +435,20 @@ def synthesize_answer_text(
     answer_program,
     debug_trace: dict[str, object] | None = None,
 ) -> str:
+    """调用 `answer_program.run` 同步合成最终回答文本。
+
+    投影参数：user_message、记忆消息、证据列表（两次：retrieval_results
+    与 evidence_items 都用同一份）、以及 meta_state（工具结果 + action
+    摘要 + 是否使用联网）。
+
+    Args:
+        state: 当前 `AgentGraphState`。
+        answer_program: video scope 回答程序。
+        debug_trace: 当前未使用，预留扩展。
+
+    Returns:
+        LLM 合成的回答文本字符串。
+    """
     return answer_program.run(
         user_message=state["user_message"],
         memory_messages=[
@@ -325,6 +470,15 @@ def build_answer_text_messages(
     *,
     answer_program,
 ) -> list[AgentChatMessage]:
+    """构造 video scope 延后流式回答所需的 `AgentChatMessage` 列表。
+
+    Args:
+        state: 当前 `AgentGraphState`。
+        answer_program: 实现 `build_text_messages` 的 video 回答程序。
+
+    Returns:
+        准备送往 LLM 流的 `AgentChatMessage` 列表。
+    """
     return answer_program.build_text_messages(
         user_message=state["user_message"],
         memory_messages=[
@@ -342,6 +496,15 @@ def build_answer_text_messages(
 
 
 def append_answer_to_state(state: AgentGraphState, answer_text: str) -> AgentGraphState:
+    """把回答文本写入 state 的 `answer` 字段并追加到 `task_outputs`。
+
+    Args:
+        state: 当前 state。
+        answer_text: 已生成的回答文本（可能为空）。
+
+    Returns:
+        新的 state（`dict(state)` 拷贝）。
+    """
     next_state = dict(state)
     next_state["answer"] = answer_text
     next_state["task_outputs"] = list(state.get("task_outputs", [])) + [
@@ -351,6 +514,14 @@ def append_answer_to_state(state: AgentGraphState, answer_text: str) -> AgentGra
 
 
 def finalize_state(state: AgentGraphState) -> AgentGraphState:
+    """图终节点：把所有 `task_outputs` 拼成 `assistant_message`，必要时回填 `answer`。
+
+    行为：
+        - 把 `task_outputs` 中 `kind=answer` 等有效文本用换行拼接为
+          `assistant_message`；
+        - 若 `answer` 为空则用 `assistant_message` 回填，保证最终用户消息与
+          回答字段都非空。
+    """
     outputs = list(state.get("task_outputs", []))
     fragments: list[str] = []
     for item in outputs:
@@ -367,6 +538,16 @@ def finalize_state(state: AgentGraphState) -> AgentGraphState:
 
 
 def _load_series_catalog(*, workspace, series_id: str) -> dict[str, object]:
+    """加载系列目录：优先读 `workspace.get_series_catalog`，缺失时回退到构造器。
+
+    Args:
+        workspace: 工作区只读端口。
+        series_id: 目标系列 ID。
+
+    Returns:
+        系列目录字典；`workspace` 为 `None` 或 `series_id` 为空时返回只含
+        `{series_id, videos: []}` 的占位字典。
+    """
     if workspace is None or not series_id:
         return {"series_id": series_id, "videos": []}
     existing = workspace.get_series_catalog(series_id)
@@ -376,6 +557,7 @@ def _load_series_catalog(*, workspace, series_id: str) -> dict[str, object]:
 
 
 def _resolve_retrieval_max_hits(retrieval_service) -> int:
+    """读取检索服务的 `default_max_hits` 配置；不可用时回退到 5。"""
     default_max_hits = getattr(retrieval_service, "default_max_hits", None)
     if callable(default_max_hits):
         return int(default_max_hits())
@@ -383,6 +565,7 @@ def _resolve_retrieval_max_hits(retrieval_service) -> int:
 
 
 def _resolve_series_title(*, workspace, series_id: str) -> str:
+    """查询系列的标题字符串；找不到时返回空串。"""
     if workspace is None or not series_id:
         return ""
     series = next((item for item in workspace.list_series() if item.id == series_id), None)
@@ -392,6 +575,7 @@ def _resolve_series_title(*, workspace, series_id: str) -> str:
 
 
 def _build_retrieval_queries(normalized_query: str, subqueries: list[str], *, max_queries: int = 5) -> list[str]:
+    """把归一化查询与子问题拼成有序去重的检索 query 列表（最多 `max_queries` 条）。"""
     queries: list[str] = []
     for query in [normalized_query, *subqueries]:
         normalized = str(query).strip()
@@ -409,6 +593,7 @@ def _search_series_queries(
     queries: list[str],
     max_hits: int,
 ) -> list[dict[str, object]]:
+    """对每个 query 调检索服务、合并 hits 并做去重 + 多视频多样化。"""
     hits: list[dict[str, object]] = []
     for query in queries:
         response = retrieval_service.search(
@@ -427,6 +612,7 @@ def _search_series_queries(
 
 
 def _deduplicate_hits(hits: list[dict[str, object]]) -> list[dict[str, object]]:
+    """按 `doc_id` 去重；缺 `doc_id` 时回退到 `video_id|source_type|start|text` 复合键。"""
     unique_hits: list[dict[str, object]] = []
     seen_keys: set[str] = set()
     for hit in hits:
@@ -448,6 +634,7 @@ def _deduplicate_hits(hits: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 def _diversify_series_hits(hits: list[dict[str, object]], *, max_hits: int) -> list[dict[str, object]]:
+    """先按"每视频至多一条"选择，未满 `max_hits` 时再按原顺序补齐。"""
     selected: list[dict[str, object]] = []
     selected_keys: set[int] = set()
     seen_videos: set[str] = set()
@@ -473,12 +660,14 @@ def _diversify_series_hits(hits: list[dict[str, object]], *, max_hits: int) -> l
 
 
 def _coerce_query_understanding(value: dict[str, object]):
+    """把 dict 形式的 query understanding 校验为 `SeriesQueryUnderstanding`。"""
     from backend.agent_graph.query.models import SeriesQueryUnderstanding
 
     return SeriesQueryUnderstanding.model_validate(value)
 
 
 def _coerce_retrieval_hits(items: list[dict[str, object]]):
+    """把 dict 检索 hits 列表校验为 `RetrievalHit` 列表，缺失字段补默认值。"""
     from backend.agent_graph.query.models import RetrievalHit
 
     hits: list[RetrievalHit] = []
@@ -495,6 +684,11 @@ def _coerce_retrieval_hits(items: list[dict[str, object]]):
 
 
 def _should_use_web_search(*, user_message: str, local_items: list[dict[str, object]]) -> bool:
+    """启发式判断是否触发联网搜索：本地证据为空或用户消息含联网意图关键词。
+
+    关键词包含中英文：联网 / 上网 / 搜索 / 查一下 / 查下 / 查找 / 外部资料 /
+    官网 / 最新 / 今天 / 现在 / 核验 / 验证 / web / internet / search / latest。
+    """
     if not local_items:
         return True
     normalized = user_message.lower()
@@ -521,6 +715,10 @@ def _should_use_web_search(*, user_message: str, local_items: list[dict[str, obj
 
 
 def _normalize_local_evidence_item(item: dict[str, object], *, index: int) -> dict[str, object]:
+    """为本地证据补齐 `evidence_id` / `source_family` / `source_type` / `text` / `snippet`。
+
+    `index` 用作兜底 `evidence_id`（如 `local-{index}`）。
+    """
     payload = dict(item)
     payload["evidence_id"] = str(payload.get("evidence_id", f"local-{index}")).strip() or f"local-{index}"
     payload["source_family"] = str(payload.get("source_family", "local")).strip() or "local"
@@ -531,6 +729,11 @@ def _normalize_local_evidence_item(item: dict[str, object], *, index: int) -> di
 
 
 def _normalize_web_search_result(item: dict[str, object], *, index: int) -> dict[str, object]:
+    """把联网搜索结果归一化为统一证据字典；`url` 或 `text/snippet` 缺失时抛错。
+
+    关键约定：强制 `source_family="web"`、`source_type="web_search"`；缺失
+    标题时回退到 URL；`text` 与 `snippet` 至少要有一个非空。
+    """
     title = str(item.get("title", "")).strip()
     url = str(item.get("url", "")).strip()
     text = str(item.get("text", item.get("snippet", ""))).strip()
@@ -556,6 +759,16 @@ def _normalize_web_search_result(item: dict[str, object], *, index: int) -> dict
 
 
 def _build_video_summary_context_item(state: AgentGraphState, summary) -> dict[str, object] | None:
+    """把视频总结 DTO 投影为本地上下文条目（含一句话/核心问题/要点）。
+
+    Args:
+        state: 当前 graph state，用于回填 series_id / video_id。
+        summary: 视频总结 DTO（可为 `None`）。
+
+    Returns:
+        含 `source_type=summary_global` 的本地证据字典；`summary` 为 `None`
+        或其 `summary` 字段不是 dict 或渲染后无文本时返回 `None`。
+    """
     if summary is None:
         return None
     raw_summary = getattr(summary, "summary", {})
@@ -582,6 +795,7 @@ def _build_video_summary_context_item(state: AgentGraphState, summary) -> dict[s
 
 
 def _build_full_transcript_context_item(transcript) -> dict[str, object] | None:
+    """把完整转写 DTO 投影为本地上下文条目（每行带 `[mm:ss]` 时间戳）。"""
     if transcript is None:
         return None
     lines: list[str] = []
@@ -608,6 +822,7 @@ def _build_full_transcript_context_item(transcript) -> dict[str, object] | None:
 
 
 def _search_video_transcript(*, retrieval_service, state: AgentGraphState, query: str) -> list[dict[str, object]]:
+    """在 video scope 内对转写类来源做 RAG 检索（窗口扩展 120 秒）。"""
     response = retrieval_service.search(
         scope_type="video",
         series_id=state["series_id"],
@@ -632,6 +847,7 @@ def _fits_context_budget(
     context_window_tokens: int,
     reserved_output_tokens: int,
 ) -> bool:
+    """判断 user_message + memory + items 是否能塞进上下文窗口（粗略 token 估算）。"""
     available = max(0, int(context_window_tokens) - int(reserved_output_tokens))
     payload = {
         "user_message": state.get("user_message", ""),
@@ -642,6 +858,7 @@ def _fits_context_budget(
 
 
 def _render_video_summary_text(summary: dict[str, object]) -> str:
+    """把视频总结 dict 渲染为可索引的纯文本（一句+核心问题+要点+章节）。"""
     parts: list[str] = []
     for key in ("one_sentence_summary", "core_problem"):
         value = str(summary.get(key, "")).strip()
@@ -663,6 +880,7 @@ def _render_video_summary_text(summary: dict[str, object]) -> str:
 
 
 def _estimate_tokens(value: object) -> int:
+    """粗略估算 token 数：按 UTF-8 字节数 / 3 计算；空字符串返回 0，最少 1。"""
     if value is None:
         return 0
     if isinstance(value, str):
@@ -677,9 +895,11 @@ def _estimate_tokens(value: object) -> int:
 
 
 def _format_seconds(value: object) -> str:
+    """把秒数格式化为 `mm:ss` 字符串（负数按 0 处理）。"""
     seconds = max(0, int(float(value or 0)))
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
 
 def _project_answer_evidence(results: list[dict[str, object]]) -> list[dict[str, object]]:
+    """过滤非字典元素，返回原样的证据列表（供 `answer_program` 消费）。"""
     return [item for item in results if isinstance(item, dict)]
