@@ -1,3 +1,15 @@
+"""Agent RAG 检索服务（SeriesRetrievalService）与文档构建工具集合。
+
+本模块是 RAG 子系统的核心：
+- `SeriesRetrievalService`：管理 LanceDB 上的 RAG 索引并对外提供检索；
+  支持全量刷新、单视频 upsert、按系列/视频删除，以及基于 LanceDB
+  metadata 过滤的混合检索（可选 BGE 重排序）；
+- `MetaStateReader`：把工作区内的视频/系列元数据序列化成 Agent 工具
+  可直接消费的字典；
+- 一组内部辅助函数负责把工作区制品（总结、转写、笔记、知识卡）转写为
+  `RetrievalDocument` 并按 series signature 维持增量一致性。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -51,11 +63,34 @@ COMMON_METADATA_DEFAULTS: dict[str, object] = {
 
 @dataclass(frozen=True)
 class RetrievalDocument:
+    """写入 LanceDB 的一条检索文档（`text` + `metadata` 的不可变组合）。
+
+    Attributes:
+        text: 被嵌入与检索的正文。
+        metadata: 与文档一同写入 LanceDB 的 metadata（用于过滤与引用回溯）。
+    """
+
     text: str
     metadata: dict[str, object]
 
 
 class SeriesRetrievalService:
+    """工作区级 RAG 检索服务（基于 LanceDB + LlamaIndex）。
+
+    业务目的：在 series scope 下回答用户问题时，先从工作区所有视频的总结/
+    转写/笔记/知识卡中召回相关证据片段，并按需附上时间戳、章节标题等引用
+    信息供前端回放与证据展示使用。
+
+    关键不变量：
+        - 索引 schema 版本由 `INDEX_SCHEMA_VERSION` 控制；表名
+          `INDEX_TABLE_NAME` 携带版本号，跨版本天然隔离；
+        - 每次索引变更后会同步更新 `*.signature.json`，用于在 `search` 时
+          检测"工作区内容已变化但索引未刷新"，避免返回陈旧结果；
+        - 写入/删除均通过 `self._index_lock`（`RLock`）串行化，保证并发安全；
+        - `search` 走的是 `_require_index` 兜底链：未构建则尝试加载持久化
+          索引；都拿不到则触发 `refresh_series` 并最终要求调用方先做刷新。
+    """
+
     def __init__(
         self,
         *,
@@ -66,6 +101,17 @@ class SeriesRetrievalService:
         rerank_enabled: bool | None = None,
         root_dir: Path | None = None,
     ) -> None:
+        """注入工作区读取端口、数据库 URI、embedding/重排序模型与配置目录。
+
+        Args:
+            workspace: 用于读取总结/转写/笔记/知识卡等制品。
+            db_uri: LanceDB 数据库目录 URI。
+            embed_model: 可选的 embedding 模型；为 `None` 时根据 `root_dir`
+                自动构造（默认走 `fastembed`/`BAAI/bge-small-zh-v1.5`）。
+            reranker: 可选的语义重排序打分器（实现 `SemanticScorer`）。
+            rerank_enabled: 重排序开关显式覆盖；为 `None` 时读 settings.toml 默认值。
+            root_dir: 项目根目录；为 `None` 时使用默认 embedding 与默认运行时设置。
+        """
         self._workspace = workspace
         self._db_uri = db_uri
         self._root_dir = root_dir
@@ -77,20 +123,31 @@ class SeriesRetrievalService:
         self._index_lock = RLock()
 
     def invalidate(self) -> None:
+        """丢弃内存中的索引与 signature 缓存，迫使下一次访问重新构建/加载。"""
         with self._index_lock:
             self._index = None
             self._series_signatures = None
 
     def refresh(self) -> None:
+        """`refresh_all` 的便捷别名，用于与 `WorkspaceIndexRefresher` 接口对齐。"""
         self.refresh_all()
 
     def refresh_all(self) -> None:
+        """全量重建工作区级 RAG 索引（清空 LanceDB 表并按当前工作区内容重新写入）。"""
         with self._index_lock:
             self._index = None
             self._series_signatures = None
             self._rebuild_index()
 
     def refresh_series(self, series_id: str) -> None:
+        """重建指定系列的索引行（不影响其他系列）。
+
+        若目标表尚未创建则用 `overwrite` 模式写入；否则先按 series 删除
+        再以 `append` 模式补回。最终刷新该系列的 signature 并触发缓存失效。
+
+        Args:
+            series_id: 目标系列 ID。
+        """
         with self._index_lock:
             if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
                 documents = _build_documents_for_series(self._workspace, series_id=series_id)
@@ -107,6 +164,16 @@ class SeriesRetrievalService:
             self.invalidate()
 
     def upsert_video(self, series_id: str, video_id: str) -> None:
+        """把单个视频的制品加入或更新到 RAG 索引（增量 upsert）。
+
+        若索引尚未具备增量条件（表不存在或 signature 缺失），自动降级为
+        整系列重建；否则先删除该视频的旧行，再追加新生成的文档并更新
+        signature。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频唯一 ID。
+        """
         with self._index_lock:
             if not self._is_incremental_mutation_ready():
                 self.refresh_series(series_id)
@@ -118,6 +185,12 @@ class SeriesRetrievalService:
             self._finalize_incremental_mutation(series_id)
 
     def delete_video(self, series_id: str, video_id: str) -> None:
+        """从 RAG 索引中删除单个视频的全部行，索引未就绪时降级为整系列重建。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频唯一 ID。
+        """
         with self._index_lock:
             if not self._is_incremental_mutation_ready():
                 self.refresh_series(series_id)
@@ -126,6 +199,11 @@ class SeriesRetrievalService:
             self._finalize_incremental_mutation(series_id)
 
     def delete_series(self, series_id: str) -> None:
+        """从 RAG 索引中删除整个系列的所有行，并尝试对 LanceDB 表做合并清理。
+
+        Args:
+            series_id: 目标系列 ID。
+        """
         with self._index_lock:
             if not self._is_incremental_mutation_ready():
                 self._remove_series_signature(series_id)
@@ -150,6 +228,35 @@ class SeriesRetrievalService:
         context_window_seconds: int,
         max_hits: int | None,
     ) -> dict[str, object]:
+        """对查询执行 RAG 检索并返回排序后的证据列表。
+
+        处理流程：
+            1. 在锁内确保索引已加载/已刷新；
+            2. 根据 scope_type/series_id/video_id/target_source/source_tags
+               构建 LlamaIndex MetadataFilters；
+            3. 调用 retriever 召回 `max_hits * RERANK_EMBEDDING_MULTIPLIER`
+               条候选（启用 rerank 时放大 4 倍）；
+            4. 对转写类命中按 `context_window_seconds` 扩展窗口文本；
+            5. 可选用 BGE reranker 重排；最终截取 top-K 并附 `evidence_id`。
+
+        Args:
+            scope_type: 检索作用域（`series` / `video`）。
+            series_id: 所属系列 ID。
+            video_id: 视频 ID（`scope_type == "video"` 时参与过滤）。
+            query: 用户查询字符串。
+            target_source: 主来源（`summary` / `transcript` / 其他），
+                影响 source_family 默认过滤。
+            source_tags: 额外来源标签（`summary` / `transcript` / `notes` /
+                `cards`），为空时按 `target_source` 推导。
+            expand_context: 是否对转写命中按窗口扩展前后文。
+            context_window_seconds: 转写命中扩展窗口的秒数。
+            max_hits: 最大返回命中数；为 `None` 时读 settings 默认值。
+
+        Returns:
+            含 `hits` 列表与查询上下文的字典；每条 hit 含 `doc_id` /
+            `video_id` / `title` / `source_type` / `start_seconds` /
+            `end_seconds` / `score` / `text` / `evidence_id` 等字段。
+        """
         with self._index_lock:
             index = self._require_index(series_id)
             final_max_hits = self._resolve_final_max_hits(max_hits)
@@ -228,9 +335,15 @@ class SeriesRetrievalService:
         }
 
     def default_max_hits(self) -> int:
+        """返回 settings 中配置的默认 `max_hits`（供接口对外暴露）。"""
         return self._load_runtime_retrieval_settings().max_hits
 
     def _get_or_build_index(self) -> VectorStoreIndex:
+        """按"signature 没变则复用，有变则重建"的策略返回可用索引。
+
+        流程：先比内存里缓存的 `series_signatures`，未命中再尝试从 LanceDB
+        加载现有索引，失败则触发 `_rebuild_index`。
+        """
         signatures = _build_series_signatures(self._workspace)
         if self._index is not None and self._series_signatures == signatures:
             return self._index
@@ -242,6 +355,10 @@ class SeriesRetrievalService:
         return self._rebuild_index()
 
     def _require_index(self, series_id: str) -> VectorStoreIndex:
+        """保证检索时可拿到一个已加载索引；若 signature 过陈旧则异步刷新该系列。
+
+        任何路径下若表与索引都不可用，最终会抛 `RuntimeError` 提示先做刷新。
+        """
         if self._index is not None:
             if self._is_series_signature_stale(series_id):
                 self._refresh_series_async(series_id)
@@ -264,6 +381,7 @@ class SeriesRetrievalService:
         return loaded
 
     def _rebuild_index(self) -> VectorStoreIndex:
+        """以 `overwrite` 模式重建 LanceDB 表并生成新的签名快照。"""
         signatures = _build_series_signatures(self._workspace)
         documents = _to_llama_documents(_build_documents(self._workspace))
         vector_store = LanceDBVectorStore(
@@ -283,9 +401,11 @@ class SeriesRetrievalService:
         return self._index
 
     def _append_documents(self, documents: list[RetrievalDocument]) -> None:
+        """以 `append` 模式把文档追加到 LanceDB（封装 `_write_documents`）。"""
         self._write_documents(documents, mode="append")
 
     def _write_documents(self, documents: list[RetrievalDocument], *, mode: str) -> None:
+        """把 `RetrievalDocument` 列表按指定 mode 写入 LanceDB 表。"""
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
@@ -300,12 +420,14 @@ class SeriesRetrievalService:
         )
 
     def _is_incremental_mutation_ready(self) -> bool:
+        """判断索引是否处于"可增量写入"状态（表存在且 signature 文件已落盘）。"""
         return (
             _table_exists(self._db_uri, INDEX_TABLE_NAME)
             and _read_signature_file(self._db_uri, INDEX_TABLE_NAME) is not None
         )
 
     def _finalize_incremental_mutation(self, series_id: str) -> None:
+        """一次增量写入完成后：失效缓存并按当前工作区内容回写该系列 signature。"""
         self.invalidate()
         signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
         current_signature = _build_series_signature(self._workspace, series_id)
@@ -316,6 +438,7 @@ class SeriesRetrievalService:
         _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
 
     def _write_series_signature(self, series_id: str) -> None:
+        """按当前工作区内容刷新指定系列的 signature（不改动缓存）。"""
         signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
         current_signature = _build_series_signature(self._workspace, series_id)
         if current_signature:
@@ -325,11 +448,16 @@ class SeriesRetrievalService:
         _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
 
     def _remove_series_signature(self, series_id: str) -> None:
+        """把指定系列从 signature 文件中移除（用于表未就绪时的 fallback 删除）。"""
         signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
         signatures.pop(series_id, None)
         _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
 
     def _is_series_signature_stale(self, series_id: str) -> bool:
+        """判断指定系列的 signature 是否已陈旧（与工作区当前内容不一致）。
+
+        `series_id` 为空时返回 `False`，避免对未知 scope 误触发刷新。
+        """
         if not series_id:
             return False
         stored_signatures = self._series_signatures
@@ -339,6 +467,7 @@ class SeriesRetrievalService:
         return stored_signatures.get(series_id) != _build_series_signature(self._workspace, series_id)
 
     def _refresh_series_async(self, series_id: str) -> None:
+        """以守护线程异步刷新指定系列的索引（异常仅记录日志、不上抛）。"""
         if not series_id:
             return
 
@@ -351,6 +480,7 @@ class SeriesRetrievalService:
         Thread(target=refresh, daemon=True).start()
 
     def _delete_video_rows(self, *, series_id: str, video_id: str) -> None:
+        """按 series_id + video_id 精确删除 LanceDB 表中的若干行。"""
         _delete_rows(
             db_uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
@@ -361,6 +491,7 @@ class SeriesRetrievalService:
         )
 
     def _delete_series_rows(self, *, series_id: str) -> None:
+        """按 series_id 删除 LanceDB 表中的所有匹配行。"""
         _delete_rows(
             db_uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
@@ -368,6 +499,7 @@ class SeriesRetrievalService:
         )
 
     def _try_load_existing_index(self) -> VectorStoreIndex | None:
+        """尝试把 LanceDB 表包装为 LlamaIndex 索引；表不存在时返回 `None`。"""
         if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
             return None
         vector_store = LanceDBVectorStore(
@@ -380,6 +512,7 @@ class SeriesRetrievalService:
         )
 
     def _resolve_final_max_hits(self, max_hits: int | None) -> int:
+        """把外部 `max_hits` 与运行时默认值归并为最终生效值；<=0 视为非法。"""
         if max_hits is not None:
             if max_hits <= 0:
                 raise ValueError("max_hits 必须是正整数。")
@@ -387,11 +520,13 @@ class SeriesRetrievalService:
         return self.default_max_hits()
 
     def _resolve_rerank_enabled(self) -> bool:
+        """返回当前生效的 rerank 开关：构造参数 > settings.toml 默认值。"""
         if self._rerank_enabled_override is not None:
             return self._rerank_enabled_override
         return self._load_runtime_retrieval_settings().rerank_enabled
 
     def _load_runtime_retrieval_settings(self) -> AgentRetrievalSettings:
+        """读取 settings.toml 中 `agent_retrieval` 段；`root_dir` 缺失时返回内置默认值。"""
         if self._root_dir is None:
             return AgentRetrievalSettings(
                 embedding_provider="fastembed",
@@ -405,10 +540,29 @@ class SeriesRetrievalService:
 
 
 class MetaStateReader:
+    """把工作区内的"工具状态"序列化为 Agent 工具可直接消费的字典。
+
+    业务目的：在 series/video scope 下回答关于"工作区里有哪些工具及其状态"
+    的问题时，让 LLM 能基于结构化字典判断下一步动作，而不是读原始 JSON。
+    """
+
     def __init__(self, *, workspace: VideoLibraryReader) -> None:
+        """注入工作区读取端口。"""
         self._workspace = workspace
 
     def read(self, *, scope_type: str, series_id: str, video_id: str) -> dict[str, object]:
+        """读取并序列化指定 scope 的工具状态。
+
+        Args:
+            scope_type: `video` 时取该视频的工具栏；其他值视为 series，
+                返回 series 级概览（标题与视频数量）。
+            series_id: 所属系列 ID。
+            video_id: 视频 ID（仅 `scope_type == "video"` 时使用）。
+
+        Returns:
+            `video` scope 返回 `overview`/`knowledge_cards`/`mindmap`/`notes`/
+            `preview` 五个工具状态；系列或视频缺失时返回含 `error` 字段的字典。
+        """
         if scope_type == "video":
             tools = self._workspace.get_video_workspace_tools(series_id, video_id)
             if tools is None:
@@ -444,6 +598,11 @@ class MetaStateReader:
 
 
 def _build_default_embed_model(root_dir: Path | None):
+    """根据 `root_dir` 构造默认 embedding 模型。
+
+    `root_dir` 为 `None` 时返回 32 维 `MockEmbedding`（便于无配置环境快速启动）；
+    否则按 settings.toml 的 `agent_retrieval` 段构造 FastEmbed embedding。
+    """
     if root_dir is None:
         return MockEmbedding(embed_dim=32)
     apply_runtime_env_overrides(root_dir)
@@ -459,6 +618,10 @@ def _build_embed_model_from_settings(
     retrieval_settings: AgentRetrievalSettings,
     cache_dir: Path | None = None,
 ):
+    """把 settings 里的 `AgentRetrievalSettings` 转成实际 embedding 模型。
+
+    当前仅支持 `fastembed` provider；其他 provider 抛 `ValueError`。
+    """
     if retrieval_settings.embedding_provider == "fastembed":
         return build_fastembed_embedding(
             model_name=retrieval_settings.embedding_model,
@@ -479,6 +642,26 @@ def _build_filters(
     target_source: str,
     source_tags: list[str],
 ) -> MetadataFilters:
+    """根据 scope/来源组装 LlamaIndex MetadataFilters。
+
+    规则：
+        - 始终按 series_id 过滤；
+        - `scope_type == "video"` 时再追加 video_id 过滤；
+        - 根据 `source_tags` / `target_source` 推导 source_family 过滤，
+          多家族时使用 OR 组合。
+    """
+    filters: list[MetadataFilter | MetadataFilters] = [
+        MetadataFilter(key="series_id", value=series_id),
+    ]
+    if scope_type == "video":
+        filters.append(MetadataFilter(key="video_id", value=video_id))
+    family_filters = _build_source_family_filters(source_tags, target_source=target_source)
+    if family_filters:
+        if len(family_filters) == 1:
+            filters.append(family_filters[0])
+        else:
+            filters.append(MetadataFilters(filters=family_filters, condition=FilterCondition.OR))
+    return MetadataFilters(filters=filters, condition=FilterCondition.AND)
     filters: list[MetadataFilter | MetadataFilters] = [
         MetadataFilter(key="series_id", value=series_id),
     ]
@@ -498,6 +681,11 @@ def _build_source_family_filters(
     *,
     target_source: str,
 ) -> list[MetadataFilter]:
+    """把 `source_tags` 翻译为 source_family 级别的 MetadataFilter 列表。
+
+    优先级：`source_tags` 非空时按显式标签映射；否则回退到 `target_source`；
+    最终多个家族用 `FilterOperator.IN` 合成单个过滤项。
+    """
     if source_tags:
         families = []
         for tag in source_tags:
@@ -528,6 +716,7 @@ def _build_source_family_filters(
 
 
 def _build_series_signatures(workspace: VideoLibraryReader) -> SeriesSignatureMap:
+    """为工作区每个系列生成一份"内容指纹签名"，作为索引一致性的判据。"""
     signatures: SeriesSignatureMap = {}
     for series in workspace.list_series():
         signatures[series.id] = _build_series_signature(workspace, series.id)
@@ -535,6 +724,10 @@ def _build_series_signatures(workspace: VideoLibraryReader) -> SeriesSignatureMa
 
 
 def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> SeriesSignature:
+    """为一个系列生成签名：把每条视频的状态 + 4 类制品哈希拼成有序元组。
+
+    系列不存在时返回空元组，便于"系列已被删除"这种边界情况。
+    """
     series = next((item for item in workspace.list_series() if item.id == series_id), None)
     if series is None:
         return ()
@@ -556,11 +749,17 @@ def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> Se
 
 
 def _build_workspace_signature(workspace: VideoLibraryReader) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """生成旧版全工作区签名（`(series_ids, video_parts)`），用于兼容历史 signature 文件。"""
     signatures = _build_series_signatures(workspace)
     return tuple(sorted(signatures)), tuple(sorted(item for signature in signatures.values() for item in signature))
 
 
 def _artifact_fingerprint(value: object) -> str:
+    """把任意 Pydantic / dict 对象序列化为 SHA1，作为内容指纹。
+
+    `None` 返回字面量 `"0"`（与缺失制品区分）；其他值用 `model_dump(mode="json")`
+    序列化后排序编码，保证字段顺序无关。
+    """
     if value is None:
         return "0"
     if hasattr(value, "model_dump"):
@@ -578,6 +777,7 @@ def _artifact_fingerprint(value: object) -> str:
 
 
 def _build_documents(workspace: VideoLibraryReader) -> list[RetrievalDocument]:
+    """遍历工作区所有系列，把每条视频的制品汇总成待索引文档列表（用于全量重建）。"""
     documents: list[RetrievalDocument] = []
     for series in workspace.list_series():
         documents.extend(_build_documents_for_series(workspace, series_id=series.id))
@@ -589,6 +789,7 @@ def _build_documents_for_series(
     *,
     series_id: str,
 ) -> list[RetrievalDocument]:
+    """为单个系列下的所有视频构建检索文档；系列不存在时返回空列表。"""
     series = next((item for item in workspace.list_series() if item.id == series_id), None)
     if series is None:
         return []
@@ -604,6 +805,7 @@ def _build_documents_for_video(
     series_id: str,
     video_id: str,
 ) -> list[RetrievalDocument]:
+    """为单个视频读取四类制品并交给 `_build_documents_for_assets` 合成文档。"""
     return _build_documents_for_assets(
         summary=workspace.get_video_summary(series_id, video_id),
         transcript=workspace.get_video_transcript(series_id, video_id),
@@ -619,6 +821,7 @@ def _build_documents_for_assets(
     notes,
     knowledge_cards,
 ) -> list[RetrievalDocument]:
+    """把四类制品（总结/转写/笔记/知识卡）按"存在则加入"的原则拼成文档列表。"""
     documents: list[RetrievalDocument] = []
     if summary is not None:
         documents.extend(_build_summary_documents(summary))
@@ -632,6 +835,7 @@ def _build_documents_for_assets(
 
 
 def _to_llama_documents(documents: list[RetrievalDocument]) -> list[Document]:
+    """把内部 `RetrievalDocument` 转换为 LlamaIndex `Document`，并把 `doc_id` 作为主键。"""
     return [
         Document(
             id_=str(document.metadata["doc_id"]),
@@ -643,6 +847,11 @@ def _to_llama_documents(documents: list[RetrievalDocument]) -> list[Document]:
 
 
 def _build_summary_documents(summary) -> list[RetrievalDocument]:
+    """把视频总结拆成"全局总览 + 每章一条"的检索文档。
+
+    全局文档包含一句话总结/核心问题/关键要点；每个章节单独成一条，便于按
+    章节做精细化检索。
+    """
     payload = summary.summary
     docs: list[RetrievalDocument] = []
     summary_text = "\n".join(
@@ -714,6 +923,7 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
 
 
 def _build_transcript_documents(transcript) -> list[RetrievalDocument]:
+    """把转写中每个 segment 转为一条 `transcript_chunk` 文档，metadata 含起止时间。"""
     docs: list[RetrievalDocument] = []
     for segment in transcript.segments:
         docs.append(
@@ -737,6 +947,10 @@ def _build_transcript_documents(transcript) -> list[RetrievalDocument]:
 
 
 def _build_notes_documents(notes) -> list[RetrievalDocument]:
+    """把每条笔记转成 `note` 文档，metadata 含 `note_id` 与 `note_source`。
+
+    空标题或空内容的笔记会被跳过。
+    """
     docs: list[RetrievalDocument] = []
     for note in notes.notes:
         note_text = "\n".join(
@@ -770,6 +984,10 @@ def _build_notes_documents(notes) -> list[RetrievalDocument]:
 
 
 def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
+    """把每张知识卡转成 `knowledge_card` 文档，metadata 含 `card_id` 与 `card_kind`。
+
+    文本拼接顺序为 title → summary → details → keywords；空文本会被跳过。
+    """
     docs: list[RetrievalDocument] = []
     for card in cards.cards:
         card_text = "\n".join(
@@ -805,6 +1023,7 @@ def _build_knowledge_card_documents(cards) -> list[RetrievalDocument]:
 
 
 def _with_common_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    """为 metadata 补齐 `COMMON_METADATA_DEFAULTS` 中的缺省键，并把 `None` 归一为空字符串。"""
     merged = dict(COMMON_METADATA_DEFAULTS)
     merged.update(metadata)
     for key in ("chapter_title", "note_id", "note_source", "card_id", "card_kind"):
@@ -814,6 +1033,7 @@ def _with_common_metadata(metadata: dict[str, object]) -> dict[str, object]:
 
 
 def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
+    """删除指定 LanceDB 表；不存在时静默忽略（用于调试或重建前清空）。"""
     connection = lancedb.connect(db_uri)
     try:
         connection.drop_table(table_name)
@@ -823,18 +1043,21 @@ def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
 
 
 def _delete_rows(*, db_uri: str, table_name: str, where: str) -> None:
+    """按 SQL 风格的 `where` 条件从 LanceDB 表中删除若干行（无则抛异常）。"""
     connection = lancedb.connect(db_uri)
     table = connection.open_table(table_name)
     table.delete(where)
 
 
 def _optimize_lancedb_table(db_uri: str, table_name: str) -> None:
+    """对 LanceDB 表执行合并清理，删除 10 分钟以上的旧版本（清理时机不可控）。"""
     connection = lancedb.connect(db_uri)
     table = connection.open_table(table_name)
     table.optimize(cleanup_older_than=LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN)
 
 
 def _table_exists(db_uri: str, table_name: str) -> bool:
+    """判断指定 LanceDB 表是否存在；连接或列举失败时保守返回 `False`。"""
     connection = lancedb.connect(db_uri)
     try:
         table_names = set(connection.table_names())
@@ -844,10 +1067,12 @@ def _table_exists(db_uri: str, table_name: str) -> bool:
 
 
 def _escape_lance_string(value: str) -> str:
+    """把字符串中的 `\\` 与 `'` 转义，供 SQL `where` 子串拼接使用。"""
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def _signature_file_path(db_uri: str, table_name: str) -> Path:
+    """返回给定 (db_uri, table_name) 对应的 signature 文件路径。"""
     return Path(db_uri) / f"{table_name}.signature.json"
 
 
@@ -878,6 +1103,10 @@ def _read_signature_file(
     db_uri: str,
     table_name: str,
 ) -> SeriesSignatureMap | None:
+    """读取 signature 文件并解析为 `SeriesSignatureMap`；兼容旧版全工作区签名格式。
+
+    文件不存在或解析失败时返回 `None`，由调用方决定是否走全量重建。
+    """
     signature_path = _signature_file_path(db_uri, table_name)
     if not signature_path.exists():
         return None
@@ -911,6 +1140,7 @@ def _series_signatures_from_legacy_workspace_signature(
     series_ids: tuple[str, ...],
     video_parts: tuple[str, ...],
 ) -> SeriesSignatureMap:
+    """把旧版 `(series_ids, video_parts)` 签名转换为按系列分组的 `SeriesSignatureMap`。"""
     signatures: SeriesSignatureMap = {series_id: () for series_id in series_ids}
     grouped_parts: dict[str, list[str]] = {series_id: [] for series_id in series_ids}
     for part in video_parts:
@@ -929,6 +1159,11 @@ def _expand_transcript_hit(
     hit: dict[str, object],
     context_window_seconds: int,
 ) -> dict[str, object]:
+    """对转写命中按 `context_window_seconds` 前后扩展，输出更完整的文本片段。
+
+    若命中缺少起止时间或转写读取失败，则原样返回 `hit`；
+    若窗口内没有任何分片，也保持原 hit 不变。
+    """
     transcript = workspace.get_video_transcript(series_id, video_id)
     if transcript is None:
         return hit
@@ -951,6 +1186,7 @@ def _expand_transcript_hit(
 
 
 def _serialize_tool_state(tool) -> dict[str, object]:
+    """把工具栏的 `ToolState` 序列化为简化的状态字典，供 LLM/前端消费。"""
     return {
         "id": tool.id,
         "title": tool.title,

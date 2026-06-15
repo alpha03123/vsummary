@@ -1,3 +1,15 @@
+"""Agent Graph 的 StateGraph 定义与按 scope 的条件路由。
+
+本模块集中描述 LangGraph 的节点、边与条件路由：
+- `build_agent_graph`：根据可选依赖构建并编译完整的图；
+- `route_scope` 之后的条件分支由 `_route_after_scope` 决定走 series 还是
+  video 链路；
+- 在证据整理（`build_evidence_items`）后再次按 scope 分流：series 进入
+  `synthesize_answer`，video 进入 `plan_and_execute_video_actions` → `answer`；
+- 未注入的检索/视频回答组件会使用 `_MissingRetrievalService` /
+  `_MissingAnswerProgram` 哨兵，运行到对应节点时报错提醒补依赖。
+"""
+
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
@@ -34,6 +46,26 @@ def build_agent_graph(
     web_search_gateway=None,
     web_search_settings=None,
 ):
+    """根据可选依赖构建并编译完整的 Agent Graph。
+
+    Args:
+        retrieval_service: 系列级 RAG 检索服务（`SeriesRetrievalService` 或兼容实现），
+            为 `None` 时使用 `_MissingRetrievalService` 哨兵，运行到检索时报错。
+        answer_program: video scope 的回答合成程序（实现 `AnswerSynthesisProgram`），
+            为 `None` 时使用 `_MissingAnswerProgram` 哨兵。
+        series_query_processor: series scope 的查询理解处理器。
+        series_answer_synthesizer: series scope 的回答合成器。
+        workspace: 工作区只读端口（视频/系列/制品读取）。
+        video_action_planner: video scope 的动作规划器。
+        tool_executor: 视频工具执行器端口。
+        context_window_tokens: video scope 上下文窗口上限（默认 1,000,000）。
+        reserved_output_tokens: 预留输出 token（默认 20,000）。
+        web_search_gateway: 联网搜索网关（`None` 时跳过联网节点）。
+        web_search_settings: 联网搜索配置（`enabled=False` 时跳过）。
+
+    Returns:
+        编译好的 LangGraph 图对象，可直接 `invoke` / `stream`。
+    """
     resolved_retrieval_service = retrieval_service or _MissingRetrievalService()
     resolved_answer_program = answer_program or _MissingAnswerProgram()
 
@@ -112,7 +144,10 @@ def build_agent_graph(
 
 
 class _MissingRetrievalService:
+    """检索服务未注入时的哨兵：调用 `search` 时直接抛错。"""
+
     def search(self, **kwargs):
+        """触发未注入错误，提醒接入真正的 RAG 检索实现。"""
         raise RuntimeError(
             "Series retrieval service 尚未注入。请在集成阶段传入 retrieval_service，"
             "或在后续任务里接入基于 workspace / LlamaIndex 的默认实现。"
@@ -120,12 +155,26 @@ class _MissingRetrievalService:
 
 
 class _MissingAnswerProgram:
+    """video scope 回答程序未注入时的哨兵：调用 `run` 时直接抛错。"""
+
     def run(self, **kwargs):
+        """触发未注入错误，提醒接入 `AnswerSynthesisProgram`。"""
         del kwargs
         raise RuntimeError("Video answer synthesis program 尚未注入。")
 
 
 def _route_after_scope(state: AgentGraphState) -> str:
+    """按 `scope_type` 决定走 series 还是 video 链路。
+
+    Args:
+        state: 当前 `AgentGraphState`。
+
+    Returns:
+        `"series"` 或 `"video"` 字符串，作为条件边的分支键。
+
+    Raises:
+        ValueError: `scope_type` 既不是 `"series"` 也不是 `"video"`。
+    """
     if str(state.get("scope_type", "")).strip() == "series":
         return "series"
     if str(state.get("scope_type", "")).strip() == "video":
@@ -134,4 +183,5 @@ def _route_after_scope(state: AgentGraphState) -> str:
 
 
 def _route_after_evidence_items(state: AgentGraphState) -> str:
+    """在 `build_evidence_items` 之后再次按 scope 路由（series 合成 / video 规划执行）。"""
     return _route_after_scope(state)
