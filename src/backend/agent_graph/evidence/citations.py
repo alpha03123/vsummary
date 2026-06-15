@@ -1,9 +1,38 @@
+"""把 LangGraph 节点产出的 `evidence_items` 翻译为前端可渲染的 citation 列表。
+
+`build_citations_from_graph_result` 是 series / video scope 共用的
+citation 构造入口：读取图节点结果里的 `evidence_items`（或旧字段
+`retrieval_results`），按 `source_type` / `depth` 分发到不同分支，
+最终生成 `CitationReference` 列表，供前端按 inline / footnote / 章节
+卡片等样式渲染。
+"""
+
 from __future__ import annotations
 
 from backend.agent.schemas.action_plan import CitationReference, CitationSlot, CitationSlotCandidate
 
 
 def build_citations_from_graph_result(result: dict[str, object]) -> list[CitationReference]:
+    """从 LangGraph 节点结果中抽取并构造 citation 列表。
+
+    处理流程：
+    1. 优先取 `evidence_items`；缺失时回退到旧字段 `retrieval_results`；
+    2. 必要时为每条证据补 `source_number`，与 LLM 输出的 `[1]`/`[2]`
+       引用对齐；
+    3. 若 `result["used_evidence_ids"]` 存在，则按它过滤出"实际被回答引用"
+       的子集（与 `resolve_inline_citations` 配合做双向校验）；
+    4. 按 `depth` 与 `source_type` 分发：summary / video_graph 走聚合
+       展开；web_search 走 URL citation；其它按 summary / transcript
+       生成单/双 slot 的 citation。
+
+    Args:
+        result: LangGraph 节点产生的状态字典，应至少包含
+            `evidence_items` 或 `retrieval_results`；可选包含
+            `used_evidence_ids` 用于过滤。
+
+    Returns:
+        前端可渲染的 `CitationReference` 列表。
+    """
     retrieval_results = result.get("evidence_items", result.get("retrieval_results", []))
     if not isinstance(retrieval_results, list):
         return []
@@ -105,6 +134,15 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
 
 
 def _with_source_numbers(items: list[object]) -> list[object]:
+    """为证据列表补 `source_number`，保留已经显式编号的项。
+
+    Args:
+        items: 任意形态的证据项列表。
+
+    Returns:
+        每项均为字典且带 `source_number`（从 1 开始）的列表；非字典或
+        已有合法 `source_number` 的项原样保留。
+    """
     numbered_items: list[object] = []
     for index, item in enumerate(items, start=1):
         if not isinstance(item, dict):
@@ -118,6 +156,15 @@ def _with_source_numbers(items: list[object]) -> list[object]:
 
 
 def _resolve_used_evidence_ids(result: dict[str, object]) -> set[str] | None:
+    """从结果中提取"回答实际引用"的 evidence_id 集合。
+
+    Args:
+        result: LangGraph 节点状态字典，可能含 `used_evidence_ids` 字段。
+
+    Returns:
+        去重后的 evidence_id 集合；若字段缺失则为 `None`（表示不过滤）；
+        若字段存在但不是数组则抛 `ValueError`。
+    """
     raw_ids = result.get("used_evidence_ids")
     if raw_ids is None:
         return None
@@ -132,6 +179,14 @@ def _resolve_used_evidence_ids(result: dict[str, object]) -> set[str] | None:
 
 
 def _evidence_id(item: dict[str, object]) -> str | None:
+    """读取证据项的 `evidence_id` 字段（缺失或空白时为 `None`）。
+
+    Args:
+        item: 证据项字典。
+
+    Returns:
+        非空 `evidence_id` 字符串；为 `None` 时表示该证据不可被引用过滤。
+    """
     value = item.get("evidence_id")
     if not isinstance(value, str):
         return None
@@ -140,6 +195,15 @@ def _evidence_id(item: dict[str, object]) -> str | None:
 
 
 def _citation_id(item: dict[str, object], fallback_id: int) -> str:
+    """为 citation 选取稳定 ID：优先使用上游 `source_number`，否则用回退编号。
+
+    Args:
+        item: 证据项字典。
+        fallback_id: 上游未带 `source_number` 时的回退编号。
+
+    Returns:
+        可用作 citation ID 的字符串。
+    """
     source_number = item.get("source_number")
     if isinstance(source_number, int) and source_number > 0:
         return str(source_number)
@@ -147,6 +211,16 @@ def _citation_id(item: dict[str, object], fallback_id: int) -> str:
 
 
 def _append_web_search_item(citations: list[CitationReference], item: dict[str, object], next_id: int) -> int:
+    """追加一条 web_search 类型的 citation（无 URL 时跳过）。
+
+    Args:
+        citations: 累积输出的 citation 列表（就地修改）。
+        item: web_search 证据项。
+        next_id: 当前可用的 citation ID 起点。
+
+    Returns:
+        追加后下一条可用的 `next_id`。
+    """
     url = _as_str(item.get("url"))
     if not url:
         return next_id
@@ -171,6 +245,16 @@ def _append_web_search_item(citations: list[CitationReference], item: dict[str, 
 
 
 def _append_summary_items(citations: list[CitationReference], items: object, next_id: int) -> int:
+    """展开 `depth == "summary"` 的聚合证据，为每个子项追加 summary citation。
+
+    Args:
+        citations: 累积输出的 citation 列表（就地修改）。
+        items: 聚合证据的 `items` 字段，应为字典列表。
+        next_id: 当前可用的 citation ID 起点。
+
+    Returns:
+        追加后下一条可用的 `next_id`。
+    """
     if not isinstance(items, list):
         return next_id
     for item in items:
@@ -204,6 +288,16 @@ def _append_summary_items(citations: list[CitationReference], items: object, nex
 
 
 def _append_video_graph_items(citations: list[CitationReference], items: object, next_id: int) -> int:
+    """展开 `depth == "video_graph"` 的图证据，仅保留 `transcript_chunk` 子项。
+
+    Args:
+        citations: 累积输出的 citation 列表（就地修改）。
+        items: 图证据的 `items` 字段，应为字典列表。
+        next_id: 当前可用的 citation ID 起点。
+
+    Returns:
+        追加后下一条可用的 `next_id`。
+    """
     if not isinstance(items, list):
         return next_id
     for item in items:
@@ -259,6 +353,14 @@ def _append_video_graph_items(citations: list[CitationReference], items: object,
 
 
 def _to_slot_candidates(matches: object) -> list[CitationSlotCandidate]:
+    """把 `matches` 字段转成 `CitationSlotCandidate` 列表（最多取前 3 个）。
+
+    Args:
+        matches: 任意形态的 matches 字段；非列表时返回空列表。
+
+    Returns:
+        长度 ≤ 3 的 `CitationSlotCandidate` 列表。
+    """
     if not isinstance(matches, list):
         return []
     candidates: list[CitationSlotCandidate] = []
@@ -276,12 +378,28 @@ def _to_slot_candidates(matches: object) -> list[CitationSlotCandidate]:
 
 
 def _as_float(value: object) -> float | None:
+    """把任意值宽松转成 `float`，失败时为 `None`。
+
+    Args:
+        value: 任意形态的输入。
+
+    Returns:
+        `int` / `float` 时返回 `float(value)`，其它情况为 `None`。
+    """
     if isinstance(value, (int, float)):
         return float(value)
     return None
 
 
 def _as_str(value: object) -> str | None:
+    """把任意值宽松转成去空白字符串，空白字符串视为 `None`。
+
+    Args:
+        value: 任意形态的输入。
+
+    Returns:
+        非空字符串返回去空白后的字符串，否则为 `None`。
+    """
     if isinstance(value, str):
         text = value.strip()
         return text or None

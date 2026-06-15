@@ -1,3 +1,20 @@
+"""video scope 动作规划阶段的 system prompt 模板集合。
+
+本模块集中维护"video talk 流程中调用 video 工具"所需的 system prompt，
+用于驱动 LangGraph 的 `plan_and_execute_video_actions` 节点：让 LLM
+在只读回答 vs. 状态变更动作之间二选一并返回对应的 tool_calls。
+"""
+
+from __future__ import annotations
+
+
+# video scope 动作规划器的 system prompt。
+#
+# 目的：让 LLM 担任"动作判别器"，仅在用户意图**确实**需要改变当前视频
+# 工作区状态时才返回 tool_calls，纯问答场景应返回空 tool_calls。允许的
+# 工具白名单为 `open_notes` / `save_note` / `video_seek`，并对各工具的
+# 参数来源（evidence / transcript 时间戳）与 Markdown 输出形式做了硬约束，
+# 避免模型编造内容或暴露未经声明的工具。
 VIDEO_ACTION_PLANNER_SYSTEM_PROMPT = (
     "你是 video scope 动作规划器，只判断是否需要执行当前视频动作。\n"
     "只能使用 open_notes、save_note、video_seek。\n"

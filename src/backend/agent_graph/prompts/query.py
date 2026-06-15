@@ -1,3 +1,28 @@
+"""series / video answer synthesis 阶段的 system prompt 模板与公共片段。
+
+本模块集中维护：
+- `SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT`：series scope query 理解器的指令；
+- `ANSWER_DETAIL_LEVEL_PROMPTS`：三种回答长度偏好（short / medium / long）；
+- `build_answer_detail_level_prompt` / `build_talk_custom_prompt`：长度与
+  Talk 自定义风格的注入工具；
+- `_SYNTHESIZER_BASE`：series / video answer synthesizer 共享的"证据 + 通用
+  知识 + Markdown 输出"基础规则；
+- `SERIES_ANSWER_SYNTHESIZER_SYSTEM_PROMPT` / `VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT`：
+  在共享基础上叠加各自上下文差异的最终指令。
+
+调用方在 `SeriesAnswerSynthesizer` / `AnswerSynthesisProgram` 中按
+`text_only` 标志决定是否再追加流式引用约束片段。
+"""
+
+from __future__ import annotations
+
+
+# series scope query 理解器的 system prompt。
+#
+# 目的：让 LLM 把用户的口语化问题改写成"统一的检索合同"
+# （normalized_query / subqueries / filters），不输出 selected_videos、
+# subplans、task_type 等下游才会关心的字段；并强制保留 `series_id` 过滤
+# 条件，避免后续 RAG 检索跨系列泄漏。
 SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT = (
     "你是 series 查询理解器。"
     "你只负责把用户问题改写成更适合统一检索的查询合同。"
@@ -6,6 +31,11 @@ SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT = (
     "filters 中必须保留 series_id。"
 )
 
+# 回答长度偏好字典：键为长度档位，值为对应的 prompt 片段。
+#
+# 调用方通过 `build_answer_detail_level_prompt` 按用户当前档位注入，
+# 未知档位会回退到 `medium`。这些片段只影响详略，不允许突破证据约束、
+# 来源约束与 Markdown 输出要求（见 `_SYNTHESIZER_BASE`）。
 ANSWER_DETAIL_LEVEL_PROMPTS = {
     "short": (
         "回答长度偏好：短。\n"
@@ -26,10 +56,27 @@ ANSWER_DETAIL_LEVEL_PROMPTS = {
 
 
 def build_answer_detail_level_prompt(answer_detail_level: str) -> str:
+    """按档位取出对应的"回答长度偏好"prompt 片段。
+
+    Args:
+        answer_detail_level: 档位字符串，应为 `short` / `medium` / `long` 之一。
+
+    Returns:
+        与档位对应的 prompt 片段；未知档位回退到 `medium`。
+    """
     return ANSWER_DETAIL_LEVEL_PROMPTS.get(answer_detail_level, ANSWER_DETAIL_LEVEL_PROMPTS["medium"])
 
 
 def build_talk_custom_prompt(custom_prompt: str | None) -> str:
+    """把用户在"Talk 模式"下配置的自定义风格提示词包装为可注入片段。
+
+    Args:
+        custom_prompt: 用户填写的自定义风格字符串；为空或仅含空白时返回 `""`。
+
+    Returns:
+        非空时返回带"用户自定义 Talk 回答要求"前缀与"约束"后缀的片段；
+        为空时返回空字符串以便直接拼接到 system prompt。
+    """
     normalized = (custom_prompt or "").strip()
     if not normalized:
         return ""
@@ -41,7 +88,11 @@ def build_talk_custom_prompt(custom_prompt: str | None) -> str:
     )
 
 
-# 两个 synthesizer 共享的基础规则
+# series / video answer synthesizer 共享的基础规则片段。
+#
+# 集中描述：证据与通用知识的边界、"无法回答"的兜底口径、来源声明策略、
+# 联网补充规则、emoji 禁用、Markdown 输出风格等通用要求。两个合成器
+# 在此之上分别叠加"series 目录"或"video 上下文状态"的差异描述。
 _SYNTHESIZER_BASE = (
     "回答规则：\n"
     "- 优先利用输入中的课程资料和证据作答；课程资料能支持的事实、结论和细节必须准确，不要编造课程或视频中没有出现的内容。\n"
@@ -69,6 +120,11 @@ _SYNTHESIZER_BASE = (
     "- 关键概念、课程名或结论可使用 `**加粗**`。\n\n"
 )
 
+# series scope answer synthesizer 的最终 system prompt。
+#
+# 在 `_SYNTHESIZER_BASE` 之上追加 series 专属上下文（series_catalog
+# 字段含义、本地 vs. 联网证据识别方式）与输出字段约束（answer Markdown
+# 不暴露内部 ID，citations / used_source_types 仅用于内部追踪）。
 SERIES_ANSWER_SYNTHESIZER_SYSTEM_PROMPT = (
     "你是一位专业的课程学习助手，职责是基于当前系列课程资料回答用户问题。\n\n"
     "输入说明：\n"
@@ -83,6 +139,11 @@ SERIES_ANSWER_SYNTHESIZER_SYSTEM_PROMPT = (
 )
 
 
+# video scope answer synthesizer 的最终 system prompt。
+#
+# 在 `_SYNTHESIZER_BASE` 之上追加 video 专属上下文（evidence_items 可能
+# 来自视频概况/完整字幕/字幕检索片段/联网搜索）与输出字段约束（仅 answer
+# 字段，不暴露 doc_id 等内部 ID）。
 VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT = (
     "你是一位专业的课程学习助手，职责是基于当前视频资料回答用户问题。\n\n"
     "输入说明：\n"
