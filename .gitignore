@@ -37,6 +37,9 @@ tmp/
 !/scripts/package/
 !/scripts/package/**
 
+# Local config (auto-generated on first run)
+config/settings.toml
+
 # Local env
 .env
 .env.*
