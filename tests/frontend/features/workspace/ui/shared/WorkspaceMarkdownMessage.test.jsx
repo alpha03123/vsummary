@@ -74,4 +74,17 @@ describe("WorkspaceMarkdownMessage", () => {
     expect(screen.queryByText(longText)).not.toBeInTheDocument();
     expect(screen.getByText(/^字幕内容.*\.\.\.$/)).toBeInTheDocument();
   });
+
+  it("renders model think tags as a collapsible thinking block", () => {
+    render(
+      <WorkspaceMarkdownMessage
+        content={"<think>先分析问题，再回答。</think>\n\n最终答案：**可以**。"}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /思考过程/ })).toBeInTheDocument();
+    expect(screen.getByText("先分析问题，再回答。")).toBeInTheDocument();
+    expect(screen.getByText(/最终答案：/)).toBeInTheDocument();
+    expect(screen.getByText("可以")).toBeInTheDocument();
+  });
 });
