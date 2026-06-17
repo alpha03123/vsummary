@@ -163,6 +163,27 @@ export function WorkspacePage({ page }) {
     );
   }
 
+  function renderChatCenterPane() {
+    if (!selectedVideo) {
+      return <WorkspaceChatPanel {...chatPanelProps} />;
+    }
+
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-transparent">
+        <div className="shrink-0 overflow-y-auto border-b border-stone-200/70 p-4 dark:border-stone-800/90">
+          <WorkspaceVideoPlayer
+            videoSource={tools?.preview?.previewUrl ?? previewUrl}
+            playerSeekRequest={playerSeekRequest}
+            videoSourceType={selectedVideo?.sourceType}
+          />
+        </div>
+        <div className="min-h-0 flex-1">
+          <WorkspaceChatPanel {...chatPanelProps} />
+        </div>
+      </div>
+    );
+  }
+
   function renderReadingPane() {
     return (
       <WorkspaceReadingPane
@@ -350,7 +371,7 @@ export function WorkspacePage({ page }) {
               style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
               className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
             >
-              {isChatCenterMode ? <WorkspaceChatPanel {...chatPanelProps} /> : renderVideoPlayerPane()}
+              {isChatCenterMode ? renderChatCenterPane() : renderVideoPlayerPane()}
             </section>
           ) : null}
           {isPlaygroundHome ? (
