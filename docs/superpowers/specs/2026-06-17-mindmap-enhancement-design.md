@@ -192,8 +192,265 @@ All changes respect existing `import-linter` boundaries:
 - API routes only use `ApiContainer` dependencies
 - No new cross-boundary violations
 
-## Testing
+## Complete File Manifest
 
-- **Unit:** `tests/backend/unit/mindmap/` — new tests for `GenerateSeriesMindmap`, prompt rendering, export rendering
-- **Integration:** `tests/backend/integration/llm/` — extend existing `test_mindmap_and_knowledge_cards.py` with series mindmap tests
-- **Frontend:** `tests/frontend/features/workspace/ui/` — test new/updated views
+### New files (5)
+
+| # | File | Layer |
+|---|------|-------|
+| 1 | `src/backend/video_summary/generation/prompts/series_mindmap.py` | generation |
+| 2 | `src/backend/video_summary/generation/usecases/generate_series_mindmap.py` | generation |
+| 3 | `src/backend/video_summary/infrastructure/litellm_series_mindmap_generator.py` | infrastructure |
+| 4 | `src/backend/video_summary/infrastructure/series_mindmap_workflow.py` | infrastructure |
+| 5 | `src/backend/video_summary/library/usecases/series_mindmap_generation.py` | library |
+| 6 | `src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx` | frontend |
+
+### Modified files (36)
+
+| # | File | Change |
+|---|-------|--------|
+| **Change 1: transcript injection** |||
+| 1 | `infrastructure/prompts/mindmap.py` | Add `{transcript_text}` placeholder |
+| 2 | `generation/ports.py` | `MindmapGenerator.generate()` adds `transcript_text: str = ""` |
+| 3 | `generation/usecases/generate_mindmap.py` | Pass through `transcript_text` |
+| 4 | `infrastructure/litellm_mindmap_generator.py` | `build_mindmap_prompt()` accepts/injects transcript |
+| 5 | `infrastructure/mindmap_workflow.py` | `run()` adds `transcript_text` param |
+| 6 | `library/ports.py` | `VideoMindmapGenerator.run()` adds `transcript_text` param |
+| 7 | `infrastructure/library_generation_adapters.py` | Pass through |
+| 8 | `library/usecases/mindmap_generation.py` | Read transcript from workspace, pass downstream |
+| **Change 2: regenerate button** |||
+| 9 | `ui/views/WorkspaceMindmapView.jsx` | Add regenerate button in generated state |
+| **Change 3: export button** |||
+| 10 | `api/routes/videos.py` | New `GET .../mindmap/export?format=md` endpoint |
+| 11 | `ui/views/WorkspaceMindmapView.jsx` | Add export download button |
+| **Change 4: series mindmap (backend)** |||
+| 12 | `generation/ports.py` | New `SeriesMindmapGenerator` Protocol |
+| 13 | `generation/usecases/__init__.py` | Export `GenerateSeriesMindmap` |
+| 14 | `generation/prompts/__init__.py` | Export `SERIES_MINDMAP_PROMPT_TEMPLATE` |
+| 15 | `infrastructure/prompts/__init__.py` | Add series mindmap prompt export |
+| 16 | `infrastructure/application_builders.py` | `build_series_mindmap_application()` |
+| 17 | `library/ports.py` | New series `SeriesMindmapGenerator` Protocol |
+| 18 | `infrastructure/library_generation_adapters.py` | `WorkspaceBackedSeriesMindmapGenerator` |
+| 19 | `library/usecases/__init__.py` | Export `GenerateSeriesMindmapFromLibrary` |
+| 20 | `api/bootstrap.py` | Wire series mindmap use-case into container |
+| 21 | `api/container.py` | Add `generate_series_mindmap` field |
+| 22 | `api/routes/series.py` | `GET/POST /api/series/{sid}/mindmap` + export |
+| 23 | `tools/mindmap.py` | Add `OPEN_SERIES_MINDMAP` + `GENERATE_SERIES_MINDMAP` tool defs |
+| 24 | `tools/catalog.py` | Register new tools in `UI_ACTION_TOOL_DEFINITIONS` |
+| 25 | `tools/__init__.py` | Export new tool executors |
+| **Change 4: series mindmap (frontend)** |||
+| 26 | `workspaceState.js` | Series mindmap state + selectedNodeId |
+| 27 | `workspaceReducer.js` | Series mindmap actions (load/clear/generate) |
+| 28 | `workspaceApi.js` | `loadSeriesMindmap()` / `generateSeriesMindmap()` |
+| 29 | `workspaceContentActions.js` | `onGenerateSeriesMindmap` action |
+| 30 | `useWorkspaceController.js` | Wire up series mindmap in controller |
+| 31 | `useWorkspaceDataEffects.js` | Load series mindmap on tool select |
+| 32 | `workspacePageModel.js` | Pass series mindmap to shell |
+| 33 | `WorkspaceReadingPane.jsx` | Series toolbar mindmap item + view routing |
+| 34 | `workspaceChatActions.js` | Handle `open_series_mindmap` / `generate_series_mindmap` payloads |
+| 35 | `workspaceChatRuntime.js` | Trace step for series mindmap tools |
+| 36 | `workspaceToolMeta.js` | Series mindmap tool meta definition |
+
+### NOT modified (boundaries preserved)
+
+- `backend/agent/` — unchanged; new tools only add `ToolDefinition` dataclasses in `tools/`
+- `backend/agent_graph/` — unchanged; `VideoActionPlanner` whitelist stays `OPEN_NOTES/SAVE_NOTE/VIDEO_SEEK`
+- `backend/video_summary/domain/` — unchanged
+- `backend/shared/` — unchanged
+
+---
+
+## Acceptance Criteria & Test Cases
+
+### Change 1: Transcript Injection
+
+**Acceptance Criteria:**
+
+| AC# | Condition |
+|-----|-----------|
+| AC1.1 | `build_mindmap_prompt()` accepts `transcript_text` param, output includes transcript text (truncated to first 3000 chars) |
+| AC1.2 | Empty string passed: prompt contains `转写文本：` with empty suffix, does not crash |
+| AC1.3 | `MindmapGenerator.generate()` port signature includes `transcript_text: str = ""`, backward compatible |
+| AC1.4 | `GenerateVideoMindmapFromLibrary.run()` auto-reads `workspace.get_video_transcript()` and passes transcript |
+| AC1.5 | When video has no transcript (`get_video_transcript` returns `None`), passes empty string, flow continues |
+| AC1.6 | `MindmapNodePayload` schema unchanged; existing `mindmap.json` files remain readable |
+| AC1.7 | Transcript >10000 chars truncated to first 3000 chars; does not overflow context window |
+
+**Test Cases:**
+
+```
+tests/backend/unit/mindmap/test_mindmap_prompt.py
+  ├── test_prompt_includes_transcript_text
+  │     transcript_text="这是一段转写文本" → output contains the text
+  ├── test_prompt_handles_empty_transcript
+  │     transcript_text="" → no crash, "转写文本：" section empty
+  ├── test_prompt_truncates_long_transcript
+  │     10000-char transcript → transcript portion in prompt ≤ 3000 chars
+  ├── test_prompt_still_includes_summary_and_title
+  │     Verify title/duration/summary placeholders still render correctly
+
+tests/backend/unit/mindmap/test_generate_mindmap.py
+  ├── test_generate_mindmap_passes_transcript_to_generator
+  │     FakeMindmapGenerator → verify transcript_text correctly passed
+  ├── test_generate_mindmap_reads_transcript_from_workspace
+  │     FakeWorkspace → verify get_video_transcript() is called
+
+tests/backend/integration/llm/test_mindmap_and_knowledge_cards.py
+  └── (extend existing MindmapPromptTests)
+       test_prompt_includes_transcript_placeholder
+```
+
+---
+
+### Change 2: Regenerate Button
+
+**Acceptance Criteria:**
+
+| AC# | Condition |
+|-----|-----------|
+| AC2.1 | Regenerate button visible when `tools.mindmap.generated === true` |
+| AC2.2 | Regenerate button hidden when `tools.mindmap.generated === false` (show original "生成思维导图" button instead) |
+| AC2.3 | Click triggers `onGenerateMindmap`; loading state shown (shimmer or button spinner) |
+| AC2.4 | Button disabled while generating to prevent double-click |
+| AC2.5 | On success, mindmap auto-refreshes to new content |
+| AC2.6 | On failure, error message shown, existing mindmap preserved (not overwritten) |
+
+**Test Cases:**
+
+```
+tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx
+  ├── test_shows_regenerate_button_when_mindmap_generated
+  │     tools.mindmap.generated=true → button present
+  ├── test_hides_regenerate_button_when_mindmap_not_generated
+  │     tools.mindmap.generated=false → button absent
+  ├── test_regenerate_button_disabled_while_generating
+  │     isGeneratingMindmapSelectedVideo=true → button disabled
+  ├── test_regenerate_calls_onGenerateMindmap
+  │     Click button → onGenerateMindmap called once
+  ├── test_existing_mindmap_preserved_on_generation_error
+  │     onGenerateMindmap rejects → mindmap data unchanged
+```
+
+---
+
+### Change 3: Export Button
+
+**Acceptance Criteria:**
+
+| AC# | Condition |
+|-----|-----------|
+| AC3.1 | Export download button visible when mindmap is generated |
+| AC3.2 | Export button hidden when mindmap not generated |
+| AC3.3 | `GET /api/videos/{sid}/{vid}/mindmap/export?format=md` returns `Content-Type: text/markdown; charset=utf-8` |
+| AC3.4 | Response includes `Content-Disposition: attachment; filename="{title}-mindmap.md"` |
+| AC3.5 | Markdown content is nested list matching `mindmap.json` tree structure |
+| AC3.6 | Returns 404 when mindmap not found |
+| AC3.7 | Only `format=md` supported; other formats return 400 |
+
+**Test Cases:**
+
+```
+tests/backend/unit/mindmap/test_mindmap_export.py
+  ├── test_export_renders_nested_markdown_list
+  │     3-level MindmapNodePayload input → correct Markdown indentation
+  ├── test_export_handles_single_root_node
+  │     Root with no children → single line output
+  ├── test_export_handles_empty_children
+  │     children=[] → no crash
+  ├── test_export_includes_node_summary
+  │     Node summary non-empty → rendered as nested content
+
+tests/backend/integration/api/test_mindmap_api.py
+  ├── test_export_returns_markdown_content_type
+  ├── test_export_returns_404_when_mindmap_not_found
+  ├── test_export_returns_400_for_unsupported_format
+
+tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx
+  ├── test_shows_export_button_when_mindmap_generated
+  ├── test_hides_export_button_when_mindmap_not_generated
+```
+
+---
+
+### Change 4: Series-Level Mindmap
+
+**Acceptance Criteria:**
+
+| AC# | Condition |
+|-----|-----------|
+| AC4.1 | Series context toolbar shows "思维导图" tool item |
+| AC4.2 | Tool status `available` when at least one video in series has summary |
+| AC4.3 | Tool status `blocked` when no video in series has summary |
+| AC4.4 | `POST /api/series/{sid}/mindmap/generate` collects all video summaries + series_catalog, calls LLM |
+| AC4.5 | Artifact written to `workspace/{series_id}/mindmap.json`, schema `MindmapNodePayload` |
+| AC4.6 | Root node `title` = series title; `children` organized by knowledge topic (not by video episode) |
+| AC4.7 | After generation, `GET /api/series/{sid}/mindmap` returns full tree |
+| AC4.8 | Generated mindmap view has regenerate + export buttons (same behavior as single-video) |
+| AC4.9 | `GET /api/series/{sid}/mindmap/export?format=md` exports series mindmap |
+| AC4.10 | Agent can trigger via `OPEN_SERIES_MINDMAP` / `GENERATE_SERIES_MINDMAP` tools in series scope |
+
+**Edge Cases & Error Handling:**
+
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| Series has no videos | Tool status=blocked; generate API returns 400 "系列无视频" |
+| Series has videos but none have summary | Tool status=blocked; generate API returns 400 "系列下没有已生成概况的视频" |
+| `series_catalog.json` missing | Degrade gracefully: use only video summaries, omit catalog section from prompt |
+| Series has 50+ videos (large summaries) | Each video summary truncated to `one_sentence_summary + chapter_titles`; raw chapters not included |
+| Concurrent generation of same series | Second request returns 409 "该系列导图正在生成中" |
+| Series deleted after mindmap generated | GET returns 404 |
+| Some videos have summary, some don't | Only videos with summary are included; partial generation proceeds |
+
+**Test Cases:**
+
+```
+tests/backend/unit/mindmap/test_series_mindmap_prompt.py
+  ├── test_prompt_includes_series_catalog
+  ├── test_prompt_includes_video_summaries
+  ├── test_prompt_truncates_large_summaries
+  │     50 video summaries → each truncated to core fields
+  ├── test_prompt_falls_back_without_catalog
+  │     catalog=None → prompt omits catalog section but does not crash
+
+tests/backend/unit/mindmap/test_generate_series_mindmap.py
+  ├── test_collects_all_video_summaries
+  │     FakeWorkspace returns 3 summaries → all passed to generator
+  ├── test_skips_videos_without_summary
+  │     3 videos, 1 summary=None → only 2 used
+  ├── test_returns_none_when_no_summaries
+  │     All summaries=None → returns None
+  ├── test_reads_series_catalog
+  │     Verify get_series_catalog() is called
+
+tests/backend/unit/mindmap/test_series_mindmap_export.py
+  ├── test_export_series_mindmap_markdown
+  │     Verify nested Markdown list output correct
+
+tests/backend/integration/api/test_series_mindmap_api.py
+  ├── test_generate_series_mindmap_requires_summaries
+  │     No summaries → 400
+  ├── test_generate_series_mindmap_creates_artifact
+  │     Normal generation → mindmap.json exists
+  ├── test_get_series_mindmap_returns_tree
+  │     GET → returns valid MindmapNodePayload structure
+  ├── test_get_series_mindmap_404_when_not_generated
+  ├── test_export_series_mindmap
+  ├── test_concurrent_generation_returns_409
+
+tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx
+  ├── test_shows_generate_button_when_available
+  ├── test_shows_blocked_state_when_no_summaries
+  ├── test_regenerate_and_export_buttons_work
+  ├── test_mindmap_canvas_renders_tree
+
+tests/backend/architecture/
+  └── Existing import-linter tests automatically cover new files
+```
+
+---
+
+### Explicitly Excluded from Testing
+
+- **Real LLM call tests** — Use `FakeGateway` for logic paths; no new tests that call real LLM (cost/time)
+- **Agent end-to-end tests** — Existing `OPEN_MINDMAP`/`GENERATE_MINDMAP` patterns already tested; new tools add only `ToolDefinition` entries following identical path
+- **Performance/stress tests** — 50+ video series scenarios validated via logic truncation tests only, no real load testing
