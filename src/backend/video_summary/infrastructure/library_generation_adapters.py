@@ -95,6 +95,7 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
         series_id: str,
         video_id: str,
         summary_data: dict[str, object],
+        transcript_text: str = "",
     ) -> None:
         """为指定视频重新生成思维导图。
 
@@ -102,12 +103,13 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
             series_id: 所属系列 ID。
             video_id: 视频唯一 ID。
             summary_data: 总结数据字典，作为思维导图的输入。
+            transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
 
         Raises:
             LookupError: 视频不存在时抛出。
         """
         video = _require_video_source(self._workspace, series_id, video_id)
-        await self._workflow.run(video.source_path, video.output_dir, summary_data)
+        await self._workflow.run(video.source_path, video.output_dir, summary_data, transcript_text=transcript_text)
 
 
 def _require_video_source(workspace: VideoLibraryReader, series_id: str, video_id: str):

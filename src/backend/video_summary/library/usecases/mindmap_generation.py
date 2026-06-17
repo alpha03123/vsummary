@@ -44,11 +44,15 @@ class GenerateVideoMindmapFromLibrary:
         if summary is None:
             return None
 
+        transcript = self._workspace.get_video_transcript(series_id, video_id)
+        transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
+
         try:
             await self._generator.run(
                 series_id=series_id,
                 video_id=video_id,
                 summary_data=summary.summary,
+                transcript_text=transcript_text,
             )
         except LookupError:
             return None

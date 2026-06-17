@@ -237,6 +237,7 @@ class VideoMindmapGenerator(Protocol):
         series_id: str,
         video_id: str,
         summary_data: dict[str, object],
+        transcript_text: str = "",
     ) -> None:
         """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。"""
 

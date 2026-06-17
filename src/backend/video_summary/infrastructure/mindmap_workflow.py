@@ -34,7 +34,9 @@ class ConfiguredMindmapWorkflow:
         self._cached_signature: tuple[str, str] | None = None
         self._cached_application = None
 
-    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> None:
+    async def run(
+        self, source_path: Path, output_dir: Path, summary_data: dict[str, object], transcript_text: str = ""
+    ) -> None:
         """基于当前配置执行一次思维导图生成。
 
         从 `summary_data` 的最后一个章节推导 `duration_seconds`；
@@ -44,6 +46,7 @@ class ConfiguredMindmapWorkflow:
             source_path: 媒体源路径，仅取 `stem` 作为标题。
             output_dir: 思维导图制品的输出目录（`mindmap.json`）。
             summary_data: 来自总结阶段的结构化数据，用于驱动导图生成。
+            transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
         """
         application = self._get_application()
         await application.use_case.run(
@@ -51,6 +54,7 @@ class ConfiguredMindmapWorkflow:
             duration_seconds=_resolve_duration_seconds(summary_data),
             summary_data=summary_data,
             output_dir=output_dir,
+            transcript_text=transcript_text,
         )
 
     def _get_application(self):
