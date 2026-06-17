@@ -54,6 +54,7 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
     return WorkspaceSettingsResponse(
         theme=settings.theme,
         show_takeaways=settings.show_takeaways,
+        layout_mode=settings.layout_mode,
         transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
@@ -95,6 +96,7 @@ async def update_workspace_settings(
         settings = container.settings_service.update_workspace_settings(
             theme=request.theme,
             show_takeaways=request.show_takeaways,
+            layout_mode=request.layout_mode,
             transcript_enhancement_enabled=request.transcript_enhancement_enabled,
             asr_model_quality=request.asr_model_quality,
             transcription_mode=request.transcription_mode,
@@ -125,6 +127,7 @@ async def update_workspace_settings(
     return WorkspaceSettingsResponse(
         theme=settings.theme,
         show_takeaways=settings.show_takeaways,
+        layout_mode=settings.layout_mode,
         transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,

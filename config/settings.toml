@@ -12,6 +12,7 @@ transcription_mode = "accurate"
 [workspace_ui]
 theme = "light"
 show_takeaways = true
+layout_mode = "video_center"
 
 [debug]
 mode = true
