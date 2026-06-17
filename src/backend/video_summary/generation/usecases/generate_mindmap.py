@@ -31,6 +31,7 @@ class GenerateMindmap:
         duration_seconds: float,
         summary_data: dict[str, object],
         output_dir: Path,
+        transcript_text: str = "",
     ) -> dict[str, object]:
         """基于总结数据生成思维导图并落盘。
 
@@ -39,6 +40,7 @@ class GenerateMindmap:
             duration_seconds: 视频时长（秒），用于时间锚点。
             summary_data: 已生成的总结结构化数据，作为思维导图骨架。
             output_dir: 思维导图制品的写入目录。
+            transcript_text: 转写文本，用于 LLM 提取更多层级细节。
 
         Returns:
             写入磁盘的思维导图节点/边字典（与生成端口返回值一致）。
@@ -47,6 +49,7 @@ class GenerateMindmap:
             title=title,
             duration_seconds=duration_seconds,
             summary_data=summary_data,
+            transcript_text=transcript_text,
         )
         await self._artifact_store.save_mindmap(mindmap=mindmap, output_dir=output_dir)
         return mindmap

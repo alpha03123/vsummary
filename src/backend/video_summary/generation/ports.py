@@ -76,6 +76,7 @@ class MindmapGenerator(Protocol):
         title: str,
         duration_seconds: float,
         summary_data: dict[str, object],
+        transcript_text: str = "",
     ) -> dict[str, object]:
         """基于总结数据生成思维导图节点/边字典。"""
 
