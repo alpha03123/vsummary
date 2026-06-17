@@ -472,7 +472,7 @@ class LazyAgentRuntimeProvider:
         with self._lock:
             if self._cached_agent_graph_service is None:
                 env_settings = load_env_settings(self._root_dir)
-                if not env_settings.api_key.strip():
+                if env_settings.provider != "ollama" and not env_settings.api_key.strip():
                     raise RuntimeError("缺少 API Key，无法调用 Agent 模型。")
                 app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
                 self._cached_context_budget_service = AgentContextBudgetService(
