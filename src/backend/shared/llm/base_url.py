@@ -54,3 +54,20 @@ def resolve_openai_compatible_api_base_url(value: str) -> str:
         path = f"{path}/v1" if path else "/v1"
 
     return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
+def resolve_provider_api_base_url(provider: str, value: str) -> str:
+    """按 provider 解析 LiteLLM 所需的 api_base。"""
+    normalized_provider = provider.strip().lower()
+    if normalized_provider == "ollama":
+        return resolve_ollama_api_base_url(value)
+    return resolve_openai_compatible_api_base_url(value)
+
+
+def resolve_ollama_api_base_url(value: str) -> str:
+    """把 Ollama 地址归一为服务根地址，不追加 OpenAI 的 /v1。"""
+    normalized = normalize_provider_base_url(value)
+    for endpoint in ("/api/generate", "/api/chat", "/v1"):
+        if normalized.endswith(endpoint):
+            return normalized[: -len(endpoint)].rstrip("/")
+    return normalized

@@ -24,7 +24,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from backend.shared.llm.chat_stream import ChatCompletionStreamChunk
-from backend.shared.llm.base_url import resolve_openai_compatible_api_base_url
+from backend.shared.llm.base_url import resolve_provider_api_base_url
 from backend.shared.llm.json_mode import describe_validation_error, validate_json_response
 
 
@@ -85,14 +85,13 @@ class LiteLLMCompletionGateway:
         completion_fn: CompletionFn | None = None,
         acompletion_fn: AsyncCompletionFn | None = None,
     ) -> None:
-        normalized_api_key = api_key.strip()
-        if not normalized_api_key:
-            raise RuntimeError("缺少 API Key，无法调用模型。")
-
         self._provider = provider.strip()
+        normalized_api_key = api_key.strip()
+        if not normalized_api_key and not _allows_empty_api_key(self._provider):
+            raise RuntimeError("缺少 API Key，无法调用模型。")
         self._model = _normalize_litellm_model(self._provider, model)
-        self._base_url = resolve_openai_compatible_api_base_url(base_url)
-        self._api_key = normalized_api_key
+        self._base_url = resolve_provider_api_base_url(self._provider, base_url)
+        self._api_key = normalized_api_key or None
         self._reasoning_effort = _normalize_reasoning_effort(reasoning_effort)
         self._structured_mode_cache_key = _build_structured_mode_cache_key(
             provider=self._provider,
@@ -592,6 +591,10 @@ def _normalize_litellm_model(provider: str, model: str) -> str:
     return f"{normalized_provider}/{normalized_model}"
 
 
+def _allows_empty_api_key(provider: str) -> bool:
+    return provider.strip().lower() == "ollama"
+
+
 def _dump_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     """将消息序列浅拷贝为普通 list，供 litellm 参数化使用。
 
@@ -609,7 +612,7 @@ def _build_completion_request(
     model: str,
     messages: list[dict[str, Any]],
     api_base: str,
-    api_key: str,
+    api_key: str | None,
     temperature: float,
     response_format: dict[str, Any] | type[BaseModel] | None,
     max_tokens: int | None,
@@ -948,7 +951,7 @@ def _build_structured_mode_cache_key(
     Returns:
         形如 ``"openai|https://api.openai.com/v1|gpt-4o|a1b2c3d4e5f6"`` 的缓存键。
     """
-    key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:12]
+    key_hash = hashlib.sha256((api_key or "").encode("utf-8")).hexdigest()[:12]
     return "|".join([provider.strip(), base_url.rstrip("/"), model.strip(), key_hash])
 
 
