@@ -29,7 +29,7 @@ function renderPanel(uiOverrides = {}) {
 }
 
 describe("WorkspaceSettingsPanel provider settings", () => {
-  it("hides the API key editor for Ollama while showing the provider-native request preview", () => {
+  it("hides the API key editor for Ollama", () => {
     renderPanel({
       llmProvider: "ollama",
       openaiBaseUrl: "http://127.0.0.1:11434",
@@ -38,17 +38,6 @@ describe("WorkspaceSettingsPanel provider settings", () => {
 
     expect(screen.queryByText("API Key")).not.toBeInTheDocument();
     expect(screen.queryByText("保存 Key")).not.toBeInTheDocument();
-    expect(screen.getByText("http://127.0.0.1:11434/api/generate")).toBeInTheDocument();
-  });
-
-  it("previews the default Ollama native URL when base URL is empty", () => {
-    renderPanel({
-      llmProvider: "ollama",
-      openaiBaseUrl: "",
-      openaiModel: "qwen2.5:7b",
-    });
-
-    expect(screen.getByText("http://127.0.0.1:11434/api/generate")).toBeInTheDocument();
   });
 
   it("shows the API key editor for OpenAI-compatible providers", () => {

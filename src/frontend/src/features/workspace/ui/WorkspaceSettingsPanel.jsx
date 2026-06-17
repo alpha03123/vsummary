@@ -11,7 +11,6 @@ import {
   WorkspaceToggleSwitch,
 } from "./shared/WorkspaceSettingsControls";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "../model/modelDownloadMessages";
-import { buildProviderRequestPreviewUrl } from "../model/providerRequestUrl";
 
 export function WorkspaceSettingsPanel({
   ui,
@@ -54,7 +53,6 @@ export function WorkspaceSettingsPanel({
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const isRerankerDownloading = rerankerModel?.status === "running" || downloadingRagModelKey === "reranker";
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
-  const providerTargetUrl = buildProviderRequestPreviewUrl(ui.llmProvider, ui.openaiBaseUrl);
   const saveProviderSettingsOnEnter = (event) => {
     if (event.key !== "Enter" || typeof onSaveProviderSettings !== "function") {
       return;
@@ -526,12 +524,6 @@ export function WorkspaceSettingsPanel({
                       placeholder="留空使用 provider 默认地址"
                       className="w-full"
                     />
-                    {providerTargetUrl ? (
-                      <p className="mt-2 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-                        实际请求地址：
-                        <code className="break-all rounded bg-stone-100 px-1 py-0.5 text-stone-700 dark:bg-stone-800 dark:text-stone-300">{providerTargetUrl}</code>
-                      </p>
-                    ) : null}
                   </div>
                 </WorkspaceSettingRow>
 
