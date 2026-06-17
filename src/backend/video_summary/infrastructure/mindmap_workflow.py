@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import Lock
 
 from backend.video_summary.infrastructure.application_builders import build_mindmap_application
+from backend.video_summary.infrastructure.settings import ensure_settings_file
 
 
 class ConfiguredMindmapWorkflow:
@@ -59,6 +60,7 @@ class ConfiguredMindmapWorkflow:
         缓存键为 `(settings.toml 文本, .env 文本)`，二者任一被修改都会触发重建。
         并发安全由 `_application_lock` 串行化，避免并发触发两次 `build_mindmap_application`。
         """
+        ensure_settings_file(self._config_path)
         signature = (
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",

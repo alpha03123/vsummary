@@ -17,6 +17,7 @@ from threading import Lock
 
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_video_summary_application
+from backend.video_summary.infrastructure.settings import ensure_settings_file
 
 
 class ConfiguredVideoSummaryWorkflow:
@@ -80,6 +81,7 @@ class ConfiguredVideoSummaryWorkflow:
         缓存键为 `(settings.toml 文本, .env 文本, transcript_enhancement_enabled)`，
         任意维度变更都会触发重建。并发安全由 `_application_lock` 串行化。
         """
+        ensure_settings_file(self._config_path)
         signature = (
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",

@@ -18,6 +18,7 @@ from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
+import shutil
 import tomllib
 
 from backend.shared.llm.base_url import normalize_provider_base_url
@@ -357,6 +358,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     Returns:
         已校验的 `AppSettings` 不可变实例。
     """
+    ensure_settings_file(config_path)
     payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
     env_values = load_env_settings(root_dir)
 
@@ -564,6 +566,16 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 def save_settings(config_path: Path, settings: AppSettings) -> None:
     """把 `AppSettings` 序列化回 `settings.toml`（走原子写）。"""
     atomic_write_text(config_path, _render_settings_toml(settings))
+
+
+def ensure_settings_file(config_path: Path) -> None:
+    if config_path.exists():
+        return
+    example_path = config_path.with_name(f"{config_path.name}.example")
+    if not example_path.exists():
+        raise FileNotFoundError(f"settings file not found: {config_path}")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(example_path, config_path)
 
 
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:

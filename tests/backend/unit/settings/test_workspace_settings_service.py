@@ -278,6 +278,21 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertEqual(settings.web_search.max_results, 5)
             self.assertEqual(settings.web_search.timeout_seconds, 10)
 
+    def test_load_settings_creates_local_settings_from_example_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            example_path = root_dir / "config" / "settings.toml.example"
+            example_path.write_text(_sample_settings_toml(), encoding="utf-8")
+
+            settings = load_settings(config_path, root_dir)
+
+            self.assertTrue(config_path.exists())
+            self.assertEqual(config_path.read_text(encoding="utf-8"), _sample_settings_toml())
+            self.assertEqual(settings.workspace_ui.layout_mode, "video_center")
+
     def test_load_settings_rejects_generation_concurrency_smaller_than_one(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
