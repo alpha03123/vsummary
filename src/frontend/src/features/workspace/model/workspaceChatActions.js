@@ -134,9 +134,8 @@ export function createWorkspaceChatActions({
     if (!reference || typeof reference.seconds !== "number") {
       return;
     }
-    dispatch({ type: "tool_selected", toolId: "preview" });
     dispatch({
-      type: "preview_seek_requested",
+      type: "player_seek_requested",
       seconds: reference.seconds,
       endSeconds: typeof reference.endSeconds === "number" ? reference.endSeconds : null,
       query: typeof reference.query === "string" ? reference.query : "",
@@ -162,7 +161,7 @@ export function createWorkspaceChatActions({
 
     if (typeof payload.seek_seconds === "number") {
       dispatch({
-        type: "preview_seek_requested",
+        type: "player_seek_requested",
         seconds: payload.seek_seconds,
         endSeconds: typeof payload.match_end_seconds === "number" ? payload.match_end_seconds : null,
         query: typeof payload.query === "string" ? payload.query : "",

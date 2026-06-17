@@ -16,9 +16,6 @@ if not defined CONDA_BAT (
 if not defined CONDA_BAT (
     if exist "%USERPROFILE%\anaconda3\condabin\conda.bat" set "CONDA_BAT=%USERPROFILE%\anaconda3\condabin\conda.bat"
 )
-if not defined CONDA_BAT (
-    if exist "E:\Anaconda3\condabin\conda.bat" set "CONDA_BAT=E:\Anaconda3\condabin\conda.bat"
-)
 
 if not defined CONDA_BAT (
     echo [error] conda not found.

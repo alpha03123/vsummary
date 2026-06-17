@@ -4,7 +4,9 @@ import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
+import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
 import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
+import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
 import { motion, AnimatePresence } from "framer-motion";
@@ -50,7 +52,7 @@ export function WorkspacePage({ page }) {
     selectedVideo,
     selectedNode,
     previewUrl,
-    previewSeekRequest,
+    playerSeekRequest,
     selectedContextType,
   } = shell;
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -62,6 +64,27 @@ export function WorkspacePage({ page }) {
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const hasRightPane = Boolean(activeSeries);
+  const isChatCenterMode = ui.layoutMode === "chat_center";
+  const chatPanelProps = {
+    workspaceTitle: library?.workspace?.title,
+    activeSeries,
+    selectedVideo,
+    selectedContextType,
+    selectedToolId: state.selectedToolId,
+    tools,
+    chatMessages: chat.messages,
+    chatSessions: chat.sessions,
+    activeSessionId: chat.activeSessionId,
+    chatPending: chat.pending,
+    contextUsage: chat.contextUsage,
+    contextUsageLoading: chat.contextUsageLoading,
+    ragModels: generation.ragModels,
+    knowledgeMemorySnapshot: state.knowledgeMemorySnapshot,
+    onSelectChatSession: chat.selectChatSession,
+    onOpenSeekReference: chat.openSeekReference,
+    onOpenSettings: () => actions.openSettingsPanel("network"),
+    onSubmitChat: chat.submit,
+  };
 
   useEffect(() => {
     persistWorkspaceLayout(layout);
@@ -116,6 +139,70 @@ export function WorkspacePage({ page }) {
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp, { once: true });
+  }
+
+  function renderVideoPlayerPane() {
+    if (selectedVideo) {
+      return (
+        <WorkspaceVideoPlayer
+          videoSource={tools?.preview?.previewUrl ?? previewUrl}
+          playerSeekRequest={playerSeekRequest}
+          videoSourceType={selectedVideo?.sourceType}
+        />
+      );
+    }
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <WorkspaceStateBlock
+          eyebrow="Player"
+          title="选择视频以开始预览"
+          description="选中左侧的视频后,这里会显示可跳转的视频播放器。"
+          dashed
+        />
+      </div>
+    );
+  }
+
+  function renderReadingPane() {
+    return (
+      <WorkspaceReadingPane
+        ui={ui}
+        tools={tools}
+        library={library}
+        chat={chat}
+        summary={summary}
+        mindmap={mindmap}
+        knowledgeCards={knowledgeCards}
+        knowledgeCardsGenerating={knowledgeCardsGenerating}
+        knowledgeCardsFeedback={knowledgeCardsFeedback}
+        notes={notes}
+        activeSeries={activeSeries}
+        selectedVideo={selectedVideo}
+        selectedContextType={selectedContextType}
+        selectedNode={selectedNode}
+        previewUrl={previewUrl}
+        playerSeekRequest={playerSeekRequest}
+        onSeek={shell.player.seekToTime}
+        selectedToolId={state.selectedToolId}
+        selectedChapterId={state.selectedChapterId}
+        toolsLoading={state.toolsLoading}
+        summaryLoading={state.summaryLoading}
+        mindmapLoading={state.mindmapLoading}
+        knowledgeCardsLoading={generation.knowledgeCardsLoading}
+        notesLoading={generation.notesLoading}
+        savingNote={generation.savingNote}
+        isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
+        isGeneratingSelectedVideo={generation.isGeneratingSummary}
+        onSelectTool={actions.selectTool}
+        onFocusNode={actions.focusNode}
+        onGenerateMindmap={actions.generateMindmap}
+        onGenerateKnowledgeCards={actions.generateKnowledgeCards}
+        onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
+        onCreateNote={actions.createNote}
+        onUpdateNote={actions.updateNote}
+        onDeleteNote={actions.deleteNote}
+      />
+    );
   }
 
   if (state.loading && !summary) {
@@ -233,6 +320,9 @@ export function WorkspacePage({ page }) {
           onToggleSettingsPanel={actions.toggleSettingsPanel}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onToggleChatDrawer={chat.toggleDrawer}
+          chatDrawerOpen={chat.drawerOpen}
+          chatDrawerEnabled={!isChatCenterMode}
         />
 
         {state.error && (
@@ -262,26 +352,7 @@ export function WorkspacePage({ page }) {
               style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
               className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
             >
-              <WorkspaceChatPanel
-                workspaceTitle={library?.workspace?.title}
-                activeSeries={activeSeries}
-                selectedVideo={selectedVideo}
-                selectedContextType={selectedContextType}
-                selectedToolId={state.selectedToolId}
-                tools={tools}
-                chatMessages={chat.messages}
-                chatSessions={chat.sessions}
-                activeSessionId={chat.activeSessionId}
-                chatPending={chat.pending}
-                contextUsage={chat.contextUsage}
-                contextUsageLoading={chat.contextUsageLoading}
-                ragModels={generation.ragModels}
-                knowledgeMemorySnapshot={state.knowledgeMemorySnapshot}
-                onSelectChatSession={chat.selectChatSession}
-                onOpenSeekReference={chat.openSeekReference}
-                onOpenSettings={() => actions.openSettingsPanel("network")}
-                onSubmitChat={chat.submit}
-              />
+              {isChatCenterMode ? <WorkspaceChatPanel {...chatPanelProps} /> : renderVideoPlayerPane()}
             </section>
           ) : null}
           {isPlaygroundHome ? (
@@ -324,42 +395,7 @@ export function WorkspacePage({ page }) {
                 initial="initial" animate="animate" exit="exit"
                 className="min-w-[320px] flex-1 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all"
               >
-                <WorkspaceReadingPane
-                  ui={ui}
-                  tools={tools}
-                  library={library}
-                  chat={chat}
-                  summary={summary}
-                  mindmap={mindmap}
-                  knowledgeCards={knowledgeCards}
-                  knowledgeCardsGenerating={knowledgeCardsGenerating}
-                  knowledgeCardsFeedback={knowledgeCardsFeedback}
-                  notes={notes}
-                  activeSeries={activeSeries}
-                  selectedVideo={selectedVideo}
-                  selectedContextType={selectedContextType}
-                  selectedNode={selectedNode}
-                  previewUrl={previewUrl}
-                  previewSeekRequest={previewSeekRequest}
-                  selectedToolId={state.selectedToolId}
-                  selectedChapterId={state.selectedChapterId}
-                  toolsLoading={state.toolsLoading}
-                  summaryLoading={state.summaryLoading}
-                  mindmapLoading={state.mindmapLoading}
-                  knowledgeCardsLoading={generation.knowledgeCardsLoading}
-                  notesLoading={generation.notesLoading}
-                  savingNote={generation.savingNote}
-                  isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
-                  isGeneratingSelectedVideo={generation.isGeneratingSummary}
-                  onSelectTool={actions.selectTool}
-                  onFocusNode={actions.focusNode}
-                  onGenerateMindmap={actions.generateMindmap}
-                  onGenerateKnowledgeCards={actions.generateKnowledgeCards}
-                  onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
-                  onCreateNote={actions.createNote}
-                  onUpdateNote={actions.updateNote}
-                  onDeleteNote={actions.deleteNote}
-                />
+                {renderReadingPane()}
               </motion.section>
             </>
           )}
@@ -420,6 +456,14 @@ export function WorkspacePage({ page }) {
           )}
         </AnimatePresence>
       </main>
+
+      {!isChatCenterMode ? (
+        <ChatDrawer
+          isOpen={chat.drawerOpen}
+          onClose={chat.closeDrawer}
+          {...chatPanelProps}
+        />
+      ) : null}
 
       {importModalState && (
         <WorkspaceImportModal

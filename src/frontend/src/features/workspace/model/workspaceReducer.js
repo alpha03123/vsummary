@@ -445,7 +445,7 @@ export function workspaceReducer(state, action) {
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
-        previewSeekRequest: null,
+        playerSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
         generatingSeriesId: null,
@@ -475,7 +475,7 @@ export function workspaceReducer(state, action) {
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
-        previewSeekRequest: null,
+        playerSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
         generatingSeriesId: null,
@@ -513,7 +513,7 @@ export function workspaceReducer(state, action) {
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
-        previewSeekRequest: null,
+        playerSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
         generatingSeriesId: null,
@@ -559,7 +559,7 @@ export function workspaceReducer(state, action) {
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
-        previewSeekRequest: null,
+        playerSeekRequest: null,
         generationProgress: null,
         generationSnapshot: null,
         downloadingVideoKey: null,
@@ -750,10 +750,10 @@ export function workspaceReducer(state, action) {
         selectedNodeId: action.nodeId,
         selectedChapterId: action.chapterId ?? state.selectedChapterId,
       };
-    case "preview_seek_requested":
+    case "player_seek_requested":
       return {
         ...state,
-        previewSeekRequest: {
+        playerSeekRequest: {
           seconds: action.seconds,
           endSeconds: action.endSeconds ?? null,
           query: action.query ?? "",
@@ -762,6 +762,12 @@ export function workspaceReducer(state, action) {
           requestId: action.requestId,
         },
       };
+    case "chat_drawer_toggled":
+      return { ...state, chatDrawerOpen: !state.chatDrawerOpen };
+    case "chat_drawer_opened":
+      return { ...state, chatDrawerOpen: true };
+    case "chat_drawer_closed":
+      return { ...state, chatDrawerOpen: false };
     case "settings_panel_toggled":
       return {
         ...state,

@@ -17,9 +17,6 @@ export function buildAgentChatContextPayload(library, selectedContextType, serie
 }
 
 export function normalizeAgentToolId(toolId) {
-  if (toolId === "video") {
-    return "preview";
-  }
   if (
     toolId === "series-overview" ||
     toolId === "overview" ||
@@ -27,7 +24,6 @@ export function normalizeAgentToolId(toolId) {
     toolId === "knowledge-cards" ||
     toolId === "mindmap" ||
     toolId === "notes" ||
-    toolId === "preview" ||
     toolId === "series-home"
   ) {
     return toolId;

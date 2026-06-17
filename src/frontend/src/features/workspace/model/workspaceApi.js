@@ -27,6 +27,7 @@ export async function loadWorkspaceSettings() {
   return {
     theme: payload.theme,
     showTakeaways: payload.show_takeaways,
+    layoutMode: payload.layout_mode,
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
@@ -71,6 +72,7 @@ export async function updateWorkspaceSettings(settings) {
     body: JSON.stringify({
       theme: settings.theme,
       show_takeaways: settings.showTakeaways,
+      layout_mode: settings.layoutMode,
       transcript_enhancement_enabled: settings.transcriptEnhancementEnabled,
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
@@ -90,6 +92,7 @@ export async function updateWorkspaceSettings(settings) {
   return {
     theme: payload.theme,
     showTakeaways: payload.show_takeaways,
+    layoutMode: payload.layout_mode,
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,

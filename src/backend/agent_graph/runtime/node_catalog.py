@@ -1,3 +1,10 @@
+"""LangGraph 节点 ID 到中文展示名的注册表。
+
+本模块集中维护 `node_id -> 中文别名` 的映射，供 `AgentGraphStreamOrchestrator`
+把节点进度事件翻译为前端可读标签；未在表中注册的 ID 会原样回传，便于
+新增节点无须同步更新本表也能跑通。
+"""
+
 from __future__ import annotations
 
 
@@ -16,6 +23,16 @@ NODE_ALIASES: dict[str, str] = {
 
 
 def get_node_alias(node_id: str) -> str:
+    """根据节点 ID 返回中文别名；未注册则原样回传。
+
+    Args:
+        node_id: 节点 ID 字符串，会先 `strip`。
+
+    Returns:
+        注册表中命中的中文别名；未命中或 `node_id` 为空时：
+            - 空字符串 → 返回空字符串；
+            - 非空未命中 → 返回原 `node_id`。
+    """
     normalized = str(node_id).strip()
     if not normalized:
         return ""

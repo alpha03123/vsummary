@@ -1,9 +1,24 @@
+"""应用配置（settings.toml + .env）的加载、保存与字段校验。
+
+数据流：
+- `load_settings(config_path, root_dir)` → 读 `settings.toml` 并合并 `.env`
+  中的 secrets，构造不可变的 `AppSettings`；
+- `replace_*` 系列函数 → 用 `dataclasses.replace` 派生新 `AppSettings`，便于
+  按字段做 partial update；
+- `save_settings` / `save_env_settings` → 把更新后的 settings 落回 TOML / .env；
+- `apply_runtime_env_overrides` → 把 `.env` 中的 HuggingFace 镜像等环境变量
+  灌入 `os.environ`，供子进程与第三方 SDK 直接读取。
+
+所有常量都以业务命名（`DEFAULT_*`、`VALID_*`）暴露，便于设置页/校验逻辑复用。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
+import shutil
 import tomllib
 
 from backend.shared.llm.base_url import normalize_provider_base_url
@@ -13,6 +28,7 @@ from backend.shared.filesystem import atomic_write_text
 VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper"}
 VALID_THEMES = {"light", "dark"}
+VALID_WORKSPACE_LAYOUT_MODES = {"video_center", "chat_center"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
 VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
@@ -129,6 +145,16 @@ SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CAC
 
 @dataclass(frozen=True)
 class FasterWhisperSettings:
+    """faster-whisper ASR provider 的子配置。
+
+    Attributes:
+        device: 设备标识，取值 `auto` / `cpu` / `gpu`。
+        model_size: 模型 ID（如 `small` / `large-v3-turbo`）。
+        compute_type: 计算精度（如 `int8` / `float16`）。
+        transcription_mode: 转写模式，决定 beam_size 等解码参数。
+        models_dir: faster-whisper 模型缓存根目录。
+    """
+
     device: str
     model_size: str
     compute_type: str
@@ -138,6 +164,15 @@ class FasterWhisperSettings:
 
 @dataclass(frozen=True)
 class AsrSettings:
+    """ASR 总配置：provider + 语言 + 是否启用转写增强 + provider 子配置。
+
+    Attributes:
+        provider: ASR provider 标识（当前仅 `faster_whisper`）。
+        language: 强制指定的语言代码，默认 `zh`。
+        transcript_enhancement_enabled: 是否启用 LLM 转写增强。
+        faster_whisper: faster-whisper provider 的具体参数。
+    """
+
     provider: str
     language: str
     transcript_enhancement_enabled: bool
@@ -146,6 +181,12 @@ class AsrSettings:
 
 @dataclass(frozen=True)
 class OpenAISettings:
+    """LLM 网关配置。
+
+    业务目的：固化 LiteLLM 调用所需的四元组（provider / base_url / model /
+    api_key），保证 secrets 仅来自 `.env`、不进入 `settings.toml`。
+    """
+
     provider: str
     base_url: str
     model: str
@@ -154,17 +195,46 @@ class OpenAISettings:
 
 @dataclass(frozen=True)
 class WorkspaceUiSettings:
+    """工作区 UI 偏好配置（主题与关键结论展示）。
+
+    业务目的：保存用户在阅读面板上的可定制选项，与后端逻辑解耦。
+    """
+
     theme: str
     show_takeaways: bool
+    layout_mode: str
 
 
 @dataclass(frozen=True)
 class DebugSettings:
+    """调试模式开关。
+
+    业务目的：开启时 LangGraph 工作流会把 debug 日志追加到输出目录，方便
+    排查节点级行为。
+    """
+
     mode: bool
 
 
 @dataclass(frozen=True)
 class AgentContextSettings:
+    """Agent 上下文与 LLM 行为相关参数。
+
+    Attributes:
+        window_tokens: 模型上下文窗口大小（token）。
+        answer_detail_level: 答案详细程度，取值 `short` / `medium` / `long`。
+        reasoning_effort: 推理深度，取值 `none` / `low` / `medium` / `high`。
+        talk_custom_prompt: 自定义问答系统提示词。
+        reserved_output_tokens: 为输出预留的 token 数。
+        warning_threshold_ratio / compact_threshold_ratio / blocking_threshold_ratio:
+            上下文预算告警/压缩/阻断三档阈值（占上下文比例）。
+        keep_tail_messages: 压缩时保留的最近消息条数。
+        projection_max_tokens_ratio: 投影预算占上下文窗口的比例。
+        direct_summary_threshold_ratio: 单视频总结走"直接总结"路径的预算阈值。
+        planner_transport: planner 与 executor 的传输模式，取值 `structured` /
+            `stream_buffered`，默认 `structured`。
+    """
+
     window_tokens: int
     answer_detail_level: str
     reasoning_effort: str
@@ -181,6 +251,17 @@ class AgentContextSettings:
 
 @dataclass(frozen=True)
 class AgentRetrievalSettings:
+    """Agent RAG 检索相关参数。
+
+    Attributes:
+        embedding_provider: embedding 提供方（当前仅 `fastembed`）。
+        embedding_model: embedding 模型仓库 ID。
+        embedding_device: embedding 计算设备，取值 `auto` / `cpu` / `gpu`。
+        embedding_batch_size: 批处理大小。
+        max_hits: 单次检索返回的最大命中数。
+        rerank_enabled: 是否启用 BGE 重排序。
+    """
+
     embedding_provider: str
     embedding_model: str
     embedding_device: str
@@ -191,12 +272,30 @@ class AgentRetrievalSettings:
 
 @dataclass(frozen=True)
 class GenerationConcurrencySettings:
+    """生成阶段的并发上限配置。
+
+    Attributes:
+        video_generation_concurrency: 单视频级并发上限（系列批量时也会遵守）。
+        summary_chunk_concurrency: 单视频分片总结阶段的并发上限。
+    """
+
     video_generation_concurrency: int
     summary_chunk_concurrency: int
 
 
 @dataclass(frozen=True)
 class WebSearchSettings:
+    """Web 搜索相关配置。
+
+    Attributes:
+        enabled: 是否启用 Web 搜索。
+        provider: 提供方（当前仅 `litellm`）。
+        mode: 搜索模式（`native` 等）。
+        search_context_size: 搜索上下文粒度（`low` / `medium` / `high`）。
+        max_results: 单次搜索返回的最大结果数。
+        timeout_seconds: 单次搜索的超时时间。
+    """
+
     enabled: bool
     provider: str
     mode: str
@@ -207,17 +306,32 @@ class WebSearchSettings:
 
 @dataclass(frozen=True)
 class ChaoxingImportSettings:
+    """超星导入相关节流配置。
+
+    Attributes:
+        request_delay_seconds: 普通请求之间的最小间隔（秒）。
+        init_course_delay_seconds: 课程初始化时的额外等待（秒）。
+    """
+
     request_delay_seconds: float
     init_course_delay_seconds: float
 
 
 @dataclass(frozen=True)
 class ExternalImportSettings:
+    """外部导入（超星 / 学习通）的配置集合。"""
+
     chaoxing: ChaoxingImportSettings
 
 
 @dataclass(frozen=True)
 class AppSettings:
+    """应用全局配置聚合根。
+
+    业务目的：把 asr / LLM / UI / agent 上下文与检索 / 生成 / 外部导入等所有
+    子配置装进一个不可变容器，作为运行时唯一可被注入的配置来源。
+    """
+
     asr: AsrSettings
     openai: OpenAISettings
     workspace_ui: WorkspaceUiSettings
@@ -230,6 +344,21 @@ class AppSettings:
 
 
 def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
+    """加载 `settings.toml` 并合并 `.env` 中的 secrets，构造 `AppSettings`。
+
+    关键行为：
+    - 对所有枚举字段做白名单校验，非法值抛 `ValueError`；
+    - 对数字字段做范围/正整数校验；
+    - 把 `OPENAI_*` 字段用 `load_env_settings` 的结果覆盖，保证 secrets 不进 TOML。
+
+    Args:
+        config_path: `settings.toml` 路径。
+        root_dir: 项目根目录，用于解析模型缓存路径与 `.env`。
+
+    Returns:
+        已校验的 `AppSettings` 不可变实例。
+    """
+    ensure_settings_file(config_path)
     payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
     env_values = load_env_settings(root_dir)
 
@@ -271,6 +400,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     workspace_ui_settings = WorkspaceUiSettings(
         theme=_normalize_theme(workspace_ui_payload.get("theme")),
         show_takeaways=bool(workspace_ui_payload.get("show_takeaways", True)),
+        layout_mode=_normalize_workspace_layout_mode(workspace_ui_payload.get("layout_mode")),
     )
     debug_payload = payload.get("debug", {})
     debug_settings = DebugSettings(
@@ -434,14 +564,27 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 
 
 def save_settings(config_path: Path, settings: AppSettings) -> None:
+    """把 `AppSettings` 序列化回 `settings.toml`（走原子写）。"""
     atomic_write_text(config_path, _render_settings_toml(settings))
 
 
+def ensure_settings_file(config_path: Path) -> None:
+    if config_path.exists():
+        return
+    example_path = config_path.with_name(f"{config_path.name}.example")
+    if not example_path.exists():
+        raise FileNotFoundError(f"settings file not found: {config_path}")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(example_path, config_path)
+
+
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:
+    """派生仅替换 `workspace_ui` 字段的新 `AppSettings`。"""
     return replace(settings, workspace_ui=workspace_ui)
 
 
 def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) -> AppSettings:
+    """派生仅替换 faster-whisper 模型 ID 的新 `AppSettings`。"""
     return replace(
         settings,
         asr=replace(
@@ -452,10 +595,12 @@ def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) ->
 
 
 def replace_transcript_enhancement_enabled(settings: AppSettings, transcript_enhancement_enabled: bool) -> AppSettings:
+    """派生仅替换"是否启用转写增强"的新 `AppSettings`。"""
     return replace(settings, asr=replace(settings.asr, transcript_enhancement_enabled=transcript_enhancement_enabled))
 
 
 def replace_faster_whisper_transcription_mode(settings: AppSettings, transcription_mode: str) -> AppSettings:
+    """派生仅替换转写模式（已校验）的 `AppSettings`。"""
     normalized_mode = _normalize_transcription_mode(transcription_mode)
     return replace(
         settings,
@@ -467,6 +612,7 @@ def replace_faster_whisper_transcription_mode(settings: AppSettings, transcripti
 
 
 def replace_agent_retrieval_embedding_device(settings: AppSettings, embedding_device: str) -> AppSettings:
+    """派生仅替换 RAG embedding 设备（已归一化）的 `AppSettings`。"""
     normalized_device = _normalize_device(
         embedding_device,
         field_name="agent_retrieval.embedding_device",
@@ -488,6 +634,7 @@ def replace_agent_retrieval_runtime_settings(
     max_hits: int,
     rerank_enabled: bool,
 ) -> AppSettings:
+    """派生替换 RAG 运行时三件套（设备 / max_hits / rerank）的 `AppSettings`。"""
     normalized_device = _normalize_device(
         embedding_device,
         field_name="agent_retrieval.embedding_device",
@@ -510,6 +657,7 @@ def replace_agent_retrieval_runtime_settings(
 
 
 def replace_agent_context_window_tokens(settings: AppSettings, window_tokens: int) -> AppSettings:
+    """派生替换 LLM 上下文窗口大小（已校验正整数）的 `AppSettings`。"""
     normalized_window_tokens = _normalize_positive_int(
         window_tokens,
         default=DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS,
@@ -524,6 +672,7 @@ def replace_agent_context_window_tokens(settings: AppSettings, window_tokens: in
 
 
 def replace_agent_context_answer_detail_level(settings: AppSettings, answer_detail_level: str) -> AppSettings:
+    """派生替换答案详细程度（已校验枚举）的 `AppSettings`。"""
     normalized_answer_detail_level = _normalize_choice(
         answer_detail_level,
         default=DEFAULT_AGENT_ANSWER_DETAIL_LEVEL,
@@ -540,6 +689,7 @@ def replace_agent_context_answer_detail_level(settings: AppSettings, answer_deta
 
 
 def replace_agent_context_reasoning_effort(settings: AppSettings, reasoning_effort: str) -> AppSettings:
+    """派生替换推理深度（已校验枚举）的 `AppSettings`。"""
     normalized_reasoning_effort = _normalize_choice(
         reasoning_effort,
         default=DEFAULT_AGENT_REASONING_EFFORT,
@@ -556,6 +706,7 @@ def replace_agent_context_reasoning_effort(settings: AppSettings, reasoning_effo
 
 
 def replace_agent_context_talk_custom_prompt(settings: AppSettings, talk_custom_prompt: str) -> AppSettings:
+    """派生替换 Agent 自定义问答提示词的 `AppSettings`。"""
     return replace(
         settings,
         agent_context=replace(
@@ -569,6 +720,7 @@ def replace_agent_context_talk_custom_prompt(settings: AppSettings, talk_custom_
 
 
 def replace_video_generation_concurrency(settings: AppSettings, video_generation_concurrency: int) -> AppSettings:
+    """派生替换单视频级并发上限（已校验正整数）的 `AppSettings`。"""
     normalized_concurrency = _normalize_positive_int(
         video_generation_concurrency,
         default=DEFAULT_VIDEO_GENERATION_CONCURRENCY,
@@ -584,6 +736,7 @@ def replace_video_generation_concurrency(settings: AppSettings, video_generation
 
 
 def replace_web_search_enabled(settings: AppSettings, web_search_enabled: bool) -> AppSettings:
+    """派生替换 Web 搜索启用开关的 `AppSettings`。"""
     return replace(
         settings,
         web_search=replace(settings.web_search, enabled=bool(web_search_enabled)),
@@ -596,6 +749,7 @@ def replace_chaoxing_import_settings(
     request_delay_seconds: float,
     init_course_delay_seconds: float,
 ) -> AppSettings:
+    """派生替换超星导入节流参数的 `AppSettings`。"""
     return replace(
         settings,
         external_import=replace(
@@ -623,6 +777,7 @@ def replace_openai_settings(
     base_url: str,
     model: str,
 ) -> AppSettings:
+    """派生仅替换 LLM provider / base_url / model 的 `AppSettings`（保留原 api_key）。"""
     return replace(
         settings,
         openai=OpenAISettings(
@@ -635,12 +790,20 @@ def replace_openai_settings(
 
 
 def _normalize_theme(value: object) -> str:
+    """校验主题枚举，非合法值回退为 `"light"`。"""
     if isinstance(value, str) and value in VALID_THEMES:
         return value
     return "light"
 
 
+def _normalize_workspace_layout_mode(value: object) -> str:
+    if isinstance(value, str) and value in VALID_WORKSPACE_LAYOUT_MODES:
+        return value
+    return "video_center"
+
+
 def _normalize_transcription_mode(value: object) -> str:
+    """校验转写模式枚举；非合法值回退为 `"fast"`。"""
     if isinstance(value, str):
         normalized = value.strip().lower()
         if normalized in VALID_TRANSCRIPTION_MODES:
@@ -649,10 +812,16 @@ def _normalize_transcription_mode(value: object) -> str:
 
 
 def normalize_openai_base_url(value: str) -> str:
+    """对 OpenAI 兼容 base_url 做归一化（处理 `https://x` ↔ `https://x/v1`）。"""
     return normalize_provider_base_url(value)
 
 
 def apply_runtime_env_overrides(root_dir: Path) -> None:
+    """把 `.env` 中受支持的环境变量（HF_ENDPOINT 等）写入 `os.environ`。
+
+    这样 huggingface_hub、fastembed 等第三方 SDK 直接 `os.environ.get` 也能
+    拿到镜像配置；空值则删除已有变量。
+    """
     values = _load_dotenv(root_dir / ".env")
     for key in SUPPORTED_HUGGINGFACE_ENV_KEYS:
         if key not in values:
@@ -665,6 +834,10 @@ def apply_runtime_env_overrides(root_dir: Path) -> None:
 
 
 def _render_settings_toml(settings: AppSettings) -> str:
+    """把 `AppSettings` 渲染成可写回 `settings.toml` 的字符串。
+
+    仅渲染"业务配置"部分；OPENAI_* 等 secrets 不写入，留给 .env。
+    """
     lines = [
         "[asr]",
         f'provider = "{settings.asr.provider}"',
@@ -680,6 +853,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
         f"show_takeaways = {_toml_bool(settings.workspace_ui.show_takeaways)}",
+        f'layout_mode = "{settings.workspace_ui.layout_mode}"',
         "",
         "[debug]",
         f"mode = {_toml_bool(settings.debug.mode)}",
@@ -729,14 +903,17 @@ def _render_settings_toml(settings: AppSettings) -> str:
 
 
 def _toml_bool(value: bool) -> str:
+    """把 bool 渲染为 TOML 字面量（`true` / `false`）。"""
     return "true" if value else "false"
 
 
 def _toml_string(value: str) -> str:
+    """把字符串渲染为合法的 TOML 字符串字面量（带引号、转义）。"""
     return json.dumps(value, ensure_ascii=False)
 
 
 def _normalize_string(value: object, *, default: str) -> str:
+    """把任意值归一为字符串：`None` 用默认；字符串则 strip；其他类型用默认。"""
     if value is None:
         return default
     if isinstance(value, str):
@@ -745,6 +922,7 @@ def _normalize_string(value: object, *, default: str) -> str:
 
 
 def _normalize_positive_int(value: object, *, default: int, field_name: str | None = None) -> int:
+    """校验正整数：`None` 用默认；非正整数抛 `ValueError`（若提供 `field_name`）。"""
     if value is None:
         return default
     if isinstance(value, int) and value > 0:
@@ -755,6 +933,7 @@ def _normalize_positive_int(value: object, *, default: int, field_name: str | No
 
 
 def _normalize_non_negative_float(value: object, *, default: float, field_name: str) -> float:
+    """校验非负浮点数：`None` 用默认；非法值抛 `ValueError`。"""
     if value is None:
         return default
     if isinstance(value, bool):
@@ -767,6 +946,7 @@ def _normalize_non_negative_float(value: object, *, default: float, field_name: 
 
 
 def _normalize_ratio(value: object, *, default: float) -> float:
+    """校验比例值 `0 < r < 1`；非法回退默认（不抛错）。"""
     if isinstance(value, (int, float)):
         normalized = float(value)
         if 0 < normalized < 1:
@@ -775,6 +955,7 @@ def _normalize_ratio(value: object, *, default: float) -> float:
 
 
 def _normalize_planner_transport(value: object) -> str:
+    """校验 planner transport 枚举；非合法值回退为 `"structured"`。"""
     if isinstance(value, str):
         normalized = value.strip().lower()
         if normalized in VALID_PLANNER_TRANSPORTS:
@@ -783,6 +964,7 @@ def _normalize_planner_transport(value: object) -> str:
 
 
 def _normalize_choice(value: object, *, default: str, allowed: set[str], field_name: str) -> str:
+    """通用枚举校验：`None` 用默认；非合法值抛 `ValueError`。"""
     if value is None:
         return default
     if not isinstance(value, str):
@@ -794,6 +976,7 @@ def _normalize_choice(value: object, *, default: str, allowed: set[str], field_n
 
 
 def _normalize_embedding_provider(value: object) -> str:
+    """校验 embedding provider；当前仅支持 `fastembed`。"""
     normalized = _normalize_non_empty_string(
         value,
         default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER,
@@ -809,6 +992,7 @@ def _normalize_device(
     field_name: str,
     default: str,
 ) -> str:
+    """校验设备枚举：`auto` / `cpu` / `gpu`，并把 `cuda` 归一为 `gpu`。"""
     if value is None:
         return default
     if not isinstance(value, str):
@@ -827,6 +1011,7 @@ def _normalize_device(
 
 
 def _normalize_non_empty_string(value: object, *, default: str) -> str:
+    """返回 strip 后的非空字符串；空字符串或非字符串回退默认。"""
     if isinstance(value, str):
         normalized = value.strip()
         if normalized:
@@ -836,6 +1021,16 @@ def _normalize_non_empty_string(value: object, *, default: str) -> str:
 
 @dataclass(frozen=True)
 class EnvSettings:
+    """`.env` 中需要被显式建模的 secrets/配置。
+
+    Attributes:
+        provider: LLM provider 标识。
+        base_url: OpenAI 兼容 base_url。
+        model: 模型名称。
+        api_key: API Key。
+        hf_endpoint: HuggingFace 镜像 URL。
+    """
+
     provider: str
     base_url: str
     model: str
@@ -844,6 +1039,7 @@ class EnvSettings:
 
 
 def load_env_settings(root_dir: Path) -> EnvSettings:
+    """从 `.env` 中读取 LLM 相关配置，构造 `EnvSettings`。"""
     values = _load_dotenv(root_dir / ".env")
     return EnvSettings(
         provider=_normalize_env_provider(values.get("OPENAI_PROVIDER")),
@@ -855,6 +1051,7 @@ def load_env_settings(root_dir: Path) -> EnvSettings:
 
 
 def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
+    """把 `EnvSettings` 写回 `.env`：保留其他行、就地替换 5 个受支持 key、缺失 key 追加。"""
     dotenv_path = root_dir / ".env"
     lines = dotenv_path.read_text(encoding="utf-8").splitlines() if dotenv_path.exists() else []
     replacements = {
@@ -889,6 +1086,7 @@ def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
 
 
 def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
+    """解析 `.env` 为 dict；同时把解析到的值通过 `os.environ.setdefault` 注入环境。"""
     if not dotenv_path.exists():
         return {}
 
@@ -902,10 +1100,16 @@ def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
         normalized_value = value.strip().strip('"').strip("'")
         if normalized_key:
             values[normalized_key] = normalized_value
+    # 顺手把 .env 里的值灌进 os.environ——这样 BILIBILI_COOKIE / BILIBILI_SESSDATA
+    # 这类不需要 EnvSettings 显式建模的变量也能被子进程和 os.environ.get 拿到。
+    # 用 setdefault 尊重 shell 里已经显式设的值。
+    for k, v in values.items():
+        os.environ.setdefault(k, v)
     return values
 
 
 def _normalize_env_provider(value: object) -> str:
+    """归一化 `OPENAI_PROVIDER`：`qwen` → `dashscope`，`openai_compatible` → `openai`。"""
     if not isinstance(value, str):
         return "openai"
     normalized = value.strip().lower()

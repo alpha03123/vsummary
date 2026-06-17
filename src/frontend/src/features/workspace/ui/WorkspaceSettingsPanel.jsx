@@ -188,6 +188,20 @@ export function WorkspaceSettingsPanel({
                     onChange={() => onChangeSetting("showTakeaways", !ui.showTakeaways)}
                   />
                 </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="显示模式"
+                  description="选择工作区中间区域优先展示视频播放器还是 AI 对话。"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.layoutMode}
+                    options={[
+                      { id: "video_center", label: "视频居中" },
+                      { id: "chat_center", label: "AI 聊天居中" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("layoutMode", nextValue)}
+                  />
+                </WorkspaceSettingRow>
               </>
             )}
 

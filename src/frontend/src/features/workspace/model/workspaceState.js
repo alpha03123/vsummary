@@ -1,6 +1,7 @@
 export const defaultUiSettings = {
   showTakeaways: true,
   theme: "light",
+  layoutMode: "video_center",
   transcriptEnhancementEnabled: true,
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
@@ -503,7 +504,7 @@ export function createInitialWorkspaceState() {
     selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
-    previewSeekRequest: null,
+    playerSeekRequest: null,
     generatingVideoKey: null,
     generatingSeriesId: null,
     generationMode: null,
@@ -550,6 +551,7 @@ export function createInitialWorkspaceState() {
     knowledgeMemorySnapshot: null,
     settingsPanelOpen: false,
     settingsPanelInitialTab: "general",
+    chatDrawerOpen: false,
     backendReady: false,
     error: "",
     loading: true,
@@ -588,7 +590,7 @@ export function createLibraryHomeState(library, currentState) {
     selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
-    previewSeekRequest: null,
+    playerSeekRequest: null,
     toolsLoading: false,
     summaryLoading: false,
     mindmapLoading: false,
@@ -691,6 +693,7 @@ export function normalizeUiSettings(value) {
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
     theme: record.theme === "dark" ? "dark" : "light",
+    layoutMode: record.layoutMode === "chat_center" ? "chat_center" : "video_center",
     transcriptEnhancementEnabled:
       typeof record.transcriptEnhancementEnabled === "boolean" ? record.transcriptEnhancementEnabled : true,
     asrModelQuality:

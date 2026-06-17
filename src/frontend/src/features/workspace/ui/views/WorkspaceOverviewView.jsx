@@ -11,6 +11,7 @@ export function WorkspaceOverviewView({
   selectedChapterId,
   summaryLoading,
   isGeneratingSelectedVideo,
+  onSeek,
 }) {
   const hasSummary = Boolean(summary);
   const overviewTitle = summary?.title ?? selectedVideo?.title ?? "AI 概况";
@@ -107,7 +108,15 @@ export function WorkspaceOverviewView({
                 : "border-stone-200/70 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
             }`}
           >
-            <div className="flex items-start justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => onSeek?.({
+                seconds: chapter.start_seconds,
+                endSeconds: chapter.end_seconds,
+                chapterTitle: chapter.title,
+              })}
+              className="flex w-full items-start justify-between gap-3 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-stone-100/60 dark:hover:bg-neutral-800/60"
+            >
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Chapter {index + 1}</p>
                 <h3 className="text-lg font-bold leading-tight text-stone-900 dark:text-stone-100">{chapter.title}</h3>
@@ -115,7 +124,7 @@ export function WorkspaceOverviewView({
               <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-xs font-mono font-bold text-stone-500 dark:bg-stone-900 dark:text-stone-400">
                 {formatRange(chapter.start_seconds, chapter.end_seconds)}
               </span>
-            </div>
+            </button>
 
             <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">{chapter.summary}</p>
 
@@ -148,12 +157,21 @@ export function WorkspaceOverviewView({
                 <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
                   <div className="flex flex-col gap-3">
                     {chapter.transcript_segments.map((segment) => (
-                      <div key={`${chapter.id}-${segment.start_seconds}-${segment.end_seconds}`} className="rounded-2xl bg-white/90 px-3 py-3 dark:bg-neutral-900">
+                      <button
+                        key={`${chapter.id}-${segment.start_seconds}-${segment.end_seconds}`}
+                        type="button"
+                        onClick={() => onSeek?.({
+                          seconds: segment.start_seconds,
+                          endSeconds: segment.end_seconds,
+                          chapterTitle: chapter.title,
+                        })}
+                        className="block w-full rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors hover:bg-accent/5 dark:bg-neutral-900 dark:hover:bg-accent/10"
+                      >
                         <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
                           {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
                         </p>
                         <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>

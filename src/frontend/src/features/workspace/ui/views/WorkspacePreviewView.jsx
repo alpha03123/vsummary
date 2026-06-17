@@ -2,12 +2,11 @@ import { useEffect, useRef } from "react";
 
 import { formatRange } from "../../../../shared/lib/time";
 
-export function WorkspacePreviewView({ previewSource, previewSeekRequest, previewSourceType = "video" }) {
+export function WorkspacePreviewView({ previewSource, previewSeekRequest }) {
   const previewVideoRef = useRef(null);
-  const isAudioSource = previewSourceType === "audio";
 
   useEffect(() => {
-    if (isAudioSource || !previewSeekRequest || !previewVideoRef.current) {
+    if (!previewSeekRequest || !previewVideoRef.current) {
       return;
     }
 
@@ -33,7 +32,7 @@ export function WorkspacePreviewView({ previewSource, previewSeekRequest, previe
     return () => {
       video.removeEventListener("loadedmetadata", seekTo);
     };
-  }, [isAudioSource, previewSeekRequest, previewSource]);
+  }, [previewSeekRequest, previewSource]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -54,17 +53,11 @@ export function WorkspacePreviewView({ previewSource, previewSeekRequest, previe
           </div>
         ) : null}
       </div>
-      {isAudioSource ? (
-        <div className="workspace-elevated-panel rounded-3xl border p-8 text-center text-sm font-semibold text-stone-600 shadow-sm dark:text-zinc-300">
-          音频文件暂不支持预览
-        </div>
-      ) : (
-        <div className="workspace-elevated-panel overflow-hidden rounded-3xl border bg-black shadow-sm">
-          <video key={previewSource} ref={previewVideoRef} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
-            <source src={previewSource} />
-          </video>
-        </div>
-      )}
+      <div className="workspace-elevated-panel overflow-hidden rounded-3xl border bg-black shadow-sm">
+        <video key={previewSource} ref={previewVideoRef} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
+          <source src={previewSource} />
+        </video>
+      </div>
     </div>
   );
 }

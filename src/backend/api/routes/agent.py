@@ -1,3 +1,9 @@
+"""Agent 聊天与会话管理路由。
+
+提供 Agent 对话（流式/非流式）、Session 生命周期管理、
+上下文预算查询和知识记忆状态监控的 HTTP 端点。
+"""
+
 from __future__ import annotations
 
 import json
@@ -32,6 +38,22 @@ router = APIRouter()
 
 @router.post("/api/agent/chat", response_model=AgentChatResponse)
 def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentChatResponse:
+    """POST /api/agent/chat — 非流式 Agent 对话。
+
+    将用户消息送入 LangGraph Agent 图执行完整的一次推理回合，
+    返回最终回答、Action Plan 和引文列表。
+    若 RAG 模型未就绪则直接返回阻断提示，不执行 Agent 图。
+
+    Args:
+        request: 包含 session_id、消息文本和可选上下文的 DTO。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        AgentChatResponse，含 assistant_message、plan 和 citations。
+
+    Raises:
+        HTTPException(503): Agent 图执行过程中发生异常。
+    """
     context_override = _build_agent_context_override(request.session_id, request.context)
     rag_block_message = _resolve_rag_block_message(context_override, container)
     if rag_block_message:
@@ -51,6 +73,22 @@ def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentCh
 
 @router.post("/api/agent/chat/stream")
 def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> StreamingResponse:
+    """POST /api/agent/chat/stream — 流式 Agent 对话（SSE）。
+
+    与 `/api/agent/chat` 共享同一请求体，但以 Server-Sent Events 流
+    逐步推送思考、Action、回答和引文事件，前端可逐 token 渲染。
+    若 RAG 模型未就绪则推送阻断消息后立即结束流。
+
+    Args:
+        request: 包含 session_id、消息文本和可选上下文的 DTO。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        StreamingResponse（`text/event-stream`），逐个推送 Agent 执行事件。
+
+    Raises:
+        异常不直接向 HTTP 抛出，而是编码为 ``error`` SSE 事件推送。
+    """
     context_override = _build_agent_context_override(request.session_id, request.context)
 
     def event_iterator():
@@ -86,6 +124,19 @@ def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> 
 
 @router.post("/api/agent/context/usage", response_model=AgentContextUsageResponse)
 def get_agent_context_usage(request: AgentContextUsageRequest, container: ApiContainerDep) -> AgentContextUsageResponse:
+    """POST /api/agent/context/usage — 查询上下文预算使用情况。
+
+    返回当前 session 的 token 预算快照，包括各来源（system prompt、
+    历史消息、RAG 文档等）的估算 token 数及使用百分比，
+    前端据此决定是否需要压缩上下文。
+
+    Args:
+        request: 包含 session_id 和可选上下文范围的 DTO。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        AgentContextUsageResponse，含 token 使用详情与告警级别。
+    """
     context_override = _build_agent_context_override(request.session_id, request.context)
     usage = container.get_agent_context_usage().inspect(
         session_id=request.session_id,
@@ -117,11 +168,34 @@ def get_agent_context_usage(request: AgentContextUsageRequest, container: ApiCon
 
 @router.get("/api/agent/memory/status")
 def get_agent_memory_status(container: ApiContainerDep) -> dict[str, object]:
+    """GET /api/agent/memory/status — 查询知识记忆刷新进度。
+
+    返回后台知识记忆刷新任务的状态快照（进度百分比、状态、详情），
+    前端按需轮询此端点以展示刷新进度条。
+
+    Args:
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        包含 status、progress、detail 等字段的进度快照字典。
+    """
     return container.knowledge_memory_progress_tracker.get_snapshot("agent-memory-refresh").to_dict()
 
 
 @router.post("/api/agent/session/recover", response_model=AgentSessionRecoveryResponse)
 def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiContainerDep) -> AgentSessionRecoveryResponse:
+    """POST /api/agent/session/recover — 恢复 Agent Session。
+
+    从 session 持久化存储中取出指定 session 的历史消息快照，
+    若 session 不存在则返回 restored=False 的空结果。
+
+    Args:
+        request: 包含待恢复 session_id 的 DTO。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        AgentSessionRecoveryResponse，含 restored 标记、消息列表及元数据。
+    """
     snapshot = container.agent_session_store.get_snapshot(request.session_id)
     if snapshot is None:
         return AgentSessionRecoveryResponse(
@@ -149,6 +223,18 @@ def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiCo
 
 @router.post("/api/agent/session/clear")
 def clear_agent_session(request: AgentSessionClearRequest, container: ApiContainerDep) -> dict[str, object]:
+    """POST /api/agent/session/clear — 清除 Agent Session。
+
+    删除指定 session 的所有持久化消息记录，
+    用于用户主动重置对话上下文。
+
+    Args:
+        request: 包含待清除 session_id 的 DTO。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        {"status": "cleared", "session_id": ...}
+    """
     session_store = getattr(container, "agent_session_store", None)
     if session_store is not None:
         session_store.clear_snapshot(request.session_id)
@@ -156,6 +242,15 @@ def clear_agent_session(request: AgentSessionClearRequest, container: ApiContain
 
 
 def _build_agent_context_override(session_id: str, request_context) -> AgentContext | None:
+    """根据请求中的上下文字段构建 `AgentContext` 覆盖对象。
+
+    Args:
+        session_id: 当前 session ID。
+        request_context: 请求中携带的上下文 DTO。
+
+    Returns:
+        若请求上下文为 None 则返回 None，否则返回填充后的 `AgentContext`。
+    """
     if request_context is None:
         return None
     return AgentContext(
@@ -170,6 +265,15 @@ def _build_agent_context_override(session_id: str, request_context) -> AgentCont
 
 
 def _resolve_rag_block_message(context: AgentContext | None, container) -> str | None:
+    """检测当前 scope 是否需要 RAG 模型但模型未就绪，返回阻断提示。
+
+    Args:
+        context: Agent 上下文（若为 None 或非 series scope 则不阻断）。
+        container: API 容器。
+
+    Returns:
+        若 RAG 模型正在下载或尚未下载则返回中文提示文案，否则返回 None。
+    """
     if context is None or context.scope_type != ScopeType.SERIES.value:
         return None
     rag_model_manager = getattr(container, "rag_model_manager", None)
@@ -183,6 +287,15 @@ def _resolve_rag_block_message(context: AgentContext | None, container) -> str |
 
 
 def _build_rag_block_response(context: AgentContext | None, message: str) -> AgentChatResponse:
+    """构造一个“RAG 模型不可用”的占位 AgentTurnResult 响应。
+
+    Args:
+        context: 原始 Agent 上下文（用于推断 scope_type）。
+        message: 要返回给用户的阻断提示文案。
+
+    Returns:
+        包装后的 AgentChatResponse。
+    """
     scope_type = ScopeType.SERIES if context is None or context.scope_type == ScopeType.SERIES.value else ScopeType.VIDEO
     return AgentChatResponse.from_result(
         AgentTurnResult(
@@ -200,12 +313,31 @@ def _build_rag_block_response(context: AgentContext | None, message: str) -> Age
 
 
 def _stream_rag_block_message(message: str):
+    """生成“RAG 模型不可用”的 SSE 阻断消息事件流。
+
+    Args:
+        message: 阻断提示文案。
+
+    Yields:
+        依次推送 answer_started、answer_delta、answer_completed 三个 SSE 事件。
+    """
     yield encode_sse_event("answer_started", {"message": "正在检查 RAG 模型"})
     yield encode_sse_event("answer_delta", {"delta": message})
     yield encode_sse_event("answer_completed", {"message": message, "citations": []})
 
 
 def _format_agent_error(error: Exception) -> str:
+    """将 Agent 执行异常按错误特征翻译为中文友好提示。
+
+    识别场景包括：联网搜索超时、模型不支持联网搜索、URL 连接失败、
+    模型被上游拦截、通用 LiteLLM 错误等。
+
+    Args:
+        error: 原始异常对象。
+
+    Returns:
+        面向终端用户的中文错误提示字符串。
+    """
     message = str(error).strip()
     if _is_web_search_timeout(error, message):
         return "联网搜索失败：请求超时，请稍后重试或关闭联网搜索。"
@@ -223,6 +355,7 @@ def _format_agent_error(error: Exception) -> str:
 
 
 def _is_web_search_timeout(error: Exception, message: str) -> bool:
+    """判断异常是否是联网搜索超时错误。"""
     normalized = message.lower()
     return (
         ("web_search" in normalized or "联网搜索" in message)
@@ -231,6 +364,7 @@ def _is_web_search_timeout(error: Exception, message: str) -> bool:
 
 
 def _is_unsupported_web_search_error(message: str) -> bool:
+    """判断错误消息是否表示当前模型不支持联网搜索。"""
     normalized = message.lower()
     if "web_search_options" not in normalized and "web_search" not in normalized and "联网搜索" not in message:
         return False
@@ -247,11 +381,13 @@ def _is_unsupported_web_search_error(message: str) -> bool:
 
 
 def _is_web_search_error(message: str) -> bool:
+    """判断错误消息是否与联网搜索相关。"""
     normalized = message.lower()
     return "web_search" in normalized or "web_search_options" in normalized or "联网搜索" in message
 
 
 def _is_model_url_connection_error(message: str) -> bool:
+    """判断错误消息是否表示模型 URL 连接失败。"""
     normalized = message.lower()
     connection_markers = (
         "connection error",
@@ -271,6 +407,7 @@ def _is_model_url_connection_error(message: str) -> bool:
 
 
 def _is_agent_debug_enabled(container) -> bool:
+    """检查配置中是否启用了 Agent 调试模式。"""
     try:
         return bool(load_settings(container.config_path, container.root_dir).debug.mode)
     except Exception:
@@ -278,6 +415,11 @@ def _is_agent_debug_enabled(container) -> bool:
 
 
 def _log_agent_debug_trace(request: AgentChatRequest, debug_trace: dict[str, object] | None) -> None:
+    """记录 Agent 调试跟踪信息到日志。
+
+    仅在 debug_trace 非空时执行，将 session_id、用户消息和
+    完整的 LangGraph 执行路径以 JSON 格式输出。
+    """
     if not debug_trace:
         return
     LOGGER.info(

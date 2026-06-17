@@ -31,9 +31,6 @@ function describeCurrentTool(selectedToolId) {
   if (selectedToolId === "notes") {
     return "笔记";
   }
-  if (selectedToolId === "preview") {
-    return "视频预览";
-  }
   return "工具首页";
 }
 

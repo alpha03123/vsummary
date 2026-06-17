@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildWorkspacePageModel } from "@src/features/workspace/ui/workspacePageModel";
 
@@ -24,7 +24,7 @@ function createController(status) {
     selectedContextType: null,
     selectedNode: null,
     previewUrl: null,
-    previewSeekRequest: null,
+    playerSeekRequest: null,
     summary: null,
     mindmap: null,
     knowledgeCards: null,
@@ -41,6 +41,11 @@ function createController(status) {
     onStartNewChat: () => {},
     onSelectChatSession: () => {},
     onOpenSeekReference: () => {},
+    chatDrawerOpen: false,
+    onSeekToTime: () => {},
+    onToggleChatDrawer: () => {},
+    onOpenChatDrawer: () => {},
+    onCloseChatDrawer: () => {},
     onClearChat: () => {},
     onSubmitChat: () => {},
     isGeneratingSelectedVideo: status === "running" || status === "queued",
@@ -91,5 +96,35 @@ describe("buildWorkspacePageModel generation overlay", () => {
     expect(buildWorkspacePageModel(createController("completed")).generation.showOverlay).toBe(false);
     expect(buildWorkspacePageModel(createController("failed")).generation.showOverlay).toBe(false);
     expect(buildWorkspacePageModel(createController("cancelled")).generation.showOverlay).toBe(false);
+  });
+});
+
+describe("buildWorkspacePageModel shell.player", () => {
+  it("exposes playerSeekRequest and player.seekToTime", () => {
+    const seekToTime = vi.fn();
+    const controller = { ...createController(null), playerSeekRequest: { seconds: 7 }, onSeekToTime: seekToTime };
+    const model = buildWorkspacePageModel(controller);
+    expect(model.shell.playerSeekRequest).toEqual({ seconds: 7 });
+    expect(model.shell.player.seekToTime).toBe(seekToTime);
+  });
+});
+
+describe("buildWorkspacePageModel chat.drawer", () => {
+  it("exposes drawer state and controls from the controller", () => {
+    const toggle = vi.fn();
+    const open = vi.fn();
+    const close = vi.fn();
+    const controller = {
+      ...createController(null),
+      chatDrawerOpen: true,
+      onToggleChatDrawer: toggle,
+      onOpenChatDrawer: open,
+      onCloseChatDrawer: close,
+    };
+    const model = buildWorkspacePageModel(controller);
+    expect(model.chat.drawerOpen).toBe(true);
+    expect(model.chat.toggleDrawer).toBe(toggle);
+    expect(model.chat.openDrawer).toBe(open);
+    expect(model.chat.closeDrawer).toBe(close);
   });
 });

@@ -24,6 +24,8 @@ transcription_mode = "accurate"
 theme = "light"
 # 是否在视频详情页默认显示关键结论。
 show_takeaways = true
+# 显示模式。"video_center" 视频居中，"chat_center" AI 聊天居中。
+layout_mode = "video_center"
 
 # 调试设置。
 [debug]

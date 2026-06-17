@@ -69,7 +69,7 @@ export function WorkspaceReadingPane({
   selectedContextType,
   selectedNode,
   previewUrl,
-  previewSeekRequest,
+  playerSeekRequest,
   selectedToolId,
   selectedChapterId,
   toolsLoading,
@@ -82,6 +82,7 @@ export function WorkspaceReadingPane({
   isGeneratingSelectedVideo,
   onSelectTool,
   onFocusNode,
+  onSeek,
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
@@ -177,12 +178,14 @@ export function WorkspaceReadingPane({
                         />
                       ) : (
                         <WorkspaceToolGrid
-                          items={Object.entries(TOOL_TILES).map(([toolId, meta]) => ({
-                            id: toolId,
-                            meta,
-                            disabled: getToolState(tools, toolId)?.available === false,
-                            hint: describeToolState(toolId, getToolState(tools, toolId)),
-                          }))}
+                          items={Object.entries(TOOL_TILES)
+                            .filter(([toolId]) => ui.layoutMode === "chat_center" || toolId !== "preview")
+                            .map(([toolId, meta]) => ({
+                              id: toolId,
+                              meta,
+                              disabled: getToolState(tools, toolId)?.available === false,
+                              hint: describeToolState(toolId, getToolState(tools, toolId)),
+                            }))}
                           onSelect={onSelectTool}
                         />
                       )}
@@ -197,6 +200,7 @@ export function WorkspaceReadingPane({
                       selectedChapterId={selectedChapterId}
                       summaryLoading={summaryLoading}
                       isGeneratingSelectedVideo={isGeneratingSelectedVideo}
+                      onSeek={onSeek}
                     />
                   ) : null}
                   {selectedToolId === "mindmap" ? (
@@ -235,11 +239,7 @@ export function WorkspaceReadingPane({
                     />
                   ) : null}
                   {selectedToolId === "preview" ? (
-                    <WorkspacePreviewView
-                      previewSource={previewSource}
-                      previewSeekRequest={previewSeekRequest}
-                      previewSourceType={selectedVideo?.sourceType}
-                    />
+                    <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={playerSeekRequest} />
                   ) : null}
                 </Suspense>
               ) : null}
