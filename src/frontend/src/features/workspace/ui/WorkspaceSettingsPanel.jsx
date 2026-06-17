@@ -513,7 +513,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="API 根地址"
-                  description="模型的URL"
+                  description="模型的URL,填写根地址即可,不填写默认指向官方地址"
                 >
                   <div className="w-full sm:w-[340px]">
                     <WorkspaceTextInput
@@ -521,7 +521,7 @@ export function WorkspaceSettingsPanel({
                       onChange={(nextValue) => onChangeSetting("openaiBaseUrl", nextValue)}
                       onBlur={onSaveProviderSettings}
                       onKeyDown={saveProviderSettingsOnEnter}
-                      placeholder="留空使用 provider 默认地址"
+                      placeholder="默认指向官方地址"
                       className="w-full"
                     />
                   </div>
