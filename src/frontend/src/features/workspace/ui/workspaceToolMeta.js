@@ -4,6 +4,7 @@ import {
   FolderKanban,
   ListChecks,
   Network,
+  PlaySquare,
   StickyNote,
   MessageSquare,
 } from "lucide-react";
@@ -49,6 +50,14 @@ export const TOOL_TILES = {
     iconShell: "bg-accent/10 text-accent border border-accent/20",
     arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
   },
+  preview: {
+    label: "视频预览",
+    description: "查看原始视频内容",
+    icon: PlaySquare,
+    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
+    iconShell: "bg-accent/10 text-accent border border-accent/20",
+    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+  },
 };
 
 export const SERIES_TOOL_TILES = {
@@ -82,6 +91,9 @@ const DEFAULT_TOOL_META = {
 export function describeToolState(toolId, toolState) {
   if (!toolState) {
     return "读取中";
+  }
+  if (toolId === "preview") {
+    return "随时可查看";
   }
   if (toolId === "notes") {
     return toolState.generated ? "可记录与整理" : "可立即使用";
