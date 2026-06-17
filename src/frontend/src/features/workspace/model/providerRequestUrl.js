@@ -3,6 +3,19 @@ export function buildOpenAICompatibleChatCompletionsUrl(baseUrl) {
   return apiBase ? `${apiBase}/chat/completions` : "";
 }
 
+export function buildProviderRequestPreviewUrl(provider, baseUrl) {
+  const normalizedProvider = typeof provider === "string" ? provider.trim().toLowerCase() : "";
+  if (normalizedProvider === "ollama") {
+    return buildOllamaGenerateUrl(baseUrl);
+  }
+  return buildOpenAICompatibleChatCompletionsUrl(baseUrl);
+}
+
+function buildOllamaGenerateUrl(baseUrl) {
+  const apiBase = resolveOllamaApiBaseUrl(baseUrl);
+  return apiBase ? `${apiBase}/api/generate` : "";
+}
+
 function resolveOpenAICompatibleApiBaseUrl(value) {
   const normalized = normalizeProviderBaseUrl(value);
   if (!normalized) {
@@ -24,6 +37,16 @@ function resolveOpenAICompatibleApiBaseUrl(value) {
   parsed.search = "";
   parsed.hash = "";
   return parsed.toString().replace(/\/$/, "");
+}
+
+function resolveOllamaApiBaseUrl(value) {
+  const normalized = normalizeProviderBaseUrl(value) || "http://127.0.0.1:11434";
+  for (const endpoint of ["/api/generate", "/api/chat", "/v1"]) {
+    if (normalized.endsWith(endpoint)) {
+      return normalized.slice(0, -endpoint.length).replace(/\/+$/, "");
+    }
+  }
+  return normalized;
 }
 
 function normalizeProviderBaseUrl(value) {

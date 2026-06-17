@@ -25,3 +25,21 @@ def resolve_openai_compatible_api_base_url(value: str) -> str:
         path = f"{path}/v1" if path else "/v1"
 
     return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
+def resolve_provider_api_base_url(provider: str, value: str) -> str:
+    normalized_provider = provider.strip().lower()
+    if normalized_provider == "ollama":
+        return resolve_ollama_api_base_url(value)
+    return resolve_openai_compatible_api_base_url(value)
+
+
+def resolve_ollama_api_base_url(value: str) -> str:
+    normalized = normalize_provider_base_url(value)
+    if normalized.endswith("/api/generate"):
+        return normalized[: -len("/api/generate")].rstrip("/")
+    if normalized.endswith("/api/chat"):
+        return normalized[: -len("/api/chat")].rstrip("/")
+    if normalized.endswith("/v1"):
+        return normalized[: -len("/v1")].rstrip("/")
+    return normalized
