@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -18,6 +20,10 @@ import httpx
 
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
+
+_BILIBILI_USER_AGENT = "Mozilla/5.0"
+_BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
+_BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
 
 
 class ProgressReporter(Protocol):
@@ -175,6 +181,8 @@ class BilibiliDownloader:
         if page > 1:
             url = f"{url}?p={page}"
         output_template = str(dest_dir / f"{stem}.%(ext)s")
+        headers = _load_bilibili_headers(bvid)
+        cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
         cmd = [
             sys.executable,
             "-m",
@@ -186,6 +194,10 @@ class BilibiliDownloader:
             output_template,
             "--newline",
             "--no-part",
+            "--proxy",
+            "",
+            *_build_yt_dlp_add_header_flags(headers),
+            *(["--cookies", str(cookie_file)] if cookie_file is not None else []),
             url,
         ]
         reporter.update("download", 0.0, "开始下载")
@@ -229,6 +241,9 @@ class BilibiliDownloader:
         except Exception as exc:
             reporter.failed(str(exc))
             raise
+        finally:
+            if cookie_file is not None:
+                cookie_file.unlink(missing_ok=True)
 
         candidates = sorted(dest_dir.glob(f"{stem}.*"))
         if not candidates:
@@ -280,6 +295,56 @@ def _download_cancel_requested(reporter: ProgressReporter) -> bool:
     except RuntimeError:
         return True
     return False
+
+
+def _load_bilibili_headers(bvid: str) -> dict[str, str]:
+    cookie = os.environ.get(_BILIBILI_COOKIE_ENV, "").strip()
+    if not cookie:
+        sessdata = os.environ.get(_BILIBILI_SESSDATA_ENV, "").strip()
+        cookie = f"SESSDATA={sessdata}" if sessdata else ""
+    headers = {
+        "User-Agent": _BILIBILI_USER_AGENT,
+        "Referer": f"https://www.bilibili.com/video/{bvid}/",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
+    flags: list[str] = []
+    for key, value in headers.items():
+        if not value:
+            continue
+        flags.extend(["--add-header", f"{key}:{value}"])
+    return flags
+
+
+def _write_bilibili_cookies_file(cookie: str) -> Path | None:
+    if not cookie.strip():
+        return None
+    cookie_pairs = _parse_cookie_pairs(cookie)
+    if not cookie_pairs:
+        return None
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".cookies.txt")
+    with handle:
+        handle.write("# Netscape HTTP Cookie File\n")
+        for name, value in cookie_pairs:
+            handle.write(f".bilibili.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}\n")
+    return Path(handle.name)
+
+
+def _parse_cookie_pairs(cookie: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for part in cookie.split(";"):
+        if "=" not in part:
+            continue
+        name, value = part.split("=", 1)
+        normalized_name = name.strip()
+        normalized_value = value.strip()
+        if normalized_name:
+            pairs.append((normalized_name, normalized_value))
+    return pairs
 
 
 class BackgroundBilibiliDownloadStarter:
