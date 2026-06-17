@@ -146,6 +146,20 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(completion.models, ["deepseek/deepseek-v4-pro"])
 
+    def test_stream_text_wraps_reasoning_content_as_think_block(self) -> None:
+        gateway = LiteLLMCompletionGateway(
+            provider="deepseek",
+            model="deepseek-reasoner",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            completion_fn=ReasoningStreamCompletion(),
+            acompletion_fn=unused_async_completion,
+        )
+
+        chunks = list(gateway.stream_text([{"role": "user", "content": "ping"}]))
+
+        self.assertEqual(chunks, ["<think>", "先分析。", "</think>", "最终答案。"])
+
     def test_allows_ollama_without_api_key(self) -> None:
         completion = CapturingCompletion("ok")
         gateway = LiteLLMCompletionGateway(
@@ -409,6 +423,17 @@ class RejectingReasoningEffortCompletion:
     def __call__(self, **kwargs):
         del kwargs
         raise RuntimeError("openai does not support parameters: ['reasoning_effort']")
+
+
+class ReasoningStreamCompletion:
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return iter(
+            [
+                {"choices": [{"delta": {"reasoning_content": "先分析。"}}]},
+                {"choices": [{"delta": {"content": "最终答案。"}}]},
+            ]
+        )
 
 
 async def unused_async_completion(**kwargs):

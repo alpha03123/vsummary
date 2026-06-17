@@ -265,10 +265,21 @@ class LiteLLMCompletionGateway:
             if _is_unsupported_reasoning_effort_error(error):
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
+        in_think_block = False
         for chunk in stream:
-            delta = _extract_stream_delta(chunk)
-            if delta:
-                yield delta
+            reasoning_delta, content_delta = _extract_stream_deltas(chunk)
+            if reasoning_delta:
+                if not in_think_block:
+                    yield "<think>"
+                    in_think_block = True
+                yield reasoning_delta
+            if content_delta:
+                if in_think_block:
+                    yield "</think>"
+                    in_think_block = False
+                yield content_delta
+        if in_think_block:
+            yield "</think>"
 
     def stream_text_with_metadata(
         self,
@@ -312,13 +323,24 @@ class LiteLLMCompletionGateway:
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
         final_usage: dict[str, int] = {}
+        in_think_block = False
         for chunk in stream:
-            delta = _extract_stream_delta(chunk)
+            reasoning_delta, delta = _extract_stream_deltas(chunk)
             usage = _extract_usage(chunk)
             if usage:
                 final_usage = usage
+            if reasoning_delta:
+                if not in_think_block:
+                    yield ChatCompletionStreamChunk(delta="<think>")
+                    in_think_block = True
+                yield ChatCompletionStreamChunk(delta=reasoning_delta)
             if delta:
+                if in_think_block:
+                    yield ChatCompletionStreamChunk(delta="</think>")
+                    in_think_block = False
                 yield ChatCompletionStreamChunk(delta=delta)
+        if in_think_block:
+            yield ChatCompletionStreamChunk(delta="</think>")
         if final_usage:
             yield ChatCompletionStreamChunk(usage=final_usage)
 
@@ -381,10 +403,21 @@ class LiteLLMCompletionGateway:
             if _is_unsupported_reasoning_effort_error(error):
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
+        in_think_block = False
         async for chunk in stream:
-            delta = _extract_stream_delta(chunk)
-            if delta:
-                yield delta
+            reasoning_delta, content_delta = _extract_stream_deltas(chunk)
+            if reasoning_delta:
+                if not in_think_block:
+                    yield "<think>"
+                    in_think_block = True
+                yield reasoning_delta
+            if content_delta:
+                if in_think_block:
+                    yield "</think>"
+                    in_think_block = False
+                yield content_delta
+        if in_think_block:
+            yield "</think>"
 
     def complete_structured(
         self,
@@ -1038,6 +1071,17 @@ def _extract_stream_delta(chunk: Any) -> str:
         parts = [part for part in (_extract_text_part(item) for item in content) if part]
         return "".join(parts)
     return ""
+
+
+def _extract_stream_deltas(chunk: Any) -> tuple[str, str]:
+    """从流式 chunk 中分别提取推理增量和回答增量。"""
+    choices = _lookup(chunk, "choices")
+    if not isinstance(choices, Sequence) or not choices:
+        return "", ""
+    delta = _lookup(choices[0], "delta")
+    reasoning_content = _lookup(delta, "reasoning_content")
+    reasoning_delta = reasoning_content if isinstance(reasoning_content, str) else ""
+    return reasoning_delta, _extract_stream_delta(chunk)
 
 
 def _extract_usage(chunk: Any) -> dict[str, int]:
