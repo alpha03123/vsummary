@@ -14,6 +14,10 @@ import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 
 const PROVIDER_TEXT_SETTING_KEYS = new Set(["openaiBaseUrl", "openaiModel", "hfEndpoint"]);
+const DEFAULT_BASE_URL_BY_PROVIDER = {
+  deepseek: "https://api.deepseek.com",
+  ollama: "http://localhost:11434",
+};
 const DOWNLOAD_FAILURE_VISIBLE_MS = 4000;
 
 function isCompletedDownloadStatus(payload) {
@@ -47,9 +51,16 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       return;
     }
 
+    const nextValue =
+      key === "llmProvider" && !state.ui.openaiBaseUrl?.trim()
+        ? {
+            [key]: value,
+            openaiBaseUrl: DEFAULT_BASE_URL_BY_PROVIDER[value] ?? state.ui.openaiBaseUrl,
+          }
+        : { [key]: value };
     const nextUi = normalizeUiSettings({
       ...state.ui,
-      [key]: value,
+      ...nextValue,
     });
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
