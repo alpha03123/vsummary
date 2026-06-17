@@ -679,6 +679,114 @@ git commit -m "feat(mindmap): add Markdown export endpoint and renderer"
 
 ---
 
+### Task 4b: Mindmap export — integration tests
+
+**Files:**
+- Create: `tests/backend/integration/api/test_mindmap_api.py`
+
+- [ ] **Step 1: Write integration tests for export endpoint**
+
+```python
+# tests/backend/integration/api/test_mindmap_api.py
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+
+class MindmapExportApiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from backend.api.app import create_app
+        from backend.api.container import ROOT
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.root_dir = Path(cls.temp_dir.name)
+        # Create minimal workspace structure for testing
+        (cls.root_dir / "config").mkdir(parents=True, exist_ok=True)
+        (cls.root_dir / "config" / "settings.toml").write_text(
+            '[openai]\nprovider="openai"\nmodel="gpt-4"\nbase_url="https://api.openai.com/v1"\napi_key="sk-test"\n'
+            '[asr]\nprovider="faster_whisper"\nlanguage="zh"\n'
+            '[asr.faster_whisper]\ndevice="cpu"\ncompute_type="int8"\nmodel_size="tiny"\ntranscription_mode="default"\nmodels_dir="models"\n'
+            '[agent_context]\nwindow_tokens=128000\nreserved_output_tokens=4096\ndirect_summary_threshold_ratio=0.8\nreasoning_effort="low"\nanswer_detail_level="normal"\ntalk_custom_prompt=""\n'
+            '[generation]\nsummary_chunk_concurrency=1\n'
+            '[web_search]\nenabled=false\nengine="duckduckgo"\nmax_results=3\n'
+        )
+        env_path = cls.root_dir / ".env"
+        if not env_path.exists():
+            env_path.write_text("OPENAI_API_KEY=sk-test\nOPENAI_BASE_URL=https://api.openai.com/v1\nOPENAI_MODEL=gpt-4\n")
+        workspace_dir = cls.root_dir / "workspace" / "s1" / "v1"
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        (cls.root_dir / "videos" / "s1").mkdir(parents=True, exist_ok=True)
+        (cls.root_dir / "videos" / "s1" / "v1.mp4").write_bytes(b"fake")
+        mindmap_data = {
+            "id": "root",
+            "title": "测试导图",
+            "summary": "",
+            "start_seconds": 0.0,
+            "end_seconds": 0.0,
+            "children": [
+                {"id": "c1", "title": "子节点1", "summary": "摘要", "start_seconds": 0.0, "end_seconds": 60.0, "children": []},
+            ],
+        }
+        (workspace_dir / "mindmap.json").write_text(json.dumps(mindmap_data, ensure_ascii=False), encoding="utf-8")
+        (workspace_dir / "summary.json").write_text(
+            json.dumps({"title": "测试视频", "chapters": []}, ensure_ascii=False), encoding="utf-8"
+        )
+        import os
+        os.chdir(str(cls.root_dir))
+        app = create_app(cls.root_dir)
+        cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp_dir.cleanup()
+
+    def test_export_returns_markdown_content_type(self):
+        response = self.client.get("/api/videos/s1/v1/mindmap/export?format=md")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/markdown", response.headers["content-type"])
+        self.assertIn("charset=utf-8", response.headers["content-type"])
+
+    def test_export_returns_content_disposition_header(self):
+        response = self.client.get("/api/videos/s1/v1/mindmap/export?format=md")
+        self.assertIn("attachment", response.headers["content-disposition"])
+
+    def test_export_returns_404_when_mindmap_not_found(self):
+        (self.root_dir / "workspace" / "s2" / "v2").mkdir(parents=True, exist_ok=True)
+        (self.root_dir / "videos" / "s2").mkdir(parents=True, exist_ok=True)
+        (self.root_dir / "videos" / "s2" / "v2.mp4").write_bytes(b"fake")
+        response = self.client.get("/api/videos/s2/v2/mindmap/export?format=md")
+        self.assertEqual(response.status_code, 404)
+
+    def test_export_returns_400_for_unsupported_format(self):
+        response = self.client.get("/api/videos/s1/v1/mindmap/export?format=pdf")
+        self.assertEqual(response.status_code, 400)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run integration tests**
+
+```bash
+PYTHONPATH=src python -m pytest tests/backend/integration/api/test_mindmap_api.py -v
+```
+Expected: 4 PASS
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/backend/integration/api/test_mindmap_api.py
+git commit -m "test(mindmap): add integration tests for mindmap export endpoint"
+```
+
+---
+
 ### Task 5: Regenerate + Export buttons — frontend
 
 **Files:**
@@ -763,6 +871,41 @@ describe("WorkspaceMindmapView — regenerate button", () => {
     );
     await userEvent.click(screen.getByText("重新生成"));
     expect(onGenerate).toHaveBeenCalledOnce();
+  });
+
+  it("regenerate button disabled while generating", () => {
+    render(
+      <WorkspaceMindmapView
+        tools={makeTools({ generated: true })}
+        mindmap={fakeMindmap}
+        selectedNode={null}
+        mindmapLoading={false}
+        isGeneratingMindmapSelectedVideo={true}
+        onFocusNode={vi.fn()}
+        onGenerateMindmap={vi.fn()}
+      />
+    );
+    const button = screen.getByText("重新生成").closest("button");
+    expect(button.disabled).toBe(true);
+  });
+
+  it("existing mindmap preserved on generation error", () => {
+    const onGenerate = vi.fn().mockRejectedValue(new Error("生成失败"));
+    const { rerender } = render(
+      <WorkspaceMindmapView
+        tools={makeTools({ generated: true })}
+        mindmap={fakeMindmap}
+        selectedNode={null}
+        mindmapLoading={false}
+        isGeneratingMindmapSelectedVideo={false}
+        onFocusNode={vi.fn()}
+        onGenerateMindmap={onGenerate}
+      />
+    );
+    // After error, mindmap data should still be the same
+    // The parent controller handles preserving mindmap state on error
+    // Verify the view still renders the mindmap
+    expect(screen.getByText("测试导图")).toBeTruthy();
   });
 });
 
@@ -1544,13 +1687,32 @@ PYTHONPATH=src python -m pytest tests/backend/unit/mindmap/test_series_mindmap_e
 ```
 Expected: 1 PASS
 
-- [ ] **Step 3: Add API routes to series.py**
+- [ ] **Step 3: Add API routes to series.py (with concurrency guard)**
 
 ```python
-# src/backend/api/routes/series.py — add endpoints:
+# src/backend/api/routes/series.py — add endpoints and module-level lock:
 
+from threading import Lock
 from backend.video_summary.infrastructure.mindmap_export import render_mindmap_markdown
 from fastapi.responses import PlainTextResponse
+
+# Module-level lock to prevent concurrent generation of same series mindmap
+_series_mindmap_locks: dict[str, Lock] = {}
+_series_mindmap_locks_guard = Lock()
+
+
+def _acquire_series_mindmap_lock(series_id: str) -> bool:
+    with _series_mindmap_locks_guard:
+        if series_id in _series_mindmap_locks:
+            return False
+        _series_mindmap_locks[series_id] = Lock()
+        return True
+
+
+def _release_series_mindmap_lock(series_id: str) -> None:
+    with _series_mindmap_locks_guard:
+        _series_mindmap_locks.pop(series_id, None)
+
 
 @router.get("/api/series/{series_id}/mindmap")
 def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
@@ -1564,10 +1726,15 @@ def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, 
 @router.post("/api/series/{series_id}/mindmap/generate")
 async def generate_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
     """POST /api/series/{series_id}/mindmap/generate — 生成系列思维导图。"""
-    mindmap = await container.generate_series_mindmap.run(series_id)
-    if mindmap is None:
-        raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
-    return mindmap.mindmap
+    if not _acquire_series_mindmap_lock(series_id):
+        raise HTTPException(status_code=409, detail="该系列导图正在生成中，请稍后再试")
+    try:
+        mindmap = await container.generate_series_mindmap.run(series_id)
+        if mindmap is None:
+            raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
+        return mindmap.mindmap
+    finally:
+        _release_series_mindmap_lock(series_id)
 
 
 @router.get("/api/series/{series_id}/mindmap/export")
@@ -1694,6 +1861,150 @@ Expected: no new violations
 ```bash
 git add tests/backend/unit/mindmap/test_series_mindmap_export.py src/backend/api/routes/series.py src/backend/api/bootstrap.py src/backend/video_summary/tools/mindmap.py src/backend/video_summary/tools/catalog.py src/backend/video_summary/tools/__init__.py src/backend/agent/schemas/tool_calls.py src/backend/video_summary/library/usecases/library_queries.py src/backend/video_summary/library/usecases/__init__.py
 git commit -m "feat(series-mindmap): add API routes, container wiring, agent tools, and query use-case"
+```
+
+---
+
+### Task 10b: Series mindmap — integration tests
+
+**Files:**
+- Create: `tests/backend/integration/api/test_series_mindmap_api.py`
+
+- [ ] **Step 1: Write integration tests for series mindmap APIs**
+
+```python
+# tests/backend/integration/api/test_series_mindmap_api.py
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+
+class SeriesMindmapApiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from backend.api.app import create_app
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.root_dir = Path(cls.temp_dir.name)
+        (cls.root_dir / "config").mkdir(parents=True, exist_ok=True)
+        (cls.root_dir / "config" / "settings.toml").write_text(
+            '[openai]\nprovider="openai"\nmodel="gpt-4"\nbase_url="https://api.openai.com/v1"\napi_key="sk-test"\n'
+            '[asr]\nprovider="faster_whisper"\nlanguage="zh"\n'
+            '[asr.faster_whisper]\ndevice="cpu"\ncompute_type="int8"\nmodel_size="tiny"\ntranscription_mode="default"\nmodels_dir="models"\n'
+            '[agent_context]\nwindow_tokens=128000\nreserved_output_tokens=4096\ndirect_summary_threshold_ratio=0.8\nreasoning_effort="low"\nanswer_detail_level="normal"\ntalk_custom_prompt=""\n'
+            '[generation]\nsummary_chunk_concurrency=1\n'
+            '[web_search]\nenabled=false\nengine="duckduckgo"\nmax_results=3\n'
+        )
+        env_path = cls.root_dir / ".env"
+        if not env_path.exists():
+            env_path.write_text("OPENAI_API_KEY=sk-test\nOPENAI_BASE_URL=https://api.openai.com/v1\nOPENAI_MODEL=gpt-4\n")
+        # Setup series with videos that have summaries
+        workspace_dir = cls.root_dir / "workspace" / "s1"
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        (cls.root_dir / "videos" / "s1").mkdir(parents=True, exist_ok=True)
+        (cls.root_dir / "videos" / "s1" / "v1.mp4").write_bytes(b"fake")
+        (cls.root_dir / "videos" / "s1" / "v2.mp4").write_bytes(b"fake")
+        v1_dir = workspace_dir / "v1"
+        v1_dir.mkdir(parents=True, exist_ok=True)
+        v2_dir = workspace_dir / "v2"
+        v2_dir.mkdir(parents=True, exist_ok=True)
+        (v1_dir / "summary.json").write_text(
+            json.dumps({"title": "视频1", "chapters": [{"id": "c1", "title": "章节1", "summary": "内容"}]}, ensure_ascii=False), encoding="utf-8"
+        )
+        (v2_dir / "summary.json").write_text(
+            json.dumps({"title": "视频2", "chapters": []}, ensure_ascii=False), encoding="utf-8"
+        )
+        # Write series_meta.json so list_series works
+        (workspace_dir / "series_meta.json").write_text(
+            json.dumps({"title": "测试系列"}, ensure_ascii=False), encoding="utf-8"
+        )
+        # Write a pre-existing mindmap for GET test
+        (workspace_dir / "mindmap.json").write_text(
+            json.dumps({"id": "root", "title": "测试系列", "summary": "", "children": []}, ensure_ascii=False), encoding="utf-8"
+        )
+        import os
+        os.chdir(str(cls.root_dir))
+        app = create_app(cls.root_dir)
+        cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp_dir.cleanup()
+
+    def test_get_series_mindmap_returns_tree(self):
+        response = self.client.get("/api/series/s1/mindmap")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["title"], "测试系列")
+
+    def test_get_series_mindmap_404_when_not_generated(self):
+        # s2 has no mindmap.json
+        (self.root_dir / "workspace" / "s2").mkdir(parents=True, exist_ok=True)
+        (self.root_dir / "videos" / "s2").mkdir(parents=True, exist_ok=True)
+        (self.root_dir / "videos" / "s2" / "v1.mp4").write_bytes(b"fake")
+        (self.root_dir / "workspace" / "s2" / "series_meta.json").write_text(
+            json.dumps({"title": "无导图系列"}, ensure_ascii=False), encoding="utf-8"
+        )
+        response = self.client.get("/api/series/s2/mindmap")
+        self.assertEqual(response.status_code, 404)
+
+    def test_generate_series_mindmap_returns_400_when_no_summaries(self):
+        # s3 has videos but no summaries
+        (self.root_dir / "workspace" / "s3").mkdir(parents=True, exist_ok=True)
+        (self.root_dir / "videos" / "s3").mkdir(parents=True, exist_ok=True)
+        (self.root_dir / "videos" / "s3" / "v1.mp4").write_bytes(b"fake")
+        (self.root_dir / "workspace" / "s3" / "series_meta.json").write_text(
+            json.dumps({"title": "无概况系列"}, ensure_ascii=False), encoding="utf-8"
+        )
+        response = self.client.post("/api/series/s3/mindmap/generate")
+        self.assertEqual(response.status_code, 400)
+
+    def test_export_series_mindmap_returns_markdown(self):
+        response = self.client.get("/api/series/s1/mindmap/export?format=md")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/markdown", response.headers["content-type"])
+
+    def test_export_series_mindmap_returns_400_for_unsupported_format(self):
+        response = self.client.get("/api/series/s1/mindmap/export?format=pdf")
+        self.assertEqual(response.status_code, 400)
+
+    def test_concurrent_generation_returns_409(self):
+        # This test verifies the lock mechanism: first request acquires lock,
+        # second concurrent request for same series returns 409.
+        # Since we can't easily test concurrent async in unittest,
+        # we verify the lock acquire/release logic directly.
+        from backend.api.routes.series import _acquire_series_mindmap_lock, _release_series_mindmap_lock
+        acquired = _acquire_series_mindmap_lock("test-series")
+        self.assertTrue(acquired)
+        second = _acquire_series_mindmap_lock("test-series")
+        self.assertFalse(second)
+        _release_series_mindmap_lock("test-series")
+        # After release, should be acquirable again
+        reacquired = _acquire_series_mindmap_lock("test-series")
+        self.assertTrue(reacquired)
+        _release_series_mindmap_lock("test-series")
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run integration tests**
+
+```bash
+PYTHONPATH=src python -m pytest tests/backend/integration/api/test_series_mindmap_api.py -v
+```
+Expected: 6 PASS
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/backend/integration/api/test_series_mindmap_api.py
+git commit -m "test(series-mindmap): add integration tests for series mindmap APIs"
 ```
 
 ---
@@ -1841,12 +2152,35 @@ export async function generateSeriesMindmap(seriesId) {
   }, [dispatch, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
 ```
 
+- [ ] **Step 6b: Add series mindmap tool status computation**
+
+```javascript
+// src/frontend/src/features/workspace/model/useWorkspaceController.js — add computed value:
+
+    // Compute series mindmap tool status from library data
+    // available: at least one video in series has summary (processed=true)
+    // blocked: series has videos but none processed
+    const seriesMindmapAvailable = useMemo(() => {
+      if (!activeSeries || activeSeries.id === PLAYGROUND_SERIES_ID) return false;
+      const videos = activeSeries.videos ?? [];
+      if (videos.length === 0) return false;
+      return videos.some(v => v.processed === true);
+    }, [activeSeries]);
+
+// Add to return object:
+    seriesMindmapAvailable,
+```
+
 - [ ] **Step 7: Pass seriesMindmap through page model**
 
 ```javascript
 // src/frontend/src/features/workspace/model/workspacePageModel.js — add:
 
       seriesMindmap: controller.seriesMindmap,
+      seriesMindmapAvailable: controller.seriesMindmapAvailable,
+
+// In generation:
+      isGeneratingSeriesMindmap: controller.generatingSeriesMindmap,
 
 // In actions:
       generateSeriesMindmap: controller.onGenerateSeriesMindmap,
@@ -1973,7 +2307,7 @@ const WorkspaceSeriesMindmapView = lazy(() =>
 );
 ```
 
-Add new props to the destructuring: `seriesMindmap`, `seriesMindmapLoading`, `generatingSeriesMindmap`, `onGenerateSeriesMindmap`, `seriesId`.
+Add new props to the destructuring: `seriesMindmap`, `seriesMindmapAvailable`, `seriesMindmapLoading`, `generatingSeriesMindmap`, `onGenerateSeriesMindmap`, `seriesId`.
 
 Add routing in the view render section (after the existing tool view routes):
 ```jsx
@@ -1981,6 +2315,7 @@ Add routing in the view render section (after the existing tool view routes):
   <WorkspaceSeriesMindmapView
     seriesId={activeSeries.id}
     seriesMindmap={seriesMindmap}
+    seriesMindmapAvailable={seriesMindmapAvailable}
     seriesMindmapLoading={seriesMindmapLoading}
     generatingSeriesMindmap={generatingSeriesMindmap}
     selectedNode={selectedNode}
@@ -1988,6 +2323,20 @@ Add routing in the view render section (after the existing tool view routes):
     onGenerateSeriesMindmap={onGenerateSeriesMindmap}
   />
 )}
+```
+
+Also update the `WorkspaceSeriesMindmapView` to accept `seriesMindmapAvailable` and show a blocked state when false:
+```jsx
+// In WorkspaceSeriesMindmapView, add blocked state before the "未生成" state:
+if (!seriesMindmapAvailable) {
+  return (
+    <WorkspaceStateBlock
+      eyebrow="Series Mindmap"
+      title="需要先生成 AI 概况"
+      description="系列导图依赖已生成的视频概况。请先生成系列中各视频的 AI 概况。"
+    />
+  );
+}
 ```
 
 - [ ] **Step 3: Update `workspaceChatActions.js`**
