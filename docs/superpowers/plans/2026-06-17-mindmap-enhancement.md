@@ -461,7 +461,7 @@ class VideoMindmapGenerator(Protocol):
             return None
 
         transcript = self._workspace.get_video_transcript(series_id, video_id)
-        transcript_text = transcript.full_text if transcript is not None else ""
+        transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
 
         try:
             await self._generator.run(
@@ -475,7 +475,7 @@ class VideoMindmapGenerator(Protocol):
         return self._workspace.get_video_mindmap(series_id, video_id)
 ```
 
-Note: `transcript.full_text` is a property on `VideoTranscriptDTO` — need to verify it exists. If not, extract text from segments: `"\n".join(s.text for s in transcript.segments)`.
+Note: `VideoTranscriptDTO` has a `segments` list of `TranscriptSegmentDTO` but no `full_text` property — extract text via `"\\n".join(s.text for s in transcript.segments)`.
 
 - [ ] **Step 7: Run tests to verify they pass**
 
