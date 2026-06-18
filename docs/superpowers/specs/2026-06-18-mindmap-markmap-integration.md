@@ -40,8 +40,9 @@ npm install markmap-view markmap-toolbar
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `markmap-view` | ^0.18 | SVG mindmap renderer (includes d3 internally) |
+| `markmap-view` | ^0.18 | SVG mindmap renderer |
 | `markmap-toolbar` | ^0.18 | Zoom/fit/reset toolbar |
+| `d3` | ^7.9 | Used for click delegation (`d3.select().datum()`) |
 
 ### Data Adapter
 
@@ -76,6 +77,8 @@ function convertToMarkmapNode(node) {
 ```jsx
 import { useEffect, useRef } from "react";
 import { Markmap } from "markmap-view";
+import { Toolbar } from "markmap-toolbar";
+import * as d3 from "d3";
 
 export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
   const svgRef = useRef(null);
@@ -91,8 +94,12 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
     const mm = Markmap.create(svgRef.current, null, data);
     mmRef.current = mm;
 
-    // Wire onClick via d3 delegation
-    import * as d3 from 'd3';
+    // Attach toolbar
+    const toolbar = Toolbar.create(mm);
+    toolbar.el.setAttribute('style', 'position:absolute;bottom:20px;right:20px');
+    svgRef.current.parentElement?.appendChild(toolbar.el);
+
+    // Wire onClick via d3 delegation (top-level import, not inside useEffect)
     d3.select(svgRef.current).on('click', (event) => {
       const target = event.target.closest('.markmap-node');
       if (!target || !onSelectNode) return;
@@ -108,7 +115,10 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
       });
     });
 
-    return () => mm.destroy();
+    return () => {
+      toolbar.el.remove();
+      mm.destroy();
+    };
   }, [root]);
 
   // Highlight selected node by walking markmap's internal g elements
@@ -136,19 +146,44 @@ markmap respects CSS custom properties for theming. Override via `src/frontend/s
 .markmap-node > circle {
   fill: var(--color-accent, #3b82f6);
 }
-.markmap-node--highlight > circle {
+.mindmap-selected > circle {
   stroke: var(--color-accent, #3b82f6);
   stroke-width: 3;
 }
 ```
 
-Dark mode: markmap detects `prefers-color-scheme: dark` automatically (same as reference implementation). Your app's `dark:` Tailwind classes should work via the existing `html.dark` class on the root element.
+**Dark mode:** markmap natively detects `prefers-color-scheme: dark` via a listener in `Markmap.create()`. However, the app controls dark mode via `html.dark` class. To sync:
+
+```js
+// In MindmapCanvas.jsx, useEffect after Markmap.create():
+if (document.documentElement.classList.contains('dark')) {
+  mm.svg.node()?.classList.add('markmap-dark');
+}
+```
+
+Also delete orphaned `.css-tree` CSS rules from `styles.css` (lines 522-617).
+
+### Trade-offs (Features Lost)
+
+| Feature | Current | markmap | Accepted? |
+|---------|---------|---------|-----------|
+| Child count badge on nodes | `mindmap-badge` shows `node.children.length` | Not supported | Yes — markmap visually expands nodes, badge redundant |
+| Double-click reset view | `onDoubleClick={resetView}` | Toolbar reset button instead | Yes |
+| Custom zoom limits | `MIN_SCALE=0.55, MAX_SCALE=2.4` | markmap defaults (0.5–5.0) | Yes — acceptable range |
+| `isPanning` cursor feedback | `cursor-grab`/`cursor-grabbing` | d3-zoom handles internally | Yes |
+| CSS tree drawing connector lines | `.css-tree` pseudo-elements | markmap SVG connector lines | Yes — upgrade
+
+### Implementation Notes
+
+**Zoom/pan (M1.2) and collapse (M1.3):** Built into markmap via d3-zoom. No custom code needed — these are implicit behaviors of `Markmap.create()`.
+
+**`__data__` fragility:** The `selectedNodeId` highlight uses `g.__data__`, which is d3's internal data binding property (private API). It is stable across minor versions but could break on a markmap major upgrade. Acceptable risk for now — refactor to markmap's public API if available later.
+
+**Click interaction (M1.4):** Clicking a node both collapses/expands it (markmap default) AND fires `onSelectNode`. This is intentional — the collapse behavior is visual, the selection behavior feeds the parent component.
 
 ### Selected Node Highlight
 
-markmap doesn't natively support "selected node" state. Implementation approach:
-
-Since `Markmap.create()` returns an instance with `d.data` at the root, we can traverse the internal d3 selection to find the matching node and add a CSS class:
+markmap doesn't natively support "selected node" state. Walk SVG DOM to find matching node:
 
 ```jsx
 useEffect(() => {
@@ -186,50 +221,54 @@ useEffect(() => {
 
 ```
 tests/frontend/features/workspace/ui/MindmapCanvas.test.jsx
-  (new file — replaces old MindmapCanvas importer)
-  ├── test_renders_svg_when_root_provided
+  (new file)
+  ├── test_renders_svg_when_root_provided              [M1.1]
   │     root with children → <svg> element present in DOM
-  ├── test_onSelectNode_fires_on_click
-  │     mock onSelectNode → click a node → called with node data
-  ├── test_highlights_selectedNodeId
+  ├── test_onSelectNode_fires_on_click                  [M1.4]
+  │     mock onSelectNode → simulate click on .markmap-node → called with node data
+  ├── test_highlights_selectedNodeId                    [M1.5]
   │     selectedNodeId matches a node → node has .mindmap-selected class
-  ├── test_clears_when_root_changes
-  │     render with rootA → rerender with rootB → old SVG gone, new SVG present
-  ├── test_renders_nothing_when_root_is_null
+  ├── test_clears_when_root_changes                     [M1.6]
+  │     render rootA → rerender rootB → old mm destroyed, new mm created
+  ├── test_renders_nothing_when_root_is_null            [edge]
   │     root=null → no <svg> element
+  ├── test_markmap_toolbar_attached                     [M1.8]
+  │     root provided → Toolbar.create called; toolbar elements in DOM
 
 tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx
-  (modify existing — import markmap and mock)
-  - Existing tests that render WorkspaceMindmapView will now need markmap mock
-    because MindmapCanvas internally imports markmap-view
+  (modify existing)
+  - Add vi.mock('markmap-view') and vi.mock('markmap-toolbar')
+  - Existing regenerate/export tests pass unchanged
 
 tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx
-  (same mock needed)
+  (modify existing)
+  - Add vi.mock('markmap-view') and vi.mock('markmap-toolbar')
 ```
 
-### markmap Mock Strategy
+**ACs implicitly covered by markmap built-in behavior (no test needed):**
+- M1.2 (zoom/pan) — d3-zoom built into markmap
+- M1.3 (collapse) — markmap circle-click toggles children natively
+- M1.7 (views unchanged) — existing tests pass with mocks
+- M1.9 (dark mode) — markmap auto-detects; verified by visual QA
 
-markmap-view requires a DOM environment with SVG support. For Vitest:
+### Mock Strategy
+
+markmap-view requires a DOM + SVG environment. For Vitest, use `vi.mock()` in the test file:
 
 ```jsx
-// tests/frontend/__mocks__/markmap-view.js
-export const Markmap = {
-  create: vi.fn(() => ({
-    destroy: vi.fn(),
-    options: {},
-  })),
-};
+// In tests/frontend/features/workspace/ui/MindmapCanvas.test.jsx
+vi.mock('markmap-view', () => ({
+  Markmap: { create: vi.fn() },
+}));
+vi.mock('markmap-toolbar', () => ({
+  Toolbar: { create: vi.fn(() => ({ el: document.createElement('div') })) },
+}));
+vi.mock('d3', () => ({
+  select: vi.fn(() => ({ on: vi.fn(), datum: vi.fn() })),
+}));
 ```
 
-Add to `src/frontend/vite.config.js` or `vitest.config.js`:
-```js
-resolve: {
-  alias: [
-    { find: 'markmap-view', replacement: '__mocks__/markmap-view.js' },
-    { find: 'markmap-toolbar', replacement: '__mocks__/markmap-toolbar.js' },
-  ]
-}
-```
+Also add these mocks to `WorkspaceMindmapView.test.jsx` and `WorkspaceSeriesMindmapView.test.jsx` (since they render `MindmapCanvas` which imports markmap).
 
 ## Scope
 
