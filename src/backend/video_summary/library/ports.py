@@ -267,8 +267,17 @@ class SeriesMindmapGenerator(Protocol):
         series_title: str,
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
+        progress_reporter: ProgressReporter | None = None,
     ) -> None:
-        """基于系列目录与视频概况生成跨视频思维导图，落盘到系列制品目录。"""
+        """基于系列目录与视频概况生成跨视频思维导图，落盘到系列制品目录。
+
+        Args:
+            series_id: 系列 ID。
+            series_title: 系列标题，用于根节点上下文。
+            catalog: 系列目录数据字典（series_catalog.json 的内容）。
+            video_summaries: 各视频概括列表，每项应包含 title / one_sentence_summary / chapters 等字段。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
+        """
 
 
 class KnowledgeCardGenerator(Protocol):

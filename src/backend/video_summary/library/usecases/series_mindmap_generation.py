@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.ports import SeriesMindmapGenerator, VideoLibraryReader
 
 
@@ -8,7 +9,7 @@ class GenerateSeriesMindmapFromLibrary:
         self._workspace = workspace
         self._generator = generator
 
-    async def run(self, series_id: str):
+    async def run(self, series_id: str, progress_reporter: ProgressReporter | None = None):
         series_list = self._workspace.list_series()
         series = next((s for s in series_list if s.id == series_id), None)
         if series is None or not series.videos:
@@ -31,6 +32,7 @@ class GenerateSeriesMindmapFromLibrary:
                 series_title=series.title,
                 catalog=catalog,
                 video_summaries=summaries,
+                progress_reporter=progress_reporter,
             )
         except LookupError:
             return None

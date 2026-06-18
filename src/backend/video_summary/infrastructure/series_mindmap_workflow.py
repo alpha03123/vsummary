@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock
 
+from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_series_mindmap_application
 
 
@@ -40,6 +41,7 @@ class ConfiguredSeriesMindmapWorkflow:
         series_title: str,
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
+        progress_reporter: ProgressReporter | None = None,
     ) -> None:
         """基于当前配置执行一次系列级思维导图生成。
 
@@ -48,6 +50,7 @@ class ConfiguredSeriesMindmapWorkflow:
             series_title: 系列标题，用于根节点上下文。
             catalog: 系列目录数据字典（series_catalog.json 的内容）。
             video_summaries: 各视频概括列表，每项应包含 title / one_sentence_summary / chapters 等字段。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
         """
         application = self._get_application()
         await application.use_case.run(
@@ -55,6 +58,7 @@ class ConfiguredSeriesMindmapWorkflow:
             catalog=catalog,
             video_summaries=video_summaries,
             output_dir=series_dir,
+            progress_reporter=progress_reporter,
         )
 
     def _get_application(self):

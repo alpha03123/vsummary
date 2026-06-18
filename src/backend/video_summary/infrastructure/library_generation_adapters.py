@@ -150,6 +150,7 @@ class WorkspaceBackedSeriesMindmapGenerator(SeriesMindmapGenerator):
         series_title: str,
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
+        progress_reporter: ProgressReporter | None = None,
     ) -> None:
         """为指定系列生成跨视频思维导图。
 
@@ -158,9 +159,17 @@ class WorkspaceBackedSeriesMindmapGenerator(SeriesMindmapGenerator):
             series_title: 系列标题，用于根节点上下文。
             catalog: 系列目录数据字典（series_catalog.json 的内容）。
             video_summaries: 各视频概括列表，每项应包含 title / one_sentence_summary / chapters 等字段。
+            progress_reporter: 可选进度上报端口；为 `None` 时由工作流自行
+                选择默认值。
         """
         series_dir = self._workspace.get_series_dir(series_id)
-        await self._workflow.run(series_dir, series_title, catalog, video_summaries)
+        await self._workflow.run(
+            series_dir,
+            series_title,
+            catalog,
+            video_summaries,
+            progress_reporter=progress_reporter,
+        )
 
 
 def _require_video_source(workspace: VideoLibraryReader, series_id: str, video_id: str):

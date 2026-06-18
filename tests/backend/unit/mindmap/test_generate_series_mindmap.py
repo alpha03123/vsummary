@@ -42,8 +42,13 @@ class FakeSeriesMindmapGenerator:
     def __init__(self):
         self.last_call = None
 
-    async def run(self, *, series_id, series_title, catalog, video_summaries):
-        self.last_call = {"series_id": series_id, "catalog": catalog, "video_summaries": video_summaries}
+    async def run(self, *, series_id, series_title, catalog, video_summaries, progress_reporter=None):
+        self.last_call = {
+            "series_id": series_id,
+            "catalog": catalog,
+            "video_summaries": video_summaries,
+            "progress_reporter": progress_reporter,
+        }
 
 
 class GenerateSeriesMindmapFromLibraryTests(unittest.TestCase):
