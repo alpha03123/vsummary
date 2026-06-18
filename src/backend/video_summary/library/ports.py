@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol
 
 from backend.video_summary.generation.ports import ProgressReporter
@@ -69,6 +70,12 @@ class VideoLibraryReader(Protocol):
 
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
         """取视频工作区工具栏的完整状态。"""
+
+    def get_series_mindmap(self, series_id: str) -> VideoMindmapDTO | None:
+        """取系列的思维导图制品；未生成则返回 None。"""
+
+    def get_series_dir(self, series_id: str) -> Path:
+        """返回到系列工作区根目录的路径。"""
 
 
 class VideoKnowledgeCardWriter(Protocol):
@@ -240,6 +247,19 @@ class VideoMindmapGenerator(Protocol):
         transcript_text: str = "",
     ) -> None:
         """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。"""
+
+
+class SeriesMindmapGenerator(Protocol):
+    """系列思维导图的异步生成端口。"""
+    async def run(
+        self,
+        *,
+        series_id: str,
+        series_title: str,
+        catalog: dict[str, object] | None,
+        video_summaries: list[dict[str, object]],
+    ) -> None:
+        """基于系列目录与视频概况生成跨视频思维导图，落盘到系列制品目录。"""
 
 
 class KnowledgeCardGenerator(Protocol):

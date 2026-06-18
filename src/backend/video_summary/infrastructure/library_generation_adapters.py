@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
+from backend.video_summary.infrastructure.series_mindmap_workflow import ConfiguredSeriesMindmapWorkflow
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
-from backend.video_summary.library.ports import VideoLibraryReader, VideoMindmapGenerator, VideoSummaryGenerator
+from backend.video_summary.library.ports import SeriesMindmapGenerator, VideoLibraryReader, VideoMindmapGenerator, VideoSummaryGenerator
 
 
 class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
@@ -110,6 +111,47 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
         """
         video = _require_video_source(self._workspace, series_id, video_id)
         await self._workflow.run(video.source_path, video.output_dir, summary_data, transcript_text=transcript_text)
+
+
+class WorkspaceBackedSeriesMindmapGenerator(SeriesMindmapGenerator):
+    """把库层 `SeriesMindmapGenerator` 端口适配为生成层工作流的实现。
+
+    业务场景：在系列生成流程结束后，需要基于已有的系列目录与所有视频概括
+    生成跨视频的思维导图；本适配器负责按 ID 解析系列目录，再交给思维导图工作流。
+
+    实现要点：
+    - 与 `WorkspaceBackedVideoMindmapGenerator` 对称：不感知进度上报 / 取消；
+      磁盘路径全部由工作区端口解析。
+    """
+
+    def __init__(self, workspace: VideoLibraryReader, workflow: ConfiguredSeriesMindmapWorkflow) -> None:
+        """注入工作区读取端口与已配置好的系列思维导图工作流。
+
+        Args:
+            workspace: 用于按 ID 解析系列目录的库层端口。
+            workflow: 已加载好提示词/网关的系列思维导图工作流。
+        """
+        self._workspace = workspace
+        self._workflow = workflow
+
+    async def run(
+        self,
+        *,
+        series_id: str,
+        series_title: str,
+        catalog: dict[str, object] | None,
+        video_summaries: list[dict[str, object]],
+    ) -> None:
+        """为指定系列生成跨视频思维导图。
+
+        Args:
+            series_id: 系列 ID。
+            series_title: 系列标题，用于根节点上下文。
+            catalog: 系列目录数据字典（series_catalog.json 的内容）。
+            video_summaries: 各视频概括列表，每项应包含 title / one_sentence_summary / chapters 等字段。
+        """
+        series_dir = self._workspace.get_series_dir(series_id)
+        await self._workflow.run(series_dir, series_title, catalog, video_summaries)
 
 
 def _require_video_source(workspace: VideoLibraryReader, series_id: str, video_id: str):
