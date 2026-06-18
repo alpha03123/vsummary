@@ -59,6 +59,7 @@ from backend.video_summary.library.usecases import (
     DeleteVideoSource,
     GenerateVideoKnowledgeCards,
     RefreshSeriesKnowledgeMemory,
+    GenerateSeriesMindmapFromLibrary,
     GenerateSeriesSummaryFromLibrary,
     GenerateVideoMindmapFromLibrary,
     GenerateVideoSummaryFromLibrary,
@@ -115,6 +116,7 @@ class ApiContainer:
     resolve_bilibili_video: ResolveBilibiliVideo
     start_linked_video_download: StartLinkedVideoDownload
     generation_progress_tracker: InMemoryProgressTracker
+    mindmap_progress_tracker: InMemoryProgressTracker
     video_download_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     chaoxing_import_progress_tracker: InMemoryProgressTracker
@@ -143,6 +145,7 @@ def build_api_container(
     settings = load_settings(config_path, root_dir)
     workspace = FileSystemVideoWorkspace(root_dir)
     progress_tracker = InMemoryProgressTracker()
+    mindmap_progress_tracker = InMemoryProgressTracker()
     video_download_progress_tracker = InMemoryProgressTracker()
     model_download_progress_tracker = InMemoryProgressTracker()
     chaoxing_import_progress_tracker = InMemoryProgressTracker()
@@ -260,6 +263,7 @@ def build_api_container(
         resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
         start_linked_video_download=StartLinkedVideoDownload(workspace, linked_download_starter),
         generation_progress_tracker=progress_tracker,
+        mindmap_progress_tracker=mindmap_progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
         model_download_progress_tracker=model_download_progress_tracker,
         chaoxing_import_progress_tracker=chaoxing_import_progress_tracker,

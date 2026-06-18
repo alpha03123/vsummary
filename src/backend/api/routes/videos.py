@@ -755,7 +755,7 @@ async def generate_video_mindmap(
 ) -> dict[str, object]:
     """POST /api/videos/{series_id}/{video_id}/mindmap/generate — 生成视频思维导图。
 
-    基于已有总结调用 LLM 生成思维导图节点树并落盘。
+    基于已有总结调用 LLM 生成思维导图节点树并落盘；通过 SSE 进度端点订阅实时状态。
 
     Args:
         series_id: 系列 ID。
@@ -768,10 +768,61 @@ async def generate_video_mindmap(
     Raises:
         HTTPException(404): 总结未生成。
     """
-    video_mindmap = await container.generate_video_mindmap.run(series_id, video_id)
+    import sys
+    task_id = _build_mindmap_task_id(series_id, video_id)
+    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
+    try:
+        reporter.update("generate", 0.0, "正在生成思维导图")
+        video_mindmap = await container.generate_video_mindmap.run(
+            series_id,
+            video_id,
+            progress_reporter=reporter,
+        )
+    except Exception:
+        reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "思维导图生成失败")
+        raise
     if video_mindmap is None:
-        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+        reporter.failed("总结不存在，无法生成思维导图")
+        raise HTTPException(
+            status_code=404,
+            detail=f"summary not found for video '{series_id}/{video_id}'",
+        )
+    reporter.completed("思维导图已生成")
     return video_mindmap.mindmap
+
+
+@router.get("/api/videos/{series_id}/{video_id}/mindmap/generate/progress")
+async def stream_mindmap_generation_progress(
+    series_id: str,
+    video_id: str,
+    container: ApiContainerDep,
+) -> StreamingResponse:
+    """GET /api/videos/{series_id}/{video_id}/mindmap/generate/progress — 订阅单视频思维导图生成进度流（SSE）。
+
+    以 SSE 推送思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
+
+    Args:
+        series_id: 系列 ID。
+        video_id: 视频 ID。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        StreamingResponse（`text/event-stream`）。
+    """
+    task_id = _build_mindmap_task_id(series_id, video_id)
+    return StreamingResponse(
+        stream_progress_events(
+            tracker=container.mindmap_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/api/series/{series_id}/mindmap")
@@ -784,15 +835,76 @@ def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, 
 
 @router.post("/api/series/{series_id}/mindmap/generate")
 async def generate_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+    """POST /api/series/{series_id}/mindmap/generate — 触发系列思维导图生成。
+
+    基于系列下已生成概况的视频聚合生成思维导图；通过 SSE 进度端点订阅实时状态。
+    同一系列并发请求会返回 409。
+
+    Args:
+        series_id: 系列 ID。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        JSON 字典，含思维导图节点树。
+
+    Raises:
+        HTTPException(400): 系列下没有已生成概况的视频。
+        HTTPException(409): 该系列思维导图正在生成中。
+    """
+    import sys
     if not _acquire_series_mindmap_lock(series_id):
         raise HTTPException(status_code=409, detail="该系列导图正在生成中，请稍后再试")
+    task_id = _build_series_mindmap_task_id(series_id)
+    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
     try:
-        mindmap = await container.generate_series_mindmap.run(series_id)
+        reporter.update("generate", 0.0, "正在生成系列思维导图")
+        try:
+            mindmap = await container.generate_series_mindmap.run(
+                series_id,
+                progress_reporter=reporter,
+            )
+        except Exception:
+            reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "系列思维导图生成失败")
+            raise
         if mindmap is None:
+            reporter.failed("系列下没有已生成概况的视频")
             raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
+        reporter.completed("系列思维导图已生成")
         return mindmap.mindmap
     finally:
         _release_series_mindmap_lock(series_id)
+
+
+@router.get("/api/series/{series_id}/mindmap/generate/progress")
+async def stream_series_mindmap_generation_progress(
+    series_id: str,
+    container: ApiContainerDep,
+) -> StreamingResponse:
+    """GET /api/series/{series_id}/mindmap/generate/progress — 订阅系列思维导图生成进度流（SSE）。
+
+    以 SSE 推送系列思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
+
+    Args:
+        series_id: 系列 ID。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        StreamingResponse（`text/event-stream`）。
+    """
+    task_id = _build_series_mindmap_task_id(series_id)
+    return StreamingResponse(
+        stream_progress_events(
+            tracker=container.mindmap_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/api/series/{series_id}/mindmap/export")
@@ -1098,6 +1210,31 @@ def _build_series_task_id(series_id: str) -> str:
         格式为 `series/{series_id}` 的任务 ID。
     """
     return f"series/{series_id}"
+
+
+def _build_mindmap_task_id(series_id: str, video_id: str) -> str:
+    """构建单视频思维导图生成的进度跟踪任务 ID。
+
+    Args:
+        series_id: 系列 ID。
+        video_id: 视频 ID。
+
+    Returns:
+        格式为 `mindmap|{series_id}|{video_id}` 的任务 ID。
+    """
+    return f"mindmap|{series_id}|{video_id}"
+
+
+def _build_series_mindmap_task_id(series_id: str) -> str:
+    """构建系列思维导图生成的进度跟踪任务 ID。
+
+    Args:
+        series_id: 系列 ID。
+
+    Returns:
+        格式为 `series-mindmap|{series_id}` 的任务 ID。
+    """
+    return f"series-mindmap|{series_id}"
 
 
 def _get_pending_series_videos(container, series_id: str) -> list[object]:
