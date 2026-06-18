@@ -55,3 +55,53 @@ describe("WorkspaceMindmapView — export button", () => {
     expect(screen.queryByText("导出")).toBeNull();
   });
 });
+
+describe("WorkspaceMindmapView — progress bar", () => {
+  const baseProps = {
+    tools: makeTools({ generated: false }),
+    mindmap: null,
+    selectedNode: null,
+    mindmapLoading: false,
+    isGeneratingMindmapSelectedVideo: false,
+    onFocusNode: vi.fn(),
+    onGenerateMindmap: vi.fn(),
+    seriesId: "s1",
+    videoId: "v1",
+    mindmapGenerationProgress: null,
+  };
+
+  it("shows progress bar while generating", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={true}
+        mindmapGenerationProgress={{ status: "running", stage: "generate", progress: 45, detail: "正在生成思维导图" }}
+      />
+    );
+    expect(screen.getByText("正在生成思维导图")).toBeTruthy();
+    expect(screen.getByText("45%")).toBeTruthy();
+  });
+
+  it("hides progress bar when generation completes", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={false}
+        mindmap={{ id: "root", title: "Test", children: [] }}
+        mindmapGenerationProgress={null}
+      />
+    );
+    expect(screen.queryByText("45%")).toBeNull();
+  });
+
+  it("hides progress bar on generation failure", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={false}
+        mindmapGenerationProgress={{ status: "failed", stage: "failed", progress: null, detail: null, error: "LLM error" }}
+      />
+    );
+    expect(screen.queryByText("45%")).toBeNull();
+  });
+});

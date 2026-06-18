@@ -83,6 +83,7 @@ export function WorkspaceReadingPane({
   seriesMindmapLoading,
   generatingSeriesMindmap,
   onGenerateSeriesMindmap,
+  mindmapGenerationProgress,
   onSelectTool,
   onFocusNode,
   onSeek,
@@ -171,6 +172,7 @@ export function WorkspaceReadingPane({
                       selectedNode={selectedNode}
                       onFocusNode={onFocusNode}
                       onGenerateSeriesMindmap={onGenerateSeriesMindmap}
+                      mindmapGenerationProgress={mindmapGenerationProgress}
                     />
                   ) : null}
                   {isStudioHome ? (
@@ -218,6 +220,7 @@ export function WorkspaceReadingPane({
                       onGenerateMindmap={onGenerateMindmap}
                       seriesId={activeSeries?.id}
                       videoId={selectedVideo?.id}
+                      mindmapGenerationProgress={mindmapGenerationProgress}
                     />
                   ) : null}
                   {selectedToolId === "knowledge-cards" ? (

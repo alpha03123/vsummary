@@ -47,3 +47,40 @@ describe("WorkspaceSeriesMindmapView", () => {
     expect(onGenerate).toHaveBeenCalledOnce();
   });
 });
+
+describe("WorkspaceSeriesMindmapView — progress bar", () => {
+  const baseProps = {
+    seriesId: "s1",
+    seriesMindmap: null,
+    seriesMindmapAvailable: true,
+    seriesMindmapLoading: false,
+    generatingSeriesMindmap: false,
+    selectedNode: null,
+    onFocusNode: vi.fn(),
+    onGenerateSeriesMindmap: vi.fn(),
+    mindmapGenerationProgress: null,
+  };
+
+  it("shows progress bar while generating", () => {
+    render(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={true}
+        mindmapGenerationProgress={{ status: "running", stage: "generate", progress: 30, detail: "正在生成系列思维导图" }}
+      />
+    );
+    expect(screen.getByText("30%")).toBeTruthy();
+  });
+
+  it("hides progress bar when generation completes", () => {
+    render(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={false}
+        seriesMindmap={{ id: "root", title: "Test", children: [] }}
+        mindmapGenerationProgress={null}
+      />
+    );
+    expect(screen.queryByText("30%")).toBeNull();
+  });
+});

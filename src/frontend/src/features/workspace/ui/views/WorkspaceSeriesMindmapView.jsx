@@ -12,6 +12,7 @@ export function WorkspaceSeriesMindmapView({
   selectedNode,
   onFocusNode,
   onGenerateSeriesMindmap,
+  mindmapGenerationProgress,
 }) {
   if (seriesMindmapLoading) {
     return (
@@ -63,6 +64,24 @@ export function WorkspaceSeriesMindmapView({
             </>
           )}
         </button>
+        {generatingSeriesMindmap && mindmapGenerationProgress ? (
+          <div className="motion-fade-up mt-6 w-full max-w-2xl">
+            <div className="workspace-elevated-panel rounded-3xl border p-5">
+              <p className="text-sm font-medium text-stone-700 dark:text-zinc-300">
+                {mindmapGenerationProgress.detail || "正在生成系列思维导图..."}
+              </p>
+              <div className="mt-3 h-2 w-full rounded-full bg-stone-100 dark:bg-stone-800">
+                <div
+                  className="h-2 rounded-full bg-accent transition-all duration-500"
+                  style={{ width: `${mindmapGenerationProgress.progress ?? 0}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-stone-400">
+                {Math.round(mindmapGenerationProgress.progress ?? 0)}%
+              </p>
+            </div>
+          </div>
+        ) : null}
       </WorkspaceStateBlock>
     );
   }
