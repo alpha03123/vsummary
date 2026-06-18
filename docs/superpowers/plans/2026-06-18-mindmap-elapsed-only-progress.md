@@ -20,7 +20,7 @@
 | 1 | `src/frontend/src/features/workspace/ui/views/WorkspaceMindmapView.jsx` | Replace progress bar JSX with spinner + elapsed text |
 | 2 | `src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx` | Same for series |
 | 3 | `tests/frontend/features/workspace/ui/views/WorkspaceMindmapView.test.jsx` | Modify existing progress tests; add F1.2 rerender test |
-| 4 | `tests/frontend/features/workspace/ui/views/WorkspaceSeriesMindmapView.test.jsx` | Same for series |
+| 4 | `tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx` | Same for series (note: file is at `ui/`, not `ui/views/`) |
 
 ---
 
@@ -168,7 +168,7 @@ git commit -m "feat(mindmap-progress): replace progress bar with elapsed-time sp
 
 **Files:**
 - Modify: `src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx`
-- Modify: `tests/frontend/features/workspace/ui/views/WorkspaceSeriesMindmapView.test.jsx`
+- Modify: `tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx`
 
 - [ ] **Step 1: Replace the series progress-bar JSX**
 
@@ -191,7 +191,7 @@ NOTE: `LoaderCircle` is already imported in this file. No new imports.
 
 - [ ] **Step 2: Update the series progress tests**
 
-Read `tests/frontend/features/workspace/ui/views/WorkspaceSeriesMindmapView.test.jsx`. Find the `describe("WorkspaceSeriesMindmapView — progress bar", ...)` block. Replace it with:
+Read `tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx`. Find the `describe("WorkspaceSeriesMindmapView — progress bar", ...)` block. Replace it with:
 
 ```jsx
 describe("WorkspaceSeriesMindmapView — elapsed time progress", () => {
@@ -286,7 +286,7 @@ Expected: all existing tests PASS + 4 new series tests PASS = around 120 tests t
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx tests/frontend/features/workspace/ui/views/WorkspaceSeriesMindmapView.test.jsx
+git add src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx
 git commit -m "feat(mindmap-progress): replace series progress bar with elapsed-time spinner"
 ```
 
@@ -299,7 +299,7 @@ git commit -m "feat(mindmap-progress): replace series progress bar with elapsed-
 ```bash
 cd src/frontend && npx vitest run tests/frontend/features/workspace/
 ```
-Expected: 120/120 tests PASS (116 existing + 4 new from this change since the original 3 progress tests were replaced, not added)
+Expected: 119/119 tests PASS (116 existing + 3 new from this change since the original 5 progress tests were replaced: 3 single + 2 series → 4 + 4 = 8 new total)
 
 - [ ] **Step 2: Verify backend is untouched**
 
