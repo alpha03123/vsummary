@@ -39,6 +39,7 @@ export function useWorkspaceController() {
   const mindmap = state.mindmap;
   const seriesMindmap = state.seriesMindmap;
   const generatingSeriesMindmap = state.generatingSeriesMindmap;
+  const mindmapGenerationProgress = state.mindmapGenerationProgress;
 
   const seriesMindmapAvailable = useMemo(() => {
     if (!activeSeries || activeSeries.id === PLAYGROUND_SERIES_ID) return false;
@@ -176,6 +177,7 @@ export function useWorkspaceController() {
     seriesMindmap,
     seriesMindmapAvailable,
     generatingSeriesMindmap,
+    mindmapGenerationProgress,
     knowledgeCards: state.knowledgeCards,
     knowledgeCardsGenerating: state.knowledgeCardsGenerating,
     knowledgeCardsFeedback: state.knowledgeCardsFeedback,

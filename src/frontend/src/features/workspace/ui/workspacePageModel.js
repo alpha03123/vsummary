@@ -39,6 +39,7 @@ export function buildWorkspacePageModel(controller) {
       mindmap: controller.mindmap,
       seriesMindmap: controller.seriesMindmap,
       seriesMindmapAvailable: controller.seriesMindmapAvailable,
+      mindmapGenerationProgress: controller.mindmapGenerationProgress,
       knowledgeCards: controller.knowledgeCards,
       knowledgeCardsGenerating: controller.knowledgeCardsGenerating,
       knowledgeCardsFeedback: controller.knowledgeCardsFeedback,
