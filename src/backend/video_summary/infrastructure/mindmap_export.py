@@ -18,8 +18,14 @@ def render_mindmap_markdown(node: dict, depth: int = 0) -> str:
 
 
 def render_mindmap_html(node: dict, title: str = "Mindmap") -> str:
-    """Generate a self-contained HTML page with markmap rendering."""
-    data_json = json.dumps(node, ensure_ascii=False, separators=(",", ":"))
+    """Generate a self-contained HTML page with markmap rendering.
+
+    Transforms MindmapNodePayload (title/children) to markmap INode
+    (content/children) before embedding, matching the frontend's
+    convertToMarkmapNode() logic.
+    """
+    markmap_data = _convert_to_markmap_data(node)
+    data_json = json.dumps(markmap_data, ensure_ascii=False)
     return f"""<!doctype html>
 <html>
 <head>
@@ -48,3 +54,25 @@ if (window.matchMedia("(prefers-color-scheme: dark)").matches) {{
 </script>
 </body>
 </html>"""
+
+
+def _convert_to_markmap_data(node: dict) -> dict:
+    """Transform MindmapNodePayload → markmap INode.
+
+    markmap requires {content, children} format; our source uses
+    {title, children}. We preserve id/summary/start/end in payload
+    for potential use, matching MindmapCanvas.convertToMarkmapNode().
+    """
+    return {
+        "content": node.get("title", ""),
+        "payload": {
+            "id": node.get("id"),
+            "summary": node.get("summary", ""),
+            "start_seconds": node.get("start_seconds", 0.0),
+            "end_seconds": node.get("end_seconds", 0.0),
+        },
+        "children": [
+            _convert_to_markmap_data(child)
+            for child in (node.get("children") or [])
+        ],
+    }
