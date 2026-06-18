@@ -161,12 +161,34 @@ Also add import at top: `from backend.video_summary.infrastructure.mindmap_expor
 
 Apply same changes to the series export endpoint in the same file (around line 910).
 
+- [ ] **Step 5b: Add backend integration test for format rejection**
+
+Add to `tests/backend/integration/api/test_mindmap_api.py`:
+
+```python
+    def test_export_returns_400_for_unsupported_format_including_pdf(self):
+        container = _build_container(mindmap_node={"id":"root","title":"T","summary":"","children":[]})
+        client = TestClient(create_app(container))
+        response = client.get("/api/videos/s1/v1/mindmap/export?format=pdf")
+        self.assertEqual(response.status_code, 400)
+```
+
+Also update the existing `test_export_returns_400_for_unsupported_format` to verify "html" is accepted (200):
+```python
+    def test_export_accepts_html_format(self):
+        container = _build_container(mindmap_node={"id":"root","title":"T","summary":"","children":[]})
+        client = TestClient(create_app(container))
+        response = client.get("/api/videos/s1/v1/mindmap/export?format=html")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers["content-type"])
+```
+
 - [ ] **Step 6: Run all mindmap tests**
 
 ```bash
 PYTHONPATH=src python -m pytest tests/backend/unit/mindmap/ -v
 ```
-Expected: 30 PASS (27 + 3 new HTML tests)
+Expected: all mindmap tests PASS (27 existing + 3 new HTML unit + 2 new integration = 32)
 
 - [ ] **Step 7: Commit**
 
@@ -189,17 +211,29 @@ git commit -m "feat(mindmap-export): add HTML format export — standalone markm
 
 The export button is at lines 107-114: a single `<a download href={...format=md}>导出</a>`. Replace it with a dropdown.
 
-- [ ] **Step 2: Add `useState` import and dropdown state**
+- [ ] **Step 2: Add `useState`, `useEffect` imports and dropdown state**
 
-Add `useState` to the React import at top of `WorkspaceMindmapView.jsx`:
+Add new imports at top of `WorkspaceMindmapView.jsx` (the file has no existing React import — only `lucide-react`):
 ```jsx
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 ```
-Already imported: `useLoaderCircle, Network, Download, RefreshCw` — keep them.
 
-Add state near the top of the component function (before the first `if` guard):
+Add state + click-outside ref near the top of the component function (before the first `if` guard):
 ```jsx
 const [exportOpen, setExportOpen] = useState(false);
+const exportRef = useRef(null);
+
+// Click-outside closes dropdown
+useEffect(() => {
+  if (!exportOpen) return;
+  const handler = (e) => {
+    if (exportRef.current && !exportRef.current.contains(e.target)) {
+      setExportOpen(false);
+    }
+  };
+  document.addEventListener("mousedown", handler);
+  return () => document.removeEventListener("mousedown", handler);
+}, [exportOpen]);
 ```
 
 - [ ] **Step 3: Replace the export `<a>` link with a dropdown menu**
@@ -218,7 +252,7 @@ Replace lines 107-114:
 
 With:
 ```jsx
-        <div className="relative">
+        <div className="relative" ref={exportRef}>
           <button
             type="button"
             onClick={() => setExportOpen(!exportOpen)}
@@ -265,7 +299,7 @@ With:
 Add `handleExportPNG` function inside the component (before the `return`):
 ```jsx
 function handleExportPNG(filename) {
-  const svgEl = document.querySelector("#mindmap svg, .workspace-elevated-panel svg");
+  const svgEl = document.querySelector(".workspace-elevated-panel svg");
   if (!svgEl) return;
   const svgData = new XMLSerializer().serializeToString(svgEl);
   const canvas = document.createElement("canvas");
@@ -294,7 +328,7 @@ Note: The SVG selector `#mindmap svg` targets the markmap SVG element. The fallb
 Find the export `<a>` link (lines 100-107). Replace with the same dropdown, but change the URLs to use `/api/series/` path:
 
 ```jsx
-        <div className="relative">
+        <div className="relative" ref={exportRef}>
           <button
             type="button"
             onClick={() => setExportOpen(!exportOpen)}
@@ -340,9 +374,9 @@ Also add `useState` import and `handleExportPNG` function (same as in single-vid
 
 - [ ] **Step 6: Update frontend tests**
 
-In `tests/frontend/features/workspace/ui/views/WorkspaceMindmapView.test.jsx`, update the existing export button tests:
+In `tests/frontend/features/workspace/ui/views/WorkspaceMindmapView.test.jsx`, update the existing export tests:
 
-Find the old `describe("WorkspaceMindmapView — export button", ...)` block. Update the 2 tests to check for the dropdown instead of a single link:
+Find the old `describe("WorkspaceMindmapView — export button", ...)` block. Replace with:
 
 ```jsx
 describe("WorkspaceMindmapView — export dropdown", () => {
@@ -363,8 +397,28 @@ describe("WorkspaceMindmapView — export dropdown", () => {
     render(<WorkspaceMindmapView {...baseProps} tools={makeTools({ generated: false })} mindmap={null} />);
     expect(screen.queryByText("导出")).toBeNull();
   });
+
+  it("shows three options when dropdown is opened", () => {
+    render(<WorkspaceMindmapView {...baseProps} />);
+    fireEvent.click(screen.getByText("导出"));
+    expect(screen.getByText("Markdown (.md)")).toBeTruthy();
+    expect(screen.getByText("HTML (.html)")).toBeTruthy();
+    expect(screen.getByText("PNG (.png)")).toBeTruthy();
+  });
+
+  it("closes dropdown on option click", () => {
+    render(<WorkspaceMindmapView {...baseProps} />);
+    fireEvent.click(screen.getByText("导出"));
+    expect(screen.getByText("Markdown (.md)")).toBeTruthy();
+    fireEvent.click(screen.getByText("Markdown (.md)"));
+    expect(screen.queryByText("Markdown (.md)")).toBeNull();
+  });
 });
 ```
+
+Also add `import { fireEvent }` to the existing import line from `"@testing-library/react"` at top of the file (it should already be there — verify).
+
+In `tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx`, update the existing test `test_shows_regenerate_and_export_buttons_when_mindmap_exists` (around line 35). Keep the check for "导出" button unchanged since the dropdown still renders it. No new code needed — the assertion still passes.
 
 In `tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx`, the existing export button test is inside `describe("WorkspaceSeriesMindmapView", ...)`. Update the assertion in `test_shows_regenerate_and_export_buttons_when_mindmap_exists` to still check for "导出" button text (same assertion, just the underlying HTML structure changed).
 
@@ -389,8 +443,9 @@ git commit -m "feat(mindmap-export): add HTML/PNG export + dropdown menu replaci
 - [ ] **Step 1: Run all tests**
 
 ```bash
-PYTHONPATH=src python -m pytest tests/backend/unit/mindmap/ -v  # Expected: 30 PASS
-cd src/frontend && npx vitest run tests/frontend/features/workspace/  # Expected: 123 PASS
+PYTHONPATH=src python -m pytest tests/backend/unit/mindmap/ -v  # Expected: 30 unit PASS
+PYTHONPATH=src python -m pytest tests/backend/integration/api/test_mindmap_api.py -v  # Expected: 6 PASS (4 existing + 2 new)
+cd src/frontend && npx vitest run tests/frontend/features/workspace/  # Expected: 125 PASS (123 existing + 2 new dropdown tests)
 ```
 
 - [ ] **Step 2: Commit (if any final tweaks)**
