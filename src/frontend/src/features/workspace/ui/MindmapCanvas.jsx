@@ -1,156 +1,107 @@
-import { useRef, useState, useEffect } from "react";
-
-const MIN_SCALE = 0.55;
-const MAX_SCALE = 2.4;
-const INITIAL_VIEW = {
-  x: 28,
-  y: 20,
-  scale: 1,
-};
+import { useEffect, useRef } from "react";
+import { Markmap } from "markmap-view";
+import { Toolbar } from "markmap-toolbar";
+import * as d3 from "d3";
 
 export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
-  const viewportRef = useRef(null);
-  const dragStateRef = useRef({
-    active: false,
-    pointerId: null,
-    originX: 0,
-    originY: 0,
-    startX: 0,
-    startY: 0,
-  });
-  const [view, setView] = useState(INITIAL_VIEW);
-  const [isPanning, setIsPanning] = useState(false);
+  const svgRef = useRef(null);
+  const mmRef = useRef(null);
+  const toolbarRef = useRef(null);
 
-  // Reset view when a new video is loaded (root changes)
   useEffect(() => {
-    setView(INITIAL_VIEW);
+    if (!root || !svgRef.current) {
+      mmRef.current?.destroy();
+      mmRef.current = null;
+      toolbarRef.current?.remove();
+      toolbarRef.current = null;
+      return;
+    }
+
+    mmRef.current?.destroy();
+    toolbarRef.current?.remove();
+
+    const data = convertToMarkmapNode(root);
+    const mm = Markmap.create(svgRef.current, null, data);
+    mmRef.current = mm;
+
+    const toolbar = Toolbar.create(mm);
+    toolbar.el.setAttribute("style", "position:absolute;bottom:20px;right:20px");
+    svgRef.current.parentElement?.appendChild(toolbar.el);
+    toolbarRef.current = toolbar.el;
+
+    d3.select(svgRef.current).on("click", (event) => {
+      const target = event.target.closest(".markmap-node");
+      if (!target || !onSelectNode) return;
+      const nodeData = d3.select(target).datum();
+      if (!nodeData) return;
+      onSelectNode({
+        id: nodeData.payload?.id,
+        title: nodeData.content,
+        summary: nodeData.payload?.summary,
+        start_seconds: nodeData.payload?.startSeconds ?? 0,
+        end_seconds: nodeData.payload?.endSeconds ?? 0,
+        children: nodeData.children || [],
+      });
+    });
+
+    return () => {
+      toolbarRef.current?.remove();
+      toolbarRef.current = null;
+      mm.destroy();
+      mmRef.current = null;
+    };
   }, [root]);
 
+  useEffect(() => {
+    const svg = mmRef.current?.svg?.node();
+    if (!svg || !root) return;
+    if (document.documentElement.classList.contains("dark")) {
+      svg.classList.add("markmap-dark");
+    } else {
+      svg.classList.remove("markmap-dark");
+    }
+  }, [root]);
+
+  useEffect(() => {
+    if (!svgRef.current || !selectedNodeId) return;
+    const svg = svgRef.current;
+    svg.querySelectorAll(".mindmap-selected").forEach((el) =>
+      el.classList.remove("mindmap-selected")
+    );
+    svg.querySelectorAll("g.markmap-node").forEach((g) => {
+      const data = g.__data__;
+      if (data?.payload?.id === selectedNodeId) {
+        g.classList.add("mindmap-selected");
+      }
+    });
+  }, [selectedNodeId, root]);
+
   if (!root) {
-    return <div className="p-8 text-stone-500 text-sm text-center">当前没有导图数据。</div>;
-  }
-
-  function renderNode(node, depth) {
-    const hasChildren = node.children && node.children.length > 0;
-    const isRoot = depth === 0;
-
     return (
-      <li key={node.id}>
-        <div className="css-tree-node-wrapper">
-          <button
-            type="button"
-            className={`mindmap-node depth-${depth} group`}
-            onClick={() => onSelectNode(node)}
-          >
-            <span className={`mindmap-label inline-flex items-center min-h-[36px] px-4 py-1.5 rounded-full text-sm border transition-all duration-200 outline-none
-              ${node.id === selectedNodeId
-                ? "bg-white dark:bg-neutral-950 border-accent text-stone-900 dark:text-white shadow-md ring-2 ring-accent/20 z-10 font-bold"
-                : isRoot
-                  ? "bg-stone-900 dark:bg-neutral-900 border-stone-800 dark:border-white/10 text-white shadow-sm font-bold"
-                  : "bg-white/80 dark:bg-neutral-900 border-stone-200 dark:border-white/10 text-stone-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-neutral-900 hover:border-stone-300 dark:hover:border-white/16 hover:shadow-sm"
-              }`}
-            >
-              {node.title}
-            </span>
-            {!isRoot && hasChildren && (
-              <span className="mindmap-badge ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-neutral-900 text-stone-700 dark:text-white font-bold text-xs shadow-sm border border-stone-200 dark:border-white/10">
-                {node.children.length}
-              </span>
-            )}
-          </button>
-        </div>
-        {hasChildren ? <ul>{node.children.map((child) => renderNode(child, depth + 1))}</ul> : null}
-      </li>
+      <div className="p-8 text-stone-500 text-sm text-center">
+        当前没有导图数据。
+      </div>
     );
   }
 
-  function resetView() {
-    setView(INITIAL_VIEW);
-  }
-
-  function handleWheel(event) {
-    event.preventDefault();
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const rect = viewport.getBoundingClientRect();
-    const cursorX = event.clientX - rect.left;
-    const cursorY = event.clientY - rect.top;
-    const nextScale = clamp(view.scale * Math.exp(-event.deltaY * 0.0015), MIN_SCALE, MAX_SCALE);
-    const worldX = (cursorX - view.x) / view.scale;
-    const worldY = (cursorY - view.y) / view.scale;
-
-    setView({
-      scale: nextScale,
-      x: cursorX - worldX * nextScale,
-      y: cursorY - worldY * nextScale,
-    });
-  }
-
-  function handlePointerDown(event) {
-    if (event.button !== 0 || event.target.closest(".mindmap-node")) return;
-    event.preventDefault();
-
-    dragStateRef.current = {
-      active: true,
-      pointerId: event.pointerId,
-      originX: view.x,
-      originY: view.y,
-      startX: event.clientX,
-      startY: event.clientY,
-    };
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setIsPanning(true);
-  }
-
-  function handlePointerMove(event) {
-    if (!dragStateRef.current.active) return;
-    const deltaX = event.clientX - dragStateRef.current.startX;
-    const deltaY = event.clientY - dragStateRef.current.startY;
-    setView((currentView) => ({
-      ...currentView,
-      x: dragStateRef.current.originX + deltaX,
-      y: dragStateRef.current.originY + deltaY,
-    }));
-  }
-
-  function handlePointerUp(event) {
-    if (!dragStateRef.current.active) return;
-    if (event.currentTarget.hasPointerCapture?.(dragStateRef.current.pointerId)) {
-      event.currentTarget.releasePointerCapture(dragStateRef.current.pointerId);
-    }
-    dragStateRef.current.active = false;
-    setIsPanning(false);
-  }
-
   return (
-    <div
-      ref={viewportRef}
-      className={`absolute inset-0 overflow-hidden w-full h-full select-none bg-stone-50/50 dark:bg-neutral-950 rounded-b-3xl ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
-      onDoubleClick={resetView}
-      onWheel={handleWheel}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onDragStart={(event) => event.preventDefault()}
-      style={{ touchAction: "none" }}
-    >
-      <div
-        className="absolute top-0 left-0 origin-top-left will-change-transform isolate"
-        style={{
-          transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`,
-        }}
-      >
-        <div className="css-tree p-10 pt-16">
-          <ul>{renderNode(root, 0)}</ul>
-        </div>
-      </div>
-    </div>
+    <svg
+      ref={svgRef}
+      className="absolute inset-0 w-full h-full"
+      style={{ background: "transparent" }}
+    />
   );
 }
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+function convertToMarkmapNode(node) {
+  return {
+    content: node.title,
+    payload: {
+      id: node.id,
+      summary: node.summary,
+      startSeconds: node.start_seconds,
+      endSeconds: node.end_seconds,
+    },
+    children: (node.children || []).map(convertToMarkmapNode),
+  };
 }

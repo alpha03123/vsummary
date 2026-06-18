@@ -16,13 +16,11 @@ vi.mock("markmap-toolbar", () => ({
   },
 }));
 vi.mock("d3", () => ({
-  default: {
-    select: vi.fn(() => ({
-      on: vi.fn(),
-      datum: vi.fn(),
-      node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })),
-    })),
-  },
+  select: vi.fn(() => ({
+    on: vi.fn(),
+    datum: vi.fn(),
+    node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })),
+  })),
 }));
 
 import { MindmapCanvas } from "@src/features/workspace/ui/MindmapCanvas";
@@ -61,7 +59,7 @@ describe("MindmapCanvas — markmap integration", () => {
     const destroy = vi.fn();
     Markmap.create.mockReturnValue({
       destroy,
-      svg: { node: vi.fn(() => ({ classList: { add: vi.fn() } })) },
+      svg: { node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })) },
     });
 
     const { rerender } = render(
