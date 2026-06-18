@@ -43,6 +43,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
         title: str,
         duration_seconds: float,
         summary_data: dict[str, object],
+        transcript_text: str = "",
     ) -> dict[str, object]:
         """生成一次思维导图节点/边字典。
 
@@ -50,6 +51,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             title: 视频标题，用于在提示词中给 LLM 上下文。
             duration_seconds: 视频时长（秒），仅取整后传入提示词。
             summary_data: 已生成的总结数据字典，会被 JSON 序列化后注入提示词。
+            transcript_text: 转写文本，截断后注入提示词以提供更多细节。
 
         Returns:
             `MindmapNodePayload.model_dump()` 的纯字典结果，便于跨层传输
@@ -62,6 +64,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             title=title,
             duration_seconds=duration_seconds,
             summary_data=summary_data,
+            transcript_text=transcript_text,
         )
         payload = await self._gateway.acomplete_structured(
             [{"role": "user", "content": prompt}],
@@ -71,19 +74,22 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
         return payload.model_dump()
 
 
-def build_mindmap_prompt(*, title: str, duration_seconds: float, summary_data: dict[str, object]) -> str:
+def build_mindmap_prompt(*, title: str, duration_seconds: float, summary_data: dict[str, object], transcript_text: str = "") -> str:
     """渲染思维导图提示词模板。
 
     Args:
         title: 视频标题。
         duration_seconds: 视频时长（秒），在模板中取整展示。
-        summary_data: 总结数据字典，使用 `ensure_ascii=False` 以保留中文。
+        summary_data: 总结数据字典，使用 ensure_ascii=False 以保留中文。
+        transcript_text: 转写文本，截断到前 3000 字符以防撑爆上下文窗口。
 
     Returns:
         渲染完成的提示词字符串。
     """
+    truncated = transcript_text[:3000] if transcript_text else ""
     return MINDMAP_PROMPT_TEMPLATE.format(
         title=title,
         duration_seconds=int(duration_seconds),
         summary_json=json.dumps(summary_data, ensure_ascii=False, indent=2),
+        transcript_text=truncated,
     )

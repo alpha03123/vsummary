@@ -330,6 +330,10 @@ export function WorkspacePage({ page }) {
                   chat={chat}
                   summary={summary}
                   mindmap={mindmap}
+                  seriesMindmap={shell.seriesMindmap}
+                  seriesMindmapAvailable={shell.seriesMindmapAvailable}
+                  mindmapGenerationProgress={shell.mindmapGenerationProgress}
+                  generatingSeriesMindmap={generation.isGeneratingSeriesMindmap}
                   knowledgeCards={knowledgeCards}
                   knowledgeCardsGenerating={knowledgeCardsGenerating}
                   knowledgeCardsFeedback={knowledgeCardsFeedback}
@@ -352,6 +356,7 @@ export function WorkspacePage({ page }) {
                   onSelectTool={actions.selectTool}
                   onFocusNode={actions.focusNode}
                   onGenerateMindmap={actions.generateMindmap}
+                  onGenerateSeriesMindmap={actions.generateSeriesMindmap}
                   onGenerateKnowledgeCards={actions.generateKnowledgeCards}
                   onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
                   onCreateNote={actions.createNote}

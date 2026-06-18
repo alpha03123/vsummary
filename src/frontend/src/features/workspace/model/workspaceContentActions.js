@@ -8,6 +8,7 @@ import {
   deleteSeries,
   deleteVideoNote,
   deleteVideoSource,
+  generateSeriesMindmap,
   generateVideoKnowledgeCards,
   generateVideoMindmap,
   generateSeriesSummaries,
@@ -24,6 +25,8 @@ import {
   resolveBilibiliVideo,
   subscribeChaoxingImportProgress,
   startVideoDownload,
+  subscribeMindmapGenerationProgress,
+  subscribeSeriesMindmapGenerationProgress,
   subscribeVideoDownloadProgress,
   updateVideoNote,
 } from "./workspaceApi";
@@ -410,18 +413,54 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return;
     }
 
-    const videoKey = buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    const videoKey = buildVideoKey(seriesId, videoId);
     dispatch({ type: "mindmap_generation_started", videoKey });
+
+    const unsubscribe = subscribeMindmapGenerationProgress(seriesId, videoId, (snapshot) => {
+      dispatch({ type: "mindmap_generation_progress_updated", snapshot });
+    });
+
     try {
-      const mindmapResult = await generateVideoMindmap(state.selectedSeriesId, state.selectedVideoId);
+      const mindmapResult = await generateVideoMindmap(seriesId, videoId);
+      unsubscribe();
+      dispatch({ type: "mindmap_generation_progress_cleared" });
       dispatch({
         type: "mindmap_generation_succeeded",
         mindmap: mindmapResult,
       });
     } catch (error) {
+      unsubscribe();
+      dispatch({ type: "mindmap_generation_progress_cleared" });
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "生成失败",
+      });
+    }
+  }
+
+  async function onGenerateSeriesMindmap() {
+    if (!state.selectedSeriesId) return;
+
+    const seriesId = state.selectedSeriesId;
+    dispatch({ type: "series_mindmap_generation_started" });
+
+    const unsubscribe = subscribeSeriesMindmapGenerationProgress(seriesId, (snapshot) => {
+      dispatch({ type: "mindmap_generation_progress_updated", snapshot });
+    });
+
+    try {
+      const mindmapResult = await generateSeriesMindmap(seriesId);
+      unsubscribe();
+      dispatch({ type: "mindmap_generation_progress_cleared" });
+      dispatch({ type: "series_mindmap_generation_succeeded", mindmap: mindmapResult });
+    } catch (error) {
+      unsubscribe();
+      dispatch({ type: "mindmap_generation_progress_cleared" });
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "系列导图生成失败",
       });
     }
   }
@@ -709,6 +748,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onClearKnowledgeCardsFeedback,
     onGenerateVideo,
     onGenerateMindmap,
+    onGenerateSeriesMindmap,
     onGenerateSeries,
     onCancelGeneration,
     onCreateNote,

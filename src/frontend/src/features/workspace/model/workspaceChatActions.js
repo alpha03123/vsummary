@@ -179,6 +179,14 @@ export function createWorkspaceChatActions({
       void contentActions.onGenerateMindmap();
     }
 
+    if (payload.selected_tool === "series-mindmap") {
+      dispatch({ type: "tool_selected", toolId: "series-mindmap" });
+    }
+
+    if (payload.action === "generate_series_mindmap") {
+      void contentActions.onGenerateSeriesMindmap();
+    }
+
     if (
       payload.action === "save_note" &&
       typeof payload.note_title === "string" &&

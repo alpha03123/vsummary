@@ -179,3 +179,11 @@ class GetVideoWorkspaceTools:
             工具栏状态 DTO，若视频不存在则返回 `None`。
         """
         return self._workspace.get_video_workspace_tools(series_id, video_id)
+
+
+class GetSeriesMindmap:
+    def __init__(self, workspace: VideoLibraryReader) -> None:
+        self._workspace = workspace
+
+    def run(self, series_id: str) -> VideoMindmapDTO | None:
+        return self._workspace.get_series_mindmap(series_id)
