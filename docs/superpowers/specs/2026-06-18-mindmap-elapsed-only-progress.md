@@ -57,17 +57,20 @@ No percentage, no historical estimate, no post-completion toast. Just honest "in
 ## Test Cases
 
 ```
-tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx
-  - (modify existing progress tests)
+tests/frontend/features/workspace/ui/views/WorkspaceMindmapView.test.jsx
+  - (modify existing "WorkspaceMindmapView — progress bar" describe block:
+     replace progress-bar assertions with elapsed-time assertions)
   - test_shows_elapsed_time_during_generation
     mindmapGenerationProgress with elapsed_seconds=5 → finds "已用 5 秒"
+  - test_shows_updated_elapsed_time
+    rerender with elapsed_seconds=8 → finds "已用 8 秒" (verifies F1.2)
   - test_no_percentage_bar_during_generation
     → queryByText("%") returns null
   - test_hides_progress_on_completion
     isGenerating=false → elapsed text not visible
 
-tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx
-  - (same 3 tests for series)
+tests/frontend/features/workspace/ui/views/WorkspaceSeriesMindmapView.test.jsx
+  - (same 4 tests for series)
 ```
 
 ## Scope
