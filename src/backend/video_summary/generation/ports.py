@@ -81,6 +81,19 @@ class MindmapGenerator(Protocol):
         """基于总结数据生成思维导图节点/边字典。"""
 
 
+class SeriesMindmapGenerator(Protocol):
+    """系列级跨视频思维导图生成端口。"""
+
+    async def generate(
+        self,
+        *,
+        series_title: str,
+        catalog: dict[str, object] | None,
+        video_summaries: list[dict[str, object]],
+    ) -> dict[str, object]:
+        """基于系列目录与视频概况列表生成跨视频思维导图节点/边字典。"""
+
+
 class GenerationArtifactStore(Protocol):
     """生成制品的落盘端口（写入视频制品目录的 JSON 等）。"""
 
