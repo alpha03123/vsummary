@@ -68,6 +68,7 @@ class LiteLLMSeriesMindmapGenerator(SeriesMindmapGenerator):
             [{"role": "user", "content": prompt}],
             response_model=MindmapNodePayload,
             retries=3,
+            timeout=300,
         )
         return payload.model_dump()
 

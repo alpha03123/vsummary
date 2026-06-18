@@ -70,6 +70,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             [{"role": "user", "content": prompt}],
             response_model=MindmapNodePayload,
             retries=3,
+            timeout=120,
         )
         return payload.model_dump()
 

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 import hashlib
 import json
@@ -394,6 +395,7 @@ class LiteLLMCompletionGateway:
         response_model: type[StructuredResponseT],
         temperature: float = 0,
         retries: int = 2,
+        timeout: float | None = None,
     ) -> StructuredResponseT:
         """同步结构化输出：要求 LLM 返回符合 Pydantic schema 的对象。
 
@@ -468,6 +470,7 @@ class LiteLLMCompletionGateway:
         response_model: type[StructuredResponseT],
         temperature: float = 0,
         retries: int = 2,
+        timeout: float | None = None,
     ) -> StructuredResponseT:
         """异步结构化输出：要求 LLM 返回符合 Pydantic schema 的对象。
 
@@ -500,13 +503,22 @@ class LiteLLMCompletionGateway:
             mode_errors: list[str] = []
             for mode_name, structured_messages, response_format in modes:
                 try:
-                    last_raw_text = await self.acomplete_text(
+                    text_coro = self.acomplete_text(
                         structured_messages,
                         temperature=temperature,
                         response_format=response_format,
                     )
+                    last_raw_text = (
+                        await asyncio.wait_for(text_coro, timeout=timeout)
+                        if timeout is not None
+                        else await text_coro
+                    )
                     _remember_structured_mode(self._structured_mode_cache_key, mode_name)
                     break
+                except asyncio.TimeoutError:
+                    raise RuntimeError(
+                        f"LiteLLM 异步请求超时: 在 {timeout} 秒内未收到模型响应，请检查模型服务是否正常运行。"
+                    )
                 except Exception as error:
                     if not _is_response_format_error(error) or response_format is None:
                         raise
