@@ -69,6 +69,46 @@ describe("WorkspaceSeriesMindmapView", () => {
   });
 });
 
+describe("WorkspaceSeriesMindmapView — export dropdown", () => {
+  const baseProps = {
+    seriesId: "s1",
+    seriesMindmap: fakeMindmap,
+    seriesMindmapAvailable: true,
+    seriesMindmapLoading: false,
+    generatingSeriesMindmap: false,
+    selectedNode: null,
+    onFocusNode: vi.fn(),
+    onGenerateSeriesMindmap: vi.fn(),
+    mindmapGenerationProgress: null,
+  };
+
+  it("shows export button when mindmap exists", () => {
+    render(<WorkspaceSeriesMindmapView {...baseProps} />);
+    expect(screen.getByText("导出")).toBeTruthy();
+  });
+
+  it("hides export button when mindmap not present", () => {
+    render(<WorkspaceSeriesMindmapView {...baseProps} seriesMindmap={null} />);
+    expect(screen.queryByText("导出")).toBeNull();
+  });
+
+  it("shows three options when dropdown is opened", () => {
+    render(<WorkspaceSeriesMindmapView {...baseProps} />);
+    fireEvent.click(screen.getByText("导出"));
+    expect(screen.getByText("Markdown (.md)")).toBeTruthy();
+    expect(screen.getByText("HTML (.html)")).toBeTruthy();
+    expect(screen.getByText("PNG (.png)")).toBeTruthy();
+  });
+
+  it("closes dropdown on option click", () => {
+    render(<WorkspaceSeriesMindmapView {...baseProps} />);
+    fireEvent.click(screen.getByText("导出"));
+    expect(screen.getByText("Markdown (.md)")).toBeTruthy();
+    fireEvent.click(screen.getByText("Markdown (.md)"));
+    expect(screen.queryByText("Markdown (.md)")).toBeNull();
+  });
+});
+
 describe("WorkspaceSeriesMindmapView — elapsed time progress", () => {
   const baseProps = {
     seriesId: "s1",

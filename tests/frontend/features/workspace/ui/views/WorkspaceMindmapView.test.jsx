@@ -63,17 +63,39 @@ describe("WorkspaceMindmapView — regenerate button", () => {
   });
 });
 
-describe("WorkspaceMindmapView — export button", () => {
-  const baseProps = { tools: makeTools({ generated: true }), mindmap: fakeMindmap, selectedNode: null, mindmapLoading: false, isGeneratingMindmapSelectedVideo: false, onFocusNode: vi.fn(), onGenerateMindmap: vi.fn(), seriesId: "s1", videoId: "v1" };
+describe("WorkspaceMindmapView — export dropdown", () => {
+  const baseProps = {
+    tools: makeTools({ generated: true }),
+    mindmap: fakeMindmap, selectedNode: null, mindmapLoading: false,
+    isGeneratingMindmapSelectedVideo: false,
+    onFocusNode: vi.fn(), onGenerateMindmap: vi.fn(),
+    seriesId: "s1", videoId: "v1", mindmapGenerationProgress: null,
+  };
 
   it("shows export button when mindmap is generated", () => {
     render(<WorkspaceMindmapView {...baseProps} />);
-    expect(screen.getByText("导出")).toBeInTheDocument();
+    expect(screen.getByText("导出")).toBeTruthy();
   });
 
   it("hides export button when mindmap not generated", () => {
     render(<WorkspaceMindmapView {...baseProps} tools={makeTools({ generated: false })} mindmap={null} />);
     expect(screen.queryByText("导出")).toBeNull();
+  });
+
+  it("shows three options when dropdown is opened", () => {
+    render(<WorkspaceMindmapView {...baseProps} />);
+    fireEvent.click(screen.getByText("导出"));
+    expect(screen.getByText("Markdown (.md)")).toBeTruthy();
+    expect(screen.getByText("HTML (.html)")).toBeTruthy();
+    expect(screen.getByText("PNG (.png)")).toBeTruthy();
+  });
+
+  it("closes dropdown on option click", () => {
+    render(<WorkspaceMindmapView {...baseProps} />);
+    fireEvent.click(screen.getByText("导出"));
+    expect(screen.getByText("Markdown (.md)")).toBeTruthy();
+    fireEvent.click(screen.getByText("Markdown (.md)"));
+    expect(screen.queryByText("Markdown (.md)")).toBeNull();
   });
 });
 
