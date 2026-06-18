@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
 import { MindmapCanvas } from "../MindmapCanvas";
@@ -16,6 +17,42 @@ export function WorkspaceMindmapView({
   mindmapGenerationProgress,
 }) {
   const hasMindmap = Boolean(mindmap);
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef(null);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e) => {
+      if (exportRef.current && !exportRef.current.contains(e.target)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
+
+  function handleExportPNG(filename) {
+    const svgEl = document.querySelector(".workspace-elevated-panel svg");
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement("canvas");
+    canvas.width = svgEl.clientWidth * 2;
+    canvas.height = svgEl.clientHeight * 2;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(2, 2);
+    const img = new Image();
+    img.onload = () => {
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-bg") || "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      const a = document.createElement("a");
+      a.download = filename;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    };
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+  }
 
   if (!tools?.mindmap.available) {
     return (
@@ -104,14 +141,46 @@ export function WorkspaceMindmapView({
           <RefreshCw size={14} strokeWidth={2} className={isGeneratingMindmapSelectedVideo ? "animate-spin" : ""} />
           重新生成
         </button>
-        <a
-          href={`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/export?format=md`}
-          download
-          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-accent hover:bg-accent/10 transition-colors"
-        >
-          <Download size={14} strokeWidth={2} />
-          导出
-        </a>
+        <div className="relative" ref={exportRef}>
+          <button
+            type="button"
+            onClick={() => setExportOpen(!exportOpen)}
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-accent hover:bg-accent/10 transition-colors"
+          >
+            <Download size={14} strokeWidth={2} />
+            导出
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 z-20 rounded-xl border border-stone-200 bg-white dark:bg-neutral-900 shadow-lg py-1 min-w-[130px]">
+              <a
+                href={`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/export?format=md`}
+                download
+                className="block px-4 py-2 text-xs text-stone-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-neutral-800"
+                onClick={() => setExportOpen(false)}
+              >
+                Markdown (.md)
+              </a>
+              <a
+                href={`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/export?format=html`}
+                download
+                className="block px-4 py-2 text-xs text-stone-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-neutral-800"
+                onClick={() => setExportOpen(false)}
+              >
+                HTML (.html)
+              </a>
+              <button
+                type="button"
+                className="block w-full text-left px-4 py-2 text-xs text-stone-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-neutral-800"
+                onClick={() => {
+                  setExportOpen(false);
+                  handleExportPNG(`mindmap-${videoId}.png`);
+                }}
+              >
+                PNG (.png)
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="h-full w-full">
         <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} />
