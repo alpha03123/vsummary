@@ -45,7 +45,7 @@ from backend.video_summary.library.markdown_exports import render_transcript_mar
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 from backend.video_summary.library.usecases.summary_generation import GenerationScopeBusyError
-from backend.video_summary.infrastructure.mindmap_export import render_mindmap_markdown
+from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html, render_mindmap_markdown
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
@@ -290,13 +290,17 @@ def get_video_mindmap(series_id: str, video_id: str, container: ApiContainerDep)
 
 @router.get("/api/videos/{series_id}/{video_id}/mindmap/export")
 def export_video_mindmap(series_id: str, video_id: str, format: str = "md", container: ApiContainerDep = None):
-    """GET /api/videos/{series_id}/{video_id}/mindmap/export?format=md — 导出思维导图为 Markdown。"""
-    if format != "md":
-        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md")
+    """GET /api/videos/{series_id}/{video_id}/mindmap/export?format=md|html — 导出思维导图。"""
+    if format not in ("md", "html"):
+        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md / html")
     _ensure_video_exists(container, series_id, video_id)
     video_mindmap = container.get_video_mindmap.run(series_id, video_id)
     if video_mindmap is None:
         raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
+    if format == "html":
+        content = render_mindmap_html(video_mindmap.mindmap, video_mindmap.title)
+        filename = f"{video_mindmap.title}-mindmap.html"
+        return _html_response(content, filename)
     markdown = render_mindmap_markdown(video_mindmap.mindmap)
     filename = f"{video_mindmap.title}-mindmap.md"
     return _markdown_response(markdown, filename)
@@ -909,18 +913,18 @@ async def stream_series_mindmap_generation_progress(
 
 @router.get("/api/series/{series_id}/mindmap/export")
 def export_series_mindmap(series_id: str, format: str = "md", container: ApiContainerDep = None):
-    if format != "md":
-        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md")
+    if format not in ("md", "html"):
+        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md / html")
     mindmap = container.get_series_mindmap.run(series_id)
     if mindmap is None:
         raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
+    if format == "html":
+        content = render_mindmap_html(mindmap.mindmap, mindmap.title)
+        filename = f"{mindmap.title}-mindmap.html"
+        return _html_response(content, filename)
     markdown = render_mindmap_markdown(mindmap.mindmap)
     filename = f"{mindmap.title}-mindmap.md"
-    return PlainTextResponse(
-        content=markdown,
-        media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _markdown_response(markdown, filename)
 
 
 @router.delete("/api/series/{series_id}")
@@ -1275,6 +1279,23 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     return source
+
+
+def _html_response(html: str, filename: str) -> Response:
+    """构造带 Content-Disposition 下载头的 HTML HTTP 响应。
+
+    Args:
+        html: 渲染后的 HTML 文本内容。
+        filename: 下载文件名。
+
+    Returns:
+        Response（`text/html; charset=utf-8`）。
+    """
+    return Response(
+        content=html,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": _content_disposition_attachment(filename)},
+    )
 
 
 def _markdown_response(markdown: str, filename: str) -> Response:

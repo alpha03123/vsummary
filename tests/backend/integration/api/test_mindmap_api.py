@@ -72,6 +72,19 @@ class MindmapExportApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_export_accepts_html_format(self):
+        container = _build_container(mindmap_node={"id":"root","title":"T","summary":"","children":[]})
+        client = TestClient(create_app(container))
+        response = client.get("/api/videos/s1/v1/mindmap/export?format=html")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers["content-type"])
+
+    def test_export_returns_400_for_unsupported_format_including_pdf(self):
+        container = _build_container(mindmap_node={"id":"root","title":"T","summary":"","children":[]})
+        client = TestClient(create_app(container))
+        response = client.get("/api/videos/s1/v1/mindmap/export?format=pdf")
+        self.assertEqual(response.status_code, 400)
+
 
 def _build_container(
     *,
