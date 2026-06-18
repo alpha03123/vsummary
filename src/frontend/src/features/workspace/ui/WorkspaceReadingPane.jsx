@@ -202,6 +202,8 @@ export function WorkspaceReadingPane({
                       isGeneratingMindmapSelectedVideo={isGeneratingMindmapSelectedVideo}
                       onFocusNode={onFocusNode}
                       onGenerateMindmap={onGenerateMindmap}
+                      seriesId={activeSeries?.id}
+                      videoId={selectedVideo?.id}
                     />
                   ) : null}
                   {selectedToolId === "knowledge-cards" ? (

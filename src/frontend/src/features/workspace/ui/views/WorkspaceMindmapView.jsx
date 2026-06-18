@@ -1,4 +1,4 @@
-import { LoaderCircle, Network } from "lucide-react";
+import { LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
 import { MindmapCanvas } from "../MindmapCanvas";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
@@ -11,6 +11,8 @@ export function WorkspaceMindmapView({
   isGeneratingMindmapSelectedVideo,
   onFocusNode,
   onGenerateMindmap,
+  seriesId,
+  videoId,
 }) {
   const hasMindmap = Boolean(mindmap);
 
@@ -84,6 +86,25 @@ export function WorkspaceMindmapView({
     <div className="workspace-elevated-panel relative h-full min-h-[500px] w-full overflow-hidden rounded-3xl border outline-dashed outline-1 outline-offset-4 outline-stone-200 dark:outline-stone-800">
       <div className="pointer-events-none absolute top-4 left-4 z-10">
         <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Mindmap</p>
+      </div>
+      <div className="pointer-events-auto absolute top-4 right-4 z-10 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onGenerateMindmap}
+          disabled={isGeneratingMindmapSelectedVideo}
+          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <RefreshCw size={14} strokeWidth={2} className={isGeneratingMindmapSelectedVideo ? "animate-spin" : ""} />
+          重新生成
+        </button>
+        <a
+          href={`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/export?format=md`}
+          download
+          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-accent hover:bg-accent/10 transition-colors"
+        >
+          <Download size={14} strokeWidth={2} />
+          导出
+        </a>
       </div>
       <div className="h-full w-full">
         <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} />
