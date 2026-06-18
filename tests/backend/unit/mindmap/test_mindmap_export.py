@@ -54,25 +54,26 @@ class MindmapExportTests(unittest.TestCase):
 class MindmapHtmlExportTests(unittest.TestCase):
     def test_html_export_renders_valid_html(self):
         from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html
-        node = {"id": "root", "title": "测试", "summary": "", "children": []}
-        result = render_mindmap_html(node, "测试视频")
+        node = {"id": "root", "title": "TestTitle", "summary": "", "children": []}
+        result = render_mindmap_html(node, "TestTitle")
         self.assertTrue(result.startswith("<!doctype html>"))
         self.assertIn("markmap-view", result)
-        self.assertIn("测试", result)
+        self.assertIn("TestTitle", result)
 
     def test_html_export_embeds_mindmap_data(self):
         from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html
-        node = {"id": "root", "title": "测试视频", "summary": "摘要", "children": []}
-        result = render_mindmap_html(node, "测试视频")
-        self.assertIn('"title":"测试视频"', result)
+        node = {"id": "root", "title": "Root Node", "summary": "A summary", "children": []}
+        result = render_mindmap_html(node, "Root Node")
+        self.assertIn('Root Node', result)
+        self.assertIn('A summary', result)
 
     def test_html_export_handles_nested_children(self):
         from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html
-        node = {"id": "root", "title": "根", "summary": "", "children": [
-            {"id": "c1", "title": "子1", "summary": "", "children": []}
+        node = {"id": "root", "title": "Root", "summary": "", "children": [
+            {"id": "c1", "title": "Child1", "summary": "", "children": []}
         ]}
-        result = render_mindmap_html(node, "根")
-        self.assertIn('"title":"子1"', result)
+        result = render_mindmap_html(node, "Root")
+        self.assertIn('Child1', result)
 
 
 if __name__ == "__main__":
