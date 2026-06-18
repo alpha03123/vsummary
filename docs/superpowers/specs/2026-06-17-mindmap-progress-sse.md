@@ -143,31 +143,78 @@ Progress display (replaces the shimmer animation during generation):
 
 ## Test Cases
 
+### Unit Tests
+
 ```
 tests/backend/unit/mindmap/test_mindmap_progress.py
   ├── test_generate_mindmap_reports_progress_stages
-  │     FakeMindmapGenerator + StubProgressReporter → verify update() called with "generate", "save"
+  │     FakeMindmapGenerator + StubProgressReporter → verify update() called
+  │     with "generate" (progress=0→10) then "save" (progress=80)
   ├── test_generate_mindmap_calls_completed_on_success
-  │     Verify reporter.completed() called
+  │     Verify reporter.completed() called with detail "思维导图已生成"
   ├── test_generate_mindmap_calls_failed_on_error
-  │     FakeMindmapGenerator raises → verify reporter.failed() called
+  │     FakeMindmapGenerator raises RuntimeError → verify reporter.failed()
+  │     called with the error message, completed() NOT called
   ├── test_generate_mindmap_works_without_reporter
-  │     progress_reporter=None → no crash (backward compat)
+  │     progress_reporter=None → no crash, normal return (backward compat)
+  ├── test_generate_mindmap_reports_failed_on_save_error
+  │     FakeGenerationArtifactStore.save_mindmap() raises IOError
+  │     → verify reporter.failed() called (NOT completed)
 
+tests/backend/unit/mindmap/test_series_mindmap_progress.py
+  ├── test_generate_series_mindmap_reports_progress
+  │     FakeSeriesMindmapGenerator + StubProgressReporter
+  │     → verify update() called with "generate" and "save" stages
+  ├── test_generate_series_mindmap_calls_completed_on_success
+  │     Verify reporter.completed() called
+  ├── test_generate_series_mindmap_works_without_reporter
+  │     progress_reporter=None → no crash
+```
+
+### Integration Tests
+
+```
 tests/backend/integration/api/test_mindmap_progress_api.py
   ├── test_progress_endpoint_streams_sse
+  │     POST trigger → GET /progress returns SSE content-type
   ├── test_progress_endpoint_terminates_on_completed
+  │     Wait for SSE stream → final event has status "completed"
+  ├── test_progress_endpoint_terminates_on_failed
+  │     Trigger generation that fails → final event has status "failed"
+  │     with error detail in payload
   ├── test_progress_returns_404_when_no_task
+  │     GET /progress with unknown task_id → 404
+```
 
+### Frontend Tests
+
+```
 tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx
-  └── (extend existing tests)
+  └── (extend existing)
        test_shows_progress_bar_while_generating
+       │  isGeneratingMindmapSelectedVideo=true + mindmapGenerationProgress
+       │  → progress bar rendered with percentage text
        test_hides_progress_bar_when_generation_completes
+       │  isGeneratingMindmapSelectedVideo=false → progress bar absent,
+       │  mindmap canvas visible
+       test_shows_error_when_generation_fails
+       │  mindmapGenerationProgress.status="failed" + error detail
+       │  → error message visible, progress bar absent
 
 tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx
-  └── (extend existing tests)
+  └── (extend existing)
        test_shows_progress_bar_while_generating
+       test_hides_progress_bar_when_generation_completes
 ```
+
+### Boundary Cases
+
+| # | Scenario | Expected Behavior |
+|---|----------|-------------------|
+| 1 | `artifact_store.save_mindmap()` raises IOError | `reporter.failed(msg)` called, `completed()` NOT called, API returns 500 |
+| 2 | SSE EventSource connection drops mid-generation | Browser auto-reconnects (standard EventSource behavior); tracker still has snapshot so reconnection gets latest state immediately |
+| 3 | Multiple SSE subscribers on same task_id | Each gets independent async generator, all see same snapshot sequence |
+| 4 | `progress_reporter` passed as `None` through entire chain | All `if progress_reporter:` guards skip → normal behavior, no crash |
 
 ## Scope & Dependencies
 
