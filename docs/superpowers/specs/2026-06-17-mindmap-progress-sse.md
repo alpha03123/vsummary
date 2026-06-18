@@ -31,20 +31,23 @@ Since the LLM call is a single blocking call without intermediate progress callb
 
 **New files:** none — pure additions within existing files.
 
-**Modified files (8):**
+**Modified files (10):**
 
 | # | File | Change |
 |---|------|--------|
 | 1 | `api/bootstrap.py` | Add `mindmap_progress_tracker: InMemoryProgressTracker` to `ApiContainer` |
-| 2 | `generation/ports.py` | Add `mindmap_progress_reporter: ProgressReporter \| None = None` to `MindmapGenerator.generate()` and `SeriesMindmapGenerator.generate()` |
-| 3 | `generation/usecases/generate_mindmap.py` | `GenerateMindmap.run()` accepts optional `progress_reporter`, reports stage transitions |
-| 4 | `library/usecases/mindmap_generation.py` | `GenerateVideoMindmapFromLibrary.run()` accepts optional `progress_reporter`, passes to generator |
-| 5 | `library/ports.py` | `VideoMindmapGenerator.run()` adds `progress_reporter: ProgressReporter \| None = None` |
-| 6 | `infrastructure/library_generation_adapters.py` | Pass `progress_reporter` through adapters |
-| 7 | `infrastructure/mindmap_workflow.py` | `ConfiguredMindmapWorkflow.run()` accepts and passes `progress_reporter` |
-| 8 | `api/routes/videos.py` | Inject `progress_reporter` into generate call; add `GET .../mindmap/generate/progress` SSE endpoint |
-| 9 | `api/routes/series.py` | Same for series: inject reporter + SSE progress endpoint |
-| 10 | `library/usecases/series_mindmap_generation.py` | Accept and pass `progress_reporter` |
+| 2 | `generation/usecases/generate_mindmap.py` | `GenerateMindmap.run()` accepts optional `progress_reporter`, reports stage transitions before/after `generator.generate()` |
+| 3 | `generation/usecases/generate_series_mindmap.py` | Same for series: `GenerateSeriesMindmap.run()` reports stages |
+| 4 | `library/usecases/mindmap_generation.py` | `GenerateVideoMindmapFromLibrary.run()` accepts and passes `progress_reporter` |
+| 5 | `library/usecases/series_mindmap_generation.py` | Same for series use-case |
+| 6 | `library/ports.py` | `VideoMindmapGenerator.run()` and `SeriesMindmapGenerator.run()` add `progress_reporter` param |
+| 7 | `infrastructure/library_generation_adapters.py` | Pass `progress_reporter` through both adapters |
+| 8 | `infrastructure/mindmap_workflow.py` | `ConfiguredMindmapWorkflow.run()` accepts and passes `progress_reporter` |
+| 9 | `infrastructure/series_mindmap_workflow.py` | Same for series workflow |
+| 10 | `api/routes/videos.py` | Inject `TaskProgressReporter` into generate call; add `GET .../mindmap/generate/progress` SSE endpoint |
+| 11 | `api/routes/series.py` | Same for series: inject reporter + SSE progress endpoint |
+
+Note: `generation/ports.py` NOT modified — `MindmapGenerator.generate()` and `SeriesMindmapGenerator.generate()` ports unchanged (same pattern as `Summarizer.summarize()` which also has no `progress_reporter`). Progress reporting happens in the use-case layer wrapping port calls.
 
 **New API endpoints:**
 
