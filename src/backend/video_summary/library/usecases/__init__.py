@@ -1,5 +1,6 @@
 from backend.video_summary.library.usecases.knowledge_cards import GenerateVideoKnowledgeCards
 from backend.video_summary.library.usecases.library_queries import (
+    GetSeriesMindmap,
     GetVideoChapterCards,
     GetVideoKnowledgeCards,
     GetVideoMindmap,
@@ -47,6 +48,7 @@ __all__ = [
     "GenerateVideoMindmapFromLibrary",
     "GenerateSeriesSummaryFromLibrary",
     "GenerateVideoSummaryFromLibrary",
+    "GetSeriesMindmap",
     "GetVideoChapterCards",
     "GetVideoKnowledgeCards",
     "GetVideoMindmap",

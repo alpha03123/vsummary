@@ -10,6 +10,7 @@ import asyncio
 import logging
 import json
 import mimetypes
+from threading import Lock
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -48,6 +49,20 @@ from backend.video_summary.infrastructure.mindmap_export import render_mindmap_m
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
+
+_series_mindmap_locks: dict[str, Lock] = {}
+_series_mindmap_locks_guard = Lock()
+
+def _acquire_series_mindmap_lock(series_id: str) -> bool:
+    with _series_mindmap_locks_guard:
+        if series_id in _series_mindmap_locks:
+            return False
+        _series_mindmap_locks[series_id] = Lock()
+        return True
+
+def _release_series_mindmap_lock(series_id: str) -> None:
+    with _series_mindmap_locks_guard:
+        _series_mindmap_locks.pop(series_id, None)
 
 
 @router.get("/api/videos", response_model=VideoLibraryResponse)
@@ -761,6 +776,43 @@ async def generate_video_mindmap(
     if video_mindmap is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
     return video_mindmap.mindmap
+
+
+@router.get("/api/series/{series_id}/mindmap")
+def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+    mindmap = container.get_series_mindmap.run(series_id)
+    if mindmap is None:
+        raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
+    return mindmap.mindmap
+
+
+@router.post("/api/series/{series_id}/mindmap/generate")
+async def generate_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+    if not _acquire_series_mindmap_lock(series_id):
+        raise HTTPException(status_code=409, detail="该系列导图正在生成中，请稍后再试")
+    try:
+        mindmap = await container.generate_series_mindmap.run(series_id)
+        if mindmap is None:
+            raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
+        return mindmap.mindmap
+    finally:
+        _release_series_mindmap_lock(series_id)
+
+
+@router.get("/api/series/{series_id}/mindmap/export")
+def export_series_mindmap(series_id: str, format: str = "md", container: ApiContainerDep = None):
+    if format != "md":
+        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md")
+    mindmap = container.get_series_mindmap.run(series_id)
+    if mindmap is None:
+        raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
+    markdown = render_mindmap_markdown(mindmap.mindmap)
+    filename = f"{mindmap.title}-mindmap.md"
+    return PlainTextResponse(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/api/series/{series_id}")

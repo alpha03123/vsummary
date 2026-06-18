@@ -40,9 +40,11 @@ from backend.video_summary.infrastructure.filesystem_video_workspace import File
 from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.library_generation_adapters import (
+    WorkspaceBackedSeriesMindmapGenerator,
     WorkspaceBackedVideoMindmapGenerator,
     WorkspaceBackedVideoSummaryGenerator,
 )
+from backend.video_summary.infrastructure.series_mindmap_workflow import ConfiguredSeriesMindmapWorkflow
 from backend.video_summary.infrastructure.litellm_web_search import LiteLLMNativeWebSearchGateway
 from backend.video_summary.infrastructure.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
@@ -62,6 +64,7 @@ from backend.video_summary.library.usecases import (
     GenerateVideoSummaryFromLibrary,
     GetVideoChapterCards,
     GetVideoKnowledgeCards,
+    GetSeriesMindmap,
     GetVideoMindmap,
     GetVideoNotes,
     GetVideoSource,
@@ -101,6 +104,8 @@ class ApiContainer:
     generate_video_summary: GenerateVideoSummaryFromLibrary
     generate_series_summaries: GenerateSeriesSummaryFromLibrary
     generate_video_mindmap: GenerateVideoMindmapFromLibrary
+    generate_series_mindmap: GenerateSeriesMindmapFromLibrary
+    get_series_mindmap: GetSeriesMindmap
     delete_series: DeleteSeries
     delete_video_source: DeleteVideoSource
     import_local_series: ImportLocalSeries
@@ -169,6 +174,10 @@ def build_api_container(
         workflow=ConfiguredMindmapWorkflow(root_dir),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(root_dir)
+    resolved_series_mindmap_generator = WorkspaceBackedSeriesMindmapGenerator(
+        workspace=workspace,
+        workflow=ConfiguredSeriesMindmapWorkflow(root_dir),
+    )
     agent_runtime = LazyAgentRuntimeProvider(
         root_dir=root_dir,
         workspace=workspace,
@@ -240,6 +249,8 @@ def build_api_container(
         generate_video_summary=summary_generation_use_case,
         generate_series_summaries=series_generation_use_case,
         generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
+        generate_series_mindmap=GenerateSeriesMindmapFromLibrary(workspace, resolved_series_mindmap_generator),
+        get_series_mindmap=GetSeriesMindmap(workspace),
         delete_series=DeleteSeries(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
         delete_video_source=DeleteVideoSource(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
         import_local_series=ImportLocalSeries(workspace),

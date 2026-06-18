@@ -36,6 +36,8 @@ class ToolName(str, Enum):
     VIDEO_SEEK = "video_seek"
     GENERATE_OVERVIEW = "generate_overview"
     GENERATE_MINDMAP = "generate_mindmap"
+    OPEN_SERIES_MINDMAP = "open_series_mindmap"
+    GENERATE_SERIES_MINDMAP = "generate_series_mindmap"
     SAVE_NOTE = "save_note"
 
 
@@ -187,6 +189,18 @@ class GenerateMindmapCall(BaseModel):
     tool_name: Literal[ToolName.GENERATE_MINDMAP] = ToolName.GENERATE_MINDMAP
 
 
+class OpenSeriesMindmapCall(BaseModel):
+    """`open_series_mindmap` 工具的调用载荷：通知前端打开系列思维导图。"""
+
+    tool_name: Literal[ToolName.OPEN_SERIES_MINDMAP] = ToolName.OPEN_SERIES_MINDMAP
+
+
+class GenerateSeriesMindmapCall(BaseModel):
+    """`generate_series_mindmap` 工具的调用载荷：触发系列思维导图的异步生成。"""
+
+    tool_name: Literal[ToolName.GENERATE_SERIES_MINDMAP] = ToolName.GENERATE_SERIES_MINDMAP
+
+
 class SaveNoteCall(BaseModel):
     """`save_note` 工具的调用载荷：把一段笔记持久化到当前视频。
 
@@ -215,6 +229,8 @@ ToolCall = Annotated[
     | VideoSeekCall
     | GenerateOverviewCall
     | GenerateMindmapCall
+    | OpenSeriesMindmapCall
+    | GenerateSeriesMindmapCall
     | SaveNoteCall,
     Field(discriminator="tool_name"),
 ]

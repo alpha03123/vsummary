@@ -14,7 +14,7 @@ from backend.video_summary.tools.context_access import (
     tool_is_available_in_context,
 )
 from backend.video_summary.tools.library_info import create_get_video_transcript_handler
-from backend.video_summary.tools.mindmap import execute_generate_mindmap, execute_open_mindmap
+from backend.video_summary.tools.mindmap import execute_generate_mindmap, execute_generate_series_mindmap, execute_open_mindmap, execute_open_series_mindmap
 from backend.video_summary.tools.notes import execute_open_knowledge_cards, execute_open_notes, execute_save_note
 from backend.video_summary.tools.overview import execute_generate_overview, execute_open_overview
 from backend.video_summary.tools.series import execute_open_series_home, execute_open_series_overview
@@ -23,8 +23,10 @@ from backend.video_summary.tools.video import execute_open_video, execute_video_
 
 __all__ = [
     "execute_generate_mindmap",
+    "execute_generate_series_mindmap",
     "execute_open_knowledge_cards",
     "execute_open_mindmap",
+    "execute_open_series_mindmap",
     "execute_open_notes",
     "execute_generate_overview",
     "execute_open_overview",
