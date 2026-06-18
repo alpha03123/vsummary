@@ -56,7 +56,7 @@ describe("WorkspaceMindmapView — export button", () => {
   });
 });
 
-describe("WorkspaceMindmapView — progress bar", () => {
+describe("WorkspaceMindmapView — elapsed time progress", () => {
   const baseProps = {
     tools: makeTools({ generated: false }),
     mindmap: null,
@@ -70,19 +70,65 @@ describe("WorkspaceMindmapView — progress bar", () => {
     mindmapGenerationProgress: null,
   };
 
-  it("shows progress bar while generating", () => {
+  it("shows elapsed time during generation", () => {
     render(
       <WorkspaceMindmapView
         {...baseProps}
         isGeneratingMindmapSelectedVideo={true}
-        mindmapGenerationProgress={{ status: "running", stage: "generate", progress: 45, detail: "正在生成思维导图" }}
+        mindmapGenerationProgress={{
+          status: "running",
+          stage: "generate",
+          progress: 45,
+          detail: "正在生成思维导图",
+          elapsed_seconds: 5,
+        }}
       />
     );
     expect(screen.getByText("正在生成思维导图")).toBeTruthy();
-    expect(screen.getByText("45%")).toBeTruthy();
+    expect(screen.getByText("已用 5 秒")).toBeTruthy();
   });
 
-  it("hides progress bar when generation completes", () => {
+  it("shows updated elapsed time on rerender", () => {
+    const { rerender } = render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={true}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 45,
+          detail: "正在生成思维导图", elapsed_seconds: 5,
+        }}
+      />
+    );
+    expect(screen.getByText("已用 5 秒")).toBeTruthy();
+
+    rerender(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={true}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 45,
+          detail: "正在生成思维导图", elapsed_seconds: 8,
+        }}
+      />
+    );
+    expect(screen.getByText("已用 8 秒")).toBeTruthy();
+  });
+
+  it("does not show percentage during generation", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={true}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 45,
+          detail: "正在生成思维导图", elapsed_seconds: 5,
+        }}
+      />
+    );
+    expect(screen.queryByText("45%")).toBeNull();
+  });
+
+  it("hides progress on completion", () => {
     render(
       <WorkspaceMindmapView
         {...baseProps}
@@ -91,17 +137,6 @@ describe("WorkspaceMindmapView — progress bar", () => {
         mindmapGenerationProgress={null}
       />
     );
-    expect(screen.queryByText("45%")).toBeNull();
-  });
-
-  it("hides progress bar on generation failure", () => {
-    render(
-      <WorkspaceMindmapView
-        {...baseProps}
-        isGeneratingMindmapSelectedVideo={false}
-        mindmapGenerationProgress={{ status: "failed", stage: "failed", progress: null, detail: null, error: "LLM error" }}
-      />
-    );
-    expect(screen.queryByText("45%")).toBeNull();
+    expect(screen.queryByText(/已用.*秒/)).toBeNull();
   });
 });
