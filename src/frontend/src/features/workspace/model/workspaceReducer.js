@@ -1468,6 +1468,11 @@ export function workspaceReducer(state, action) {
         generatingSeriesMindmap: false,
         seriesSelectedNodeId: action.mindmap?.children?.[0]?.id ?? action.mindmap?.id ?? null,
       };
+    case "mindmap_generation_progress_updated":
+      return { ...state, mindmapGenerationProgress: action.snapshot };
+
+    case "mindmap_generation_progress_cleared":
+      return { ...state, mindmapGenerationProgress: null };
     default:
       return state;
   }

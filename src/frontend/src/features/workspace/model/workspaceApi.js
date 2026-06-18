@@ -833,3 +833,57 @@ export async function generateSeriesMindmap(seriesId) {
   });
   return toWorkspaceMindmap(payload);
 }
+
+export function subscribeMindmapGenerationProgress(seriesId, videoId, listener) {
+  const eventSource = new EventSource(
+    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate/progress`
+  );
+  let terminal = false;
+
+  eventSource.onmessage = (event) => {
+    const snapshot = JSON.parse(event.data);
+    listener(snapshot);
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      terminal = true;
+      eventSource.close();
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (terminal) return;
+    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
+    eventSource.close();
+  };
+
+  return () => {
+    terminal = true;
+    eventSource.close();
+  };
+}
+
+export function subscribeSeriesMindmapGenerationProgress(seriesId, listener) {
+  const eventSource = new EventSource(
+    `/api/series/${encodeURIComponent(seriesId)}/mindmap/generate/progress`
+  );
+  let terminal = false;
+
+  eventSource.onmessage = (event) => {
+    const snapshot = JSON.parse(event.data);
+    listener(snapshot);
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      terminal = true;
+      eventSource.close();
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (terminal) return;
+    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
+    eventSource.close();
+  };
+
+  return () => {
+    terminal = true;
+    eventSource.close();
+  };
+}

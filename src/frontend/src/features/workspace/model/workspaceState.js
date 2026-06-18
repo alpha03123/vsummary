@@ -516,6 +516,7 @@ export function createInitialWorkspaceState() {
     generationTasksByKey: {},
     generationProgress: null,
     generationSnapshot: null,
+    mindmapGenerationProgress: null,
     downloadingVideoKey: null,
     videoDownloadProgress: null,
     downloadingModelId: null,
