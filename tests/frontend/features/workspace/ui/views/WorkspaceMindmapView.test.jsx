@@ -1,6 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
+vi.mock("markmap-view", () => ({
+  Markmap: {
+    create: vi.fn(() => ({
+      destroy: vi.fn(),
+      svg: { node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })) },
+    })),
+  },
+}));
+vi.mock("markmap-toolbar", () => ({
+  Toolbar: {
+    create: vi.fn(() => ({ el: document.createElement("div") })),
+  },
+}));
+vi.mock("d3", () => ({
+  select: vi.fn(() => ({
+    on: vi.fn(),
+    datum: vi.fn(),
+    node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })),
+  })),
+}));
+
 import { WorkspaceMindmapView } from "@src/features/workspace/ui/views/WorkspaceMindmapView";
 
 function makeTools(overrides = {}) {
