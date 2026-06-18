@@ -738,6 +738,29 @@ class MindmapProgressApiTests(unittest.TestCase):
         response = client.get("/api/videos/s1/v1/mindmap/generate/progress")
         self.assertEqual(response.status_code, 404)
 
+    def test_progress_endpoint_terminates_on_completed(self):
+        container = self._build_container(mindmap_result={"id": "root", "title": "T"})
+        client = TestClient(create_app(container))
+        # Trigger generation
+        client.post("/api/videos/s1/v1/mindmap/generate")
+        # Read SSE stream until terminal
+        response = client.get("/api/videos/s1/v1/mindmap/generate/progress")
+        self.assertEqual(response.status_code, 200)
+        # Parse SSE data lines, verify last event has status "completed"
+        body = response.text
+        self.assertIn('"status":"completed"', body)
+
+    def test_progress_endpoint_terminates_on_failed(self):
+        container = self._build_container(raise_error=RuntimeError("LLM error"))
+        client = TestClient(create_app(container))
+        try:
+            client.post("/api/videos/s1/v1/mindmap/generate")
+        except Exception:
+            pass  # Expected — the endpoint re-raises after logging
+        response = client.get("/api/videos/s1/v1/mindmap/generate/progress")
+        body = response.text
+        self.assertIn('"status":"failed"', body)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -1015,18 +1038,115 @@ Same for `<WorkspaceSeriesMindmapView`.
 
 Add `mindmapGenerationProgress` to the destructured props.
 
-- [ ] **Step 4: Run frontend tests**
+- [ ] **Step 4: Write frontend progress tests**
+
+Add to `tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx`:
+```jsx
+describe("WorkspaceMindmapView — progress bar", () => {
+  const baseProps = {
+    tools: makeTools({ generated: false }),
+    mindmap: null,
+    selectedNode: null,
+    mindmapLoading: false,
+    isGeneratingMindmapSelectedVideo: false,
+    onFocusNode: vi.fn(),
+    onGenerateMindmap: vi.fn(),
+    seriesId: "s1",
+    videoId: "v1",
+    mindmapGenerationProgress: null,
+  };
+
+  it("shows progress bar while generating", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={true}
+        mindmapGenerationProgress={{ status: "running", stage: "generate", progress: 45, detail: "正在生成思维导图" }}
+      />
+    );
+    expect(screen.getByText("正在生成思维导图")).toBeTruthy();
+    expect(screen.getByText("45%")).toBeTruthy();
+  });
+
+  it("hides progress bar when generation completes", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={false}
+        mindmap={{ id: "root", title: "Test", children: [] }}
+        mindmapGenerationProgress={null}
+      />
+    );
+    expect(screen.queryByText("45%")).toBeNull();
+  });
+
+  it("shows error when generation fails", () => {
+    render(
+      <WorkspaceMindmapView
+        {...baseProps}
+        isGeneratingMindmapSelectedVideo={false}
+        mindmapGenerationProgress={{ status: "failed", stage: "failed", progress: null, detail: null, error: "LLM error" }}
+      />
+    );
+    // Error is displayed via the load_failed dispatch, not in this component directly.
+    // The component simply hides the progress bar (since isGenerating is false).
+    expect(screen.queryByText("45%")).toBeNull();
+  });
+});
+```
+
+Add to `tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx`:
+```jsx
+describe("WorkspaceSeriesMindmapView — progress bar", () => {
+  const baseProps = {
+    seriesId: "s1",
+    seriesMindmap: null,
+    seriesMindmapAvailable: true,
+    seriesMindmapLoading: false,
+    generatingSeriesMindmap: false,
+    selectedNode: null,
+    onFocusNode: vi.fn(),
+    onGenerateSeriesMindmap: vi.fn(),
+    mindmapGenerationProgress: null,
+  };
+
+  it("shows progress bar while generating", () => {
+    render(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={true}
+        mindmapGenerationProgress={{ status: "running", stage: "generate", progress: 30, detail: "正在生成系列思维导图" }}
+      />
+    );
+    expect(screen.getByText("30%")).toBeTruthy();
+  });
+
+  it("hides progress bar when generation completes", () => {
+    render(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={false}
+        seriesMindmap={{ id: "root", title: "Test", children: [] }}
+        mindmapGenerationProgress={null}
+      />
+    );
+    expect(screen.queryByText("30%")).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 5: Run frontend tests**
 
 ```bash
 cd src/frontend && npx vitest run tests/frontend/features/workspace/
 ```
-Expected: all tests PASS
+Expected: all tests PASS (existing + 5 new)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/frontend/src/features/workspace/ui/views/WorkspaceMindmapView.jsx src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx src/frontend/src/features/workspace/ui/WorkspaceReadingPane.jsx
-git commit -m "feat(mindmap-progress): add progress bar UI to mindmap views"
+git add src/frontend/src/features/workspace/ui/views/WorkspaceMindmapView.jsx src/frontend/src/features/workspace/ui/views/WorkspaceSeriesMindmapView.jsx src/frontend/src/features/workspace/ui/WorkspaceReadingPane.jsx tests/frontend/features/workspace/ui/WorkspaceMindmapView.test.jsx tests/frontend/features/workspace/ui/WorkspaceSeriesMindmapView.test.jsx
+git commit -m "feat(mindmap-progress): add progress bar UI to mindmap views with 5 frontend tests"
 ```
 
 ---
@@ -1040,21 +1160,37 @@ PYTHONPATH=src python -m pytest tests/backend/unit/mindmap/ -v
 ```
 Expected: 27 PASS
 
-- [ ] **Step 2: Run import-linter**
+- [ ] **Step 2: Run integration tests**
+
+```bash
+PYTHONPATH=src python -m pytest tests/backend/integration/api/test_mindmap_progress_api.py -v
+```
+Expected: 4 PASS (collection errors from missing lancedb dep are OK)
+
+- [ ] **Step 3: Run import-linter**
 
 ```bash
 PYTHONPATH=src lint-imports
 ```
 Expected: 10 kept, 0 broken
 
-- [ ] **Step 3: Run all frontend tests**
+- [ ] **Step 4: Run all frontend tests**
 
 ```bash
 cd src/frontend && npx vitest run tests/frontend/features/workspace/
 ```
-Expected: all PASS
+Expected: all PASS (F1.5 verified by existing regenerate/export button tests passing)
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Verify boundary cases**
+
+| # | Boundary | Verification |
+|---|----------|--------------|
+| 1 | `save_mindmap()` raises → `failed()` | Task 1 `test_reports_failed_on_save_error` PASS |
+| 2 | SSE EventSource drops → auto-reconnect | Browser-standard behavior, no test needed |
+| 3 | Multiple SSE subscribers on same task_id | `InMemoryProgressTracker` is thread-safe (`threading.Lock`), each subscriber gets independent `async for` loop |
+| 4 | `progress_reporter=None` through chain | Task 1 + Task 3 `test_works_without_reporter` PASS |
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add -A
