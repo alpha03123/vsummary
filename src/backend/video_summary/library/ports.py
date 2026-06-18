@@ -245,8 +245,17 @@ class VideoMindmapGenerator(Protocol):
         video_id: str,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        progress_reporter: ProgressReporter | None = None,
     ) -> None:
-        """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。"""
+        """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频唯一 ID。
+            summary_data: 总结数据字典，作为思维导图的输入。
+            transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
+        """
 
 
 class SeriesMindmapGenerator(Protocol):

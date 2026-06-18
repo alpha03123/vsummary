@@ -35,7 +35,12 @@ class ConfiguredMindmapWorkflow:
         self._cached_application = None
 
     async def run(
-        self, source_path: Path, output_dir: Path, summary_data: dict[str, object], transcript_text: str = ""
+        self,
+        source_path: Path,
+        output_dir: Path,
+        summary_data: dict[str, object],
+        transcript_text: str = "",
+        progress_reporter=None,
     ) -> None:
         """基于当前配置执行一次思维导图生成。
 
@@ -47,6 +52,7 @@ class ConfiguredMindmapWorkflow:
             output_dir: 思维导图制品的输出目录（`mindmap.json`）。
             summary_data: 来自总结阶段的结构化数据，用于驱动导图生成。
             transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
         """
         application = self._get_application()
         await application.use_case.run(
@@ -55,6 +61,7 @@ class ConfiguredMindmapWorkflow:
             summary_data=summary_data,
             output_dir=output_dir,
             transcript_text=transcript_text,
+            progress_reporter=progress_reporter,
         )
 
     def _get_application(self):
