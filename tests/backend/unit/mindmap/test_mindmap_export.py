@@ -38,7 +38,7 @@ class MindmapExportTests(unittest.TestCase):
     def test_export_handles_empty_children(self):
         node = {"id": "root", "title": "根", "summary": "", "children": []}
         result = render_mindmap_markdown(node)
-        self.assertIsInstance(result, str)
+        self.assertEqual(result, "- **根**")
 
     def test_export_includes_node_summary(self):
         node = {

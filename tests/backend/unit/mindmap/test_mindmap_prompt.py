@@ -24,6 +24,9 @@ class MindmapPromptTranscriptTests(unittest.TestCase):
             transcript_text="",
         )
         self.assertIn("转写文本", prompt)
+        idx = prompt.find("转写文本：") + len("转写文本：")
+        section_after_label = prompt[idx:].strip()
+        self.assertEqual(section_after_label, "")
 
     def test_prompt_truncates_long_transcript(self) -> None:
         long_text = "测" * 10000
@@ -46,6 +49,7 @@ class MindmapPromptTranscriptTests(unittest.TestCase):
         )
         self.assertIn("测试视频", prompt)
         self.assertIn("300", prompt)
+        self.assertIn("概况 JSON", prompt)
 
 
 if __name__ == "__main__":

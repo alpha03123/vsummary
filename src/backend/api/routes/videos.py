@@ -299,11 +299,7 @@ def export_video_mindmap(series_id: str, video_id: str, format: str = "md", cont
         raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
     markdown = render_mindmap_markdown(video_mindmap.mindmap)
     filename = f"{video_mindmap.title}-mindmap.md"
-    return PlainTextResponse(
-        content=markdown,
-        media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _markdown_response(markdown, filename)
 
 
 @router.get("/api/videos/{series_id}/{video_id}/cards", response_model=VideoChapterCardsResponse)
