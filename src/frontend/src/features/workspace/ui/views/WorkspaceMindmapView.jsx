@@ -33,7 +33,7 @@ export function WorkspaceMindmapView({
   }, [exportOpen]);
 
   function handleExportPNG(filename) {
-    const svgEl = document.querySelector(".workspace-elevated-panel svg");
+    const svgEl = document.querySelector(".mindmap-svg");
     if (!svgEl) return;
     const svgData = new XMLSerializer().serializeToString(svgEl);
     const canvas = document.createElement("canvas");

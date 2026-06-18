@@ -87,7 +87,7 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
   return (
     <svg
       ref={svgRef}
-      className="absolute inset-0 w-full h-full"
+      className="mindmap-svg absolute inset-0 w-full h-full"
       style={{ background: "transparent" }}
     />
   );
