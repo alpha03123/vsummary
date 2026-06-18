@@ -23,6 +23,7 @@ export function normalizeAgentToolId(toolId) {
     toolId === "cards" ||
     toolId === "knowledge-cards" ||
     toolId === "mindmap" ||
+    toolId === "series-mindmap" ||
     toolId === "notes" ||
     toolId === "series-home"
   ) {
@@ -48,6 +49,10 @@ export function normalizeAgentToolTraceStep(result) {
       return createToolTraceStep(result.tool_name, "打开 AI 概况");
     case "open_mindmap":
       return createToolTraceStep(result.tool_name, "打开思维导图");
+    case "open_series_mindmap":
+      return createToolTraceStep(result.tool_name, "打开系列思维导图");
+    case "generate_series_mindmap":
+      return createToolTraceStep(result.tool_name, "生成系列思维导图");
     case "open_knowledge_cards":
       return createToolTraceStep(result.tool_name, "打开知识卡片");
     case "open_notes":

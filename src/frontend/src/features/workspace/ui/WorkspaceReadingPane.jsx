@@ -36,6 +36,11 @@ const WorkspaceSeriesHomeView = lazy(() =>
     default: module.WorkspaceSeriesHomeView,
   })),
 );
+const WorkspaceSeriesMindmapView = lazy(() =>
+  import("./views/WorkspaceSeriesMindmapView").then((module) => ({
+    default: module.WorkspaceSeriesMindmapView,
+  })),
+);
 
 const WorkspaceChatManagementView = lazy(() =>
   import("./views/WorkspaceChatManagementView").then((module) => ({
@@ -73,6 +78,11 @@ export function WorkspaceReadingPane({
   savingNote,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
+  seriesMindmap,
+  seriesMindmapAvailable,
+  seriesMindmapLoading,
+  generatingSeriesMindmap,
+  onGenerateSeriesMindmap,
   onSelectTool,
   onFocusNode,
   onSeek,
@@ -152,11 +162,15 @@ export function WorkspaceReadingPane({
                     </div>
                   ) : null}
                   {selectedToolId === "series-mindmap" ? (
-                    <WorkspaceStateBlock
-                      eyebrow="Coming Soon"
-                      title="全局思维导图"
-                      description="Constructing..."
-                      dashed
+                    <WorkspaceSeriesMindmapView
+                      seriesId={activeSeries.id}
+                      seriesMindmap={seriesMindmap}
+                      seriesMindmapAvailable={seriesMindmapAvailable}
+                      seriesMindmapLoading={seriesMindmapLoading}
+                      generatingSeriesMindmap={generatingSeriesMindmap}
+                      selectedNode={selectedNode}
+                      onFocusNode={onFocusNode}
+                      onGenerateSeriesMindmap={onGenerateSeriesMindmap}
                     />
                   ) : null}
                   {isStudioHome ? (
