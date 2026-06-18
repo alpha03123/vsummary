@@ -48,7 +48,7 @@ describe("WorkspaceSeriesMindmapView", () => {
   });
 });
 
-describe("WorkspaceSeriesMindmapView — progress bar", () => {
+describe("WorkspaceSeriesMindmapView — elapsed time progress", () => {
   const baseProps = {
     seriesId: "s1",
     seriesMindmap: null,
@@ -61,18 +61,62 @@ describe("WorkspaceSeriesMindmapView — progress bar", () => {
     mindmapGenerationProgress: null,
   };
 
-  it("shows progress bar while generating", () => {
+  it("shows elapsed time during generation", () => {
     render(
       <WorkspaceSeriesMindmapView
         {...baseProps}
         generatingSeriesMindmap={true}
-        mindmapGenerationProgress={{ status: "running", stage: "generate", progress: 30, detail: "正在生成系列思维导图" }}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 30,
+          detail: "正在生成系列思维导图", elapsed_seconds: 12,
+        }}
       />
     );
-    expect(screen.getByText("30%")).toBeTruthy();
+    expect(screen.getByText("正在生成系列思维导图")).toBeTruthy();
+    expect(screen.getByText("已用 12 秒")).toBeTruthy();
   });
 
-  it("hides progress bar when generation completes", () => {
+  it("shows updated elapsed time on rerender", () => {
+    const { rerender } = render(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={true}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 30,
+          detail: "正在生成系列思维导图", elapsed_seconds: 12,
+        }}
+      />
+    );
+    expect(screen.getByText("已用 12 秒")).toBeTruthy();
+
+    rerender(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={true}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 30,
+          detail: "正在生成系列思维导图", elapsed_seconds: 18,
+        }}
+      />
+    );
+    expect(screen.getByText("已用 18 秒")).toBeTruthy();
+  });
+
+  it("does not show percentage during generation", () => {
+    render(
+      <WorkspaceSeriesMindmapView
+        {...baseProps}
+        generatingSeriesMindmap={true}
+        mindmapGenerationProgress={{
+          status: "running", stage: "generate", progress: 30,
+          detail: "正在生成系列思维导图", elapsed_seconds: 12,
+        }}
+      />
+    );
+    expect(screen.queryByText("30%")).toBeNull();
+  });
+
+  it("hides progress on completion", () => {
     render(
       <WorkspaceSeriesMindmapView
         {...baseProps}
@@ -81,6 +125,6 @@ describe("WorkspaceSeriesMindmapView — progress bar", () => {
         mindmapGenerationProgress={null}
       />
     );
-    expect(screen.queryByText("30%")).toBeNull();
+    expect(screen.queryByText(/已用.*秒/)).toBeNull();
   });
 });

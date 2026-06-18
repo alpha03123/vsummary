@@ -66,18 +66,14 @@ export function WorkspaceSeriesMindmapView({
         </button>
         {generatingSeriesMindmap && mindmapGenerationProgress ? (
           <div className="motion-fade-up mt-6 w-full max-w-2xl">
-            <div className="workspace-elevated-panel rounded-3xl border p-5">
-              <p className="text-sm font-medium text-stone-700 dark:text-zinc-300">
-                {mindmapGenerationProgress.detail || "正在生成系列思维导图..."}
-              </p>
-              <div className="mt-3 h-2 w-full rounded-full bg-stone-100 dark:bg-stone-800">
-                <div
-                  className="h-2 rounded-full bg-accent transition-all duration-500"
-                  style={{ width: `${mindmapGenerationProgress.progress ?? 0}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-stone-400">
-                {Math.round(mindmapGenerationProgress.progress ?? 0)}%
+            <div className="workspace-elevated-panel rounded-3xl border p-5 flex items-center gap-3">
+              <LoaderCircle size={18} strokeWidth={2.2} className="animate-spin text-accent" />
+              <p className="text-sm text-stone-600 dark:text-zinc-400">
+                {mindmapGenerationProgress.detail || "正在生成系列思维导图"}
+                <span className="mx-2 text-stone-300 dark:text-zinc-600">·</span>
+                <span className="font-medium text-stone-700 dark:text-zinc-200">
+                  已用 {Math.round(mindmapGenerationProgress.elapsed_seconds ?? 0)} 秒
+                </span>
               </p>
             </div>
           </div>
