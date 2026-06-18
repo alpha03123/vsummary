@@ -821,3 +821,15 @@ export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
     "视频下载进度连接已中断",
   );
 }
+
+export async function loadSeriesMindmap(seriesId) {
+  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/mindmap`);
+  return toWorkspaceMindmap(payload);
+}
+
+export async function generateSeriesMindmap(seriesId) {
+  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/mindmap/generate`, {
+    method: "POST",
+  });
+  return toWorkspaceMindmap(payload);
+}

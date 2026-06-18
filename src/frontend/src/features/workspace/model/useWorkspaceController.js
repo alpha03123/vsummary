@@ -37,6 +37,16 @@ export function useWorkspaceController() {
   const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
   const summary = state.summary;
   const mindmap = state.mindmap;
+  const seriesMindmap = state.seriesMindmap;
+  const generatingSeriesMindmap = state.generatingSeriesMindmap;
+
+  const seriesMindmapAvailable = useMemo(() => {
+    if (!activeSeries || activeSeries.id === PLAYGROUND_SERIES_ID) return false;
+    const videos = activeSeries.videos ?? [];
+    if (videos.length === 0) return false;
+    return videos.some(v => v.processed === true);
+  }, [activeSeries]);
+
   const tools = state.tools;
   const currentGenerationTask = getGenerationTaskForSelection(state);
   const selectedNode = useMemo(
@@ -163,6 +173,9 @@ export function useWorkspaceController() {
     tools,
     summary,
     mindmap,
+    seriesMindmap,
+    seriesMindmapAvailable,
+    generatingSeriesMindmap,
     knowledgeCards: state.knowledgeCards,
     knowledgeCardsGenerating: state.knowledgeCardsGenerating,
     knowledgeCardsFeedback: state.knowledgeCardsFeedback,
@@ -200,6 +213,7 @@ export function useWorkspaceController() {
     onClearChat: chatActions.onClearChat,
     onGenerateVideo: contentActions.onGenerateVideo,
     onGenerateMindmap: contentActions.onGenerateMindmap,
+    onGenerateSeriesMindmap: contentActions.onGenerateSeriesMindmap,
     onGenerateSeries: contentActions.onGenerateSeries,
     onCancelGeneration: contentActions.onCancelGeneration,
     onGenerateKnowledgeCards: contentActions.onGenerateKnowledgeCards,

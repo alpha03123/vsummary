@@ -8,6 +8,7 @@ import {
   deleteSeries,
   deleteVideoNote,
   deleteVideoSource,
+  generateSeriesMindmap,
   generateVideoKnowledgeCards,
   generateVideoMindmap,
   generateSeriesSummaries,
@@ -426,6 +427,21 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onGenerateSeriesMindmap() {
+    if (!state.selectedSeriesId) return;
+
+    dispatch({ type: "series_mindmap_generation_started" });
+    try {
+      const mindmapResult = await generateSeriesMindmap(state.selectedSeriesId);
+      dispatch({ type: "series_mindmap_generation_succeeded", mindmap: mindmapResult });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "系列导图生成失败",
+      });
+    }
+  }
+
   async function onCreateNote(note) {
     if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
       return;
@@ -709,6 +725,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onClearKnowledgeCardsFeedback,
     onGenerateVideo,
     onGenerateMindmap,
+    onGenerateSeriesMindmap,
     onGenerateSeries,
     onCancelGeneration,
     onCreateNote,
