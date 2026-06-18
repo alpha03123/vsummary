@@ -710,6 +710,16 @@ export async function resolveBilibiliVideo(url, targetSeriesId = null) {
   });
 }
 
+export async function initBilibiliCookie(options = {}) {
+  const payload = await fetchJson("/api/linked/bilibili/cookie/init", {
+    method: "POST",
+    signal: options.signal,
+  });
+  return {
+    configured: payload.configured === true,
+  };
+}
+
 export async function loadChaoxingStatus() {
   const payload = await fetchJson("/api/linked/chaoxing/status");
   return {

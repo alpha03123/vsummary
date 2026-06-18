@@ -477,6 +477,7 @@ export function WorkspacePage({ page }) {
               ? actions.resolveSeriesVideo(url, targetSeriesId)
               : actions.resolvePlaygroundVideo(url)
           )}
+          onInitBilibiliCookie={actions.initBilibiliCookie}
           onLoadChaoxingStatus={actions.loadChaoxingStatus}
           onInitChaoxing={actions.initChaoxing}
           onCancelChaoxingInit={actions.cancelChaoxingInit}

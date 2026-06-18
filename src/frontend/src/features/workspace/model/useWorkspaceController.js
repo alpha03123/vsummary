@@ -226,6 +226,7 @@ export function useWorkspaceController() {
     onResolveLinkedSeries: contentActions.onResolveLinkedSeries,
     onResolvePlaygroundVideo: contentActions.onResolvePlaygroundVideo,
     onResolveSeriesVideo: contentActions.onResolveSeriesVideo,
+    onInitBilibiliCookie: contentActions.onInitBilibiliCookie,
     onLoadChaoxingStatus: contentActions.onLoadChaoxingStatus,
     onInitChaoxing: contentActions.onInitChaoxing,
     onCancelChaoxingInit: contentActions.onCancelChaoxingInit,

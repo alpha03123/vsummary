@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 
 from backend.api.app import create_app
+from backend.bilibili.ytdlp_bilibili import BILIBILI_COOKIE_REQUIRED_MESSAGE
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 
@@ -24,6 +25,28 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "linked")
         self.assertTrue(payload["is_linked"])
         self.assertEqual(payload["bilibili_bvid"], "BV1xx411c7mD")
+
+    def test_init_bilibili_cookie_returns_configured_status(self) -> None:
+        container = _build_container()
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/linked/bilibili/cookie/init")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"configured": True})
+        self.assertTrue(container.bilibili_cookie_initializer.called)
+
+    def test_bilibili_anti_spider_error_returns_cookie_message(self) -> None:
+        async def resolve_series(url):
+            del url
+            raise RuntimeError("ERROR: [BiliBili] x: HTTP Error 412: Precondition Failed")
+
+        client = TestClient(create_app(_build_container(resolve_series=resolve_series)))
+
+        response = client.post("/api/linked/bilibili/resolve/series", json={"url": "https://www.bilibili.com/video/BV1xx411c7mD"})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], BILIBILI_COOKIE_REQUIRED_MESSAGE)
 
     def test_start_linked_video_download_returns_task_id(self) -> None:
         client = TestClient(create_app(_build_container()))
@@ -118,6 +141,7 @@ class LinkedApiTests(unittest.TestCase):
 def _build_container(
     videos: list[LibraryVideoCardDTO] | None = None,
     active_video_ids: list[str] | None = None,
+    resolve_series=None,
 ):
     video = LibraryVideoCardDTO(
         id="BV1xx411c7mD",
@@ -131,7 +155,7 @@ def _build_container(
         source_url="https://www.bilibili.com/video/BV1xx411c7mD",
     )
     resolved_videos = videos or [video]
-    async def resolve_series(url):
+    async def default_resolve_series(url):
         return LibrarySeriesDTO(id="series-1", title="课程", videos=resolved_videos, is_linked=True, source_url=url)
 
     async def resolve_video(url, target_series_id=None):
@@ -139,6 +163,7 @@ def _build_container(
         return video
 
     generation_progress_tracker = InMemoryProgressTracker()
+    bilibili_cookie_initializer = _FakeBilibiliCookieInitializer()
 
     return SimpleNamespace(
         root_dir=None,
@@ -154,8 +179,9 @@ def _build_container(
                 ]
             ),
         ),
-        resolve_bilibili_series=SimpleNamespace(run=resolve_series),
+        resolve_bilibili_series=SimpleNamespace(run=resolve_series or default_resolve_series),
         resolve_bilibili_video=SimpleNamespace(run=resolve_video),
+        bilibili_cookie_initializer=bilibili_cookie_initializer,
         start_linked_video_download=SimpleNamespace(
             run=lambda series_id, video_id: SimpleNamespace(task_id=f"download/{series_id}/{video_id}"),
         ),
@@ -165,6 +191,15 @@ def _build_container(
         generation_progress_tracker=generation_progress_tracker,
         video_download_progress_tracker=InMemoryProgressTracker(),
     )
+
+
+class _FakeBilibiliCookieInitializer:
+    def __init__(self) -> None:
+        self.called = False
+
+    def init(self) -> bool:
+        self.called = True
+        return True
 
 
 if __name__ == "__main__":

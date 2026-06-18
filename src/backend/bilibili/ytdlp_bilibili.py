@@ -13,17 +13,22 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 import httpx
 
+from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
 
 _BILIBILI_USER_AGENT = "Mozilla/5.0"
 _BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
 _BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
+BILIBILI_COOKIE_REQUIRED_MESSAGE = "风控拦截，请配置cookie"
+_BILIBILI_LOGIN_URL = "https://passport.bilibili.com/login"
+_BILIBILI_DEFAULT_BROWSER_PORT = 9223
 
 
 class ProgressReporter(Protocol):
@@ -50,6 +55,10 @@ class ProgressTracker(Protocol):
 
 class DownloadCancelled(RuntimeError):
     """下载被用户取消时抛出的异常。"""
+
+
+class BilibiliCookieInitError(RuntimeError):
+    """Bilibili Cookie 初始化失败。"""
 
 
 class YtDlpBilibiliResolver:
@@ -268,6 +277,44 @@ class BilibiliDownloader:
         return await asyncio.to_thread(self.download, bvid, page, dest_dir, reporter)
 
 
+class DrissionBilibiliCookieInitializer:
+    """通过 DrissionPage 打开 Bilibili 登录页并写入 BILIBILI_COOKIE。"""
+
+    def __init__(
+        self,
+        *,
+        root_dir: Path,
+        page_factory: Callable[[str, int], object] | None = None,
+        login_url: str = _BILIBILI_LOGIN_URL,
+        browser_port: int = _BILIBILI_DEFAULT_BROWSER_PORT,
+        timeout_seconds: float = 300.0,
+        poll_interval_seconds: float = 1.0,
+    ) -> None:
+        self._root_dir = root_dir
+        self._page_factory = page_factory or _create_drission_page
+        self._login_url = login_url
+        self._browser_port = browser_port
+        self._timeout_seconds = timeout_seconds
+        self._poll_interval_seconds = poll_interval_seconds
+
+    def init(self) -> bool:
+        """打开 Bilibili 登录页，拿到登录 Cookie 后写入 .env 和当前进程环境。"""
+        page = self._page_factory(str(self._root_dir / "data" / "bilibili" / "browser"), self._browser_port)
+        try:
+            _page_get(page, self._login_url)
+            deadline = time.monotonic() + self._timeout_seconds
+            while time.monotonic() <= deadline:
+                cookie_header = _format_bilibili_cookie_header(_page_cookies(page))
+                if _has_bilibili_login_cookie(cookie_header):
+                    _write_dotenv_value(self._root_dir / ".env", _BILIBILI_COOKIE_ENV, cookie_header)
+                    os.environ[_BILIBILI_COOKIE_ENV] = cookie_header
+                    return True
+                time.sleep(self._poll_interval_seconds)
+            raise BilibiliCookieInitError("Bilibili 登录超时，未获取到 Cookie。")
+        finally:
+            _close_page(page)
+
+
 def build_video_download_task_id(series_id: str, video_id: str) -> str:
     """生成下载任务的唯一 ID，格式为 ``"download/{series_id}/{video_id}"``。
 
@@ -345,6 +392,99 @@ def _parse_cookie_pairs(cookie: str) -> list[tuple[str, str]]:
         if normalized_name:
             pairs.append((normalized_name, normalized_value))
     return pairs
+
+
+def _create_drission_page(user_data_dir: str, browser_port: int) -> object:
+    try:
+        from DrissionPage import Chromium, ChromiumOptions
+    except ImportError as exc:
+        raise BilibiliCookieInitError("当前 Python 环境缺少 DrissionPage，请先安装项目依赖。") from exc
+    options = ChromiumOptions(read_file=False).set_local_port(browser_port).set_user_data_path(user_data_dir)
+    browser = Chromium(addr_or_opts=options)
+    return _DrissionPageSession(browser, browser.latest_tab)
+
+
+class _DrissionPageSession:
+    def __init__(self, browser: object, page: object) -> None:
+        self._browser = browser
+        self._page = page
+
+    def get(self, url: str) -> None:
+        self._page.get(url)
+
+    def cookies(self, *, all_domains: bool = True, all_info: bool = False) -> list[Mapping[str, object]]:
+        return self._page.cookies(all_domains=all_domains, all_info=all_info)
+
+    def quit(self) -> None:
+        self._browser.quit()
+
+
+def _page_get(page: object, url: str) -> None:
+    getter = getattr(page, "get", None)
+    if getter is None:
+        raise BilibiliCookieInitError("DrissionPage 页面对象缺少 get 方法。")
+    getter(url)
+
+
+def _page_cookies(page: object) -> list[Mapping[str, object]]:
+    cookies = getattr(page, "cookies", None)
+    if cookies is not None:
+        try:
+            return cookies(all_domains=True, all_info=False)
+        except TypeError:
+            return cookies()
+    get_cookies = getattr(page, "get_cookies", None)
+    if get_cookies is not None:
+        return get_cookies(as_dict=False)
+    raise BilibiliCookieInitError("DrissionPage 页面对象缺少 cookies 方法。")
+
+
+def _close_page(page: object) -> None:
+    for name in ("quit", "close"):
+        method = getattr(page, name, None)
+        if method is not None:
+            method()
+            return
+
+
+def _format_bilibili_cookie_header(cookies: list[Mapping[str, object]]) -> str:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for cookie in cookies:
+        domain = str(cookie.get("domain", "")).lower()
+        if "bilibili.com" not in domain:
+            continue
+        name = str(cookie.get("name", "")).strip()
+        value = str(cookie.get("value", "")).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        pairs.append((name, value))
+    return "; ".join(f"{name}={value}" for name, value in pairs)
+
+
+def _has_bilibili_login_cookie(cookie_header: str) -> bool:
+    names = {name for name, _ in _parse_cookie_pairs(cookie_header)}
+    return "SESSDATA" in names
+
+
+def _write_dotenv_value(dotenv_path: Path, key: str, value: str) -> None:
+    lines = dotenv_path.read_text(encoding="utf-8").splitlines() if dotenv_path.exists() else []
+    next_lines: list[str] = []
+    replaced = False
+    for raw_line in lines:
+        if not raw_line.strip() or raw_line.lstrip().startswith("#") or "=" not in raw_line:
+            next_lines.append(raw_line)
+            continue
+        raw_key, _ = raw_line.split("=", 1)
+        if raw_key.strip() == key:
+            next_lines.append(f"{key}={value}")
+            replaced = True
+        else:
+            next_lines.append(raw_line)
+    if not replaced:
+        next_lines.append(f"{key}={value}")
+    atomic_write_text(dotenv_path, "\n".join(next_lines).rstrip() + "\n")
 
 
 class BackgroundBilibiliDownloadStarter:
@@ -478,14 +618,28 @@ def _extract_info(url: str) -> dict[str, object]:
     """
     from yt_dlp import YoutubeDL
 
+    bvid = _extract_bvid_from_text(url)
+    headers = _load_bilibili_headers(bvid) if bvid else {
+        "User-Agent": _BILIBILI_USER_AGENT,
+        "Referer": "https://www.bilibili.com/",
+    }
+    cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
     options = {
         "quiet": True,
         "no_warnings": True,
         "extract_flat": "in_playlist",
         "skip_download": True,
+        "proxy": "",
+        "http_headers": headers,
     }
-    with YoutubeDL(options) as ydl:
-        payload = ydl.extract_info(url, download=False)
+    if cookie_file is not None:
+        options["cookiefile"] = str(cookie_file)
+    try:
+        with YoutubeDL(options) as ydl:
+            payload = ydl.extract_info(url, download=False)
+    finally:
+        if cookie_file is not None:
+            cookie_file.unlink(missing_ok=True)
     if not isinstance(payload, dict):
         raise RuntimeError("yt-dlp 未返回有效元数据。")
     return payload

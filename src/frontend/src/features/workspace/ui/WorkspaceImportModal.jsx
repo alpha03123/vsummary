@@ -9,6 +9,7 @@ export function WorkspaceImportModal({
   onClose,
   onResolveSeries,
   onResolveVideo,
+  onInitBilibiliCookie,
   onLoadChaoxingStatus,
   onInitChaoxing,
   onCancelChaoxingInit,
@@ -32,6 +33,8 @@ export function WorkspaceImportModal({
   const [chaoxingCourseSearch, setChaoxingCourseSearch] = useState("");
   const [selectedChaoxingCourseKey, setSelectedChaoxingCourseKey] = useState("");
   const [chaoxingLoading, setChaoxingLoading] = useState(false);
+  const [bilibiliCookieLoading, setBilibiliCookieLoading] = useState(false);
+  const [bilibiliCookieConfigured, setBilibiliCookieConfigured] = useState(false);
   const [chaoxingImportProgress, setChaoxingImportProgress] = useState(null);
   const loadChaoxingStatusRef = useRef(onLoadChaoxingStatus);
   const loadChaoxingCoursesRef = useRef(onLoadChaoxingCourses);
@@ -176,6 +179,33 @@ export function WorkspaceImportModal({
       }
       if (mountedRef.current) {
         setChaoxingLoading(false);
+      }
+    }
+  }
+
+  async function handleInitBilibiliCookie() {
+    if (!onInitBilibiliCookie) {
+      return;
+    }
+    setStatus("loading");
+    setErrorMsg("");
+    setBilibiliCookieLoading(true);
+    try {
+      const result = await onInitBilibiliCookie();
+      if (!mountedRef.current) {
+        return;
+      }
+      setBilibiliCookieConfigured(result.configured === true);
+      setStatus("idle");
+    } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
+      setStatus("error");
+      setErrorMsg(error instanceof Error ? error.message : "获取 Bilibili Cookie 失败");
+    } finally {
+      if (mountedRef.current) {
+        setBilibiliCookieLoading(false);
       }
     }
   }
@@ -371,8 +401,25 @@ export function WorkspaceImportModal({
                   autoFocus
                 />
                 <p className="mt-2 text-[11px] text-stone-400 dark:text-zinc-500">
-                  仅支持无 cookie 可访问的公开视频。
+                  遇到风控时请先获取 Cookie，再重新解析。
                 </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleInitBilibiliCookie}
+                    disabled={bilibiliCookieLoading || status === "loading"}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-2 text-xs font-bold text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {bilibiliCookieLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                    {bilibiliCookieLoading ? "等待登录..." : "获取 Bilibili Cookie"}
+                  </button>
+                  {bilibiliCookieConfigured ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 size={14} />
+                      Cookie 已写入
+                    </span>
+                  ) : null}
+                </div>
                 </>
                 ) : (
                   <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-700 dark:bg-neutral-900">

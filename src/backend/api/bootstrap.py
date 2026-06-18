@@ -24,6 +24,7 @@ from backend.bilibili import (
     BilibiliDownloader,
     BilibiliLinkedVideoDownloadStarter,
     CompositeLinkedVideoDownloadStarter,
+    DrissionBilibiliCookieInitializer,
     YtDlpBilibiliResolver,
 )
 from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
@@ -108,6 +109,7 @@ class ApiContainer:
     import_local_series_videos: ImportLocalSeriesVideos
     resolve_bilibili_series: ResolveBilibiliSeries
     resolve_bilibili_video: ResolveBilibiliVideo
+    bilibili_cookie_initializer: DrissionBilibiliCookieInitializer
     start_linked_video_download: StartLinkedVideoDownload
     generation_progress_tracker: InMemoryProgressTracker
     video_download_progress_tracker: InMemoryProgressTracker
@@ -200,6 +202,7 @@ def build_api_container(
         progress_tracker,
     )
     bilibili_resolver = YtDlpBilibiliResolver()
+    bilibili_cookie_initializer = DrissionBilibiliCookieInitializer(root_dir=root_dir)
     bilibili_download_starter = BackgroundBilibiliDownloadStarter(
         root_dir=root_dir,
         downloader=BilibiliDownloader(),
@@ -247,6 +250,7 @@ def build_api_container(
         import_local_series_videos=ImportLocalSeriesVideos(workspace),
         resolve_bilibili_series=ResolveBilibiliSeries(workspace, bilibili_resolver, workspace_index_invalidator),
         resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
+        bilibili_cookie_initializer=bilibili_cookie_initializer,
         start_linked_video_download=StartLinkedVideoDownload(workspace, linked_download_starter),
         generation_progress_tracker=progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,

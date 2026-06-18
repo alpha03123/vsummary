@@ -116,6 +116,7 @@ export function buildWorkspacePageModel(controller) {
       resolveLinkedSeries: controller.onResolveLinkedSeries,
       resolvePlaygroundVideo: controller.onResolvePlaygroundVideo,
       resolveSeriesVideo: controller.onResolveSeriesVideo,
+      initBilibiliCookie: controller.onInitBilibiliCookie,
       loadChaoxingStatus: controller.onLoadChaoxingStatus,
       initChaoxing: controller.onInitChaoxing,
       cancelChaoxingInit: controller.onCancelChaoxingInit,
