@@ -111,3 +111,25 @@ def build_mindmap_application(config_path: Path, root_dir: Path) -> MindmapAppli
         artifact_store=FileSystemGenerationArtifactStore(),
     )
     return MindmapApplication(settings=settings, use_case=use_case)
+
+
+def build_series_mindmap_application(config_path: Path, root_dir: Path) -> MindmapApplication:
+    """装配系列思维导图用例及其全部依赖。
+
+    Args:
+        config_path: settings.toml 配置文件路径。
+        root_dir: 项目根目录，用于解析模型缓存等相对路径。
+
+    Returns:
+        包含 settings 与 `GenerateSeriesMindmap` 用例的 `MindmapApplication`。
+    """
+    from backend.video_summary.generation.usecases.generate_series_mindmap import GenerateSeriesMindmap
+    from backend.video_summary.infrastructure.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
+
+    settings = load_settings(config_path=config_path, root_dir=root_dir)
+    gateway = build_litellm_completion_gateway(settings)
+    use_case = GenerateSeriesMindmap(
+        generator=LiteLLMSeriesMindmapGenerator(gateway=gateway),
+        artifact_store=FileSystemGenerationArtifactStore(),
+    )
+    return MindmapApplication(settings=settings, use_case=use_case)

@@ -76,8 +76,22 @@ class MindmapGenerator(Protocol):
         title: str,
         duration_seconds: float,
         summary_data: dict[str, object],
+        transcript_text: str = "",
     ) -> dict[str, object]:
         """基于总结数据生成思维导图节点/边字典。"""
+
+
+class SeriesMindmapGenerator(Protocol):
+    """系列级跨视频思维导图生成端口。"""
+
+    async def generate(
+        self,
+        *,
+        series_title: str,
+        catalog: dict[str, object] | None,
+        video_summaries: list[dict[str, object]],
+    ) -> dict[str, object]:
+        """基于系列目录与视频概况列表生成跨视频思维导图节点/边字典。"""
 
 
 class GenerationArtifactStore(Protocol):

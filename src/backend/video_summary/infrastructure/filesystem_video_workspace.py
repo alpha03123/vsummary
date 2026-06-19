@@ -240,6 +240,29 @@ class FileSystemVideoWorkspace:
         payload = json.loads(payload_path.read_text(encoding="utf-8"))
         return SeriesCatalogPayload.model_validate(payload).model_dump(mode="json")
 
+    def get_series_mindmap(self, series_id: str) -> VideoMindmapDTO | None:
+        """读取 `mindmap.json` 并以系列标题组装 DTO。
+
+        Args:
+            series_id: 目标系列 ID。
+
+        Returns:
+            思维导图 DTO；`mindmap.json` 缺失时返回 `None`。
+        """
+        mindmap_path = self._workspace_dir / series_id / "mindmap.json"
+        if not mindmap_path.exists():
+            return None
+        return VideoMindmapDTO(
+            series_id=series_id,
+            video_id="",
+            title=series_id,
+            mindmap=json.loads(mindmap_path.read_text(encoding="utf-8")),
+        )
+
+    def get_series_dir(self, series_id: str) -> Path:
+        """返回到系列工作区根目录的路径。"""
+        return self._workspace_dir / series_id
+
     def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
         """校验 + 序列化 + 原子写系列目录 payload（自动创建 series 目录）。
 
