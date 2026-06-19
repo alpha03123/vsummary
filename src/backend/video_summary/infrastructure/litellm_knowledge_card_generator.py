@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
-from backend.video_summary.infrastructure.settings import load_settings
+from backend.video_summary.infrastructure.settings import ensure_settings_file, load_settings
 from backend.video_summary.infrastructure.prompts import KNOWLEDGE_CARD_PROMPT_TEMPLATE
 from backend.video_summary.library.models import KnowledgeCardDTO
 
@@ -142,6 +142,7 @@ class ConfiguredKnowledgeCardGenerator:
         Returns:
             当前可用的 `LiteLLMKnowledgeCardGenerator` 实例。
         """
+        ensure_settings_file(self._config_path)
         signature = (
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",

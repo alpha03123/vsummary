@@ -1,6 +1,7 @@
 export const defaultUiSettings = {
   showTakeaways: true,
   theme: "light",
+  layoutMode: "video_center",
   transcriptEnhancementEnabled: true,
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
@@ -697,6 +698,7 @@ export function normalizeUiSettings(value) {
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
     theme: record.theme === "dark" ? "dark" : "light",
+    layoutMode: record.layoutMode === "chat_center" ? "chat_center" : "video_center",
     transcriptEnhancementEnabled:
       typeof record.transcriptEnhancementEnabled === "boolean" ? record.transcriptEnhancementEnabled : true,
     asrModelQuality:

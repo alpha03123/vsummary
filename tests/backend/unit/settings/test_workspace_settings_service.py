@@ -74,6 +74,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             updated = service.update_workspace_settings(
                 theme="dark",
                 show_takeaways=False,
+                layout_mode="chat_center",
                 transcript_enhancement_enabled=False,
                 asr_model_quality="large-v3-turbo",
                 transcription_mode="accurate",
@@ -88,6 +89,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             )
 
             self.assertEqual(updated.window_tokens, 222_222)
+            self.assertEqual(updated.layout_mode, "chat_center")
             self.assertEqual(updated.answer_detail_level, "long")
             self.assertEqual(updated.reasoning_effort, "high")
             self.assertEqual(updated.video_generation_concurrency, 5)
@@ -110,6 +112,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertIn("[web_search]", rendered)
             self.assertIn("enabled = true", rendered)
             self.assertIn('provider = "litellm"', rendered)
+            self.assertIn('layout_mode = "chat_center"', rendered)
             self.assertNotIn("series_video_concurrency", rendered)
 
     def test_update_workspace_settings_rejects_rerank_enabled_when_reranker_model_is_missing(self) -> None:
@@ -131,6 +134,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 service.update_workspace_settings(
                     theme="light",
                     show_takeaways=True,
+                    layout_mode="video_center",
                     transcript_enhancement_enabled=True,
                     asr_model_quality="large-v3-turbo",
                     transcription_mode="accurate",
@@ -163,6 +167,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 service.update_workspace_settings(
                     theme="light",
                     show_takeaways=True,
+                    layout_mode="video_center",
                     transcript_enhancement_enabled=True,
                     asr_model_quality="large-v3-turbo",
                     transcription_mode="accurate",
@@ -195,6 +200,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             service.update_workspace_settings(
                     theme="light",
                     show_takeaways=True,
+                    layout_mode="video_center",
                     transcript_enhancement_enabled=True,
                     asr_model_quality="large-v3-turbo",
                     transcription_mode="accurate",
@@ -271,6 +277,21 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertEqual(settings.web_search.search_context_size, "medium")
             self.assertEqual(settings.web_search.max_results, 5)
             self.assertEqual(settings.web_search.timeout_seconds, 10)
+
+    def test_load_settings_creates_local_settings_from_example_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            example_path = root_dir / "config" / "settings.toml.example"
+            example_path.write_text(_sample_settings_toml(), encoding="utf-8")
+
+            settings = load_settings(config_path, root_dir)
+
+            self.assertTrue(config_path.exists())
+            self.assertEqual(config_path.read_text(encoding="utf-8"), _sample_settings_toml())
+            self.assertEqual(settings.workspace_ui.layout_mode, "video_center")
 
     def test_load_settings_rejects_generation_concurrency_smaller_than_one(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -381,6 +402,7 @@ transcription_mode = "accurate"
 [workspace_ui]
 theme = "light"
 show_takeaways = true
+layout_mode = "video_center"
 
 [debug]
 mode = false

@@ -519,6 +519,102 @@
   }
 }
 
+/* ============================================================================
+   MINDMAP CSS TREE DRAWING
+   (Preserved explicitly to render the hierarchical Mindmap structure)
+============================================================================ */
+
+.css-tree {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.css-tree ul {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  position: relative;
+}
+
+.css-tree li {
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding-left: 36px;
+}
+
+.css-tree>ul>li {
+  padding-left: 0;
+}
+
+.css-tree li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 36px;
+  height: 2px;
+  background: #d6d3d1;
+  /* stone-300 */
+  transform: translateY(-50%);
+}
+
+.dark .css-tree li::before,
+.dark .css-tree li::after,
+.dark .css-tree-node-wrapper::before {
+  background: #44403c;
+}
+
+.css-tree>ul>li::before {
+  display: none;
+}
+
+.css-tree li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #d6d3d1;
+}
+
+.css-tree li:first-child::after {
+  top: 50%;
+}
+
+.css-tree li:last-child::after {
+  bottom: 50%;
+}
+
+.css-tree>ul>li::after {
+  display: none;
+}
+
+.css-tree-node-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.css-tree-node-wrapper::before {
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 36px;
+  height: 2px;
+  background: #d6d3d1;
+  transform: translateY(-50%);
+}
+
+.css-tree li:not(:has(> ul))>.css-tree-node-wrapper::before {
+  display: none;
+}
+
 .markdown-body {
   line-height: 1.75;
 }

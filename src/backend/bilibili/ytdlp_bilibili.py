@@ -13,13 +13,22 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 import httpx
 
+from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
+
+_BILIBILI_USER_AGENT = "Mozilla/5.0"
+_BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
+_BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
+BILIBILI_COOKIE_REQUIRED_MESSAGE = "风控拦截，请配置cookie"
+_BILIBILI_LOGIN_URL = "https://passport.bilibili.com/login"
+_BILIBILI_DEFAULT_BROWSER_PORT = 9223
 
 
 class ProgressReporter(Protocol):
@@ -46,6 +55,10 @@ class ProgressTracker(Protocol):
 
 class DownloadCancelled(RuntimeError):
     """下载被用户取消时抛出的异常。"""
+
+
+class BilibiliCookieInitError(RuntimeError):
+    """Bilibili Cookie 初始化失败。"""
 
 
 class YtDlpBilibiliResolver:
@@ -177,38 +190,8 @@ class BilibiliDownloader:
         if page > 1:
             url = f"{url}?p={page}"
         output_template = str(dest_dir / f"{stem}.%(ext)s")
-        # 原始命令（已注释）：v1 没设 User-Agent / Referer，B 站返回 412。
-        # cmd = [
-        #     sys.executable, "-m", "yt_dlp",
-        #     "--no-playlist", "--merge-output-format", "mp4",
-        #     "--output", output_template, "--newline", "--no-part",
-        #     url,
-        # ]
-        # v2（已注释）：加了 User-Agent / Referer / Cookie，但没关代理。
-        # bilibili_headers = _load_bilibili_headers()
-        # cmd = [
-        #     sys.executable, "-m", "yt_dlp",
-        #     "--no-playlist", "--merge-output-format", "mp4",
-        #     "--output", output_template, "--newline", "--no-part",
-        #     *_build_yt_dlp_add_header_flags(bilibili_headers),
-        #     url,
-        # ]
-        # v3（已注释）：加了 --proxy "" 和 --add-header Cookie，但 Cookie 经
-        # --add-header 注入会被 yt-dlp 的 cookiejar 覆盖，playinfo 端点照样 412。
-        # bilibili_headers = _load_bilibili_headers()
-        # cmd = [
-        #     sys.executable, "-m", "yt_dlp",
-        #     "--no-playlist", "--merge-output-format", "mp4",
-        #     "--output", output_template, "--newline", "--no-part",
-        #     "--proxy", "",
-        #     *_build_yt_dlp_add_header_flags(bilibili_headers),
-        #     url,
-        # ]
-        # v4：Cookie 走 --cookies Netscape 文件，UA/Referer 走 --add-header。
-        bilibili_headers = _load_bilibili_headers()
-        # Cookie 单独提走，避免和 --cookies 重复注入。
-        cookie_value = bilibili_headers.pop("Cookie", None)
-        cookies_path = _write_bilibili_cookies_file(cookie_value or "")
+        headers = _load_bilibili_headers(bvid)
+        cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
         cmd = [
             sys.executable,
             "-m",
@@ -220,36 +203,17 @@ class BilibiliDownloader:
             output_template,
             "--newline",
             "--no-part",
-            "--proxy", "",  # 显式不走代理：B 站是境内站点，代理握手会失败。
+            "--proxy",
+            "",
+            *_build_yt_dlp_add_header_flags(headers),
+            *(["--cookies", str(cookie_file)] if cookie_file is not None else []),
+            url,
         ]
-        if cookies_path is not None:
-            cmd.extend(["--cookies", str(cookies_path)])
-        cmd.extend([*_build_yt_dlp_add_header_flags(bilibili_headers), url])
-        # 子进程清掉代理相关环境变量（防 ffmpeg 等子进程走系统代理）。
-        proc_env = {
-            k: v
-            for k, v in os.environ.items()
-            if k.lower() not in {"http_proxy", "https_proxy", "all_proxy"}
-        }
         reporter.update("download", 0.0, "开始下载")
         process = None
-        # 收集 yt-dlp 最近 50 行输出，失败时拼进错误信息便于排错。
-        output_tail: list[str] = []
-        # v1 Popen（已注释）：没传 env=，子进程继承系统代理。
-        # try:
-        #     process = subprocess.Popen(
-        #         cmd,
-        #         stdout=subprocess.PIPE,
-        #         stderr=subprocess.STDOUT,
-        #         text=True,
-        #         encoding="utf-8",
-        #         errors="replace",
-        #     )
-        # v2 Popen：传 env=，子进程不携带代理；外加 finally 清理 cookies 临时文件。
         try:
             process = subprocess.Popen(
                 cmd,
-                env=proc_env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -260,14 +224,10 @@ class BilibiliDownloader:
                 raise RuntimeError("无法读取 yt-dlp 输出。")
             last_percent = -1.0
             for line in process.stdout:
-                stripped = line.rstrip()
-                output_tail.append(stripped)
-                if len(output_tail) > 50:
-                    output_tail.pop(0)
                 if _download_cancel_requested(reporter):
                     process.terminate()
                     raise DownloadCancelled("下载已取消")
-                match = self._PROGRESS_RE.search(stripped)
+                match = self._PROGRESS_RE.search(line.rstrip())
                 if match is None:
                     continue
                 percent = float(match.group(1))
@@ -276,15 +236,8 @@ class BilibiliDownloader:
                 last_percent = percent
                 reporter.update("download", percent, f"下载中 {percent:.1f}%")
             process.wait()
-            # v1 错误（已注释）：只报退出码，看不到 yt-dlp 实际报错。
-            # if process.returncode != 0:
-            #     raise RuntimeError(f"yt-dlp 退出码 {process.returncode}")
-            # v2 错误：把 yt-dlp 最后输出拼进来。
             if process.returncode != 0:
-                tail_text = "\n".join(output_tail).strip() or "(无输出)"
-                raise RuntimeError(
-                    f"yt-dlp 退出码 {process.returncode}。\nyt-dlp 最后输出：\n{tail_text}"
-                )
+                raise RuntimeError(f"yt-dlp 退出码 {process.returncode}")
         except DownloadCancelled as exc:
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -298,12 +251,8 @@ class BilibiliDownloader:
             reporter.failed(str(exc))
             raise
         finally:
-            # 不管成功 / 失败 / 取消，都清理临时 cookies 文件。
-            if cookies_path is not None:
-                try:
-                    cookies_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+            if cookie_file is not None:
+                cookie_file.unlink(missing_ok=True)
 
         candidates = sorted(dest_dir.glob(f"{stem}.*"))
         if not candidates:
@@ -326,6 +275,44 @@ class BilibiliDownloader:
             下载完成的文件路径。
         """
         return await asyncio.to_thread(self.download, bvid, page, dest_dir, reporter)
+
+
+class DrissionBilibiliCookieInitializer:
+    """通过 DrissionPage 打开 Bilibili 登录页并写入 BILIBILI_COOKIE。"""
+
+    def __init__(
+        self,
+        *,
+        root_dir: Path,
+        page_factory: Callable[[str, int], object] | None = None,
+        login_url: str = _BILIBILI_LOGIN_URL,
+        browser_port: int = _BILIBILI_DEFAULT_BROWSER_PORT,
+        timeout_seconds: float = 300.0,
+        poll_interval_seconds: float = 1.0,
+    ) -> None:
+        self._root_dir = root_dir
+        self._page_factory = page_factory or _create_drission_page
+        self._login_url = login_url
+        self._browser_port = browser_port
+        self._timeout_seconds = timeout_seconds
+        self._poll_interval_seconds = poll_interval_seconds
+
+    def init(self) -> bool:
+        """打开 Bilibili 登录页，拿到登录 Cookie 后写入 .env 和当前进程环境。"""
+        page = self._page_factory(str(self._root_dir / "data" / "bilibili" / "browser"), self._browser_port)
+        try:
+            _page_get(page, self._login_url)
+            deadline = time.monotonic() + self._timeout_seconds
+            while time.monotonic() <= deadline:
+                cookie_header = _format_bilibili_cookie_header(_page_cookies(page))
+                if _has_bilibili_login_cookie(cookie_header):
+                    _write_dotenv_value(self._root_dir / ".env", _BILIBILI_COOKIE_ENV, cookie_header)
+                    os.environ[_BILIBILI_COOKIE_ENV] = cookie_header
+                    return True
+                time.sleep(self._poll_interval_seconds)
+            raise BilibiliCookieInitError("Bilibili 登录超时，未获取到 Cookie。")
+        finally:
+            _close_page(page)
 
 
 def build_video_download_task_id(series_id: str, video_id: str) -> str:
@@ -355,6 +342,149 @@ def _download_cancel_requested(reporter: ProgressReporter) -> bool:
     except RuntimeError:
         return True
     return False
+
+
+def _load_bilibili_headers(bvid: str) -> dict[str, str]:
+    cookie = os.environ.get(_BILIBILI_COOKIE_ENV, "").strip()
+    if not cookie:
+        sessdata = os.environ.get(_BILIBILI_SESSDATA_ENV, "").strip()
+        cookie = f"SESSDATA={sessdata}" if sessdata else ""
+    headers = {
+        "User-Agent": _BILIBILI_USER_AGENT,
+        "Referer": f"https://www.bilibili.com/video/{bvid}/",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
+    flags: list[str] = []
+    for key, value in headers.items():
+        if not value:
+            continue
+        flags.extend(["--add-header", f"{key}:{value}"])
+    return flags
+
+
+def _write_bilibili_cookies_file(cookie: str) -> Path | None:
+    if not cookie.strip():
+        return None
+    cookie_pairs = _parse_cookie_pairs(cookie)
+    if not cookie_pairs:
+        return None
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".cookies.txt")
+    with handle:
+        handle.write("# Netscape HTTP Cookie File\n")
+        for name, value in cookie_pairs:
+            handle.write(f".bilibili.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}\n")
+    return Path(handle.name)
+
+
+def _parse_cookie_pairs(cookie: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for part in cookie.split(";"):
+        if "=" not in part:
+            continue
+        name, value = part.split("=", 1)
+        normalized_name = name.strip()
+        normalized_value = value.strip()
+        if normalized_name:
+            pairs.append((normalized_name, normalized_value))
+    return pairs
+
+
+def _create_drission_page(user_data_dir: str, browser_port: int) -> object:
+    try:
+        from DrissionPage import Chromium, ChromiumOptions
+    except ImportError as exc:
+        raise BilibiliCookieInitError("当前 Python 环境缺少 DrissionPage，请先安装项目依赖。") from exc
+    options = ChromiumOptions(read_file=False).set_local_port(browser_port).set_user_data_path(user_data_dir)
+    browser = Chromium(addr_or_opts=options)
+    return _DrissionPageSession(browser, browser.latest_tab)
+
+
+class _DrissionPageSession:
+    def __init__(self, browser: object, page: object) -> None:
+        self._browser = browser
+        self._page = page
+
+    def get(self, url: str) -> None:
+        self._page.get(url)
+
+    def cookies(self, *, all_domains: bool = True, all_info: bool = False) -> list[Mapping[str, object]]:
+        return self._page.cookies(all_domains=all_domains, all_info=all_info)
+
+    def quit(self) -> None:
+        self._browser.quit()
+
+
+def _page_get(page: object, url: str) -> None:
+    getter = getattr(page, "get", None)
+    if getter is None:
+        raise BilibiliCookieInitError("DrissionPage 页面对象缺少 get 方法。")
+    getter(url)
+
+
+def _page_cookies(page: object) -> list[Mapping[str, object]]:
+    cookies = getattr(page, "cookies", None)
+    if cookies is not None:
+        try:
+            return cookies(all_domains=True, all_info=False)
+        except TypeError:
+            return cookies()
+    get_cookies = getattr(page, "get_cookies", None)
+    if get_cookies is not None:
+        return get_cookies(as_dict=False)
+    raise BilibiliCookieInitError("DrissionPage 页面对象缺少 cookies 方法。")
+
+
+def _close_page(page: object) -> None:
+    for name in ("quit", "close"):
+        method = getattr(page, name, None)
+        if method is not None:
+            method()
+            return
+
+
+def _format_bilibili_cookie_header(cookies: list[Mapping[str, object]]) -> str:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for cookie in cookies:
+        domain = str(cookie.get("domain", "")).lower()
+        if "bilibili.com" not in domain:
+            continue
+        name = str(cookie.get("name", "")).strip()
+        value = str(cookie.get("value", "")).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        pairs.append((name, value))
+    return "; ".join(f"{name}={value}" for name, value in pairs)
+
+
+def _has_bilibili_login_cookie(cookie_header: str) -> bool:
+    names = {name for name, _ in _parse_cookie_pairs(cookie_header)}
+    return "SESSDATA" in names
+
+
+def _write_dotenv_value(dotenv_path: Path, key: str, value: str) -> None:
+    lines = dotenv_path.read_text(encoding="utf-8").splitlines() if dotenv_path.exists() else []
+    next_lines: list[str] = []
+    replaced = False
+    for raw_line in lines:
+        if not raw_line.strip() or raw_line.lstrip().startswith("#") or "=" not in raw_line:
+            next_lines.append(raw_line)
+            continue
+        raw_key, _ = raw_line.split("=", 1)
+        if raw_key.strip() == key:
+            next_lines.append(f"{key}={value}")
+            replaced = True
+        else:
+            next_lines.append(raw_line)
+    if not replaced:
+        next_lines.append(f"{key}={value}")
+    atomic_write_text(dotenv_path, "\n".join(next_lines).rstrip() + "\n")
 
 
 class BackgroundBilibiliDownloadStarter:
@@ -471,92 +601,6 @@ class CompositeLinkedVideoDownloadStarter:
         return starter.start(series_id=series_id, video=video)
 
 
-# B 站反爬要求：标准浏览器 UA + Referer，否则会返回 412。
-# 可选地从 BILIBILI_COOKIE（完整字符串，优先级最高）或 BILIBILI_SESSDATA（单 cookie）
-# 环境变量读取登录态 Cookie，进一步过 playinfo WAF。
-_BILIBILI_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
-_BILIBILI_REFERER = "https://www.bilibili.com/"
-_BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
-_BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
-
-
-def _load_bilibili_headers() -> dict[str, str]:
-    """构造 B 站请求头。
-
-    优先读 BILIBILI_COOKIE（浏览器 DevTools 复制的完整 Cookie 字符串，
-    包含 SESSDATA / buvid3 / buvid4 / b_nut / bili_jct / _uuid 等，
-    playinfo 接口必需）；未设置时回退到 BILIBILI_SESSDATA（单 cookie，
-    兼容旧配置，覆盖面不够）。两者都没设就不带 Cookie。
-    """
-    # 原始实现（已注释）：只支持单 SESSDATA，过不了 playinfo WAF。
-    # headers: dict[str, str] = {
-    #     "User-Agent": _BILIBILI_USER_AGENT,
-    #     "Referer": _BILIBILI_REFERER,
-    # }
-    # sessdata = os.environ.get(_BILIBILI_SESSDATA_ENV, "").strip()
-    # if sessdata:
-    #     headers["Cookie"] = f"SESSDATA={sessdata}"
-    # return headers
-    headers: dict[str, str] = {
-        "User-Agent": _BILIBILI_USER_AGENT,
-        "Referer": _BILIBILI_REFERER,
-    }
-    full_cookie = os.environ.get(_BILIBILI_COOKIE_ENV, "").strip()
-    if full_cookie:
-        headers["Cookie"] = full_cookie
-        return headers
-    sessdata = os.environ.get(_BILIBILI_SESSDATA_ENV, "").strip()
-    if sessdata:
-        headers["Cookie"] = f"SESSDATA={sessdata}"
-    return headers
-
-
-def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
-    """把 headers 字典展开成 yt-dlp 的 --add-header 参数列表。"""
-    flags: list[str] = []
-    for key, value in headers.items():
-        flags.extend(["--add-header", f"{key}:{value}"])
-    return flags
-
-
-def _write_bilibili_cookies_file(cookie_string: str) -> Path | None:
-    """把 B 站 Cookie 字符串写成 Netscape 格式临时文件，返回路径。
-
-    yt-dlp 的 B 站提取器对 playinfo 端点走 cookiejar 路径处理 Cookie，
-    --add-header "Cookie:..." 注入的 header 在这一步可能被覆盖。
-    用 --cookies 加载 Netscape 文件走 cookiejar 才能稳定生效。
-    """
-    cookie_string = cookie_string.strip()
-    if not cookie_string:
-        return None
-    cookies: list[tuple[str, str]] = []
-    for pair in cookie_string.split(";"):
-        pair = pair.strip()
-        if not pair or "=" not in pair:
-            continue
-        name, value = pair.split("=", 1)
-        cookies.append((name.strip(), value.strip()))
-    if not cookies:
-        return None
-    # Netscape 格式：domain TAB include_subdomains TAB path TAB secure TAB expires TAB name TAB value
-    lines = ["# Netscape HTTP Cookie File"]
-    for name, value in cookies:
-        lines.append(f".bilibili.com\tTRUE\t/\tFALSE\t0\t{name}\t{value}")
-    content = "\n".join(lines) + "\n"
-    fd, path_str = tempfile.mkstemp(suffix=".txt", prefix="bilibili_cookies_")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-    except Exception:
-        os.close(fd)
-        raise
-    return Path(path_str)
-
-
 def _extract_info(url: str) -> dict[str, object]:
     """通过 yt-dlp 提取 Bilibili URL 的元数据（flat 模式，不下载）。
 
@@ -574,22 +618,28 @@ def _extract_info(url: str) -> dict[str, object]:
     """
     from yt_dlp import YoutubeDL
 
-    # 原始 options（已注释）：缺少 http_headers，B 站会返回 412。
-    # options = {
-    #     "quiet": True,
-    #     "no_warnings": True,
-    #     "extract_flat": "in_playlist",
-    #     "skip_download": True,
-    # }
+    bvid = _extract_bvid_from_text(url)
+    headers = _load_bilibili_headers(bvid) if bvid else {
+        "User-Agent": _BILIBILI_USER_AGENT,
+        "Referer": "https://www.bilibili.com/",
+    }
+    cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
     options = {
         "quiet": True,
         "no_warnings": True,
         "extract_flat": "in_playlist",
         "skip_download": True,
-        "http_headers": _load_bilibili_headers(),
+        "proxy": "",
+        "http_headers": headers,
     }
-    with YoutubeDL(options) as ydl:
-        payload = ydl.extract_info(url, download=False)
+    if cookie_file is not None:
+        options["cookiefile"] = str(cookie_file)
+    try:
+        with YoutubeDL(options) as ydl:
+            payload = ydl.extract_info(url, download=False)
+    finally:
+        if cookie_file is not None:
+            cookie_file.unlink(missing_ok=True)
     if not isinstance(payload, dict):
         raise RuntimeError("yt-dlp 未返回有效元数据。")
     return payload
@@ -614,20 +664,11 @@ def _extract_view_info(bvid: str) -> dict[str, object]:
         "User-Agent": "Mozilla/5.0",
         "Referer": f"https://www.bilibili.com/video/{bvid}/",
     }
-    # 原始 httpx.get（已注释）：默认会读系统 HTTPS_PROXY，代理与 api.bilibili.com 的
-    # TLS 握手失败（SSL: UNEXPECTED_EOF_WHILE_READING）。
-    # response = httpx.get(
-    #     "https://api.bilibili.com/x/web-interface/view",
-    #     params={"bvid": bvid},
-    #     headers=headers,
-    #     timeout=20,
-    # )
     response = httpx.get(
         "https://api.bilibili.com/x/web-interface/view",
         params={"bvid": bvid},
         headers=headers,
         timeout=20,
-        proxy=None,  # B 站是境内站点，显式不走代理，避免代理握手失败。
     )
     response.raise_for_status()
     payload = response.json()

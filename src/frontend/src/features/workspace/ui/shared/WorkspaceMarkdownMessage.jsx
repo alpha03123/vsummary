@@ -10,6 +10,7 @@ const CITATION_PREVIEW_WIDTH = 360;
 const CITATION_PREVIEW_ESTIMATED_MAX_HEIGHT = 260;
 const CITATION_PREVIEW_GAP = 8;
 const CITATION_PREVIEW_VIEWPORT_PADDING = 16;
+const THINK_BLOCK_PATTERN = /<think>([\s\S]*?)(?:<\/think>|$)/gi;
 
 function normalizeCitations(citations) {
   if (!Array.isArray(citations)) {
@@ -53,6 +54,27 @@ function normalizeMathDelimiters(content) {
     .replace(/\\\[([\s\S]*?)\\\]/g, (_match, expression) => `\n\n$$\n${expression.trim()}\n$$\n\n`)
     .replace(/\\\(([\s\S]*?)\\\)/g, (_match, expression) => `$${expression.trim()}$`)
     .replace(/^[ \t]*\[\s*([^\]\n]*(?:\\[A-Za-z]+|[A-Za-z]\([^)]*\)|[A-Za-z]\s*[=+\-*/^]|[=+\-*/^]\s*[A-Za-z]|[{}_^])[^\]\n]*)\s*\][ \t]*$/gm, (_match, expression) => `$$\n${expression.trim()}\n$$`);
+}
+
+function splitThinkBlocks(content) {
+  if (typeof content !== "string" || !content) {
+    return [];
+  }
+  const parts = [];
+  let cursor = 0;
+  let match;
+  THINK_BLOCK_PATTERN.lastIndex = 0;
+  while ((match = THINK_BLOCK_PATTERN.exec(content)) !== null) {
+    if (match.index > cursor) {
+      parts.push({ type: "answer", content: content.slice(cursor, match.index) });
+    }
+    parts.push({ type: "think", content: match[1] ?? "" });
+    cursor = THINK_BLOCK_PATTERN.lastIndex;
+  }
+  if (cursor < content.length) {
+    parts.push({ type: "answer", content: content.slice(cursor) });
+  }
+  return parts.filter((part) => part.content.trim());
 }
 
 function formatCitationSlot(slot) {
@@ -190,42 +212,73 @@ function CitationLink({ href, children, preview, ...props }) {
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null }) {
+function ThinkBlock({ content }) {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-stone-50/70 px-4 py-3 text-sm text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-300">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-stone-400"
+      >
+        思考过程
+        <span aria-hidden="true">{expanded ? "收起" : "展开"}</span>
+      </button>
+      {expanded ? <div className="mt-3 whitespace-pre-wrap leading-6">{content.trim()}</div> : null}
+    </section>
+  );
+}
+
+function MarkdownSegment({ content, citations }) {
   const normalizedCitations = normalizeCitations(citations);
   const renderedContent = injectCitationLinks(normalizeMathDelimiters(content), normalizedCitations);
   const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
   return (
-    <div className="flex flex-col gap-4">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
-          a: ({ node: _node, href, children, ...props }) => {
-            if (typeof href === "string" && href.startsWith("#citation-")) {
-              const citationId = href.replace("#citation-", "");
-              const preview = buildCitationPreview(citationMap.get(citationId));
-              return (
-                <CitationLink {...props} href={href} preview={preview}>
-                  {children}
-                </CitationLink>
-              );
-            }
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
+      components={{
+        a: ({ node: _node, href, children, ...props }) => {
+          if (typeof href === "string" && href.startsWith("#citation-")) {
+            const citationId = href.replace("#citation-", "");
+            const preview = buildCitationPreview(citationMap.get(citationId));
             return (
-              <a
-                {...props}
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="text-accent hover:text-accent/80 hover:underline"
-              >
+              <CitationLink {...props} href={href} preview={preview}>
                 {children}
-              </a>
+              </CitationLink>
             );
-          },
-        }}
-      >
-        {renderedContent}
-      </ReactMarkdown>
+          }
+          return (
+            <a
+              {...props}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:text-accent/80 hover:underline"
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {renderedContent}
+    </ReactMarkdown>
+  );
+}
+
+export function WorkspaceMarkdownMessage({ content, citations = null }) {
+  const parts = splitThinkBlocks(content);
+  return (
+    <div className="flex flex-col gap-4">
+      {(parts.length ? parts : [{ type: "answer", content }]).map((part, index) => (
+        part.type === "think" ? (
+          <ThinkBlock key={`${part.type}-${index}`} content={part.content} />
+        ) : (
+          <MarkdownSegment key={`${part.type}-${index}`} content={part.content} citations={citations} />
+        )
+      ))}
     </div>
   );
 }

@@ -18,6 +18,7 @@ from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
+import shutil
 import tomllib
 
 from backend.shared.llm.base_url import normalize_provider_base_url
@@ -27,6 +28,7 @@ from backend.shared.filesystem import atomic_write_text
 VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper"}
 VALID_THEMES = {"light", "dark"}
+VALID_WORKSPACE_LAYOUT_MODES = {"video_center", "chat_center"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
 VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
@@ -200,6 +202,7 @@ class WorkspaceUiSettings:
 
     theme: str
     show_takeaways: bool
+    layout_mode: str
 
 
 @dataclass(frozen=True)
@@ -355,6 +358,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     Returns:
         已校验的 `AppSettings` 不可变实例。
     """
+    ensure_settings_file(config_path)
     payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
     env_values = load_env_settings(root_dir)
 
@@ -396,6 +400,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     workspace_ui_settings = WorkspaceUiSettings(
         theme=_normalize_theme(workspace_ui_payload.get("theme")),
         show_takeaways=bool(workspace_ui_payload.get("show_takeaways", True)),
+        layout_mode=_normalize_workspace_layout_mode(workspace_ui_payload.get("layout_mode")),
     )
     debug_payload = payload.get("debug", {})
     debug_settings = DebugSettings(
@@ -561,6 +566,16 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 def save_settings(config_path: Path, settings: AppSettings) -> None:
     """把 `AppSettings` 序列化回 `settings.toml`（走原子写）。"""
     atomic_write_text(config_path, _render_settings_toml(settings))
+
+
+def ensure_settings_file(config_path: Path) -> None:
+    if config_path.exists():
+        return
+    example_path = config_path.with_name(f"{config_path.name}.example")
+    if not example_path.exists():
+        raise FileNotFoundError(f"settings file not found: {config_path}")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(example_path, config_path)
 
 
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:
@@ -781,6 +796,12 @@ def _normalize_theme(value: object) -> str:
     return "light"
 
 
+def _normalize_workspace_layout_mode(value: object) -> str:
+    if isinstance(value, str) and value in VALID_WORKSPACE_LAYOUT_MODES:
+        return value
+    return "video_center"
+
+
 def _normalize_transcription_mode(value: object) -> str:
     """校验转写模式枚举；非合法值回退为 `"fast"`。"""
     if isinstance(value, str):
@@ -832,6 +853,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
         f"show_takeaways = {_toml_bool(settings.workspace_ui.show_takeaways)}",
+        f'layout_mode = "{settings.workspace_ui.layout_mode}"',
         "",
         "[debug]",
         f"mode = {_toml_bool(settings.debug.mode)}",

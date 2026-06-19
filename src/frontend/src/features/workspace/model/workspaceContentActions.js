@@ -13,6 +13,7 @@ import {
   generateVideoMindmap,
   generateSeriesSummaries,
   generateVideoSummary,
+  initBilibiliCookie,
   importChaoxingCourse,
   importLocalPlaygroundVideos,
   importLocalSeries,
@@ -464,7 +465,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       });
     }
   }
-
   async function onCreateNote(note) {
     if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
       return;
@@ -573,6 +573,17 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onInitBilibiliCookie(options = {}) {
+    try {
+      return await initBilibiliCookie(options);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "获取 Bilibili Cookie 失败" });
+      throw error;
+    }
+  }
   async function onLoadChaoxingStatus() {
     try {
       return await loadChaoxingStatus();
@@ -757,6 +768,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onResolveLinkedSeries,
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
+    onInitBilibiliCookie,
     onLoadChaoxingStatus,
     onInitChaoxing,
     onCancelChaoxingInit,

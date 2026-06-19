@@ -5,8 +5,11 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from backend.api.container import ApiContainerDep
 from backend.api.responses import (
@@ -17,9 +20,30 @@ from backend.api.responses import (
     VideoCardResponse,
 )
 from backend.api.sse import stream_progress_events
-from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
+from backend.bilibili.ytdlp_bilibili import (
+    BILIBILI_COOKIE_REQUIRED_MESSAGE,
+    BilibiliCookieInitError,
+    build_video_download_task_id,
+)
 
 router = APIRouter()
+
+
+class BilibiliCookieStatusResponse(BaseModel):
+    """Bilibili Cookie 配置状态响应。"""
+    configured: bool
+
+
+@router.post("/api/linked/bilibili/cookie/init", response_model=BilibiliCookieStatusResponse)
+async def init_bilibili_cookie(container: ApiContainerDep) -> BilibiliCookieStatusResponse:
+    """POST /api/linked/bilibili/cookie/init — 打开登录页并写入 Bilibili Cookie。"""
+    try:
+        configured = await asyncio.to_thread(container.bilibili_cookie_initializer.init)
+    except BilibiliCookieInitError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return BilibiliCookieStatusResponse(configured=configured)
 
 
 @router.post("/api/linked/bilibili/resolve/series", response_model=SeriesResponse)
@@ -45,6 +69,8 @@ async def resolve_bilibili_series(request: ResolveBilibiliSeriesRequest, contain
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except RuntimeError as error:
+        if _is_bilibili_cookie_required_error(error):
+            raise HTTPException(status_code=409, detail=BILIBILI_COOKIE_REQUIRED_MESSAGE) from error
         raise HTTPException(status_code=502, detail=str(error)) from error
     return SeriesResponse.from_model(series)
 
@@ -78,8 +104,19 @@ async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except RuntimeError as error:
+        if _is_bilibili_cookie_required_error(error):
+            raise HTTPException(status_code=409, detail=BILIBILI_COOKIE_REQUIRED_MESSAGE) from error
         raise HTTPException(status_code=502, detail=str(error)) from error
     return VideoCardResponse.from_model(video)
+
+
+def _is_bilibili_cookie_required_error(error: RuntimeError) -> bool:
+    message = str(error)
+    return (
+        BILIBILI_COOKIE_REQUIRED_MESSAGE in message
+        or "HTTP Error 412" in message
+        or "Precondition Failed" in message
+    )
 
 
 @router.post("/api/videos/{series_id}/{video_id}/download", response_model=LinkedVideoDownloadResponse)

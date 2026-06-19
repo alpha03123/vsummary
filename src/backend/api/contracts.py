@@ -60,6 +60,7 @@ class WorkspaceSettingsResponse(BaseModel):
 
     theme: str
     show_takeaways: bool
+    layout_mode: str
     transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
@@ -84,6 +85,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
 
     theme: str
     show_takeaways: bool
+    layout_mode: str
     transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str

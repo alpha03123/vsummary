@@ -5,6 +5,7 @@ import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
+import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
 import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
@@ -63,6 +64,27 @@ export function WorkspacePage({ page }) {
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const hasRightPane = Boolean(activeSeries);
+  const isChatCenterMode = ui.layoutMode === "chat_center";
+  const chatPanelProps = {
+    workspaceTitle: library?.workspace?.title,
+    activeSeries,
+    selectedVideo,
+    selectedContextType,
+    selectedToolId: state.selectedToolId,
+    tools,
+    chatMessages: chat.messages,
+    chatSessions: chat.sessions,
+    activeSessionId: chat.activeSessionId,
+    chatPending: chat.pending,
+    contextUsage: chat.contextUsage,
+    contextUsageLoading: chat.contextUsageLoading,
+    ragModels: generation.ragModels,
+    knowledgeMemorySnapshot: state.knowledgeMemorySnapshot,
+    onSelectChatSession: chat.selectChatSession,
+    onOpenSeekReference: chat.openSeekReference,
+    onOpenSettings: () => actions.openSettingsPanel("network"),
+    onSubmitChat: chat.submit,
+  };
 
   useEffect(() => {
     persistWorkspaceLayout(layout);
@@ -119,6 +141,27 @@ export function WorkspacePage({ page }) {
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
+  function renderVideoPlayerPane() {
+    if (selectedVideo) {
+      return (
+        <WorkspaceVideoPlayer
+          videoSource={tools?.preview?.previewUrl ?? previewUrl}
+          playerSeekRequest={playerSeekRequest}
+          videoSourceType={selectedVideo?.sourceType}
+        />
+      );
+    }
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <WorkspaceStateBlock
+          eyebrow="Player"
+          title="选择视频以开始预览"
+          description="选中左侧的视频后,这里会显示可跳转的视频播放器。"
+          dashed
+        />
+      </div>
+    );
+  }
   if (state.loading && !summary) {
     const waitingForBackend = !state.backendReady;
     return (
@@ -236,6 +279,7 @@ export function WorkspacePage({ page }) {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onToggleChatDrawer={chat.toggleDrawer}
           chatDrawerOpen={chat.drawerOpen}
+          chatDrawerEnabled={!isChatCenterMode}
         />
 
         {state.error && (
@@ -265,22 +309,7 @@ export function WorkspacePage({ page }) {
               style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
               className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
             >
-              {selectedVideo ? (
-                <WorkspaceVideoPlayer
-                  videoSource={tools?.preview?.previewUrl ?? previewUrl}
-                  playerSeekRequest={playerSeekRequest}
-                  videoSourceType={selectedVideo?.sourceType}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center p-8">
-                  <WorkspaceStateBlock
-                    eyebrow="Player"
-                    title="选择视频以开始预览"
-                    description="选中左侧的视频后,这里会显示可跳转的视频播放器。"
-                    dashed
-                  />
-                </div>
-              )}
+              {isChatCenterMode ? <WorkspaceChatPanel {...chatPanelProps} /> : renderVideoPlayerPane()}
             </section>
           ) : null}
           {isPlaygroundHome ? (
@@ -342,6 +371,8 @@ export function WorkspacePage({ page }) {
                   selectedVideo={selectedVideo}
                   selectedContextType={selectedContextType}
                   selectedNode={selectedNode}
+                  previewUrl={previewUrl}
+                  playerSeekRequest={playerSeekRequest}
                   onSeek={shell.player.seekToTime}
                   selectedToolId={state.selectedToolId}
                   selectedChapterId={state.selectedChapterId}
@@ -424,28 +455,13 @@ export function WorkspacePage({ page }) {
         </AnimatePresence>
       </main>
 
-      <ChatDrawer
-        isOpen={chat.drawerOpen}
-        onClose={chat.closeDrawer}
-        workspaceTitle={library?.workspace?.title}
-        activeSeries={activeSeries}
-        selectedVideo={selectedVideo}
-        selectedContextType={selectedContextType}
-        selectedToolId={state.selectedToolId}
-        tools={tools}
-        chatMessages={chat.messages}
-        chatSessions={chat.sessions}
-        activeSessionId={chat.activeSessionId}
-        chatPending={chat.pending}
-        contextUsage={chat.contextUsage}
-        contextUsageLoading={chat.contextUsageLoading}
-        ragModels={generation.ragModels}
-        knowledgeMemorySnapshot={state.knowledgeMemorySnapshot}
-        onSelectChatSession={chat.selectChatSession}
-        onOpenSeekReference={chat.openSeekReference}
-        onOpenSettings={() => actions.openSettingsPanel("network")}
-        onSubmitChat={chat.submit}
-      />
+      {!isChatCenterMode ? (
+        <ChatDrawer
+          isOpen={chat.drawerOpen}
+          onClose={chat.closeDrawer}
+          {...chatPanelProps}
+        />
+      ) : null}
 
       {importModalState && (
         <WorkspaceImportModal
@@ -459,6 +475,7 @@ export function WorkspacePage({ page }) {
               ? actions.resolveSeriesVideo(url, targetSeriesId)
               : actions.resolvePlaygroundVideo(url)
           )}
+          onInitBilibiliCookie={actions.initBilibiliCookie}
           onLoadChaoxingStatus={actions.loadChaoxingStatus}
           onInitChaoxing={actions.initChaoxing}
           onCancelChaoxingInit={actions.cancelChaoxingInit}

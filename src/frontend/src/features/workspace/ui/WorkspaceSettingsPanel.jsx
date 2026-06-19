@@ -43,6 +43,7 @@ export function WorkspaceSettingsPanel({
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
   const [apiKeyRevealLoading, setApiKeyRevealLoading] = useState(false);
   const [providerTest, setProviderTest] = useState({ status: "idle", message: "" });
+  const isOllamaProvider = ui.llmProvider === "ollama";
   const hasApiKey = ui.hasOpenaiApiKey;
   const draftApiKey = ui.openaiApiKey.trim();
   const apiKeyDisplayValue = draftApiKey
@@ -186,6 +187,20 @@ export function WorkspaceSettingsPanel({
                   <WorkspaceToggleSwitch
                     checked={ui.showTakeaways}
                     onChange={() => onChangeSetting("showTakeaways", !ui.showTakeaways)}
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="显示模式"
+                  description="选择工作区中间区域优先展示视频播放器还是 AI 对话。"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.layoutMode}
+                    options={[
+                      { id: "video_center", label: "视频居中" },
+                      { id: "chat_center", label: "AI 聊天居中" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("layoutMode", nextValue)}
                   />
                 </WorkspaceSettingRow>
               </>
@@ -500,7 +515,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="API 根地址"
-                  description="模型的URL"
+                  description="模型的URL,填写根地址即可,不填写默认指向官方地址"
                 >
                   <div className="w-full sm:w-[340px]">
                     <WorkspaceTextInput
@@ -550,75 +565,77 @@ export function WorkspaceSettingsPanel({
                   />
                 </WorkspaceSettingRow>
 
-                <WorkspaceSettingRow
-                  title="API Key"
-                  description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。"
-                  contentClassName="2xl:w-full 2xl:flex-1 2xl:shrink"
-                >
-                  <div className="w-full min-w-0 max-w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-500 dark:text-stone-400"}`}>
-                          {hasApiKey ? "已配置" : "未配置"}
-                        </p>
-                        {apiKeyStatus ? (
-                          <p className="mt-1 max-w-full break-all text-xs text-stone-500 [overflow-wrap:anywhere] dark:text-stone-400">
-                            当前状态：{apiKeyDisplayValue}
+                {!isOllamaProvider ? (
+                  <WorkspaceSettingRow
+                    title="API Key"
+                    description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。"
+                    contentClassName="2xl:w-full 2xl:flex-1 2xl:shrink"
+                  >
+                    <div className="w-full min-w-0 max-w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-500 dark:text-stone-400"}`}>
+                            {hasApiKey ? "已配置" : "未配置"}
                           </p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (showApiKeyValue) {
-                            setShowApiKeyValue(false);
-                            return;
-                          }
-                          if (!draftApiKey && typeof onRevealOpenaiApiKey === "function") {
-                            setApiKeyRevealLoading(true);
-                            const revealedKey = await onRevealOpenaiApiKey();
-                            setApiKeyRevealLoading(false);
-                            if (!revealedKey) {
+                          {apiKeyStatus ? (
+                            <p className="mt-1 max-w-full break-all text-xs text-stone-500 [overflow-wrap:anywhere] dark:text-stone-400">
+                              当前状态：{apiKeyDisplayValue}
+                            </p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (showApiKeyValue) {
+                              setShowApiKeyValue(false);
                               return;
                             }
-                          }
-                          setShowApiKeyValue(true);
-                        }}
-                        disabled={!apiKeyStatus || apiKeyRevealLoading}
-                        className="w-full rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800 sm:w-auto"
-                      >
-                        {apiKeyRevealLoading ? "读取中..." : showApiKeyValue ? "隐藏" : "显示"}
-                      </button>
+                            if (!draftApiKey && typeof onRevealOpenaiApiKey === "function") {
+                              setApiKeyRevealLoading(true);
+                              const revealedKey = await onRevealOpenaiApiKey();
+                              setApiKeyRevealLoading(false);
+                              if (!revealedKey) {
+                                return;
+                              }
+                            }
+                            setShowApiKeyValue(true);
+                          }}
+                          disabled={!apiKeyStatus || apiKeyRevealLoading}
+                          className="w-full rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800 sm:w-auto"
+                        >
+                          {apiKeyRevealLoading ? "读取中..." : showApiKeyValue ? "隐藏" : "显示"}
+                        </button>
+                      </div>
+                      {showApiKeyValue ? (
+                        <textarea
+                          value={ui.openaiApiKey}
+                          onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
+                          placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
+                          rows={3}
+                          className="mt-3 block w-full min-w-0 max-w-full resize-none overflow-y-auto break-all rounded-xl border border-stone-200 bg-white px-4 py-2.5 font-mono text-sm leading-6 text-stone-900 outline-none [overflow-wrap:anywhere] focus:border-accent dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
+                        />
+                      ) : (
+                        <WorkspaceTextInput
+                          type="password"
+                          value={ui.openaiApiKey}
+                          onChange={(nextValue) => onChangeSetting("openaiApiKey", nextValue)}
+                          placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
+                          className="mt-3 w-full min-w-0 dark:bg-stone-950"
+                        />
+                      )}
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={onSaveApiKey}
+                          disabled={!ui.openaiApiKey.trim()}
+                          className="w-full rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 sm:w-auto"
+                        >
+                          保存 Key
+                        </button>
+                      </div>
                     </div>
-                    {showApiKeyValue ? (
-                      <textarea
-                        value={ui.openaiApiKey}
-                        onChange={(event) => onChangeSetting("openaiApiKey", event.target.value)}
-                        placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
-                        rows={3}
-                        className="mt-3 block w-full min-w-0 max-w-full resize-none overflow-y-auto break-all rounded-xl border border-stone-200 bg-white px-4 py-2.5 font-mono text-sm leading-6 text-stone-900 outline-none [overflow-wrap:anywhere] focus:border-accent dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
-                      />
-                    ) : (
-                      <WorkspaceTextInput
-                        type="password"
-                        value={ui.openaiApiKey}
-                        onChange={(nextValue) => onChangeSetting("openaiApiKey", nextValue)}
-                        placeholder={hasApiKey ? "输入新 Key 以覆盖现有配置" : "sk-..."}
-                        className="mt-3 w-full min-w-0 dark:bg-stone-950"
-                      />
-                    )}
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={onSaveApiKey}
-                        disabled={!ui.openaiApiKey.trim()}
-                        className="w-full rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100 sm:w-auto"
-                      >
-                        保存 Key
-                      </button>
-                    </div>
-                  </div>
-                </WorkspaceSettingRow>
+                  </WorkspaceSettingRow>
+                ) : null}
 
                 <WorkspaceSettingRow
                   title="连接测试"

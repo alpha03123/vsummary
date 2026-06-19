@@ -19,6 +19,7 @@ from backend.video_summary.infrastructure.rag_models import RAG_RERANKER_REQUIRE
 from backend.video_summary.infrastructure.settings import (
     EnvSettings,
     VALID_THEMES,
+    VALID_WORKSPACE_LAYOUT_MODES,
     VALID_TRANSCRIPTION_MODES,
     VALID_ANSWER_DETAIL_LEVELS,
     VALID_LLM_PROVIDERS,
@@ -95,6 +96,7 @@ class WorkspaceSettings:
 
     theme: str
     show_takeaways: bool
+    layout_mode: str
     transcript_enhancement_enabled: bool
     asr_model_quality: str
     transcription_mode: str
@@ -127,6 +129,7 @@ class SettingsServicePort(Protocol):
         *,
         theme: str,
         show_takeaways: bool,
+        layout_mode: str,
         transcript_enhancement_enabled: bool,
         asr_model_quality: str,
         transcription_mode: str,
@@ -224,6 +227,7 @@ class SettingsService:
         return WorkspaceSettings(
             theme=settings.workspace_ui.theme,
             show_takeaways=settings.workspace_ui.show_takeaways,
+            layout_mode=settings.workspace_ui.layout_mode,
             transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
             asr_model_quality=settings.asr.faster_whisper.model_size,
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
@@ -245,6 +249,7 @@ class SettingsService:
         *,
         theme: str,
         show_takeaways: bool,
+        layout_mode: str,
         transcript_enhancement_enabled: bool,
         asr_model_quality: str,
         transcription_mode: str,
@@ -293,6 +298,8 @@ class SettingsService:
         """
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
+        if layout_mode not in VALID_WORKSPACE_LAYOUT_MODES:
+            raise SettingsValidationError(f"unsupported workspace layout mode '{layout_mode}'")
         if not self._faster_whisper_model_manager.is_supported(asr_model_quality):
             raise SettingsValidationError(f"unsupported asr model '{asr_model_quality}'")
         if transcription_mode not in VALID_TRANSCRIPTION_MODES:
@@ -325,6 +332,7 @@ class SettingsService:
                 WorkspaceUiSettings(
                     theme=theme,
                     show_takeaways=show_takeaways,
+                    layout_mode=layout_mode,
                 ),
             )
             next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
@@ -352,6 +360,7 @@ class SettingsService:
         return WorkspaceSettings(
             theme=theme,
             show_takeaways=show_takeaways,
+            layout_mode=layout_mode,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
             asr_model_quality=asr_model_quality,
             transcription_mode=transcription_mode,

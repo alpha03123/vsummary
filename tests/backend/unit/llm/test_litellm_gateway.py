@@ -146,6 +146,48 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(completion.models, ["deepseek/deepseek-v4-pro"])
 
+    def test_stream_text_wraps_reasoning_content_as_think_block(self) -> None:
+        gateway = LiteLLMCompletionGateway(
+            provider="deepseek",
+            model="deepseek-reasoner",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            completion_fn=ReasoningStreamCompletion(),
+            acompletion_fn=unused_async_completion,
+        )
+
+        chunks = list(gateway.stream_text([{"role": "user", "content": "ping"}]))
+
+        self.assertEqual(chunks, ["<think>", "先分析。", "</think>", "最终答案。"])
+
+    def test_allows_ollama_without_api_key(self) -> None:
+        completion = CapturingCompletion("ok")
+        gateway = LiteLLMCompletionGateway(
+            provider="ollama",
+            model="qwen2.5:7b",
+            base_url="http://127.0.0.1:11434",
+            api_key="",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        gateway.complete_text([{"role": "user", "content": "ping"}])
+
+        self.assertEqual(completion.models, ["ollama/qwen2.5:7b"])
+        self.assertEqual(completion.api_keys, [None])
+        self.assertEqual(completion.api_bases, ["http://127.0.0.1:11434"])
+
+    def test_keeps_api_key_required_for_openai_provider(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "缺少 API Key"):
+            LiteLLMCompletionGateway(
+                provider="openai",
+                model="test-model",
+                base_url="https://example.invalid/v1",
+                api_key="",
+                completion_fn=CapturingCompletion("ok"),
+                acompletion_fn=unused_async_completion,
+            )
+
     def test_falls_back_to_json_object_when_schema_is_rejected(self) -> None:
         completion = RejectingFirstResponseFormatCompletion(
             SeriesAnswerPayload,
@@ -324,6 +366,7 @@ class CapturingCompletion:
         self.reasoning_efforts: list[object] = []
         self.allowed_openai_params: list[object] = []
         self.models: list[str] = []
+        self.api_keys: list[object] = []
 
     def __call__(self, **kwargs):
         self.messages.append(list(kwargs["messages"]))
@@ -332,6 +375,7 @@ class CapturingCompletion:
         self.reasoning_efforts.append(kwargs.get("reasoning_effort"))
         self.allowed_openai_params.append(kwargs.get("allowed_openai_params"))
         self.models.append(kwargs["model"])
+        self.api_keys.append(kwargs.get("api_key"))
         return {"choices": [{"message": {"content": self._content}}]}
 
 
@@ -379,6 +423,17 @@ class RejectingReasoningEffortCompletion:
     def __call__(self, **kwargs):
         del kwargs
         raise RuntimeError("openai does not support parameters: ['reasoning_effort']")
+
+
+class ReasoningStreamCompletion:
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return iter(
+            [
+                {"choices": [{"delta": {"reasoning_content": "先分析。"}}]},
+                {"choices": [{"delta": {"content": "最终答案。"}}]},
+            ]
+        )
 
 
 async def unused_async_completion(**kwargs):

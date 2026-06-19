@@ -31,6 +31,11 @@ const WorkspaceOverviewView = lazy(() =>
     default: module.WorkspaceOverviewView,
   })),
 );
+const WorkspacePreviewView = lazy(() =>
+  import("./views/WorkspacePreviewView").then((module) => ({
+    default: module.WorkspacePreviewView,
+  })),
+);
 const WorkspaceSeriesHomeView = lazy(() =>
   import("./views/WorkspaceSeriesHomeView").then((module) => ({
     default: module.WorkspaceSeriesHomeView,
@@ -68,6 +73,8 @@ export function WorkspaceReadingPane({
   selectedVideo,
   selectedContextType,
   selectedNode,
+  previewUrl,
+  playerSeekRequest,
   selectedToolId,
   selectedChapterId,
   toolsLoading,
@@ -98,6 +105,7 @@ export function WorkspaceReadingPane({
   const isSeriesHome = selectedToolId === "series-home";
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
+  const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
 
   return (
     <section className="relative flex h-full w-full flex-col bg-transparent">
@@ -186,12 +194,14 @@ export function WorkspaceReadingPane({
                         />
                       ) : (
                         <WorkspaceToolGrid
-                          items={Object.entries(TOOL_TILES).map(([toolId, meta]) => ({
-                            id: toolId,
-                            meta,
-                            disabled: getToolState(tools, toolId)?.available === false,
-                            hint: describeToolState(toolId, getToolState(tools, toolId)),
-                          }))}
+                          items={Object.entries(TOOL_TILES)
+                            .filter(([toolId]) => ui.layoutMode === "chat_center" || toolId !== "preview")
+                            .map(([toolId, meta]) => ({
+                              id: toolId,
+                              meta,
+                              disabled: getToolState(tools, toolId)?.available === false,
+                              hint: describeToolState(toolId, getToolState(tools, toolId)),
+                            }))}
                           onSelect={onSelectTool}
                         />
                       )}
@@ -246,6 +256,9 @@ export function WorkspaceReadingPane({
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}
                     />
+                  ) : null}
+                  {selectedToolId === "preview" ? (
+                    <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={playerSeekRequest} />
                   ) : null}
                 </Suspense>
               ) : null}
@@ -304,6 +317,16 @@ function buildExportActions({ activeSeries, notes, selectedToolId, selectedVideo
       },
     ];
   }
+  if (selectedToolId === "preview") {
+    return [
+      {
+        href: videoSourceExportUrl(activeSeries.id, selectedVideo.id),
+        enabled: tools?.preview?.available === true,
+        label: "视频导出",
+        disabledReason: "视频源存在后才能导出",
+      },
+    ];
+  }
   return [];
 }
 
@@ -311,6 +334,9 @@ function videoExportUrl(seriesId, videoId, exportName) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;
 }
 
+function videoSourceExportUrl(seriesId, videoId) {
+  return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/video`;
+}
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
   return (
     <>
