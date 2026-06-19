@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import VideoMindmapDTO
 from backend.video_summary.library.ports import VideoLibraryReader, VideoMindmapGenerator
 
@@ -29,12 +30,18 @@ class GenerateVideoMindmapFromLibrary:
         self._workspace = workspace
         self._generator = generator
 
-    async def run(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
+    async def run(
+        self,
+        series_id: str,
+        video_id: str,
+        progress_reporter: ProgressReporter | None = None,
+    ) -> VideoMindmapDTO | None:
         """为指定视频生成思维导图并返回最终制品 DTO。
 
         Args:
             series_id: 所属系列 ID。
             video_id: 视频唯一 ID。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
 
         Returns:
             落盘后的 `VideoMindmapDTO`；总结不存在或生成器抛 `LookupError` 时
@@ -44,11 +51,16 @@ class GenerateVideoMindmapFromLibrary:
         if summary is None:
             return None
 
+        transcript = self._workspace.get_video_transcript(series_id, video_id)
+        transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
+
         try:
             await self._generator.run(
                 series_id=series_id,
                 video_id=video_id,
                 summary_data=summary.summary,
+                transcript_text=transcript_text,
+                progress_reporter=progress_reporter,
             )
         except LookupError:
             return None
