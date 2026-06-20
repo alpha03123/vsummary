@@ -39,6 +39,7 @@ function asVideoCard(value, label) {
     sourceType: record.source_type === "audio" ? "audio" : "video",
     processed: Boolean(record.processed),
     status: asString(record.status, `${label}.status`),
+    coreProblem: asOptionalString(record.core_problem),
     isLinked: Boolean(record.is_linked),
     bilibiliBvid: typeof record.bilibili_bvid === "string" ? record.bilibili_bvid : "",
     bilibiliPage: typeof record.bilibili_page === "number" ? record.bilibili_page : 0,
