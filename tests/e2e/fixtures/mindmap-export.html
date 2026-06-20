@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mindmap export e2e fixture</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #export-svg { margin-top: 16px; padding: 8px 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Mindmap export fixture</h1>
+  <svg id="mindmap" width="800" height="500" class="mindmap-svg"></svg>
+  <br />
+  <button id="export-svg" type="button">导出 SVG</button>
+
+  <script type="module">
+    import { Markmap } from "markmap-view";
+    import { exportMindmapAsSVG } from "/src/features/workspace/ui/mindmapSVGExport.js";
+
+    const svgEl = document.getElementById("mindmap");
+    const mm = Markmap.create(svgEl, null, {
+      content: "Root",
+      payload: { id: "root" },
+      children: [
+        { content: "Child A", payload: { id: "a" }, children: [] },
+        { content: "Child B", payload: { id: "b" }, children: [] },
+      ],
+    });
+
+    // Wait for markmap to finish rendering before exposing the export button.
+    setTimeout(() => {
+      document.getElementById("export-svg").addEventListener("click", () => {
+        exportMindmapAsSVG(mm, "e2e-test.svg");
+      });
+    }, 200);
+  </script>
+</body>
+</html>
