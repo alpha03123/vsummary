@@ -6,7 +6,10 @@ vi.mock("markmap-view", () => ({
   Markmap: {
     create: vi.fn(() => ({
       destroy: vi.fn(),
+      fit: vi.fn(() => Promise.resolve()),
+      state: { rect: { x1: 0, x2: 100, y1: 0, y2: 100 } },
       svg: { node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })) },
+      zoom: { transform: vi.fn() },
     })),
   },
 }));
@@ -84,5 +87,38 @@ describe("MindmapCanvas — markmap integration", () => {
       </div>
     );
     expect(Toolbar.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("T8: writes the markmap instance to markmapRef on render", () => {
+    Markmap.create.mockReturnValue({
+      destroy: vi.fn(),
+      fit: vi.fn(() => Promise.resolve()),
+      state: { rect: { x1: 0, x2: 100, y1: 0, y2: 100 } },
+      svg: { node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })) },
+      zoom: { transform: vi.fn() },
+    });
+    const markmapRef = { current: null };
+    render(
+      <MindmapCanvas root={fakeRoot} selectedNodeId={null} onSelectNode={vi.fn()} markmapRef={markmapRef} />
+    );
+    expect(markmapRef.current).not.toBeNull();
+    expect(typeof markmapRef.current.fit).toBe("function");
+  });
+
+  it("T9: clears markmapRef on unmount", () => {
+    Markmap.create.mockReturnValue({
+      destroy: vi.fn(),
+      fit: vi.fn(() => Promise.resolve()),
+      state: { rect: { x1: 0, x2: 100, y1: 0, y2: 100 } },
+      svg: { node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })) },
+      zoom: { transform: vi.fn() },
+    });
+    const markmapRef = { current: null };
+    const { unmount } = render(
+      <MindmapCanvas root={fakeRoot} selectedNodeId={null} onSelectNode={vi.fn()} markmapRef={markmapRef} />
+    );
+    expect(markmapRef.current).not.toBeNull();
+    unmount();
+    expect(markmapRef.current).toBeNull();
   });
 });

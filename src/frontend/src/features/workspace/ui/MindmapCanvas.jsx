@@ -3,7 +3,7 @@ import { Markmap } from "markmap-view";
 import { Toolbar } from "markmap-toolbar";
 import * as d3 from "d3";
 
-export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
+export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }) {
   const svgRef = useRef(null);
   const mmRef = useRef(null);
   const toolbarRef = useRef(null);
@@ -23,6 +23,7 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
     const data = convertToMarkmapNode(root);
     const mm = Markmap.create(svgRef.current, null, data);
     mmRef.current = mm;
+    if (markmapRef) markmapRef.current = mm;
 
     const toolbar = Toolbar.create(mm);
     toolbar.el.setAttribute("style", "position:absolute;bottom:20px;right:20px");
@@ -49,8 +50,9 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode }) {
       toolbarRef.current = null;
       mm.destroy();
       mmRef.current = null;
+      if (markmapRef) markmapRef.current = null;
     };
-  }, [root]);
+  }, [root, markmapRef]);
 
   useEffect(() => {
     const svg = mmRef.current?.svg?.node();
