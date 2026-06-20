@@ -43,6 +43,7 @@ class VideoCardResponse(BaseModel):
     source_type: str
     processed: bool
     status: str
+    core_problem: str = ""
     is_linked: bool = False
     bilibili_bvid: str = ""
     bilibili_page: int = 0
@@ -66,6 +67,7 @@ class VideoCardResponse(BaseModel):
             source_type=video.source_type,
             processed=video.processed,
             status=video.status,
+            core_problem=video.core_problem,
             is_linked=video.is_linked,
             bilibili_bvid=video.bilibili_bvid,
             bilibili_page=video.bilibili_page,
