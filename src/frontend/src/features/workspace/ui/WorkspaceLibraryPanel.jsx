@@ -405,7 +405,7 @@ export function WorkspaceLibraryPanel({
       return videos;
     }
     return videos.filter((video) => {
-      const haystacks = [video.title, video.sourceName, video.sourceUrl]
+      const haystacks = [video.title, video.sourceName, video.sourceUrl, video.coreProblem]
         .filter((value) => typeof value === "string")
         .map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(normalizedFilter));
@@ -554,6 +554,14 @@ export function WorkspaceLibraryPanel({
                 <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
                   {video.title}
                 </strong>
+                {video.coreProblem ? (
+                  <span
+                    className="text-xs text-stone-600 dark:text-stone-300 line-clamp-2 leading-snug whitespace-pre-line"
+                    title={video.coreProblem}
+                  >
+                    {video.coreProblem}
+                  </span>
+                ) : null}
                 <span className="text-xs text-stone-500 dark:text-stone-400 truncate">
                   {video.isLinked || video.status === "linked" ? video.sourceUrl || video.sourceName : video.sourceName}
                 </span>
