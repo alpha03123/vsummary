@@ -782,6 +782,26 @@ class FileSystemVideoWorkspace:
             status="ready" if processed else "pending",
         )
 
+    def _read_core_problem(self, series_id: str, video_id: str) -> str:
+        """从本地 summary.json 提取 core_problem 字段。
+
+        返回空串的所有路径都视为"无 core_problem",不抛异常:
+            - summary.json 不存在
+            - summary.json 读取失败 (OSError)
+            - summary.json 不是合法 JSON (ValueError)
+            - core_problem 字段缺失
+            - core_problem 不是字符串
+        """
+        summary_path = self._workspace_dir / series_id / video_id / "summary.json"
+        if not summary_path.is_file():
+            return ""
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return ""
+        value = payload.get("core_problem", "")
+        return value.strip() if isinstance(value, str) else ""
+
     def _copy_video_streams(self, *, series_dir: Path, files: list[tuple[str, object]]) -> list[Path]:
         """把 `[(filename, stream), ...]` 复制到目标系列目录中。
 
