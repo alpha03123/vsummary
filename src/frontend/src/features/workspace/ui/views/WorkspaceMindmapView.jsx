@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
 import { MindmapCanvas } from "../MindmapCanvas";
+import { exportMindmapAsSVG } from "../mindmapSVGExport";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 
 export function WorkspaceMindmapView({
@@ -20,6 +21,7 @@ export function WorkspaceMindmapView({
 
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
+  const markmapRef = useRef(null);
 
   useEffect(() => {
     if (!exportOpen) return;
@@ -31,28 +33,6 @@ export function WorkspaceMindmapView({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [exportOpen]);
-
-  function handleExportPNG(filename) {
-    const svgEl = document.querySelector(".mindmap-svg");
-    if (!svgEl) return;
-    const svgData = new XMLSerializer().serializeToString(svgEl);
-    const canvas = document.createElement("canvas");
-    canvas.width = svgEl.clientWidth * 2;
-    canvas.height = svgEl.clientHeight * 2;
-    const ctx = canvas.getContext("2d");
-    ctx.scale(2, 2);
-    const img = new Image();
-    img.onload = () => {
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-bg") || "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      const a = document.createElement("a");
-      a.download = filename;
-      a.href = canvas.toDataURL("image/png");
-      a.click();
-    };
-    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
-  }
 
   if (!tools?.mindmap.available) {
     return (
@@ -173,17 +153,19 @@ export function WorkspaceMindmapView({
                 className="block w-full text-left px-4 py-2 text-xs text-stone-700 dark:text-zinc-300 hover:bg-stone-50 dark:hover:bg-neutral-800"
                 onClick={() => {
                   setExportOpen(false);
-                  handleExportPNG(`mindmap-${videoId}.png`);
+                  if (markmapRef.current) {
+                    exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`);
+                  }
                 }}
               >
-                PNG (.png)
+                SVG (.svg)
               </button>
             </div>
           )}
         </div>
       </div>
       <div className="h-full w-full">
-        <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} />
+        <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} />
       </div>
     </div>
   );
