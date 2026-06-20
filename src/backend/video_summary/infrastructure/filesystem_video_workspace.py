@@ -733,14 +733,17 @@ class FileSystemVideoWorkspace:
             consumed_video_ids.add(video_id)
             local_file = local_paths_by_stem.get(video_id)
             if local_file is not None:
+                summary_path = self._workspace_dir / series_id / video_id / "summary.json"
+                has_summary = summary_path.is_file()
                 cards.append(
                     LibraryVideoCardDTO(
                         id=video_id,
                         title=str(item.get("title", video_id)).strip() or video_id,
                         source_name=local_file.name,
                         source_type=_source_type_for_path(local_file),
-                        processed=(self._workspace_dir / series_id / video_id / "summary.json").exists(),
-                        status="ready" if (self._workspace_dir / series_id / video_id / "summary.json").exists() else "pending",
+                        processed=has_summary,
+                        status="ready" if has_summary else "pending",
+                        core_problem=self._read_core_problem(series_id, video_id),
                         is_linked=False,
                         bilibili_bvid=bvid,
                         bilibili_page=page,
@@ -757,6 +760,7 @@ class FileSystemVideoWorkspace:
                     source_type="video",
                     processed=False,
                     status="linked",
+                    core_problem="",
                     is_linked=True,
                     bilibili_bvid=bvid,
                     bilibili_page=page,
@@ -772,14 +776,16 @@ class FileSystemVideoWorkspace:
 
     def _build_local_video_card(self, series_id: str, video_path: Path) -> LibraryVideoCardDTO:
         """按媒体文件路径构造本地视频卡片，状态以 `summary.json` 是否存在为判据。"""
-        processed = (self._workspace_dir / series_id / video_path.stem / "summary.json").exists()
+        summary_path = self._workspace_dir / series_id / video_path.stem / "summary.json"
+        has_summary = summary_path.is_file()
         return LibraryVideoCardDTO(
             id=video_path.stem,
             title=video_path.stem,
             source_name=video_path.name,
             source_type=_source_type_for_path(video_path),
-            processed=processed,
-            status="ready" if processed else "pending",
+            processed=has_summary,
+            status="ready" if has_summary else "pending",
+            core_problem=self._read_core_problem(series_id, video_path.stem),
         )
 
     def _read_core_problem(self, series_id: str, video_id: str) -> str:
