@@ -3,6 +3,8 @@ import { Check, Copy } from "lucide-react";
 
 import { copyText } from "./clipboard";
 
+const REVERT_DELAY_MS = 1600;
+
 export function CopyToClipboardButton({
   text,
   label = "复制",
@@ -25,7 +27,7 @@ export function CopyToClipboardButton({
       await copyText(text);
       setCopied(true);
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = window.setTimeout(() => setCopied(false), 1600);
+      timeoutRef.current = window.setTimeout(() => setCopied(false), REVERT_DELAY_MS);
     } catch {
       // copyText rejected: leave button in initial state, no toast/log
     }
@@ -38,7 +40,6 @@ export function CopyToClipboardButton({
     <button
       type="button"
       onClick={handleClick}
-      aria-live="polite"
       aria-label={displayLabel}
       title={displayLabel}
       className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition ${
@@ -48,7 +49,7 @@ export function CopyToClipboardButton({
       } ${className}`}
     >
       <Icon size={iconSize} strokeWidth={2.2} aria-hidden="true" />
-      <span>{displayLabel}</span>
+      <span aria-live="polite">{displayLabel}</span>
     </button>
   );
 }
