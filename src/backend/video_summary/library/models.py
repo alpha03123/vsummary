@@ -64,6 +64,7 @@ class LibraryVideoCardDTO:
         source_name: 源文件展示名（本地）或站点名（外部链接）。
         processed: 是否已生成至少一份制品（总结/转写/思维导图等）。
         status: 处理状态文本（如 "pending"/"ready"/"failed"），由用例层定义。
+        core_problem: 视频总结中的核心问题摘要，空字符串表示未生成或无内容。
         source_type: 源类型，"video" 表示本地视频文件。
         is_linked: 是否来自外部链接（未实际下载到本地）。
         bilibili_bvid: Bilibili BV 号；非 B 站来源时为空字符串。
@@ -77,6 +78,7 @@ class LibraryVideoCardDTO:
     source_name: str
     processed: bool
     status: str
+    core_problem: str = ""
     source_type: str = "video"
     is_linked: bool = False
     bilibili_bvid: str = ""

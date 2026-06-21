@@ -64,4 +64,84 @@ describe("toWorkspaceLibrary", () => {
 
     expect(library.series[0].videos[0].sourceType).toBe("audio");
   });
+
+  it("maps core_problem to coreProblem when present", () => {
+    const library = toWorkspaceLibrary({
+      workspace: { id: "ws", title: "Workspace" },
+      series: [
+        {
+          id: "s1",
+          title: "S1",
+          is_linked: false,
+          source_url: "",
+          videos: [
+            {
+              id: "v1",
+              title: "V1",
+              source_name: "v1.mp4",
+              processed: true,
+              status: "ready",
+              core_problem: "如何用三步拆解复杂问题",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(library.series[0].videos[0]).toMatchObject({
+      coreProblem: "如何用三步拆解复杂问题",
+    });
+  });
+
+  it("returns empty coreProblem when core_problem field is missing", () => {
+    const library = toWorkspaceLibrary({
+      workspace: { id: "ws", title: "Workspace" },
+      series: [
+        {
+          id: "s1",
+          title: "S1",
+          is_linked: false,
+          source_url: "",
+          videos: [
+            {
+              id: "v1",
+              title: "V1",
+              source_name: "v1.mp4",
+              processed: false,
+              status: "pending",
+              // core_problem 故意不传
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(library.series[0].videos[0].coreProblem).toBe("");
+  });
+
+  it("returns empty coreProblem when core_problem is not a string", () => {
+    const library = toWorkspaceLibrary({
+      workspace: { id: "ws", title: "Workspace" },
+      series: [
+        {
+          id: "s1",
+          title: "S1",
+          is_linked: false,
+          source_url: "",
+          videos: [
+            {
+              id: "v1",
+              title: "V1",
+              source_name: "v1.mp4",
+              processed: true,
+              status: "ready",
+              core_problem: 42,  // 故意传错类型
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(library.series[0].videos[0].coreProblem).toBe("");
+  });
 });
