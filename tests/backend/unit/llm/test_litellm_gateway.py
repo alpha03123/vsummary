@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 import unittest
@@ -355,6 +356,65 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         self.assertIn("不要输出 Markdown", prompt)
         self.assertIn('"SeriesAnswerPayload"', prompt)
         self.assertIn('"citations"', prompt)
+
+    def test_async_acomplete_structured_forwards_timeout_to_acompletion(self) -> None:
+        # T1: explicit timeout reaches the litellm layer.
+        #
+        # Uses SeriesAnswerPayload (already imported at top of file) instead of
+        # MindmapNodePayload: the timeout-forwarding logic is independent of the
+        # response_model type (acomplete_structured is generic over
+        # type[StructuredResponseT] and does not dispatch on it). Keeping
+        # SeriesAnswerPayload avoids pulling video_summary.generation into this
+        # shared-layer test.
+        recorded_timeouts: list[object] = []
+
+        async def recording_acompletion(**kwargs):
+            recorded_timeouts.append(kwargs.get("timeout"))
+            return {"choices": [{"message": {"content": '{"answer": "ok", "citations": [], "used_source_types": []}'}}]}
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            acompletion_fn=recording_acompletion,
+        )
+
+        result = asyncio.run(
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "生成思维导图"}],
+                response_model=SeriesAnswerPayload,
+                timeout=120,
+            )
+        )
+
+        self.assertEqual(result.answer, "ok")
+        self.assertEqual(recorded_timeouts, [120])
+
+    def test_async_acomplete_structured_default_timeout_is_none(self) -> None:
+        # T2: when timeout is omitted, inner acomplete_text sees None.
+        recorded_timeouts: list[object] = []
+
+        async def recording_acompletion(**kwargs):
+            recorded_timeouts.append(kwargs.get("timeout"))
+            return {"choices": [{"message": {"content": '{"answer": "ok", "citations": [], "used_source_types": []}'}}]}
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            acompletion_fn=recording_acompletion,
+        )
+
+        asyncio.run(
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "生成思维导图"}],
+                response_model=SeriesAnswerPayload,
+            )
+        )
+
+        self.assertEqual(recorded_timeouts, [None])
 
 
 class CapturingCompletion:
