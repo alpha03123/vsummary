@@ -143,7 +143,7 @@ git commit -m "feat(frontend): extract copyText utility to ui/shared/clipboard"
 - Create: `src/frontend/src/features/workspace/ui/shared/CopyToClipboardButton.jsx`
 - Create: `tests/frontend/features/workspace/ui/shared/CopyToClipboardButton.test.jsx`
 
-本任务一次性写完所有 11 个测试（覆盖 R1/R2/R5/R6/B1/B2/B3/B4/B6），跑确认全失败，实现组件，再跑确认全通过，最后一次提交。
+本任务一次性写完所有 9 个测试（覆盖 R1/R2/R5/R6/B1/B2/B3/B4 + 1600ms 复原），跑确认全失败，实现组件，再跑确认全通过，最后一次提交。B6 键盘测试不写（详见 Self-Review）。
 
 - [ ] **Step 1: 写所有失败的组件测试**
 
@@ -153,13 +153,12 @@ git commit -m "feat(frontend): extract copyText utility to ui/shared/clipboard"
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { copyText } from "@src/features/workspace/ui/shared/clipboard";
 import { CopyToClipboardButton } from "@src/features/workspace/ui/shared/CopyToClipboardButton";
 
 vi.mock("@src/features/workspace/ui/shared/clipboard", () => ({
   copyText: vi.fn(),
 }));
-
-import { copyText } from "@src/features/workspace/ui/shared/clipboard";
 
 describe("CopyToClipboardButton", () => {
   beforeEach(() => {
@@ -250,9 +249,10 @@ describe("CopyToClipboardButton", () => {
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
-    expect(errorSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining("Can't perform a React state update"),
-    );
+    // React 在组件卸载后调用 setState 会输出 "An update to X inside a test was not wrapped in act"
+    // 或 "Can't perform a React state update on an unmounted component" — 任一出现即视为未清理
+    const allCalls = errorSpy.mock.calls.flat().join("\n");
+    expect(allCalls).not.toMatch(/unmounted|wrapped in act/i);
     errorSpy.mockRestore();
   });
 
@@ -263,26 +263,6 @@ describe("CopyToClipboardButton", () => {
       fireEvent.click(screen.getByRole("button"));
     });
     expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
-  });
-
-  it("Enter 键触发复制", async () => {
-    render(<CopyToClipboardButton text="abc" />);
-    const btn = screen.getByRole("button", { name: "复制" });
-    btn.focus();
-    await act(async () => {
-      fireEvent.keyDown(btn, { key: "Enter" });
-    });
-    expect(copyText).toHaveBeenCalledWith("abc");
-  });
-
-  it("Space 键触发复制", async () => {
-    render(<CopyToClipboardButton text="abc" />);
-    const btn = screen.getByRole("button", { name: "复制" });
-    btn.focus();
-    await act(async () => {
-      fireEvent.keyDown(btn, { key: " " });
-    });
-    expect(copyText).toHaveBeenCalledWith("abc");
   });
 
   it("不同实例的 copied 状态相互独立", async () => {
@@ -300,16 +280,17 @@ describe("CopyToClipboardButton", () => {
     await act(async () => {
       fireEvent.click(buttons[1]);
     });
-    expect(screen.getByRole("button", { name: "已复制" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "复制" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "已复制" })).toHaveLength(2);
   });
 });
 ```
 
+**注:** 不写键盘 Enter/Space 触发测试 (AC B6)。B6 对应"`<button type="button">` 默认行为，无额外处理"，是浏览器原生行为，不属于本组件代码。`@testing-library/user-event` 未安装 (package.json devDependencies 确认)，`fireEvent.keyDown` 在 jsdom 中无法触发原生 click，因此放弃测试。
+
 - [ ] **Step 2: 跑测试, 确认全部失败**
 
 Run: `cd src/frontend && npx vitest run tests/frontend/features/workspace/ui/shared/CopyToClipboardButton.test.jsx`
-Expected: 全部 FAIL（11 个）— `Failed to resolve import "@src/features/workspace/ui/shared/CopyToClipboardButton"`
+Expected: 全部 FAIL (9 个) — `Failed to resolve import "@src/features/workspace/ui/shared/CopyToClipboardButton"`
 
 - [ ] **Step 3: 实现 CopyToClipboardButton.jsx**
 
@@ -375,7 +356,7 @@ export function CopyToClipboardButton({
 - [ ] **Step 4: 跑测试, 确认全部通过**
 
 Run: `cd src/frontend && npx vitest run tests/frontend/features/workspace/ui/shared/CopyToClipboardButton.test.jsx`
-Expected: 11 passed
+Expected: 9 passed
 
 > 若失败: 优先检查 timer 测试 (`vi.useFakeTimers` 必须在 click 之前；`act` 包裹必须齐全); a11y 测试断言 `aria-label` 而非 `title`; 卸载测试需 `unmount()` 后再 advance timers.
 
@@ -399,17 +380,18 @@ git commit -m "feat(frontend): add CopyToClipboardButton shared component"
 创建 `tests/frontend/features/workspace/ui/views/WorkspaceKnowledgeCardsView.test.jsx`:
 
 ```jsx
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WorkspaceKnowledgeCardsView } from "@src/features/workspace/ui/views/WorkspaceKnowledgeCardsView";
-import { buildCardMarkdown } from "@src/features/workspace/ui/views/WorkspaceKnowledgeCardsView";
+import { copyText } from "@src/features/workspace/ui/shared/clipboard";
+import {
+  buildCardMarkdown,
+  WorkspaceKnowledgeCardsView,
+} from "@src/features/workspace/ui/views/WorkspaceKnowledgeCardsView";
 
 vi.mock("@src/features/workspace/ui/shared/clipboard", () => ({
   copyText: vi.fn(),
 }));
-
-import { copyText } from "@src/features/workspace/ui/shared/clipboard";
 
 const baseProps = {
   tools: { knowledgeCards: { available: true, generated: true } },
@@ -420,6 +402,25 @@ const baseProps = {
   onGenerateKnowledgeCards: vi.fn(),
   onClearKnowledgeCardsFeedback: vi.fn(),
 };
+
+const sampleCards = [
+  {
+    id: "c1",
+    kind: "CONCEPT",
+    title: "Transformer 注意力",
+    summary: "核心是 self-attention",
+    details: "Q/K/V 投影",
+    tags: ["transformer", "nlp"],
+  },
+  {
+    id: "c2",
+    kind: "FACT",
+    title: "另一个知识点",
+    summary: "次要点",
+    details: "细节",
+    tags: [],
+  },
+];
 
 describe("buildCardMarkdown", () => {
   it("包含标题、摘要、详情和 tags 行", () => {
@@ -489,35 +490,16 @@ describe("buildCardMarkdown", () => {
 });
 
 describe("WorkspaceKnowledgeCardsView - 复制按钮", () => {
-  const cards = [
-    {
-      id: "c1",
-      kind: "CONCEPT",
-      title: "Transformer 注意力",
-      summary: "核心是 self-attention",
-      details: "Q/K/V 投影",
-      tags: ["transformer", "nlp"],
-    },
-    {
-      id: "c2",
-      kind: "FACT",
-      title: "另一个知识点",
-      summary: "次要点",
-      details: "细节",
-      tags: [],
-    },
-  ];
-
-  beforeEachProps = () => {
+  beforeEach(() => {
     copyText.mockReset();
     copyText.mockResolvedValue(undefined);
-  };
+  });
 
   function renderView() {
     return render(
       <WorkspaceKnowledgeCardsView
         {...baseProps}
-        knowledgeCards={{ seriesId: "s1", videoId: "v1", title: "V", cards }}
+        knowledgeCards={{ seriesId: "s1", videoId: "v1", title: "V", cards: sampleCards }}
       />,
     );
   }
@@ -554,34 +536,21 @@ describe("WorkspaceKnowledgeCardsView - 复制按钮", () => {
       fireEvent.click(buttons[0]);
       fireEvent.click(buttons[1]);
     });
-    expect(screen.getByAllRole).toBeUndefined; // sanity: prove import isn't typed
     expect(screen.getAllByRole("button", { name: "已复制" })).toHaveLength(2);
   });
 
-  it("hover 卡片时按钮仍可见 (常驻右上角, 不依赖 hover)", () => {
+  it("按钮默认可见 (不依赖父级 hover)", () => {
     renderView();
     const btn = screen.getAllByRole("button", { name: "复制" })[0];
     expect(btn).toBeVisible();
   });
 });
-
-// helper import for vitest to discover beforeAll hook
-const beforeEachProps = undefined;
 ```
 
-> 修正: 上面 `beforeEachProps` 的写法仅为占位, 实际应改为:
->
-> ```js
-> describe("WorkspaceKnowledgeCardsView - 复制按钮", () => {
->   beforeEach(() => {
->     copyText.mockReset();
->     copyText.mockResolvedValue(undefined);
->   });
->   // ...其余测试...
-> });
-> ```
->
-> 实施者按此正确写法落地, 删除占位行.
+- [ ] **Step 2: 跑测试, 确认全部失败**
+
+Run: `cd src/frontend && npx vitest run tests/frontend/features/workspace/ui/views/WorkspaceKnowledgeCardsView.test.jsx`
+Expected: 全部 FAIL (11 个) — `Failed to resolve import` 或 `buildCardMarkdown is not a function`
 
 - [ ] **Step 2: 跑测试, 确认全部失败**
 
@@ -847,36 +816,37 @@ git commit -m "refactor(frontend): migrate chat copy button to CopyToClipboardBu
 
 **1. Spec 覆盖核对:**
 
-| Spec 项 | 任务 |
-|---|---|
-| D1 buildCardMarkdown 完整覆盖 | Task 3 (6 测试) |
-| D2 copyText 行为 | Task 1 (2 测试) |
-| R1 默认 render + 右上角位置 | Task 2 (R1 测试) + Task 3 (视图测试) |
-| R2 copied 状态 + 1.6s 复原 | Task 2 (2 测试) |
-| R3 shrink-0 + flex | Task 3 (flex 测试) |
-| R4 ChatPanel 视觉一致 | Task 4 (className 严格对齐) |
-| R5 aria-live/aria-label | Task 2 (测试) |
-| R6 hover 背景 | Task 2 (测试) |
-| B1 copyText reject 处理 | Task 2 (try/catch + 测试) |
-| B2 卸载清理 | Task 2 (测试) |
-| B3 连点不提前复原 | Task 2 (测试) |
-| B4 跨实例独立 | Task 2 (测试) + Task 3 (视图跨卡片测试) |
-| B5 ChatPanel canCopy 守护 | Task 4 Step 2 (保留 canCopy 判断) |
-| B6 键盘 Enter/Space | Task 2 (2 测试) |
-| B7 grep 无残留 | Task 4 Step 5 (grep 验证) |
+| Spec 项 | 任务 | 覆盖方式 |
+|---|---|---|
+| D1 buildCardMarkdown 完整覆盖 | Task 3 | 6 直接单测 (含 tags 为空/非数组/summary 为空/details 为 null/Markdown 特殊字符) |
+| D2 copyText 行为 | Task 1 | 2 测试 (clipboard API 路径 + execCommand 兜底) |
+| R1 默认 render + 右上角位置 | Task 2 + Task 3 | Task 2 默认 render 测试 + Task 3 视图渲染测试 |
+| R2 copied 状态 + 1.6s 复原 | Task 2 | 2 测试 (状态切换 + 1600ms 复原) |
+| R3 shrink-0 + flex | Task 3 | 视图 flex 容器断言 |
+| R4 ChatPanel 视觉一致 | Task 4 | className 严格对齐 + grep 验证 (B7) |
+| R5 aria-live/aria-label | Task 2 | aria-label 反映状态测试 |
+| R6 hover 背景 | Task 2 | className 正则断言 (bg-stone-100 / hover:bg-stone-200) |
+| B1 copyText reject 处理 | Task 2 | mockRejectedValueOnce + try/catch 行为测试 |
+| B2 卸载清理 | Task 2 | unmount + advanceTimersByTime + 监控 console.error |
+| B3 连点不提前复原 | Task 2 | fakeTimers + 两次点击断言 |
+| B4 跨实例独立 | Task 2 + Task 3 | Task 2 单元测试 + Task 3 视图跨卡片测试 |
+| B5 ChatPanel canCopy 守护 | Task 4 Step 2 | 保留原 canCopy 判断 (`{canCopy ? ... : null}`) |
+| B6 键盘 Enter/Space | **不测** | 浏览器原生行为, 非组件代码; jsdom + fireEvent.keyDown 无法可靠触发 |
+| B7 grep 无残留 | Task 4 Step 5 | grep -nE "copiedMessageId\|setCopiedMessageId\|isCopied\|handleCopyMessage\|async function copyText" |
 
-所有 AC 均覆盖。
+**B6 决策:** spec B6 明文 "`<button type="button">` 默认行为，无额外处理"。组件未实现自定义键盘逻辑，测试浏览器默认行为 = 测试浏览器/框架, 非本组件代码。`@testing-library/user-event` 未安装 (`package.json` 确认); `fireEvent.keyDown` 在 jsdom 中不会触发原生 click → 测试不可靠。决定删除 2 个 B6 测试。
 
 **2. Placeholder 扫描:**
-- Step 1 测试代码中包含占位 `beforeEachProps` 与错字 `getByAllRole`, 已在 Step 1 后用「修正」段落明确说明正确写法。**实施者必须按修正段落地**, 删除占位行。
+- 已删除 Task 3 Step 1 的 `beforeEachProps` 占位和 `getByAllRole` 错字; 改为正确的 `beforeEach(() => {...})`。
 - 其它 step 无 TBD / TODO / "implement later"。
 
 **3. 类型/命名一致性:**
-- `copyText(text)` 在 Task 1, 2, 4 一致
+- `copyText(text)` 在 Task 1, 2, 3 一致
 - `CopyToClipboardButton` props (`text` / `label` / `copiedLabel` / `iconSize` / `className`) 在 Task 2 定义, Task 3/4 使用一致
-- `buildCardMarkdown(card)` 在 Task 3 定义, Task 3 内被自身使用
-- `clipboard.js` 导出名 (`copyText`) 在 Task 1/2 一致
+- `buildCardMarkdown(card)` 在 Task 3 定义并 export, Task 3 测试 + 视图使用
+- `clipboard.js` 导出名 (`copyText`) 在 Task 1/2/3 一致
 - vitest mock path (`@src/features/workspace/ui/shared/clipboard`) 在 Task 2/3 一致
+- 测试 import 顺序统一为: testing-library → vitest → 模块 → vi.mock (避免 hoisting 误判)
 
 无不一致。
 
