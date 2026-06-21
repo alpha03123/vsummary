@@ -1439,6 +1439,40 @@ export function workspaceReducer(state, action) {
         ...state,
         knowledgeMemorySnapshot: action.snapshot,
       };
+    case "series_mindmap_loading_started":
+      return { ...state, seriesMindmapLoading: true, error: "" };
+
+    case "series_mindmap_loaded":
+      return {
+        ...state,
+        seriesMindmap: action.mindmap,
+        seriesMindmapLoading: false,
+        seriesSelectedNodeId: action.mindmap?.children?.[0]?.id ?? action.mindmap?.id ?? null,
+      };
+
+    case "series_mindmap_cleared":
+      return {
+        ...state,
+        seriesMindmap: null,
+        seriesMindmapLoading: false,
+        seriesSelectedNodeId: null,
+      };
+
+    case "series_mindmap_generation_started":
+      return { ...state, generatingSeriesMindmap: true, error: "" };
+
+    case "series_mindmap_generation_succeeded":
+      return {
+        ...state,
+        seriesMindmap: action.mindmap,
+        generatingSeriesMindmap: false,
+        seriesSelectedNodeId: action.mindmap?.children?.[0]?.id ?? action.mindmap?.id ?? null,
+      };
+    case "mindmap_generation_progress_updated":
+      return { ...state, mindmapGenerationProgress: action.snapshot };
+
+    case "mindmap_generation_progress_cleared":
+      return { ...state, mindmapGenerationProgress: null };
     default:
       return state;
   }

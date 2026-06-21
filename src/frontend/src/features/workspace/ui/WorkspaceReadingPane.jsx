@@ -41,6 +41,11 @@ const WorkspaceSeriesHomeView = lazy(() =>
     default: module.WorkspaceSeriesHomeView,
   })),
 );
+const WorkspaceSeriesMindmapView = lazy(() =>
+  import("./views/WorkspaceSeriesMindmapView").then((module) => ({
+    default: module.WorkspaceSeriesMindmapView,
+  })),
+);
 
 const WorkspaceChatManagementView = lazy(() =>
   import("./views/WorkspaceChatManagementView").then((module) => ({
@@ -80,6 +85,12 @@ export function WorkspaceReadingPane({
   savingNote,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
+  seriesMindmap,
+  seriesMindmapAvailable,
+  seriesMindmapLoading,
+  generatingSeriesMindmap,
+  onGenerateSeriesMindmap,
+  mindmapGenerationProgress,
   onSelectTool,
   onFocusNode,
   onSeek,
@@ -160,11 +171,16 @@ export function WorkspaceReadingPane({
                     </div>
                   ) : null}
                   {selectedToolId === "series-mindmap" ? (
-                    <WorkspaceStateBlock
-                      eyebrow="Coming Soon"
-                      title="全局思维导图"
-                      description="Constructing..."
-                      dashed
+                    <WorkspaceSeriesMindmapView
+                      seriesId={activeSeries.id}
+                      seriesMindmap={seriesMindmap}
+                      seriesMindmapAvailable={seriesMindmapAvailable}
+                      seriesMindmapLoading={seriesMindmapLoading}
+                      generatingSeriesMindmap={generatingSeriesMindmap}
+                      selectedNode={selectedNode}
+                      onFocusNode={onFocusNode}
+                      onGenerateSeriesMindmap={onGenerateSeriesMindmap}
+                      mindmapGenerationProgress={mindmapGenerationProgress}
                     />
                   ) : null}
                   {isStudioHome ? (
@@ -212,6 +228,9 @@ export function WorkspaceReadingPane({
                       isGeneratingMindmapSelectedVideo={isGeneratingMindmapSelectedVideo}
                       onFocusNode={onFocusNode}
                       onGenerateMindmap={onGenerateMindmap}
+                      seriesId={activeSeries?.id}
+                      videoId={selectedVideo?.id}
+                      mindmapGenerationProgress={mindmapGenerationProgress}
                     />
                   ) : null}
                   {selectedToolId === "knowledge-cards" ? (
@@ -318,7 +337,6 @@ function videoExportUrl(seriesId, videoId, exportName) {
 function videoSourceExportUrl(seriesId, videoId) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/video`;
 }
-
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
   return (
     <>

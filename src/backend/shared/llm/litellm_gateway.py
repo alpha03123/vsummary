@@ -500,6 +500,7 @@ class LiteLLMCompletionGateway:
         response_model: type[StructuredResponseT],
         temperature: float = 0,
         retries: int = 2,
+        timeout: float | None = None,
     ) -> StructuredResponseT:
         """异步结构化输出：要求 LLM 返回符合 Pydantic schema 的对象。
 
@@ -511,6 +512,7 @@ class LiteLLMCompletionGateway:
             response_model: 期望的 Pydantic 模型类。
             temperature: 采样温度，默认 0。
             retries: 最大重试次数（含首次），默认 2 次。
+            timeout: 请求超时秒数，透传给 litellm。None 表示使用 litellm 默认。
 
         Returns:
             通过校验的 Pydantic 模型实例。
@@ -536,6 +538,7 @@ class LiteLLMCompletionGateway:
                         structured_messages,
                         temperature=temperature,
                         response_format=response_format,
+                        timeout=timeout,
                     )
                     _remember_structured_mode(self._structured_mode_cache_key, mode_name)
                     break

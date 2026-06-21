@@ -8,6 +8,7 @@ import {
   loadFasterWhisperModels,
   loadRagModels,
   loadSeriesGenerationStatus,
+  loadSeriesMindmap,
   loadProviderSettings,
   loadVideoKnowledgeCards,
   loadVideoGenerationStatus,
@@ -658,6 +659,28 @@ export function useWorkspaceDataEffects(state, dispatch) {
       cancelled = true;
     };
   }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.mindmap.generated]);
+
+  useEffect(() => {
+    if (
+      state.selectedContextType !== "series" ||
+      state.selectedToolId !== "series-mindmap"
+    ) {
+      dispatch({ type: "series_mindmap_cleared" });
+      return;
+    }
+
+    let cancelled = false;
+    dispatch({ type: "series_mindmap_loading_started" });
+    loadSeriesMindmap(state.selectedSeriesId)
+      .then((mindmap) => {
+        if (!cancelled) dispatch({ type: "series_mindmap_loaded", mindmap });
+      })
+      .catch((error) => {
+        if (!cancelled) dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "加载系列导图失败" });
+      });
+
+    return () => { cancelled = true; };
+  }, [dispatch, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
