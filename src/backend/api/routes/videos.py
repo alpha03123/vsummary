@@ -10,10 +10,11 @@ import asyncio
 import logging
 import json
 import mimetypes
+from threading import Lock
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 
 from backend.api.container import ApiContainerDep
 from backend.api.contracts import (
@@ -44,9 +45,24 @@ from backend.video_summary.library.markdown_exports import render_transcript_mar
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 from backend.video_summary.library.usecases.summary_generation import GenerationScopeBusyError
+from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html, render_mindmap_markdown
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
+
+_series_mindmap_locks: dict[str, Lock] = {}
+_series_mindmap_locks_guard = Lock()
+
+def _acquire_series_mindmap_lock(series_id: str) -> bool:
+    with _series_mindmap_locks_guard:
+        if series_id in _series_mindmap_locks:
+            return False
+        _series_mindmap_locks[series_id] = Lock()
+        return True
+
+def _release_series_mindmap_lock(series_id: str) -> None:
+    with _series_mindmap_locks_guard:
+        _series_mindmap_locks.pop(series_id, None)
 
 
 @router.get("/api/videos", response_model=VideoLibraryResponse)
@@ -270,6 +286,24 @@ def get_video_mindmap(series_id: str, video_id: str, container: ApiContainerDep)
     if video_mindmap is None:
         raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
     return video_mindmap.mindmap
+
+
+@router.get("/api/videos/{series_id}/{video_id}/mindmap/export")
+def export_video_mindmap(series_id: str, video_id: str, format: str = "md", container: ApiContainerDep = None):
+    """GET /api/videos/{series_id}/{video_id}/mindmap/export?format=md|html — 导出思维导图。"""
+    if format not in ("md", "html"):
+        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md / html")
+    _ensure_video_exists(container, series_id, video_id)
+    video_mindmap = container.get_video_mindmap.run(series_id, video_id)
+    if video_mindmap is None:
+        raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
+    if format == "html":
+        content = render_mindmap_html(video_mindmap.mindmap, video_mindmap.title)
+        filename = f"{video_mindmap.title}-mindmap.html"
+        return _html_response(content, filename)
+    markdown = render_mindmap_markdown(video_mindmap.mindmap)
+    filename = f"{video_mindmap.title}-mindmap.md"
+    return _markdown_response(markdown, filename)
 
 
 @router.get("/api/videos/{series_id}/{video_id}/cards", response_model=VideoChapterCardsResponse)
@@ -725,7 +759,7 @@ async def generate_video_mindmap(
 ) -> dict[str, object]:
     """POST /api/videos/{series_id}/{video_id}/mindmap/generate — 生成视频思维导图。
 
-    基于已有总结调用 LLM 生成思维导图节点树并落盘。
+    基于已有总结调用 LLM 生成思维导图节点树并落盘；通过 SSE 进度端点订阅实时状态。
 
     Args:
         series_id: 系列 ID。
@@ -738,10 +772,159 @@ async def generate_video_mindmap(
     Raises:
         HTTPException(404): 总结未生成。
     """
-    video_mindmap = await container.generate_video_mindmap.run(series_id, video_id)
+    import sys
+    task_id = _build_mindmap_task_id(series_id, video_id)
+    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
+    try:
+        reporter.update("generate", 0.0, "正在生成思维导图")
+        video_mindmap = await container.generate_video_mindmap.run(
+            series_id,
+            video_id,
+            progress_reporter=reporter,
+        )
+    except Exception:
+        reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "思维导图生成失败")
+        raise
     if video_mindmap is None:
-        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+        reporter.failed("总结不存在，无法生成思维导图")
+        raise HTTPException(
+            status_code=404,
+            detail=f"summary not found for video '{series_id}/{video_id}'",
+        )
+    reporter.completed("思维导图已生成")
     return video_mindmap.mindmap
+
+
+@router.get("/api/videos/{series_id}/{video_id}/mindmap/generate/progress")
+async def stream_mindmap_generation_progress(
+    series_id: str,
+    video_id: str,
+    container: ApiContainerDep,
+) -> StreamingResponse:
+    """GET /api/videos/{series_id}/{video_id}/mindmap/generate/progress — 订阅单视频思维导图生成进度流（SSE）。
+
+    以 SSE 推送思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
+
+    Args:
+        series_id: 系列 ID。
+        video_id: 视频 ID。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        StreamingResponse（`text/event-stream`）。
+    """
+    task_id = _build_mindmap_task_id(series_id, video_id)
+    return StreamingResponse(
+        stream_progress_events(
+            tracker=container.mindmap_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/api/series/{series_id}/mindmap")
+def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+    mindmap = container.get_series_mindmap.run(series_id)
+    if mindmap is None:
+        raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
+    return mindmap.mindmap
+
+
+@router.post("/api/series/{series_id}/mindmap/generate")
+async def generate_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+    """POST /api/series/{series_id}/mindmap/generate — 触发系列思维导图生成。
+
+    基于系列下已生成概况的视频聚合生成思维导图；通过 SSE 进度端点订阅实时状态。
+    同一系列并发请求会返回 409。
+
+    Args:
+        series_id: 系列 ID。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        JSON 字典，含思维导图节点树。
+
+    Raises:
+        HTTPException(400): 系列下没有已生成概况的视频。
+        HTTPException(409): 该系列思维导图正在生成中。
+    """
+    import sys
+    if not _acquire_series_mindmap_lock(series_id):
+        raise HTTPException(status_code=409, detail="该系列导图正在生成中，请稍后再试")
+    task_id = _build_series_mindmap_task_id(series_id)
+    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
+    try:
+        reporter.update("generate", 0.0, "正在生成系列思维导图")
+        try:
+            mindmap = await container.generate_series_mindmap.run(
+                series_id,
+                progress_reporter=reporter,
+            )
+        except Exception:
+            reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "系列思维导图生成失败")
+            raise
+        if mindmap is None:
+            reporter.failed("系列下没有已生成概况的视频")
+            raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
+        reporter.completed("系列思维导图已生成")
+        return mindmap.mindmap
+    finally:
+        _release_series_mindmap_lock(series_id)
+
+
+@router.get("/api/series/{series_id}/mindmap/generate/progress")
+async def stream_series_mindmap_generation_progress(
+    series_id: str,
+    container: ApiContainerDep,
+) -> StreamingResponse:
+    """GET /api/series/{series_id}/mindmap/generate/progress — 订阅系列思维导图生成进度流（SSE）。
+
+    以 SSE 推送系列思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
+
+    Args:
+        series_id: 系列 ID。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        StreamingResponse（`text/event-stream`）。
+    """
+    task_id = _build_series_mindmap_task_id(series_id)
+    return StreamingResponse(
+        stream_progress_events(
+            tracker=container.mindmap_progress_tracker,
+            task_id=task_id,
+            terminal_statuses={"completed", "failed", "cancelled"},
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/api/series/{series_id}/mindmap/export")
+def export_series_mindmap(series_id: str, format: str = "md", container: ApiContainerDep = None):
+    if format not in ("md", "html"):
+        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md / html")
+    mindmap = container.get_series_mindmap.run(series_id)
+    if mindmap is None:
+        raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
+    if format == "html":
+        content = render_mindmap_html(mindmap.mindmap, mindmap.title)
+        filename = f"{mindmap.title}-mindmap.html"
+        return _html_response(content, filename)
+    markdown = render_mindmap_markdown(mindmap.mindmap)
+    filename = f"{mindmap.title}-mindmap.md"
+    return _markdown_response(markdown, filename)
 
 
 @router.delete("/api/series/{series_id}")
@@ -1033,6 +1216,31 @@ def _build_series_task_id(series_id: str) -> str:
     return f"series/{series_id}"
 
 
+def _build_mindmap_task_id(series_id: str, video_id: str) -> str:
+    """构建单视频思维导图生成的进度跟踪任务 ID。
+
+    Args:
+        series_id: 系列 ID。
+        video_id: 视频 ID。
+
+    Returns:
+        格式为 `mindmap|{series_id}|{video_id}` 的任务 ID。
+    """
+    return f"mindmap|{series_id}|{video_id}"
+
+
+def _build_series_mindmap_task_id(series_id: str) -> str:
+    """构建系列思维导图生成的进度跟踪任务 ID。
+
+    Args:
+        series_id: 系列 ID。
+
+    Returns:
+        格式为 `series-mindmap|{series_id}` 的任务 ID。
+    """
+    return f"series-mindmap|{series_id}"
+
+
 def _get_pending_series_videos(container, series_id: str) -> list[object]:
     """获取系列下所有未处理（processed=False）的视频列表。
 
@@ -1071,6 +1279,23 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     return source
+
+
+def _html_response(html: str, filename: str) -> Response:
+    """构造带 Content-Disposition 下载头的 HTML HTTP 响应。
+
+    Args:
+        html: 渲染后的 HTML 文本内容。
+        filename: 下载文件名。
+
+    Returns:
+        Response（`text/html; charset=utf-8`）。
+    """
+    return Response(
+        content=html,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": _content_disposition_attachment(filename)},
+    )
 
 
 def _markdown_response(markdown: str, filename: str) -> Response:
