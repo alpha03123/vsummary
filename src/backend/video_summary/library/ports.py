@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol
 
 from backend.video_summary.generation.ports import ProgressReporter
@@ -69,6 +70,12 @@ class VideoLibraryReader(Protocol):
 
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
         """取视频工作区工具栏的完整状态。"""
+
+    def get_series_mindmap(self, series_id: str) -> VideoMindmapDTO | None:
+        """取系列的思维导图制品；未生成则返回 None。"""
+
+    def get_series_dir(self, series_id: str) -> Path:
+        """返回到系列工作区根目录的路径。"""
 
 
 class VideoKnowledgeCardWriter(Protocol):
@@ -237,8 +244,40 @@ class VideoMindmapGenerator(Protocol):
         series_id: str,
         video_id: str,
         summary_data: dict[str, object],
+        transcript_text: str = "",
+        progress_reporter: ProgressReporter | None = None,
     ) -> None:
-        """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。"""
+        """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频唯一 ID。
+            summary_data: 总结数据字典，作为思维导图的输入。
+            transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
+        """
+
+
+class SeriesMindmapGenerator(Protocol):
+    """系列思维导图的异步生成端口。"""
+    async def run(
+        self,
+        *,
+        series_id: str,
+        series_title: str,
+        catalog: dict[str, object] | None,
+        video_summaries: list[dict[str, object]],
+        progress_reporter: ProgressReporter | None = None,
+    ) -> None:
+        """基于系列目录与视频概况生成跨视频思维导图，落盘到系列制品目录。
+
+        Args:
+            series_id: 系列 ID。
+            series_title: 系列标题，用于根节点上下文。
+            catalog: 系列目录数据字典（series_catalog.json 的内容）。
+            video_summaries: 各视频概括列表，每项应包含 title / one_sentence_summary / chapters 等字段。
+            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
+        """
 
 
 class KnowledgeCardGenerator(Protocol):
