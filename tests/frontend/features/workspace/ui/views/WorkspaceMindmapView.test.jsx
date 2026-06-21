@@ -5,7 +5,10 @@ vi.mock("markmap-view", () => ({
   Markmap: {
     create: vi.fn(() => ({
       destroy: vi.fn(),
+      fit: vi.fn(() => Promise.resolve()),
+      state: { rect: { x1: 0, x2: 100, y1: 0, y2: 100 } },
       svg: { node: vi.fn(() => ({ classList: { add: vi.fn(), remove: vi.fn() } })) },
+      zoom: { transform: vi.fn() },
     })),
   },
 }));
@@ -22,6 +25,11 @@ vi.mock("d3", () => ({
   })),
 }));
 
+vi.mock("@src/features/workspace/ui/mindmapSVGExport", () => ({
+  exportMindmapAsSVG: vi.fn(() => Promise.resolve()),
+}));
+
+import { exportMindmapAsSVG } from "@src/features/workspace/ui/mindmapSVGExport";
 import { WorkspaceMindmapView } from "@src/features/workspace/ui/views/WorkspaceMindmapView";
 
 function makeTools(overrides = {}) {
@@ -87,7 +95,7 @@ describe("WorkspaceMindmapView — export dropdown", () => {
     fireEvent.click(screen.getByText("导出"));
     expect(screen.getByText("Markdown (.md)")).toBeTruthy();
     expect(screen.getByText("HTML (.html)")).toBeTruthy();
-    expect(screen.getByText("PNG (.png)")).toBeTruthy();
+    expect(screen.getByText("SVG (.svg)")).toBeTruthy();
   });
 
   it("closes dropdown on option click", () => {
@@ -96,6 +104,20 @@ describe("WorkspaceMindmapView — export dropdown", () => {
     expect(screen.getByText("Markdown (.md)")).toBeTruthy();
     fireEvent.click(screen.getByText("Markdown (.md)"));
     expect(screen.queryByText("Markdown (.md)")).toBeNull();
+  });
+
+  it("T10: SVG option calls exportMindmapAsSVG with the markmap instance from the ref", async () => {
+    exportMindmapAsSVG.mockClear();
+    const { Markmap } = await import("markmap-view");
+
+    render(<WorkspaceMindmapView {...baseProps} />);
+    const fakeMm = Markmap.create.mock.results[Markmap.create.mock.results.length - 1].value;
+
+    fireEvent.click(screen.getByText("导出"));
+    fireEvent.click(screen.getByText("SVG (.svg)"));
+
+    expect(exportMindmapAsSVG).toHaveBeenCalledTimes(1);
+    expect(exportMindmapAsSVG).toHaveBeenCalledWith(fakeMm, "mindmap-v1.svg");
   });
 });
 
