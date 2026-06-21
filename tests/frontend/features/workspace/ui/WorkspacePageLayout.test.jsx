@@ -13,7 +13,28 @@ vi.mock("@src/features/workspace/ui/WorkspaceSeriesGrid", () => ({
   WorkspaceSeriesGrid: () => <div>series-grid</div>,
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceReadingPane", () => ({
-  WorkspaceReadingPane: ({ onSeek }) => <div data-testid="reading-pane" data-on-seek={Boolean(onSeek)}>reading</div>,
+  WorkspaceReadingPane: ({
+    onGenerateSeriesMindmap,
+    onSeek,
+    seriesMindmap,
+    seriesMindmapAvailable,
+    seriesMindmapLoading,
+    generatingSeriesMindmap,
+    mindmapGenerationProgress,
+  }) => (
+    <div
+      data-testid="reading-pane"
+      data-on-seek={Boolean(onSeek)}
+      data-series-mindmap={seriesMindmap?.id ?? ""}
+      data-series-mindmap-available={String(seriesMindmapAvailable)}
+      data-series-mindmap-loading={String(seriesMindmapLoading)}
+      data-generating-series-mindmap={String(generatingSeriesMindmap)}
+      data-series-mindmap-progress={mindmapGenerationProgress?.status ?? ""}
+      data-on-generate-series-mindmap={Boolean(onGenerateSeriesMindmap)}
+    >
+      reading
+    </div>
+  ),
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceVideoPlayer", () => ({
   WorkspaceVideoPlayer: ({ videoSource }) => <div data-testid="video-player" data-source={videoSource}>player</div>,
@@ -64,6 +85,8 @@ function makePage(overrides = {}) {
       player: { seekToTime: vi.fn() },
       summary: null,
       mindmap: null,
+      seriesMindmap: null,
+      seriesMindmapAvailable: false,
       knowledgeCards: null,
       knowledgeCardsGenerating: false,
       knowledgeCardsFeedback: null,
@@ -81,6 +104,7 @@ function makePage(overrides = {}) {
     generation: {
       isGeneratingSummary: false, isGeneratingSeries: false, seriesGenerationQueue: null,
       isGeneratingMindmap: false, knowledgeCardsLoading: false, notesLoading: false, savingNote: false,
+      seriesMindmapLoading: false, generatingSeriesMindmap: false, mindmapGenerationProgress: null,
       fasterWhisperModels: [], fasterWhisperModelsLoading: false, ragModels: [], ragModelsLoading: false,
       downloadingRagModelKey: null, downloadingModelId: null, modelDownloadsById: {},
       modelDownloadStatus: null, modelDownloadProgress: null, modelDownloadErrorModelId: null, modelDownloadError: null,
@@ -103,6 +127,32 @@ describe("WorkspacePage new layout", () => {
     render(<WorkspacePage page={makePage()} />);
     const pane = screen.getByTestId("reading-pane");
     expect(pane.getAttribute("data-on-seek")).toBe("true");
+  });
+
+  it("forwards series mindmap state to WorkspaceReadingPane", () => {
+    render(
+      <WorkspacePage
+        page={makePage({
+          shell: {
+            seriesMindmap: { id: "series-root" },
+            seriesMindmapAvailable: true,
+          },
+          generation: {
+            seriesMindmapLoading: true,
+            generatingSeriesMindmap: true,
+            mindmapGenerationProgress: { status: "running" },
+          },
+        })}
+      />,
+    );
+
+    const pane = screen.getByTestId("reading-pane");
+    expect(pane.getAttribute("data-series-mindmap")).toBe("series-root");
+    expect(pane.getAttribute("data-series-mindmap-available")).toBe("true");
+    expect(pane.getAttribute("data-series-mindmap-loading")).toBe("true");
+    expect(pane.getAttribute("data-generating-series-mindmap")).toBe("true");
+    expect(pane.getAttribute("data-series-mindmap-progress")).toBe("running");
+    expect(pane.getAttribute("data-on-generate-series-mindmap")).toBe("true");
   });
 
   it("mounts ChatDrawer with isOpen reflecting chat.drawerOpen", () => {

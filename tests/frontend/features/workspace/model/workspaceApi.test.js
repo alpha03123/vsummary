@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { loadAgentSessionRecovery } from "@src/features/workspace/model/workspaceApi";
+import {
+  loadAgentSessionRecovery,
+  loadSeriesMindmap,
+} from "@src/features/workspace/model/workspaceApi";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -67,5 +70,19 @@ describe("loadAgentSessionRecovery", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("loadSeriesMindmap", () => {
+  test("returns null when the series mindmap has not been generated", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      json: async () => ({
+        detail: "series mindmap not found for 'A1'",
+      }),
+    })));
+
+    await expect(loadSeriesMindmap("A1")).resolves.toBeNull();
   });
 });

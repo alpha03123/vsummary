@@ -116,6 +116,25 @@ class GetVideoMindmap:
         return self._workspace.get_video_mindmap(series_id, video_id)
 
 
+class GetSeriesMindmap:
+    """取整个系列的思维导图制品。"""
+
+    def __init__(self, workspace: VideoLibraryReader) -> None:
+        """通过 `VideoLibraryReader` 端口注入具体实现，便于替换。"""
+        self._workspace = workspace
+
+    def run(self, series_id: str) -> VideoMindmapDTO | None:
+        """返回指定系列的思维导图 DTO；未生成则返回 `None`。
+
+        Args:
+            series_id: 系列 ID。
+
+        Returns:
+            系列思维导图 DTO，若没有则返回 `None`。
+        """
+        return self._workspace.get_series_mindmap(series_id)
+
+
 class GetVideoChapterCards:
     """取单个视频的章节卡集合。"""
 

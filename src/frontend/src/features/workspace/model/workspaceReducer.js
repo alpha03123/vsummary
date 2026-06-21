@@ -408,6 +408,8 @@ export function workspaceReducer(state, action) {
         generatingSeriesId: null,
         generationMode: null,
         generatingMindmapKey: null,
+        seriesMindmapLoading: false,
+        generatingSeriesMindmap: false,
         generationProgress: null,
         generationSnapshot: null,
         downloadingVideoKey: null,

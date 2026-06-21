@@ -38,6 +38,7 @@ export function useWorkspaceController() {
   const summary = state.summary;
   const mindmap = state.mindmap;
   const seriesMindmap = state.seriesMindmap;
+  const seriesMindmapLoading = state.seriesMindmapLoading;
   const generatingSeriesMindmap = state.generatingSeriesMindmap;
   const mindmapGenerationProgress = state.mindmapGenerationProgress;
 
@@ -176,6 +177,7 @@ export function useWorkspaceController() {
     mindmap,
     seriesMindmap,
     seriesMindmapAvailable,
+    seriesMindmapLoading,
     generatingSeriesMindmap,
     mindmapGenerationProgress,
     knowledgeCards: state.knowledgeCards,

@@ -582,8 +582,11 @@ export function getVideoPreviewUrl(seriesId, videoId) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/preview`;
 }
 
-async function fetchJson(path, init) {
+async function fetchJson(path, init, options = {}) {
   const response = await fetch(path, init);
+  if (response.status === 404 && Object.prototype.hasOwnProperty.call(options, "notFoundValue")) {
+    return options.notFoundValue;
+  }
   if (!response.ok) {
     let detail = null;
     try {
@@ -835,7 +838,14 @@ export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
 }
 
 export async function loadSeriesMindmap(seriesId) {
-  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/mindmap`);
+  const payload = await fetchJson(
+    `/api/series/${encodeURIComponent(seriesId)}/mindmap`,
+    undefined,
+    { notFoundValue: null },
+  );
+  if (payload == null) {
+    return null;
+  }
   return toWorkspaceMindmap(payload);
 }
 
