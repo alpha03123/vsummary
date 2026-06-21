@@ -26,7 +26,8 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }
     if (markmapRef) markmapRef.current = mm;
 
     const toolbar = Toolbar.create(mm);
-    toolbar.el.setAttribute("style", "position:absolute;bottom:20px;right:20px");
+    toolbar.setBrand?.(false);
+    configureToolbar(toolbar.el);
     svgRef.current.parentElement?.appendChild(toolbar.el);
     toolbarRef.current = toolbar.el;
 
@@ -106,4 +107,56 @@ function convertToMarkmapNode(node) {
     },
     children: (node.children || []).map(convertToMarkmapNode),
   };
+}
+
+function configureToolbar(toolbarEl) {
+  Object.assign(toolbarEl.style, {
+    position: "absolute",
+    bottom: "20px",
+    right: "20px",
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: "8px",
+    width: "auto",
+    padding: "6px",
+    borderRadius: "16px",
+    border: "1px solid rgba(214, 211, 209, 0.72)",
+    background: "rgba(255, 255, 255, 0.86)",
+    boxShadow: "0 18px 44px rgba(15, 23, 42, 0.12)",
+    backdropFilter: "blur(12px)",
+  });
+  toolbarEl.querySelectorAll(".mm-toolbar-item").forEach((item) => {
+    Object.assign(item.style, {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "32px",
+      height: "32px",
+      margin: "0",
+      borderRadius: "12px",
+      color: "rgb(87, 83, 78)",
+      transition: "background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease",
+    });
+    item.addEventListener("mouseenter", handleToolbarItemEnter);
+    item.addEventListener("mouseleave", handleToolbarItemLeave);
+  });
+}
+
+function handleToolbarItemEnter(event) {
+  Object.assign(event.currentTarget.style, {
+    background: "rgba(245, 158, 11, 0.12)",
+    color: "rgb(180, 83, 9)",
+    boxShadow: "0 10px 24px rgba(180, 83, 9, 0.12)",
+    transform: "translateY(-1px)",
+  });
+}
+
+function handleToolbarItemLeave(event) {
+  Object.assign(event.currentTarget.style, {
+    background: "",
+    color: "rgb(87, 83, 78)",
+    boxShadow: "",
+    transform: "",
+  });
 }
