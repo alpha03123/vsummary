@@ -5,15 +5,44 @@ import { WorkspaceFeedbackBanner } from "../shared/WorkspaceFeedbackBanner";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 
 export function buildCardMarkdown(card) {
-  const parts = [`# ${card?.title ?? ""}`];
-  if (card?.summary) parts.push(card.summary);
-  if (card?.details) parts.push(card.details);
-  if (Array.isArray(card?.tags) && card.tags.length) {
-    parts.push(
-      `**Tags:** ${card.tags.filter((t) => typeof t === "string").join(", ")}`,
-    );
+  const lines = [];
+
+  lines.push(`## ${card?.title ?? ""}`);
+  lines.push("");
+
+  const meta = [];
+  if (card?.kind) {
+    meta.push(`- 类型：${card.kind}`);
   }
-  return parts.join("\n\n");
+  if (Array.isArray(card?.tags) && card.tags.length) {
+    const validTags = card.tags.filter((t) => typeof t === "string");
+    if (validTags.length) meta.push(`- 标签：${validTags.join("、")}`);
+  }
+  if (Array.isArray(card?.keywords) && card.keywords.length) {
+    const validKeywords = card.keywords.filter((k) => typeof k === "string");
+    if (validKeywords.length) meta.push(`- 关键词：${validKeywords.join("、")}`);
+  }
+  if (meta.length) {
+    lines.push(...meta);
+    lines.push("");
+  }
+
+  if (card?.summary) {
+    lines.push("### 摘要");
+    lines.push(card.summary);
+    lines.push("");
+  }
+
+  if (card?.details) {
+    lines.push("### 详情");
+    lines.push(card.details);
+  }
+
+  while (lines.length && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return lines.join("\n");
 }
 
 export function WorkspaceKnowledgeCardsView({
