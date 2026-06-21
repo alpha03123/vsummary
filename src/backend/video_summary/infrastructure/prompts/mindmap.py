@@ -11,7 +11,8 @@
 # 前端按节点跳转时间戳。
 #
 # 输入占位符：`{title}`（视频标题）、`{duration_seconds}`（视频时长秒数）、
-# `{summary_json}`（结构化总结 JSON 字符串）。
+# `{summary_json}`（结构化总结 JSON 字符串）、
+# `{transcript_text}`（转写文本，已由调用方截断）。
 #
 # 输出形态：JSON 树，每个节点包含 `id` / `title` / `summary` /
 # `start_seconds` / `end_seconds` / `children`；节点组织按"知识结构"而非
@@ -30,4 +31,5 @@ MINDMAP_PROMPT_TEMPLATE = (
     "视频时长秒数：{duration_seconds}\n"
     "概况 JSON：\n"
     "{summary_json}\n"
+    "转写文本：{transcript_text}\n"
 )

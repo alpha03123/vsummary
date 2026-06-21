@@ -1,5 +1,6 @@
 from backend.video_summary.library.usecases.knowledge_cards import GenerateVideoKnowledgeCards
 from backend.video_summary.library.usecases.library_queries import (
+    GetSeriesMindmap,
     GetVideoChapterCards,
     GetVideoKnowledgeCards,
     GetVideoMindmap,
@@ -34,6 +35,7 @@ from backend.video_summary.library.usecases.summary_generation import (
     GenerateSeriesSummaryFromLibrary,
     GenerateVideoSummaryFromLibrary,
 )
+from backend.video_summary.library.usecases.series_mindmap_generation import GenerateSeriesMindmapFromLibrary
 from backend.video_summary.library.usecases.series_synopsis_generation import RefreshSeriesKnowledgeMemory
 
 __all__ = [
@@ -42,9 +44,11 @@ __all__ = [
     "DeleteSeries",
     "DeleteVideoSource",
     "GenerateVideoKnowledgeCards",
+    "GenerateSeriesMindmapFromLibrary",
     "GenerateVideoMindmapFromLibrary",
     "GenerateSeriesSummaryFromLibrary",
     "GenerateVideoSummaryFromLibrary",
+    "GetSeriesMindmap",
     "GetVideoChapterCards",
     "GetVideoKnowledgeCards",
     "GetVideoMindmap",
