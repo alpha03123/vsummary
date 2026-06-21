@@ -114,11 +114,11 @@ export function WorkspaceKnowledgeCardsView({
             </div>
             <p className="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{card.summary}</p>
             <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.details}</p>
-            {card.tags.length ? (
+            {card.tags?.length ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {card.tags.map((tag) => (
                   <span
-                    key={tag}
+                    key={`${card.id}-${tag}`}
                     className="rounded-full border border-stone-200/70 bg-stone-100/80 px-3 py-1 text-[11px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
                   >
                     {tag}
