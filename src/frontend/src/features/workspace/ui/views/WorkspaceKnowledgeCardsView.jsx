@@ -1,7 +1,20 @@
 import { BrainCircuit } from "lucide-react";
 
+import { CopyToClipboardButton } from "../shared/CopyToClipboardButton";
 import { WorkspaceFeedbackBanner } from "../shared/WorkspaceFeedbackBanner";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+
+export function buildCardMarkdown(card) {
+  const parts = [`# ${card?.title ?? ""}`];
+  if (card?.summary) parts.push(card.summary);
+  if (card?.details) parts.push(card.details);
+  if (Array.isArray(card?.tags) && card.tags.length) {
+    parts.push(
+      `**Tags:** ${card.tags.filter((t) => typeof t === "string").join(", ")}`,
+    );
+  }
+  return parts.join("\n\n");
+}
 
 export function WorkspaceKnowledgeCardsView({
   tools,
@@ -92,9 +105,12 @@ export function WorkspaceKnowledgeCardsView({
             key={card.id}
             className="workspace-elevated-panel rounded-[2rem] border p-6 transition-all hover:-translate-y-0.5 hover:border-stone-300 dark:hover:border-white/16"
           >
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{card.kind}</p>
-              <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{card.kind}</p>
+                <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+              </div>
+              <CopyToClipboardButton text={buildCardMarkdown(card)} className="shrink-0" />
             </div>
             <p className="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{card.summary}</p>
             <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.details}</p>
