@@ -6,6 +6,7 @@ from pathlib import Path
 from backend.bilibili.ytdlp_bilibili import BilibiliDownloader
 from backend.bilibili.ytdlp_bilibili import DrissionBilibiliCookieInitializer
 from backend.bilibili.ytdlp_bilibili import _extract_info
+from backend.bilibili.ytdlp_bilibili import _resolve_default_browser_path
 
 
 class RecordingReporter:
@@ -176,3 +177,26 @@ def test_bilibili_cookie_initializer_writes_dotenv_and_process_env(monkeypatch, 
     assert "OPENAI_MODEL=test" in dotenv_path.read_text(encoding="utf-8")
     assert "BILIBILI_COOKIE=SESSDATA=session-value; bili_jct=csrf-value" in dotenv_path.read_text(encoding="utf-8")
     assert os.environ["BILIBILI_COOKIE"] == "SESSDATA=session-value; bili_jct=csrf-value"
+
+
+def test_resolve_default_browser_path_falls_back_to_edge_when_chrome_is_missing(monkeypatch) -> None:
+    monkeypatch.setenv("PROGRAMFILES", r"C:\Program Files")
+    monkeypatch.setenv("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+    edge_path = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+
+    def exists(path: Path) -> bool:
+        return path == edge_path
+
+    assert _resolve_default_browser_path(exists=exists) == str(edge_path)
+
+
+def test_resolve_default_browser_path_prefers_chrome_before_edge(monkeypatch) -> None:
+    monkeypatch.setenv("PROGRAMFILES", r"C:\Program Files")
+    monkeypatch.setenv("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+    chrome_path = Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe")
+    edge_path = Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe")
+
+    def exists(path: Path) -> bool:
+        return path in {chrome_path, edge_path}
+
+    assert _resolve_default_browser_path(exists=exists) == str(chrome_path)

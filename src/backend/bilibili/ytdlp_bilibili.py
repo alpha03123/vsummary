@@ -400,8 +400,26 @@ def _create_drission_page(user_data_dir: str, browser_port: int) -> object:
     except ImportError as exc:
         raise BilibiliCookieInitError("当前 Python 环境缺少 DrissionPage，请先安装项目依赖。") from exc
     options = ChromiumOptions(read_file=False).set_local_port(browser_port).set_user_data_path(user_data_dir)
+    browser_path = _resolve_default_browser_path()
+    if browser_path:
+        options.set_browser_path(browser_path)
     browser = Chromium(addr_or_opts=options)
     return _DrissionPageSession(browser, browser.latest_tab)
+
+
+def _resolve_default_browser_path(*, exists: Callable[[Path], bool] | None = None) -> str | None:
+    path_exists = exists or Path.exists
+    program_files = [os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)")]
+    browser_candidates = [
+        ("Google", "Chrome", "Application", "chrome.exe"),
+        ("Microsoft", "Edge", "Application", "msedge.exe"),
+    ]
+    for parts in browser_candidates:
+        for base_dir in [path for path in program_files if path]:
+            candidate = Path(base_dir).joinpath(*parts)
+            if path_exists(candidate):
+                return str(candidate)
+    return None
 
 
 class _DrissionPageSession:
