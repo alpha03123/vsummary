@@ -1,7 +1,49 @@
 import { BrainCircuit } from "lucide-react";
 
+import { CopyToClipboardButton } from "../shared/CopyToClipboardButton";
 import { WorkspaceFeedbackBanner } from "../shared/WorkspaceFeedbackBanner";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+
+export function buildCardMarkdown(card) {
+  const lines = [];
+
+  lines.push(`## ${card?.title ?? ""}`);
+  lines.push("");
+
+  const meta = [];
+  if (card?.kind) {
+    meta.push(`- 类型：${card.kind}`);
+  }
+  if (Array.isArray(card?.tags) && card.tags.length) {
+    const validTags = card.tags.filter((t) => typeof t === "string");
+    if (validTags.length) meta.push(`- 标签：${validTags.join("、")}`);
+  }
+  if (Array.isArray(card?.keywords) && card.keywords.length) {
+    const validKeywords = card.keywords.filter((k) => typeof k === "string");
+    if (validKeywords.length) meta.push(`- 关键词：${validKeywords.join("、")}`);
+  }
+  if (meta.length) {
+    lines.push(...meta);
+    lines.push("");
+  }
+
+  if (card?.summary) {
+    lines.push("### 摘要");
+    lines.push(card.summary);
+    lines.push("");
+  }
+
+  if (card?.details) {
+    lines.push("### 详情");
+    lines.push(card.details);
+  }
+
+  while (lines.length && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return lines.join("\n");
+}
 
 export function WorkspaceKnowledgeCardsView({
   tools,
@@ -92,17 +134,20 @@ export function WorkspaceKnowledgeCardsView({
             key={card.id}
             className="workspace-elevated-panel rounded-[2rem] border p-6 transition-all hover:-translate-y-0.5 hover:border-stone-300 dark:hover:border-white/16"
           >
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{card.kind}</p>
-              <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{card.kind}</p>
+                <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+              </div>
+              <CopyToClipboardButton text={buildCardMarkdown(card)} className="shrink-0" />
             </div>
             <p className="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{card.summary}</p>
             <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.details}</p>
-            {card.tags.length ? (
+            {card.tags?.length ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {card.tags.map((tag) => (
                   <span
-                    key={tag}
+                    key={`${card.id}-${tag}`}
                     className="rounded-full border border-stone-200/70 bg-stone-100/80 px-3 py-1 text-[11px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
                   >
                     {tag}

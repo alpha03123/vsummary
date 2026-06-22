@@ -11,6 +11,9 @@ set "ENV_PATH="
 set "PYTHON="
 
 if not defined CONDA_BAT (
+    for /f "delims=" %%I in ('where conda.bat 2^>nul') do set "CONDA_BAT=%%I"
+)
+if not defined CONDA_BAT (
     if exist "%USERPROFILE%\miniconda3\condabin\conda.bat" set "CONDA_BAT=%USERPROFILE%\miniconda3\condabin\conda.bat"
 )
 if not defined CONDA_BAT (
