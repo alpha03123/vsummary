@@ -37,6 +37,9 @@ tmp/
 /data/
 .worktrees/
 
+# Local planning artifacts
+docs/superpowers/
+
 # Local dev scripts (environment-specific)
 /scripts/*
 !/scripts/build_release.ps1
