@@ -11,7 +11,7 @@ from pathlib import Path
 from threading import Lock
 
 from backend.video_summary.infrastructure.application_builders import build_mindmap_application
-from backend.video_summary.infrastructure.settings import ensure_settings_file
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 
 
 class ConfiguredMindmapWorkflow:

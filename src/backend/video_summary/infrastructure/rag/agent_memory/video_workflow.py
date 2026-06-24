@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from backend.video_summary.infrastructure.agent_memory.pinpoint import SemanticScorer, _lexical_score, extract_query_terms
+from backend.video_summary.infrastructure.rag.agent_memory.pinpoint import SemanticScorer, _lexical_score, extract_query_terms
 
 
 GET_VIDEO_TRANSCRIPT_TOOL_NAME = "get_video_transcript"

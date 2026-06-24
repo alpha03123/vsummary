@@ -14,8 +14,8 @@ from fastapi.responses import StreamingResponse
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult, ScopeType
-from backend.api.container import ApiContainerDep
-from backend.api.responses import (
+from backend.api.di.container import ApiContainerDep
+from backend.api.schemas.responses import (
     AgentChatRequest,
     AgentChatResponse,
     AgentContextUsageRequest,
@@ -25,12 +25,12 @@ from backend.api.responses import (
     AgentSessionRecoveryResponse,
     CitationResponse,
 )
-from backend.api.sse import encode_sse_event
-from backend.video_summary.infrastructure.rag_models import (
+from backend.api.http.sse import encode_sse_event
+from backend.video_summary.infrastructure.rag.rag_models import (
     RAG_EMBEDDING_REQUIRED_MESSAGE,
     RAG_MODEL_DOWNLOAD_MESSAGE,
 )
-from backend.video_summary.infrastructure.settings import load_settings
+from backend.video_summary.infrastructure.config.settings import load_settings
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter()

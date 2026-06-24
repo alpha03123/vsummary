@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
-from backend.video_summary.infrastructure.settings import ensure_settings_file, load_settings
-from backend.video_summary.infrastructure.prompts import KNOWLEDGE_CARD_PROMPT_TEMPLATE
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
+from backend.video_summary.infrastructure.llm.prompts import KNOWLEDGE_CARD_PROMPT_TEMPLATE
 from backend.video_summary.library.models import KnowledgeCardDTO
 
 

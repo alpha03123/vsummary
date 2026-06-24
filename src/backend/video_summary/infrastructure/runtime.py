@@ -19,11 +19,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from backend.video_summary.infrastructure.faster_whisper_transcriber import FasterWhisperTranscriber
-from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.asr.faster_whisper_transcriber import FasterWhisperTranscriber
+from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.shared.llm import LiteLLMCompletionGateway
-from backend.video_summary.infrastructure.litellm_summarizer import LiteLLMCompletionSummarizer
-from backend.video_summary.infrastructure.settings import AppSettings
+from backend.video_summary.infrastructure.llm.litellm_summarizer import LiteLLMCompletionSummarizer
+from backend.video_summary.infrastructure.config.settings import AppSettings
 from backend.video_summary.generation.ports import Summarizer, Transcriber
 
 

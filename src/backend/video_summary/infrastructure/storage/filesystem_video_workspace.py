@@ -34,7 +34,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.shared.filesystem import KeyedLockManager, atomic_write_text
-from backend.video_summary.infrastructure.agent_memory.document_schema import SeriesCatalogPayload
+from backend.video_summary.infrastructure.rag.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import (

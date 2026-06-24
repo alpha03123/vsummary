@@ -11,10 +11,11 @@ from contextlib import contextmanager
 from unittest.mock import patch
 
 
-from backend.api.bootstrap import LazyAgentRuntimeProvider, _WorkspaceIndexRefresher
-from backend.video_summary.infrastructure.agent_memory.retrieval import SeriesRetrievalService
+from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
+from backend.api.workers.workspace_index_worker import _WorkspaceIndexRefresher
+from backend.video_summary.infrastructure.rag.agent_memory.retrieval import INDEX_TABLE_NAME, SeriesRetrievalService
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.library.models import (
     LibrarySeriesDTO,
     LibraryVideoCardDTO,
@@ -399,42 +400,42 @@ class RetrievalIncrementalMutationTests(unittest.TestCase):
         service = SeriesRetrievalService(workspace=MutableRetrievalWorkspace(), db_uri="db-uri")
 
         with (
-            patch("backend.video_summary.infrastructure.agent_memory.retrieval._table_exists", return_value=True),
+            patch("backend.video_summary.infrastructure.rag.agent_memory.retrieval._table_exists", return_value=True),
             patch(
-                "backend.video_summary.infrastructure.agent_memory.retrieval._read_signature_file",
+                "backend.video_summary.infrastructure.rag.agent_memory.retrieval._read_signature_file",
                 return_value={"series-1": ("series-1:video-1:ready:1:a:b:c:d",)},
             ),
-            patch("backend.video_summary.infrastructure.agent_memory.retrieval._delete_rows"),
-            patch("backend.video_summary.infrastructure.agent_memory.retrieval._write_signature_file"),
+            patch("backend.video_summary.infrastructure.rag.agent_memory.retrieval._delete_rows"),
+            patch("backend.video_summary.infrastructure.rag.agent_memory.retrieval._write_signature_file"),
             patch(
-                "backend.video_summary.infrastructure.agent_memory.retrieval._optimize_lancedb_table",
+                "backend.video_summary.infrastructure.rag.agent_memory.retrieval._optimize_lancedb_table",
                 create=True,
             ) as optimize_table,
         ):
             service.delete_series("series-1")
 
-        optimize_table.assert_called_once_with("db-uri", "agent_graph_evidence_v4")
+        optimize_table.assert_called_once_with("db-uri", INDEX_TABLE_NAME)
 
     def test_delete_series_does_not_fail_when_lancedb_optimize_fails(self) -> None:
         service = SeriesRetrievalService(workspace=MutableRetrievalWorkspace(), db_uri="db-uri")
 
         with (
-            patch("backend.video_summary.infrastructure.agent_memory.retrieval._table_exists", return_value=True),
+            patch("backend.video_summary.infrastructure.rag.agent_memory.retrieval._table_exists", return_value=True),
             patch(
-                "backend.video_summary.infrastructure.agent_memory.retrieval._read_signature_file",
+                "backend.video_summary.infrastructure.rag.agent_memory.retrieval._read_signature_file",
                 return_value={"series-1": ("series-1:video-1:ready:1:a:b:c:d",)},
             ),
-            patch("backend.video_summary.infrastructure.agent_memory.retrieval._delete_rows") as delete_rows,
-            patch("backend.video_summary.infrastructure.agent_memory.retrieval._write_signature_file"),
+            patch("backend.video_summary.infrastructure.rag.agent_memory.retrieval._delete_rows") as delete_rows,
+            patch("backend.video_summary.infrastructure.rag.agent_memory.retrieval._write_signature_file"),
             patch(
-                "backend.video_summary.infrastructure.agent_memory.retrieval._optimize_lancedb_table",
+                "backend.video_summary.infrastructure.rag.agent_memory.retrieval._optimize_lancedb_table",
                 side_effect=RuntimeError("optimize failed"),
             ) as optimize_table,
         ):
             service.delete_series("series-1")
 
         delete_rows.assert_called_once()
-        optimize_table.assert_called_once_with("db-uri", "agent_graph_evidence_v4")
+        optimize_table.assert_called_once_with("db-uri", INDEX_TABLE_NAME)
 
     def test_full_refresh_uses_stable_business_doc_ids(self) -> None:
         workspace = MutableRetrievalWorkspace()
@@ -445,7 +446,7 @@ class RetrievalIncrementalMutationTests(unittest.TestCase):
 
             import lancedb
 
-            table = lancedb.connect(temp_dir).open_table("agent_graph_evidence_v4")
+            table = lancedb.connect(temp_dir).open_table(INDEX_TABLE_NAME)
             rows = table.to_pandas().to_dict(orient="records")
             top_level_doc_ids = {row["doc_id"] for row in rows}
             metadata_doc_ids = {row["metadata"]["doc_id"] for row in rows}
@@ -481,7 +482,7 @@ class RetrievalIncrementalMutationTests(unittest.TestCase):
             )
 
             with patch(
-                "backend.video_summary.infrastructure.agent_memory.retrieval._reset_lancedb_table",
+                "backend.video_summary.infrastructure.rag.agent_memory.retrieval._reset_lancedb_table",
                 side_effect=AssertionError("refresh should not manually drop the table"),
             ):
                 service.refresh()
@@ -701,8 +702,8 @@ class LazyAgentRuntimeProviderTests(unittest.TestCase):
             )
 
             with (
-                patch("backend.api.bootstrap.SeriesRetrievalService", return_value=FakeRetrievalService()),
-                patch("backend.api.bootstrap.AgentWorkspaceIndexBuilder", BlockingIndexBuilder),
+                patch("backend.api.adapters.agent_runtime_provider.SeriesRetrievalService", return_value=FakeRetrievalService()),
+                patch("backend.api.adapters.agent_runtime_provider.AgentWorkspaceIndexBuilder", BlockingIndexBuilder),
             ):
                 refresh_thread = threading.Thread(target=provider.refresh_workspace_indexes)
                 refresh_thread.start()
@@ -1282,7 +1283,7 @@ def _patched_thread_start():
     def fake_start(thread_self):
         scheduled_targets.append(thread_self._target)
 
-    with patch("backend.api.bootstrap.Thread.start", fake_start):
+    with patch("backend.api.workers.workspace_index_worker.Thread.start", fake_start):
         yield scheduled_targets
 
 

@@ -11,11 +11,11 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
-from backend.video_summary.infrastructure.huggingface_model_downloader import (
+from backend.video_summary.infrastructure.asr.huggingface_model_downloader import (
     HuggingFaceDownloadSpec,
     HuggingFaceModelDownloader,
 )
-from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides
+from backend.video_summary.infrastructure.config.settings import apply_runtime_env_overrides
 
 
 SUPPORTED_FASTER_WHISPER_MODELS = (

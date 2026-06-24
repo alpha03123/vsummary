@@ -5,7 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from backend.api.access_log import SuppressPathAccessLogFilter
+from backend.api.http.access_log import SuppressPathAccessLogFilter
 
 
 class SuppressPathAccessLogFilterTests(unittest.TestCase):

@@ -4,7 +4,7 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from backend.api.server import configure_event_loop_policy
+from backend.api.http.server import configure_event_loop_policy
 
 
 class ServerStartupTests(unittest.TestCase):
@@ -13,8 +13,8 @@ class ServerStartupTests(unittest.TestCase):
         original_policy = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
         asyncio.WindowsSelectorEventLoopPolicy = lambda: policy  # type: ignore[attr-defined]
         try:
-            with patch("backend.api.server.sys.platform", "win32"), patch(
-                "backend.api.server.asyncio.set_event_loop_policy"
+            with patch("backend.api.http.server.sys.platform", "win32"), patch(
+                "backend.api.http.server.asyncio.set_event_loop_policy"
             ) as set_policy:
                 configure_event_loop_policy()
 
@@ -26,8 +26,8 @@ class ServerStartupTests(unittest.TestCase):
                 asyncio.WindowsSelectorEventLoopPolicy = original_policy  # type: ignore[attr-defined]
 
     def test_does_not_change_event_loop_policy_on_non_windows(self) -> None:
-        with patch("backend.api.server.sys.platform", "linux"), patch(
-            "backend.api.server.asyncio.set_event_loop_policy"
+        with patch("backend.api.http.server.sys.platform", "linux"), patch(
+            "backend.api.http.server.asyncio.set_event_loop_policy"
         ) as set_policy:
             configure_event_loop_policy()
 

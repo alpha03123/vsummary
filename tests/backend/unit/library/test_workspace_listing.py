@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.video_summary.infrastructure.filesystem_video_workspace import (
+from backend.video_summary.infrastructure.storage.filesystem_video_workspace import (
     FileSystemVideoWorkspace,
 )
 

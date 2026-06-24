@@ -11,15 +11,15 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.api.container import ApiContainerDep
-from backend.api.responses import (
+from backend.api.di.container import ApiContainerDep
+from backend.api.schemas.responses import (
     LinkedVideoDownloadResponse,
     ResolveBilibiliSeriesRequest,
     ResolveBilibiliVideoRequest,
     SeriesResponse,
     VideoCardResponse,
 )
-from backend.api.sse import stream_progress_events
+from backend.api.http.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import (
     BILIBILI_COOKIE_REQUIRED_MESSAGE,
     BilibiliCookieInitError,

@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend.api.app import create_app
+from backend.api.http.app import create_app
 from backend.video_summary.infrastructure.in_memory_progress_tracker import (
     InMemoryProgressTracker,
 )

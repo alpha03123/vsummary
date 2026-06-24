@@ -14,7 +14,7 @@ from typing import Callable, Literal
 
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.settings import apply_runtime_env_overrides
+from backend.video_summary.infrastructure.config.settings import apply_runtime_env_overrides
 
 
 RAG_MODEL_DOWNLOAD_MESSAGE = "正在下载 RAG 模型，请等待下载完成后再提问。"

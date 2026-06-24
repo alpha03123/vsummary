@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from backend.api.access_log import install_access_log_filters
-from backend.api.bootstrap import ApiContainer
-from backend.api.container import build_default_container
+from backend.api.http.access_log import install_access_log_filters
+from backend.api.di.bootstrap import ApiContainer
+from backend.api.di.container import build_default_container
 from backend.api.routes import include_api_routers
-from backend.api.static_assets import mount_frontend_dist
+from backend.api.http.static_assets import mount_frontend_dist
 
 
 def create_app(container: ApiContainer | None = None) -> FastAPI:

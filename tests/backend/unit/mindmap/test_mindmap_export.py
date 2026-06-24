@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from backend.video_summary.infrastructure.mindmap_export import render_mindmap_markdown
+from backend.video_summary.infrastructure.storage.mindmap_export import render_mindmap_markdown
 
 
 class MindmapExportTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class MindmapExportTests(unittest.TestCase):
 
 class MindmapHtmlExportTests(unittest.TestCase):
     def test_html_export_renders_valid_html(self):
-        from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html
+        from backend.video_summary.infrastructure.storage.mindmap_export import render_mindmap_html
         node = {"id": "root", "title": "TestTitle", "summary": "", "children": []}
         result = render_mindmap_html(node, "TestTitle")
         self.assertTrue(result.startswith("<!doctype html>"))
@@ -61,14 +61,14 @@ class MindmapHtmlExportTests(unittest.TestCase):
         self.assertIn("TestTitle", result)
 
     def test_html_export_embeds_mindmap_data(self):
-        from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html
+        from backend.video_summary.infrastructure.storage.mindmap_export import render_mindmap_html
         node = {"id": "root", "title": "Root Node", "summary": "A summary", "children": []}
         result = render_mindmap_html(node, "Root Node")
         self.assertIn('Root Node', result)
         self.assertIn('A summary', result)
 
     def test_html_export_handles_nested_children(self):
-        from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html
+        from backend.video_summary.infrastructure.storage.mindmap_export import render_mindmap_html
         node = {"id": "root", "title": "Root", "summary": "", "children": [
             {"id": "c1", "title": "Child1", "summary": "", "children": []}
         ]}

@@ -11,9 +11,17 @@ from pathlib import Path
 
 from fastapi import Depends, Request
 
-from backend.api.bootstrap import ApiContainer, build_api_container
+from backend.api.di.bootstrap import ApiContainer, build_api_container
 
-ROOT = Path(__file__).resolve().parents[3]
+
+def _resolve_root_dir() -> Path:
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "config" / "settings.toml").is_file():
+            return candidate
+    raise FileNotFoundError("settings file not found in parent config directories")
+
+
+ROOT = _resolve_root_dir()
 
 
 def build_default_container() -> ApiContainer:

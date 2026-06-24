@@ -14,9 +14,9 @@ from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
-from backend.video_summary.infrastructure.faster_whisper_models import FasterWhisperModelManager
-from backend.video_summary.infrastructure.rag_models import RAG_RERANKER_REQUIRED_MESSAGE, RagModelManager
-from backend.video_summary.infrastructure.settings import (
+from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.rag.rag_models import RAG_RERANKER_REQUIRED_MESSAGE, RagModelManager
+from backend.video_summary.infrastructure.config.settings import (
     EnvSettings,
     VALID_THEMES,
     VALID_WORKSPACE_LAYOUT_MODES,

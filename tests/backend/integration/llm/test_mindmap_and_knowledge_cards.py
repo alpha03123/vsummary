@@ -7,10 +7,10 @@ import unittest
 from pathlib import Path
 
 
-from backend.api.responses import VideoKnowledgeCardsResponse
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.infrastructure.litellm_mindmap_generator import build_mindmap_prompt
-from backend.video_summary.infrastructure.litellm_series_mindmap_generator import build_series_mindmap_prompt
+from backend.api.schemas.responses import VideoKnowledgeCardsResponse
+from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import build_mindmap_prompt
+from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import build_series_mindmap_prompt
 from backend.video_summary.library.models import KnowledgeCardDTO, VideoKnowledgeCardsDTO
 
 
@@ -60,7 +60,7 @@ class SeriesMindmapPromptTests(unittest.TestCase):
 
 class LLMKnowledgeCardGeneratorTests(unittest.TestCase):
     def test_generator_uses_transcript_context_and_returns_explanatory_cards(self) -> None:
-        from backend.video_summary.infrastructure.litellm_knowledge_card_generator import (
+        from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import (
             KnowledgeCardCollectionPayload,
             LiteLLMKnowledgeCardGenerator,
         )
@@ -174,7 +174,7 @@ class FakeKnowledgeCardGateway:
 
     def complete_structured(self, messages, *, response_model, temperature=0, retries=2):
         del response_model, temperature, retries
-        from backend.video_summary.infrastructure.litellm_knowledge_card_generator import (
+        from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import (
             KnowledgeCardCollectionPayload,
         )
 

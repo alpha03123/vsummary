@@ -12,15 +12,15 @@ from pathlib import Path
 
 from backend.video_summary.generation.usecases.generate_mindmap import GenerateMindmap
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
-from backend.video_summary.infrastructure.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
-from backend.video_summary.infrastructure.litellm_mindmap_generator import LiteLLMMindmapGenerator
-from backend.video_summary.infrastructure.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
+from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
+from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
+from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
     build_video_summary_runtime,
 )
-from backend.video_summary.infrastructure.settings import AppSettings, load_settings
+from backend.video_summary.infrastructure.config.settings import AppSettings, load_settings
 
 
 @dataclass(frozen=True)
@@ -124,7 +124,7 @@ def build_series_mindmap_application(config_path: Path, root_dir: Path) -> Mindm
         包含 settings 与 `GenerateSeriesMindmap` 用例的 `MindmapApplication`。
     """
     from backend.video_summary.generation.usecases.generate_series_mindmap import GenerateSeriesMindmap
-    from backend.video_summary.infrastructure.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
+    from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
 
     settings = load_settings(config_path=config_path, root_dir=root_dir)
     gateway = build_litellm_completion_gateway(settings)

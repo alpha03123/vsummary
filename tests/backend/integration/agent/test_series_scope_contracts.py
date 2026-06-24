@@ -45,7 +45,7 @@ from backend.agent_graph.actions.video_action_planner import (
     VideoActionPlannerPayload,
 )
 from backend.agent_graph.prompts import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
-from backend.api.responses import AgentChatResponse
+from backend.api.schemas.responses import AgentChatResponse
 from backend.shared.llm.json_mode import validate_json_response
 from backend.video_summary.tools.notes import SAVE_NOTE_TOOL
 from backend.video_summary.library.models import TranscriptSegmentDTO, VideoSummaryDTO, VideoTranscriptDTO

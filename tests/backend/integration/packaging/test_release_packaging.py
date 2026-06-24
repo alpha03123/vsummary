@@ -8,8 +8,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests import _path_setup
-from backend.api.app import create_app
-from backend.api.bootstrap import _resolve_local_reranker_cache_dir
+from backend.api.http.app import create_app
+from backend.api.adapters.agent_runtime_provider import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
     PACKAGE_VARIANTS,
     build_release_layout,
@@ -116,7 +116,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
         self.assertIn("HF_HOME", script)
         self.assertIn("HUGGINGFACE_HUB_CACHE", script)
-        self.assertIn("-m backend.api.server", script)
+        self.assertIn("-m backend.api.http.server", script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:

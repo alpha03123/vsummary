@@ -15,7 +15,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from backend.api.bootstrap import ApiContainer, build_api_container
+from backend.api.di.bootstrap import ApiContainer, build_api_container
 
 
 @dataclass(frozen=True)
@@ -149,4 +149,3 @@ def summarize_event_order(raw_events: list[dict[str, object]]) -> list[str]:
             continue
         order.append(event_type)
     return order
-

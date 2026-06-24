@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from backend.video_summary.domain.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError, GenerateVideoSummary
-from backend.video_summary.infrastructure.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
+from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
 
 
 class FakeArtifactStore:

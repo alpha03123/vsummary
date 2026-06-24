@@ -13,5 +13,5 @@ if exist "%NVIDIA_BIN_ROOT%" for /d %%D in ("%NVIDIA_BIN_ROOT%\*") do if exist "
 set "PYTHONPATH=%ROOT%\src"
 
 start "" http://127.0.0.1:4173
-call "%ROOT%\runtime\python.exe" -m backend.api.server --host 127.0.0.1 --port 4173
+call "%ROOT%\runtime\python.exe" -m backend.api.http.server --host 127.0.0.1 --port 4173
 if errorlevel 1 pause

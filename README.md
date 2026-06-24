@@ -185,7 +185,7 @@ embedding_batch_size = 8
 
 ```bat
 cd src
-conda run -n vsummary python -m uvicorn backend.api.app:app --host 127.0.0.1 --port 8001
+conda run -n vsummary python -m uvicorn backend.api.http.app:app --host 127.0.0.1 --port 8001
 ```
 
 **终端 2：前端**

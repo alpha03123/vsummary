@@ -4,7 +4,7 @@ import unittest
 
 from tests import _path_setup  # noqa: F401
 
-from backend.video_summary.infrastructure.litellm_web_search import LiteLLMNativeWebSearchGateway
+from backend.video_summary.infrastructure.llm.litellm_web_search import LiteLLMNativeWebSearchGateway
 
 
 class LiteLLMNativeWebSearchGatewayTests(unittest.TestCase):

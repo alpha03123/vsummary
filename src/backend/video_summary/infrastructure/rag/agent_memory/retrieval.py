@@ -27,14 +27,14 @@ from llama_index.core.vector_stores import FilterCondition, FilterOperator, Meta
 from llama_index.vector_stores.lancedb import LanceDBVectorStore
 
 from backend.shared.filesystem import atomic_write_text
-from backend.video_summary.infrastructure.settings import (
+from backend.video_summary.infrastructure.config.settings import (
     AgentRetrievalSettings,
     DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
     DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED,
     apply_runtime_env_overrides,
     load_settings,
 )
-from backend.video_summary.infrastructure.agent_memory.fastembed_adapter import build_fastembed_embedding
+from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import build_fastembed_embedding
 from backend.video_summary.library.ports import VideoLibraryReader
 
 INDEX_SCHEMA_VERSION = 5

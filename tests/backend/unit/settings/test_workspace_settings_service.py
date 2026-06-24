@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from backend.video_summary.infrastructure.settings_service import SettingsService, SettingsValidationError
-from backend.video_summary.infrastructure.settings import (
+from backend.video_summary.infrastructure.config.settings_service import SettingsService, SettingsValidationError
+from backend.video_summary.infrastructure.config.settings import (
     EnvSettings,
     apply_runtime_env_overrides,
     load_env_settings,
@@ -354,7 +354,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 faster_whisper_model_manager=FakeFasterWhisperModelManager(),
             )
 
-            with patch("backend.video_summary.infrastructure.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
+            with patch("backend.video_summary.infrastructure.config.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
                 with self.assertRaisesRegex(RuntimeError, "^模型超时$"):
                     service.test_provider_settings(
                         llm_provider="openai",

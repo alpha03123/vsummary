@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend.api.app import create_app
+from backend.api.http.app import create_app
 
 
 class MarkdownExportApiTests(unittest.TestCase):

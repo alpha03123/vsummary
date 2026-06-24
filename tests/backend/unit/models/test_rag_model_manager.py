@@ -10,10 +10,10 @@ from fastapi.testclient import TestClient
 
 from tests import _path_setup  # noqa: F401
 
-from backend.api.app import create_app
-from backend.api.bootstrap import ApiContainer
+from backend.api.http.app import create_app
+from backend.api.di.bootstrap import ApiContainer
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
+from backend.video_summary.infrastructure.rag.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
 
 
 class RagModelManagerTests(unittest.TestCase):

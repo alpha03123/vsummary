@@ -23,7 +23,7 @@ def main() -> None:
     args = parser.parse_args()
 
     configure_event_loop_policy()
-    uvicorn.run("backend.api.app:app", host=args.host, port=args.port)
+    uvicorn.run("backend.api.http.app:app", host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

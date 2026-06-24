@@ -12,8 +12,8 @@ from threading import Thread
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from backend.api.container import ApiContainerDep
-from backend.api.contracts import (
+from backend.api.di.container import ApiContainerDep
+from backend.api.schemas.contracts import (
     FasterWhisperModelResponse,
     ProviderApiKeyResponse,
     ProviderSettingsResponse,
@@ -23,8 +23,8 @@ from backend.api.contracts import (
     UpdateWorkspaceSettingsRequest,
     WorkspaceSettingsResponse,
 )
-from backend.api.sse import stream_progress_events
-from backend.video_summary.infrastructure.settings import load_settings
+from backend.api.http.sse import stream_progress_events
+from backend.video_summary.infrastructure.config.settings import load_settings
 
 router = APIRouter()
 _ASR_DOWNLOAD_LOCK = Lock()

@@ -12,8 +12,8 @@ from tests import _path_setup  # noqa: F401
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.agent.infrastructure.chat_gateway import LiteLLMChatGateway
 from backend.agent.memory.context import AgentContext
-from backend.api.app import create_app
-from backend.api.bootstrap import LazyAgentRuntimeProvider
+from backend.api.http.app import create_app
+from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 from backend.agent_graph.actions.video_action_planner import VideoActionPlanner
 from backend.agent_graph.query.series_answer_synthesizer import SeriesAnswerSynthesizer
 from backend.agent_graph.query.series_query_processor import SeriesQueryProcessor

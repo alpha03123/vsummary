@@ -16,15 +16,15 @@ from urllib.parse import quote
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 
-from backend.api.container import ApiContainerDep
-from backend.api.contracts import (
+from backend.api.di.container import ApiContainerDep
+from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
     UpdateVideoNoteRequest,
 )
-from backend.api.responses import (
+from backend.api.schemas.responses import (
     SeriesResponse,
     VideoCardResponse,
     VideoChapterCardsResponse,
@@ -34,7 +34,7 @@ from backend.api.responses import (
     VideoNotesResponse,
     VideoWorkspaceToolsResponse,
 )
-from backend.api.sse import stream_progress_events
+from backend.api.http.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
@@ -45,7 +45,7 @@ from backend.video_summary.library.markdown_exports import render_transcript_mar
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 from backend.video_summary.library.usecases.summary_generation import GenerationScopeBusyError
-from backend.video_summary.infrastructure.mindmap_export import render_mindmap_html, render_mindmap_markdown
+from backend.video_summary.infrastructure.storage.mindmap_export import render_mindmap_html, render_mindmap_markdown
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)

@@ -285,7 +285,7 @@ os.chdir(root)
 os.environ["HF_HOME"] = str(root / "data" / "huggingface")
 os.environ["HUGGINGFACE_HUB_CACHE"] = str(root / "data" / "huggingface" / "hub")
 sys.path.insert(0, str(root / "src"))
-from backend.api.app import create_app
+from backend.api.http.app import create_app
 
 class DummyContainer:
     def __init__(self, root_dir):

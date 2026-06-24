@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from backend.video_summary.infrastructure.faster_whisper_transcriber import (
+from backend.video_summary.infrastructure.asr.faster_whisper_transcriber import (
     FasterWhisperTranscriber,
     _discover_nvidia_bin_dirs,
 )
@@ -21,7 +21,7 @@ class FasterWhisperTranscriberTests(unittest.TestCase):
         sys.modules["faster_whisper"] = fake_module
         try:
             with patch(
-                "backend.video_summary.infrastructure.faster_whisper_transcriber._ensure_windows_cuda_dll_dirs",
+                "backend.video_summary.infrastructure.asr.faster_whisper_transcriber._ensure_windows_cuda_dll_dirs",
                 side_effect=AssertionError("CPU mode must not scan CUDA DLL dirs"),
             ):
                 transcriber = FasterWhisperTranscriber(
@@ -40,7 +40,7 @@ class FasterWhisperTranscriberTests(unittest.TestCase):
 
     def test_missing_nvidia_namespace_is_ignored_when_discovering_cuda_dlls(self) -> None:
         with patch(
-            "backend.video_summary.infrastructure.faster_whisper_transcriber.importlib.util.find_spec",
+            "backend.video_summary.infrastructure.asr.faster_whisper_transcriber.importlib.util.find_spec",
             side_effect=ModuleNotFoundError("No module named 'nvidia'"),
         ):
             self.assertEqual(_discover_nvidia_bin_dirs(), [])

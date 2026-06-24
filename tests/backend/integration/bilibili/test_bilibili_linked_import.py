@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 from backend.bilibili.ytdlp_bilibili import YtDlpBilibiliResolver
-from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO

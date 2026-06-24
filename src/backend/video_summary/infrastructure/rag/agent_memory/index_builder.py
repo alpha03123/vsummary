@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from backend.video_summary.infrastructure.agent_memory.retrieval import SeriesRetrievalService
+from backend.video_summary.infrastructure.rag.agent_memory.retrieval import SeriesRetrievalService
 
 
 class AgentWorkspaceIndexBuilder:

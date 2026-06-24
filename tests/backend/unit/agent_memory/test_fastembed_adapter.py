@@ -3,13 +3,13 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from backend.video_summary.infrastructure.agent_memory.fastembed_adapter import FastEmbedEmbedding
+from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import FastEmbedEmbedding
 
 
 class FastEmbedEmbeddingTests(unittest.TestCase):
     def test_uses_fastembed_for_text_and_query_embeddings(self) -> None:
         with patch(
-            "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
+            "backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter._load_text_embedding_cls",
             return_value=_FakeTextEmbedding,
         ):
             embedding = FastEmbedEmbedding(
@@ -28,10 +28,10 @@ class FastEmbedEmbeddingTests(unittest.TestCase):
         _FakeTextEmbedding.active_providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         with (
             patch(
-                "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
+                "backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter._load_text_embedding_cls",
                 return_value=_FakeTextEmbedding,
             ),
-            patch("backend.video_summary.infrastructure.agent_memory.fastembed_adapter._prepare_cuda_runtime") as prepare,
+            patch("backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter._prepare_cuda_runtime") as prepare,
         ):
             FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
 
@@ -44,10 +44,10 @@ class FastEmbedEmbeddingTests(unittest.TestCase):
         _FakeTextEmbedding.active_providers = ["CPUExecutionProvider"]
         with (
             patch(
-                "backend.video_summary.infrastructure.agent_memory.fastembed_adapter._load_text_embedding_cls",
+                "backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter._load_text_embedding_cls",
                 return_value=_FakeTextEmbedding,
             ),
-            patch("backend.video_summary.infrastructure.agent_memory.fastembed_adapter._prepare_cuda_runtime"),
+            patch("backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter._prepare_cuda_runtime"),
         ):
             with self.assertRaisesRegex(RuntimeError, "CUDAExecutionProvider 未激活"):
                 FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
