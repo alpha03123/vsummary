@@ -146,6 +146,18 @@ class MarkdownExportApiTests(unittest.TestCase):
 
             self.assertEqual(response.status_code, 404)
 
+    def test_exports_series_archive_zip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            client = TestClient(create_app(_build_container(root)))
+
+            response = client.get("/api/series/series-1/exports/mixed.zip")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, b"zip-content")
+            self.assertEqual(response.headers["content-type"], "application/zip")
+            self.assertIn("series-1-mixed.zip", response.headers["content-disposition"])
+
 
 def _prepare_video_dir(root: Path) -> Path:
     video_dir = root / "workspace" / "series-1" / "video-1"
@@ -158,6 +170,12 @@ def _build_container(root: Path, title: str = "Video 1", video_id: str = "video-
     return SimpleNamespace(
         root_dir=root,
         get_video_source=SimpleNamespace(run=lambda series_id, video_id: source),
+        export_series_archive=SimpleNamespace(
+            run=lambda series_id, export_kind: SimpleNamespace(
+                filename=f"{series_id}-{export_kind}.zip",
+                content=b"zip-content",
+            )
+        ),
     )
 
 

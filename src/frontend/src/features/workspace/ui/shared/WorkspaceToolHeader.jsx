@@ -24,7 +24,7 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
   );
 }
 
-function WorkspaceExportMenu({ exportActions }) {
+export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const enabledActions = exportActions.filter((action) => action.enabled);
@@ -54,7 +54,7 @@ function WorkspaceExportMenu({ exportActions }) {
         className={`${className} cursor-not-allowed text-stone-400 opacity-50 dark:text-stone-500`}
       >
         <Download size={16} />
-        导出
+        {buttonLabel}
         <ChevronDown size={14} />
       </button>
     );
@@ -68,7 +68,7 @@ function WorkspaceExportMenu({ exportActions }) {
         className={`${className} text-stone-700 hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:text-stone-900 dark:text-stone-200 dark:hover:border-white/16 dark:hover:bg-neutral-800 dark:hover:text-stone-100`}
       >
         <Download size={16} />
-        导出
+        {buttonLabel}
         <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open ? (

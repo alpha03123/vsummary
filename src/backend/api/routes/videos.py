@@ -927,6 +927,18 @@ def export_series_mindmap(series_id: str, format: str = "md", container: ApiCont
     return _markdown_response(markdown, filename)
 
 
+@router.get("/api/series/{series_id}/exports/{export_kind}.zip")
+def export_series_archive(series_id: str, export_kind: str, container: ApiContainerDep) -> Response:
+    """GET /api/series/{series_id}/exports/{kind}.zip — 批量导出系列制品压缩包。"""
+    try:
+        archive = container.export_series_archive.run(series_id, export_kind)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return _zip_response(archive.content, archive.filename)
+
+
 @router.delete("/api/series/{series_id}")
 def delete_series(series_id: str, container: ApiContainerDep) -> dict[str, object]:
     """DELETE /api/series/{series_id} — 删除整个系列及其全部制品。
@@ -1311,6 +1323,15 @@ def _markdown_response(markdown: str, filename: str) -> Response:
     return Response(
         content=markdown,
         media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": _content_disposition_attachment(filename)},
+    )
+
+
+def _zip_response(content: bytes, filename: str) -> Response:
+    """构造带 Content-Disposition 下载头的 ZIP HTTP 响应。"""
+    return Response(
+        content=content,
+        media_type="application/zip",
         headers={"Content-Disposition": _content_disposition_attachment(filename)},
     )
 

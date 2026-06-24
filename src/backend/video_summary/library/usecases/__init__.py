@@ -37,6 +37,7 @@ from backend.video_summary.library.usecases.summary_generation import (
 )
 from backend.video_summary.library.usecases.series_mindmap_generation import GenerateSeriesMindmapFromLibrary
 from backend.video_summary.library.usecases.series_synopsis_generation import RefreshSeriesKnowledgeMemory
+from backend.video_summary.library.usecases.series_exports import ExportSeriesArchive
 
 __all__ = [
     "CreateVideoNote",
@@ -46,6 +47,7 @@ __all__ = [
     "GenerateVideoKnowledgeCards",
     "GenerateSeriesMindmapFromLibrary",
     "GenerateVideoMindmapFromLibrary",
+    "ExportSeriesArchive",
     "GenerateSeriesSummaryFromLibrary",
     "GenerateVideoSummaryFromLibrary",
     "GetSeriesMindmap",

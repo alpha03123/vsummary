@@ -36,6 +36,7 @@ from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMin
 from backend.video_summary.library.usecases import (
     DeleteSeries,
     DeleteVideoSource,
+    ExportSeriesArchive,
     GenerateVideoKnowledgeCards,
     RefreshSeriesKnowledgeMemory,
     GenerateSeriesMindmapFromLibrary,
@@ -87,6 +88,7 @@ class ApiContainer:
     get_series_mindmap: GetSeriesMindmap
     delete_series: DeleteSeries
     delete_video_source: DeleteVideoSource
+    export_series_archive: ExportSeriesArchive
     import_local_series: ImportLocalSeries
     import_local_playground_videos: ImportLocalPlaygroundVideos
     import_local_series_videos: ImportLocalSeriesVideos
@@ -236,6 +238,7 @@ def build_api_container(
         get_series_mindmap=GetSeriesMindmap(workspace),
         delete_series=DeleteSeries(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
         delete_video_source=DeleteVideoSource(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
+        export_series_archive=ExportSeriesArchive(workspace),
         import_local_series=ImportLocalSeries(workspace),
         import_local_playground_videos=ImportLocalPlaygroundVideos(workspace),
         import_local_series_videos=ImportLocalSeriesVideos(workspace),

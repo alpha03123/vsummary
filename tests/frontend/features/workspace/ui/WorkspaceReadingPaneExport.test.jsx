@@ -31,8 +31,8 @@ function renderPane(overrides = {}) {
       knowledgeCardsFeedback={null}
       notes={overrides.notes ?? null}
       activeSeries={activeSeries}
-      selectedVideo={selectedVideo}
-      selectedContextType="video"
+      selectedVideo={overrides.selectedVideo === undefined ? selectedVideo : overrides.selectedVideo}
+      selectedContextType={overrides.selectedContextType ?? "video"}
       selectedNode={null}
       selectedToolId={overrides.selectedToolId ?? "overview"}
       selectedChapterId={null}
@@ -114,5 +114,27 @@ describe("WorkspaceReadingPane markdown exports", () => {
     });
 
     expect(await screen.findByRole("button", { name: "导出" })).toBeDisabled();
+  });
+
+  it("shows series batch export zip links on the series home", async () => {
+    renderPane({
+      selectedVideo: null,
+      selectedContextType: "series",
+      selectedToolId: "series-home",
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "批量导出" }));
+    expect(screen.getByRole("link", { name: "AI 概括混合导出" })).toHaveAttribute(
+      "href",
+      "/api/series/series-1/exports/mixed.zip",
+    );
+    expect(screen.getByRole("link", { name: "知识卡片导出" })).toHaveAttribute(
+      "href",
+      "/api/series/series-1/exports/knowledge-cards.zip",
+    );
+    expect(screen.getByRole("link", { name: "导图导出" })).toHaveAttribute(
+      "href",
+      "/api/series/series-1/exports/mindmaps.zip",
+    );
   });
 });
