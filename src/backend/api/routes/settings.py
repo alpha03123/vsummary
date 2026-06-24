@@ -23,7 +23,7 @@ from backend.api.schemas.contracts import (
     UpdateWorkspaceSettingsRequest,
     WorkspaceSettingsResponse,
 )
-from backend.api.http.sse import stream_progress_events
+from backend.api.schemas.sse import stream_progress_events
 from backend.video_summary.infrastructure.config.settings import load_settings
 
 router = APIRouter()

@@ -34,7 +34,7 @@ from backend.api.schemas.responses import (
     VideoNotesResponse,
     VideoWorkspaceToolsResponse,
 )
-from backend.api.http.sse import stream_progress_events
+from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError

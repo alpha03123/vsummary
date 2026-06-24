@@ -19,7 +19,7 @@ from backend.api.schemas.responses import (
     SeriesResponse,
     VideoCardResponse,
 )
-from backend.api.http.sse import stream_progress_events
+from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import (
     BILIBILI_COOKIE_REQUIRED_MESSAGE,
     BilibiliCookieInitError,

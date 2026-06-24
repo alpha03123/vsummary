@@ -11,8 +11,22 @@ from fastapi import FastAPI
 from backend.api.http.access_log import install_access_log_filters
 from backend.api.di.bootstrap import ApiContainer
 from backend.api.di.container import build_default_container
-from backend.api.routes import include_api_routers
+from backend.api.routes.agent import router as agent_router
+from backend.api.routes.chaoxing import router as chaoxing_router
+from backend.api.routes.health import router as health_router
+from backend.api.routes.linked import router as linked_router
+from backend.api.routes.settings import router as settings_router
+from backend.api.routes.videos import router as videos_router
 from backend.api.http.static_assets import mount_frontend_dist
+
+
+def include_api_routers(app: FastAPI) -> None:
+    app.include_router(health_router)
+    app.include_router(settings_router)
+    app.include_router(videos_router)
+    app.include_router(agent_router)
+    app.include_router(linked_router)
+    app.include_router(chaoxing_router)
 
 
 def create_app(container: ApiContainer | None = None) -> FastAPI:

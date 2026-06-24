@@ -25,7 +25,7 @@ from backend.api.schemas.responses import (
     AgentSessionRecoveryResponse,
     CitationResponse,
 )
-from backend.api.http.sse import encode_sse_event
+from backend.api.schemas.sse import encode_sse_event
 from backend.video_summary.infrastructure.rag.rag_models import (
     RAG_EMBEDDING_REQUIRED_MESSAGE,
     RAG_MODEL_DOWNLOAD_MESSAGE,
