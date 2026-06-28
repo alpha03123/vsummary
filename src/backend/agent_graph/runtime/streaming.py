@@ -373,6 +373,7 @@ class AgentGraphStreamOrchestrator:
         )
         assistant_message = citation_resolution.answer_text
         used_evidence_ids = citation_resolution.used_evidence_ids
+        used_citation_ids = citation_resolution.used_citation_ids
 
         stream_finished_at = _current_time_like(stream_started_at)
         result = {
@@ -380,6 +381,7 @@ class AgentGraphStreamOrchestrator:
             "answer": assistant_message,
             "assistant_message": assistant_message,
             "used_evidence_ids": used_evidence_ids,
+            "used_citation_ids": used_citation_ids,
         }
         if debug_trace is not None:
             debug_trace["graph_result"] = result

@@ -38,7 +38,7 @@ function injectCitationLinks(content, citations) {
     return content;
   }
   const citationIds = new Set(citations.map((citation) => citation.id));
-  return content.replace(/\[(\d+)\]/g, (match, citationId) => {
+  return content.replace(/\[(\d+(?:\.\d+)?)\]/g, (match, citationId) => {
     if (!citationIds.has(citationId)) {
       return match;
     }

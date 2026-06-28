@@ -13,6 +13,7 @@ import json
 from pydantic import BaseModel
 
 from backend.agent.schemas.messages import AgentChatMessage
+from backend.agent_graph.evidence.transcript_anchors import number_evidence_items_for_citations
 from backend.agent_graph.prompts import (
     VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT,
     build_answer_detail_level_prompt,
@@ -125,7 +126,7 @@ class AnswerSynthesisProgram:
         return self._build_messages(
             user_message=user_message,
             memory_messages=memory_messages or [],
-            evidence_items=_number_evidence_items(normalized_evidence_items),
+            evidence_items=number_evidence_items_for_citations(normalized_evidence_items),
             meta_state=meta_state or {},
             text_only=True,
         )
@@ -183,33 +184,14 @@ class AnswerSynthesisProgram:
 
 # 追加到流式输出 system prompt 末尾的约束片段。
 #
-# 目的：让模型在流式输出场景下只产出 Markdown 回答正文 + `[1]`/`[2]`
-# 形式的数字引用，不要输出 JSON、doc_id 等内部 ID，也不要输出额外字段。
+# 目的：让模型在流式输出场景下只产出 Markdown 回答正文 + citation
+# marker，不要输出 JSON、doc_id 等内部 ID，也不要输出额外字段。
 _STREAMING_CITED_ANSWER_PROMPT = (
     "\n流式引用输出要求：\n"
     "- 只输出 answer 字段对应的 Markdown 回答正文。\n"
     "- evidence_items 已按 Source 1、Source 2 等数字编号。\n"
-    "- 使用某条 Source 支持句子或段落时，在该句或段落末尾插入对应的数字引用，例如 [1] 或 [2]。\n"
-    "- 只能使用真实存在的 Source 编号，不要输出 evidence_id、local-*、web-* 或 e* 这类内部 ID，不要编造引用编号。\n"
+    "- summary / web evidence 使用 Source 编号引用，例如 [1] 或 [2]。\n"
+    "- transcript evidence 如果包含 segments，必须使用 segment 的 anchor_id 引用，例如 [2.1]，不要用粗粒度 [2]。\n"
+    "- 只能使用真实存在的 Source 编号或 transcript anchor_id，不要输出 evidence_id、local-*、web-* 或 e* 这类内部 ID，不要编造引用编号。\n"
     "- 不要输出 JSON，不要输出额外字段。\n"
 )
-
-
-def _number_evidence_items(items: list[dict[str, object]]) -> list[dict[str, object]]:
-    """为证据项注入 `source_number` 与 `source_label`，用于流式引用编号。
-
-    Args:
-        items: 待编号的证据字典列表。
-
-    Returns:
-        长度与输入一致、每项多了 `source_number`（从 1 开始）和
-        `source_label`（形如 `Source 1`）的新字典列表。
-    """
-    return [
-        {
-            **item,
-            "source_number": index,
-            "source_label": f"Source {index}",
-        }
-        for index, item in enumerate(items, start=1)
-    ]

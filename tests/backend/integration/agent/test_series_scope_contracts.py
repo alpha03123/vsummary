@@ -16,6 +16,7 @@ from backend.agent_graph.query.models import (
     SeriesQueryUnderstanding,
 )
 from backend.agent_graph.query.series_answer_synthesizer import SeriesAnswerSynthesizer
+from backend.agent_graph.query.video_answer_synthesizer import AnswerSynthesisProgram
 from backend.agent_graph.query.series_query_processor import SeriesQueryProcessor
 from backend.agent_graph.runtime.graph import build_agent_graph
 from backend.agent_graph.runtime.service import AgentGraphService
@@ -927,6 +928,58 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertNotIn("[local-1]", resolution.answer_text)
         self.assertIn("[React](https://example.com)", resolution.answer_text)
 
+    def test_inline_citation_resolution_accepts_transcript_segment_anchor(self) -> None:
+        resolution = resolve_inline_citations(
+            "这里引用的是字幕里的精确片段。[2.1]",
+            [
+                {"evidence_id": "local-1", "source_number": 1},
+                {
+                    "evidence_id": "local-2",
+                    "source_number": 2,
+                    "segments": [
+                        {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
+                    ],
+                },
+            ],
+        )
+
+        self.assertEqual(resolution.answer_text, "这里引用的是字幕里的精确片段。[2.1]")
+        self.assertEqual(resolution.used_source_numbers, [2])
+        self.assertEqual(resolution.used_evidence_ids, ["local-2"])
+        self.assertEqual(resolution.used_citation_ids, ["2.1"])
+
+    def test_inline_citation_resolution_rejects_unknown_transcript_segment_anchor(self) -> None:
+        with self.assertRaisesRegex(ValueError, "未知引用编号"):
+            resolve_inline_citations(
+                "这里引用的是不存在的字幕片段。[2.99]",
+                [
+                    {"evidence_id": "local-1", "source_number": 1},
+                    {
+                        "evidence_id": "local-2",
+                        "source_number": 2,
+                        "segments": [
+                            {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
+                        ],
+                    },
+                ],
+            )
+
+    def test_inline_citation_resolution_rejects_broad_transcript_citation_when_segments_exist(self) -> None:
+        with self.assertRaisesRegex(ValueError, "未知引用编号"):
+            resolve_inline_citations(
+                "这里引用的是过宽的字幕来源。[2]",
+                [
+                    {"evidence_id": "local-1", "source_number": 1},
+                    {
+                        "evidence_id": "local-2",
+                        "source_number": 2,
+                        "segments": [
+                            {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
+                        ],
+                    },
+                ],
+            )
+
     def test_citation_builder_uses_source_number_as_citation_id(self) -> None:
         turn = AgentGraphTurnBuilder().build(
             context=AgentContext(session_id="s1", scope_type="video", series_id="series-1", video_id="video-1"),
@@ -1038,6 +1091,80 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertEqual(citation.slots[0].end_seconds, 70.0)
         self.assertEqual(citation.slots[1].target_type, "transcript")
         self.assertEqual(citation.slots[1].text, "完整字幕内容")
+
+    def test_citation_builder_uses_transcript_segment_anchor_time(self) -> None:
+        turn = AgentGraphTurnBuilder().build(
+            context=AgentContext(session_id="s1", scope_type="video", series_id="series-1", video_id="video-1"),
+            result={
+                "assistant_message": "answer [2.2]",
+                "answer": "answer [2.2]",
+                "used_evidence_ids": ["local-2"],
+                "used_citation_ids": ["2.2"],
+                "evidence_items": [
+                    {
+                        "evidence_id": "local-2",
+                        "source_number": 2,
+                        "series_id": "series-1",
+                        "video_id": "video-1",
+                        "title": "Video 1",
+                        "source_type": "transcript_chunk",
+                        "source_family": "transcript",
+                        "start_seconds": 0.0,
+                        "end_seconds": 700.0,
+                        "text": "扩展窗口字幕",
+                        "snippet": "扩展窗口字幕",
+                        "segments": [
+                            {"anchor_id": "2.1", "start_seconds": 10.0, "end_seconds": 15.0, "text": "第一句"},
+                            {"anchor_id": "2.2", "start_seconds": 42.0, "end_seconds": 47.0, "text": "第二句"},
+                        ],
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(len(turn.citations), 1)
+        citation = turn.citations[0]
+        self.assertEqual(citation.id, "2.2")
+        self.assertEqual(citation.source_type, "transcript")
+        self.assertEqual(citation.slots[0].start_seconds, 42.0)
+        self.assertEqual(citation.slots[0].end_seconds, 47.0)
+        self.assertEqual(citation.slots[1].text, "第二句")
+
+    def test_video_answer_stream_messages_render_transcript_full_segment_anchors(self) -> None:
+        program = AnswerSynthesisProgram(gateway=FakeAnswerGateway())
+
+        messages = program.build_text_messages(
+            user_message="这里讲了什么？",
+            evidence_items=[
+                {
+                    "evidence_id": "local-1",
+                    "series_id": "series-1",
+                    "video_id": "video-1",
+                    "title": "Video 1",
+                    "source_type": "summary_global",
+                    "source_family": "summary",
+                    "text": "summary",
+                    "snippet": "summary",
+                },
+                {
+                    "evidence_id": "local-2",
+                    "series_id": "series-1",
+                    "video_id": "video-1",
+                    "title": "Video 1",
+                    "source_type": "transcript_full",
+                    "source_family": "transcript",
+                    "segments": [
+                        {"start_seconds": 12.0, "end_seconds": 18.0, "text": "第一句"},
+                        {"start_seconds": 42.0, "end_seconds": 47.0, "text": "第二句"},
+                    ],
+                },
+            ],
+        )
+
+        user_content = messages[1].content
+        self.assertIn("[2.1] (00:12) 第一句", user_content)
+        self.assertIn("[2.2] (00:42) 第二句", user_content)
+        self.assertIn("必须使用 segment 的 anchor_id", messages[0].content)
 
 
 class FakeQueryGateway:
