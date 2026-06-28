@@ -1176,12 +1176,27 @@ def _expand_transcript_hit(
     ]
     if not segments:
         return hit
+    segment_items = [
+        {
+            "start_seconds": segment.start_seconds,
+            "end_seconds": segment.end_seconds,
+            "text": segment.text,
+        }
+        for segment in segments
+        if str(segment.text).strip()
+    ]
     return {
         **hit,
+        "best_match": {
+            "start_seconds": hit.get("start_seconds"),
+            "end_seconds": hit.get("end_seconds"),
+            "text": hit.get("text") or hit.get("snippet"),
+        },
         "start_seconds": segments[0].start_seconds,
         "end_seconds": segments[-1].end_seconds,
         "text": " ".join(segment.text for segment in segments),
         "snippet": " ".join(segment.text for segment in segments),
+        "segments": segment_items,
     }
 
 

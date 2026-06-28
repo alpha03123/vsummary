@@ -38,7 +38,7 @@ function injectCitationLinks(content, citations) {
     return content;
   }
   const citationIds = new Set(citations.map((citation) => citation.id));
-  return content.replace(/\[(\d+)\]/g, (match, citationId) => {
+  return content.replace(/\[(\d+(?:\.\d+)?)\]/g, (match, citationId) => {
     if (!citationIds.has(citationId)) {
       return match;
     }
@@ -119,6 +119,26 @@ function buildCitationPreview(citation) {
   };
 }
 
+function buildCitationSeekReference(citation) {
+  if (!citation || typeof citation !== "object") {
+    return null;
+  }
+  const slots = Array.isArray(citation.slots) ? citation.slots.filter((slot) => slot && typeof slot === "object") : [];
+  const videoSlot = slots.find((slot) => slot.target_type === "video" && typeof slot.start_seconds === "number");
+  if (!videoSlot) {
+    return null;
+  }
+  const transcriptSlot = slots.find((slot) => slot.target_type === "transcript" && typeof slot.text === "string" && slot.text.trim());
+  const matchedText = transcriptSlot?.text?.trim() ?? "";
+  return {
+    seconds: videoSlot.start_seconds,
+    endSeconds: typeof videoSlot.end_seconds === "number" ? videoSlot.end_seconds : null,
+    matchedText,
+    chapterTitle: typeof videoSlot.video_title === "string" ? videoSlot.video_title.trim() : "",
+    query: "",
+  };
+}
+
 function resolveCitationPreviewPosition(anchor) {
   const rect = anchor.getBoundingClientRect();
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth || CITATION_PREVIEW_WIDTH;
@@ -179,7 +199,7 @@ function CitationPreviewCard({ preview, position }) {
   );
 }
 
-function CitationLink({ href, children, preview, ...props }) {
+function CitationLink({ href, children, preview, seekReference, onOpenSeekReference, ...props }) {
   const [position, setPosition] = useState(null);
 
   function showPreview(event) {
@@ -193,12 +213,19 @@ function CitationLink({ href, children, preview, ...props }) {
     setPosition(null);
   }
 
+  function handleClick(event) {
+    event.preventDefault();
+    if (seekReference) {
+      onOpenSeekReference?.(seekReference);
+    }
+  }
+
   return (
     <span className="inline-flex align-baseline">
       <a
         {...props}
         href={href}
-        onClick={(event) => event.preventDefault()}
+        onClick={handleClick}
         onMouseEnter={showPreview}
         onMouseLeave={hidePreview}
         onFocus={showPreview}
@@ -230,7 +257,7 @@ function ThinkBlock({ content }) {
   );
 }
 
-function MarkdownSegment({ content, citations }) {
+function MarkdownSegment({ content, citations, onOpenSeekReference }) {
   const normalizedCitations = normalizeCitations(citations);
   const renderedContent = injectCitationLinks(normalizeMathDelimiters(content), normalizedCitations);
   const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
@@ -242,9 +269,17 @@ function MarkdownSegment({ content, citations }) {
         a: ({ node: _node, href, children, ...props }) => {
           if (typeof href === "string" && href.startsWith("#citation-")) {
             const citationId = href.replace("#citation-", "");
-            const preview = buildCitationPreview(citationMap.get(citationId));
+            const citation = citationMap.get(citationId);
+            const preview = buildCitationPreview(citation);
+            const seekReference = buildCitationSeekReference(citation);
             return (
-              <CitationLink {...props} href={href} preview={preview}>
+              <CitationLink
+                {...props}
+                href={href}
+                preview={preview}
+                seekReference={seekReference}
+                onOpenSeekReference={onOpenSeekReference}
+              >
                 {children}
               </CitationLink>
             );
@@ -268,7 +303,7 @@ function MarkdownSegment({ content, citations }) {
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null }) {
+export function WorkspaceMarkdownMessage({ content, citations = null, onOpenSeekReference }) {
   const parts = splitThinkBlocks(content);
   return (
     <div className="flex flex-col gap-4">
@@ -276,7 +311,12 @@ export function WorkspaceMarkdownMessage({ content, citations = null }) {
         part.type === "think" ? (
           <ThinkBlock key={`${part.type}-${index}`} content={part.content} />
         ) : (
-          <MarkdownSegment key={`${part.type}-${index}`} content={part.content} citations={citations} />
+          <MarkdownSegment
+            key={`${part.type}-${index}`}
+            content={part.content}
+            citations={citations}
+            onOpenSeekReference={onOpenSeekReference}
+          />
         )
       ))}
     </div>

@@ -114,7 +114,11 @@ export function WorkspaceChatPanel({
 
     return (
       <Suspense fallback={<AssistantMessageFallback content={message.content} />}>
-        <WorkspaceMarkdownMessage content={message.content} citations={message.citations} />
+        <WorkspaceMarkdownMessage
+          content={message.content}
+          citations={message.citations}
+          onOpenSeekReference={onOpenSeekReference}
+        />
       </Suspense>
     );
   }

@@ -38,6 +38,7 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
         return []
     retrieval_results = _with_source_numbers(retrieval_results)
     used_evidence_ids = _resolve_used_evidence_ids(result)
+    used_citation_ids = _resolve_used_citation_ids(result)
     if used_evidence_ids is not None:
         retrieval_results = [
             item for item in retrieval_results
@@ -90,6 +91,19 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             continue
 
         if source_type in {"transcript_chunk", "transcript_full"}:
+            segment_citations = _transcript_segment_citations(
+                item=item,
+                citation_id=citation_id,
+                title=title,
+                used_citation_ids=used_citation_ids,
+            )
+            if segment_citations:
+                citations.extend(segment_citations)
+                next_id += 1
+                continue
+            if used_citation_ids is not None:
+                next_id += 1
+                continue
             slot_candidates = _to_slot_candidates(item.get("matches"))
             best_match = item.get("best_match")
             if isinstance(best_match, dict):
@@ -170,6 +184,21 @@ def _resolve_used_evidence_ids(result: dict[str, object]) -> set[str] | None:
         return None
     if not isinstance(raw_ids, list):
         raise ValueError("used_evidence_ids 必须是数组。")
+    used_ids = {
+        item.strip()
+        for item in raw_ids
+        if isinstance(item, str) and item.strip()
+    }
+    return used_ids
+
+
+def _resolve_used_citation_ids(result: dict[str, object]) -> set[str] | None:
+    """从结果中提取回答实际引用过的 citation id 集合。"""
+    raw_ids = result.get("used_citation_ids")
+    if raw_ids is None:
+        return None
+    if not isinstance(raw_ids, list):
+        raise ValueError("used_citation_ids 必须是数组。")
     used_ids = {
         item.strip()
         for item in raw_ids
@@ -350,6 +379,59 @@ def _append_video_graph_items(citations: list[CitationReference], items: object,
         )
         next_id += 1
     return next_id
+
+
+def _transcript_segment_citations(
+    *,
+    item: dict[str, object],
+    citation_id: str,
+    title: str,
+    used_citation_ids: set[str] | None,
+) -> list[CitationReference]:
+    """把 transcript evidence 的 `segments` 展开为 `[N.M]` citation。"""
+    raw_segments = item.get("segments")
+    if not isinstance(raw_segments, list):
+        return []
+    citations: list[CitationReference] = []
+    for index, segment in enumerate(raw_segments, start=1):
+        if not isinstance(segment, dict):
+            continue
+        anchor_id = _as_str(segment.get("anchor_id")) or f"{citation_id}.{index}"
+        if used_citation_ids is not None and anchor_id not in used_citation_ids:
+            continue
+        start_seconds = _as_float(segment.get("start_seconds"))
+        if start_seconds is None:
+            continue
+        end_seconds = _as_float(segment.get("end_seconds"))
+        text = _as_str(segment.get("text"))
+        citations.append(
+            CitationReference(
+                id=anchor_id,
+                label=_as_str(item.get("slot_label")) or _as_str(item.get("label")) or title,
+                source_type="transcript",
+                search_scope="transcript",
+                slots=[
+                    CitationSlot(
+                        slot=1,
+                        target_type="video",
+                        video_id=str(item.get("video_id", "")).strip(),
+                        video_title=title,
+                        start_seconds=start_seconds,
+                        end_seconds=end_seconds,
+                    ),
+                    CitationSlot(
+                        slot=2,
+                        target_type="transcript",
+                        video_id=str(item.get("video_id", "")).strip(),
+                        video_title=title,
+                        start_seconds=start_seconds,
+                        end_seconds=end_seconds,
+                        text=text,
+                    ),
+                ],
+            )
+        )
+    return citations
 
 
 def _to_slot_candidates(matches: object) -> list[CitationSlotCandidate]:

@@ -12,11 +12,16 @@ from pathlib import Path
 from fastapi import Depends, Request
 
 from backend.api.di.bootstrap import ApiContainer, build_api_container
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 
 
-def _resolve_root_dir() -> Path:
-    for candidate in Path(__file__).resolve().parents:
-        if (candidate / "config" / "settings.toml").is_file():
+def _resolve_root_dir(start_path: Path | None = None) -> Path:
+    resolved_start = start_path or Path(__file__).resolve()
+    for candidate in resolved_start.parents:
+        settings_path = candidate / "config" / "settings.toml"
+        example_path = candidate / "config" / "settings.toml.example"
+        if settings_path.is_file() or example_path.is_file():
+            ensure_settings_file(settings_path)
             return candidate
     raise FileNotFoundError("settings file not found in parent config directories")
 

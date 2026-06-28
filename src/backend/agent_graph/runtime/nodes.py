@@ -799,11 +799,21 @@ def _build_full_transcript_context_item(transcript) -> dict[str, object] | None:
     if transcript is None:
         return None
     lines: list[str] = []
+    segments: list[dict[str, object]] = []
     for segment in getattr(transcript, "segments", []):
         text = str(getattr(segment, "text", "")).strip()
         if not text:
             continue
-        lines.append(f"[{_format_seconds(getattr(segment, 'start_seconds', 0.0))}] {text}")
+        start_seconds = getattr(segment, "start_seconds", None)
+        end_seconds = getattr(segment, "end_seconds", None)
+        lines.append(f"[{_format_seconds(start_seconds or 0.0)}] {text}")
+        segments.append(
+            {
+                "start_seconds": start_seconds,
+                "end_seconds": end_seconds,
+                "text": text,
+            }
+        )
     text = "\n".join(lines).strip()
     if not text:
         return None
@@ -818,6 +828,7 @@ def _build_full_transcript_context_item(transcript) -> dict[str, object] | None:
         "end_seconds": getattr(transcript, "segments", [None])[-1].end_seconds if getattr(transcript, "segments", []) else None,
         "text": text,
         "snippet": text,
+        "segments": segments,
     }
 
 

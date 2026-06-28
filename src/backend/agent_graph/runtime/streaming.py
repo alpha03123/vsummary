@@ -14,6 +14,7 @@ from datetime import datetime
 from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.stream_events import AgentStreamEvent
 from backend.agent_graph.evidence.inline_citations import filter_inline_citation_markers, resolve_inline_citations
+from backend.agent_graph.evidence.transcript_anchors import number_evidence_items_for_citations
 from backend.agent_graph.runtime.node_catalog import get_node_alias
 from backend.agent_graph.runtime.outcome import extract_assistant_message, extract_tool_results
 
@@ -373,6 +374,7 @@ class AgentGraphStreamOrchestrator:
         )
         assistant_message = citation_resolution.answer_text
         used_evidence_ids = citation_resolution.used_evidence_ids
+        used_citation_ids = citation_resolution.used_citation_ids
 
         stream_finished_at = _current_time_like(stream_started_at)
         result = {
@@ -380,6 +382,7 @@ class AgentGraphStreamOrchestrator:
             "answer": assistant_message,
             "assistant_message": assistant_message,
             "used_evidence_ids": used_evidence_ids,
+            "used_citation_ids": used_citation_ids,
         }
         if debug_trace is not None:
             debug_trace["graph_result"] = result
@@ -463,7 +466,8 @@ def _graph_evidence_items(result: dict[str, object]) -> list[dict[str, object]]:
     raw_items = result.get("evidence_items", result.get("retrieval_results", []))
     if not isinstance(raw_items, list):
         return []
-    return [item for item in raw_items if isinstance(item, dict)]
+    evidence_items = [item for item in raw_items if isinstance(item, dict)]
+    return number_evidence_items_for_citations(evidence_items)
 
 
 def _duration_ms(start: datetime | None, end: datetime | None) -> int | None:
