@@ -172,7 +172,7 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary.skipped_videos, [])
         self.assertEqual(generator.calls, [("series-1", "video-1"), ("series-1", "video-2"), ("series-1", "video-3")])
         reporter = tracker.reporters["series/series-1"]
-        self.assertEqual(reporter.completed_calls, ["系列处理完成，已结束 3 / 3，完成 2，取消 1"])
+        self.assertEqual(reporter.completed_calls, ["系列处理完成，已结束 3 / 3，完成 2，取消 1，跳过 0"])
 
     async def test_series_batch_keeps_child_stage_progress_on_video_task(self) -> None:
         tracker = FakeProgressTracker()
@@ -513,7 +513,7 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.cancelled_videos, ["video-1"])
         self.assertEqual(result.skipped_videos, ["video-2"])
 
-    async def test_series_batch_failure_propagates_error(self) -> None:
+    async def test_series_batch_skips_failed_video_and_continues(self) -> None:
         tracker = FakeProgressTracker()
         workspace = FakeWorkspace(
             series=[
@@ -550,10 +550,15 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         task = asyncio.create_task(batch_use_case.run("series-1"))
         await asyncio.wait_for(generator.started_two.wait(), timeout=1.0)
         generator.release_waiting("video-2")
-        with self.assertRaisesRegex(RuntimeError, "video-1 failed"):
-            await task
+        result = await task
 
-        self.assertIn("video-1", generator.calls)
+        self.assertEqual(result.completed_videos, ["video-2", "video-3"])
+        self.assertEqual(result.cancelled_videos, [])
+        self.assertEqual(result.skipped_videos, ["video-1"])
+        reporter = tracker.reporters["series/series-1"]
+        self.assertEqual(reporter.completed_calls, ["系列处理完成，已结束 3 / 3，完成 2，取消 0，跳过 1"])
+        self.assertEqual(reporter.failed_calls, [])
+        self.assertEqual(tracker.reporters["series-1/video-1"].failed_calls, ["video-1 failed"])
 
 
 class FakeWorkspace:

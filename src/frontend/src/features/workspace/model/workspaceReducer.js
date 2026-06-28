@@ -1011,6 +1011,7 @@ export function workspaceReducer(state, action) {
                 currentVideoTitle: null,
                 downloadVideoId: null,
                 downloadVideoTitle: null,
+                detail: action.detail ?? state.seriesGenerationQueue.detail,
               },
         };
       }

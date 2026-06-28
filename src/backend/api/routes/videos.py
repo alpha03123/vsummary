@@ -681,6 +681,7 @@ async def generate_series_summaries(
         "series_id": result.series_id,
         "completed_videos": result.completed_videos,
         "skipped_videos": result.skipped_videos,
+        "skipped_video_errors": result.skipped_video_errors,
         "cancelled_videos": result.cancelled_videos,
         "cancelled_video_id": result.cancelled_video_id,
     }

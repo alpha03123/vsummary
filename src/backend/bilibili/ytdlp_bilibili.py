@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import os
 import re
 import subprocess
@@ -223,11 +224,15 @@ class BilibiliDownloader:
             if process.stdout is None:
                 raise RuntimeError("无法读取 yt-dlp 输出。")
             last_percent = -1.0
+            recent_output: deque[str] = deque(maxlen=50)
             for line in process.stdout:
+                stripped_line = line.rstrip()
+                if stripped_line:
+                    recent_output.append(stripped_line)
                 if _download_cancel_requested(reporter):
                     process.terminate()
                     raise DownloadCancelled("下载已取消")
-                match = self._PROGRESS_RE.search(line.rstrip())
+                match = self._PROGRESS_RE.search(stripped_line)
                 if match is None:
                     continue
                 percent = float(match.group(1))
@@ -237,7 +242,7 @@ class BilibiliDownloader:
                 reporter.update("download", percent, f"下载中 {percent:.1f}%")
             process.wait()
             if process.returncode != 0:
-                raise RuntimeError(f"yt-dlp 退出码 {process.returncode}")
+                raise RuntimeError(_format_yt_dlp_failure(process.returncode, recent_output))
         except DownloadCancelled as exc:
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -365,6 +370,13 @@ def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
             continue
         flags.extend(["--add-header", f"{key}:{value}"])
     return flags
+
+
+def _format_yt_dlp_failure(returncode: int | None, recent_output: deque[str]) -> str:
+    message = f"yt-dlp 退出码 {returncode}"
+    if not recent_output:
+        return message
+    return f"{message}；最近输出：\n" + "\n".join(recent_output)
 
 
 def _write_bilibili_cookies_file(cookie: str) -> Path | None:

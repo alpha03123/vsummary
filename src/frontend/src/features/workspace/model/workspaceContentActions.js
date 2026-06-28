@@ -66,6 +66,70 @@ function isDownloadCancelledError(error) {
   return error.message.includes("下载已取消") || error.message.includes("任务已取消");
 }
 
+function errorMessage(error, fallback) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function normalizeSkippedVideoError(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  const videoId = typeof item.video_id === "string" ? item.video_id : typeof item.videoId === "string" ? item.videoId : "";
+  const title = typeof item.title === "string" ? item.title : "";
+  const error = typeof item.error === "string" ? item.error : "";
+  if (!videoId && !title && !error) {
+    return null;
+  }
+  return { videoId, title, error };
+}
+
+function mergeSkippedVideoErrors(...groups) {
+  const merged = new Map();
+  for (const group of groups) {
+    if (!Array.isArray(group)) {
+      continue;
+    }
+    for (const item of group) {
+      const normalized = normalizeSkippedVideoError(item);
+      if (normalized == null) {
+        continue;
+      }
+      const key = normalized.videoId || normalized.title || normalized.error;
+      const existing = merged.get(key);
+      if (existing == null) {
+        merged.set(key, normalized);
+        continue;
+      }
+      const errors = [existing.error, normalized.error].filter(Boolean);
+      merged.set(key, {
+        ...existing,
+        ...normalized,
+        error: Array.from(new Set(errors)).join("；"),
+      });
+    }
+  }
+  return Array.from(merged.values());
+}
+
+function buildSeriesCompletionDetail(result, skippedVideoErrors) {
+  const completedCount = Array.isArray(result?.completed_videos) ? result.completed_videos.length : 0;
+  const skippedCount = Math.max(
+    Array.isArray(result?.skipped_videos) ? result.skipped_videos.length : 0,
+    skippedVideoErrors.length,
+  );
+  if (skippedCount <= 0) {
+    return `系列处理完成：成功 ${completedCount} 个，跳过 0 个。`;
+  }
+  const details = skippedVideoErrors
+    .map((item, index) => {
+      const title = item.title || item.videoId || `视频 ${index + 1}`;
+      const reason = item.error || "未知错误";
+      return `${index + 1}. ${title}：${reason}`;
+    })
+    .join("\n");
+  return `系列处理完成：成功 ${completedCount} 个，跳过 ${skippedCount} 个。${details ? `\n跳过的视频：\n${details}` : ""}`;
+}
+
 export function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
   async function reloadWorkspaceLibrary() {
     const library = await loadWorkspaceLibrary();
@@ -193,6 +257,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     dispatch({ type: "series_generation_started", seriesId, runId });
     const cancellation = { requested: false, runId };
     activeSeriesCancellationRef.current = cancellation;
+    const downloadSkippedVideoErrors = [];
     try {
       const linkedVideos = pendingVideos.filter(isLinkedVideo);
       for (const [index, video] of linkedVideos.entries()) {
@@ -204,7 +269,20 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           videoTitle: video.title,
           detail: `正在下载未缓存视频 ${index + 1}/${linkedVideos.length}`,
         });
-        await downloadLinkedVideo(seriesId, video.id, { cancelCheck: () => cancellation.requested });
+        try {
+          await downloadLinkedVideo(seriesId, video.id, { cancelCheck: () => cancellation.requested });
+        } catch (error) {
+          if (isDownloadCancelledError(error)) {
+            throw error;
+          }
+          downloadSkippedVideoErrors.push({
+            videoId: video.id,
+            title: video.title,
+            error: errorMessage(error, "视频下载失败"),
+          });
+          dispatch({ type: "series_generation_queue_download_finished", seriesId, runId, videoId: video.id });
+          continue;
+        }
         if (cancellation.requested) {
           throw new Error("任务已取消");
         }
@@ -222,10 +300,15 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       if (cancellation.requested) {
         throw new Error("任务已取消");
       }
-      await generateSeriesSummaries(seriesId, {
+      const seriesResult = await generateSeriesSummaries(seriesId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
         runId,
       });
+      const skippedVideoErrors = mergeSkippedVideoErrors(
+        downloadSkippedVideoErrors,
+        seriesResult?.skipped_video_errors,
+      );
+      const completionDetail = buildSeriesCompletionDetail(seriesResult, skippedVideoErrors);
       const library = await reloadWorkspaceLibrary();
       dispatch({
         type: "series_generation_succeeded",
@@ -235,10 +318,27 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         library,
       });
       dispatch({
+        type: "generation_status_loaded",
+        taskKey: buildSeriesGenerationTaskKey(seriesId),
+        mode: "series",
+        seriesId,
+        runId,
+        videoId: null,
+        snapshot: {
+          status: "completed",
+          stage: "completed",
+          progress: 100,
+          detail: completionDetail,
+          error: null,
+        },
+        subscriptionActive: false,
+      });
+      dispatch({
         type: "series_generation_queue_finished",
         seriesId,
         runId,
         status: "completed",
+        detail: completionDetail,
       });
     } catch (error) {
       if (isDownloadCancelledError(error)) {

@@ -230,6 +230,92 @@ describe("workspaceContentActions series cancellation", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "workspace_loaded", library: refreshedLibrary });
   });
 
+  it("skips failed linked video downloads and continues the series run", async () => {
+    vi.resetModules();
+    const startVideoDownload = vi.fn(() => Promise.resolve({ taskId: "download-task" }));
+    const subscribeVideoDownloadProgress = vi.fn((seriesId, videoId, listener) => {
+      queueMicrotask(() => {
+        listener(
+          videoId === "linked-1"
+            ? { status: "failed", error: "yt-dlp 退出码 1：HTTP Error 403" }
+            : { status: "completed", progress: 100 },
+        );
+      });
+      return vi.fn();
+    });
+    const generateSeriesSummaries = vi.fn(() => Promise.resolve({
+      completed_videos: ["linked-2"],
+      skipped_videos: ["linked-1"],
+      skipped_video_errors: [
+        { video_id: "linked-1", title: "Linked 1", error: "源文件不存在" },
+      ],
+      cancelled_videos: [],
+    }));
+    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({
+      series: [
+        {
+          id: "series-a",
+          videos: [
+            { id: "linked-1", processed: false, status: "linked", isLinked: true, title: "Linked 1" },
+            { id: "linked-2", processed: true, status: "ready", isLinked: false, title: "Linked 2" },
+          ],
+        },
+      ],
+    }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      generateSeriesSummaries,
+      loadWorkspaceLibrary,
+      startVideoDownload,
+      subscribeVideoDownloadProgress,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: null,
+        selectedContextType: "series",
+        library: {
+          series: [
+            {
+              id: "series-a",
+              videos: [
+                { id: "linked-1", processed: false, status: "linked", isLinked: true, title: "Linked 1" },
+                { id: "linked-2", processed: false, status: "linked", isLinked: true, title: "Linked 2" },
+              ],
+            },
+          ],
+        },
+        ui: { transcriptEnhancementEnabled: true },
+        seriesGenerationQueue: null,
+        generationTasksByKey: {},
+      },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    await actions.onGenerateSeries();
+
+    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
+    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-2");
+    expect(generateSeriesSummaries).toHaveBeenCalledWith("series-a", {
+      transcriptEnhancementEnabled: true,
+      runId: expect.any(String),
+    });
+    const completedSnapshot = dispatch.mock.calls.find(([action]) => action.type === "generation_status_loaded")?.[0]?.snapshot;
+    expect(completedSnapshot?.detail).toContain("跳过 1 个");
+    expect(completedSnapshot?.detail).toContain("HTTP Error 403");
+    expect(completedSnapshot?.detail).toContain("源文件不存在");
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "series_generation_queue_finished",
+      seriesId: "series-a",
+      status: "completed",
+    }));
+  });
+
   it("exposes and cancels a running chaoxing import task", async () => {
     vi.resetModules();
     let progressListener;

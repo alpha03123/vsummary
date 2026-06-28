@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 from backend.bilibili.ytdlp_bilibili import BilibiliDownloader
 from backend.bilibili.ytdlp_bilibili import DrissionBilibiliCookieInitializer
 from backend.bilibili.ytdlp_bilibili import _extract_info
@@ -30,9 +32,9 @@ class RecordingReporter:
 
 
 class FakeProcess:
-    def __init__(self) -> None:
-        self.stdout = iter(["[download] 100.0% of 1.00MiB\n"])
-        self.returncode = 0
+    def __init__(self, *, returncode: int = 0, lines: list[str] | None = None) -> None:
+        self.stdout = iter(lines or ["[download] 100.0% of 1.00MiB\n"])
+        self.returncode = returncode
 
     def wait(self, timeout: float | None = None) -> int:
         return self.returncode
@@ -45,6 +47,15 @@ class FakeProcess:
 
     def kill(self) -> None:
         pass
+
+
+class CapturingReporter(RecordingReporter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.failed_messages: list[str] = []
+
+    def failed(self, message: str) -> None:
+        self.failed_messages.append(message)
 
 
 def test_download_passes_bilibili_cookie_headers_and_disables_proxy(monkeypatch, tmp_path: Path) -> None:
@@ -95,6 +106,29 @@ def test_download_uses_sessdata_when_full_cookie_is_absent(monkeypatch, tmp_path
     cookies_path = Path(cmd[cmd.index("--cookies") + 1])
     assert "SESSDATA\tsession-value" in captured["cookies_text"]
     assert not cookies_path.exists()
+
+
+def test_download_failure_includes_recent_yt_dlp_output(monkeypatch, tmp_path: Path) -> None:
+    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
+        return FakeProcess(
+            returncode=1,
+            lines=[
+                "[BiliBili] Extracting URL\n",
+                "ERROR: unable to download video data: HTTP Error 403: Forbidden\n",
+            ],
+        )
+
+    monkeypatch.setenv("BILIBILI_COOKIE", "SESSDATA=session-value")
+    monkeypatch.setattr("backend.bilibili.ytdlp_bilibili.subprocess.Popen", fake_popen)
+    reporter = CapturingReporter()
+
+    with pytest.raises(RuntimeError) as error:
+        BilibiliDownloader().download("BV1xx411c7mD", 1, tmp_path, reporter)
+
+    message = str(error.value)
+    assert "yt-dlp 退出码 1" in message
+    assert "HTTP Error 403" in message
+    assert reporter.failed_messages == [message]
 
 
 def test_extract_info_passes_bilibili_cookie_headers_and_disables_proxy(monkeypatch) -> None:
