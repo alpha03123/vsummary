@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceMarkdownMessage } from "@src/features/workspace/ui/shared/WorkspaceMarkdownMessage";
 
@@ -73,6 +73,49 @@ describe("WorkspaceMarkdownMessage", () => {
     expect(screen.getByText("[2] Video 1")).toBeInTheDocument();
     expect(screen.queryByText(longText)).not.toBeInTheDocument();
     expect(screen.getByText(/^字幕内容.*\.\.\.$/)).toBeInTheDocument();
+  });
+
+  it("opens video seek references when clicking transcript citations", () => {
+    const onOpenSeekReference = vi.fn();
+
+    render(
+      <WorkspaceMarkdownMessage
+        content="这里讲到了关键知识点。[1]"
+        citations={[
+          {
+            id: "1",
+            label: "Video 1",
+            source_type: "transcript",
+            slots: [
+              {
+                slot: 1,
+                target_type: "video",
+                video_title: "Video 1",
+                start_seconds: 42,
+                end_seconds: 55,
+              },
+              {
+                slot: 2,
+                target_type: "transcript",
+                video_title: "Video 1",
+                text: "关键知识点对应的字幕",
+              },
+            ],
+          },
+        ]}
+        onOpenSeekReference={onOpenSeekReference}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "1" }));
+
+    expect(onOpenSeekReference).toHaveBeenCalledWith({
+      seconds: 42,
+      endSeconds: 55,
+      matchedText: "关键知识点对应的字幕",
+      chapterTitle: "Video 1",
+      query: "",
+    });
   });
 
   it("renders model think tags as a collapsible thinking block", () => {
