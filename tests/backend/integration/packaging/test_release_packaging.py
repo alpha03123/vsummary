@@ -173,13 +173,13 @@ class ReleasePackagingSpecTests(unittest.TestCase):
                     size=123,
                 ),
                 ReleaseArtifact(
-                    name="vsummary-runtime-cpu-runtime-cpu-deadbeef.7z",
+                    name="runtime-cpu-deadbeef",
                     role="runtime",
                     variant="cpu",
                     runtime_id="runtime-cpu-deadbeef",
-                    url="https://example.test/vsummary-runtime-cpu-runtime-cpu-deadbeef.7z",
-                    sha256="b" * 64,
-                    size=456,
+                    url="",
+                    sha256="",
+                    size=0,
                 ),
                 ReleaseArtifact(
                     name="vsummary-full-cpu-v0.3.1.7z",
@@ -196,7 +196,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertEqual(manifest["app"]["version"], "v0.3.1")
         self.assertEqual(manifest["app"]["sha256"], "a" * 64)
         self.assertEqual(manifest["runtime"]["cpu"]["id"], "runtime-cpu-deadbeef")
-        self.assertEqual(manifest["runtime"]["cpu"]["sha256"], "b" * 64)
         self.assertEqual(manifest["full"]["cpu"]["sha256"], "c" * 64)
 
 

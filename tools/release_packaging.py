@@ -94,7 +94,7 @@ def build_release_manifest(*, version: str, assets: list[ReleaseArtifact]) -> di
         if asset.role == "runtime":
             if not asset.runtime_id:
                 raise ValueError(f"runtime artifact requires runtime_id: {asset.name}")
-            runtime_assets[asset.variant] = {"id": asset.runtime_id, **payload}
+            runtime_assets[asset.variant] = {"id": asset.runtime_id}
             continue
         if asset.role == "full":
             full_assets[asset.variant] = payload

@@ -11,7 +11,7 @@ param(
     [switch]$SkipFullPackage,
     [switch]$KeepFrontendDist,
     [switch]$CleanNodeModules,
-    [switch]$KeepBuildArtifacts
+    [switch]$CleanBuildArtifacts
 )
 
 $ErrorActionPreference = "Stop"
@@ -326,9 +326,9 @@ function Get-VariantTable {
             EnvRelativePath = "scripts\package\environment.cpu.yml"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.cpu.toml"
             RuntimeId = $cpuRuntimeId
-            RuntimeArchive = Join-Path $OutputRootPath "vsummary-$cpuRuntimeId.zip"
             PackageRoot = Join-Path $BuildRootPath "full\cpu\vsummary-cpu"
             BuildRoot = Join-Path $BuildRootPath "runtime\cpu"
+            RuntimeRoot = Join-Path $BuildRootPath "runtime\cpu\runtime"
             FullArchive = Join-Path $OutputRootPath "vsummary-full-cpu-$Script:ReleaseVersion.7z"
         }
         gpu = @{
@@ -338,9 +338,9 @@ function Get-VariantTable {
             EnvRelativePath = "scripts\package\environment.gpu.yml"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.gpu.toml"
             RuntimeId = $gpuRuntimeId
-            RuntimeArchive = Join-Path $OutputRootPath "vsummary-$gpuRuntimeId.zip"
             PackageRoot = Join-Path $BuildRootPath "full\gpu\vsummary-gpu"
             BuildRoot = Join-Path $BuildRootPath "runtime\gpu"
+            RuntimeRoot = Join-Path $BuildRootPath "runtime\gpu\runtime"
             FullArchive = Join-Path $OutputRootPath "vsummary-full-gpu-$Script:ReleaseVersion.7z"
         }
     }
@@ -460,8 +460,7 @@ function Pack-CondaEnvironment {
     param(
         [string]$CondaPackExe,
         [string]$SevenZipExe,
-        [hashtable]$Variant,
-        [string]$RuntimeArchive
+        [hashtable]$Variant
     )
 
     $archivePath = Join-Path $Variant.BuildRoot "runtime.zip"
@@ -474,7 +473,6 @@ function Pack-CondaEnvironment {
     Invoke-External -FilePath $CondaPackExe -Arguments @("-n", $Variant.EnvName, "-o", $archivePath, "--format", "zip", "--force", "--ignore-missing-files")
     Invoke-External -FilePath $SevenZipExe -Arguments @("x", $archivePath, "-o$runtimeRoot", "-y")
     Invoke-CondaUnpack -RuntimeRoot $runtimeRoot
-    Compress-Directory -SourceRoot $runtimeRoot -ArchivePath $RuntimeArchive -SevenZipExe $SevenZipExe
 }
 
 function Invoke-CondaUnpack {
@@ -640,7 +638,7 @@ function Write-AppFilesManifest {
     $payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 }
 
-function Ensure-RuntimeArchive {
+function Ensure-RuntimeRoot {
     param(
         [hashtable]$Variant,
         [string]$CondaExe,
@@ -648,8 +646,8 @@ function Ensure-RuntimeArchive {
         [string]$SevenZipExe
     )
 
-    if ((Test-Path -LiteralPath $Variant.RuntimeArchive -PathType Leaf) -and -not $ForceRuntime) {
-        Write-Host "Reusing runtime $($Variant.RuntimeId)"
+    if ((Test-Path -LiteralPath (Join-Path $Variant.RuntimeRoot "python.exe") -PathType Leaf) -and -not $ForceRuntime) {
+        Write-Host "Reusing runtime root $($Variant.RuntimeId)"
         return
     }
 
@@ -664,7 +662,7 @@ function Ensure-RuntimeArchive {
     }
 
     Write-Host "Packing runtime $($Variant.RuntimeId)"
-    Pack-CondaEnvironment -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe -Variant $Variant -RuntimeArchive $Variant.RuntimeArchive
+    Pack-CondaEnvironment -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe -Variant $Variant
 }
 
 function Build-FullPackage {
@@ -687,7 +685,9 @@ function Build-FullPackage {
     Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "RUNTIME") -Value $Variant.RuntimeId -Encoding ASCII
     Write-InstalledState -PackageRoot $Variant.PackageRoot -Variant $Variant
     Write-UpdaterConfig -PackageRoot $Variant.PackageRoot
-    Expand-ArchiveWith7Zip -ArchivePath $Variant.RuntimeArchive -DestinationRoot (Join-Path $Variant.PackageRoot "runtime") -SevenZipExe $SevenZipExe
+    $packageRuntimeRoot = Join-Path $Variant.PackageRoot "runtime"
+    Remove-PathIfExists -Path $packageRuntimeRoot
+    Copy-DirectoryContents -Source $Variant.RuntimeRoot -Destination $packageRuntimeRoot
 
     Write-Host "Checking packaged dependency contract"
     Test-PackagedDependencyContract -PackageRoot $Variant.PackageRoot -Kind $Variant.Kind
@@ -772,11 +772,9 @@ function Write-ReleaseManifest {
     $full = [ordered]@{}
 
     foreach ($variant in $Variants) {
-        $runtime[$variant.Kind] = New-AssetManifestEntry `
-            -ArchivePath $variant.RuntimeArchive `
-            -Role "runtime" `
-            -Variant $variant.Kind `
-            -RuntimeId $variant.RuntimeId
+        $runtime[$variant.Kind] = [ordered]@{
+            id = $variant.RuntimeId
+        }
 
         if (Test-Path -LiteralPath $variant.FullArchive -PathType Leaf) {
             $full[$variant.Kind] = New-AssetManifestEntry `
@@ -811,7 +809,7 @@ try {
     $variants = @(Resolve-Targets)
 
     foreach ($variant in $variants) {
-        Ensure-RuntimeArchive -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
+        Ensure-RuntimeRoot -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
 
         if (-not $SkipFullPackage) {
             Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe
@@ -827,7 +825,11 @@ finally {
     if ($CleanNodeModules) {
         Remove-PathIfExists -Path $FrontendNodeModulesDir
     }
-    if (-not $KeepBuildArtifacts) {
+    if ($CleanBuildArtifacts) {
         Remove-PathIfExists -Path $BuildRootPath
+    }
+    else {
+        Remove-PathIfExists -Path (Join-Path $BuildRootPath "app")
+        Remove-PathIfExists -Path (Join-Path $BuildRootPath "full")
     }
 }

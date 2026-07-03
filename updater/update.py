@@ -54,6 +54,17 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
     app_updated = False
     runtime_updated = False
 
+    runtime = ((manifest.get("runtime") or {}).get(selected_variant)) or {}
+    if runtime.get("id") and runtime.get("id") != installed.get("runtime_id"):
+        full = ((manifest.get("full") or {}).get(selected_variant)) or {}
+        full_url = full.get("url") or "the latest full package"
+        messages.append(
+            "Runtime changed "
+            f"({installed.get('runtime_id', 'unknown')} -> {runtime['id']}). "
+            f"Download and reinstall the full package: {full_url}"
+        )
+        return UpdateResult(changed=False, messages=messages)
+
     app = manifest.get("app") or {}
     if app.get("version") and app.get("version") != installed.get("app_version"):
         messages.append(f"Updating app: {installed.get('app_version', 'unknown')} -> {app['version']}")
@@ -65,15 +76,7 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
     else:
         messages.append("App is already up to date.")
 
-    runtime = ((manifest.get("runtime") or {}).get(selected_variant)) or {}
-    if runtime.get("id") and runtime.get("id") != installed.get("runtime_id"):
-        messages.append(f"Updating runtime: {installed.get('runtime_id', 'unknown')} -> {runtime['id']}")
-        runtime_archive = _download_asset(root, runtime)
-        _apply_runtime_update(root, runtime_archive, old_runtime_id=installed.get("runtime_id", "unknown"))
-        installed["runtime_id"] = runtime["id"]
-        runtime_updated = True
-    else:
-        messages.append("Runtime is already up to date.")
+    messages.append("Runtime is already up to date.")
 
     installed["variant"] = selected_variant
     if app_updated or runtime_updated:
@@ -171,31 +174,6 @@ def _apply_app_update(root: Path, archive_path: Path, installed: dict[str, Any])
     _copy_tree_contents(staging, root)
     _write_json(root / APP_FILES_PATH, {"files": new_files})
     shutil.rmtree(staging, ignore_errors=True)
-
-
-def _apply_runtime_update(root: Path, archive_path: Path, *, old_runtime_id: str) -> None:
-    staging = root / STAGING_DIR / "runtime"
-    _reset_dir(staging)
-    _extract_zip(archive_path, staging)
-
-    runtime_root = root / "runtime"
-    backup_root = root / "updater" / "backups" / f"runtime-{old_runtime_id}"
-    if backup_root.exists():
-        shutil.rmtree(backup_root)
-    backup_root.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        if runtime_root.exists():
-            shutil.move(str(runtime_root), str(backup_root))
-        shutil.move(str(staging), str(runtime_root))
-    except Exception:
-        if runtime_root.exists():
-            shutil.rmtree(runtime_root, ignore_errors=True)
-        if backup_root.exists():
-            shutil.move(str(backup_root), str(runtime_root))
-        raise
-    else:
-        shutil.rmtree(backup_root, ignore_errors=True)
 
 
 def _extract_zip(archive_path: Path, destination: Path) -> None:
