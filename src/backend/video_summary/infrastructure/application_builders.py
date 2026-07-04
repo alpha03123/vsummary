@@ -21,6 +21,7 @@ from backend.video_summary.infrastructure.video_summary_runtime import (
     build_video_summary_runtime,
 )
 from backend.video_summary.infrastructure.config.settings import AppSettings, load_settings
+from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ def build_video_summary_application(
     config_path: Path,
     root_dir: Path,
     transcript_enhancement_enabled: bool | None = None,
+    usage_recorder: LlmUsageRecorder | None = None,
 ) -> VideoSummaryApplication:
     """装配单视频总结用例及其全部依赖。
 
@@ -78,7 +80,7 @@ def build_video_summary_application(
         if transcript_enhancement_enabled is None
         else transcript_enhancement_enabled
     )
-    runtime = build_video_summary_runtime(settings)
+    runtime = build_video_summary_runtime(settings, usage_recorder=usage_recorder)
     artifact_store = FileSystemGenerationArtifactStore()
     use_case = GenerateVideoSummary(
         media_processor=FfmpegMediaProcessor(),
@@ -94,7 +96,12 @@ def build_video_summary_application(
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 
 
-def build_mindmap_application(config_path: Path, root_dir: Path) -> MindmapApplication:
+def build_mindmap_application(
+    config_path: Path,
+    root_dir: Path,
+    *,
+    usage_recorder: LlmUsageRecorder | None = None,
+) -> MindmapApplication:
     """装配思维导图用例及其全部依赖。
 
     Args:
@@ -105,7 +112,11 @@ def build_mindmap_application(config_path: Path, root_dir: Path) -> MindmapAppli
         包含 settings 与 `GenerateMindmap` 用例的 `MindmapApplication`。
     """
     settings = load_settings(config_path=config_path, root_dir=root_dir)
-    gateway = build_litellm_completion_gateway(settings)
+    gateway = build_litellm_completion_gateway(
+        settings,
+        usage_recorder=usage_recorder,
+        usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
+    )
     use_case = GenerateMindmap(
         generator=LiteLLMMindmapGenerator(gateway=gateway),
         artifact_store=FileSystemGenerationArtifactStore(),
@@ -113,7 +124,12 @@ def build_mindmap_application(config_path: Path, root_dir: Path) -> MindmapAppli
     return MindmapApplication(settings=settings, use_case=use_case)
 
 
-def build_series_mindmap_application(config_path: Path, root_dir: Path) -> MindmapApplication:
+def build_series_mindmap_application(
+    config_path: Path,
+    root_dir: Path,
+    *,
+    usage_recorder: LlmUsageRecorder | None = None,
+) -> MindmapApplication:
     """装配系列思维导图用例及其全部依赖。
 
     Args:
@@ -127,7 +143,11 @@ def build_series_mindmap_application(config_path: Path, root_dir: Path) -> Mindm
     from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
 
     settings = load_settings(config_path=config_path, root_dir=root_dir)
-    gateway = build_litellm_completion_gateway(settings)
+    gateway = build_litellm_completion_gateway(
+        settings,
+        usage_recorder=usage_recorder,
+        usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
+    )
     use_case = GenerateSeriesMindmap(
         generator=LiteLLMSeriesMindmapGenerator(gateway=gateway),
         artifact_store=FileSystemGenerationArtifactStore(),

@@ -12,6 +12,7 @@ from threading import Lock
 
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_series_mindmap_application
+from backend.shared.llm.usage import LlmUsageRecorder
 
 
 class ConfiguredSeriesMindmapWorkflow:
@@ -22,13 +23,14 @@ class ConfiguredSeriesMindmapWorkflow:
     同时支持用户在运行时改写配置后自动重建。
     """
 
-    def __init__(self, root_dir: Path) -> None:
+    def __init__(self, root_dir: Path, usage_recorder: LlmUsageRecorder | None = None) -> None:
         """记录项目根目录、配置文件路径与缓存状态。
 
         Args:
             root_dir: 项目根目录，用于解析 `config/settings.toml` 与 `.env`。
         """
         self._root_dir = root_dir
+        self._usage_recorder = usage_recorder
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
@@ -76,6 +78,7 @@ class ConfiguredSeriesMindmapWorkflow:
                 self._cached_application = build_series_mindmap_application(
                     config_path=self._config_path,
                     root_dir=self._root_dir,
+                    usage_recorder=self._usage_recorder,
                 )
                 self._cached_signature = signature
             return self._cached_application

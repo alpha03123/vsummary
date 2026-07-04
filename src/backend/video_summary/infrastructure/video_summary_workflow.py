@@ -18,6 +18,7 @@ from threading import Lock
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_video_summary_application
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file
+from backend.shared.llm.usage import LlmUsageRecorder
 
 
 class ConfiguredVideoSummaryWorkflow:
@@ -28,13 +29,14 @@ class ConfiguredVideoSummaryWorkflow:
     每次调用都重建昂贵的资源，并保证配置变更后能立即生效。
     """
 
-    def __init__(self, root_dir: Path) -> None:
+    def __init__(self, root_dir: Path, usage_recorder: LlmUsageRecorder | None = None) -> None:
         """记录项目根目录、配置文件路径与缓存状态。
 
         Args:
             root_dir: 项目根目录，用于解析 `config/settings.toml` 与 `.env`。
         """
         self._root_dir = root_dir
+        self._usage_recorder = usage_recorder
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
@@ -93,6 +95,7 @@ class ConfiguredVideoSummaryWorkflow:
                     config_path=self._config_path,
                     root_dir=self._root_dir,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
+                    usage_recorder=self._usage_recorder,
                 )
                 self._cached_signature = signature
             return self._cached_application

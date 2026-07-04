@@ -19,6 +19,7 @@ from backend.video_summary.infrastructure.llm.litellm_web_search import LiteLLMN
 from backend.video_summary.infrastructure.rag.agent_memory import AgentWorkspaceIndexBuilder, BGEReranker, SeriesRetrievalService
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
 from backend.video_summary.infrastructure.config.settings import load_env_settings, load_settings, normalize_openai_base_url
+from backend.shared.llm.usage import LlmUsageRecorder
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.tool_executor import RegistryAgentToolExecutor
 from backend.video_summary.tools.notes import execute_open_notes, execute_save_note
@@ -32,10 +33,12 @@ class LazyAgentRuntimeProvider:
         root_dir: Path,
         workspace: FileSystemVideoWorkspace,
         rag_model_manager: RagModelManager | None = None,
+        usage_recorder: LlmUsageRecorder | None = None,
     ) -> None:
         self._root_dir = root_dir
         self._workspace = workspace
         self._rag_model_manager = rag_model_manager
+        self._usage_recorder = usage_recorder
         self._context_loader = WorkspaceAgentContextLoader(workspace)
         self.session_store = FileAgentSessionStore(root_dir / "data" / "agent_sessions")
         self._lock = Lock()
@@ -65,6 +68,7 @@ class LazyAgentRuntimeProvider:
                     base_url=normalize_openai_base_url(env_settings.base_url),
                     api_key=env_settings.api_key,
                     reasoning_effort=app_settings.agent_context.reasoning_effort,
+                    usage_recorder=self._usage_recorder,
                 )
                 memory_compactor = MemoryMessageCompactor(
                     gateway=planner_gateway,

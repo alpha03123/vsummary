@@ -31,6 +31,7 @@ from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMind
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
 from backend.video_summary.infrastructure.config.settings_service import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.config.settings import load_settings
+from backend.shared.llm.usage import SQLiteLlmUsageStore
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
@@ -107,6 +108,7 @@ class ApiContainer:
     linked_series_workspace: FileSystemVideoWorkspace
     workspace_index_invalidator: object
     settings_service: SettingsServicePort
+    usage_store: SQLiteLlmUsageStore
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
     agent_session_store: FileAgentSessionStore
@@ -132,6 +134,7 @@ def build_api_container(
     chaoxing_import_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
     rag_model_progress_tracker = InMemoryProgressTracker()
+    usage_store = SQLiteLlmUsageStore(root_dir / "data" / "usage" / "llm_usage.sqlite3")
     index_refresher_ref: dict[str, _WorkspaceIndexRefresher | None] = {"value": None}
 
     def on_rag_model_download_completed(model_key: str) -> None:
@@ -151,21 +154,25 @@ def build_api_container(
     )
     resolved_generator = generator or WorkspaceBackedVideoSummaryGenerator(
         workspace=workspace,
-        workflow=ConfiguredVideoSummaryWorkflow(root_dir),
+        workflow=ConfiguredVideoSummaryWorkflow(root_dir, usage_recorder=usage_store),
     )
     resolved_mindmap_generator = mindmap_generator or WorkspaceBackedVideoMindmapGenerator(
         workspace=workspace,
-        workflow=ConfiguredMindmapWorkflow(root_dir),
+        workflow=ConfiguredMindmapWorkflow(root_dir, usage_recorder=usage_store),
     )
-    resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(root_dir)
+    resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
+        root_dir,
+        usage_recorder=usage_store,
+    )
     resolved_series_mindmap_generator = WorkspaceBackedSeriesMindmapGenerator(
         workspace=workspace,
-        workflow=ConfiguredSeriesMindmapWorkflow(root_dir),
+        workflow=ConfiguredSeriesMindmapWorkflow(root_dir, usage_recorder=usage_store),
     )
     agent_runtime = LazyAgentRuntimeProvider(
         root_dir=root_dir,
         workspace=workspace,
         rag_model_manager=rag_model_manager,
+        usage_recorder=usage_store,
     )
     index_refresher = _WorkspaceIndexRefresher(
         refresh_all=agent_runtime.refresh_workspace_indexes,
@@ -262,6 +269,7 @@ def build_api_container(
             faster_whisper_model_manager=model_manager,
             rag_model_manager=rag_model_manager,
         ),
+        usage_store=usage_store,
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
         agent_session_store=agent_runtime.session_store,

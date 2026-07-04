@@ -41,6 +41,18 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     dispatch({ type: "settings_panel_closed" });
   }
 
+  function onOpenUsagePage() {
+    dispatch({ type: "usage_page_opened" });
+  }
+
+  function onCloseUsagePage() {
+    dispatch({ type: "usage_page_closed" });
+  }
+
+  function onChangeProviderUsageRange(range) {
+    dispatch({ type: "provider_usage_range_changed", range });
+  }
+
   async function onChangeSetting(key, value) {
     if (PROVIDER_TEXT_SETTING_KEYS.has(key)) {
       dispatch({ type: "workspace_setting_edited", key, value });
@@ -360,7 +372,10 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onToggleSettingsPanel,
     onOpenSettingsPanel,
     onCloseSettingsPanel,
+    onOpenUsagePage,
+    onCloseUsagePage,
     onChangeSetting,
+    onChangeProviderUsageRange,
     onSaveProviderSettings,
     onSaveApiKey,
     onRevealOpenaiApiKey,

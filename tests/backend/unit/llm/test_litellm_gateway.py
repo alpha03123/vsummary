@@ -9,6 +9,7 @@ import unittest
 from pydantic import BaseModel
 
 from backend.shared.llm.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
+from backend.shared.llm.usage import LlmUsageCategory
 from backend.agent_graph.query.models import SeriesAnswerPayload
 
 
@@ -177,6 +178,54 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         self.assertEqual(completion.models, ["ollama/qwen2.5:7b"])
         self.assertEqual(completion.api_keys, [None])
         self.assertEqual(completion.api_bases, ["http://127.0.0.1:11434"])
+
+    def test_records_completion_usage_with_provider_endpoint_and_model(self) -> None:
+        recorder = CapturingUsageRecorder()
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="gpt-test",
+            base_url="https://api.example.test",
+            api_key="test-key",
+            completion_fn=CapturingCompletionWithUsage(
+                "ok",
+                {"prompt_tokens": 12, "completion_tokens": 5, "total_tokens": 17},
+            ),
+            acompletion_fn=unused_async_completion,
+            usage_recorder=recorder,
+            usage_category=LlmUsageCategory.CHAT,
+        )
+
+        gateway.complete_text([{"role": "user", "content": "ping"}])
+
+        self.assertEqual(len(recorder.records), 1)
+        record = recorder.records[0]
+        self.assertEqual(record.category, "chat")
+        self.assertEqual(record.provider, "openai")
+        self.assertEqual(record.base_url, "https://api.example.test/v1")
+        self.assertEqual(record.model, "openai/gpt-test")
+        self.assertEqual(record.prompt_tokens, 12)
+        self.assertEqual(record.completion_tokens, 5)
+        self.assertEqual(record.total_tokens, 17)
+
+    def test_records_stream_metadata_usage(self) -> None:
+        recorder = CapturingUsageRecorder()
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="gpt-test",
+            base_url="https://api.example.test/v1",
+            api_key="test-key",
+            completion_fn=UsageStreamCompletion(),
+            acompletion_fn=unused_async_completion,
+            usage_recorder=recorder,
+            usage_category=LlmUsageCategory.CHAT,
+        )
+
+        chunks = list(gateway.stream_text_with_metadata([{"role": "user", "content": "ping"}]))
+
+        self.assertEqual([chunk.delta for chunk in chunks], ["hello", ""])
+        self.assertEqual(chunks[-1].usage, {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11})
+        self.assertEqual(len(recorder.records), 1)
+        self.assertEqual(recorder.records[0].total_tokens, 11)
 
     def test_keeps_api_key_required_for_openai_provider(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "缺少 API Key"):
@@ -439,6 +488,27 @@ class CapturingCompletion:
         return {"choices": [{"message": {"content": self._content}}]}
 
 
+class CapturingCompletionWithUsage(CapturingCompletion):
+    def __init__(self, content: str, usage: dict[str, int]) -> None:
+        super().__init__(content)
+        self._usage = usage
+
+    def __call__(self, **kwargs):
+        super().__call__(**kwargs)
+        return {
+            "choices": [{"message": {"content": self._content}}],
+            "usage": self._usage,
+        }
+
+
+class CapturingUsageRecorder:
+    def __init__(self) -> None:
+        self.records = []
+
+    def record(self, record) -> None:
+        self.records.append(record)
+
+
 class RejectingFirstResponseFormatCompletion(CapturingCompletion):
     def __init__(self, rejected_format: object, content: str) -> None:
         super().__init__(content)
@@ -492,6 +562,20 @@ class ReasoningStreamCompletion:
             [
                 {"choices": [{"delta": {"reasoning_content": "先分析。"}}]},
                 {"choices": [{"delta": {"content": "最终答案。"}}]},
+            ]
+        )
+
+
+class UsageStreamCompletion:
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        return iter(
+            [
+                {"choices": [{"delta": {"content": "hello"}}]},
+                {
+                    "choices": [{"delta": {}}],
+                    "usage": {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11},
+                },
             ]
         )
 
