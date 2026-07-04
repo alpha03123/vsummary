@@ -13,7 +13,8 @@ from collections.abc import Iterator
 from backend.agent.ports import ChatGateway, StructuredResponseT
 from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.messages import AgentChatMessage
-from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm import LiteLLMCompletionGateway, LlmUsageCategory
+from backend.shared.llm.usage import LlmUsageRecorder
 
 
 class LiteLLMChatGateway(ChatGateway):
@@ -42,6 +43,7 @@ class LiteLLMChatGateway(ChatGateway):
         reasoning_effort: str | None = None,
         completion_fn=None,
         acompletion_fn=None,
+        usage_recorder: LlmUsageRecorder | None = None,
     ) -> None:
         """注入 LiteLLM 所需配置并构造底层的共享层 LLM 网关。
 
@@ -66,6 +68,8 @@ class LiteLLMChatGateway(ChatGateway):
                 reasoning_effort=reasoning_effort,
                 completion_fn=completion_fn,
                 acompletion_fn=acompletion_fn,
+                usage_recorder=usage_recorder,
+                usage_category=LlmUsageCategory.CHAT if usage_recorder is not None else None,
             )
         except RuntimeError as error:
             if str(error) == "缺少 API Key，无法调用模型。":

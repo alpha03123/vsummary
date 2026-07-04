@@ -13,6 +13,7 @@ from threading import Lock
 from pydantic import BaseModel, Field
 
 from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
 from backend.video_summary.infrastructure.llm.prompts import KNOWLEDGE_CARD_PROMPT_TEMPLATE
@@ -110,13 +111,14 @@ class ConfiguredKnowledgeCardGenerator:
     上一次构建好的网关；只要配置未变更就返回同一个生成器实例。
     """
 
-    def __init__(self, root_dir: Path) -> None:
+    def __init__(self, root_dir: Path, usage_recorder: LlmUsageRecorder | None = None) -> None:
         """注入项目根目录，并据此定位 `settings.toml` 与 `.env`。
 
         Args:
             root_dir: 项目根目录（包含 `config/settings.toml` 与 `.env`）。
         """
         self._root_dir = root_dir
+        self._usage_recorder = usage_recorder
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._generator_lock = Lock()
@@ -150,7 +152,11 @@ class ConfiguredKnowledgeCardGenerator:
         with self._generator_lock:
             if self._cached_generator is None or self._cached_signature != signature:
                 settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
-                gateway = build_litellm_completion_gateway(settings)
+                gateway = build_litellm_completion_gateway(
+                    settings,
+                    usage_recorder=self._usage_recorder,
+                    usage_category=LlmUsageCategory.GENERATION if self._usage_recorder is not None else None,
+                )
                 self._cached_generator = LiteLLMKnowledgeCardGenerator(gateway)
                 self._cached_signature = signature
             return self._cached_generator

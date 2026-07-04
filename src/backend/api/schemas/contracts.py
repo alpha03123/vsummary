@@ -116,6 +116,68 @@ class ProviderSettingsResponse(BaseModel):
     hf_endpoint: str
 
 
+class ProviderUsageTotalsResponse(BaseModel):
+    """LLM token 用量总计。"""
+
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class ProviderUsageCategoryResponse(BaseModel):
+    """按 generation/chat 分类的 LLM token 用量。"""
+
+    category: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class ProviderUsageProviderResponse(BaseModel):
+    """按 provider + base_url + model 聚合的 LLM token 用量。"""
+
+    provider: str
+    base_url: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class ProviderUsageRecordResponse(BaseModel):
+    """最近一次 LLM token 用量记录。"""
+
+    created_at: str
+    category: str
+    provider: str
+    base_url: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class ProviderUsageTimelineBucketResponse(BaseModel):
+    """按时间桶聚合的 generation/chat token 用量。"""
+
+    started_at: str
+    generation_tokens: int
+    chat_tokens: int
+    total_tokens: int
+
+
+class ProviderUsageResponse(BaseModel):
+    """模型供应商页的 LLM token 用量统计响应。"""
+
+    range: str
+    total: ProviderUsageTotalsResponse
+    by_category: list[ProviderUsageCategoryResponse]
+    by_provider: list[ProviderUsageProviderResponse]
+    recent: list[ProviderUsageRecordResponse]
+    timeline_granularity: str
+    timeline: list[ProviderUsageTimelineBucketResponse]
+
+
 class ProviderApiKeyResponse(BaseModel):
     """明文 API Key 的响应模型。
 

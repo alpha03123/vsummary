@@ -22,6 +22,7 @@ from pathlib import Path
 from backend.video_summary.infrastructure.asr.faster_whisper_transcriber import FasterWhisperTranscriber
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.llm.litellm_summarizer import LiteLLMCompletionSummarizer
 from backend.video_summary.infrastructure.config.settings import AppSettings
 from backend.video_summary.generation.ports import Summarizer, Transcriber
@@ -69,7 +70,12 @@ class AsrModelNotReadyError(RuntimeError):
     """
 
 
-def build_litellm_completion_gateway(settings: AppSettings) -> LiteLLMCompletionGateway:
+def build_litellm_completion_gateway(
+    settings: AppSettings,
+    *,
+    usage_recorder: LlmUsageRecorder | None = None,
+    usage_category: LlmUsageCategory | None = None,
+) -> LiteLLMCompletionGateway:
     """根据 settings 构建 `LiteLLMCompletionGateway`。
 
     `reasoning_effort` 取自 `settings.agent_context.reasoning_effort`，便于把
@@ -81,11 +87,15 @@ def build_litellm_completion_gateway(settings: AppSettings) -> LiteLLMCompletion
         base_url=settings.openai.base_url,
         api_key=settings.openai.api_key,
         reasoning_effort=settings.agent_context.reasoning_effort,
+        usage_recorder=usage_recorder,
+        usage_category=usage_category,
     )
 
 
 def build_video_summary_runtime(
     settings: AppSettings,
+    *,
+    usage_recorder: LlmUsageRecorder | None = None,
 ) -> VideoSummaryRuntime:
     """根据 settings 装配完整的视频总结运行时。
 
@@ -100,7 +110,11 @@ def build_video_summary_runtime(
         ValueError: 选定的 ASR provider 不受支持。
     """
     transcriber, asr = _build_transcriber(settings)
-    gateway = build_litellm_completion_gateway(settings)
+    gateway = build_litellm_completion_gateway(
+        settings,
+        usage_recorder=usage_recorder,
+        usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
+    )
     summarizer = LiteLLMCompletionSummarizer(
         gateway=gateway,
         context_window_tokens=settings.agent_context.window_tokens,

@@ -376,3 +376,28 @@ describe("workspaceReducer chat drawer", () => {
     expect(afterVideo.chatDrawerOpen).toBe(true);
   });
 });
+
+describe("workspaceReducer provider usage", () => {
+  it("stores provider usage after loading", () => {
+    const state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "provider_usage_loading_started",
+      range: "30d",
+    });
+
+    const nextState = workspaceReducer(state, {
+      type: "provider_usage_loaded",
+      range: "30d",
+      usage: {
+        total: { totalTokens: 42 },
+        byCategory: [],
+        byProvider: [],
+        recent: [],
+      },
+    });
+
+    expect(nextState.providerUsageRange).toBe("30d");
+    expect(nextState.providerUsageLoading).toBe(false);
+    expect(nextState.providerUsage.total.totalTokens).toBe(42);
+    expect(nextState.providerUsageError).toBe("");
+  });
+});

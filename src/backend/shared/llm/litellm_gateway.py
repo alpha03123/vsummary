@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
+from datetime import datetime, timezone
 import hashlib
 import json
 from threading import Lock
@@ -26,6 +27,7 @@ from pydantic import BaseModel
 from backend.shared.llm.chat_stream import ChatCompletionStreamChunk
 from backend.shared.llm.base_url import resolve_provider_api_base_url
 from backend.shared.llm.json_mode import describe_validation_error, validate_json_response
+from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecord, LlmUsageRecorder
 
 
 StructuredResponseT = TypeVar("StructuredResponseT", bound=BaseModel)
@@ -84,6 +86,8 @@ class LiteLLMCompletionGateway:
         reasoning_effort: str | None = None,
         completion_fn: CompletionFn | None = None,
         acompletion_fn: AsyncCompletionFn | None = None,
+        usage_recorder: LlmUsageRecorder | None = None,
+        usage_category: LlmUsageCategory | None = None,
     ) -> None:
         self._provider = provider.strip()
         normalized_api_key = api_key.strip()
@@ -111,6 +115,8 @@ class LiteLLMCompletionGateway:
         )
         self._completion = completion_fn or _load_litellm_completion()
         self._acompletion = acompletion_fn or _load_litellm_acompletion()
+        self._usage_recorder = usage_recorder
+        self._usage_category = usage_category
 
     def complete_text(
         self,
@@ -156,6 +162,7 @@ class LiteLLMCompletionGateway:
             if _is_unsupported_reasoning_effort_error(error):
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
+        self._record_usage(_extract_usage(response))
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
@@ -209,6 +216,7 @@ class LiteLLMCompletionGateway:
             if _is_unsupported_reasoning_effort_error(error):
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
+        self._record_usage(_extract_usage(response))
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
@@ -342,6 +350,7 @@ class LiteLLMCompletionGateway:
         if in_think_block:
             yield ChatCompletionStreamChunk(delta="</think>")
         if final_usage:
+            self._record_usage(final_usage)
             yield ChatCompletionStreamChunk(usage=final_usage)
 
     def test_connection(self) -> str:
@@ -361,6 +370,27 @@ class LiteLLMCompletionGateway:
             temperature=0,
             max_tokens=8,
             timeout=5,
+        )
+
+    def _record_usage(self, usage: dict[str, int]) -> None:
+        if self._usage_recorder is None or self._usage_category is None or not usage:
+            return
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+        if prompt_tokens is None or completion_tokens is None or total_tokens is None:
+            return
+        self._usage_recorder.record(
+            LlmUsageRecord(
+                created_at=datetime.now(timezone.utc),
+                category=self._usage_category,
+                provider=self._provider,
+                base_url=self._base_url,
+                model=self._model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+            )
         )
 
     async def astream_text(
@@ -1100,11 +1130,11 @@ def _extract_usage(chunk: Any) -> dict[str, int]:
         以 token 类别为键的用量字典；若无用量信息则返回空字典。
     """
     usage = _lookup(chunk, "usage")
-    if not isinstance(usage, Mapping):
+    if usage is None:
         return {}
     normalized: dict[str, int] = {}
     for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
-        value = usage.get(key)
+        value = _lookup(usage, key)
         if isinstance(value, int):
             normalized[key] = value
     return normalized

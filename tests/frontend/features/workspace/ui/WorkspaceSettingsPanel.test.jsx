@@ -1,10 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { defaultUiSettings } from "@src/features/workspace/model/workspaceState";
 import { WorkspaceSettingsPanel } from "@src/features/workspace/ui/WorkspaceSettingsPanel";
 
-function renderPanel(uiOverrides = {}) {
+function renderPanel(uiOverrides = {}, propOverrides = {}) {
   return render(
     <WorkspaceSettingsPanel
       ui={{
@@ -24,6 +24,7 @@ function renderPanel(uiOverrides = {}) {
       onDownloadRagModel={vi.fn()}
       onResetSettings={vi.fn()}
       onClose={vi.fn()}
+      {...propOverrides}
     />,
   );
 }
@@ -49,5 +50,14 @@ describe("WorkspaceSettingsPanel provider settings", () => {
 
     expect(screen.getByText("API Key")).toBeInTheDocument();
     expect(screen.getByText("保存 Key")).toBeInTheDocument();
+  });
+
+  it("opens the dedicated usage page from provider settings", () => {
+    const onOpenUsagePage = vi.fn();
+    renderPanel({}, { onOpenUsagePage });
+
+    fireEvent.click(screen.getByRole("button", { name: "打开用量统计" }));
+
+    expect(onOpenUsagePage).toHaveBeenCalledTimes(1);
   });
 });

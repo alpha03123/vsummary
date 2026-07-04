@@ -27,6 +27,7 @@ export function WorkspaceSettingsPanel({
   modelDownloadErrorModelId = null,
   modelDownloadError = null,
   onChangeSetting,
+  onOpenUsagePage,
   onSaveProviderSettings,
   onSaveApiKey,
   onRevealOpenaiApiKey,
@@ -272,16 +273,16 @@ export function WorkspaceSettingsPanel({
                           : downloadFailed
                             ? "下载失败"
                             : isCurrent
-                            ? "当前默认模型，需先下载"
-                            : "尚未下载";
+                              ? "当前默认模型，需先下载"
+                              : "尚未下载";
                         return (
                           <div
                             key={model.id}
                             className={`rounded-2xl border p-4 transition-colors ${downloadFailed
                               ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
                               : isCurrent
-                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
-                              : "border-stone-200 dark:border-stone-800"
+                                ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                                : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -685,6 +686,19 @@ export function WorkspaceSettingsPanel({
                     onChange={() => onChangeSetting("webSearchEnabled", !ui.webSearchEnabled)}
                   />
                 </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="API 用量统计"
+                  description="查看真实 token 用量、供应商与模型分布。"
+                >
+                  <button
+                    type="button"
+                    onClick={onOpenUsagePage}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold bg-accent text-white shadow-sm hover:bg-accent-hover transition-colors"
+                  >
+                    打开用量统计
+                  </button>
+                </WorkspaceSettingRow>
               </>
             )}
 
@@ -731,15 +745,15 @@ export function WorkspaceSettingsPanel({
                             ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
                             : downloadFailed
                               ? "下载失败"
-                            : "尚未下载";
+                              : "尚未下载";
                         return (
                           <div
                             key={model.key}
                             className={`rounded-2xl border p-4 transition-colors ${downloadFailed
                               ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
                               : model.downloaded
-                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
-                              : "border-stone-200 dark:border-stone-800"
+                                ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                                : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

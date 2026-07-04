@@ -58,6 +58,11 @@ export async function loadProviderSettings() {
   };
 }
 
+export async function loadProviderUsage(range = "7d") {
+  const payload = await fetchJson(`/api/provider-settings/usage?range=${encodeURIComponent(range)}`);
+  return toProviderUsage(payload);
+}
+
 export async function loadOpenaiApiKey() {
   const payload = await fetchJson("/api/provider-settings/openai-api-key");
   return typeof payload.openai_api_key === "string" ? payload.openai_api_key : "";
@@ -630,6 +635,76 @@ function extractErrorMessage(payload) {
 
 function parseProgressMessage(rawValue) {
   return toProgressSnapshot(JSON.parse(rawValue));
+}
+
+function toProviderUsage(payload) {
+  const record = payload && typeof payload === "object" ? payload : {};
+  return {
+    range: typeof record.range === "string" ? record.range : "7d",
+    total: toTokenTotals(record.total),
+    byCategory: Array.isArray(record.by_category)
+      ? record.by_category.map(toUsageCategory)
+      : [],
+    byProvider: Array.isArray(record.by_provider)
+      ? record.by_provider.map(toUsageProvider)
+      : [],
+    recent: Array.isArray(record.recent)
+      ? record.recent.map(toUsageRecord)
+      : [],
+    timelineGranularity: typeof record.timeline_granularity === "string" ? record.timeline_granularity : "day",
+    timeline: Array.isArray(record.timeline)
+      ? record.timeline.map(toUsageTimelineBucket)
+      : [],
+  };
+}
+
+function toUsageCategory(item) {
+  const record = item && typeof item === "object" ? item : {};
+  return {
+    category: typeof record.category === "string" ? record.category : "",
+    ...toTokenTotals(record),
+  };
+}
+
+function toUsageProvider(item) {
+  const record = item && typeof item === "object" ? item : {};
+  return {
+    provider: typeof record.provider === "string" ? record.provider : "",
+    baseUrl: typeof record.base_url === "string" ? record.base_url : "",
+    model: typeof record.model === "string" ? record.model : "",
+    ...toTokenTotals(record),
+  };
+}
+
+function toUsageRecord(item) {
+  const record = item && typeof item === "object" ? item : {};
+  return {
+    createdAt: typeof record.created_at === "string" ? record.created_at : "",
+    category: typeof record.category === "string" ? record.category : "",
+    provider: typeof record.provider === "string" ? record.provider : "",
+    baseUrl: typeof record.base_url === "string" ? record.base_url : "",
+    model: typeof record.model === "string" ? record.model : "",
+    ...toTokenTotals(record),
+  };
+}
+
+function toUsageTimelineBucket(item) {
+  const record = item && typeof item === "object" ? item : {};
+  return {
+    startedAt: typeof record.started_at === "string" ? record.started_at : "",
+    generationTokens: typeof record.generation_tokens === "number" ? record.generation_tokens : 0,
+    chatTokens: typeof record.chat_tokens === "number" ? record.chat_tokens : 0,
+    totalTokens: typeof record.total_tokens === "number" ? record.total_tokens : 0,
+  };
+}
+
+function toTokenTotals(record) {
+  const source = record && typeof record === "object" ? record : {};
+  return {
+    promptTokens: typeof source.prompt_tokens === "number" ? source.prompt_tokens : 0,
+    completionTokens: typeof source.completion_tokens === "number" ? source.completion_tokens : 0,
+    totalTokens: typeof source.total_tokens === "number" ? source.total_tokens : 0,
+  };
 }
 
 function toProgressSnapshot(payload) {
