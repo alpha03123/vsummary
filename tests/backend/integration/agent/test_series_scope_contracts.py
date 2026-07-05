@@ -842,16 +842,22 @@ class SeriesScopeContractTests(unittest.TestCase):
     def test_video_action_planner_payload_schema_avoids_openai_unsupported_one_of(self) -> None:
         schema = VideoActionPlannerPayload.model_json_schema()
         serialized_schema = json.dumps(schema)
+        properties = schema["$defs"]["PlannedVideoToolCall"]["properties"]
 
         self.assertNotIn('"oneOf"', serialized_schema)
         self.assertEqual(
-            schema["$defs"]["PlannedVideoToolCall"]["properties"]["tool_name"]["enum"],
+            properties["tool_name"]["enum"],
             ["open_notes", "save_note", "video_seek"],
         )
+        self.assertIn("save_note", properties["note_title"]["description"])
+        self.assertIn("非空", properties["note_title"]["description"])
+        self.assertIn("save_note", properties["note_content"]["description"])
+        self.assertIn("Markdown", properties["note_content"]["description"])
 
     def test_save_note_contract_prefers_markdown_content_without_fixed_template(self) -> None:
         self.assertIn("Markdown", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
         self.assertIn("按内容复杂度", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
+        self.assertIn("不要把参数放进 arguments/input/params 子对象", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
         self.assertIn("支持 Markdown 的笔记正文", SAVE_NOTE_TOOL.arguments["note_content"])
         self.assertNotIn("视频核心", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
 
@@ -959,6 +965,23 @@ class SeriesScopeContractTests(unittest.TestCase):
                         "source_number": 2,
                         "segments": [
                             {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
+                        ],
+                    },
+                ],
+            )
+
+    def test_inline_citation_resolution_rejects_range_marker(self) -> None:
+        with self.assertRaisesRegex(ValueError, "非法范围引用"):
+            resolve_inline_citations(
+                "这里错误地引用了字幕范围。[2.1544-2.1561]",
+                [
+                    {"evidence_id": "local-1", "source_number": 1},
+                    {
+                        "evidence_id": "local-2",
+                        "source_number": 2,
+                        "segments": [
+                            {"anchor_id": "2.1544", "start_seconds": 1544.0, "end_seconds": 1550.0, "text": "片段 A"},
+                            {"anchor_id": "2.1561", "start_seconds": 1561.0, "end_seconds": 1568.0, "text": "片段 B"},
                         ],
                     },
                 ],
@@ -1165,6 +1188,8 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertIn("[2.1] (00:12) 第一句", user_content)
         self.assertIn("[2.2] (00:42) 第二句", user_content)
         self.assertIn("必须使用 segment 的 anchor_id", messages[0].content)
+        self.assertIn("禁止输出范围引用", messages[0].content)
+        self.assertIn("[2.1][2.3]", messages[0].content)
 
 
 class FakeQueryGateway:

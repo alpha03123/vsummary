@@ -38,14 +38,37 @@ class PlannedVideoToolCall(BaseModel):
         query: `video_seek` 时附带的检索 query。
     """
 
-    tool_name: Literal["open_notes", "save_note", "video_seek"]
-    note_title: str = ""
-    note_content: str = ""
-    seek_seconds: float | None = None
-    match_end_seconds: float | None = None
-    matched_text: str = ""
-    chapter_title: str = ""
-    query: str = ""
+    tool_name: Literal["open_notes", "save_note", "video_seek"] = Field(
+        description="目标工具名。只能是 open_notes、save_note 或 video_seek。"
+    )
+    note_title: str = Field(
+        default="",
+        description="仅当 tool_name 为 save_note 时填写，必须是非空笔记标题。",
+    )
+    note_content: str = Field(
+        default="",
+        description="仅当 tool_name 为 save_note 时填写，必须是基于 evidence 的非空 Markdown 笔记正文。",
+    )
+    seek_seconds: float | None = Field(
+        default=None,
+        description="仅当 tool_name 为 video_seek 时填写，必须来自 transcript evidence 的 start_seconds。",
+    )
+    match_end_seconds: float | None = Field(
+        default=None,
+        description="仅当 tool_name 为 video_seek 时填写，可使用命中文本的 end_seconds。",
+    )
+    matched_text: str = Field(
+        default="",
+        description="仅当 tool_name 为 video_seek 时填写，记录命中的转写文本片段。",
+    )
+    chapter_title: str = Field(
+        default="",
+        description="仅当 tool_name 为 video_seek 时填写，记录命中的章节标题。",
+    )
+    query: str = Field(
+        default="",
+        description="仅当 tool_name 为 video_seek 时填写，记录触发跳转的查询词。",
+    )
 
     @model_validator(mode="after")
     def validate_arguments_for_tool(self) -> PlannedVideoToolCall:

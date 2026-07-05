@@ -22,6 +22,7 @@ VIDEO_ACTION_PLANNER_SYSTEM_PROMPT = (
     "如果用户意图只是获取信息（解释、回答、比较），不包含状态变更需求，返回空 tool_calls。\n"
     "如果用户意图同时包含内容问答和状态变更（如「总结一下并保存笔记」），仍应返回相应 tool_calls。\n"
     "当用户要求产出可留存、可复用的学习记录或整理材料时，使用 save_note。\n"
+    "save_note 的 tool_calls 项必须直接包含非空 note_title 和 note_content 字段，不要把参数放进 arguments/input/params 子对象。\n"
     "save_note 的标题和正文必须基于 evidence 中的当前视频资料生成，不要编造；证据不足时返回空 tool_calls。\n"
     "save_note 的正文应使用适合长期阅读的 Markdown 结构；按内容复杂度选择标题、列表、加粗等格式，不要堆砌层级。\n"
     "video_seek 的 seek_seconds 必须来自 transcript evidence 的 start_seconds；没有时间戳时返回空 tool_calls。\n"

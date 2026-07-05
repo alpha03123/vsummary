@@ -48,7 +48,7 @@ def describe_validation_error(error: Exception) -> str:
         描述校验失败原因的错误字符串。
     """
     if isinstance(error, ValidationError):
-        return json.dumps(error.errors(include_url=False), ensure_ascii=False)
+        return json.dumps(error.errors(include_url=False), ensure_ascii=False, default=str)
     return str(error)
 
 

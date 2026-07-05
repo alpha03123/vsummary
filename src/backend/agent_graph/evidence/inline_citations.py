@@ -19,6 +19,10 @@ from dataclasses import dataclass
 # 匹配回答正文中的 inline 数字引用 `[N]` 或 transcript segment anchor `[N.M]`。
 INLINE_NUMBER_PATTERN = re.compile(r"\[(?P<value>\s*\d+(?:\.\d+)?\s*)\]")
 
+# 匹配模型错误输出的范围引用，例如 `[2.1-2.3]`。系统没有范围 citation 语义，
+# 这类标记不能被前端跳转，必须在后端拦截。
+INLINE_RANGE_PATTERN = re.compile(r"\[\s*\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\s*\]")
+
 # 匹配模型在流式输出时可能误输出的内部 ID 标记（命中后直接整段删除）。
 EVIDENCE_ID_MARKER_PATTERN = re.compile(r"\[\s*(?:e+[0-9]+|local-\d+|web-\d+)\s*\]")
 
@@ -89,6 +93,10 @@ def resolve_inline_citations(
     cleaned_parts: list[str] = []
     last_index = 0
     answer_text = EVIDENCE_ID_MARKER_PATTERN.sub("", answer_text)
+    range_markers = INLINE_RANGE_PATTERN.findall(answer_text)
+    if range_markers:
+        joined_markers = ", ".join(dict.fromkeys(marker.strip() for marker in range_markers))
+        raise ValueError(f"模型输出了非法范围引用: {joined_markers}")
     for match in INLINE_NUMBER_PATTERN.finditer(answer_text):
         cleaned_parts.append(answer_text[last_index:match.start()])
         citation_id = match.group("value").strip()
@@ -138,6 +146,7 @@ def filter_inline_citation_markers(answer_text: str, available_ids: set[str]) ->
             return f"[{citation_id}]"
         return ""
 
+    answer_text = INLINE_RANGE_PATTERN.sub("", answer_text)
     return INLINE_NUMBER_PATTERN.sub(replace_match, answer_text)
 
 

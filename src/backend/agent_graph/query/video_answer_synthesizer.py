@@ -192,6 +192,7 @@ _STREAMING_CITED_ANSWER_PROMPT = (
     "- evidence_items 已按 Source 1、Source 2 等数字编号。\n"
     "- summary / web evidence 使用 Source 编号引用，例如 [1] 或 [2]。\n"
     "- transcript evidence 如果包含 segments，必须使用 segment 的 anchor_id 引用，例如 [2.1]，不要用粗粒度 [2]。\n"
+    "- 禁止输出范围引用，例如 [2.1-2.3] 或 [2.1544-2.1561]；如果需要引用多个片段，分别写多个合法 anchor，例如 [2.1][2.3]。\n"
     "- 只能使用真实存在的 Source 编号或 transcript anchor_id，不要输出 evidence_id、local-*、web-* 或 e* 这类内部 ID，不要编造引用编号。\n"
     "- 不要输出 JSON，不要输出额外字段。\n"
 )

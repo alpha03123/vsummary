@@ -6,8 +6,9 @@ from pathlib import Path
 import unittest
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
+from backend.shared.llm.json_mode import describe_validation_error
 from backend.shared.llm.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
 from backend.shared.llm.usage import LlmUsageCategory
 from backend.agent_graph.query.models import SeriesAnswerPayload
@@ -465,6 +466,15 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(recorded_timeouts, [None])
 
+    def test_describe_validation_error_serializes_value_error_context(self) -> None:
+        with self.assertRaises(Exception) as raised:
+            ValueErrorValidatedPayload.model_validate({"name": ""})
+
+        description = describe_validation_error(raised.exception)
+
+        self.assertIn("name 不能为空", description)
+        self.assertNotIn("Object of type ValueError is not JSON serializable", description)
+
 
 class CapturingCompletion:
     def __init__(self, content: str) -> None:
@@ -578,6 +588,16 @@ class UsageStreamCompletion:
                 },
             ]
         )
+
+
+class ValueErrorValidatedPayload(BaseModel):
+    name: str
+
+    @model_validator(mode="after")
+    def validate_name(self):
+        if not self.name.strip():
+            raise ValueError("name 不能为空")
+        return self
 
 
 async def unused_async_completion(**kwargs):
