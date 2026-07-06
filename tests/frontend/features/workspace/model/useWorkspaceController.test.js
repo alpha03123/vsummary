@@ -65,3 +65,11 @@ describe("useWorkspaceController chat-drawer actions", () => {
     expect(result.current.chatDrawerOpen).toBe(false);
   });
 });
+
+describe("useWorkspaceController external import actions", () => {
+  it("exposes Bilibili cookie initialization to the page model", () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    expect(typeof result.current.onInitBilibiliCookie).toBe("function");
+  });
+});

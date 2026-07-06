@@ -107,6 +107,7 @@ function Test-AppFile {
     }
     return @(
         ".env.example",
+        "diagnose_gpu.py",
         "LICENSE",
         "README.md",
         "update.bat",
@@ -426,7 +427,7 @@ function Repair-GpuProviderWheel {
         "install",
         "--force-reinstall",
         "--no-deps",
-        "onnxruntime-gpu>=1.20,<2"
+        "onnxruntime-gpu>=1.20,<1.27"
     )
 }
 
@@ -578,7 +579,16 @@ elif kind == "gpu":
         "chaoxing-downloader",
     })
     forbid({"fastembed"})
+    from importlib.metadata import version
     import onnxruntime as ort
+
+    ort_gpu_version = version("onnxruntime-gpu")
+    if tuple(int(part) for part in ort_gpu_version.split(".")[:2]) >= (1, 27):
+        raise SystemExit(
+            "gpu package uses onnxruntime-gpu "
+            + ort_gpu_version
+            + ", which requires CUDA 13 runtime; pin onnxruntime-gpu <1.27 for the bundled CUDA 12 runtime"
+        )
 
     providers = set(ort.get_available_providers())
     if "CUDAExecutionProvider" not in providers:

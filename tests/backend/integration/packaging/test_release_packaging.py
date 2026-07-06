@@ -103,6 +103,13 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn('embedding_provider = "fastembed"', rendered)
         self.assertIn('embedding_model = "BAAI/bge-small-zh-v1.5"', rendered)
 
+    def test_gpu_environment_pins_onnxruntime_gpu_before_cuda_13_builds(self) -> None:
+        gpu = PACKAGE_VARIANTS["gpu"]
+        rendered = (self.repo_root / gpu.environment_file).read_text(encoding="utf-8")
+
+        self.assertIn("onnxruntime-gpu>=1.20,<1.27", rendered)
+        self.assertNotIn("onnxruntime-gpu>=1.20,<2", rendered)
+
     def test_build_release_layout_targets_external_pack_root(self) -> None:
         layout = build_release_layout(
             repo_root=self.repo_root,

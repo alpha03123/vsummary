@@ -134,6 +134,53 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual(installed["app_version"], "v1")
             self.assertEqual(installed["runtime_id"], "runtime-cpu-a")
 
+    def test_reads_bom_prefixed_packaging_json_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest = {
+                "version": "v1",
+                "app": {"version": "v1", "url": "unused", "sha256": "0" * 64, "size": 0},
+                "runtime": {"gpu": {"id": "runtime-gpu-a"}},
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8-sig")
+            installed_path = root / "updater" / "installed.json"
+            installed_path.parent.mkdir()
+            installed_path.write_text(
+                json.dumps({"variant": "gpu", "app_version": "v1", "runtime_id": "runtime-gpu-a"}),
+                encoding="utf-8-sig",
+            )
+
+            result = run_update(root=root, manifest_url=str(manifest_path))
+
+            self.assertFalse(result.changed)
+            self.assertIn("App is already up to date.", result.messages)
+
+    def test_infers_variant_from_bom_prefixed_runtime_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "RUNTIME").write_text("runtime-gpu-a", encoding="utf-8-sig")
+            config_path = root / "updater" / "config.json"
+            config_path.parent.mkdir()
+            installed_path = root / "updater" / "installed.json"
+            installed_path.write_text(
+                json.dumps({"app_version": "v1", "runtime_id": "runtime-gpu-a"}),
+                encoding="utf-8",
+            )
+            manifest = {
+                "version": "v1",
+                "app": {"version": "v1", "url": "unused", "sha256": "0" * 64, "size": 0},
+                "runtime": {"gpu": {"id": "runtime-gpu-a"}},
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            config_path.write_text(json.dumps({"manifest_url": str(manifest_path)}), encoding="utf-8")
+
+            result = run_update(root=root)
+
+            self.assertFalse(result.changed)
+            self.assertIn("Runtime is already up to date.", result.messages)
+
 
 def _write_manifest(
     root: Path,

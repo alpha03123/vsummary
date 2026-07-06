@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
 def _read_json(path: Path, *, default: Any) -> Any:
     if not path.is_file():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -126,8 +126,8 @@ def _read_json_from_location(location: str) -> dict[str, Any]:
     parsed = urllib.parse.urlparse(location)
     if parsed.scheme in ("http", "https", "file"):
         with urllib.request.urlopen(location) as response:
-            return json.loads(response.read().decode("utf-8"))
-    return json.loads(Path(location).read_text(encoding="utf-8"))
+            return json.loads(response.read().decode("utf-8-sig"))
+    return json.loads(Path(location).read_text(encoding="utf-8-sig"))
 
 
 def _download_asset(root: Path, asset: dict[str, Any]) -> Path:
@@ -248,7 +248,7 @@ def _sha256(path: Path) -> str:
 def _infer_variant(root: Path) -> str:
     runtime_id_path = root / "RUNTIME"
     if runtime_id_path.is_file():
-        runtime_id = runtime_id_path.read_text(encoding="utf-8").strip()
+        runtime_id = runtime_id_path.read_text(encoding="utf-8-sig").strip()
         if runtime_id.startswith("runtime-cpu-"):
             return "cpu"
         if runtime_id.startswith("runtime-gpu-"):
