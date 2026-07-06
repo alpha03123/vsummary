@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests import _path_setup  # noqa: F401
 
 from backend.video_summary.infrastructure.config.settings_service import SettingsService, SettingsValidationError
 from backend.video_summary.infrastructure.config.settings import (
@@ -35,6 +36,29 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 os.environ.pop("HF_ENDPOINT", None)
             else:
                 os.environ["HF_ENDPOINT"] = previous
+
+    def test_runtime_env_overrides_updates_loaded_huggingface_hub_endpoint(self) -> None:
+        import huggingface_hub.constants as hf_constants
+
+        previous_env = os.environ.get("HF_ENDPOINT")
+        previous_endpoint = hf_constants.ENDPOINT
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                root_dir = Path(temp_dir)
+                (root_dir / ".env").write_text("HF_ENDPOINT=https://hf-mirror.com\n", encoding="utf-8")
+                os.environ.pop("HF_ENDPOINT", None)
+                hf_constants.ENDPOINT = "https://huggingface.co"
+
+                apply_runtime_env_overrides(root_dir)
+
+                self.assertEqual(os.environ["HF_ENDPOINT"], "https://hf-mirror.com")
+                self.assertEqual(hf_constants.ENDPOINT, "https://hf-mirror.com")
+        finally:
+            if previous_env is None:
+                os.environ.pop("HF_ENDPOINT", None)
+            else:
+                os.environ["HF_ENDPOINT"] = previous_env
+            hf_constants.ENDPOINT = previous_endpoint
 
     def test_get_and_update_workspace_settings_include_window_tokens_video_concurrency_rag_and_web_search_controls(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

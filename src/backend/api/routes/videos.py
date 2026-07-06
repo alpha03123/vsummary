@@ -819,7 +819,7 @@ async def stream_mindmap_generation_progress(
         stream_progress_events(
             tracker=container.mindmap_progress_tracker,
             task_id=task_id,
-            terminal_statuses={"completed", "failed", "cancelled"},
+            terminal_statuses={"idle", "completed", "failed", "cancelled"},
         ),
         media_type="text/event-stream",
         headers={
@@ -901,7 +901,7 @@ async def stream_series_mindmap_generation_progress(
         stream_progress_events(
             tracker=container.mindmap_progress_tracker,
             task_id=task_id,
-            terminal_statuses={"completed", "failed", "cancelled"},
+            terminal_statuses={"idle", "completed", "failed", "cancelled"},
         ),
         media_type="text/event-stream",
         headers={

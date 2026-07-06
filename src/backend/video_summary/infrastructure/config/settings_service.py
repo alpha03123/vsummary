@@ -25,6 +25,7 @@ from backend.video_summary.infrastructure.config.settings import (
     VALID_LLM_PROVIDERS,
     VALID_REASONING_EFFORTS,
     WorkspaceUiSettings,
+    apply_runtime_env_overrides,
     load_env_settings,
     load_settings,
     normalize_openai_base_url,
@@ -506,6 +507,7 @@ class SettingsService:
                 hf_endpoint=hf_endpoint,
             ),
         )
+        apply_runtime_env_overrides(self._root_dir)
 
     def _validate_provider_settings(
         self,

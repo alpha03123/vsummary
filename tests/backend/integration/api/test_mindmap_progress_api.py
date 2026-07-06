@@ -31,6 +31,7 @@ class MindmapProgressApiTests(unittest.TestCase):
         *,
         mindmap_result: dict | None = None,
         raise_error: Exception | None = None,
+        gate: threading.Event | None = None,
     ) -> SimpleNamespace:
         """构造一个最小 ApiContainer，足以驱动单视频 mindmap 生成 + SSE 进度端点。
 
@@ -45,6 +46,8 @@ class MindmapProgressApiTests(unittest.TestCase):
                 del series_id, video_id
                 if progress_reporter is not None:
                     progress_reporter.update("generate", 50.0, "正在生成思维导图节点")
+                if gate is not None:
+                    gate.wait(timeout=2.0)
                 if raise_error is not None:
                     raise raise_error
                 if mindmap_result is None:
@@ -54,6 +57,7 @@ class MindmapProgressApiTests(unittest.TestCase):
         return SimpleNamespace(
             mindmap_progress_tracker=tracker,
             generate_video_mindmap=FakeUseCase(),
+            gate=gate,
         )
 
     def test_progress_endpoint_returns_sse_when_completed(self) -> None:
@@ -75,8 +79,10 @@ class MindmapProgressApiTests(unittest.TestCase):
 
     def test_progress_endpoint_streams_running_then_completed(self) -> None:
         """进度端点应在 running 阶段也推送一帧，末帧为 completed。"""
+        gate = threading.Event()
         container = self._build_container(
             mindmap_result={"id": "root", "title": "T", "summary": "", "children": []},
+            gate=gate,
         )
         client = TestClient(create_app(container))
 
@@ -85,20 +91,23 @@ class MindmapProgressApiTests(unittest.TestCase):
             daemon=True,
         )
         generate_thread.start()
+        _wait_until(lambda: container.mindmap_progress_tracker.get_snapshot("mindmap|s1|v1").stage == "generate")
 
-        time.sleep(0.05)
-        progress_response = client.get("/api/videos/s1/v1/mindmap/generate/progress")
-        self.assertEqual(progress_response.status_code, 200)
+        with client.stream("GET", "/api/videos/s1/v1/mindmap/generate/progress") as progress_response:
+            self.assertEqual(progress_response.status_code, 200)
+            lines = progress_response.iter_lines()
+            first_line = next(lines)
+            self.assertIn('"stage": "generate"', first_line)
+            gate.set()
+            body = "\n".join([first_line, *lines])
         generate_thread.join(timeout=2.0)
 
-        body = progress_response.text
-        self.assertIn('"stage": "generate"', body)
         self.assertIn('"status": "completed"', body)
 
     def test_progress_endpoint_returns_failed_status_on_error(self) -> None:
         """当 use-case 抛异常时，API 路由调用 reporter.failed()，SSE 流末帧应为 failed。"""
         container = self._build_container(raise_error=RuntimeError("LLM error"))
-        client = TestClient(create_app(container))
+        client = TestClient(create_app(container), raise_server_exceptions=False)
 
         generate_response = client.post("/api/videos/s1/v1/mindmap/generate")
         self.assertEqual(generate_response.status_code, 500)
@@ -191,7 +200,7 @@ class SeriesMindmapProgressApiTests(unittest.TestCase):
     def test_series_progress_endpoint_returns_failed_on_error(self) -> None:
         """系列思维导图生成抛错时，进度端点末帧应为 failed。"""
         container = self._build_series_container(raise_error=RuntimeError("boom"))
-        client = TestClient(create_app(container))
+        client = TestClient(create_app(container), raise_server_exceptions=False)
 
         generate_response = client.post("/api/series/s1/mindmap/generate")
         self.assertEqual(generate_response.status_code, 500)
@@ -251,6 +260,15 @@ class SeriesMindmapProgressApiTests(unittest.TestCase):
 # --------------------------------------------------------------------------- #
 # Test container builders live as methods on each test class above.
 # --------------------------------------------------------------------------- #
+
+
+def _wait_until(predicate, *, timeout_seconds: float = 2.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition was not met before timeout")
 
 
 if __name__ == "__main__":

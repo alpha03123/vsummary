@@ -31,6 +31,7 @@ class ProviderSettingsApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(container.invalidate_agent_graph_service_calls, 1)
+        self.assertEqual(container.invalidate_agent_workspace_indexes_calls, 1)
 
     def test_provider_settings_test_returns_model_connection_error_without_agent_stage_label(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -64,9 +65,13 @@ class FakeContainer:
         self.config_path = root_dir / "config" / "settings.toml"
         self.settings_service = settings_service or FakeSettingsService()
         self.invalidate_agent_graph_service_calls = 0
+        self.invalidate_agent_workspace_indexes_calls = 0
 
     def invalidate_agent_graph_service(self) -> None:
         self.invalidate_agent_graph_service_calls += 1
+
+    def invalidate_agent_workspace_indexes(self) -> None:
+        self.invalidate_agent_workspace_indexes_calls += 1
 
 
 class FakeSettingsService:

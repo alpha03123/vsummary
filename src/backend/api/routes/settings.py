@@ -119,6 +119,7 @@ async def update_workspace_settings(
             chaoxing_init_course_delay_seconds=request.chaoxing_init_course_delay_seconds,
         )
         container.invalidate_agent_graph_service()
+        container.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -286,6 +287,7 @@ def update_provider_settings(
             hf_endpoint=request.hf_endpoint,
         )
         container.invalidate_agent_graph_service()
+        container.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

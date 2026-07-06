@@ -47,6 +47,8 @@ class _RagModelAwareRetrievalService:
         with self._lock:
             if self._service is not None:
                 self._service.invalidate()
+            self._service = None
+            self._signature = None
 
     def _require_service(self) -> SeriesRetrievalService:
         with self._lock:

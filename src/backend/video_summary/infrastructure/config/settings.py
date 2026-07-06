@@ -19,6 +19,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import tomllib
 
 from backend.shared.llm.base_url import normalize_provider_base_url
@@ -831,6 +832,18 @@ def apply_runtime_env_overrides(root_dir: Path) -> None:
             os.environ[key] = value
         else:
             os.environ.pop(key, None)
+    _refresh_loaded_huggingface_hub_endpoint()
+
+
+def _refresh_loaded_huggingface_hub_endpoint() -> None:
+    """同步已导入的 HuggingFace Hub endpoint 常量，避免 FastEmbed 继续使用旧镜像。"""
+    constants = sys.modules.get("huggingface_hub.constants")
+    if constants is None or not hasattr(constants, "ENDPOINT"):
+        return
+    endpoint = os.environ.get("HF_ENDPOINT", "").strip().rstrip("/")
+    if not endpoint:
+        endpoint = getattr(constants, "_HF_DEFAULT_ENDPOINT", "https://huggingface.co")
+    constants.ENDPOINT = endpoint
 
 
 def _render_settings_toml(settings: AppSettings) -> str:
