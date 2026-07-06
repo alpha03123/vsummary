@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 from threading import Lock, Thread
 from typing import Callable, Literal
 
@@ -222,6 +223,7 @@ class RagModelManager:
     def _run_download(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
         """后台线程的下载主循环：调用注入的下载器，校验完成后通知回调。"""
         try:
+            self._cleanup_incomplete_model_cache(spec)
             self._downloader(spec, reporter)
             if not self.is_downloaded(spec.key):
                 raise RuntimeError(f"RAG 模型下载后校验失败：{spec.label}")
@@ -229,10 +231,32 @@ class RagModelManager:
             if self._on_download_completed is not None:
                 self._on_download_completed(spec.key)
         except Exception as error:
-            reporter.failed(str(error))
+            cleanup_error = self._try_cleanup_incomplete_model_cache(spec)
+            if cleanup_error is None:
+                reporter.failed(str(error))
+            else:
+                reporter.failed(f"{error}；失败缓存清理失败：{cleanup_error}")
         finally:
             with self._lock:
                 self._active_keys.discard(spec.key)
+
+    def _try_cleanup_incomplete_model_cache(self, spec: RagModelSpec) -> Exception | None:
+        """清理目标模型未完成缓存；失败时返回异常供调用方显式上报。"""
+        try:
+            self._cleanup_incomplete_model_cache(spec)
+        except Exception as error:
+            return error
+        return None
+
+    def _cleanup_incomplete_model_cache(self, spec: RagModelSpec) -> None:
+        """删除目标模型的半成品缓存目录和对应 FastEmbed 锁目录。"""
+        metadata = self._get_fastembed_metadata(spec)
+        model_file = _metadata_model_file(metadata)
+        candidates = self._candidate_model_dirs(spec, metadata)
+        for model_dir in candidates:
+            if model_dir.exists() and not _has_required_file(model_dir, model_file):
+                _remove_path(model_dir)
+        _remove_model_lock_entries(self._models_root / ".locks", candidates)
 
     def _download_from_huggingface(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
         """默认下载实现：实例化 FastEmbed 的 `TextEmbedding` / `TextCrossEncoder`。
@@ -331,3 +355,30 @@ def _metadata_model_file(metadata: dict) -> str:
     if not isinstance(model_file, str) or not model_file.strip():
         raise RuntimeError("FastEmbed 模型元数据缺少 model_file。")
     return model_file.strip()
+
+
+def _remove_model_lock_entries(locks_root: Path, model_dirs: list[Path]) -> None:
+    """删除 `.locks` 下属于目标模型候选目录的锁条目。"""
+    if not locks_root.is_dir():
+        return
+    model_dir_names = {model_dir.name.lower() for model_dir in model_dirs}
+    for entry in list(locks_root.iterdir()):
+        if _is_model_lock_entry(entry, model_dir_names):
+            _remove_path(entry)
+
+
+def _is_model_lock_entry(entry: Path, model_dir_names: set[str]) -> bool:
+    """判断锁文件/目录名是否对应某个模型缓存目录名。"""
+    name = entry.name.lower()
+    return name in model_dir_names or any(
+        name.startswith(f"{model_dir_name}.") or name.startswith(f"{model_dir_name}-")
+        for model_dir_name in model_dir_names
+    )
+
+
+def _remove_path(path: Path) -> None:
+    """删除文件或目录；不存在则不处理。"""
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
