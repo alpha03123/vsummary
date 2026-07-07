@@ -4,8 +4,7 @@ import {
   MessageSquare,
   Settings2,
   PanelLeftClose,
-  PanelLeftOpen,
-  BarChart3
+  PanelLeftOpen
 } from "lucide-react";
 
 export function WorkspaceToolbar({
@@ -18,7 +17,6 @@ export function WorkspaceToolbar({
   onToggleChatDrawer,
   chatDrawerOpen,
   chatDrawerEnabled = true,
-  onOpenUsagePage,
 }) {
   const settingsButtonRef = useRef(null);
 
@@ -81,14 +79,6 @@ export function WorkspaceToolbar({
             <MessageSquare size={18} strokeWidth={2.2} />
           </button>
         ) : null}
-        <button
-          className="inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white text-stone-500 dark:text-zinc-400"
-          onClick={onOpenUsagePage}
-          title="打开用量统计"
-          aria-label="打开用量统计"
-        >
-          <BarChart3 size={18} strokeWidth={2.2} />
-        </button>
         <button
           ref={settingsButtonRef}
           className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-500 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"}`}

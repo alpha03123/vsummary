@@ -23,6 +23,7 @@ export const defaultUiSettings = {
   videoGenerationConcurrency: 1,
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
+  seriesMarkdownExportPath: "",
 };
 
 const validLlmProviders = new Set([
@@ -505,10 +506,6 @@ export function createInitialWorkspaceState() {
     selectedChapterId: null,
     selectedNodeId: null,
     playerSeekRequest: null,
-    seriesMindmap: null,
-    seriesMindmapLoading: false,
-    generatingSeriesMindmap: false,
-    seriesSelectedNodeId: null,
     generatingVideoKey: null,
     generatingSeriesId: null,
     generationMode: null,
@@ -517,7 +514,6 @@ export function createInitialWorkspaceState() {
     generationTasksByKey: {},
     generationProgress: null,
     generationSnapshot: null,
-    mindmapGenerationProgress: null,
     downloadingVideoKey: null,
     videoDownloadProgress: null,
     downloadingModelId: null,
@@ -553,14 +549,9 @@ export function createInitialWorkspaceState() {
     contextUsageByScope: {},
     contextUsage: null,
     contextUsageLoading: false,
-    providerUsageRange: "7d",
-    providerUsage: null,
-    providerUsageLoading: false,
-    providerUsageError: "",
     knowledgeMemorySnapshot: null,
     settingsPanelOpen: false,
     settingsPanelInitialTab: "general",
-    usagePageOpen: false,
     chatDrawerOpen: false,
     backendReady: false,
     error: "",
@@ -763,6 +754,7 @@ export function normalizeUiSettings(value) {
         : 1,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),
+    seriesMarkdownExportPath: typeof record.seriesMarkdownExportPath === "string" ? record.seriesMarkdownExportPath : "",
   };
 }
 

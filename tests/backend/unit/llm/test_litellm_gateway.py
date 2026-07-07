@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
 import unittest
@@ -9,7 +8,6 @@ import unittest
 from pydantic import BaseModel
 
 from backend.shared.llm.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
-from backend.shared.llm.usage import LlmUsageCategory
 from backend.agent_graph.query.models import SeriesAnswerPayload
 
 
@@ -178,54 +176,6 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         self.assertEqual(completion.models, ["ollama/qwen2.5:7b"])
         self.assertEqual(completion.api_keys, [None])
         self.assertEqual(completion.api_bases, ["http://127.0.0.1:11434"])
-
-    def test_records_completion_usage_with_provider_endpoint_and_model(self) -> None:
-        recorder = CapturingUsageRecorder()
-        gateway = LiteLLMCompletionGateway(
-            provider="openai",
-            model="gpt-test",
-            base_url="https://api.example.test",
-            api_key="test-key",
-            completion_fn=CapturingCompletionWithUsage(
-                "ok",
-                {"prompt_tokens": 12, "completion_tokens": 5, "total_tokens": 17},
-            ),
-            acompletion_fn=unused_async_completion,
-            usage_recorder=recorder,
-            usage_category=LlmUsageCategory.CHAT,
-        )
-
-        gateway.complete_text([{"role": "user", "content": "ping"}])
-
-        self.assertEqual(len(recorder.records), 1)
-        record = recorder.records[0]
-        self.assertEqual(record.category, "chat")
-        self.assertEqual(record.provider, "openai")
-        self.assertEqual(record.base_url, "https://api.example.test/v1")
-        self.assertEqual(record.model, "openai/gpt-test")
-        self.assertEqual(record.prompt_tokens, 12)
-        self.assertEqual(record.completion_tokens, 5)
-        self.assertEqual(record.total_tokens, 17)
-
-    def test_records_stream_metadata_usage(self) -> None:
-        recorder = CapturingUsageRecorder()
-        gateway = LiteLLMCompletionGateway(
-            provider="openai",
-            model="gpt-test",
-            base_url="https://api.example.test/v1",
-            api_key="test-key",
-            completion_fn=UsageStreamCompletion(),
-            acompletion_fn=unused_async_completion,
-            usage_recorder=recorder,
-            usage_category=LlmUsageCategory.CHAT,
-        )
-
-        chunks = list(gateway.stream_text_with_metadata([{"role": "user", "content": "ping"}]))
-
-        self.assertEqual([chunk.delta for chunk in chunks], ["hello", ""])
-        self.assertEqual(chunks[-1].usage, {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11})
-        self.assertEqual(len(recorder.records), 1)
-        self.assertEqual(recorder.records[0].total_tokens, 11)
 
     def test_keeps_api_key_required_for_openai_provider(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "缺少 API Key"):
@@ -406,65 +356,6 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         self.assertIn('"SeriesAnswerPayload"', prompt)
         self.assertIn('"citations"', prompt)
 
-    def test_async_acomplete_structured_forwards_timeout_to_acompletion(self) -> None:
-        # T1: explicit timeout reaches the litellm layer.
-        #
-        # Uses SeriesAnswerPayload (already imported at top of file) instead of
-        # MindmapNodePayload: the timeout-forwarding logic is independent of the
-        # response_model type (acomplete_structured is generic over
-        # type[StructuredResponseT] and does not dispatch on it). Keeping
-        # SeriesAnswerPayload avoids pulling video_summary.generation into this
-        # shared-layer test.
-        recorded_timeouts: list[object] = []
-
-        async def recording_acompletion(**kwargs):
-            recorded_timeouts.append(kwargs.get("timeout"))
-            return {"choices": [{"message": {"content": '{"answer": "ok", "citations": [], "used_source_types": []}'}}]}
-
-        gateway = LiteLLMCompletionGateway(
-            provider="openai",
-            model="test-model",
-            base_url="https://example.invalid/v1",
-            api_key="test-key",
-            acompletion_fn=recording_acompletion,
-        )
-
-        result = asyncio.run(
-            gateway.acomplete_structured(
-                [{"role": "user", "content": "生成思维导图"}],
-                response_model=SeriesAnswerPayload,
-                timeout=120,
-            )
-        )
-
-        self.assertEqual(result.answer, "ok")
-        self.assertEqual(recorded_timeouts, [120])
-
-    def test_async_acomplete_structured_default_timeout_is_none(self) -> None:
-        # T2: when timeout is omitted, inner acomplete_text sees None.
-        recorded_timeouts: list[object] = []
-
-        async def recording_acompletion(**kwargs):
-            recorded_timeouts.append(kwargs.get("timeout"))
-            return {"choices": [{"message": {"content": '{"answer": "ok", "citations": [], "used_source_types": []}'}}]}
-
-        gateway = LiteLLMCompletionGateway(
-            provider="openai",
-            model="test-model",
-            base_url="https://example.invalid/v1",
-            api_key="test-key",
-            acompletion_fn=recording_acompletion,
-        )
-
-        asyncio.run(
-            gateway.acomplete_structured(
-                [{"role": "user", "content": "生成思维导图"}],
-                response_model=SeriesAnswerPayload,
-            )
-        )
-
-        self.assertEqual(recorded_timeouts, [None])
-
 
 class CapturingCompletion:
     def __init__(self, content: str) -> None:
@@ -486,27 +377,6 @@ class CapturingCompletion:
         self.models.append(kwargs["model"])
         self.api_keys.append(kwargs.get("api_key"))
         return {"choices": [{"message": {"content": self._content}}]}
-
-
-class CapturingCompletionWithUsage(CapturingCompletion):
-    def __init__(self, content: str, usage: dict[str, int]) -> None:
-        super().__init__(content)
-        self._usage = usage
-
-    def __call__(self, **kwargs):
-        super().__call__(**kwargs)
-        return {
-            "choices": [{"message": {"content": self._content}}],
-            "usage": self._usage,
-        }
-
-
-class CapturingUsageRecorder:
-    def __init__(self) -> None:
-        self.records = []
-
-    def record(self, record) -> None:
-        self.records.append(record)
 
 
 class RejectingFirstResponseFormatCompletion(CapturingCompletion):
@@ -562,20 +432,6 @@ class ReasoningStreamCompletion:
             [
                 {"choices": [{"delta": {"reasoning_content": "先分析。"}}]},
                 {"choices": [{"delta": {"content": "最终答案。"}}]},
-            ]
-        )
-
-
-class UsageStreamCompletion:
-    def __call__(self, **kwargs):
-        self.kwargs = kwargs
-        return iter(
-            [
-                {"choices": [{"delta": {"content": "hello"}}]},
-                {
-                    "choices": [{"delta": {}}],
-                    "usage": {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11},
-                },
             ]
         )
 

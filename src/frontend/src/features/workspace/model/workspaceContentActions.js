@@ -4,11 +4,12 @@ import {
   cancelChaoxingImport,
   cancelVideoDownload,
   cancelVideoSummary,
+  createBilibiliQrLoginSession,
   createVideoNote,
   deleteSeries,
   deleteVideoNote,
   deleteVideoSource,
-  generateSeriesMindmap,
+  exportSeriesMarkdown,
   generateVideoKnowledgeCards,
   generateVideoMindmap,
   generateSeriesSummaries,
@@ -19,6 +20,7 @@ import {
   importLocalSeries,
   importLocalSeriesVideos,
   loadWorkspaceLibrary,
+  pollBilibiliQrLogin,
   initChaoxing,
   loadChaoxingCourses,
   loadChaoxingStatus,
@@ -26,8 +28,6 @@ import {
   resolveBilibiliVideo,
   subscribeChaoxingImportProgress,
   startVideoDownload,
-  subscribeMindmapGenerationProgress,
-  subscribeSeriesMindmapGenerationProgress,
   subscribeVideoDownloadProgress,
   updateVideoNote,
 } from "./workspaceApi";
@@ -64,70 +64,6 @@ function isDownloadCancelledError(error) {
     return false;
   }
   return error.message.includes("下载已取消") || error.message.includes("任务已取消");
-}
-
-function errorMessage(error, fallback) {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function normalizeSkippedVideoError(item) {
-  if (!item || typeof item !== "object") {
-    return null;
-  }
-  const videoId = typeof item.video_id === "string" ? item.video_id : typeof item.videoId === "string" ? item.videoId : "";
-  const title = typeof item.title === "string" ? item.title : "";
-  const error = typeof item.error === "string" ? item.error : "";
-  if (!videoId && !title && !error) {
-    return null;
-  }
-  return { videoId, title, error };
-}
-
-function mergeSkippedVideoErrors(...groups) {
-  const merged = new Map();
-  for (const group of groups) {
-    if (!Array.isArray(group)) {
-      continue;
-    }
-    for (const item of group) {
-      const normalized = normalizeSkippedVideoError(item);
-      if (normalized == null) {
-        continue;
-      }
-      const key = normalized.videoId || normalized.title || normalized.error;
-      const existing = merged.get(key);
-      if (existing == null) {
-        merged.set(key, normalized);
-        continue;
-      }
-      const errors = [existing.error, normalized.error].filter(Boolean);
-      merged.set(key, {
-        ...existing,
-        ...normalized,
-        error: Array.from(new Set(errors)).join("；"),
-      });
-    }
-  }
-  return Array.from(merged.values());
-}
-
-function buildSeriesCompletionDetail(result, skippedVideoErrors) {
-  const completedCount = Array.isArray(result?.completed_videos) ? result.completed_videos.length : 0;
-  const skippedCount = Math.max(
-    Array.isArray(result?.skipped_videos) ? result.skipped_videos.length : 0,
-    skippedVideoErrors.length,
-  );
-  if (skippedCount <= 0) {
-    return `系列处理完成：成功 ${completedCount} 个，跳过 0 个。`;
-  }
-  const details = skippedVideoErrors
-    .map((item, index) => {
-      const title = item.title || item.videoId || `视频 ${index + 1}`;
-      const reason = item.error || "未知错误";
-      return `${index + 1}. ${title}：${reason}`;
-    })
-    .join("\n");
-  return `系列处理完成：成功 ${completedCount} 个，跳过 ${skippedCount} 个。${details ? `\n跳过的视频：\n${details}` : ""}`;
 }
 
 export function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
@@ -257,10 +193,11 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     dispatch({ type: "series_generation_started", seriesId, runId });
     const cancellation = { requested: false, runId };
     activeSeriesCancellationRef.current = cancellation;
-    const downloadSkippedVideoErrors = [];
+    let activeLinkedVideo = null;
     try {
       const linkedVideos = pendingVideos.filter(isLinkedVideo);
       for (const [index, video] of linkedVideos.entries()) {
+        activeLinkedVideo = video;
         dispatch({
           type: "series_generation_queue_download_started",
           seriesId,
@@ -269,24 +206,12 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           videoTitle: video.title,
           detail: `正在下载未缓存视频 ${index + 1}/${linkedVideos.length}`,
         });
-        try {
-          await downloadLinkedVideo(seriesId, video.id, { cancelCheck: () => cancellation.requested });
-        } catch (error) {
-          if (isDownloadCancelledError(error)) {
-            throw error;
-          }
-          downloadSkippedVideoErrors.push({
-            videoId: video.id,
-            title: video.title,
-            error: errorMessage(error, "视频下载失败"),
-          });
-          dispatch({ type: "series_generation_queue_download_finished", seriesId, runId, videoId: video.id });
-          continue;
-        }
+        await downloadLinkedVideo(seriesId, video.id, { cancelCheck: () => cancellation.requested });
         if (cancellation.requested) {
           throw new Error("任务已取消");
         }
         dispatch({ type: "series_generation_queue_download_finished", seriesId, runId, videoId: video.id });
+        activeLinkedVideo = null;
       }
       if (linkedVideos.length) {
         await reloadWorkspaceLibrary();
@@ -300,15 +225,10 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       if (cancellation.requested) {
         throw new Error("任务已取消");
       }
-      const seriesResult = await generateSeriesSummaries(seriesId, {
+      await generateSeriesSummaries(seriesId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
         runId,
       });
-      const skippedVideoErrors = mergeSkippedVideoErrors(
-        downloadSkippedVideoErrors,
-        seriesResult?.skipped_video_errors,
-      );
-      const completionDetail = buildSeriesCompletionDetail(seriesResult, skippedVideoErrors);
       const library = await reloadWorkspaceLibrary();
       dispatch({
         type: "series_generation_succeeded",
@@ -318,27 +238,10 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         library,
       });
       dispatch({
-        type: "generation_status_loaded",
-        taskKey: buildSeriesGenerationTaskKey(seriesId),
-        mode: "series",
-        seriesId,
-        runId,
-        videoId: null,
-        snapshot: {
-          status: "completed",
-          stage: "completed",
-          progress: 100,
-          detail: completionDetail,
-          error: null,
-        },
-        subscriptionActive: false,
-      });
-      dispatch({
         type: "series_generation_queue_finished",
         seriesId,
         runId,
         status: "completed",
-        detail: completionDetail,
       });
     } catch (error) {
       if (isDownloadCancelledError(error)) {
@@ -363,6 +266,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         return;
       }
       const message = error instanceof Error ? error.message : "生成失败";
+      const detail = activeLinkedVideo
+        ? `下载未缓存视频失败：${activeLinkedVideo.title || activeLinkedVideo.id}`
+        : "处理全部系列视频失败";
       await reloadWorkspaceLibraryAfterSeriesStop();
       dispatch({ type: "load_failed", message });
       dispatch({
@@ -381,7 +287,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         },
         subscriptionActive: false,
       });
-      dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "failed" });
+      dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "failed", detail, error: message });
     } finally {
       if (activeSeriesCancellationRef.current === cancellation) {
         activeSeriesCancellationRef.current = null;
@@ -514,26 +420,15 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return;
     }
 
-    const seriesId = state.selectedSeriesId;
-    const videoId = state.selectedVideoId;
-    const videoKey = buildVideoKey(seriesId, videoId);
+    const videoKey = buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
     dispatch({ type: "mindmap_generation_started", videoKey });
-
-    const unsubscribe = subscribeMindmapGenerationProgress(seriesId, videoId, (snapshot) => {
-      dispatch({ type: "mindmap_generation_progress_updated", snapshot });
-    });
-
     try {
-      const mindmapResult = await generateVideoMindmap(seriesId, videoId);
-      unsubscribe();
-      dispatch({ type: "mindmap_generation_progress_cleared" });
+      const mindmapResult = await generateVideoMindmap(state.selectedSeriesId, state.selectedVideoId);
       dispatch({
         type: "mindmap_generation_succeeded",
         mindmap: mindmapResult,
       });
     } catch (error) {
-      unsubscribe();
-      dispatch({ type: "mindmap_generation_progress_cleared" });
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "生成失败",
@@ -541,30 +436,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onGenerateSeriesMindmap() {
-    if (!state.selectedSeriesId) return;
-
-    const seriesId = state.selectedSeriesId;
-    dispatch({ type: "series_mindmap_generation_started" });
-
-    const unsubscribe = subscribeSeriesMindmapGenerationProgress(seriesId, (snapshot) => {
-      dispatch({ type: "mindmap_generation_progress_updated", snapshot });
-    });
-
-    try {
-      const mindmapResult = await generateSeriesMindmap(seriesId);
-      unsubscribe();
-      dispatch({ type: "mindmap_generation_progress_cleared" });
-      dispatch({ type: "series_mindmap_generation_succeeded", mindmap: mindmapResult });
-    } catch (error) {
-      unsubscribe();
-      dispatch({ type: "mindmap_generation_progress_cleared" });
-      dispatch({
-        type: "load_failed",
-        message: error instanceof Error ? error.message : "系列导图生成失败",
-      });
-    }
-  }
   async function onCreateNote(note) {
     if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
       return;
@@ -684,6 +555,25 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       throw error;
     }
   }
+
+  async function onCreateBilibiliQrLoginSession() {
+    try {
+      return await createBilibiliQrLoginSession();
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "创建 Bilibili 扫码登录失败" });
+      throw error;
+    }
+  }
+
+  async function onPollBilibiliQrLogin(qrcodeKey) {
+    try {
+      return await pollBilibiliQrLogin(qrcodeKey);
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "检查 Bilibili 扫码登录失败" });
+      throw error;
+    }
+  }
+
   async function onLoadChaoxingStatus() {
     try {
       return await loadChaoxingStatus();
@@ -827,6 +717,19 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onExportSeriesMarkdown() {
+    const seriesId = state.selectedSeriesId;
+    if (!seriesId) {
+      return null;
+    }
+    try {
+      return await exportSeriesMarkdown(seriesId);
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导出系列 Markdown 失败" });
+      throw error;
+    }
+  }
+
   async function onDeleteCurrentVideo() {
     const seriesId = state.selectedSeriesId;
     const videoId = state.selectedVideoId;
@@ -859,7 +762,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onClearKnowledgeCardsFeedback,
     onGenerateVideo,
     onGenerateMindmap,
-    onGenerateSeriesMindmap,
     onGenerateSeries,
     onCancelGeneration,
     onCreateNote,
@@ -869,6 +771,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
     onInitBilibiliCookie,
+    onCreateBilibiliQrLoginSession,
+    onPollBilibiliQrLogin,
     onLoadChaoxingStatus,
     onInitChaoxing,
     onCancelChaoxingInit,
@@ -881,5 +785,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onDeleteSeries,
     onDeleteCurrentVideo,
     onDownloadVideo,
+    onExportSeriesMarkdown,
   };
 }

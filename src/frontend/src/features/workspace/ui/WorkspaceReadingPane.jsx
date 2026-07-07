@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceToolGrid } from "./shared/WorkspaceToolGrid";
-import { WorkspaceExportMenu, WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
+import { WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
 import {
   SERIES_TOOL_TILES,
   TOOL_TILES,
@@ -39,11 +39,6 @@ const WorkspacePreviewView = lazy(() =>
 const WorkspaceSeriesHomeView = lazy(() =>
   import("./views/WorkspaceSeriesHomeView").then((module) => ({
     default: module.WorkspaceSeriesHomeView,
-  })),
-);
-const WorkspaceSeriesMindmapView = lazy(() =>
-  import("./views/WorkspaceSeriesMindmapView").then((module) => ({
-    default: module.WorkspaceSeriesMindmapView,
   })),
 );
 
@@ -85,12 +80,6 @@ export function WorkspaceReadingPane({
   savingNote,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
-  seriesMindmap,
-  seriesMindmapAvailable,
-  seriesMindmapLoading,
-  generatingSeriesMindmap,
-  onGenerateSeriesMindmap,
-  mindmapGenerationProgress,
   onSelectTool,
   onFocusNode,
   onSeek,
@@ -130,12 +119,7 @@ export function WorkspaceReadingPane({
                   eyebrow="Series Home"
                   title={activeSeries.title}
                   description="你可以在当前对话栏询问关于整个系列的问题。"
-                >
-                  <WorkspaceExportMenu
-                    buttonLabel="批量导出"
-                    exportActions={buildSeriesExportActions(activeSeries)}
-                  />
-                </WorkspaceHomeHeader>
+                />
               ) : (
                 <WorkspaceToolHeader
                   meta={currentToolMeta}
@@ -176,16 +160,11 @@ export function WorkspaceReadingPane({
                     </div>
                   ) : null}
                   {selectedToolId === "series-mindmap" ? (
-                    <WorkspaceSeriesMindmapView
-                      seriesId={activeSeries.id}
-                      seriesMindmap={seriesMindmap}
-                      seriesMindmapAvailable={seriesMindmapAvailable}
-                      seriesMindmapLoading={seriesMindmapLoading}
-                      generatingSeriesMindmap={generatingSeriesMindmap}
-                      selectedNode={selectedNode}
-                      onFocusNode={onFocusNode}
-                      onGenerateSeriesMindmap={onGenerateSeriesMindmap}
-                      mindmapGenerationProgress={mindmapGenerationProgress}
+                    <WorkspaceStateBlock
+                      eyebrow="Coming Soon"
+                      title="全局思维导图"
+                      description="Constructing..."
+                      dashed
                     />
                   ) : null}
                   {isStudioHome ? (
@@ -233,9 +212,6 @@ export function WorkspaceReadingPane({
                       isGeneratingMindmapSelectedVideo={isGeneratingMindmapSelectedVideo}
                       onFocusNode={onFocusNode}
                       onGenerateMindmap={onGenerateMindmap}
-                      seriesId={activeSeries?.id}
-                      videoId={selectedVideo?.id}
-                      mindmapGenerationProgress={mindmapGenerationProgress}
                     />
                   ) : null}
                   {selectedToolId === "knowledge-cards" ? (
@@ -335,50 +311,24 @@ function buildExportActions({ activeSeries, notes, selectedToolId, selectedVideo
   return [];
 }
 
-function buildSeriesExportActions(activeSeries) {
-  if (!activeSeries) {
-    return [];
-  }
-  return [
-    {
-      href: seriesExportUrl(activeSeries.id, "mixed"),
-      enabled: true,
-      label: "AI 概括混合导出",
-    },
-    {
-      href: seriesExportUrl(activeSeries.id, "knowledge-cards"),
-      enabled: true,
-      label: "知识卡片导出",
-    },
-    {
-      href: seriesExportUrl(activeSeries.id, "mindmaps"),
-      enabled: true,
-      label: "导图导出",
-    },
-  ];
-}
-
 function videoExportUrl(seriesId, videoId, exportName) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;
-}
-
-function seriesExportUrl(seriesId, exportName) {
-  return `/api/series/${encodeURIComponent(seriesId)}/exports/${exportName}.zip`;
 }
 
 function videoSourceExportUrl(seriesId, videoId) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/video`;
 }
+
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <>
       <div>
         <p className="mb-1 text-xs font-bold uppercase text-stone-500 dark:text-stone-400">{eyebrow}</p>
         <h2 className="text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{title}</h2>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{description}</p>
       </div>
-      {children ? <div className="shrink-0">{children}</div> : null}
-    </div>
+      {children}
+    </>
   );
 }
 

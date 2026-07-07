@@ -1,4 +1,3 @@
-from backend.video_summary.generation.prompts.series_mindmap import SERIES_MINDMAP_PROMPT_TEMPLATE
 from backend.video_summary.generation.prompts.summary import (
     CHUNK_SUMMARY_PROMPT_TEMPLATE,
     DOCUMENT_SUMMARY_PROMPT_TEMPLATE,
@@ -14,7 +13,6 @@ from backend.video_summary.generation.prompts.summary import (
 __all__ = [
     "CHUNK_SUMMARY_PROMPT_TEMPLATE",
     "DOCUMENT_SUMMARY_PROMPT_TEMPLATE",
-    "SERIES_MINDMAP_PROMPT_TEMPLATE",
     "TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE",
     "build_chunk_prompt",
     "build_document_prompt",

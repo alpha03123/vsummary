@@ -100,6 +100,60 @@ def render_notes_markdown(title: str, payload: dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def render_summary_transcript_markdown(
+    summary_payload: dict[str, Any],
+    transcript_payload: dict[str, Any],
+    *,
+    title: str,
+) -> str:
+    """把视频总结和完整转写渲染为可归档的单篇 Markdown。"""
+    normalized_title = _require_text(title, "title")
+    segments = _require_list(transcript_payload.get("segments"), "segments")
+    lines = [f"# {normalized_title}", "", "## Summary", ""]
+
+    one_sentence = summary_payload.get("one_sentence_summary")
+    if isinstance(one_sentence, str) and one_sentence.strip():
+        lines.extend([f"一句话总结：{one_sentence.strip()}", ""])
+
+    core_problem = summary_payload.get("core_problem")
+    if isinstance(core_problem, str) and core_problem.strip():
+        lines.extend([f"核心问题：{core_problem.strip()}", ""])
+
+    key_takeaways = summary_payload.get("key_takeaways")
+    if isinstance(key_takeaways, list) and key_takeaways:
+        lines.append("关键要点：")
+        for index, takeaway in enumerate(key_takeaways):
+            lines.append(f"- {_require_text(takeaway, f'key_takeaways[{index}]')}")
+        lines.append("")
+
+    chapters = summary_payload.get("chapters")
+    if isinstance(chapters, list) and chapters:
+        lines.extend(["章节总结：", ""])
+        for index, chapter in enumerate(chapters):
+            if not isinstance(chapter, dict):
+                raise ValueError(f"chapters[{index}] 必须是对象。")
+            chapter_title = _require_text(chapter.get("title"), f"chapters[{index}].title")
+            chapter_summary = _require_text(chapter.get("summary"), f"chapters[{index}].summary")
+            lines.extend([f"### {chapter_title}", "", chapter_summary, ""])
+            key_points = chapter.get("key_points")
+            if isinstance(key_points, list):
+                for point_index, point in enumerate(key_points):
+                    lines.append(f"- {_require_text(point, f'chapters[{index}].key_points[{point_index}]')}")
+                if key_points:
+                    lines.append("")
+
+    lines.extend(["## 原文", ""])
+    for index, segment in enumerate(segments):
+        if not isinstance(segment, dict):
+            raise ValueError(f"segments[{index}] 必须是对象。")
+        start = _require_number(segment.get("start_seconds"), f"segments[{index}].start_seconds")
+        end = _require_number(segment.get("end_seconds"), f"segments[{index}].end_seconds")
+        text = _require_text(segment.get("text"), f"segments[{index}].text")
+        lines.append(f"[{format_timestamp(start)} - {format_timestamp(end)}] {text}")
+
+    return "\n".join(lines).strip() + "\n"
+
+
 def render_mixed_overview_markdown(summary_payload: dict[str, Any], transcript_payload: dict[str, Any]) -> str:
     """把总结 + 转写合并渲染为「章节纪要」Markdown。
 

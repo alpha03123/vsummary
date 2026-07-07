@@ -4,10 +4,48 @@ import unittest
 
 from backend.video_summary.library.markdown_exports import render_knowledge_cards_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
+from backend.video_summary.library.markdown_exports import render_summary_transcript_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
 
 
 class MarkdownExportTests(unittest.TestCase):
+    def test_renders_summary_prefixed_transcript_markdown(self) -> None:
+        markdown = render_summary_transcript_markdown(
+            {
+                "one_sentence_summary": "这是一句话总结。",
+                "core_problem": "核心问题是什么？",
+                "key_takeaways": ["第一点", "第二点"],
+                "chapters": [
+                    {
+                        "title": "开场",
+                        "start_seconds": 0.0,
+                        "end_seconds": 12.0,
+                        "summary": "介绍主题。",
+                        "key_points": ["点 A"],
+                    }
+                ],
+            },
+            {
+                "segments": [
+                    {"start_seconds": 0.0, "end_seconds": 3.5, "text": "开场介绍"},
+                    {"start_seconds": 3.5, "end_seconds": 12.0, "text": "进入主题"},
+                ]
+            },
+            title="第一讲",
+        )
+
+        self.assertIn("# 第一讲\n", markdown)
+        self.assertIn("## Summary\n", markdown)
+        self.assertIn("一句话总结：这是一句话总结。\n", markdown)
+        self.assertIn("核心问题：核心问题是什么？\n", markdown)
+        self.assertIn("关键要点：\n- 第一点\n- 第二点\n", markdown)
+        self.assertIn("章节总结：\n\n### 开场\n", markdown)
+        self.assertIn("介绍主题。\n", markdown)
+        self.assertIn("- 点 A\n", markdown)
+        self.assertIn("## 原文\n", markdown)
+        self.assertIn("[00:00 - 00:03] 开场介绍\n", markdown)
+        self.assertIn("[00:03 - 00:12] 进入主题\n", markdown)
+
     def test_renders_transcript_segments_as_markdown_with_metadata(self) -> None:
         markdown = render_transcript_markdown(
             {

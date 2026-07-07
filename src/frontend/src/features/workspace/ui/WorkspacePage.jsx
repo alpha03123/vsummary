@@ -29,11 +29,6 @@ const WorkspaceSettingsPanel = lazy(() =>
     default: module.WorkspaceSettingsPanel,
   })),
 );
-const WorkspaceUsagePage = lazy(() =>
-  import("./WorkspaceUsagePage").then((module) => ({
-    default: module.WorkspaceUsagePage,
-  })),
-);
 const WorkspaceGenerationOverlay = lazy(() =>
   import("./WorkspaceGenerationOverlay").then((module) => ({
     default: module.WorkspaceGenerationOverlay,
@@ -49,8 +44,6 @@ export function WorkspacePage({ page }) {
     tools,
     summary,
     mindmap,
-    seriesMindmap,
-    seriesMindmapAvailable,
     knowledgeCards,
     knowledgeCardsGenerating,
     knowledgeCardsFeedback,
@@ -179,11 +172,6 @@ export function WorkspacePage({ page }) {
         chat={chat}
         summary={summary}
         mindmap={mindmap}
-        seriesMindmap={seriesMindmap}
-        seriesMindmapAvailable={seriesMindmapAvailable}
-        seriesMindmapLoading={generation.seriesMindmapLoading}
-        generatingSeriesMindmap={generation.generatingSeriesMindmap}
-        mindmapGenerationProgress={generation.mindmapGenerationProgress}
         knowledgeCards={knowledgeCards}
         knowledgeCardsGenerating={knowledgeCardsGenerating}
         knowledgeCardsFeedback={knowledgeCardsFeedback}
@@ -208,7 +196,6 @@ export function WorkspacePage({ page }) {
         onSelectTool={actions.selectTool}
         onFocusNode={actions.focusNode}
         onGenerateMindmap={actions.generateMindmap}
-        onGenerateSeriesMindmap={actions.generateSeriesMindmap}
         onGenerateKnowledgeCards={actions.generateKnowledgeCards}
         onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
         onCreateNote={actions.createNote}
@@ -263,6 +250,7 @@ export function WorkspacePage({ page }) {
               onSelectVideo={actions.selectVideo}
               onGenerateVideo={actions.generateVideo}
               onGenerateSeries={actions.generateSeries}
+              onExportSeriesMarkdown={actions.exportSeriesMarkdown}
               onCancelGeneration={actions.cancelGeneration}
               onDownloadVideo={actions.downloadVideo}
               onAddPlaygroundVideo={() => setImportModalState({ mode: "playground" })}
@@ -331,7 +319,6 @@ export function WorkspacePage({ page }) {
           activeSeries={activeSeries}
           onEnterLibraryHome={actions.enterLibraryHome}
           onToggleSettingsPanel={actions.toggleSettingsPanel}
-          onOpenUsagePage={actions.openUsagePage}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onToggleChatDrawer={chat.toggleDrawer}
@@ -462,36 +449,11 @@ export function WorkspacePage({ page }) {
                   onTestProviderConnection={actions.testProviderConnection}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
                   onDownloadRagModel={actions.downloadRagModel}
+                  onInitBilibiliCookie={actions.initBilibiliCookie}
+                  onCreateBilibiliQrLoginSession={actions.createBilibiliQrLoginSession}
+                  onPollBilibiliQrLogin={actions.pollBilibiliQrLogin}
                   onResetSettings={actions.resetSettings}
-                  onOpenUsagePage={() => {
-                    actions.closeSettingsPanel();
-                    actions.openUsagePage();
-                  }}
                   onClose={actions.closeSettingsPanel}
-                />
-              </Suspense>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Usage Overlay */}
-        <AnimatePresence>
-          {state.usagePageOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 z-50 bg-stone-900/20 dark:bg-black/50 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
-            >
-              <Suspense fallback={<WorkspaceModalLoadingState />}>
-                <WorkspaceUsagePage
-                  usage={generation.providerUsage}
-                  range={generation.providerUsageRange}
-                  loading={generation.providerUsageLoading}
-                  error={generation.providerUsageError}
-                  onChangeRange={actions.changeProviderUsageRange}
-                  onClose={actions.closeUsagePage}
                 />
               </Suspense>
             </motion.div>

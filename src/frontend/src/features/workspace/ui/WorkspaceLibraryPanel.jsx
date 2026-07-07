@@ -129,6 +129,7 @@ function PanelFooter({
   downloadProgress,
   onGenerateVideo,
   onGenerateSeries,
+  onExportSeriesMarkdown,
   onCancelGeneration,
   onDownloadVideo,
   onAddPlaygroundVideo,
@@ -139,6 +140,7 @@ function PanelFooter({
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
   const embeddingModel = ragModels?.find((model) => model.key === "embedding") ?? null;
   const embeddingNeedsDownload = embeddingModel != null && !embeddingModel.downloaded;
+  const [seriesExportState, setSeriesExportState] = useState({ status: "idle", message: "", outputDir: "" });
   const selectedVideoIsDownloading =
     activeSeries?.id && selectedVideo?.id && downloadingVideoKey === buildVideoKey(activeSeries.id, selectedVideo.id);
 
@@ -160,9 +162,35 @@ function PanelFooter({
     const queueIsActive =
       seriesGenerationQueue?.seriesId === activeSeries?.id &&
       (seriesGenerationQueue.status === "running" || seriesGenerationQueue.status === "cancelling");
+    const queueFailed =
+      seriesGenerationQueue?.seriesId === activeSeries?.id && seriesGenerationQueue.status === "failed";
     const queueLabel = queueIsActive
       ? `已完成 ${seriesGenerationQueue.completed}/${seriesGenerationQueue.total}`
       : null;
+    const failureDetail = seriesGenerationQueue?.detail || "处理全部系列视频失败";
+    const failureError = seriesGenerationQueue?.error || null;
+    const failureVideo = seriesGenerationQueue?.downloadVideoTitle || seriesGenerationQueue?.downloadVideoId || null;
+    const exportRunning = seriesExportState.status === "loading";
+    async function handleExportSeriesMarkdown() {
+      if (typeof onExportSeriesMarkdown !== "function" || exportRunning) {
+        return;
+      }
+      setSeriesExportState({ status: "loading", message: "正在导出系列 Markdown...", outputDir: "" });
+      try {
+        const result = await onExportSeriesMarkdown();
+        setSeriesExportState({
+          status: "success",
+          message: `已导出 ${result?.exportedCount ?? 0} 个 Markdown 文件`,
+          outputDir: result?.outputDir ?? "",
+        });
+      } catch (error) {
+        setSeriesExportState({
+          status: "failed",
+          message: error instanceof Error ? error.message : "导出系列 Markdown 失败",
+          outputDir: "",
+        });
+      }
+    }
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-1">
@@ -181,6 +209,17 @@ function PanelFooter({
                 <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : "正在处理全部视频"}</span>
                 <span>{queueLabel}</span>
               </div>
+            </div>
+          ) : null}
+          {queueFailed ? (
+            <div className="mb-3 rounded-2xl border border-red-200 bg-red-50/80 px-3 py-2 text-xs text-red-700 dark:border-red-900/70 dark:bg-red-950/20 dark:text-red-200">
+              <div className="mb-1 flex items-center gap-2 font-semibold">
+                <X size={14} />
+                <span>处理全部系列视频失败</span>
+              </div>
+              <p>{failureDetail}</p>
+              {failureError ? <p className="mt-1 break-words text-red-600 dark:text-red-300">{failureError}</p> : null}
+              {failureVideo ? <p className="mt-1 text-red-600 dark:text-red-300">失败视频：{failureVideo}</p> : null}
             </div>
           ) : null}
           {embeddingNeedsDownload ? (
@@ -213,6 +252,24 @@ function PanelFooter({
               </>
             )}
           </button>
+          <button
+            type="button"
+            onClick={handleExportSeriesMarkdown}
+            disabled={exportRunning}
+            className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:border-accent/40 hover:text-accent disabled:cursor-wait disabled:opacity-70 dark:border-stone-800 dark:bg-neutral-900 dark:text-stone-200"
+          >
+            {exportRunning ? <LoaderCircle size={16} className="animate-spin" /> : <FileVideo size={16} />}
+            导出系列文案 Markdown
+          </button>
+          {seriesExportState.message ? (
+            <div className={`mt-2 rounded-2xl border px-3 py-2 text-xs ${seriesExportState.status === "failed"
+              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/20 dark:text-red-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/20 dark:text-emerald-200"
+            }`}>
+              <p className="font-semibold">{seriesExportState.message}</p>
+              {seriesExportState.outputDir ? <p className="mt-1 break-words">{seriesExportState.outputDir}</p> : null}
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -385,6 +442,7 @@ export function WorkspaceLibraryPanel({
   onSelectVideo,
   onGenerateVideo,
   onGenerateSeries,
+  onExportSeriesMarkdown,
   onCancelGeneration,
   onDownloadVideo,
   onAddPlaygroundVideo,
@@ -405,7 +463,7 @@ export function WorkspaceLibraryPanel({
       return videos;
     }
     return videos.filter((video) => {
-      const haystacks = [video.title, video.sourceName, video.sourceUrl, video.coreProblem]
+      const haystacks = [video.title, video.sourceName, video.sourceUrl]
         .filter((value) => typeof value === "string")
         .map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(normalizedFilter));
@@ -554,14 +612,6 @@ export function WorkspaceLibraryPanel({
                 <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
                   {video.title}
                 </strong>
-                {video.coreProblem ? (
-                  <span
-                    className="text-xs text-stone-600 dark:text-stone-300 line-clamp-2 leading-snug whitespace-pre-line"
-                    title={video.coreProblem}
-                  >
-                    {video.coreProblem}
-                  </span>
-                ) : null}
                 <span className="text-xs text-stone-500 dark:text-stone-400 truncate">
                   {video.isLinked || video.status === "linked" ? video.sourceUrl || video.sourceName : video.sourceName}
                 </span>
@@ -589,6 +639,7 @@ export function WorkspaceLibraryPanel({
         downloadProgress={downloadProgress}
         onGenerateVideo={onGenerateVideo}
         onGenerateSeries={onGenerateSeries}
+        onExportSeriesMarkdown={onExportSeriesMarkdown}
         onCancelGeneration={onCancelGeneration}
         onDownloadVideo={onDownloadVideo}
         onAddPlaygroundVideo={onAddPlaygroundVideo}

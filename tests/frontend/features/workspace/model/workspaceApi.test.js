@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  createBilibiliQrLoginSession,
+  exportSeriesMarkdown,
   loadAgentSessionRecovery,
-  loadProviderUsage,
-  loadSeriesMindmap,
+  loadWorkspaceSettings,
+  pollBilibiliQrLogin,
+  updateWorkspaceSettings,
 } from "@src/features/workspace/model/workspaceApi";
 
 afterEach(() => {
@@ -74,78 +77,135 @@ describe("loadAgentSessionRecovery", () => {
   });
 });
 
-describe("loadSeriesMindmap", () => {
-  test("returns null when the series mindmap has not been generated", async () => {
+describe("workspace settings API", () => {
+  test("maps series markdown export path from settings response", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
-      ok: false,
-      status: 404,
+      ok: true,
       json: async () => ({
-        detail: "series mindmap not found for 'A1'",
+        theme: "light",
+        show_takeaways: true,
+        layout_mode: "video_center",
+        transcript_enhancement_enabled: true,
+        asr_model_quality: "large-v3-turbo",
+        transcription_mode: "accurate",
+        rag_embedding_device: "cpu",
+        rag_max_hits: 5,
+        rag_rerank_enabled: true,
+        web_search_enabled: false,
+        window_tokens: 1000000,
+        answer_detail_level: "medium",
+        reasoning_effort: "none",
+        talk_custom_prompt: "",
+        video_generation_concurrency: 1,
+        chaoxing_request_delay_seconds: 0.2,
+        chaoxing_init_course_delay_seconds: 0.3,
+        series_markdown_export_path: "D:/exports",
       }),
     })));
 
-    await expect(loadSeriesMindmap("A1")).resolves.toBeNull();
+    const settings = await loadWorkspaceSettings();
+
+    expect(settings.seriesMarkdownExportPath).toBe("D:/exports");
+  });
+
+  test("sends series markdown export path when updating settings", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        theme: "light",
+        show_takeaways: true,
+        layout_mode: "video_center",
+        transcript_enhancement_enabled: true,
+        asr_model_quality: "large-v3-turbo",
+        transcription_mode: "accurate",
+        rag_embedding_device: "cpu",
+        rag_max_hits: 5,
+        rag_rerank_enabled: true,
+        web_search_enabled: false,
+        window_tokens: 1000000,
+        answer_detail_level: "medium",
+        reasoning_effort: "none",
+        talk_custom_prompt: "",
+        video_generation_concurrency: 1,
+        chaoxing_request_delay_seconds: 0.2,
+        chaoxing_init_course_delay_seconds: 0.3,
+        series_markdown_export_path: "D:/exports",
+      }),
+    })));
+
+    await updateWorkspaceSettings({
+      theme: "light",
+      showTakeaways: true,
+      layoutMode: "video_center",
+      transcriptEnhancementEnabled: true,
+      asrModelQuality: "large-v3-turbo",
+      transcriptionMode: "accurate",
+      ragEmbeddingDevice: "cpu",
+      ragMaxHits: 5,
+      ragRerankEnabled: true,
+      webSearchEnabled: false,
+      windowTokens: 1000000,
+      answerDetailLevel: "medium",
+      reasoningEffort: "none",
+      talkCustomPrompt: "",
+      videoGenerationConcurrency: 1,
+      chaoxingRequestDelaySeconds: 0.2,
+      chaoxingInitCourseDelaySeconds: 0.3,
+      seriesMarkdownExportPath: "D:/exports",
+    });
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.series_markdown_export_path).toBe("D:/exports");
   });
 });
 
-describe("loadProviderUsage", () => {
-  test("loads provider usage for the selected range", async () => {
-    const fetchMock = vi.fn(async () => ({
+describe("series markdown export API", () => {
+  test("posts to the series markdown export endpoint", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ output_dir: "D:/exports/Series", exported_count: 2 }),
+    })));
+
+    const result = await exportSeriesMarkdown("series-1");
+
+    expect(fetch).toHaveBeenCalledWith("/api/series/series-1/exports/markdown", { method: "POST" });
+    expect(result).toEqual({ outputDir: "D:/exports/Series", exportedCount: 2 });
+  });
+});
+
+describe("Bilibili QR login API", () => {
+  test("creates a QR login session", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        range: "7d",
-        total: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-        by_category: [
-          { category: "generation", prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 },
-        ],
-        by_provider: [
-          {
-            provider: "openai",
-            base_url: "https://api.example.test/v1",
-            model: "openai/gpt-test",
-            prompt_tokens: 10,
-            completion_tokens: 5,
-            total_tokens: 15,
-          },
-        ],
-        recent: [
-          {
-            created_at: "2026-07-03T10:00:00+00:00",
-            category: "chat",
-            provider: "openai",
-            base_url: "https://api.example.test/v1",
-            model: "openai/gpt-test",
-            prompt_tokens: 3,
-            completion_tokens: 2,
-            total_tokens: 5,
-          },
-        ],
-        timeline_granularity: "day",
-        timeline: [
-          {
-            started_at: "2026-07-03T00:00:00+00:00",
-            generation_tokens: 10,
-            chat_tokens: 5,
-            total_tokens: 15,
-          },
-        ],
+        url: "https://passport.bilibili.com/qrcode",
+        qrcode_key: "qr-key",
       }),
-    }));
-    vi.stubGlobal("fetch", fetchMock);
+    })));
 
-    const usage = await loadProviderUsage("7d");
+    const session = await createBilibiliQrLoginSession();
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/provider-settings/usage?range=7d", undefined);
-    expect(usage.total.totalTokens).toBe(15);
-    expect(usage.byCategory[0].totalTokens).toBe(10);
-    expect(usage.byProvider[0].baseUrl).toBe("https://api.example.test/v1");
-    expect(usage.recent[0].createdAt).toBe("2026-07-03T10:00:00+00:00");
-    expect(usage.timelineGranularity).toBe("day");
-    expect(usage.timeline[0]).toEqual({
-      startedAt: "2026-07-03T00:00:00+00:00",
-      generationTokens: 10,
-      chatTokens: 5,
-      totalTokens: 15,
+    expect(fetch).toHaveBeenCalledWith("/api/linked/bilibili/cookie/qr", { method: "POST" });
+    expect(session).toEqual({ url: "https://passport.bilibili.com/qrcode", qrcodeKey: "qr-key" });
+  });
+
+  test("polls a QR login session", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        status: "confirmed",
+        message: "扫码登录成功",
+        configured: true,
+      }),
+    })));
+
+    const result = await pollBilibiliQrLogin("qr-key");
+
+    expect(fetch).toHaveBeenCalledWith("/api/linked/bilibili/cookie/qr/poll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qrcode_key: "qr-key" }),
     });
+    expect(result).toEqual({ status: "confirmed", message: "扫码登录成功", configured: true });
   });
 });

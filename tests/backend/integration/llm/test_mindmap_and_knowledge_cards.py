@@ -7,10 +7,9 @@ import unittest
 from pathlib import Path
 
 
-from backend.api.schemas.responses import VideoKnowledgeCardsResponse
-from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import build_mindmap_prompt
-from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import build_series_mindmap_prompt
+from backend.api.responses import VideoKnowledgeCardsResponse
+from backend.video_summary.infrastructure.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.infrastructure.litellm_mindmap_generator import build_mindmap_prompt
 from backend.video_summary.library.models import KnowledgeCardDTO, VideoKnowledgeCardsDTO
 
 
@@ -38,29 +37,9 @@ class MindmapPromptTests(unittest.TestCase):
         self.assertNotIn("二三级节点用于展开要点", prompt)
 
 
-class SeriesMindmapPromptTests(unittest.TestCase):
-    def test_prompt_includes_series_catalog_and_video_summaries(self) -> None:
-        prompt = build_series_mindmap_prompt(
-            series_title="测试系列",
-            catalog={"videos": [{"id": "v1", "title": "第一讲"}]},
-            video_summaries=[
-                {
-                    "title": "第一讲",
-                    "one_sentence_summary": "介绍核心概念。",
-                    "chapters": [{"title": "核心概念"}],
-                }
-            ],
-        )
-
-        self.assertIn("测试系列", prompt)
-        self.assertIn("第一讲", prompt)
-        self.assertIn("介绍核心概念", prompt)
-        self.assertIn("按知识主题组织二级节点", prompt)
-
-
 class LLMKnowledgeCardGeneratorTests(unittest.TestCase):
     def test_generator_uses_transcript_context_and_returns_explanatory_cards(self) -> None:
-        from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import (
+        from backend.video_summary.infrastructure.litellm_knowledge_card_generator import (
             KnowledgeCardCollectionPayload,
             LiteLLMKnowledgeCardGenerator,
         )
@@ -174,7 +153,7 @@ class FakeKnowledgeCardGateway:
 
     def complete_structured(self, messages, *, response_model, temperature=0, retries=2):
         del response_model, temperature, retries
-        from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import (
+        from backend.video_summary.infrastructure.litellm_knowledge_card_generator import (
             KnowledgeCardCollectionPayload,
         )
 

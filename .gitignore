@@ -18,12 +18,6 @@ node_modules/
 dist/
 build/
 
-# Playwright
-test-results/
-playwright-report/
-blob-report/
-playwright/.cache/
-
 # Logs / Temp
 *.log
 tmp/
@@ -37,9 +31,6 @@ tmp/
 /data/
 .worktrees/
 
-# Local planning artifacts
-docs/superpowers/
-
 # Local dev scripts (environment-specific)
 /scripts/*
 !/scripts/build_release.ps1
@@ -48,6 +39,7 @@ docs/superpowers/
 
 # Local config (auto-generated on first run)
 config/settings.toml
+config/downloader.json
 
 # Local env
 .env

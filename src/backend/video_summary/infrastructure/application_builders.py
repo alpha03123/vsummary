@@ -12,16 +12,15 @@ from pathlib import Path
 
 from backend.video_summary.generation.usecases.generate_mindmap import GenerateMindmap
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
-from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
-from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
-from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
+from backend.video_summary.infrastructure.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
+from backend.video_summary.infrastructure.litellm_mindmap_generator import LiteLLMMindmapGenerator
+from backend.video_summary.infrastructure.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
     build_video_summary_runtime,
 )
-from backend.video_summary.infrastructure.config.settings import AppSettings, load_settings
-from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
+from backend.video_summary.infrastructure.settings import AppSettings, load_settings
 
 
 @dataclass(frozen=True)
@@ -54,7 +53,6 @@ def build_video_summary_application(
     config_path: Path,
     root_dir: Path,
     transcript_enhancement_enabled: bool | None = None,
-    usage_recorder: LlmUsageRecorder | None = None,
 ) -> VideoSummaryApplication:
     """装配单视频总结用例及其全部依赖。
 
@@ -80,7 +78,7 @@ def build_video_summary_application(
         if transcript_enhancement_enabled is None
         else transcript_enhancement_enabled
     )
-    runtime = build_video_summary_runtime(settings, usage_recorder=usage_recorder)
+    runtime = build_video_summary_runtime(settings)
     artifact_store = FileSystemGenerationArtifactStore()
     use_case = GenerateVideoSummary(
         media_processor=FfmpegMediaProcessor(),
@@ -96,12 +94,7 @@ def build_video_summary_application(
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 
 
-def build_mindmap_application(
-    config_path: Path,
-    root_dir: Path,
-    *,
-    usage_recorder: LlmUsageRecorder | None = None,
-) -> MindmapApplication:
+def build_mindmap_application(config_path: Path, root_dir: Path) -> MindmapApplication:
     """装配思维导图用例及其全部依赖。
 
     Args:
@@ -112,44 +105,9 @@ def build_mindmap_application(
         包含 settings 与 `GenerateMindmap` 用例的 `MindmapApplication`。
     """
     settings = load_settings(config_path=config_path, root_dir=root_dir)
-    gateway = build_litellm_completion_gateway(
-        settings,
-        usage_recorder=usage_recorder,
-        usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
-    )
+    gateway = build_litellm_completion_gateway(settings)
     use_case = GenerateMindmap(
         generator=LiteLLMMindmapGenerator(gateway=gateway),
-        artifact_store=FileSystemGenerationArtifactStore(),
-    )
-    return MindmapApplication(settings=settings, use_case=use_case)
-
-
-def build_series_mindmap_application(
-    config_path: Path,
-    root_dir: Path,
-    *,
-    usage_recorder: LlmUsageRecorder | None = None,
-) -> MindmapApplication:
-    """装配系列思维导图用例及其全部依赖。
-
-    Args:
-        config_path: settings.toml 配置文件路径。
-        root_dir: 项目根目录，用于解析模型缓存等相对路径。
-
-    Returns:
-        包含 settings 与 `GenerateSeriesMindmap` 用例的 `MindmapApplication`。
-    """
-    from backend.video_summary.generation.usecases.generate_series_mindmap import GenerateSeriesMindmap
-    from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
-
-    settings = load_settings(config_path=config_path, root_dir=root_dir)
-    gateway = build_litellm_completion_gateway(
-        settings,
-        usage_recorder=usage_recorder,
-        usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
-    )
-    use_case = GenerateSeriesMindmap(
-        generator=LiteLLMSeriesMindmapGenerator(gateway=gateway),
         artifact_store=FileSystemGenerationArtifactStore(),
     )
     return MindmapApplication(settings=settings, use_case=use_case)

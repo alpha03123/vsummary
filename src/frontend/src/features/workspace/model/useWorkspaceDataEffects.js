@@ -8,9 +8,7 @@ import {
   loadFasterWhisperModels,
   loadRagModels,
   loadSeriesGenerationStatus,
-  loadSeriesMindmap,
   loadProviderSettings,
-  loadProviderUsage,
   loadVideoKnowledgeCards,
   loadVideoGenerationStatus,
   loadVideoMindmap,
@@ -333,34 +331,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
       cancelled = true;
     };
   }, [dispatch, state.backendReady, state.settingsPanelOpen]);
-
-  useEffect(() => {
-    if (!state.backendReady || (!state.settingsPanelOpen && !state.usagePageOpen)) {
-      return;
-    }
-
-    let cancelled = false;
-    const range = state.providerUsageRange ?? "7d";
-    dispatch({ type: "provider_usage_loading_started", range });
-    loadProviderUsage(range)
-      .then((usage) => {
-        if (!cancelled) {
-          dispatch({ type: "provider_usage_loaded", range, usage });
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          dispatch({
-            type: "provider_usage_load_failed",
-            message: error instanceof Error ? error.message : "用量统计加载失败",
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [dispatch, state.backendReady, state.settingsPanelOpen, state.usagePageOpen, state.providerUsageRange]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -688,28 +658,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
       cancelled = true;
     };
   }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.mindmap.generated]);
-
-  useEffect(() => {
-    if (
-      state.selectedContextType !== "series" ||
-      state.selectedToolId !== "series-mindmap"
-    ) {
-      dispatch({ type: "series_mindmap_cleared" });
-      return;
-    }
-
-    let cancelled = false;
-    dispatch({ type: "series_mindmap_loading_started" });
-    loadSeriesMindmap(state.selectedSeriesId)
-      .then((mindmap) => {
-        if (!cancelled) dispatch({ type: "series_mindmap_loaded", mindmap });
-      })
-      .catch((error) => {
-        if (!cancelled) dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "加载系列导图失败" });
-      });
-
-    return () => { cancelled = true; };
-  }, [dispatch, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);

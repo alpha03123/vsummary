@@ -8,17 +8,24 @@
 from __future__ import annotations
 
 import asyncio
-from collections import deque
+import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
+from urllib.parse import parse_qsl, quote, urlparse
 
 import httpx
+
+try:
+    import websocket
+except ImportError:  # pragma: no cover - optional fallback dependency
+    websocket = None
 
 from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
@@ -27,9 +34,27 @@ from backend.video_summary.library.models import BilibiliUrlInfoDTO
 _BILIBILI_USER_AGENT = "Mozilla/5.0"
 _BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
 _BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
+_BILIBILI_COOKIE_BROWSER_ENV = "BILIBILI_COOKIE_BROWSER"
+_BILINOTE_DOWNLOADER_COOKIE_FILE_ENV = "BILINOTE_DOWNLOADER_COOKIE_FILE"
 BILIBILI_COOKIE_REQUIRED_MESSAGE = "风控拦截，请配置cookie"
+EDGE_COOKIE_COPY_FAILED_MESSAGE = "无法读取 Edge Cookie，请关闭 Edge 浏览器后重试。"
 _BILIBILI_LOGIN_URL = "https://passport.bilibili.com/login"
 _BILIBILI_DEFAULT_BROWSER_PORT = 9223
+_BILIBILI_QR_GENERATE_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
+_BILIBILI_QR_POLL_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
+
+
+@dataclass(frozen=True)
+class BiliNoteQrLoginSession:
+    url: str
+    qrcode_key: str
+
+
+@dataclass(frozen=True)
+class BiliNoteQrLoginPollResult:
+    status: str
+    message: str
+    configured: bool = False
 
 
 class ProgressReporter(Protocol):
@@ -60,6 +85,55 @@ class DownloadCancelled(RuntimeError):
 
 class BilibiliCookieInitError(RuntimeError):
     """Bilibili Cookie 初始化失败。"""
+
+
+class BiliNoteCookieConfigManager:
+    """BiliNote 风格的平台 Cookie 持久化管理器。"""
+
+    def __init__(self, filepath: str | Path = "config/downloader.json") -> None:
+        self.path = Path(filepath)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            self._write({})
+
+    def _read(self) -> dict[str, dict[str, str]]:
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        data: dict[str, dict[str, str]] = {}
+        for platform, value in payload.items():
+            if isinstance(platform, str) and isinstance(value, dict):
+                cookie = value.get("cookie")
+                if isinstance(cookie, str):
+                    data[platform] = {"cookie": cookie}
+        return data
+
+    def _write(self, data: dict[str, dict[str, str]]) -> None:
+        atomic_write_text(self.path, json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def get(self, platform: str) -> str | None:
+        cookie = self._read().get(platform, {}).get("cookie")
+        return cookie if cookie else None
+
+    def set(self, platform: str, cookie: str) -> None:
+        data = self._read()
+        data[platform] = {"cookie": cookie}
+        self._write(data)
+
+    def delete(self, platform: str) -> None:
+        data = self._read()
+        if platform in data:
+            del data[platform]
+            self._write(data)
+
+    def list_all(self) -> dict[str, str]:
+        return {platform: value.get("cookie", "") for platform, value in self._read().items()}
+
+    def exists(self, platform: str) -> bool:
+        return self.get(platform) is not None
 
 
 class YtDlpBilibiliResolver:
@@ -224,11 +298,12 @@ class BilibiliDownloader:
             if process.stdout is None:
                 raise RuntimeError("无法读取 yt-dlp 输出。")
             last_percent = -1.0
-            recent_output: deque[str] = deque(maxlen=50)
+            output_tail: list[str] = []
             for line in process.stdout:
                 stripped_line = line.rstrip()
                 if stripped_line:
-                    recent_output.append(stripped_line)
+                    output_tail.append(stripped_line)
+                    output_tail = output_tail[-20:]
                 if _download_cancel_requested(reporter):
                     process.terminate()
                     raise DownloadCancelled("下载已取消")
@@ -242,7 +317,13 @@ class BilibiliDownloader:
                 reporter.update("download", percent, f"下载中 {percent:.1f}%")
             process.wait()
             if process.returncode != 0:
-                raise RuntimeError(_format_yt_dlp_failure(process.returncode, recent_output))
+                failure = _format_yt_dlp_failure(process.returncode, output_tail)
+                if failure == BILIBILI_COOKIE_REQUIRED_MESSAGE:
+                    browser_result = _download_bilibili_via_browser(bvid, page, dest_dir)
+                    if browser_result is not None:
+                        reporter.completed(f"下载完成：{browser_result.name}")
+                        return browser_result
+                raise RuntimeError(failure)
         except DownloadCancelled as exc:
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -320,6 +401,140 @@ class DrissionBilibiliCookieInitializer:
             _close_page(page)
 
 
+class BiliNoteBilibiliCookieInitializer:
+    """BiliNote 风格的 Bilibili Cookie 初始化器。"""
+
+    def __init__(
+        self,
+        *,
+        root_dir: Path,
+        page_factory: Callable[[str, int], object] | None = None,
+        login_url: str = _BILIBILI_LOGIN_URL,
+        browser_port: int = _BILIBILI_DEFAULT_BROWSER_PORT,
+        timeout_seconds: float = 300.0,
+        poll_interval_seconds: float = 1.0,
+        cookie_config_path: Path | None = None,
+    ) -> None:
+        self._root_dir = root_dir
+        self._page_factory = page_factory or _create_drission_page
+        self._login_url = login_url
+        self._browser_port = browser_port
+        self._timeout_seconds = timeout_seconds
+        self._poll_interval_seconds = poll_interval_seconds
+        self._cookie_config_path = cookie_config_path or root_dir / "config" / "downloader.json"
+
+    def init(self, cookie: str | None = None) -> bool:
+        if cookie is not None:
+            cookie_header = cookie.strip()
+            if not cookie_header:
+                raise BilibiliCookieInitError("Bilibili Cookie 不能为空。")
+            if _is_sessdata_only_cookie(cookie_header):
+                raise BilibiliCookieInitError("请粘贴完整 Bilibili 浏览器 Cookie，不能只填写 SESSDATA。")
+            self._save_cookie(cookie_header)
+            return True
+
+        page = self._page_factory(str(self._root_dir / "data" / "bilibili" / "browser"), self._browser_port)
+        try:
+            _page_get(page, self._login_url)
+            deadline = time.monotonic() + self._timeout_seconds
+            while time.monotonic() <= deadline:
+                cookie_header = _format_bilibili_cookie_header(_page_cookies(page))
+                if _has_bilibili_login_cookie(cookie_header):
+                    self._save_cookie(cookie_header)
+                    return True
+                time.sleep(self._poll_interval_seconds)
+            raise BilibiliCookieInitError("Bilibili 登录超时，未获取到 Cookie。")
+        finally:
+            _close_page(page)
+
+    def _save_cookie(self, cookie: str) -> None:
+        BiliNoteCookieConfigManager(self._cookie_config_path).set("bilibili", cookie)
+        os.environ[_BILINOTE_DOWNLOADER_COOKIE_FILE_ENV] = str(self._cookie_config_path)
+        os.environ.pop(_BILIBILI_COOKIE_ENV, None)
+        os.environ.pop(_BILIBILI_SESSDATA_ENV, None)
+        os.environ.pop(_BILIBILI_COOKIE_BROWSER_ENV, None)
+
+
+class BiliNoteQrLoginService:
+    """Bilibili 二维码登录服务，成功后写入 BiliNote Cookie 配置。"""
+
+    def __init__(
+        self,
+        *,
+        http_client_factory: Callable[[], object] | None = None,
+        cookie_initializer: BiliNoteBilibiliCookieInitializer | None = None,
+    ) -> None:
+        self._http_client_factory = http_client_factory or (lambda: httpx.Client(timeout=20, headers={"User-Agent": _BILIBILI_USER_AGENT}))
+        self._cookie_initializer = cookie_initializer
+        self._clients: dict[str, object] = {}
+
+    def create_session(self) -> BiliNoteQrLoginSession:
+        client = self._http_client_factory()
+        response = client.get(_BILIBILI_QR_GENERATE_URL)
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict) or not isinstance(data.get("url"), str) or not isinstance(data.get("qrcode_key"), str):
+            _close_http_client(client)
+            raise BilibiliCookieInitError("Bilibili 二维码生成失败。")
+        qrcode_key = data["qrcode_key"]
+        self._clients[qrcode_key] = client
+        return BiliNoteQrLoginSession(url=data["url"], qrcode_key=qrcode_key)
+
+    def poll(self, qrcode_key: str) -> BiliNoteQrLoginPollResult:
+        client = self._clients.get(qrcode_key)
+        if client is None:
+            raise BilibiliCookieInitError("Bilibili 二维码会话不存在或已过期。")
+        response = client.get(_BILIBILI_QR_POLL_URL, params={"qrcode_key": qrcode_key})
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            raise BilibiliCookieInitError("Bilibili 登录状态返回异常。")
+        status_code = data.get("code")
+        message = str(data.get("message") or "")
+        if status_code == 0:
+            try:
+                cookie_header = _format_bilibili_cookie_header_from_items(client.cookies)
+                poll_url = data.get("url")
+                if isinstance(poll_url, str):
+                    cookie_header = _merge_cookie_headers(cookie_header, _format_bilibili_cookie_header_from_url(poll_url))
+                _supplement_bilibili_device_cookies(client, cookie_header)
+                cookie_header = _merge_cookie_headers(cookie_header, _format_bilibili_cookie_header_from_items(client.cookies))
+                initializer = self._cookie_initializer
+                if initializer is None:
+                    raise BilibiliCookieInitError("Bilibili Cookie 保存器未配置。")
+                initializer.init(cookie_header)
+                return BiliNoteQrLoginPollResult(status="confirmed", message=message or "扫码登录成功", configured=True)
+            finally:
+                self._clients.pop(qrcode_key, None)
+                _close_http_client(client)
+        if status_code == 86101:
+            return BiliNoteQrLoginPollResult(status="waiting", message=message or "等待扫码")
+        if status_code == 86090:
+            return BiliNoteQrLoginPollResult(status="scanned", message=message or "已扫码，等待确认")
+        self._clients.pop(qrcode_key, None)
+        _close_http_client(client)
+        return BiliNoteQrLoginPollResult(status="expired", message=message or "二维码已失效")
+
+
+class EdgeBilibiliCookieInitializer:
+    """把 Bilibili Cookie 来源配置为本机 Microsoft Edge。"""
+
+    def __init__(self, *, root_dir: Path) -> None:
+        self._root_dir = root_dir
+
+    def init(self) -> bool:
+        dotenv_path = self._root_dir / ".env"
+        _write_dotenv_value(dotenv_path, _BILIBILI_COOKIE_ENV, "")
+        _write_dotenv_value(dotenv_path, _BILIBILI_SESSDATA_ENV, "")
+        _write_dotenv_value(dotenv_path, _BILIBILI_COOKIE_BROWSER_ENV, "edge")
+        os.environ.pop(_BILIBILI_COOKIE_ENV, None)
+        os.environ.pop(_BILIBILI_SESSDATA_ENV, None)
+        os.environ[_BILIBILI_COOKIE_BROWSER_ENV] = "edge"
+        return True
+
+
 def build_video_download_task_id(series_id: str, video_id: str) -> str:
     """生成下载任务的唯一 ID，格式为 ``"download/{series_id}/{video_id}"``。
 
@@ -349,8 +564,397 @@ def _download_cancel_requested(reporter: ProgressReporter) -> bool:
     return False
 
 
+def _format_yt_dlp_failure(returncode: int, output_tail: list[str]) -> str:
+    output = "\n".join(output_tail)
+    if "HTTP Error 412" in output or "Precondition Failed" in output:
+        return BILIBILI_COOKIE_REQUIRED_MESSAGE
+    if "Could not copy Chrome cookie database" in output:
+        return EDGE_COOKIE_COPY_FAILED_MESSAGE
+    error_lines = [line for line in output_tail if "ERROR:" in line or "HTTP Error" in line]
+    if error_lines:
+        return error_lines[-1]
+    return f"yt-dlp 退出码 {returncode}"
+
+
+def _download_bilibili_via_browser(bvid: str, page: int, dest_dir: Path) -> Path | None:
+    proxy_result = _download_bilibili_via_cdp_proxy(bvid, page, dest_dir)
+    if proxy_result is not None:
+        return proxy_result
+    cdp_result = _download_bilibili_via_cdp(bvid, page, dest_dir)
+    if cdp_result is not None:
+        return cdp_result
+    return _download_bilibili_via_drission(bvid, page, dest_dir)
+
+
+def _download_bilibili_via_cdp_proxy(bvid: str, page: int, dest_dir: Path) -> Path | None:
+    try:
+        video_url = f"https://www.bilibili.com/video/{bvid}"
+        if page > 1:
+            video_url = f"{video_url}?p={page}"
+        with httpx.Client(timeout=120, follow_redirects=True) as client:
+            response = client.get("http://127.0.0.1:3456/new", params={"url": video_url})
+            response.raise_for_status()
+            target_id = response.json().get("targetId")
+            if not isinstance(target_id, str) or not target_id:
+                return None
+            try:
+                playinfo = _fetch_bilibili_browser_playinfo(client, target_id, bvid, page)
+                media_url = playinfo.get("url")
+                user_agent = playinfo.get("ua") or _BILIBILI_USER_AGENT
+                referer = playinfo.get("referer") or video_url
+                if not isinstance(media_url, str) or not media_url:
+                    return None
+                output_path = dest_dir / f"{bvid if page == 1 else f'{bvid}_p{page}'}.mp4"
+                with client.stream(
+                    "GET",
+                    media_url,
+                    headers={"User-Agent": str(user_agent), "Referer": str(referer)},
+                    timeout=None,
+                ) as media_response:
+                    media_response.raise_for_status()
+                    with output_path.open("wb") as output_file:
+                        for chunk in media_response.iter_bytes():
+                            if chunk:
+                                output_file.write(chunk)
+                return output_path if output_path.exists() else None
+            finally:
+                client.get("http://127.0.0.1:3456/close", params={"target": target_id})
+    except Exception:
+        return None
+
+
+def _download_bilibili_via_cdp(bvid: str, page: int, dest_dir: Path) -> Path | None:
+    if websocket is None:
+        return None
+    for browser_port in (9222, _BILIBILI_DEFAULT_BROWSER_PORT):
+        result = _download_bilibili_via_cdp_port(bvid, page, dest_dir, browser_port)
+        if result is not None:
+            return result
+    chrome_process = _start_temporary_cdp_chrome(_BILIBILI_DEFAULT_BROWSER_PORT)
+    if chrome_process is None:
+        return None
+    try:
+        _wait_for_cdp_port(_BILIBILI_DEFAULT_BROWSER_PORT)
+        return _download_bilibili_via_cdp_port(bvid, page, dest_dir, _BILIBILI_DEFAULT_BROWSER_PORT)
+    finally:
+        _close_cdp_browser(_BILIBILI_DEFAULT_BROWSER_PORT)
+        try:
+            if chrome_process.poll() is None:
+                chrome_process.terminate()
+        except Exception:
+            pass
+
+
+def _download_bilibili_via_cdp_port(bvid: str, page: int, dest_dir: Path, browser_port: int) -> Path | None:
+    video_url = f"https://www.bilibili.com/video/{bvid}"
+    if page > 1:
+        video_url = f"{video_url}?p={page}"
+    target_id: str | None = None
+    try:
+        with httpx.Client(timeout=120, follow_redirects=True) as client:
+            client.get(f"http://127.0.0.1:{browser_port}/json/version").raise_for_status()
+            target = client.put(f"http://127.0.0.1:{browser_port}/json/new?{quote(video_url, safe='')}")
+            target.raise_for_status()
+            target_payload = target.json()
+            target_id = target_payload.get("id") if isinstance(target_payload, dict) else None
+            ws_url = target_payload.get("webSocketDebuggerUrl") if isinstance(target_payload, dict) else None
+            if not isinstance(target_id, str) or not isinstance(ws_url, str):
+                return None
+            cookie_header = _load_bilibili_headers(bvid).get("Cookie", "")
+            playinfo = _fetch_bilibili_cdp_playinfo(ws_url, bvid, page, cookie_header)
+            media_url = playinfo.get("url")
+            user_agent = playinfo.get("ua") or _BILIBILI_USER_AGENT
+            referer = playinfo.get("referer") or video_url
+            if not isinstance(media_url, str) or not media_url:
+                return None
+            output_path = dest_dir / f"{bvid if page == 1 else f'{bvid}_p{page}'}.mp4"
+            with client.stream(
+                "GET",
+                media_url,
+                headers={"User-Agent": str(user_agent), "Referer": str(referer)},
+                timeout=None,
+            ) as media_response:
+                media_response.raise_for_status()
+                with output_path.open("wb") as output_file:
+                    for chunk in media_response.iter_bytes():
+                        if chunk:
+                            output_file.write(chunk)
+            return output_path if output_path.exists() else None
+    except Exception:
+        return None
+    finally:
+        if target_id:
+            try:
+                with httpx.Client(timeout=10) as client:
+                    client.get(f"http://127.0.0.1:{browser_port}/json/close/{target_id}")
+            except Exception:
+                pass
+
+
+def _start_temporary_cdp_chrome(browser_port: int) -> subprocess.Popen[bytes] | None:
+    chrome_path = _find_chrome_executable()
+    if not chrome_path:
+        return None
+    user_data_dir = Path(tempfile.gettempdir()) / "vsummary-bilibili-cdp-browser"
+    user_data_dir.mkdir(parents=True, exist_ok=True)
+    return subprocess.Popen(
+        [
+            chrome_path,
+            f"--remote-debugging-port={browser_port}",
+            "--remote-allow-origins=*",
+            f"--user-data-dir={user_data_dir}",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _wait_for_cdp_port(browser_port: int, timeout_seconds: float = 10.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() <= deadline:
+        try:
+            response = httpx.get(f"http://127.0.0.1:{browser_port}/json/version", timeout=1)
+            if response.status_code < 400:
+                return
+        except Exception:
+            pass
+        time.sleep(0.2)
+
+
+def _find_chrome_executable() -> str | None:
+    candidates = [
+        os.environ.get("CHROME_PATH", ""),
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        "chrome",
+        "msedge",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        if candidate in {"chrome", "msedge"} or Path(candidate).exists():
+            return candidate
+    return None
+
+
+def _close_cdp_browser(browser_port: int) -> None:
+    if websocket is None:
+        return
+    try:
+        response = httpx.get(f"http://127.0.0.1:{browser_port}/json/version", timeout=2)
+        response.raise_for_status()
+        payload = response.json()
+        ws_url = payload.get("webSocketDebuggerUrl") if isinstance(payload, dict) else None
+        if not isinstance(ws_url, str):
+            return
+        connection = websocket.create_connection(ws_url, timeout=5)
+        try:
+            _send_cdp_command(connection, 1, "Browser.close", {})
+        finally:
+            close = getattr(connection, "close", None)
+            if callable(close):
+                close()
+    except Exception:
+        pass
+
+
+def _download_bilibili_via_drission(bvid: str, page: int, dest_dir: Path) -> Path | None:
+    video_url = f"https://www.bilibili.com/video/{bvid}"
+    if page > 1:
+        video_url = f"{video_url}?p={page}"
+    for browser_port in (9222, _BILIBILI_DEFAULT_BROWSER_PORT):
+        browser = None
+        try:
+            browser = _create_drission_page(str(Path.cwd() / "data" / "bilibili" / "browser"), browser_port)
+            _page_get(browser, video_url)
+            playinfo = _fetch_bilibili_drission_playinfo(browser, bvid, page)
+            media_url = playinfo.get("url")
+            user_agent = playinfo.get("ua") or _BILIBILI_USER_AGENT
+            referer = playinfo.get("referer") or video_url
+            if not isinstance(media_url, str) or not media_url:
+                continue
+            output_path = dest_dir / f"{bvid if page == 1 else f'{bvid}_p{page}'}.mp4"
+            with httpx.Client(timeout=120, follow_redirects=True) as client:
+                with client.stream(
+                    "GET",
+                    media_url,
+                    headers={"User-Agent": str(user_agent), "Referer": str(referer)},
+                    timeout=None,
+                ) as media_response:
+                    media_response.raise_for_status()
+                    with output_path.open("wb") as output_file:
+                        for chunk in media_response.iter_bytes():
+                            if chunk:
+                                output_file.write(chunk)
+            return output_path if output_path.exists() else None
+        except Exception:
+            continue
+        finally:
+            if browser is not None:
+                _close_page(browser)
+    return None
+
+
+def _fetch_bilibili_browser_playinfo(client: httpx.Client, target_id: str, bvid: str, page: int) -> dict[str, object]:
+    script = f"""
+(async () => {{
+  const bvid = {json.dumps(bvid)};
+  const page = {page};
+  const view = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${{encodeURIComponent(bvid)}}`, {{
+    credentials: 'include',
+  }}).then(r => r.json());
+  const pages = view.data && Array.isArray(view.data.pages) ? view.data.pages : [];
+  const selected = pages[page - 1] || {{ cid: view.data && view.data.cid }};
+  const params = new URLSearchParams({{ bvid, cid: String(selected.cid), fnval: '4048', qn: '32' }});
+  const playinfo = await fetch(`https://api.bilibili.com/x/player/wbi/playurl?${{params.toString()}}`, {{
+    credentials: 'include',
+    headers: {{ Referer: location.href }},
+  }}).then(r => r.json());
+  const durl = playinfo.data && Array.isArray(playinfo.data.durl) ? playinfo.data.durl[0] : null;
+  return JSON.stringify({{ url: durl && durl.url, size: durl && durl.size, ua: navigator.userAgent, referer: location.href }});
+}})()
+"""
+    response = client.post("http://127.0.0.1:3456/eval", params={"target": target_id}, content=script)
+    response.raise_for_status()
+    payload = response.json()
+    value = payload.get("value")
+    if not isinstance(value, str):
+        return {}
+    parsed = json.loads(value)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _fetch_bilibili_cdp_playinfo(ws_url: str, bvid: str, page: int, cookie_header: str = "") -> dict[str, object]:
+    if websocket is None:
+        return {}
+    script = _build_bilibili_playinfo_script(bvid, page)
+    connection = websocket.create_connection(ws_url, timeout=120)
+    try:
+        request_id = 1
+        if cookie_header.strip():
+            _send_cdp_command(connection, request_id, "Network.enable", {})
+            request_id += 1
+            _send_cdp_command(
+                connection,
+                request_id,
+                "Network.setCookies",
+                {"cookies": _cookie_header_to_cdp_cookies(cookie_header)},
+            )
+            request_id += 1
+        request_id = _wait_for_cdp_page_ready(connection, request_id)
+        result = _send_cdp_command(
+            connection,
+            request_id,
+            "Runtime.evaluate",
+            {
+                "expression": script,
+                "awaitPromise": True,
+                "returnByValue": True,
+            },
+        )
+        runtime_result = result.get("result")
+        if not isinstance(runtime_result, dict):
+            return {}
+        value = runtime_result.get("value")
+        if not isinstance(value, str):
+            return {}
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+    finally:
+        close = getattr(connection, "close", None)
+        if callable(close):
+            close()
+
+
+def _wait_for_cdp_page_ready(connection: object, request_id: int, timeout_seconds: float = 15.0) -> int:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() <= deadline:
+        result = _send_cdp_command(
+            connection,
+            request_id,
+            "Runtime.evaluate",
+            {
+                "expression": "`${location.href}|${document.readyState}`",
+                "returnByValue": True,
+            },
+        )
+        request_id += 1
+        runtime_result = result.get("result")
+        value = runtime_result.get("value") if isinstance(runtime_result, dict) else None
+        if isinstance(value, str) and "|complete" in value and "bilibili.com/video/" in value:
+            return request_id
+        time.sleep(0.25)
+    return request_id
+
+
+def _send_cdp_command(connection: object, request_id: int, method: str, params: dict[str, object]) -> dict[str, object]:
+    connection.send(json.dumps({"id": request_id, "method": method, "params": params}))
+    while True:
+        message = json.loads(connection.recv())
+        if message.get("id") != request_id:
+            continue
+        result = message.get("result")
+        return result if isinstance(result, dict) else {}
+
+
+def _cookie_header_to_cdp_cookies(cookie_header: str) -> list[dict[str, object]]:
+    cookies: list[dict[str, object]] = []
+    for item in cookie_header.split(";"):
+        if "=" not in item:
+            continue
+        name, value = item.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if not name:
+            continue
+        cookies.append({
+            "name": name,
+            "value": value,
+            "domain": ".bilibili.com",
+            "path": "/",
+            "secure": True,
+        })
+    return cookies
+
+
+def _fetch_bilibili_drission_playinfo(page_obj: object, bvid: str, page: int) -> dict[str, object]:
+    script = _build_bilibili_playinfo_script(bvid, page)
+    value = _page_run_js(page_obj, script)
+    if not isinstance(value, str):
+        return {}
+    parsed = json.loads(value)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _build_bilibili_playinfo_script(bvid: str, page: int) -> str:
+    return f"""
+(async () => {{
+  const bvid = {json.dumps(bvid)};
+  const page = {page};
+  const view = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${{encodeURIComponent(bvid)}}`, {{
+    credentials: 'include',
+  }}).then(r => r.json());
+  const pages = view.data && Array.isArray(view.data.pages) ? view.data.pages : [];
+  const selected = pages[page - 1] || {{ cid: view.data && view.data.cid }};
+  const params = new URLSearchParams({{ bvid, cid: String(selected.cid), fnval: '4048', qn: '32' }});
+  const playinfo = await fetch(`https://api.bilibili.com/x/player/wbi/playurl?${{params.toString()}}`, {{
+    credentials: 'include',
+    headers: {{ Referer: location.href }},
+  }}).then(r => r.json());
+  const durl = playinfo.data && Array.isArray(playinfo.data.durl) ? playinfo.data.durl[0] : null;
+  return JSON.stringify({{ url: durl && durl.url, size: durl && durl.size, ua: navigator.userAgent, referer: location.href }});
+}})()
+"""
+
+
 def _load_bilibili_headers(bvid: str) -> dict[str, str]:
-    cookie = os.environ.get(_BILIBILI_COOKIE_ENV, "").strip()
+    cookie = _load_bilinote_bilibili_cookie()
+    if not cookie:
+        cookie = os.environ.get(_BILIBILI_COOKIE_ENV, "").strip()
     if not cookie:
         sessdata = os.environ.get(_BILIBILI_SESSDATA_ENV, "").strip()
         cookie = f"SESSDATA={sessdata}" if sessdata else ""
@@ -363,6 +967,12 @@ def _load_bilibili_headers(bvid: str) -> dict[str, str]:
     return headers
 
 
+def _load_bilinote_bilibili_cookie() -> str:
+    cookie_file = os.environ.get(_BILINOTE_DOWNLOADER_COOKIE_FILE_ENV, "").strip()
+    manager = BiliNoteCookieConfigManager(cookie_file) if cookie_file else BiliNoteCookieConfigManager()
+    return manager.get("bilibili") or ""
+
+
 def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
     flags: list[str] = []
     for key, value in headers.items():
@@ -370,13 +980,6 @@ def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
             continue
         flags.extend(["--add-header", f"{key}:{value}"])
     return flags
-
-
-def _format_yt_dlp_failure(returncode: int | None, recent_output: deque[str]) -> str:
-    message = f"yt-dlp 退出码 {returncode}"
-    if not recent_output:
-        return message
-    return f"{message}；最近输出：\n" + "\n".join(recent_output)
 
 
 def _write_bilibili_cookies_file(cookie: str) -> Path | None:
@@ -389,7 +992,7 @@ def _write_bilibili_cookies_file(cookie: str) -> Path | None:
     with handle:
         handle.write("# Netscape HTTP Cookie File\n")
         for name, value in cookie_pairs:
-            handle.write(f".bilibili.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}\n")
+            handle.write(f".bilibili.com\tTRUE\t/\tTRUE\t2147483647\t{name}\t{value}\n")
     return Path(handle.name)
 
 
@@ -406,32 +1009,22 @@ def _parse_cookie_pairs(cookie: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def _is_sessdata_only_cookie(cookie: str) -> bool:
+    cookie_names = {name.lower() for name, _value in _parse_cookie_pairs(cookie)}
+    if "sessdata" not in cookie_names:
+        return False
+    full_cookie_markers = {"buvid3", "buvid4", "bili_jct", "dedeuserid", "b_nut"}
+    return cookie_names.isdisjoint(full_cookie_markers)
+
+
 def _create_drission_page(user_data_dir: str, browser_port: int) -> object:
     try:
         from DrissionPage import Chromium, ChromiumOptions
     except ImportError as exc:
         raise BilibiliCookieInitError("当前 Python 环境缺少 DrissionPage，请先安装项目依赖。") from exc
     options = ChromiumOptions(read_file=False).set_local_port(browser_port).set_user_data_path(user_data_dir)
-    browser_path = _resolve_default_browser_path()
-    if browser_path:
-        options.set_browser_path(browser_path)
     browser = Chromium(addr_or_opts=options)
     return _DrissionPageSession(browser, browser.latest_tab)
-
-
-def _resolve_default_browser_path(*, exists: Callable[[Path], bool] | None = None) -> str | None:
-    path_exists = exists or Path.exists
-    program_files = [os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)")]
-    browser_candidates = [
-        ("Google", "Chrome", "Application", "chrome.exe"),
-        ("Microsoft", "Edge", "Application", "msedge.exe"),
-    ]
-    for parts in browser_candidates:
-        for base_dir in [path for path in program_files if path]:
-            candidate = Path(base_dir).joinpath(*parts)
-            if path_exists(candidate):
-                return str(candidate)
-    return None
 
 
 class _DrissionPageSession:
@@ -469,6 +1062,16 @@ def _page_cookies(page: object) -> list[Mapping[str, object]]:
     raise BilibiliCookieInitError("DrissionPage 页面对象缺少 cookies 方法。")
 
 
+def _page_run_js(page: object, script: str) -> object:
+    runner = getattr(page, "run_js", None)
+    if runner is not None:
+        return runner(script)
+    runner = getattr(page, "run_js_loaded", None)
+    if runner is not None:
+        return runner(script)
+    raise BilibiliCookieInitError("DrissionPage 页面对象缺少 run_js 方法。")
+
+
 def _close_page(page: object) -> None:
     for name in ("quit", "close"):
         method = getattr(page, name, None)
@@ -491,6 +1094,76 @@ def _format_bilibili_cookie_header(cookies: list[Mapping[str, object]]) -> str:
         seen.add(name)
         pairs.append((name, value))
     return "; ".join(f"{name}={value}" for name, value in pairs)
+
+
+def _format_bilibili_cookie_header_from_items(cookies: object) -> str:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    jar = getattr(cookies, "jar", None)
+    if jar is not None:
+        iterable = ((cookie.name, cookie.value) for cookie in jar)
+    else:
+        items = getattr(cookies, "items", None)
+        iterable = items() if callable(items) else cookies
+    for name, value in iterable:
+        cookie_name = str(name).strip()
+        cookie_value = str(value).strip()
+        if not cookie_name or cookie_name in seen:
+            continue
+        seen.add(cookie_name)
+        pairs.append((cookie_name, cookie_value))
+    return "; ".join(f"{name}={value}" for name, value in pairs)
+
+
+def _format_bilibili_cookie_header_from_url(url: str) -> str:
+    return _format_bilibili_cookie_header_from_items(parse_qsl(urlparse(url).query, keep_blank_values=True))
+
+
+def _merge_cookie_headers(*headers: str) -> str:
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for header in headers:
+        for name, value in _parse_cookie_pairs(header):
+            if name in seen:
+                continue
+            seen.add(name)
+            pairs.append((name, value))
+    return "; ".join(f"{name}={value}" for name, value in pairs)
+
+
+def _supplement_bilibili_device_cookies(client: object, cookie_header: str) -> None:
+    get = getattr(client, "get", None)
+    if get is None:
+        return
+    try:
+        get("https://www.bilibili.com/", headers={"Cookie": cookie_header, "Referer": "https://www.bilibili.com/"})
+        response = get(
+            "https://api.bilibili.com/x/frontend/finger/spi",
+            headers={"Cookie": cookie_header, "Referer": "https://www.bilibili.com/"},
+        )
+        payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return
+        cookies = getattr(client, "cookies", None)
+        update = getattr(cookies, "update", None)
+        if update is None:
+            return
+        device_cookies = {}
+        if isinstance(data.get("b_3"), str):
+            device_cookies["buvid3"] = data["b_3"]
+        if isinstance(data.get("b_4"), str):
+            device_cookies["buvid4"] = data["b_4"]
+        if device_cookies:
+            update(device_cookies)
+    except Exception:
+        return
+
+
+def _close_http_client(client: object) -> None:
+    close = getattr(client, "close", None)
+    if close is not None:
+        close()
 
 
 def _has_bilibili_login_cookie(cookie_header: str) -> bool:

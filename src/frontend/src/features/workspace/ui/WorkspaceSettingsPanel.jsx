@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 import { popScaleVariant, blurVariant } from "../../../lib/animations";
 import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download } from "lucide-react";
 import {
@@ -27,13 +28,15 @@ export function WorkspaceSettingsPanel({
   modelDownloadErrorModelId = null,
   modelDownloadError = null,
   onChangeSetting,
-  onOpenUsagePage,
   onSaveProviderSettings,
   onSaveApiKey,
   onRevealOpenaiApiKey,
   onTestProviderConnection,
   onDownloadFasterWhisperModel,
   onDownloadRagModel,
+  onInitBilibiliCookie,
+  onCreateBilibiliQrLoginSession,
+  onPollBilibiliQrLogin,
   onResetSettings,
   onClose,
 }) {
@@ -43,6 +46,9 @@ export function WorkspaceSettingsPanel({
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
   const [apiKeyRevealLoading, setApiKeyRevealLoading] = useState(false);
   const [providerTest, setProviderTest] = useState({ status: "idle", message: "" });
+  const [bilibiliCookieStatus, setBilibiliCookieStatus] = useState({ status: "idle", message: "" });
+  const [bilibiliCookie, setBilibiliCookie] = useState("");
+  const [bilibiliQrSession, setBilibiliQrSession] = useState(null);
   const isOllamaProvider = ui.llmProvider === "ollama";
   const hasApiKey = ui.hasOpenaiApiKey;
   const draftApiKey = ui.openaiApiKey.trim();
@@ -89,6 +95,44 @@ export function WorkspaceSettingsPanel({
     { id: "external-import", label: "外部导入", icon: Globe },
     { id: "network", label: "下载管理 ", icon: Download },
   ];
+  async function handleStartBilibiliQrLogin() {
+    if (typeof onCreateBilibiliQrLoginSession !== "function") {
+      return;
+    }
+    setBilibiliCookieStatus({ status: "loading", message: "正在生成 Bilibili 登录二维码..." });
+    try {
+      const session = await onCreateBilibiliQrLoginSession();
+      setBilibiliQrSession(session);
+      setBilibiliCookieStatus({ status: "idle", message: "请使用 Bilibili App 扫码确认登录" });
+    } catch (error) {
+      setBilibiliCookieStatus({
+        status: "failed",
+        message: error instanceof Error ? error.message : "生成 Bilibili 登录二维码失败",
+      });
+    }
+  }
+
+  async function handlePollBilibiliQrLogin() {
+    if (!bilibiliQrSession?.qrcodeKey || typeof onPollBilibiliQrLogin !== "function") {
+      return;
+    }
+    setBilibiliCookieStatus({ status: "loading", message: "正在检查扫码登录状态..." });
+    try {
+      const result = await onPollBilibiliQrLogin(bilibiliQrSession.qrcodeKey);
+      setBilibiliCookieStatus({
+        status: result.configured ? "success" : "idle",
+        message: result.message || (result.configured ? "扫码登录成功" : "等待扫码确认"),
+      });
+      if (result.configured) {
+        setBilibiliQrSession(null);
+      }
+    } catch (error) {
+      setBilibiliCookieStatus({
+        status: "failed",
+        message: error instanceof Error ? error.message : "检查 Bilibili 扫码登录失败",
+      });
+    }
+  }
   return (
     <motion.section
       variants={popScaleVariant}
@@ -202,6 +246,20 @@ export function WorkspaceSettingsPanel({
                     onChange={(nextValue) => onChangeSetting("layoutMode", nextValue)}
                   />
                 </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
+                  title="系列 Markdown 默认导出路径"
+                  description="导出系列文案时，会在这个目录下创建系列名文件夹并写入所有视频 Markdown。"
+                  contentClassName="2xl:flex-1"
+                >
+                  <WorkspaceTextInput
+                    value={ui.seriesMarkdownExportPath ?? ""}
+                    ariaLabel="系列 Markdown 默认导出路径"
+                    placeholder="例如 D:\\Exports\\视频文案"
+                    className="w-full min-w-0"
+                    onChange={(nextValue) => onChangeSetting("seriesMarkdownExportPath", nextValue)}
+                  />
+                </WorkspaceSettingRow>
               </>
             )}
 
@@ -273,16 +331,16 @@ export function WorkspaceSettingsPanel({
                           : downloadFailed
                             ? "下载失败"
                             : isCurrent
-                              ? "当前默认模型，需先下载"
-                              : "尚未下载";
+                            ? "当前默认模型，需先下载"
+                            : "尚未下载";
                         return (
                           <div
                             key={model.id}
                             className={`rounded-2xl border p-4 transition-colors ${downloadFailed
                               ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
                               : isCurrent
-                                ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
-                                : "border-stone-200 dark:border-stone-800"
+                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                              : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -686,19 +744,6 @@ export function WorkspaceSettingsPanel({
                     onChange={() => onChangeSetting("webSearchEnabled", !ui.webSearchEnabled)}
                   />
                 </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
-                  title="API 用量统计"
-                  description="查看真实 token 用量、供应商与模型分布。"
-                >
-                  <button
-                    type="button"
-                    onClick={onOpenUsagePage}
-                    className="px-4 py-2.5 rounded-xl text-sm font-bold bg-accent text-white shadow-sm hover:bg-accent-hover transition-colors"
-                  >
-                    打开用量统计
-                  </button>
-                </WorkspaceSettingRow>
               </>
             )}
 
@@ -745,15 +790,15 @@ export function WorkspaceSettingsPanel({
                             ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
                             : downloadFailed
                               ? "下载失败"
-                              : "尚未下载";
+                            : "尚未下载";
                         return (
                           <div
                             key={model.key}
                             className={`rounded-2xl border p-4 transition-colors ${downloadFailed
                               ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
                               : model.downloaded
-                                ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
-                                : "border-stone-200 dark:border-stone-800"
+                              ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                              : "border-stone-200 dark:border-stone-800"
                               }`}
                           >
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -819,6 +864,97 @@ export function WorkspaceSettingsPanel({
                     控制外部API的设置。
                   </p>
                 </div>
+
+                <WorkspaceSettingRow
+                  title="Bilibili Cookie"
+                  description="保存 BiliNote 风格的完整账号 Cookie，用于解析和下载受风控影响的视频。"
+                  contentClassName="2xl:w-full 2xl:flex-1 2xl:shrink"
+                >
+                  <div className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
+                    <div className="flex flex-col gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">Bilibili 登录 Cookie</p>
+                        <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                          推荐扫码登录自动获取完整 Cookie；也可以从浏览器复制完整 Cookie，不能只填 SESSDATA。
+                        </p>
+                      </div>
+                      {bilibiliQrSession?.url ? (
+                        <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/60 dark:bg-sky-950/20">
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                            <div className="mx-auto rounded-2xl bg-white p-3 shadow-sm sm:mx-0">
+                              <QRCodeSVG value={bilibiliQrSession.url} size={132} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-stone-900 dark:text-stone-100">使用 Bilibili App 扫码确认登录</p>
+                              <p className="mt-1 break-all text-xs text-stone-500 dark:text-stone-400">{bilibiliQrSession.url}</p>
+                              <button
+                                type="button"
+                                onClick={handlePollBilibiliQrLogin}
+                                disabled={bilibiliCookieStatus.status === "loading"}
+                                className="mt-3 rounded-xl border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-50 disabled:cursor-wait disabled:opacity-60 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                              >
+                                检查登录状态
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      <textarea
+                        value={bilibiliCookie}
+                        onChange={(event) => setBilibiliCookie(event.target.value)}
+                        placeholder="SESSDATA=...; buvid3=...; bili_jct=..."
+                        className="min-h-24 w-full resize-y rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100"
+                      />
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (typeof onInitBilibiliCookie !== "function") {
+                              return;
+                            }
+                            setBilibiliCookieStatus({ status: "loading", message: "正在保存 Bilibili Cookie..." });
+                            try {
+                              const result = await onInitBilibiliCookie({ cookie: bilibiliCookie });
+                              setBilibiliCookieStatus({
+                                status: result?.configured ? "success" : "failed",
+                                message: result?.configured ? "Bilibili Cookie 已保存" : "Bilibili Cookie 配置失败",
+                              });
+                            } catch (error) {
+                              setBilibiliCookieStatus({
+                                status: "failed",
+                                message: error instanceof Error ? error.message : "Bilibili Cookie 配置失败",
+                              });
+                            }
+                          }}
+                          disabled={bilibiliCookieStatus.status === "loading" || !bilibiliCookie.trim()}
+                          className="w-full rounded-xl bg-accent px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                        >
+                          {bilibiliCookieStatus.status === "loading" ? "配置中..." : "保存 Bilibili Cookie"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleStartBilibiliQrLogin}
+                          disabled={bilibiliCookieStatus.status === "loading"}
+                          className="w-full rounded-xl bg-stone-900 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-wait disabled:opacity-60 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white sm:w-auto"
+                        >
+                          {bilibiliCookieStatus.status === "loading" ? "配置中..." : "扫码登录 Bilibili"}
+                        </button>
+                      </div>
+                    </div>
+                    {bilibiliCookieStatus.message ? (
+                      <p
+                        className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${bilibiliCookieStatus.status === "success"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          : bilibiliCookieStatus.status === "failed"
+                            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                            : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-300"
+                          }`}
+                      >
+                        {bilibiliCookieStatus.message}
+                      </p>
+                    ) : null}
+                  </div>
+                </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
                   title="超星请求间隔"

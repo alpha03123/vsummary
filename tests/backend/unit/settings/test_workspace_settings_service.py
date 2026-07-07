@@ -7,10 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests import _path_setup  # noqa: F401
 
-from backend.video_summary.infrastructure.config.settings_service import SettingsService, SettingsValidationError
-from backend.video_summary.infrastructure.config.settings import (
+from backend.video_summary.infrastructure.settings_service import SettingsService, SettingsValidationError
+from backend.video_summary.infrastructure.settings import (
     EnvSettings,
     apply_runtime_env_overrides,
     load_env_settings,
@@ -36,29 +35,6 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 os.environ.pop("HF_ENDPOINT", None)
             else:
                 os.environ["HF_ENDPOINT"] = previous
-
-    def test_runtime_env_overrides_updates_loaded_huggingface_hub_endpoint(self) -> None:
-        import huggingface_hub.constants as hf_constants
-
-        previous_env = os.environ.get("HF_ENDPOINT")
-        previous_endpoint = hf_constants.ENDPOINT
-        try:
-            with tempfile.TemporaryDirectory() as temp_dir:
-                root_dir = Path(temp_dir)
-                (root_dir / ".env").write_text("HF_ENDPOINT=https://hf-mirror.com\n", encoding="utf-8")
-                os.environ.pop("HF_ENDPOINT", None)
-                hf_constants.ENDPOINT = "https://huggingface.co"
-
-                apply_runtime_env_overrides(root_dir)
-
-                self.assertEqual(os.environ["HF_ENDPOINT"], "https://hf-mirror.com")
-                self.assertEqual(hf_constants.ENDPOINT, "https://hf-mirror.com")
-        finally:
-            if previous_env is None:
-                os.environ.pop("HF_ENDPOINT", None)
-            else:
-                os.environ["HF_ENDPOINT"] = previous_env
-            hf_constants.ENDPOINT = previous_endpoint
 
     def test_get_and_update_workspace_settings_include_window_tokens_video_concurrency_rag_and_web_search_controls(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -94,6 +70,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertEqual(current.rag_max_hits, 5)
             self.assertTrue(current.rag_rerank_enabled)
             self.assertFalse(current.web_search_enabled)
+            self.assertEqual(current.series_markdown_export_path, "")
 
             updated = service.update_workspace_settings(
                 theme="dark",
@@ -110,6 +87,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 reasoning_effort="high",
                 video_generation_concurrency=5,
                 web_search_enabled=True,
+                series_markdown_export_path=str(root_dir / "exports"),
             )
 
             self.assertEqual(updated.window_tokens, 222_222)
@@ -120,6 +98,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertEqual(updated.rag_max_hits, 7)
             self.assertFalse(updated.rag_rerank_enabled)
             self.assertTrue(updated.web_search_enabled)
+            self.assertEqual(updated.series_markdown_export_path, str(root_dir / "exports"))
             rendered = config_path.read_text(encoding="utf-8")
             self.assertIn("[agent_context]", rendered)
             self.assertIn("window_tokens = 222222", rendered)
@@ -137,6 +116,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertIn("enabled = true", rendered)
             self.assertIn('provider = "litellm"', rendered)
             self.assertIn('layout_mode = "chat_center"', rendered)
+            self.assertIn(f'series_markdown_export_path = "{str(root_dir / "exports").replace(chr(92), chr(92) + chr(92))}"', rendered)
             self.assertNotIn("series_video_concurrency", rendered)
 
     def test_update_workspace_settings_rejects_rerank_enabled_when_reranker_model_is_missing(self) -> None:
@@ -378,7 +358,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 faster_whisper_model_manager=FakeFasterWhisperModelManager(),
             )
 
-            with patch("backend.video_summary.infrastructure.config.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
+            with patch("backend.video_summary.infrastructure.settings_service.LiteLLMCompletionGateway", TimeoutGateway):
                 with self.assertRaisesRegex(RuntimeError, "^模型超时$"):
                     service.test_provider_settings(
                         llm_provider="openai",

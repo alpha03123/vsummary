@@ -42,6 +42,7 @@ export async function loadWorkspaceSettings() {
     videoGenerationConcurrency: payload.video_generation_concurrency,
     chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
     chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
+    seriesMarkdownExportPath: payload.series_markdown_export_path ?? "",
   };
 }
 
@@ -56,11 +57,6 @@ export async function loadProviderSettings() {
     hfEndpoint: payload.hf_endpoint,
     openaiApiKey: "",
   };
-}
-
-export async function loadProviderUsage(range = "7d") {
-  const payload = await fetchJson(`/api/provider-settings/usage?range=${encodeURIComponent(range)}`);
-  return toProviderUsage(payload);
 }
 
 export async function loadOpenaiApiKey() {
@@ -92,6 +88,7 @@ export async function updateWorkspaceSettings(settings) {
       video_generation_concurrency: settings.videoGenerationConcurrency,
       chaoxing_request_delay_seconds: settings.chaoxingRequestDelaySeconds,
       chaoxing_init_course_delay_seconds: settings.chaoxingInitCourseDelaySeconds,
+      series_markdown_export_path: settings.seriesMarkdownExportPath ?? "",
     }),
   });
   return {
@@ -112,6 +109,15 @@ export async function updateWorkspaceSettings(settings) {
     videoGenerationConcurrency: payload.video_generation_concurrency,
     chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
     chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
+    seriesMarkdownExportPath: payload.series_markdown_export_path ?? "",
+  };
+}
+
+export async function exportSeriesMarkdown(seriesId) {
+  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/exports/markdown`, { method: "POST" });
+  return {
+    outputDir: payload.output_dir,
+    exportedCount: payload.exported_count,
   };
 }
 
@@ -587,11 +593,8 @@ export function getVideoPreviewUrl(seriesId, videoId) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/preview`;
 }
 
-async function fetchJson(path, init, options = {}) {
+async function fetchJson(path, init) {
   const response = await fetch(path, init);
-  if (response.status === 404 && Object.prototype.hasOwnProperty.call(options, "notFoundValue")) {
-    return options.notFoundValue;
-  }
   if (!response.ok) {
     let detail = null;
     try {
@@ -635,76 +638,6 @@ function extractErrorMessage(payload) {
 
 function parseProgressMessage(rawValue) {
   return toProgressSnapshot(JSON.parse(rawValue));
-}
-
-function toProviderUsage(payload) {
-  const record = payload && typeof payload === "object" ? payload : {};
-  return {
-    range: typeof record.range === "string" ? record.range : "7d",
-    total: toTokenTotals(record.total),
-    byCategory: Array.isArray(record.by_category)
-      ? record.by_category.map(toUsageCategory)
-      : [],
-    byProvider: Array.isArray(record.by_provider)
-      ? record.by_provider.map(toUsageProvider)
-      : [],
-    recent: Array.isArray(record.recent)
-      ? record.recent.map(toUsageRecord)
-      : [],
-    timelineGranularity: typeof record.timeline_granularity === "string" ? record.timeline_granularity : "day",
-    timeline: Array.isArray(record.timeline)
-      ? record.timeline.map(toUsageTimelineBucket)
-      : [],
-  };
-}
-
-function toUsageCategory(item) {
-  const record = item && typeof item === "object" ? item : {};
-  return {
-    category: typeof record.category === "string" ? record.category : "",
-    ...toTokenTotals(record),
-  };
-}
-
-function toUsageProvider(item) {
-  const record = item && typeof item === "object" ? item : {};
-  return {
-    provider: typeof record.provider === "string" ? record.provider : "",
-    baseUrl: typeof record.base_url === "string" ? record.base_url : "",
-    model: typeof record.model === "string" ? record.model : "",
-    ...toTokenTotals(record),
-  };
-}
-
-function toUsageRecord(item) {
-  const record = item && typeof item === "object" ? item : {};
-  return {
-    createdAt: typeof record.created_at === "string" ? record.created_at : "",
-    category: typeof record.category === "string" ? record.category : "",
-    provider: typeof record.provider === "string" ? record.provider : "",
-    baseUrl: typeof record.base_url === "string" ? record.base_url : "",
-    model: typeof record.model === "string" ? record.model : "",
-    ...toTokenTotals(record),
-  };
-}
-
-function toUsageTimelineBucket(item) {
-  const record = item && typeof item === "object" ? item : {};
-  return {
-    startedAt: typeof record.started_at === "string" ? record.started_at : "",
-    generationTokens: typeof record.generation_tokens === "number" ? record.generation_tokens : 0,
-    chatTokens: typeof record.chat_tokens === "number" ? record.chat_tokens : 0,
-    totalTokens: typeof record.total_tokens === "number" ? record.total_tokens : 0,
-  };
-}
-
-function toTokenTotals(record) {
-  const source = record && typeof record === "object" ? record : {};
-  return {
-    promptTokens: typeof source.prompt_tokens === "number" ? source.prompt_tokens : 0,
-    completionTokens: typeof source.completion_tokens === "number" ? source.completion_tokens : 0,
-    totalTokens: typeof source.total_tokens === "number" ? source.total_tokens : 0,
-  };
 }
 
 function toProgressSnapshot(payload) {
@@ -789,14 +722,45 @@ export async function resolveBilibiliVideo(url, targetSeriesId = null) {
 }
 
 export async function initBilibiliCookie(options = {}) {
+  const cookie = typeof options.cookie === "string" ? options.cookie.trim() : "";
   const payload = await fetchJson("/api/linked/bilibili/cookie/init", {
     method: "POST",
     signal: options.signal,
+    ...(cookie
+      ? {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookie }),
+      }
+      : {}),
   });
   return {
     configured: payload.configured === true,
   };
 }
+
+export async function createBilibiliQrLoginSession() {
+  const payload = await fetchJson("/api/linked/bilibili/cookie/qr", {
+    method: "POST",
+  });
+  return {
+    url: typeof payload.url === "string" ? payload.url : "",
+    qrcodeKey: typeof payload.qrcode_key === "string" ? payload.qrcode_key : "",
+  };
+}
+
+export async function pollBilibiliQrLogin(qrcodeKey) {
+  const payload = await fetchJson("/api/linked/bilibili/cookie/qr/poll", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qrcode_key: qrcodeKey }),
+  });
+  return {
+    status: typeof payload.status === "string" ? payload.status : "waiting",
+    message: typeof payload.message === "string" ? payload.message : "",
+    configured: payload.configured === true,
+  };
+}
+
 export async function loadChaoxingStatus() {
   const payload = await fetchJson("/api/linked/chaoxing/status");
   return {
@@ -910,77 +874,4 @@ export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
     listener,
     "视频下载进度连接已中断",
   );
-}
-
-export async function loadSeriesMindmap(seriesId) {
-  const payload = await fetchJson(
-    `/api/series/${encodeURIComponent(seriesId)}/mindmap`,
-    undefined,
-    { notFoundValue: null },
-  );
-  if (payload == null) {
-    return null;
-  }
-  return toWorkspaceMindmap(payload);
-}
-
-export async function generateSeriesMindmap(seriesId) {
-  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/mindmap/generate`, {
-    method: "POST",
-  });
-  return toWorkspaceMindmap(payload);
-}
-
-export function subscribeMindmapGenerationProgress(seriesId, videoId, listener) {
-  const eventSource = new EventSource(
-    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate/progress`
-  );
-  let terminal = false;
-
-  eventSource.onmessage = (event) => {
-    const snapshot = JSON.parse(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      eventSource.close();
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (terminal) return;
-    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
-    eventSource.close();
-  };
-
-  return () => {
-    terminal = true;
-    eventSource.close();
-  };
-}
-
-export function subscribeSeriesMindmapGenerationProgress(seriesId, listener) {
-  const eventSource = new EventSource(
-    `/api/series/${encodeURIComponent(seriesId)}/mindmap/generate/progress`
-  );
-  let terminal = false;
-
-  eventSource.onmessage = (event) => {
-    const snapshot = JSON.parse(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      eventSource.close();
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (terminal) return;
-    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
-    eventSource.close();
-  };
-
-  return () => {
-    terminal = true;
-    eventSource.close();
-  };
 }

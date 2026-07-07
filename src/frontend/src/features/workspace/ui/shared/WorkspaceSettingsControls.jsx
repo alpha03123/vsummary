@@ -137,6 +137,7 @@ export function WorkspaceTextInput({
   onBlur,
   onKeyDown,
   placeholder,
+  ariaLabel,
   className = "",
   type = "text",
 }) {
@@ -148,6 +149,7 @@ export function WorkspaceTextInput({
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     />
   );

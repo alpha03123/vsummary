@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
 from threading import Lock
 
@@ -48,7 +48,6 @@ class SeriesGenerationResult:
     skipped_videos: list[str]
     cancelled_videos: list[str]
     cancelled_video_id: str | None = None
-    skipped_video_errors: list[dict[str, str]] = field(default_factory=list)
 
 
 class DuplicateSeriesGenerationError(RuntimeError):
@@ -426,8 +425,7 @@ class GenerateSeriesSummaryFromLibrary:
 
             completed_video_ids: set[str] = set()
             cancelled_video_ids: set[str] = set()
-            skipped_video_ids: set[str] = set()
-            skipped_video_errors: dict[str, dict[str, str]] = {}
+            failure: Exception | None = None
             cancellation_requested = asyncio.Event()
             results_lock = asyncio.Lock()
             queue: asyncio.Queue[tuple[int, object]] = asyncio.Queue()
@@ -439,20 +437,20 @@ class GenerateSeriesSummaryFromLibrary:
             async def update_series_progress() -> None:
                 """把单视频完成/取消事件聚合成系列级进度并上报。"""
                 async with results_lock:
-                    finished_count = len(completed_video_ids) + len(cancelled_video_ids) + len(skipped_video_ids)
-                    progress = (finished_count / len(pending_videos)) * 100.0
+                    progress = (len(completed_video_ids) / len(pending_videos)) * 100.0
                     counts = (
-                        f"已结束 {finished_count} / {len(pending_videos)}"
+                        f"已完成 {len(completed_video_ids)} / {len(pending_videos)}"
                         f"，完成 {len(completed_video_ids)}"
                         f"，取消 {len(cancelled_video_ids)}"
-                        f"，跳过 {len(skipped_video_ids)}"
                     )
                     reporter.update("batch", progress, counts)
 
             async def worker() -> None:
                 """单 worker：从队列取视频并复用 `GenerateVideoSummaryFromLibrary` 跑生成。"""
+                nonlocal failure
                 while (
-                    not reporter.is_cancel_requested()
+                    failure is None
+                    and not reporter.is_cancel_requested()
                     and not cancellation_requested.is_set()
                 ):
                     try:
@@ -474,6 +472,8 @@ class GenerateSeriesSummaryFromLibrary:
                             internal_series_generation=True,
                         )
                         if result is None:
+                            if failure is not None:
+                                return
                             async with results_lock:
                                 cancelled_video_ids.add(video.id)
                             await update_series_progress()
@@ -482,14 +482,9 @@ class GenerateSeriesSummaryFromLibrary:
                             completed_video_ids.add(video.id)
                         await update_series_progress()
                     except Exception as error:
-                        async with results_lock:
-                            skipped_video_ids.add(video.id)
-                            skipped_video_errors[video.id] = {
-                                "video_id": str(video.id),
-                                "title": str(video.title),
-                                "error": str(error),
-                            }
-                        await update_series_progress()
+                        failure = error
+                        cancellation_requested.set()
+                        return
                     finally:
                         queue.task_done()
 
@@ -501,6 +496,9 @@ class GenerateSeriesSummaryFromLibrary:
                     if not worker_task.done():
                         worker_task.cancel()
 
+            if failure is not None:
+                raise failure
+
             completed_videos = [video.id for video in pending_videos if video.id in completed_video_ids]
             cancelled_videos = [video.id for video in pending_videos if video.id in cancelled_video_ids]
             skipped_videos = [
@@ -508,15 +506,10 @@ class GenerateSeriesSummaryFromLibrary:
                 for video in pending_videos
                 if video.id not in completed_video_ids and video.id not in cancelled_video_ids
             ]
-            ordered_skipped_errors = [
-                skipped_video_errors[video.id]
-                for video in pending_videos
-                if video.id in skipped_video_errors
-            ]
             if reporter.is_cancel_requested():
                 reporter.cancelled(
-                    f"系列处理已取消，已结束 {len(completed_videos) + len(cancelled_videos) + len(skipped_videos)} / {len(pending_videos)}"
-                    f"，完成 {len(completed_videos)}，取消 {len(cancelled_videos)}，跳过 {len(skipped_videos)}"
+                    f"系列处理已取消，已结束 {len(completed_videos) + len(cancelled_videos)} / {len(pending_videos)}"
+                    f"，完成 {len(completed_videos)}，取消 {len(cancelled_videos)}"
                 )
                 return SeriesGenerationResult(
                     series_id=series_id,
@@ -524,20 +517,18 @@ class GenerateSeriesSummaryFromLibrary:
                     skipped_videos=skipped_videos,
                     cancelled_videos=cancelled_videos,
                     cancelled_video_id=cancelled_videos[0] if cancelled_videos else None,
-                    skipped_video_errors=ordered_skipped_errors,
                 )
 
             reporter.completed(
-                f"系列处理完成，已结束 {len(completed_videos) + len(cancelled_videos) + len(skipped_videos)} / {len(pending_videos)}"
-                f"，完成 {len(completed_videos)}，取消 {len(cancelled_videos)}，跳过 {len(skipped_videos)}"
+                f"系列处理完成，已结束 {len(completed_videos) + len(cancelled_videos)} / {len(pending_videos)}"
+                f"，完成 {len(completed_videos)}，取消 {len(cancelled_videos)}"
             )
             return SeriesGenerationResult(
                 series_id=series_id,
                 completed_videos=completed_videos,
-                skipped_videos=skipped_videos,
+                skipped_videos=[],
                 cancelled_videos=cancelled_videos,
                 cancelled_video_id=cancelled_videos[0] if cancelled_videos else None,
-                skipped_video_errors=ordered_skipped_errors,
             )
         finally:
             await self._clear_series_task(task_id)
@@ -591,8 +582,9 @@ class _SeriesVideoProgressReporter:
         self._video_reporter.completed(detail)
 
     def failed(self, message: str) -> None:
-        """失败时只通知单视频 reporter，避免可跳过错误终止系列级 SSE。"""
+        """失败时同时通知单视频与系列级 reporter，确保两端都收到失败信号。"""
         self._video_reporter.failed(message)
+        self._base_reporter.failed(message)
 
     def cancelled(self, detail: str | None = None) -> None:
         """单视频取消事件转发给单视频 reporter。"""

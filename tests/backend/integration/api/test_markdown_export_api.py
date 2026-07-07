@@ -8,10 +8,65 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend.api.http.app import create_app
+from backend.api.app import create_app
 
 
 class MarkdownExportApiTests(unittest.TestCase):
+    def test_exports_series_markdown_files_to_configured_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            export_root = root / "exports"
+            export_root.mkdir()
+            video_dir = _prepare_video_dir(root)
+            (video_dir / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "one_sentence_summary": "一句话总结。",
+                        "core_problem": "核心问题。",
+                        "key_takeaways": ["重点一"],
+                        "chapters": [
+                            {
+                                "title": "开场",
+                                "summary": "开场总结。",
+                                "key_points": ["细节一"],
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (video_dir / "transcript.cleaned.json").write_text(
+                json.dumps(
+                    {"segments": [{"start_seconds": 0.0, "end_seconds": 3.0, "text": "原文内容"}]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            client = TestClient(
+                create_app(
+                    _build_container(
+                        root,
+                        series_title="系列:标题?",
+                        title="视频:标题?",
+                        export_path=str(export_root),
+                    )
+                )
+            )
+
+            response = client.post("/api/series/series-1/exports/markdown")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["exported_count"], 1)
+            output_file = export_root / "系列-标题" / "视频-标题.md"
+            self.assertTrue(output_file.exists())
+            markdown = output_file.read_text(encoding="utf-8")
+            self.assertIn("# 视频:标题?\n", markdown)
+            self.assertIn("## Summary\n", markdown)
+            self.assertIn("一句话总结：一句话总结。\n", markdown)
+            self.assertIn("## 原文\n", markdown)
+            self.assertIn("[00:00 - 00:03] 原文内容\n", markdown)
+
     def test_exports_existing_summary_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -146,18 +201,6 @@ class MarkdownExportApiTests(unittest.TestCase):
 
             self.assertEqual(response.status_code, 404)
 
-    def test_exports_series_archive_zip(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            client = TestClient(create_app(_build_container(root)))
-
-            response = client.get("/api/series/series-1/exports/mixed.zip")
-
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.content, b"zip-content")
-            self.assertEqual(response.headers["content-type"], "application/zip")
-            self.assertIn("series-1-mixed.zip", response.headers["content-disposition"])
-
 
 def _prepare_video_dir(root: Path) -> Path:
     video_dir = root / "workspace" / "series-1" / "video-1"
@@ -165,16 +208,22 @@ def _prepare_video_dir(root: Path) -> Path:
     return video_dir
 
 
-def _build_container(root: Path, title: str = "Video 1", video_id: str = "video-1"):
+def _build_container(
+    root: Path,
+    title: str = "Video 1",
+    video_id: str = "video-1",
+    series_title: str = "Series 1",
+    export_path: str = "",
+):
     source = SimpleNamespace(output_dir=root / "workspace" / "series-1" / video_id, title=title)
+    video = SimpleNamespace(id=video_id, title=title)
+    series = SimpleNamespace(id="series-1", title=series_title, videos=[video])
     return SimpleNamespace(
         root_dir=root,
         get_video_source=SimpleNamespace(run=lambda series_id, video_id: source),
-        export_series_archive=SimpleNamespace(
-            run=lambda series_id, export_kind: SimpleNamespace(
-                filename=f"{series_id}-{export_kind}.zip",
-                content=b"zip-content",
-            )
+        list_video_library=SimpleNamespace(run=lambda: SimpleNamespace(series=[series])),
+        settings_service=SimpleNamespace(
+            get_workspace_settings=lambda: SimpleNamespace(series_markdown_export_path=export_path)
         ),
     )
 

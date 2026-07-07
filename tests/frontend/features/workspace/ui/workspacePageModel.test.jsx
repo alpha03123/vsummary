@@ -27,10 +27,6 @@ function createController(status) {
     playerSeekRequest: null,
     summary: null,
     mindmap: null,
-    seriesMindmap: null,
-    seriesMindmapAvailable: false,
-    generatingSeriesMindmap: false,
-    mindmapGenerationProgress: null,
     knowledgeCards: null,
     knowledgeCardsGenerating: false,
     knowledgeCardsFeedback: null,
@@ -55,7 +51,6 @@ function createController(status) {
     isGeneratingSelectedVideo: status === "running" || status === "queued",
     isGeneratingSelectedSeries: false,
     isGeneratingMindmapSelectedVideo: false,
-    seriesMindmapLoading: false,
     knowledgeCardsLoading: false,
     notesLoading: false,
     savingNote: false,
@@ -73,7 +68,6 @@ function createController(status) {
     onGenerateSeries: () => {},
     onCancelGeneration: () => {},
     onGenerateMindmap: () => {},
-    onGenerateSeriesMindmap: () => {},
     onGenerateKnowledgeCards: () => {},
     onCreateNote: () => {},
     onUpdateNote: () => {},
@@ -102,32 +96,6 @@ describe("buildWorkspacePageModel generation overlay", () => {
     expect(buildWorkspacePageModel(createController("completed")).generation.showOverlay).toBe(false);
     expect(buildWorkspacePageModel(createController("failed")).generation.showOverlay).toBe(false);
     expect(buildWorkspacePageModel(createController("cancelled")).generation.showOverlay).toBe(false);
-  });
-});
-
-describe("buildWorkspacePageModel series mindmap", () => {
-  it("exposes series mindmap state and action from the controller", () => {
-    const generateSeriesMindmap = vi.fn();
-    const mindmap = { id: "root", title: "Series", children: [] };
-    const progress = { status: "running", elapsed_seconds: 3 };
-    const controller = {
-      ...createController(null),
-      seriesMindmap: mindmap,
-      seriesMindmapAvailable: true,
-      seriesMindmapLoading: true,
-      generatingSeriesMindmap: true,
-      mindmapGenerationProgress: progress,
-      onGenerateSeriesMindmap: generateSeriesMindmap,
-    };
-
-    const model = buildWorkspacePageModel(controller);
-
-    expect(model.shell.seriesMindmap).toBe(mindmap);
-    expect(model.shell.seriesMindmapAvailable).toBe(true);
-    expect(model.generation.seriesMindmapLoading).toBe(true);
-    expect(model.generation.generatingSeriesMindmap).toBe(true);
-    expect(model.generation.mindmapGenerationProgress).toBe(progress);
-    expect(model.actions.generateSeriesMindmap).toBe(generateSeriesMindmap);
   });
 });
 

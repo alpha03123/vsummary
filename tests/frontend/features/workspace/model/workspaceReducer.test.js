@@ -238,6 +238,40 @@ describe("workspaceReducer video generation cancellation", () => {
     expect(state.seriesGenerationQueue.status).toBe("cancelling");
   });
 
+  it("keeps failed series queue error and download context", () => {
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_generation_queue_started",
+      seriesId: "series-a",
+      runId: "run-a",
+      total: 3,
+    });
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_download_started",
+      seriesId: "series-a",
+      runId: "run-a",
+      videoId: "BV1xx411c7mD",
+      videoTitle: "第一讲",
+      detail: "正在下载未缓存视频 1/2",
+    });
+
+    state = workspaceReducer(state, {
+      type: "series_generation_queue_finished",
+      seriesId: "series-a",
+      runId: "run-a",
+      status: "failed",
+      detail: "下载 Bilibili 视频失败",
+      error: "视频下载进度连接已中断",
+    });
+
+    expect(state.seriesGenerationQueue).toEqual(expect.objectContaining({
+      status: "failed",
+      downloadVideoId: "BV1xx411c7mD",
+      downloadVideoTitle: "第一讲",
+      detail: "下载 Bilibili 视频失败",
+      error: "视频下载进度连接已中断",
+    }));
+  });
+
   it("ignores series status without run id while a run-scoped queue is active", () => {
     const taskKey = buildSeriesGenerationTaskKey("series-a");
     let state = workspaceReducer(createInitialWorkspaceState(), {
@@ -374,30 +408,5 @@ describe("workspaceReducer chat drawer", () => {
     const afterVideo = workspaceReducer(withRequest, { type: "video_selected", seriesId: "s", videoId: "v" });
     expect(afterVideo.playerSeekRequest).toBeNull();
     expect(afterVideo.chatDrawerOpen).toBe(true);
-  });
-});
-
-describe("workspaceReducer provider usage", () => {
-  it("stores provider usage after loading", () => {
-    const state = workspaceReducer(createInitialWorkspaceState(), {
-      type: "provider_usage_loading_started",
-      range: "30d",
-    });
-
-    const nextState = workspaceReducer(state, {
-      type: "provider_usage_loaded",
-      range: "30d",
-      usage: {
-        total: { totalTokens: 42 },
-        byCategory: [],
-        byProvider: [],
-        recent: [],
-      },
-    });
-
-    expect(nextState.providerUsageRange).toBe("30d");
-    expect(nextState.providerUsageLoading).toBe(false);
-    expect(nextState.providerUsage.total.totalTokens).toBe(42);
-    expect(nextState.providerUsageError).toBe("");
   });
 });

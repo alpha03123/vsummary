@@ -10,10 +10,10 @@ from fastapi.testclient import TestClient
 
 from tests import _path_setup  # noqa: F401
 
-from backend.api.http.app import create_app
-from backend.api.di.bootstrap import ApiContainer
+from backend.api.app import create_app
+from backend.api.bootstrap import ApiContainer
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.rag.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
+from backend.video_summary.infrastructure.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
 
 
 class RagModelManagerTests(unittest.TestCase):
@@ -97,68 +97,6 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertEqual(snapshot.status, "failed")
             self.assertIn("RAG 模型下载后校验失败", snapshot.error or "")
             self.assertEqual(completed, [])
-
-    def test_failed_download_cleans_partial_model_cache_and_lock_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root_dir = Path(temp_dir)
-            model_dir = root_dir / "data" / "models" / "fastembed" / "models--Qdrant--bge-small-zh-v1.5"
-            lock_dir = root_dir / "data" / "models" / "fastembed" / ".locks" / "models--Qdrant--bge-small-zh-v1.5"
-            unrelated_lock_dir = root_dir / "data" / "models" / "fastembed" / ".locks" / "models--BAAI--bge-reranker-base"
-            unrelated_lock_dir.mkdir(parents=True)
-            (unrelated_lock_dir / "keep.lock").write_text("", encoding="utf-8")
-
-            def failing_downloader(spec, reporter) -> None:
-                del spec, reporter
-                model_dir.mkdir(parents=True)
-                (model_dir / "config.json").write_text("{}", encoding="utf-8")
-                lock_dir.mkdir(parents=True)
-                (lock_dir / "download.lock").write_text("", encoding="utf-8")
-                raise RuntimeError("network failed")
-
-            manager = RagModelManager(
-                root_dir=root_dir,
-                progress_tracker=InMemoryProgressTracker(),
-                downloader=failing_downloader,
-            )
-
-            manager.start_download("embedding")
-            _wait_until(lambda: not manager.has_active_download())
-            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
-
-            self.assertEqual(snapshot.status, "failed")
-            self.assertIn("network failed", snapshot.error or "")
-            self.assertFalse(model_dir.exists())
-            self.assertFalse(lock_dir.exists())
-            self.assertTrue(unrelated_lock_dir.exists())
-
-    def test_download_start_cleans_stale_partial_cache_before_retry(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root_dir = Path(temp_dir)
-            stale_model_dir = root_dir / "data" / "models" / "fastembed" / "models--Qdrant--bge-small-zh-v1.5"
-            stale_lock_dir = root_dir / "data" / "models" / "fastembed" / ".locks" / "models--Qdrant--bge-small-zh-v1.5"
-            stale_model_dir.mkdir(parents=True)
-            (stale_model_dir / "config.json").write_text("{}", encoding="utf-8")
-            stale_lock_dir.mkdir(parents=True)
-            (stale_lock_dir / "download.lock").write_text("", encoding="utf-8")
-
-            def retry_downloader(spec, reporter) -> None:
-                del spec, reporter
-                self.assertFalse(stale_model_dir.exists())
-                self.assertFalse(stale_lock_dir.exists())
-                _write_model_marker(root_dir, "models--Qdrant--bge-small-zh-v1.5", extra_files=("model_optimized.onnx",))
-
-            manager = RagModelManager(
-                root_dir=root_dir,
-                progress_tracker=InMemoryProgressTracker(),
-                downloader=retry_downloader,
-            )
-
-            manager.start_download("embedding")
-            _wait_until(lambda: not manager.has_active_download())
-            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
-
-            self.assertEqual(snapshot.status, "completed")
-            self.assertTrue(manager.is_downloaded("embedding"))
 
 
 class RagModelAgentRouteTests(unittest.TestCase):

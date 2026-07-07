@@ -1,6 +1,30 @@
 import { describe, expect, it, vi } from "vitest";
 
 describe("workspaceContentActions series cancellation", () => {
+  it("exports the selected series markdown and reports the output folder", async () => {
+    vi.resetModules();
+    const exportSeriesMarkdown = vi.fn().mockResolvedValue({ outputDir: "D:/exports/Series", exportedCount: 3 });
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      exportSeriesMarkdown,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: { selectedSeriesId: "series-a" },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    const result = await actions.onExportSeriesMarkdown();
+
+    expect(exportSeriesMarkdown).toHaveBeenCalledWith("series-a");
+    expect(result).toEqual({ outputDir: "D:/exports/Series", exportedCount: 3 });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("keeps the series queue cancelling until backend cancellation finishes", async () => {
     vi.resetModules();
     let resolveDownloadCancel;
@@ -230,44 +254,24 @@ describe("workspaceContentActions series cancellation", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "workspace_loaded", library: refreshedLibrary });
   });
 
-  it("skips failed linked video downloads and continues the series run", async () => {
+  it("keeps linked video download failure details on the series queue", async () => {
     vi.resetModules();
-    const startVideoDownload = vi.fn(() => Promise.resolve({ taskId: "download-task" }));
-    const subscribeVideoDownloadProgress = vi.fn((seriesId, videoId, listener) => {
-      queueMicrotask(() => {
-        listener(
-          videoId === "linked-1"
-            ? { status: "failed", error: "yt-dlp 退出码 1：HTTP Error 403" }
-            : { status: "completed", progress: 100 },
-        );
-      });
-      return vi.fn();
-    });
-    const generateSeriesSummaries = vi.fn(() => Promise.resolve({
-      completed_videos: ["linked-2"],
-      skipped_videos: ["linked-1"],
-      skipped_video_errors: [
-        { video_id: "linked-1", title: "Linked 1", error: "源文件不存在" },
-      ],
-      cancelled_videos: [],
-    }));
-    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({
-      series: [
-        {
-          id: "series-a",
-          videos: [
-            { id: "linked-1", processed: false, status: "linked", isLinked: true, title: "Linked 1" },
-            { id: "linked-2", processed: true, status: "ready", isLinked: false, title: "Linked 2" },
-          ],
-        },
-      ],
-    }));
+    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({ series: [] }));
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
-      generateSeriesSummaries,
+      generateSeriesSummaries: vi.fn(),
       loadWorkspaceLibrary,
-      startVideoDownload,
-      subscribeVideoDownloadProgress,
+      startVideoDownload: vi.fn(() => Promise.resolve({ task_id: "download-1" })),
+      subscribeVideoDownloadProgress: vi.fn((_seriesId, _videoId, listener) => {
+        listener({
+          status: "failed",
+          stage: "failed",
+          progress: null,
+          detail: "下载 Bilibili 视频失败",
+          error: "视频下载进度连接已中断",
+        });
+        return vi.fn();
+      }),
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -282,16 +286,13 @@ describe("workspaceContentActions series cancellation", () => {
           series: [
             {
               id: "series-a",
-              videos: [
-                { id: "linked-1", processed: false, status: "linked", isLinked: true, title: "Linked 1" },
-                { id: "linked-2", processed: false, status: "linked", isLinked: true, title: "Linked 2" },
-              ],
+              videos: [{ id: "linked-1", title: "第一讲", processed: false, status: "linked", isLinked: true }],
             },
           ],
         },
         ui: { transcriptEnhancementEnabled: true },
-        seriesGenerationQueue: null,
         generationTasksByKey: {},
+        seriesGenerationQueue: null,
       },
       dispatch,
       selectedVideo: null,
@@ -299,20 +300,12 @@ describe("workspaceContentActions series cancellation", () => {
 
     await actions.onGenerateSeries();
 
-    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
-    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-2");
-    expect(generateSeriesSummaries).toHaveBeenCalledWith("series-a", {
-      transcriptEnhancementEnabled: true,
-      runId: expect.any(String),
-    });
-    const completedSnapshot = dispatch.mock.calls.find(([action]) => action.type === "generation_status_loaded")?.[0]?.snapshot;
-    expect(completedSnapshot?.detail).toContain("跳过 1 个");
-    expect(completedSnapshot?.detail).toContain("HTTP Error 403");
-    expect(completedSnapshot?.detail).toContain("源文件不存在");
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "series_generation_queue_finished",
       seriesId: "series-a",
-      status: "completed",
+      status: "failed",
+      detail: "下载未缓存视频失败：第一讲",
+      error: "视频下载进度连接已中断",
     }));
   });
 

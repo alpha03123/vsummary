@@ -192,32 +192,6 @@ export function workspaceReducer(state, action) {
           ...action.settings,
         }),
       };
-    case "provider_usage_loading_started":
-      return {
-        ...state,
-        providerUsageRange: action.range,
-        providerUsageLoading: true,
-        providerUsageError: "",
-      };
-    case "provider_usage_range_changed":
-      return {
-        ...state,
-        providerUsageRange: action.range,
-      };
-    case "provider_usage_loaded":
-      return {
-        ...state,
-        providerUsageRange: action.range,
-        providerUsage: action.usage,
-        providerUsageLoading: false,
-        providerUsageError: "",
-      };
-    case "provider_usage_load_failed":
-      return {
-        ...state,
-        providerUsageLoading: false,
-        providerUsageError: action.message,
-      };
     case "faster_whisper_models_loading_started":
       return {
         ...state,
@@ -434,8 +408,6 @@ export function workspaceReducer(state, action) {
         generatingSeriesId: null,
         generationMode: null,
         generatingMindmapKey: null,
-        seriesMindmapLoading: false,
-        generatingSeriesMindmap: false,
         generationProgress: null,
         generationSnapshot: null,
         downloadingVideoKey: null,
@@ -856,16 +828,6 @@ export function workspaceReducer(state, action) {
         ...state,
         settingsPanelOpen: false,
       };
-    case "usage_page_opened":
-      return {
-        ...state,
-        usagePageOpen: true,
-      };
-    case "usage_page_closed":
-      return {
-        ...state,
-        usagePageOpen: false,
-      };
     case "generation_started":
       return {
         ...state,
@@ -1045,9 +1007,16 @@ export function workspaceReducer(state, action) {
                 status: action.status ?? "completed",
                 currentVideoId: null,
                 currentVideoTitle: null,
-                downloadVideoId: null,
-                downloadVideoTitle: null,
+                downloadVideoId:
+                  action.status === "failed"
+                    ? state.seriesGenerationQueue.downloadVideoId
+                    : null,
+                downloadVideoTitle:
+                  action.status === "failed"
+                    ? state.seriesGenerationQueue.downloadVideoTitle
+                    : null,
                 detail: action.detail ?? state.seriesGenerationQueue.detail,
+                error: action.error ?? null,
               },
         };
       }
@@ -1478,40 +1447,6 @@ export function workspaceReducer(state, action) {
         ...state,
         knowledgeMemorySnapshot: action.snapshot,
       };
-    case "series_mindmap_loading_started":
-      return { ...state, seriesMindmapLoading: true, error: "" };
-
-    case "series_mindmap_loaded":
-      return {
-        ...state,
-        seriesMindmap: action.mindmap,
-        seriesMindmapLoading: false,
-        seriesSelectedNodeId: action.mindmap?.children?.[0]?.id ?? action.mindmap?.id ?? null,
-      };
-
-    case "series_mindmap_cleared":
-      return {
-        ...state,
-        seriesMindmap: null,
-        seriesMindmapLoading: false,
-        seriesSelectedNodeId: null,
-      };
-
-    case "series_mindmap_generation_started":
-      return { ...state, generatingSeriesMindmap: true, error: "" };
-
-    case "series_mindmap_generation_succeeded":
-      return {
-        ...state,
-        seriesMindmap: action.mindmap,
-        generatingSeriesMindmap: false,
-        seriesSelectedNodeId: action.mindmap?.children?.[0]?.id ?? action.mindmap?.id ?? null,
-      };
-    case "mindmap_generation_progress_updated":
-      return { ...state, mindmapGenerationProgress: action.snapshot };
-
-    case "mindmap_generation_progress_cleared":
-      return { ...state, mindmapGenerationProgress: null };
     default:
       return state;
   }

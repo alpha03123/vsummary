@@ -8,14 +8,11 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests import _path_setup
-from backend.api.http.app import create_app
-from backend.api.adapters.agent_runtime_provider import _resolve_local_reranker_cache_dir
+from backend.api.app import create_app
+from backend.api.bootstrap import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
     PACKAGE_VARIANTS,
-    ReleaseArtifact,
-    build_release_manifest,
     build_release_layout,
-    build_runtime_id,
     render_start_bat,
 )
 
@@ -103,13 +100,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn('embedding_provider = "fastembed"', rendered)
         self.assertIn('embedding_model = "BAAI/bge-small-zh-v1.5"', rendered)
 
-    def test_gpu_environment_pins_onnxruntime_gpu_before_cuda_13_builds(self) -> None:
-        gpu = PACKAGE_VARIANTS["gpu"]
-        rendered = (self.repo_root / gpu.environment_file).read_text(encoding="utf-8")
-
-        self.assertIn("onnxruntime-gpu>=1.20,<1.27", rendered)
-        self.assertNotIn("onnxruntime-gpu>=1.20,<2", rendered)
-
     def test_build_release_layout_targets_external_pack_root(self) -> None:
         layout = build_release_layout(
             repo_root=self.repo_root,
@@ -126,7 +116,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
         self.assertIn("HF_HOME", script)
         self.assertIn("HUGGINGFACE_HUB_CACHE", script)
-        self.assertIn("-m backend.api.http.server", script)
+        self.assertIn("-m backend.api.server", script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
@@ -138,72 +128,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
             cache_dir = _resolve_local_reranker_cache_dir(root_dir)
 
             self.assertEqual(cache_dir, str(root_dir / "data" / "models" / "fastembed"))
-
-    def test_build_runtime_id_is_stable_and_changes_with_dependency_content(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root_dir = Path(temp_dir)
-            env_file = root_dir / "scripts" / "package" / "environment.cpu.yml"
-            env_file.parent.mkdir(parents=True)
-            env_file.write_text("name: vsummary-pack-cpu\n- fastapi\n", encoding="utf-8")
-
-            first_id = build_runtime_id(
-                kind="cpu",
-                repo_root=root_dir,
-                dependency_files=(Path("scripts/package/environment.cpu.yml"),),
-            )
-            second_id = build_runtime_id(
-                kind="cpu",
-                repo_root=root_dir,
-                dependency_files=(Path("scripts/package/environment.cpu.yml"),),
-            )
-
-            env_file.write_text("name: vsummary-pack-cpu\n- fastapi\n- lancedb\n", encoding="utf-8")
-            changed_id = build_runtime_id(
-                kind="cpu",
-                repo_root=root_dir,
-                dependency_files=(Path("scripts/package/environment.cpu.yml"),),
-            )
-
-        self.assertEqual(first_id, second_id)
-        self.assertTrue(first_id.startswith("runtime-cpu-"))
-        self.assertNotEqual(first_id, changed_id)
-
-    def test_build_release_manifest_describes_app_runtime_and_full_assets(self) -> None:
-        manifest = build_release_manifest(
-            version="v0.3.1",
-            assets=[
-                ReleaseArtifact(
-                    name="vsummary-app-v0.3.1.7z",
-                    role="app",
-                    url="https://example.test/vsummary-app-v0.3.1.7z",
-                    sha256="a" * 64,
-                    size=123,
-                ),
-                ReleaseArtifact(
-                    name="runtime-cpu-deadbeef",
-                    role="runtime",
-                    variant="cpu",
-                    runtime_id="runtime-cpu-deadbeef",
-                    url="",
-                    sha256="",
-                    size=0,
-                ),
-                ReleaseArtifact(
-                    name="vsummary-full-cpu-v0.3.1.7z",
-                    role="full",
-                    variant="cpu",
-                    url="https://example.test/vsummary-full-cpu-v0.3.1.7z",
-                    sha256="c" * 64,
-                    size=789,
-                ),
-            ],
-        )
-
-        self.assertEqual(manifest["version"], "v0.3.1")
-        self.assertEqual(manifest["app"]["version"], "v0.3.1")
-        self.assertEqual(manifest["app"]["sha256"], "a" * 64)
-        self.assertEqual(manifest["runtime"]["cpu"]["id"], "runtime-cpu-deadbeef")
-        self.assertEqual(manifest["full"]["cpu"]["sha256"], "c" * 64)
 
 
 if __name__ == "__main__":

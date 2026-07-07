@@ -11,8 +11,7 @@ from pathlib import Path
 from threading import Lock
 
 from backend.video_summary.infrastructure.application_builders import build_mindmap_application
-from backend.video_summary.infrastructure.config.settings import ensure_settings_file
-from backend.shared.llm.usage import LlmUsageRecorder
+from backend.video_summary.infrastructure.settings import ensure_settings_file
 
 
 class ConfiguredMindmapWorkflow:
@@ -23,28 +22,20 @@ class ConfiguredMindmapWorkflow:
     同时支持用户在运行时改写配置后自动重建。
     """
 
-    def __init__(self, root_dir: Path, usage_recorder: LlmUsageRecorder | None = None) -> None:
+    def __init__(self, root_dir: Path) -> None:
         """记录项目根目录、配置文件路径与缓存状态。
 
         Args:
             root_dir: 项目根目录，用于解析 `config/settings.toml` 与 `.env`。
         """
         self._root_dir = root_dir
-        self._usage_recorder = usage_recorder
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
         self._cached_signature: tuple[str, str] | None = None
         self._cached_application = None
 
-    async def run(
-        self,
-        source_path: Path,
-        output_dir: Path,
-        summary_data: dict[str, object],
-        transcript_text: str = "",
-        progress_reporter=None,
-    ) -> None:
+    async def run(self, source_path: Path, output_dir: Path, summary_data: dict[str, object]) -> None:
         """基于当前配置执行一次思维导图生成。
 
         从 `summary_data` 的最后一个章节推导 `duration_seconds`；
@@ -54,8 +45,6 @@ class ConfiguredMindmapWorkflow:
             source_path: 媒体源路径，仅取 `stem` 作为标题。
             output_dir: 思维导图制品的输出目录（`mindmap.json`）。
             summary_data: 来自总结阶段的结构化数据，用于驱动导图生成。
-            transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
-            progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
         """
         application = self._get_application()
         await application.use_case.run(
@@ -63,8 +52,6 @@ class ConfiguredMindmapWorkflow:
             duration_seconds=_resolve_duration_seconds(summary_data),
             summary_data=summary_data,
             output_dir=output_dir,
-            transcript_text=transcript_text,
-            progress_reporter=progress_reporter,
         )
 
     def _get_application(self):
@@ -83,7 +70,6 @@ class ConfiguredMindmapWorkflow:
                 self._cached_application = build_mindmap_application(
                     config_path=self._config_path,
                     root_dir=self._root_dir,
-                    usage_recorder=self._usage_recorder,
                 )
                 self._cached_signature = signature
             return self._cached_application

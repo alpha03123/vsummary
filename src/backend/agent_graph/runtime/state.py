@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+from typing import TypedDict
+
+from typing_extensions import NotRequired
 
 
 class AgentGraphState(TypedDict):

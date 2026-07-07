@@ -66,10 +66,11 @@ describe("useWorkspaceController chat-drawer actions", () => {
   });
 });
 
-describe("useWorkspaceController external import actions", () => {
-  it("exposes Bilibili cookie initialization to the page model", () => {
+describe("useWorkspaceController Bilibili QR actions", () => {
+  it("exposes QR login actions for the settings panel", () => {
     const { result } = renderHook(() => useWorkspaceController());
 
-    expect(typeof result.current.onInitBilibiliCookie).toBe("function");
+    expect(typeof result.current.onCreateBilibiliQrLoginSession).toBe("function");
+    expect(typeof result.current.onPollBilibiliQrLogin).toBe("function");
   });
 });

@@ -3,15 +3,10 @@ param(
     [string]$Target = "all",
     [string]$CpuEnvName = "vsummary-pack-cpu",
     [string]$GpuEnvName = "vsummary-pack-gpu",
-    [string]$Version = "",
-    [string]$ReleaseBaseUrl = "https://github.com/alpha03123/vsummary/releases/latest/download",
     [string]$OutputRoot = "temp\packs",
-    [switch]$ForceRuntime,
-    [switch]$RefreshEnv,
-    [switch]$SkipFullPackage,
     [switch]$KeepFrontendDist,
     [switch]$CleanNodeModules,
-    [switch]$CleanBuildArtifacts
+    [switch]$KeepBuildArtifacts
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,10 +16,7 @@ $PackageConfigDir = Join-Path $RepoRoot "scripts\package"
 $FrontendDir = Join-Path $RepoRoot "src\frontend"
 $FrontendDistDir = Join-Path $FrontendDir "dist"
 $FrontendNodeModulesDir = Join-Path $FrontendDir "node_modules"
-$PacksRootPath = if ([System.IO.Path]::IsPathRooted($OutputRoot)) { $OutputRoot } else { Join-Path $RepoRoot $OutputRoot }
-$OutputRootPath = Join-Path $PacksRootPath (Get-Date -Format "yyyy-MM-dd")
-$BuildRootPath = Join-Path $OutputRootPath "_build"
-$ManifestPath = Join-Path $OutputRootPath "vsummary-manifest.json"
+$OutputRootPath = if ([System.IO.Path]::IsPathRooted($OutputRoot)) { $OutputRoot } else { Join-Path $RepoRoot $OutputRoot }
 
 function Remove-PathIfExists {
     param([string]$Path)
@@ -54,20 +46,6 @@ function Copy-DirectoryIfExists {
     Copy-Item -LiteralPath $Source -Destination $Destination -Recurse -Force
 }
 
-function Copy-DirectoryContents {
-    param(
-        [string]$Source,
-        [string]$Destination
-    )
-
-    if (-not (Test-Path -LiteralPath $Source)) {
-        throw "Source directory not found: $Source"
-    }
-
-    Ensure-Directory -Path $Destination
-    Get-ChildItem -LiteralPath $Source -Force | Copy-Item -Destination $Destination -Recurse -Force
-}
-
 function Copy-GitTrackedFiles {
     param([string]$DestinationRoot)
 
@@ -87,74 +65,6 @@ function Copy-GitTrackedFiles {
         }
 
         $destination = Join-Path $DestinationRoot $file
-        Ensure-Directory -Path (Split-Path -Parent $destination)
-        Copy-Item -LiteralPath $source -Destination $destination -Force
-    }
-}
-
-function Test-AppFile {
-    param([string]$Path)
-
-    $normalized = $Path.Replace("\", "/")
-    if ($normalized.StartsWith("src/")) {
-        return $true
-    }
-    if ($normalized.StartsWith("assets/")) {
-        return $true
-    }
-    if ($normalized.StartsWith("updater/")) {
-        return $true
-    }
-    return @(
-        ".env.example",
-        "diagnose_gpu.py",
-        "LICENSE",
-        "README.md",
-        "update.bat",
-        "config/settings.toml.example"
-    ) -contains $normalized
-}
-
-function Copy-AppFiles {
-    param([string]$DestinationRoot)
-
-    $files = & git -C $RepoRoot ls-files
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: git -C $RepoRoot ls-files"
-    }
-
-    foreach ($file in $files) {
-        if (-not $file -or -not (Test-AppFile -Path $file)) {
-            continue
-        }
-
-        $source = Join-Path $RepoRoot $file
-        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            continue
-        }
-
-        $destination = Join-Path $DestinationRoot $file
-        Ensure-Directory -Path (Split-Path -Parent $destination)
-        Copy-Item -LiteralPath $source -Destination $destination -Force
-    }
-
-    Copy-UpdaterEntrypoints -DestinationRoot $DestinationRoot
-}
-
-function Copy-UpdaterEntrypoints {
-    param([string]$DestinationRoot)
-
-    $entrypoints = @(
-        "update.bat",
-        "updater\__init__.py",
-        "updater\update.py"
-    )
-    foreach ($entrypoint in $entrypoints) {
-        $source = Join-Path $RepoRoot $entrypoint
-        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "Updater entrypoint not found: $entrypoint"
-        }
-        $destination = Join-Path $DestinationRoot $entrypoint
         Ensure-Directory -Path (Split-Path -Parent $destination)
         Copy-Item -LiteralPath $source -Destination $destination -Force
     }
@@ -193,114 +103,6 @@ function Get-CondaExe {
     throw "conda.exe not found."
 }
 
-function Resolve-ReleaseVersion {
-    if (-not [string]::IsNullOrWhiteSpace($Version)) {
-        return $Version
-    }
-
-    $tag = & git -C $RepoRoot describe --tags --exact-match 2>$null
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
-        return $tag.Trim()
-    }
-
-    $commit = & git -C $RepoRoot rev-parse --short HEAD
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
-        throw "Unable to resolve release version. Pass -Version explicitly."
-    }
-    return "dev-$($commit.Trim())"
-}
-
-function Get-ContentSignature {
-    param([string[]]$RelativePaths)
-
-    $stream = [System.IO.MemoryStream]::new()
-    try {
-        foreach ($relativePath in $RelativePaths) {
-            $normalized = $relativePath.Replace("\", "/")
-            $path = Join-Path $RepoRoot $relativePath
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-                throw "Signature input not found: $relativePath"
-            }
-
-            $nameBytes = [System.Text.Encoding]::UTF8.GetBytes($normalized)
-            $stream.Write($nameBytes, 0, $nameBytes.Length)
-            $stream.WriteByte(0)
-            $contentBytes = [System.IO.File]::ReadAllBytes($path)
-            $stream.Write($contentBytes, 0, $contentBytes.Length)
-            $stream.WriteByte(0)
-        }
-
-        $sha = [System.Security.Cryptography.SHA256]::Create()
-        try {
-            $hash = $sha.ComputeHash($stream.ToArray())
-        }
-        finally {
-            $sha.Dispose()
-        }
-        return -join ($hash | ForEach-Object { $_.ToString("x2") })
-    }
-    finally {
-        $stream.Dispose()
-    }
-}
-
-function Get-RuntimeId {
-    param(
-        [string]$Kind,
-        [string[]]$DependencyFiles
-    )
-
-    $signature = Get-ContentSignature -RelativePaths $DependencyFiles
-    return "runtime-$Kind-$($signature.Substring(0, 12))"
-}
-
-function Get-FileSha256 {
-    param([string]$Path)
-
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
-function Get-AssetUrl {
-    param([string]$FileName)
-
-    if ([string]::IsNullOrWhiteSpace($ReleaseBaseUrl)) {
-        return $FileName
-    }
-
-    return $ReleaseBaseUrl.TrimEnd("/") + "/" + $FileName
-}
-
-function Compress-Directory {
-    param(
-        [string]$SourceRoot,
-        [string]$ArchivePath,
-        [string]$SevenZipExe
-    )
-
-    Ensure-Directory -Path (Split-Path -Parent $ArchivePath)
-    Remove-PathIfExists -Path $ArchivePath
-    $archiveType = if ([System.IO.Path]::GetExtension($ArchivePath).ToLowerInvariant() -eq ".zip") { "-tzip" } else { "-t7z" }
-    Push-Location $SourceRoot
-    try {
-        Invoke-External -FilePath $SevenZipExe -Arguments @("a", $archiveType, $ArchivePath, ".") -WorkingDirectory $SourceRoot
-    }
-    finally {
-        Pop-Location
-    }
-}
-
-function Expand-ArchiveWith7Zip {
-    param(
-        [string]$ArchivePath,
-        [string]$DestinationRoot,
-        [string]$SevenZipExe
-    )
-
-    Remove-PathIfExists -Path $DestinationRoot
-    Ensure-Directory -Path $DestinationRoot
-    Invoke-External -FilePath $SevenZipExe -Arguments @("x", $ArchivePath, "-o$DestinationRoot", "-y")
-}
-
 function Invoke-External {
     param(
         [string]$FilePath,
@@ -316,33 +118,22 @@ function Invoke-External {
 }
 
 function Get-VariantTable {
-    $cpuRuntimeId = Get-RuntimeId -Kind "cpu" -DependencyFiles @("scripts\package\environment.cpu.yml")
-    $gpuRuntimeId = Get-RuntimeId -Kind "gpu" -DependencyFiles @("scripts\package\environment.gpu.yml")
-
     return @{
         cpu = @{
             Kind = "cpu"
             EnvName = $CpuEnvName
             EnvFile = Join-Path $PackageConfigDir "environment.cpu.yml"
-            EnvRelativePath = "scripts\package\environment.cpu.yml"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.cpu.toml"
-            RuntimeId = $cpuRuntimeId
-            PackageRoot = Join-Path $BuildRootPath "full\cpu\vsummary-cpu"
-            BuildRoot = Join-Path $BuildRootPath "runtime\cpu"
-            RuntimeRoot = Join-Path $BuildRootPath "runtime\cpu\runtime"
-            FullArchive = Join-Path $OutputRootPath "vsummary-full-cpu-$Script:ReleaseVersion.7z"
+            PackageRoot = Join-Path $OutputRootPath "vsummary-cpu"
+            BuildRoot = Join-Path $OutputRootPath "_build\cpu"
         }
         gpu = @{
             Kind = "gpu"
             EnvName = $GpuEnvName
             EnvFile = Join-Path $PackageConfigDir "environment.gpu.yml"
-            EnvRelativePath = "scripts\package\environment.gpu.yml"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.gpu.toml"
-            RuntimeId = $gpuRuntimeId
-            PackageRoot = Join-Path $BuildRootPath "full\gpu\vsummary-gpu"
-            BuildRoot = Join-Path $BuildRootPath "runtime\gpu"
-            RuntimeRoot = Join-Path $BuildRootPath "runtime\gpu\runtime"
-            FullArchive = Join-Path $OutputRootPath "vsummary-full-gpu-$Script:ReleaseVersion.7z"
+            PackageRoot = Join-Path $OutputRootPath "vsummary-gpu"
+            BuildRoot = Join-Path $OutputRootPath "_build\gpu"
         }
     }
 }
@@ -364,20 +155,6 @@ function Get-EnvironmentNameFromFile {
         throw "Environment file missing name: $EnvFile"
     }
     return $nameLine.Matches[0].Groups[1].Value.Trim()
-}
-
-function Test-CondaEnvironmentExists {
-    param(
-        [string]$CondaExe,
-        [string]$EnvName
-    )
-
-    $envs = & $CondaExe env list --json | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $CondaExe env list --json"
-    }
-    $matches = @($envs.envs) | Where-Object { $_ -match "\\$EnvName$" }
-    return $matches.Count -gt 0
 }
 
 function Ensure-CondaEnvironment {
@@ -427,7 +204,7 @@ function Repair-GpuProviderWheel {
         "install",
         "--force-reinstall",
         "--no-deps",
-        "onnxruntime-gpu>=1.20,<1.27"
+        "onnxruntime-gpu>=1.20,<2"
     )
 }
 
@@ -473,7 +250,7 @@ function Pack-CondaEnvironment {
 
     Invoke-External -FilePath $CondaPackExe -Arguments @("-n", $Variant.EnvName, "-o", $archivePath, "--format", "zip", "--force", "--ignore-missing-files")
     Invoke-External -FilePath $SevenZipExe -Arguments @("x", $archivePath, "-o$runtimeRoot", "-y")
-    Invoke-CondaUnpack -RuntimeRoot $runtimeRoot
+
 }
 
 function Invoke-CondaUnpack {
@@ -508,7 +285,7 @@ os.chdir(root)
 os.environ["HF_HOME"] = str(root / "data" / "huggingface")
 os.environ["HUGGINGFACE_HUB_CACHE"] = str(root / "data" / "huggingface" / "hub")
 sys.path.insert(0, str(root / "src"))
-from backend.api.http.app import create_app
+from backend.api.app import create_app
 
 class DummyContainer:
     def __init__(self, root_dir):
@@ -579,16 +356,7 @@ elif kind == "gpu":
         "chaoxing-downloader",
     })
     forbid({"fastembed"})
-    from importlib.metadata import version
     import onnxruntime as ort
-
-    ort_gpu_version = version("onnxruntime-gpu")
-    if tuple(int(part) for part in ort_gpu_version.split(".")[:2]) >= (1, 27):
-        raise SystemExit(
-            "gpu package uses onnxruntime-gpu "
-            + ort_gpu_version
-            + ", which requires CUDA 13 runtime; pin onnxruntime-gpu <1.27 for the bundled CUDA 12 runtime"
-        )
 
     providers = set(ort.get_available_providers())
     if "CUDAExecutionProvider" not in providers:
@@ -611,44 +379,7 @@ print(f"{kind} dependency contract ok")
     }
 }
 
-function Build-AppPackage {
-    param([string]$SevenZipExe)
-
-    $appRoot = Join-Path $BuildRootPath "app\vsummary-app"
-    Remove-PathIfExists -Path $appRoot
-    Ensure-Directory -Path $appRoot
-
-    Copy-AppFiles -DestinationRoot $appRoot
-    Copy-DirectoryIfExists -Source $FrontendDistDir -Destination (Join-Path $appRoot "src\frontend\dist")
-    Set-Content -LiteralPath (Join-Path $appRoot "start.bat") -Value (Render-StartScript) -Encoding ASCII
-    Set-Content -LiteralPath (Join-Path $appRoot "VERSION") -Value $Script:ReleaseVersion -Encoding ASCII
-    Write-AppFilesManifest -AppRoot $appRoot
-
-    $archivePath = Join-Path $OutputRootPath "vsummary-app-$Script:ReleaseVersion.zip"
-    Compress-Directory -SourceRoot $appRoot -ArchivePath $archivePath -SevenZipExe $SevenZipExe
-    return @{
-        Root = $appRoot
-        Archive = $archivePath
-    }
-}
-
-function Write-AppFilesManifest {
-    param([string]$AppRoot)
-
-    $manifestPath = Join-Path $AppRoot "updater\app-files.json"
-    Ensure-Directory -Path (Split-Path -Parent $manifestPath)
-    $rootPath = (Resolve-Path -LiteralPath $AppRoot).Path
-    $files = Get-ChildItem -LiteralPath $AppRoot -Recurse -File -Force |
-        ForEach-Object {
-            $_.FullName.Substring($rootPath.Length + 1).Replace("\", "/")
-        } |
-        Sort-Object
-
-    $payload = [ordered]@{ files = @($files) }
-    $payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-}
-
-function Ensure-RuntimeRoot {
+function Build-Package {
     param(
         [hashtable]$Variant,
         [string]$CondaExe,
@@ -656,177 +387,46 @@ function Ensure-RuntimeRoot {
         [string]$SevenZipExe
     )
 
-    if ((Test-Path -LiteralPath (Join-Path $Variant.RuntimeRoot "python.exe") -PathType Leaf) -and -not $ForceRuntime) {
-        Write-Host "Reusing runtime root $($Variant.RuntimeId)"
-        return
-    }
+    Write-Host "Preparing environment $($Variant.EnvName)"
+    Ensure-CondaEnvironment -CondaExe $CondaExe -Variant $Variant
+    Repair-GpuProviderWheel -CondaExe $CondaExe -Variant $Variant
 
-    $envExists = Test-CondaEnvironmentExists -CondaExe $CondaExe -EnvName $Variant.EnvName
-    if ($RefreshEnv -or -not $envExists) {
-        Write-Host "Preparing environment $($Variant.EnvName) for $($Variant.RuntimeId)"
-        Ensure-CondaEnvironment -CondaExe $CondaExe -Variant $Variant
-        Repair-GpuProviderWheel -CondaExe $CondaExe -Variant $Variant
-    }
-    else {
-        Write-Host "Using existing environment $($Variant.EnvName) for $($Variant.RuntimeId)"
-    }
-
-    Write-Host "Packing runtime $($Variant.RuntimeId)"
+    Write-Host "Packing environment $($Variant.EnvName)"
     Pack-CondaEnvironment -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe -Variant $Variant
-}
 
-function Build-FullPackage {
-    param(
-        [hashtable]$Variant,
-        [string]$AppRoot,
-        [string]$SevenZipExe
-    )
-
-    Write-Host "Building full package $($Variant.Kind)"
     Remove-PathIfExists -Path $Variant.PackageRoot
     Ensure-Directory -Path $Variant.PackageRoot
-
-    Copy-DirectoryContents -Source $AppRoot -Destination $Variant.PackageRoot
     Ensure-Directory -Path (Join-Path $Variant.PackageRoot "videos")
     Ensure-Directory -Path (Join-Path $Variant.PackageRoot "workspace")
     Ensure-Directory -Path (Join-Path $Variant.PackageRoot "data")
 
+    Copy-GitTrackedFiles -DestinationRoot $Variant.PackageRoot
     Copy-Item -LiteralPath $Variant.SettingsTemplate -Destination (Join-Path $Variant.PackageRoot "config\settings.toml") -Force
-    Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "RUNTIME") -Value $Variant.RuntimeId -Encoding ASCII
-    Write-InstalledState -PackageRoot $Variant.PackageRoot -Variant $Variant
-    Write-UpdaterConfig -PackageRoot $Variant.PackageRoot
-    $packageRuntimeRoot = Join-Path $Variant.PackageRoot "runtime"
-    Remove-PathIfExists -Path $packageRuntimeRoot
-    Copy-DirectoryContents -Source $Variant.RuntimeRoot -Destination $packageRuntimeRoot
+    Copy-DirectoryIfExists -Source $FrontendDistDir -Destination (Join-Path $Variant.PackageRoot "src\frontend\dist")
+
+    Copy-DirectoryIfExists -Source (Join-Path $Variant.BuildRoot "runtime") -Destination (Join-Path $Variant.PackageRoot "runtime")
+    Invoke-CondaUnpack -RuntimeRoot (Join-Path $Variant.PackageRoot "runtime")
+    Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "start.bat") -Value (Render-StartScript) -Encoding ASCII
 
     Write-Host "Checking packaged dependency contract"
     Test-PackagedDependencyContract -PackageRoot $Variant.PackageRoot -Kind $Variant.Kind
 
     Write-Host "Running packaged runtime smoke check"
     Test-PackagedRuntime -PackageRoot $Variant.PackageRoot
-
-    Compress-Directory -SourceRoot $Variant.PackageRoot -ArchivePath $Variant.FullArchive -SevenZipExe $SevenZipExe
-}
-
-function Write-InstalledState {
-    param(
-        [string]$PackageRoot,
-        [hashtable]$Variant
-    )
-
-    $appFilesManifest = Join-Path $PackageRoot "updater\app-files.json"
-    $appFiles = @()
-    if (Test-Path -LiteralPath $appFilesManifest -PathType Leaf) {
-        $appFiles = @((Get-Content -LiteralPath $appFilesManifest -Raw -Encoding UTF8 | ConvertFrom-Json).files)
-    }
-
-    $payload = [ordered]@{
-        variant = $Variant.Kind
-        app_version = $Script:ReleaseVersion
-        runtime_id = $Variant.RuntimeId
-        app_files = $appFiles
-    }
-    $installedPath = Join-Path $PackageRoot "updater\installed.json"
-    Ensure-Directory -Path (Split-Path -Parent $installedPath)
-    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $installedPath -Encoding UTF8
-}
-
-function Write-UpdaterConfig {
-    param([string]$PackageRoot)
-
-    $manifestUrl = if ([string]::IsNullOrWhiteSpace($ReleaseBaseUrl)) {
-        ""
-    }
-    else {
-        $ReleaseBaseUrl.TrimEnd("/") + "/vsummary-manifest.json"
-    }
-    $payload = [ordered]@{
-        manifest_url = $manifestUrl
-    }
-    $configPath = Join-Path $PackageRoot "updater\config.json"
-    Ensure-Directory -Path (Split-Path -Parent $configPath)
-    $payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $configPath -Encoding UTF8
-}
-
-function New-AssetManifestEntry {
-    param(
-        [string]$ArchivePath,
-        [string]$Role,
-        [string]$Variant = "",
-        [string]$RuntimeId = ""
-    )
-
-    $item = Get-Item -LiteralPath $ArchivePath
-    $entry = [ordered]@{
-        name = $item.Name
-        url = Get-AssetUrl -FileName $item.Name
-        sha256 = Get-FileSha256 -Path $item.FullName
-        size = $item.Length
-    }
-    if ($Role -eq "app") {
-        $entry.version = $Script:ReleaseVersion
-    }
-    if ($Role -eq "runtime") {
-        $entry.id = $RuntimeId
-    }
-    return $entry
-}
-
-function Write-ReleaseManifest {
-    param(
-        [string]$AppArchive,
-        [hashtable[]]$Variants
-    )
-
-    $runtime = [ordered]@{}
-    $full = [ordered]@{}
-
-    foreach ($variant in $Variants) {
-        $runtime[$variant.Kind] = [ordered]@{
-            id = $variant.RuntimeId
-        }
-
-        if (Test-Path -LiteralPath $variant.FullArchive -PathType Leaf) {
-            $full[$variant.Kind] = New-AssetManifestEntry `
-                -ArchivePath $variant.FullArchive `
-                -Role "full" `
-                -Variant $variant.Kind
-        }
-    }
-
-    $manifest = [ordered]@{
-        schema_version = 1
-        version = $Script:ReleaseVersion
-        app = New-AssetManifestEntry -ArchivePath $AppArchive -Role "app"
-        runtime = $runtime
-        full = $full
-    }
-
-    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
 }
 
 $CondaExe = Get-CondaExe
 $CondaPackExe = Require-Command -Name "conda-pack"
 $SevenZipExe = Require-Command -Name "7z"
-$Script:ReleaseVersion = Resolve-ReleaseVersion
 
 Ensure-Directory -Path $OutputRootPath
 
 try {
     Ensure-FrontendDist
 
-    $appPackage = Build-AppPackage -SevenZipExe $SevenZipExe
-    $variants = @(Resolve-Targets)
-
-    foreach ($variant in $variants) {
-        Ensure-RuntimeRoot -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
-
-        if (-not $SkipFullPackage) {
-            Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe
-        }
+    foreach ($variant in Resolve-Targets) {
+        Build-Package -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
     }
-
-    Write-ReleaseManifest -AppArchive $appPackage.Archive -Variants $variants
 }
 finally {
     if (-not $KeepFrontendDist) {
@@ -835,11 +435,7 @@ finally {
     if ($CleanNodeModules) {
         Remove-PathIfExists -Path $FrontendNodeModulesDir
     }
-    if ($CleanBuildArtifacts) {
-        Remove-PathIfExists -Path $BuildRootPath
-    }
-    else {
-        Remove-PathIfExists -Path (Join-Path $BuildRootPath "app")
-        Remove-PathIfExists -Path (Join-Path $BuildRootPath "full")
+    if (-not $KeepBuildArtifacts) {
+        Remove-PathIfExists -Path (Join-Path $OutputRootPath "_build")
     }
 }
