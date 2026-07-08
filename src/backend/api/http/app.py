@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from backend.api.http.access_log import install_access_log_filters
@@ -18,6 +20,17 @@ from backend.api.routes.linked import router as linked_router
 from backend.api.routes.settings import router as settings_router
 from backend.api.routes.videos import router as videos_router
 from backend.api.http.static_assets import mount_frontend_dist
+from backend.mcp.video_series_server import install_mcp_http_endpoint
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    mcp_server = getattr(app.state, "mcp_server", None)
+    if mcp_server is None:
+        yield
+        return
+    async with mcp_server.session_manager.run():
+        yield
 
 
 def include_api_routers(app: FastAPI) -> None:
@@ -46,10 +59,11 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
         已完成初始化的 FastAPI 应用实例，可直接传给 ``uvicorn.run()``。
     """
     install_access_log_filters()
-    application = FastAPI(title="video_include api")
+    application = FastAPI(title="video_include api", lifespan=lifespan)
     resolved_container = container or build_default_container()
     application.state.container = resolved_container
     include_api_routers(application)
+    install_mcp_http_endpoint(application)
     root_dir = getattr(resolved_container, "root_dir", None)
     if root_dir is not None:
         mount_frontend_dist(application, root_dir)

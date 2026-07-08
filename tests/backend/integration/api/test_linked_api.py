@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import sys
 import asyncio
+import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -225,6 +225,60 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(container.generation_progress_tracker.get_snapshot("series/series-1").status, "cancelled")
 
+    def test_mcp_streamable_http_endpoint_calls_existing_agent_series_api(self) -> None:
+        container = _build_container()
+        app = create_app(container)
+
+        with TestClient(app, base_url="http://127.0.0.1:8001") as client:
+            headers = {"accept": "application/json, text/event-stream"}
+            response = client.post("/mcp", json=_mcp_initialize_payload(), headers=headers)
+            self.assertEqual(response.status_code, 200)
+            session_id = response.headers["mcp-session-id"]
+
+            session_headers = {**headers, "mcp-session-id": session_id}
+            initialized = client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                headers=session_headers,
+            )
+            self.assertEqual(initialized.status_code, 202)
+
+            tools = client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+                headers=session_headers,
+            )
+            tool_names = {
+                tool["name"]
+                for tool in _mcp_event_payload(tools.text)["result"]["tools"]
+            }
+            self.assertIn("create_series", tool_names)
+            self.assertIn("process_series", tool_names)
+
+            created = client.post(
+                "/mcp",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {"name": "create_series", "arguments": {"title": "Agent 课程"}},
+                },
+                headers=session_headers,
+            )
+
+        result = _mcp_event_payload(created.text)["result"]
+        self.assertFalse(result["isError"])
+        self.assertEqual(
+            {
+                "series_id": "agent-transformer",
+                "title": "Agent 课程",
+                "is_agent_managed": True,
+                "videos": [],
+            },
+            result["structuredContent"],
+        )
+        self.assertEqual(container.create_agent_series.calls, ["Agent 课程"])
+
 
 def _build_container(
     videos: list[LibraryVideoCardDTO] | None = None,
@@ -292,6 +346,26 @@ def _build_container(
         run_agent_series_generation=_run_agent_series_generation,
     )
     return container
+
+
+def _mcp_initialize_payload() -> dict[str, object]:
+    return {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "vsummary-test", "version": "1"},
+        },
+    }
+
+
+def _mcp_event_payload(response_text: str) -> dict[str, object]:
+    for line in response_text.splitlines():
+        if line.startswith("data: "):
+            return json.loads(line.removeprefix("data: "))
+    raise AssertionError(f"MCP response did not contain an SSE data line: {response_text}")
 
 
 class _FakeBilibiliCookieInitializer:

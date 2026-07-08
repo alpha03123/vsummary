@@ -3,7 +3,18 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import httpx
+from fastapi import FastAPI
+
 from backend.mcp.video_series_client import VideoSeriesBackendClient
+
+MCP_SERVER_NAME = "vsummary-video-series"
+MCP_HTTP_PATH = "/mcp"
+MCP_INSTRUCTIONS = (
+    "Use this server to operate VSummary video-series workflows. "
+    "Create a series, add Bilibili URLs, process the series, poll status, "
+    "then export Markdown text. Do not call raw VSummary HTTP APIs when MCP tools are available."
+)
 
 
 class VideoSeriesTools:
@@ -55,7 +66,7 @@ class VideoSeriesTools:
 def create_mcp_server(client: VideoSeriesBackendClient | None = None):
     from mcp.server.fastmcp import FastMCP
 
-    app = FastMCP("vsummary-video-series")
+    app = FastMCP(MCP_SERVER_NAME, instructions=MCP_INSTRUCTIONS, streamable_http_path=MCP_HTTP_PATH)
     backend_client = client or VideoSeriesBackendClient(
         base_url=os.environ.get("VSUMMARY_BACKEND_URL", "http://127.0.0.1:8000")
     )
@@ -69,6 +80,19 @@ def create_mcp_server(client: VideoSeriesBackendClient | None = None):
     app.tool()(tools.export_series)
     app.tool()(tools.delete_series)
     return app
+
+
+def install_mcp_http_endpoint(app: FastAPI) -> None:
+    """Expose the VSummary MCP server as a Streamable HTTP endpoint on the FastAPI app."""
+    backend_client = VideoSeriesBackendClient(
+        base_url="http://vsummary.local",
+        transport=httpx.ASGITransport(app=app),
+    )
+    mcp_server = create_mcp_server(client=backend_client)
+    mcp_http_app = mcp_server.streamable_http_app()
+
+    app.router.routes.extend(mcp_http_app.routes)
+    app.state.mcp_server = mcp_server
 
 
 def main() -> None:
