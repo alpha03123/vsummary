@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 import shutil
+from typing import Any
 
 from backend.video_summary.generation.ports import ProgressReporter
 
@@ -39,6 +40,10 @@ class HuggingFaceDownloadSpec:
     allow_patterns: tuple[str, ...] = ()
     endpoint: str | None = None
     max_workers: int = 4
+
+
+class HuggingFaceDownloadCancelled(RuntimeError):
+    """HuggingFace 模型下载被用户取消。"""
 
 
 class HuggingFaceModelDownloader:
@@ -67,14 +72,14 @@ class HuggingFaceModelDownloader:
         """
         temp_dir = spec.target_dir.with_name(f".{spec.target_dir.name}.download")
         reporter.update("download", 0.0, f"正在连接模型仓库：{spec.repo_id}")
-        reporter.raise_if_cancelled()
+        _raise_if_download_cancelled(reporter)
 
         try:
             _remove_path(temp_dir)
             temp_dir.mkdir(parents=True, exist_ok=True)
             reporter.update("download", 5.0, f"正在下载模型文件：{spec.repo_id}")
-            self._snapshot_download(spec=spec, temp_dir=temp_dir)
-            reporter.raise_if_cancelled()
+            self._snapshot_download(spec=spec, temp_dir=temp_dir, reporter=reporter)
+            _raise_if_download_cancelled(reporter)
             reporter.update("validate", 95.0, f"正在校验模型文件：{spec.repo_id}")
             _validate_downloaded_model(temp_dir, spec)
             _remove_path(spec.target_dir)
@@ -84,20 +89,110 @@ class HuggingFaceModelDownloader:
             raise
         return spec.target_dir
 
-    def _snapshot_download(self, *, spec: HuggingFaceDownloadSpec, temp_dir: Path) -> None:
-        """封装 `huggingface_hub.snapshot_download` 调用，传入 `endpoint` / `allow_patterns` 等可选参数。"""
-        from huggingface_hub import snapshot_download
+    def _snapshot_download(self, *, spec: HuggingFaceDownloadSpec, temp_dir: Path, reporter: ProgressReporter) -> None:
+        """按 HuggingFace 仓库文件清单下载到本地目录，并在真实文件流中响应取消。"""
+        from huggingface_hub import HfApi, hf_hub_url
+        from huggingface_hub import constants
+        from huggingface_hub.utils import build_hf_headers, get_session, hf_raise_for_status
 
-        kwargs: dict[str, object] = {
-            "repo_id": spec.repo_id,
-            "local_dir": temp_dir,
-            "max_workers": spec.max_workers,
-        }
-        if spec.endpoint:
-            kwargs["endpoint"] = spec.endpoint
-        if spec.allow_patterns:
-            kwargs["allow_patterns"] = spec.allow_patterns
-        snapshot_download(**kwargs)
+        api = HfApi(endpoint=spec.endpoint)
+        model_info = api.model_info(spec.repo_id, files_metadata=True)
+        files = _select_repo_files(model_info.siblings, spec.allow_patterns)
+        if not files:
+            raise RuntimeError(f"模型仓库未匹配到需要下载的文件：{spec.repo_id}")
+
+        total_bytes = _sum_known_sizes(files)
+        downloaded_bytes = 0
+        headers = build_hf_headers()
+        session = get_session()
+        for file_info in files:
+            _raise_if_download_cancelled(reporter)
+            filename = str(file_info.rfilename)
+            target_path = temp_dir / filename
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            url = hf_hub_url(spec.repo_id, filename, endpoint=spec.endpoint)
+            with session.get(
+                url,
+                headers=headers,
+                stream=True,
+                timeout=constants.HF_HUB_DOWNLOAD_TIMEOUT,
+            ) as response:
+                hf_raise_for_status(response)
+                with target_path.open("wb") as output:
+                    for chunk in response.iter_content(chunk_size=constants.DOWNLOAD_CHUNK_SIZE):
+                        _raise_if_download_cancelled(reporter)
+                        if not chunk:
+                            continue
+                        output.write(chunk)
+                        downloaded_bytes += len(chunk)
+                        reporter.update(
+                            "download",
+                            _calculate_download_progress(downloaded_bytes, total_bytes),
+                            f"正在下载模型文件：{filename}",
+                        )
+                        _raise_if_download_cancelled(reporter)
+            expected_size = _file_size(file_info)
+            if expected_size is not None and target_path.stat().st_size != expected_size:
+                raise RuntimeError(
+                    f"模型文件下载不完整：{filename}，期望 {expected_size} bytes，实际 {target_path.stat().st_size} bytes"
+                )
+
+
+def _raise_if_download_cancelled(reporter: ProgressReporter) -> None:
+    """把通用 reporter 取消信号转换为下载器专用异常。"""
+    if reporter.is_cancel_requested():
+        raise HuggingFaceDownloadCancelled("模型下载已取消")
+    try:
+        reporter.raise_if_cancelled()
+    except RuntimeError as error:
+        if "取消" in str(error):
+            raise HuggingFaceDownloadCancelled("模型下载已取消") from error
+        raise
+
+
+def _select_repo_files(siblings: list[Any], allow_patterns: tuple[str, ...]) -> list[Any]:
+    """按 `allow_patterns` 选择需要下载的仓库文件。"""
+    return [
+        file_info
+        for file_info in siblings
+        if _is_allowed_repo_file(str(getattr(file_info, "rfilename", "")), allow_patterns)
+    ]
+
+
+def _is_allowed_repo_file(filename: str, allow_patterns: tuple[str, ...]) -> bool:
+    """判断仓库文件名是否匹配下载规则。"""
+    if not filename or filename.endswith("/"):
+        return False
+    if not allow_patterns:
+        return True
+    basename = Path(filename).name
+    return any(fnmatch(filename, pattern) or fnmatch(basename, pattern) for pattern in allow_patterns)
+
+
+def _sum_known_sizes(files: list[Any]) -> int | None:
+    """汇总已知文件大小；任一文件缺少 size 时返回 None。"""
+    sizes = [_file_size(file_info) for file_info in files]
+    if any(size is None for size in sizes):
+        return None
+    return sum(size for size in sizes if size is not None)
+
+
+def _file_size(file_info: Any) -> int | None:
+    """读取 HuggingFace sibling 的文件大小，兼容不同版本字段。"""
+    size = getattr(file_info, "size", None)
+    if isinstance(size, int):
+        return size
+    lfs = getattr(file_info, "lfs", None)
+    if isinstance(lfs, dict) and isinstance(lfs.get("size"), int):
+        return lfs["size"]
+    return None
+
+
+def _calculate_download_progress(downloaded_bytes: int, total_bytes: int | None) -> float | None:
+    """把字节下载进度映射到 5%-95% 的下载阶段区间。"""
+    if total_bytes is None or total_bytes <= 0:
+        return None
+    return 5.0 + min(90.0, (downloaded_bytes / total_bytes) * 90.0)
 
 
 def _validate_downloaded_model(model_dir: Path, spec: HuggingFaceDownloadSpec) -> None:

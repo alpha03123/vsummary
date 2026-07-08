@@ -58,7 +58,19 @@ class CapturingReporter(RecordingReporter):
         self.failed_messages.append(message)
 
 
-def test_download_passes_bilibili_cookie_headers_and_disables_proxy(monkeypatch, tmp_path: Path) -> None:
+class CancellingReporter(RecordingReporter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.cancelled_messages: list[str] = []
+
+    def cancelled(self, detail: str | None = None) -> None:
+        self.cancelled_messages.append(detail or "")
+
+    def raise_if_cancelled(self) -> None:
+        raise RuntimeError("cancel requested")
+
+
+def test_download_passes_bilibili_cookie_headers_and_prefers_720p_30fps(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
     def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
@@ -77,8 +89,76 @@ def test_download_passes_bilibili_cookie_headers_and_disables_proxy(monkeypatch,
     assert isinstance(cmd, list)
     assert "--cookies" in cmd
     assert "--add-header" in cmd
+    assert "--format" in cmd
+    selected_format = cmd[cmd.index("--format") + 1]
+    assert "height<=720" in selected_format
+    assert "fps<=30" in selected_format
     assert "User-Agent:Mozilla/5.0" in cmd
     assert "Referer:https://www.bilibili.com/video/BV1xx411c7mD/" in cmd
+    assert "--proxy" not in cmd
+
+
+def test_download_falls_back_to_lower_quality_after_yt_dlp_failure(monkeypatch, tmp_path: Path) -> None:
+    captured_formats: list[str] = []
+
+    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
+        selected_format = cmd[cmd.index("--format") + 1]
+        captured_formats.append(selected_format)
+        if len(captured_formats) == 1:
+            return FakeProcess(
+                returncode=1,
+                lines=["ERROR: [download] Got error: SSL EOF\n"],
+            )
+        (tmp_path / "BV1xx411c7mD.mp4").write_text("video", encoding="utf-8")
+        return FakeProcess()
+
+    monkeypatch.setenv("BILIBILI_COOKIE", "SESSDATA=session-value")
+    monkeypatch.setattr("backend.bilibili.ytdlp_bilibili.subprocess.Popen", fake_popen)
+
+    result = BilibiliDownloader().download("BV1xx411c7mD", 1, tmp_path, RecordingReporter())
+
+    assert result == tmp_path / "BV1xx411c7mD.mp4"
+    assert len(captured_formats) == 2
+    assert "fps<=30" in captured_formats[0]
+    assert captured_formats[1] != captured_formats[0]
+    assert "height<=720" in captured_formats[1]
+
+
+def test_download_cancel_does_not_fall_back_to_lower_quality(monkeypatch, tmp_path: Path) -> None:
+    popen_calls = 0
+
+    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
+        nonlocal popen_calls
+        popen_calls += 1
+        return FakeProcess(lines=["[download] 1.0% of 1.00MiB\n"])
+
+    monkeypatch.setenv("BILIBILI_COOKIE", "SESSDATA=session-value")
+    monkeypatch.setattr("backend.bilibili.ytdlp_bilibili.subprocess.Popen", fake_popen)
+    reporter = CancellingReporter()
+
+    with pytest.raises(RuntimeError, match="下载已取消"):
+        BilibiliDownloader().download("BV1xx411c7mD", 1, tmp_path, reporter)
+
+    assert popen_calls == 1
+    assert reporter.cancelled_messages == ["下载已取消"]
+
+
+def test_download_uses_configured_proxy(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
+        captured["cmd"] = cmd
+        (tmp_path / "BV1xx411c7mD.mp4").write_text("video", encoding="utf-8")
+        return FakeProcess()
+
+    monkeypatch.setenv("BILIBILI_COOKIE", "SESSDATA=session-value")
+    monkeypatch.setenv("BILIBILI_YTDLP_PROXY", "direct")
+    monkeypatch.setattr("backend.bilibili.ytdlp_bilibili.subprocess.Popen", fake_popen)
+
+    BilibiliDownloader().download("BV1xx411c7mD", 1, tmp_path, RecordingReporter())
+
+    cmd = captured["cmd"]
+    assert isinstance(cmd, list)
     assert "--proxy" in cmd
     proxy_index = cmd.index("--proxy")
     assert cmd[proxy_index + 1] == ""
@@ -131,7 +211,7 @@ def test_download_failure_includes_recent_yt_dlp_output(monkeypatch, tmp_path: P
     assert reporter.failed_messages == [message]
 
 
-def test_extract_info_passes_bilibili_cookie_headers_and_disables_proxy(monkeypatch) -> None:
+def test_extract_info_passes_bilibili_cookie_headers(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeYoutubeDL:
@@ -162,7 +242,7 @@ def test_extract_info_passes_bilibili_cookie_headers_and_disables_proxy(monkeypa
     assert payload == {"id": "BV1xx411c7mD", "title": "title"}
     options = captured["options"]
     assert isinstance(options, dict)
-    assert options["proxy"] == ""
+    assert "proxy" not in options
     assert options["http_headers"] == {
         "User-Agent": "Mozilla/5.0",
         "Referer": "https://www.bilibili.com/video/BV1xx411c7mD/",
@@ -171,6 +251,32 @@ def test_extract_info_passes_bilibili_cookie_headers_and_disables_proxy(monkeypa
     assert isinstance(cookiefile, str)
     assert "SESSDATA\tsession-value" in captured["cookies_text"]
     assert not Path(cookiefile).exists()
+
+
+def test_extract_info_uses_configured_proxy(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeYoutubeDL:
+        def __init__(self, options: dict[str, object]) -> None:
+            captured["options"] = options
+
+        def __enter__(self) -> "FakeYoutubeDL":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def extract_info(self, url: str, download: bool = False) -> dict[str, object]:
+            return {"id": "BV1xx411c7mD", "title": "title"}
+
+    monkeypatch.setenv("BILIBILI_YTDLP_PROXY", "http://127.0.0.1:7890")
+    monkeypatch.setattr("yt_dlp.YoutubeDL", FakeYoutubeDL)
+
+    _extract_info("https://www.bilibili.com/video/BV1xx411c7mD")
+
+    options = captured["options"]
+    assert isinstance(options, dict)
+    assert options["proxy"] == "http://127.0.0.1:7890"
 
 
 def test_bilibili_cookie_initializer_writes_dotenv_and_process_env(monkeypatch, tmp_path: Path) -> None:

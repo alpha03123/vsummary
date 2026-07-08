@@ -237,6 +237,7 @@ export function useWorkspaceController() {
     onRevealOpenaiApiKey: settingsActions.onRevealOpenaiApiKey,
     onTestProviderConnection: settingsActions.onTestProviderConnection,
     onDownloadFasterWhisperModel: settingsActions.onDownloadFasterWhisperModel,
+    onCancelFasterWhisperModelDownload: settingsActions.onCancelFasterWhisperModelDownload,
     onDownloadRagModel: settingsActions.onDownloadRagModel,
     onResetSettings: settingsActions.onResetSettings,
     onClearError,

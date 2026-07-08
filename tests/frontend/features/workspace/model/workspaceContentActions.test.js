@@ -316,6 +316,36 @@ describe("workspaceContentActions series cancellation", () => {
     }));
   });
 
+  it("clears local video download state immediately after cancelling a selected download", async () => {
+    vi.resetModules();
+    const cancelVideoDownload = vi.fn(() => Promise.resolve({ status: "cancelling" }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelVideoDownload,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        downloadingVideoKey: "series-a/linked-1",
+      },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    await actions.onDownloadVideo({ id: "linked-1" });
+
+    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "video_download_cancel_requested",
+      seriesId: "series-a",
+      videoId: "linked-1",
+    });
+  });
+
   it("exposes and cancels a running chaoxing import task", async () => {
     vi.resetModules();
     let progressListener;

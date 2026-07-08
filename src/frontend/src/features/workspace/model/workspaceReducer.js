@@ -80,6 +80,17 @@ function isTerminalDownloadStatus(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
+function isActiveDownloadStatus(status) {
+  return status === "running" || status === "cancelling";
+}
+
+function restoreLinkedDownloadStatus(video) {
+  return {
+    ...video,
+    status: video.isLinked || video.status === "downloading" ? "linked" : video.status,
+  };
+}
+
 function setModelDownloadForId(downloadsById, modelId, download) {
   if (!modelId) {
     return { ...(downloadsById ?? {}) };
@@ -242,10 +253,29 @@ export function workspaceReducer(state, action) {
         error: "",
       };
       }
+    case "faster_whisper_model_download_cancel_requested":
+      {
+        const currentDownload = state.modelDownloadsById?.[action.modelId] ?? {};
+        const modelDownloadsById = setModelDownloadForId(state.modelDownloadsById, action.modelId, {
+          status: "cancelling",
+          progress: typeof currentDownload.progress === "number" ? currentDownload.progress : state.modelDownloadProgress,
+          error: null,
+        });
+        return {
+        ...state,
+        modelDownloadsById,
+        downloadingModelId: action.modelId,
+        modelDownloadStatus: "cancelling",
+        modelDownloadProgress: typeof currentDownload.progress === "number" ? currentDownload.progress : state.modelDownloadProgress,
+        modelDownloadErrorModelId: null,
+        modelDownloadError: null,
+      };
+      }
     case "faster_whisper_model_download_progress_updated":
       {
         const status = action.status ?? state.modelDownloadsById?.[action.modelId]?.status ?? state.modelDownloadStatus;
         const progress = action.progress == null ? null : Math.max(0, Math.min(100, action.progress));
+        const isTerminal = isTerminalDownloadStatus(status);
         const modelDownloadsById = isTerminalDownloadStatus(status)
           ? removeModelDownloadForId(state.modelDownloadsById, action.modelId)
           : setModelDownloadForId(state.modelDownloadsById, action.modelId, {
@@ -256,9 +286,9 @@ export function workspaceReducer(state, action) {
         return {
         ...state,
         modelDownloadsById,
-        downloadingModelId: action.modelId,
-        modelDownloadStatus: status,
-        modelDownloadProgress: progress,
+        downloadingModelId: isTerminal ? null : action.modelId,
+        modelDownloadStatus: isTerminal ? null : status,
+        modelDownloadProgress: isTerminal ? null : progress,
         modelDownloadErrorModelId: null,
         modelDownloadError: null,
       };
@@ -304,16 +334,16 @@ export function workspaceReducer(state, action) {
       {
         const refreshedDownloadsById = Object.fromEntries(
           action.models
-            .filter((model) => model.status === "running")
+            .filter((model) => isActiveDownloadStatus(model.status))
             .map((model) => [model.id, {
-              status: "running",
+              status: model.status,
               progress: typeof model.progress === "number" ? model.progress : null,
               error: null,
             }]),
         );
         const runningDownloadsById = Object.fromEntries(
           Object.entries(state.modelDownloadsById ?? {})
-            .filter(([, download]) => download?.status === "running"),
+            .filter(([, download]) => isActiveDownloadStatus(download?.status)),
         );
       return {
         ...state,
@@ -1330,11 +1360,18 @@ export function workspaceReducer(state, action) {
         videoDownloadProgress: null,
         library: action.library,
       };
+    case "video_download_cancel_requested":
     case "video_download_failed":
       return {
         ...state,
         downloadingVideoKey: null,
         videoDownloadProgress: null,
+        library: updateVideoCardInLibrary(
+          state.library,
+          action.seriesId,
+          action.videoId,
+          restoreLinkedDownloadStatus,
+        ),
       };
     case "mindmap_generation_started":
       return {

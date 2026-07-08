@@ -33,6 +33,7 @@ export function WorkspaceSettingsPanel({
   onRevealOpenaiApiKey,
   onTestProviderConnection,
   onDownloadFasterWhisperModel,
+  onCancelFasterWhisperModelDownload,
   onDownloadRagModel,
   onResetSettings,
   onClose,
@@ -257,6 +258,9 @@ export function WorkspaceSettingsPanel({
                         const needsConfirm = confirmDownloadModelId === model.id;
                         const isCurrent = ui.asrModelQuality === model.id;
                         const modelDownload = modelDownloadsById?.[model.id] ?? null;
+                        const isCancelling =
+                          modelDownload?.status === "cancelling" ||
+                          (downloadingModelId === model.id && modelDownloadStatus === "cancelling");
                         const isDownloading =
                           modelDownload?.status === "running" ||
                           (downloadingModelId === model.id && modelDownloadStatus === "running");
@@ -270,6 +274,8 @@ export function WorkspaceSettingsPanel({
                         const isReady = model.downloaded === true;
                         const statusText = model.downloaded
                           ? "已下载到本地"
+                          : isCancelling
+                            ? "正在取消下载..."
                           : downloadFailed
                             ? "下载失败"
                             : isCurrent
@@ -298,12 +304,14 @@ export function WorkspaceSettingsPanel({
                                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                                   {isDownloading
                                     ? `正在下载... ${typeof downloadProgress === "number" ? `${Math.round(downloadProgress)}%` : ""}`.trim()
+                                    : isCancelling
+                                      ? "正在取消下载..."
                                     : statusText}
                                 </p>
-                                {isDownloading ? (
+                                {isDownloading || isCancelling ? (
                                   <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
                                     <div
-                                      className="h-full bg-accent transition-[width] duration-200 ease-out"
+                                      className={`h-full transition-[width] duration-200 ease-out ${isCancelling ? "bg-amber-500" : "bg-accent"}`}
                                       style={{ width: `${typeof downloadProgress === "number" ? downloadProgress : 8}%` }}
                                     />
                                   </div>
@@ -314,13 +322,21 @@ export function WorkspaceSettingsPanel({
                                   </p>
                                 ) : null}
                               </div>
-                              {isDownloading ? (
+                              {isCancelling ? (
                                 <button
                                   type="button"
                                   disabled
                                   className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-400 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
                                 >
-                                  下载中
+                                  取消中
+                                </button>
+                              ) : isDownloading ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onCancelFasterWhisperModelDownload?.(model.id)}
+                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+                                >
+                                  取消下载
                                 </button>
                               ) : isCurrent && isReady ? (
                                 <button
@@ -720,7 +736,7 @@ export function WorkspaceSettingsPanel({
                     onChange={(nextValue) => onChangeSetting("hfEndpoint", nextValue)}
                     onBlur={onSaveProviderSettings}
                     onKeyDown={saveProviderSettingsOnEnter}
-                    placeholder="https://hf-mirror.com"
+                    placeholder="https://huggingface.co"
                     className="w-full sm:w-[340px]"
                   />
                 </WorkspaceSettingRow>

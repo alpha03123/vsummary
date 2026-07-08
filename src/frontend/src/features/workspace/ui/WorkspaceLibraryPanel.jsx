@@ -75,7 +75,7 @@ export function getVideoGenerationButtonState({
   if (modelNeedsDownload) {
     return {
       disabled: false,
-      label: "先下载语音模型",
+      label: "下载语音模型",
       tone: "primary",
     };
   }

@@ -774,6 +774,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const seriesId = state.selectedSeriesId;
     const videoId = video.id;
     if (state.downloadingVideoKey === buildVideoKey(seriesId, videoId)) {
+      dispatch({ type: "video_download_cancel_requested", seriesId, videoId });
       try {
         await cancelVideoDownload(seriesId, videoId);
       } catch (error) {

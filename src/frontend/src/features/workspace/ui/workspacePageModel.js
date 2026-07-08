@@ -123,6 +123,7 @@ export function buildWorkspacePageModel(controller) {
       revealOpenaiApiKey: controller.onRevealOpenaiApiKey,
       testProviderConnection: controller.onTestProviderConnection,
       downloadFasterWhisperModel: controller.onDownloadFasterWhisperModel,
+      cancelFasterWhisperModelDownload: controller.onCancelFasterWhisperModelDownload,
       downloadRagModel: controller.onDownloadRagModel,
       resetSettings: controller.onResetSettings,
       clearError: controller.onClearError,

@@ -300,7 +300,7 @@ export function WorkspacePage({ page }) {
               downloadProgress={generation.videoDownloadProgress}
               currentAsrModel={currentAsrModel}
               ragModels={generation.ragModels}
-              onOpenSettings={() => actions.openSettingsPanel("network")}
+              onOpenSettings={() => actions.openSettingsPanel("ai")}
             />
           ) : (
             <WorkspaceSeriesGrid
@@ -461,6 +461,7 @@ export function WorkspacePage({ page }) {
                   onRevealOpenaiApiKey={actions.revealOpenaiApiKey}
                   onTestProviderConnection={actions.testProviderConnection}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
+                  onCancelFasterWhisperModelDownload={actions.cancelFasterWhisperModelDownload}
                   onDownloadRagModel={actions.downloadRagModel}
                   onResetSettings={actions.resetSettings}
                   onOpenUsagePage={() => {

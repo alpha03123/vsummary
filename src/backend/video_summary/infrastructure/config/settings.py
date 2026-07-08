@@ -1115,8 +1115,13 @@ def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
             values[normalized_key] = normalized_value
     # 顺手把 .env 里的值灌进 os.environ——这样 BILIBILI_COOKIE / BILIBILI_SESSDATA
     # 这类不需要 EnvSettings 显式建模的变量也能被子进程和 os.environ.get 拿到。
+    # 空的 HuggingFace endpoint 表示使用官方默认源，不能把空字符串暴露给
+    # huggingface_hub，否则它会拼出没有 scheme 的相对 URL。
     # 用 setdefault 尊重 shell 里已经显式设的值。
     for k, v in values.items():
+        if k in SUPPORTED_HUGGINGFACE_ENV_KEYS and not v:
+            os.environ.pop(k, None)
+            continue
         os.environ.setdefault(k, v)
     return values
 

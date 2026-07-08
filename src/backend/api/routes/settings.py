@@ -30,6 +30,7 @@ from backend.api.schemas.contracts import (
     WorkspaceSettingsResponse,
 )
 from backend.api.schemas.sse import stream_progress_events
+from backend.video_summary.infrastructure.asr.huggingface_model_downloader import HuggingFaceDownloadCancelled
 from backend.video_summary.infrastructure.config.settings import load_settings
 
 router = APIRouter()
@@ -410,6 +411,17 @@ def download_faster_whisper_model(model_id: str, container: ApiContainerDep) -> 
     return _to_faster_whisper_model_response(downloaded_model, container)
 
 
+@router.post("/api/asr/faster-whisper/models/{model_id}/download/cancel")
+def cancel_faster_whisper_model_download(model_id: str, container: ApiContainerDep) -> dict[str, str]:
+    """POST /api/asr/faster-whisper/models/{model_id}/download/cancel — 请求取消 ASR 模型下载。"""
+    if not container.faster_whisper_model_manager.is_supported(model_id):
+        raise HTTPException(status_code=400, detail=f"unsupported faster-whisper model '{model_id}'")
+
+    task_id = _build_model_download_task_id(model_id)
+    container.model_download_progress_tracker.request_cancel(task_id)
+    return {"status": "cancelling", "task_id": task_id}
+
+
 @router.get("/api/asr/faster-whisper/models/{model_id}/download/progress")
 async def stream_faster_whisper_model_download_progress(
     model_id: str,
@@ -543,6 +555,8 @@ def _run_faster_whisper_model_download(model_id: str, task_id: str, container: A
     """
     try:
         container.faster_whisper_model_manager.download(model_id, progress_reporter=reporter)
+    except HuggingFaceDownloadCancelled:
+        reporter.cancelled("模型下载已取消")
     except Exception as error:
         reporter.failed(str(error))
     finally:

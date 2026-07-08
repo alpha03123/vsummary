@@ -190,6 +190,10 @@ class _NullProgressReporter:
         """空实现的完成通知，不做任何事。"""
         pass
 
+    def is_cancel_requested(self) -> bool:
+        """空实现的取消状态，始终表示未取消。"""
+        return False
+
     def raise_if_cancelled(self) -> None:
         """空实现的取消检查，不抛异常。"""
         pass

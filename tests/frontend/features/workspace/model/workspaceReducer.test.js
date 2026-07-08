@@ -82,6 +82,56 @@ describe("workspaceReducer model download failures", () => {
     });
   });
 
+  it("marks faster-whisper model download as cancelling", () => {
+    const state = {
+      modelDownloadsById: {
+        "large-v3-turbo": { status: "running", progress: 32, error: null },
+      },
+      downloadingModelId: "large-v3-turbo",
+      modelDownloadStatus: "running",
+      modelDownloadProgress: 32,
+      modelDownloadErrorModelId: null,
+      modelDownloadError: null,
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "faster_whisper_model_download_cancel_requested",
+      modelId: "large-v3-turbo",
+    });
+
+    expect(nextState.downloadingModelId).toBe("large-v3-turbo");
+    expect(nextState.modelDownloadsById["large-v3-turbo"]).toEqual({
+      status: "cancelling",
+      progress: 32,
+      error: null,
+    });
+  });
+
+  it("clears faster-whisper model download state after cancellation completes", () => {
+    const state = {
+      modelDownloadsById: {
+        "large-v3-turbo": { status: "cancelling", progress: 32, error: null },
+      },
+      downloadingModelId: "large-v3-turbo",
+      modelDownloadStatus: "cancelling",
+      modelDownloadProgress: 32,
+      modelDownloadErrorModelId: null,
+      modelDownloadError: null,
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "faster_whisper_model_download_progress_updated",
+      modelId: "large-v3-turbo",
+      status: "cancelled",
+      progress: null,
+    });
+
+    expect(nextState.downloadingModelId).toBeNull();
+    expect(nextState.modelDownloadStatus).toBeNull();
+    expect(nextState.modelDownloadProgress).toBeNull();
+    expect(nextState.modelDownloadsById).toEqual({});
+  });
+
   it("preserves running faster-whisper downloads when model list refreshes", () => {
     const state = {
       fasterWhisperModels: [],
@@ -374,6 +424,35 @@ describe("workspaceReducer chat drawer", () => {
     const afterVideo = workspaceReducer(withRequest, { type: "video_selected", seriesId: "s", videoId: "v" });
     expect(afterVideo.playerSeekRequest).toBeNull();
     expect(afterVideo.chatDrawerOpen).toBe(true);
+  });
+});
+
+describe("workspaceReducer video download cancellation", () => {
+  it("restores linked video cards when cancelling an active download", () => {
+    const state = {
+      downloadingVideoKey: "series-a/linked-1",
+      videoDownloadProgress: 42,
+      library: {
+        series: [
+          {
+            id: "series-a",
+            videos: [
+              { id: "linked-1", isLinked: true, status: "downloading" },
+            ],
+          },
+        ],
+      },
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "video_download_cancel_requested",
+      seriesId: "series-a",
+      videoId: "linked-1",
+    });
+
+    expect(nextState.downloadingVideoKey).toBeNull();
+    expect(nextState.videoDownloadProgress).toBeNull();
+    expect(nextState.library.series[0].videos[0].status).toBe("linked");
   });
 });
 

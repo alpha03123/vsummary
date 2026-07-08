@@ -191,6 +191,12 @@ export async function downloadFasterWhisperModel(modelId) {
   });
 }
 
+export async function cancelFasterWhisperModelDownload(modelId) {
+  return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/cancel`, {
+    method: "POST",
+  });
+}
+
 export function subscribeFasterWhisperModelDownloadProgress(modelId, listener) {
   return subscribeProgress(
     `/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/progress`,

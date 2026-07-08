@@ -1,4 +1,5 @@
 import {
+  cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
   loadFasterWhisperModels,
@@ -22,6 +23,10 @@ function isCompletedDownloadStatus(payload) {
 
 function isFailedDownloadStatus(payload) {
   return payload?.status === "failed";
+}
+
+function isCancelledDownloadStatus(payload) {
+  return payload?.status === "cancelled";
 }
 
 function scheduleFailureClear(dispatch, action) {
@@ -219,6 +224,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     dispatch({ type: "faster_whisper_model_download_started", modelId });
     let unsubscribe = () => {};
     let failedDispatched = false;
+    let cancelled = false;
     const dispatchFailure = (message) => {
       failedDispatched = true;
       dispatch({
@@ -233,7 +239,12 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     };
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
-        if (snapshot.status === "running" || snapshot.status === "completed") {
+        if (
+          snapshot.status === "running" ||
+          snapshot.status === "cancelling" ||
+          snapshot.status === "completed" ||
+          snapshot.status === "cancelled"
+        ) {
           dispatch({
             type: "faster_whisper_model_download_progress_updated",
             modelId,
@@ -250,6 +261,10 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         if (snapshot.status === "completed") {
           resolve();
         }
+        if (snapshot.status === "cancelled") {
+          cancelled = true;
+          resolve();
+        }
       });
     });
     try {
@@ -264,10 +279,18 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
           status: "completed",
           progress: 100,
         });
+      } else if (isCancelledDownloadStatus(started)) {
+        cancelled = true;
+        dispatch({
+          type: "faster_whisper_model_download_progress_updated",
+          modelId,
+          status: "cancelled",
+          progress: null,
+        });
       } else {
         await downloadCompleted;
       }
-      if (state.ui.asrModelQuality === modelId) {
+      if (!cancelled && state.ui.asrModelQuality === modelId) {
         const savedSettings = await updateWorkspaceSettings({
           ...state.ui,
           asrModelQuality: modelId,
@@ -293,6 +316,19 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       });
     } finally {
       unsubscribe();
+    }
+  }
+
+  async function onCancelFasterWhisperModelDownload(modelId) {
+    dispatch({ type: "faster_whisper_model_download_cancel_requested", modelId });
+    try {
+      await cancelFasterWhisperModelDownload(modelId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "语音模型取消失败";
+      dispatch({
+        type: "load_failed",
+        message,
+      });
     }
   }
 
@@ -382,6 +418,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onTestProviderConnection,
     onResetSettings,
     onDownloadFasterWhisperModel,
+    onCancelFasterWhisperModelDownload,
     onDownloadRagModel,
   };
 }

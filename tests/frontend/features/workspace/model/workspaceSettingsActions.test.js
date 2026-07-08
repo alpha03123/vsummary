@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isSaveableOpenaiBaseUrl, toProviderTestErrorMessage, createWorkspaceSettingsActions } from "@src/features/workspace/model/workspaceSettingsActions";
 import {
+  cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
   loadFasterWhisperModels,
@@ -13,6 +14,7 @@ import {
 } from "@src/features/workspace/model/workspaceApi";
 
 vi.mock("@src/features/workspace/model/workspaceApi", () => ({
+  cancelFasterWhisperModelDownload: vi.fn(),
   downloadFasterWhisperModel: vi.fn(),
   downloadRagModel: vi.fn(),
   loadFasterWhisperModels: vi.fn(),
@@ -53,6 +55,70 @@ describe("isSaveableOpenaiBaseUrl", () => {
 });
 
 describe("createWorkspaceSettingsActions downloads", () => {
+  it("requests faster-whisper download cancellation", async () => {
+    const actions = [];
+    cancelFasterWhisperModelDownload.mockResolvedValue({
+      status: "cancelling",
+      task_id: "asr-download/large-v3-turbo",
+    });
+    const controller = createWorkspaceSettingsActions({
+      state: { ui: {} },
+      dispatch: (action) => actions.push(action),
+    });
+
+    await controller.onCancelFasterWhisperModelDownload("large-v3-turbo");
+
+    expect(cancelFasterWhisperModelDownload).toHaveBeenCalledWith("large-v3-turbo");
+    expect(actions).toEqual([
+      {
+        type: "faster_whisper_model_download_cancel_requested",
+        modelId: "large-v3-turbo",
+      },
+    ]);
+  });
+
+  it("does not show a global failure when faster-whisper download is cancelled", async () => {
+    const actions = [];
+    subscribeFasterWhisperModelDownloadProgress.mockImplementation((modelId, listener) => {
+      listener({
+        status: "cancelled",
+        progress: null,
+      });
+      return () => {};
+    });
+    downloadFasterWhisperModel.mockResolvedValue({
+      id: "large-v3-turbo",
+      downloaded: false,
+      status: "running",
+    });
+    loadFasterWhisperModels.mockResolvedValue([
+      {
+        id: "large-v3-turbo",
+        downloaded: false,
+      },
+    ]);
+
+    const controller = createWorkspaceSettingsActions({
+      state: {
+        ui: {
+          asrModelQuality: "large-v3-turbo",
+        },
+      },
+      dispatch: (action) => actions.push(action),
+    });
+
+    await controller.onDownloadFasterWhisperModel("large-v3-turbo");
+
+    expect(updateWorkspaceSettings).not.toHaveBeenCalled();
+    expect(actions).toContainEqual({
+      type: "faster_whisper_model_download_progress_updated",
+      modelId: "large-v3-turbo",
+      status: "cancelled",
+      progress: null,
+    });
+    expect(actions.some((action) => action.type === "load_failed")).toBe(false);
+  });
+
   it("keeps backend faster-whisper download errors instead of replacing them", async () => {
     vi.useFakeTimers();
     const actions = [];

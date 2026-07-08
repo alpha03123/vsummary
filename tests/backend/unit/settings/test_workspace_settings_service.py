@@ -21,15 +21,39 @@ from backend.video_summary.infrastructure.config.settings import (
 
 class WorkspaceSettingsServiceTests(unittest.TestCase):
     def test_runtime_env_overrides_clear_explicit_empty_hf_endpoint(self) -> None:
+        import huggingface_hub.constants as hf_constants
+
         previous = os.environ.get("HF_ENDPOINT")
+        previous_endpoint = hf_constants.ENDPOINT
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 root_dir = Path(temp_dir)
                 (root_dir / ".env").write_text("HF_ENDPOINT=\n", encoding="utf-8")
                 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+                hf_constants.ENDPOINT = ""
 
                 apply_runtime_env_overrides(root_dir)
 
+                self.assertNotIn("HF_ENDPOINT", os.environ)
+                self.assertEqual(hf_constants.ENDPOINT, "https://huggingface.co")
+        finally:
+            if previous is None:
+                os.environ.pop("HF_ENDPOINT", None)
+            else:
+                os.environ["HF_ENDPOINT"] = previous
+            hf_constants.ENDPOINT = previous_endpoint
+
+    def test_load_env_settings_does_not_seed_blank_hf_endpoint(self) -> None:
+        previous = os.environ.get("HF_ENDPOINT")
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                root_dir = Path(temp_dir)
+                (root_dir / ".env").write_text("HF_ENDPOINT=\nOPENAI_MODEL=test\n", encoding="utf-8")
+                os.environ.pop("HF_ENDPOINT", None)
+
+                settings = load_env_settings(root_dir)
+
+                self.assertEqual(settings.hf_endpoint, "")
                 self.assertNotIn("HF_ENDPOINT", os.environ)
         finally:
             if previous is None:

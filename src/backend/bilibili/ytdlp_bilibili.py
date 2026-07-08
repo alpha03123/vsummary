@@ -27,9 +27,16 @@ from backend.video_summary.library.models import BilibiliUrlInfoDTO
 _BILIBILI_USER_AGENT = "Mozilla/5.0"
 _BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
 _BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
+_BILIBILI_YTDLP_PROXY_ENV = "BILIBILI_YTDLP_PROXY"
 BILIBILI_COOKIE_REQUIRED_MESSAGE = "风控拦截，请配置cookie"
 _BILIBILI_LOGIN_URL = "https://passport.bilibili.com/login"
 _BILIBILI_DEFAULT_BROWSER_PORT = 9223
+_BILIBILI_DOWNLOAD_FORMATS = (
+    ("720p 30fps", "bv*[height<=720][fps<=30]+ba/b[height<=720][fps<=30]"),
+    ("720p", "bv*[height<=720]+ba/b[height<=720]"),
+    ("480p", "bv*[height<=480]+ba/b[height<=480]"),
+    ("best", "b[ext=mp4]/best"),
+)
 
 
 class ProgressReporter(Protocol):
@@ -160,9 +167,11 @@ class BilibiliDownloader:
     - v3：加 ``--proxy ""``，但 Cookie 经 ``--add-header`` 注入会被 yt-dlp 的
       cookiejar 覆盖；
     - v4：Cookie 走 ``--cookies`` Netscape 文件，UA/Referer 走
-      ``--add-header``；显式 ``--proxy ""`` 避免境内代理握手失败。
+      ``--add-header``；
+    - v5：默认 720p/30fps 优先，下载失败后按清晰度降级重试；代理仅在
+      ``BILIBILI_YTDLP_PROXY`` 显式配置时传给 yt-dlp。
 
-    视频质量：默认交由 yt-dlp 选择最佳 mp4 格式（``--merge-output-format mp4``）。
+    视频质量：优先 720p/30fps，失败后降级到 720p、480p、best。
     """
     _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
@@ -193,24 +202,67 @@ class BilibiliDownloader:
         output_template = str(dest_dir / f"{stem}.%(ext)s")
         headers = _load_bilibili_headers(bvid)
         cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
-        cmd = [
-            sys.executable,
-            "-m",
-            "yt_dlp",
-            "--no-playlist",
-            "--merge-output-format",
-            "mp4",
-            "--output",
-            output_template,
-            "--newline",
-            "--no-part",
-            "--proxy",
-            "",
-            *_build_yt_dlp_add_header_flags(headers),
-            *(["--cookies", str(cookie_file)] if cookie_file is not None else []),
-            url,
-        ]
-        reporter.update("download", 0.0, "开始下载")
+        failures: list[str] = []
+        try:
+            for index, (format_label, format_selector) in enumerate(_BILIBILI_DOWNLOAD_FORMATS):
+                _remove_download_outputs(dest_dir, stem)
+                reporter.update(
+                    "download",
+                    0.0 if index == 0 else None,
+                    f"开始下载（{format_label}）" if index == 0 else f"降级重试（{format_label}）",
+                )
+                cmd = [
+                    sys.executable,
+                    "-m",
+                    "yt_dlp",
+                    "--no-playlist",
+                    "--format",
+                    format_selector,
+                    "--merge-output-format",
+                    "mp4",
+                    "--output",
+                    output_template,
+                    "--newline",
+                    *_build_yt_dlp_proxy_flags(),
+                    *_build_yt_dlp_add_header_flags(headers),
+                    *(["--cookies", str(cookie_file)] if cookie_file is not None else []),
+                    url,
+                ]
+                try:
+                    self._run_process(cmd, reporter)
+                except DownloadCancelled:
+                    raise
+                except RuntimeError as exc:
+                    failures.append(f"{format_label}: {exc}")
+                    if index == len(_BILIBILI_DOWNLOAD_FORMATS) - 1:
+                        message = "所有清晰度下载失败：\n" + "\n\n".join(failures)
+                        reporter.failed(message)
+                        raise RuntimeError(message) from exc
+                    reporter.update("download", None, f"{format_label} 下载失败，尝试降级")
+                    continue
+
+                candidates = _find_download_outputs(dest_dir, stem)
+                if candidates:
+                    reporter.completed(f"下载完成：{candidates[0].name}")
+                    return candidates[0]
+
+                failures.append(f"{format_label}: yt-dlp 下载完成但未找到输出文件：{stem}.*")
+        except DownloadCancelled as exc:
+            reporter.cancelled(str(exc))
+            raise
+        except Exception as exc:
+            if not failures:
+                reporter.failed(str(exc))
+            raise
+        finally:
+            if cookie_file is not None:
+                cookie_file.unlink(missing_ok=True)
+
+        message = "所有清晰度下载失败：\n" + "\n\n".join(failures)
+        reporter.failed(message)
+        raise RuntimeError(message)
+
+    def _run_process(self, cmd: list[str], reporter: ProgressReporter) -> None:
         process = None
         try:
             process = subprocess.Popen(
@@ -243,29 +295,14 @@ class BilibiliDownloader:
             process.wait()
             if process.returncode != 0:
                 raise RuntimeError(_format_yt_dlp_failure(process.returncode, recent_output))
-        except DownloadCancelled as exc:
+        except DownloadCancelled:
             if process is not None and process.poll() is None:
                 process.terminate()
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     process.kill()
-            reporter.cancelled(str(exc))
             raise
-        except Exception as exc:
-            reporter.failed(str(exc))
-            raise
-        finally:
-            if cookie_file is not None:
-                cookie_file.unlink(missing_ok=True)
-
-        candidates = sorted(dest_dir.glob(f"{stem}.*"))
-        if not candidates:
-            message = f"yt-dlp 下载完成但未找到输出文件：{stem}.*"
-            reporter.failed(message)
-            raise RuntimeError(message)
-        reporter.completed(f"下载完成：{candidates[0].name}")
-        return candidates[0]
 
     async def download_async(self, bvid: str, page: int, dest_dir: Path, reporter: ProgressReporter) -> Path:
         """异步包装 ``download``，避免阻塞事件循环。
@@ -370,6 +407,33 @@ def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
             continue
         flags.extend(["--add-header", f"{key}:{value}"])
     return flags
+
+
+def _build_yt_dlp_proxy_flags() -> list[str]:
+    proxy = _resolve_yt_dlp_proxy()
+    return [] if proxy is None else ["--proxy", proxy]
+
+
+def _resolve_yt_dlp_proxy() -> str | None:
+    raw_proxy = os.environ.get(_BILIBILI_YTDLP_PROXY_ENV)
+    if raw_proxy is None or not raw_proxy.strip():
+        return None
+    proxy = raw_proxy.strip()
+    return "" if proxy.lower() in {"direct", "none", "off"} else proxy
+
+
+def _find_download_outputs(dest_dir: Path, stem: str) -> list[Path]:
+    return [
+        path
+        for path in sorted(dest_dir.glob(f"{stem}.*"))
+        if path.is_file() and not path.name.endswith(".part")
+    ]
+
+
+def _remove_download_outputs(dest_dir: Path, stem: str) -> None:
+    for path in dest_dir.glob(f"{stem}.*"):
+        if path.is_file():
+            path.unlink(missing_ok=True)
 
 
 def _format_yt_dlp_failure(returncode: int | None, recent_output: deque[str]) -> str:
@@ -659,9 +723,11 @@ def _extract_info(url: str) -> dict[str, object]:
         "no_warnings": True,
         "extract_flat": "in_playlist",
         "skip_download": True,
-        "proxy": "",
         "http_headers": headers,
     }
+    proxy = _resolve_yt_dlp_proxy()
+    if proxy is not None:
+        options["proxy"] = proxy
     if cookie_file is not None:
         options["cookiefile"] = str(cookie_file)
     try:
