@@ -141,6 +141,7 @@ class FileSystemVideoWorkspace:
                         local_video_dir=self._videos_dir / series_id,
                     ),
                     is_linked=series_id != PLAYGROUND_SERIES_ID,
+                    is_agent_managed=bool(payload.get("is_agent_managed", False)),
                     source_url=str(payload.get("source_url", "")),
                 )
 
@@ -874,6 +875,7 @@ class FileSystemVideoWorkspace:
             "title": series.title,
             "cover_url": series.cover_url,
             "source_url": series.source_url,
+            "is_agent_managed": series.is_agent_managed,
             "videos": [
                 {
                     "bvid": video.bvid,
@@ -917,6 +919,7 @@ class FileSystemVideoWorkspace:
             title=str(payload.get("title", _to_title(series_id))).strip() or _to_title(series_id),
             cover_url=str(payload.get("cover_url", "")),
             source_url=str(payload.get("source_url", "")),
+            is_agent_managed=bool(payload.get("is_agent_managed", False)),
             videos=[
                 LinkedVideo(
                     bvid=_require_text(item.get("bvid"), "linked_video.bvid"),
@@ -1005,6 +1008,7 @@ class FileSystemVideoWorkspace:
                         title=linked_series.title,
                         cover_url=linked_series.cover_url,
                         source_url=linked_series.source_url,
+                        is_agent_managed=linked_series.is_agent_managed,
                         videos=remaining_videos,
                     )
                 )

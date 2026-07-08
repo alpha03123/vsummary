@@ -35,6 +35,7 @@ from backend.shared.llm.usage import SQLiteLlmUsageStore
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
+    CreateAgentLinkedSeries,
     DeleteSeries,
     DeleteVideoSource,
     ExportSeriesArchive,
@@ -93,6 +94,7 @@ class ApiContainer:
     import_local_series: ImportLocalSeries
     import_local_playground_videos: ImportLocalPlaygroundVideos
     import_local_series_videos: ImportLocalSeriesVideos
+    create_agent_series: CreateAgentLinkedSeries
     resolve_bilibili_series: ResolveBilibiliSeries
     resolve_bilibili_video: ResolveBilibiliVideo
     bilibili_cookie_initializer: DrissionBilibiliCookieInitializer
@@ -249,6 +251,7 @@ def build_api_container(
         import_local_series=ImportLocalSeries(workspace),
         import_local_playground_videos=ImportLocalPlaygroundVideos(workspace),
         import_local_series_videos=ImportLocalSeriesVideos(workspace),
+        create_agent_series=CreateAgentLinkedSeries(workspace, workspace_index_invalidator),
         resolve_bilibili_series=ResolveBilibiliSeries(workspace, bilibili_resolver, workspace_index_invalidator),
         resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
         bilibili_cookie_initializer=bilibili_cookie_initializer,

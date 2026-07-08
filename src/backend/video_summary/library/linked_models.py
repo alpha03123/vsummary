@@ -58,6 +58,7 @@ class LinkedSeries:
         title: 系列标题（通常来自外部收藏夹名）。
         cover_url: 系列封面图 URL。
         source_url: 外部系列入口链接。
+        is_agent_managed: 是否由 agent/MCP 自动化流程创建并管理。
         videos: 解析得到的分P 视频列表。
     """
 
@@ -65,4 +66,5 @@ class LinkedSeries:
     title: str
     cover_url: str
     source_url: str
+    is_agent_managed: bool = False
     videos: list[LinkedVideo] = field(default_factory=list)

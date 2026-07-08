@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import asyncio
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +16,93 @@ from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoC
 
 
 class LinkedApiTests(unittest.TestCase):
+    def test_create_agent_series_returns_empty_linked_series(self) -> None:
+        container = _build_container()
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/agent/series", json={"title": "  Transformer 入门  "})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "id": "agent-transformer",
+                "title": "Transformer 入门",
+                "videos": [],
+                "is_linked": True,
+                "is_agent_managed": True,
+                "source_url": "",
+            },
+        )
+        self.assertEqual(container.create_agent_series.calls, ["Transformer 入门"])
+
+    def test_create_agent_series_rejects_blank_title(self) -> None:
+        client = TestClient(create_app(_build_container()))
+
+        response = client.post("/api/agent/series", json={"title": "   "})
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_process_agent_series_schedules_existing_series_generation(self) -> None:
+        client = TestClient(create_app(_build_container()))
+
+        response = client.post("/api/agent/series/series-1/process", json={"run_id": "run-1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {
+                "series_id": "series-1",
+                "run_id": "run-1",
+                "scope": "series",
+                "video_ids": [],
+                "status": "scheduled",
+            },
+            response.json(),
+        )
+
+    def test_process_agent_series_accepts_multiple_selected_videos(self) -> None:
+        client = TestClient(create_app(_build_container(videos=[
+            LibraryVideoCardDTO(
+                id="video-1",
+                title="视频 1",
+                source_name="video-1.mp4",
+                processed=False,
+                status="pending",
+            ),
+            LibraryVideoCardDTO(
+                id="video-2",
+                title="视频 2",
+                source_name="video-2.mp4",
+                processed=False,
+                status="pending",
+            ),
+        ])))
+
+        response = client.post("/api/agent/series/series-1/process", json={"video_ids": ["video-1", "video-2"]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["scope"], "videos")
+        self.assertEqual(response.json()["video_ids"], ["video-1", "video-2"])
+
+    def test_process_agent_series_downloads_linked_videos_before_generation(self) -> None:
+        container = _build_container()
+
+        async def run() -> None:
+            await asyncio.wait_for(
+                container.run_agent_series_generation(
+                    container=container,
+                    series_id="series-1",
+                    run_id="run-1",
+                    transcript_enhancement_enabled=None,
+                ),
+                timeout=1.0,
+            )
+
+        asyncio.run(run())
+
+        self.assertEqual(container.download_calls, [("series-1", "BV1xx411c7mD")])
+        self.assertEqual(container.generate_series_summaries.calls, [("series-1", "run-1")])
+
     def test_resolve_bilibili_video_returns_linked_video_card(self) -> None:
         client = TestClient(create_app(_build_container()))
 
@@ -163,9 +251,19 @@ def _build_container(
         return video
 
     generation_progress_tracker = InMemoryProgressTracker()
+    video_download_progress_tracker = InMemoryProgressTracker()
     bilibili_cookie_initializer = _FakeBilibiliCookieInitializer()
+    create_agent_series = _FakeCreateAgentSeries()
 
-    return SimpleNamespace(
+    def start_download(series_id, video_id):
+        task_id = f"download/{series_id}/{video_id}"
+        container.download_calls.append((series_id, video_id))
+        video_download_progress_tracker.create_reporter(task_id).completed("下载完成")
+        return SimpleNamespace(task_id=task_id)
+
+    from backend.api.routes.linked import _run_agent_series_generation
+
+    container = SimpleNamespace(
         root_dir=None,
         list_video_library=SimpleNamespace(
             run=lambda: SimpleNamespace(
@@ -181,16 +279,19 @@ def _build_container(
         ),
         resolve_bilibili_series=SimpleNamespace(run=resolve_series or default_resolve_series),
         resolve_bilibili_video=SimpleNamespace(run=resolve_video),
+        create_agent_series=create_agent_series,
         bilibili_cookie_initializer=bilibili_cookie_initializer,
         start_linked_video_download=SimpleNamespace(
-            run=lambda series_id, video_id: SimpleNamespace(task_id=f"download/{series_id}/{video_id}"),
+            run=start_download,
         ),
-        generate_series_summaries=SimpleNamespace(
-            get_active_video_ids=lambda series_id: active_video_ids if active_video_ids is not None else []
-        ),
+        generate_series_summaries=_FakeGenerateSeriesSummaries(active_video_ids),
+        generate_video_summary=_FakeGenerateVideoSummary(),
         generation_progress_tracker=generation_progress_tracker,
-        video_download_progress_tracker=InMemoryProgressTracker(),
+        video_download_progress_tracker=video_download_progress_tracker,
+        download_calls=[],
+        run_agent_series_generation=_run_agent_series_generation,
     )
+    return container
 
 
 class _FakeBilibiliCookieInitializer:
@@ -200,6 +301,46 @@ class _FakeBilibiliCookieInitializer:
     def init(self) -> bool:
         self.called = True
         return True
+
+
+class _FakeCreateAgentSeries:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def run(self, *, title: str) -> LibrarySeriesDTO:
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("title cannot be blank")
+        self.calls.append(normalized_title)
+        return LibrarySeriesDTO(
+            id="agent-transformer",
+            title=normalized_title,
+            videos=[],
+            is_linked=True,
+            is_agent_managed=True,
+            source_url="",
+        )
+
+
+class _FakeGenerateSeriesSummaries:
+    def __init__(self, active_video_ids: list[str] | None) -> None:
+        self._active_video_ids = active_video_ids
+        self.calls: list[tuple[str, str | None]] = []
+
+    async def run(self, series_id: str, *, transcript_enhancement_enabled=None, run_id: str | None = None):
+        del transcript_enhancement_enabled
+        self.calls.append((series_id, run_id))
+        await asyncio.sleep(0)
+
+    def get_active_video_ids(self, series_id: str) -> list[str]:
+        del series_id
+        return self._active_video_ids if self._active_video_ids is not None else []
+
+
+class _FakeGenerateVideoSummary:
+    async def run(self, series_id: str, video_id: str, *, transcript_enhancement_enabled=None):
+        del series_id, video_id, transcript_enhancement_enabled
+        await asyncio.sleep(0)
 
 
 if __name__ == "__main__":

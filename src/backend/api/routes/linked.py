@@ -6,12 +6,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.api.di.container import ApiContainerDep
+from backend.api.schemas.contracts import AgentSeriesCreateRequest, AgentSeriesProcessRequest
 from backend.api.schemas.responses import (
     LinkedVideoDownloadResponse,
     ResolveBilibiliSeriesRequest,
@@ -27,11 +30,75 @@ from backend.bilibili.ytdlp_bilibili import (
 )
 
 router = APIRouter()
+LOGGER = logging.getLogger(__name__)
+DOWNLOAD_POLL_INTERVAL_SECONDS = 0.5
+DOWNLOAD_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 
 class BilibiliCookieStatusResponse(BaseModel):
     """Bilibili Cookie 配置状态响应。"""
     configured: bool
+
+
+@router.post("/api/agent/series", response_model=SeriesResponse)
+async def create_agent_series(request: AgentSeriesCreateRequest, container: ApiContainerDep) -> SeriesResponse:
+    """POST /api/agent/series — 创建一个供 Agent 编排的空链接型系列。"""
+    try:
+        series = container.create_agent_series.run(title=request.title)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return SeriesResponse.from_model(series)
+
+
+@router.post("/api/agent/series/{series_id}/process")
+async def process_agent_series(
+    series_id: str,
+    request: AgentSeriesProcessRequest | None = None,
+    container: ApiContainerDep = None,
+) -> dict[str, object]:
+    """POST /api/agent/series/{series_id}/process — 后台启动 Agent 系列处理。"""
+    payload = request or AgentSeriesProcessRequest()
+    video_ids = [item.strip() for item in payload.video_ids if item.strip()]
+    try:
+        _find_series(container, series_id)
+        run_id = payload.run_id or str(uuid4())
+        if video_ids:
+            for video_id in video_ids:
+                _find_video(container, series_id, video_id)
+            asyncio.create_task(
+                _run_agent_selected_video_generation(
+                    container=container,
+                    series_id=series_id,
+                    video_ids=video_ids,
+                    transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
+                )
+            )
+            return {
+                "series_id": series_id,
+                "run_id": run_id,
+                "scope": "videos",
+                "video_ids": video_ids,
+                "status": "scheduled",
+            }
+        asyncio.create_task(
+            _run_agent_series_generation(
+                container=container,
+                series_id=series_id,
+                run_id=run_id,
+                transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
+            )
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {
+        "series_id": series_id,
+        "run_id": run_id,
+        "scope": "series",
+        "video_ids": [],
+        "status": "scheduled",
+    }
 
 
 @router.post("/api/linked/bilibili/cookie/init", response_model=BilibiliCookieStatusResponse)
@@ -73,6 +140,136 @@ async def resolve_bilibili_series(request: ResolveBilibiliSeriesRequest, contain
             raise HTTPException(status_code=409, detail=BILIBILI_COOKIE_REQUIRED_MESSAGE) from error
         raise HTTPException(status_code=502, detail=str(error)) from error
     return SeriesResponse.from_model(series)
+
+
+async def _run_agent_series_generation(
+    *,
+    container,
+    series_id: str,
+    run_id: str,
+    transcript_enhancement_enabled: bool | None,
+) -> None:
+    try:
+        await _download_agent_linked_videos(
+            container=container,
+            series_id=series_id,
+            video_ids=[],
+            task_id=f"series/{series_id}",
+        )
+        await container.generate_series_summaries.run(
+            series_id,
+            transcript_enhancement_enabled=transcript_enhancement_enabled,
+            run_id=run_id,
+        )
+    except Exception as error:
+        container.generation_progress_tracker.create_reporter(f"series/{series_id}").failed(str(error))
+        LOGGER.exception("Background agent series generation failed: series_id=%s run_id=%s", series_id, run_id)
+
+
+async def _run_agent_selected_video_generation(
+    *,
+    container,
+    series_id: str,
+    video_ids: list[str],
+    transcript_enhancement_enabled: bool | None,
+) -> None:
+    try:
+        for video_id in video_ids:
+            await _download_agent_linked_videos(
+                container=container,
+                series_id=series_id,
+                video_ids=[video_id],
+                task_id=f"{series_id}/{video_id}",
+            )
+            await container.generate_video_summary.run(
+                series_id,
+                video_id,
+                transcript_enhancement_enabled=transcript_enhancement_enabled,
+            )
+    except Exception as error:
+        for video_id in video_ids:
+            container.generation_progress_tracker.create_reporter(f"{series_id}/{video_id}").failed(str(error))
+        LOGGER.exception("Background agent selected video generation failed: series_id=%s video_ids=%s", series_id, video_ids)
+
+
+async def _download_agent_linked_videos(
+    *,
+    container,
+    series_id: str,
+    video_ids: list[str],
+    task_id: str | None = None,
+) -> None:
+    videos = _find_agent_download_targets(container, series_id, video_ids)
+    if not videos:
+        return
+
+    reporter = None
+    if task_id is not None:
+        reporter = container.generation_progress_tracker.create_reporter(task_id)
+
+    total = len(videos)
+    for index, video in enumerate(videos, start=1):
+        if reporter is not None and reporter.is_cancel_requested():
+            reporter.cancelled("任务已取消")
+            return
+        if reporter is not None:
+            reporter.update(
+                "download",
+                ((index - 1) / total) * 100.0,
+                f"正在下载未缓存视频 {index}/{total}: {video.title}",
+            )
+        try:
+            await _download_agent_linked_video(container=container, series_id=series_id, video_id=video.id)
+        except Exception as error:
+            if reporter is not None:
+                reporter.failed(str(error))
+            raise
+
+    if reporter is not None:
+        reporter.update("download", 100.0, "未缓存视频已下载完成")
+
+
+async def _download_agent_linked_video(*, container, series_id: str, video_id: str) -> None:
+    result = container.start_linked_video_download.run(series_id=series_id, video_id=video_id)
+    task_id = result.task_id
+    while True:
+        snapshot = container.video_download_progress_tracker.get_snapshot(task_id)
+        if snapshot.status == "completed":
+            return
+        if snapshot.status in DOWNLOAD_TERMINAL_STATUSES:
+            detail = snapshot.error or snapshot.detail or f"linked video download {snapshot.status}"
+            raise RuntimeError(detail)
+        await asyncio.sleep(DOWNLOAD_POLL_INTERVAL_SECONDS)
+
+
+def _find_agent_download_targets(container, series_id: str, video_ids: list[str]):
+    selected_ids = set(video_ids)
+    series = _find_series(container, series_id)
+    return [
+        video
+        for video in series.videos
+        if (not selected_ids or video.id in selected_ids)
+        and not video.processed
+        and (video.is_linked or video.status == "linked")
+    ]
+
+
+def _find_series(container, series_id: str):
+    if not series_id.strip():
+        raise ValueError("series_id must not be blank")
+    library = container.list_video_library.run()
+    for series in library.series:
+        if series.id == series_id:
+            return series
+    raise LookupError(f"series not found '{series_id}'")
+
+
+def _find_video(container, series_id: str, video_id: str):
+    series = _find_series(container, series_id)
+    for video in series.videos:
+        if video.id == video_id:
+            return video
+    raise LookupError(f"video not found '{series_id}/{video_id}'")
 
 
 @router.post("/api/linked/bilibili/resolve/video", response_model=VideoCardResponse)

@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import re
 
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries
@@ -36,6 +38,47 @@ class StartLinkedVideoDownloadResult:
     """
 
     task_id: str
+
+
+class CreateAgentLinkedSeries:
+    """Create an empty linked series for agent-curated video collections."""
+
+    def __init__(self, workspace: LinkedSeriesResolverWorkspace, invalidator: WorkspaceIndexInvalidator) -> None:
+        self._workspace = workspace
+        self._invalidator = invalidator
+
+    def run(self, *, title: str) -> LibrarySeriesDTO:
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise ValueError("title cannot be blank")
+        series_id = f"agent-{_slugify(normalized_title)}"
+        existing = self._workspace.get_linked_series(series_id)
+        if existing is not None:
+            if existing.title == normalized_title:
+                return _to_series_dto(existing)
+            series_id = self._unique_series_id(series_id, normalized_title)
+
+        linked_series = LinkedSeries(
+            series_id=series_id,
+            title=normalized_title,
+            cover_url="",
+            source_url="",
+            is_agent_managed=True,
+            videos=[],
+        )
+        self._workspace.save_linked_series(linked_series)
+        self._invalidator.invalidate()
+        return _to_series_dto(linked_series)
+
+    def _unique_series_id(self, base_id: str, title: str) -> str:
+        suffix = hashlib.sha1(title.encode("utf-8")).hexdigest()[:8]
+        candidate = f"{base_id}-{suffix}"
+        if self._workspace.get_linked_series(candidate) is None:
+            return candidate
+        index = 2
+        while self._workspace.get_linked_series(f"{candidate}-{index}") is not None:
+            index += 1
+        return f"{candidate}-{index}"
 
 
 class ResolveBilibiliSeries:
@@ -142,6 +185,7 @@ class ResolveBilibiliVideo:
             title=series.title,
             cover_url="",
             source_url="",
+            is_agent_managed=series.is_agent_managed,
             videos=[],
         )
         if not any(item.video_id == video.video_id for item in existing.videos):
@@ -151,6 +195,7 @@ class ResolveBilibiliVideo:
                     title=existing.title,
                     cover_url=existing.cover_url,
                     source_url=existing.source_url,
+                    is_agent_managed=existing.is_agent_managed,
                     videos=[*existing.videos, video],
                 )
             )
@@ -204,6 +249,7 @@ def _to_series_dto(linked_series: LinkedSeries) -> LibrarySeriesDTO:
         title=linked_series.title,
         videos=[_to_video_card_dto(video) for video in linked_series.videos],
         is_linked=True,
+        is_agent_managed=linked_series.is_agent_managed,
         source_url=linked_series.source_url,
     )
 
@@ -222,3 +268,8 @@ def _to_video_card_dto(video) -> LibraryVideoCardDTO:
         source_url=video.source_url,
         provider=video.provider,
     )
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "series"

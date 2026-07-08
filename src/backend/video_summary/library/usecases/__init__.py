@@ -23,6 +23,7 @@ from backend.video_summary.library.usecases.imports import (
     ImportLocalSeriesVideos,
 )
 from backend.video_summary.library.usecases.linked_videos import (
+    CreateAgentLinkedSeries,
     ResolveBilibiliSeries,
     ResolveBilibiliVideo,
     StartLinkedVideoDownload,
@@ -41,6 +42,7 @@ from backend.video_summary.library.usecases.series_exports import ExportSeriesAr
 
 __all__ = [
     "CreateVideoNote",
+    "CreateAgentLinkedSeries",
     "DeleteVideoNote",
     "DeleteSeries",
     "DeleteVideoSource",

@@ -41,6 +41,7 @@ class LibrarySeriesDTO:
         title: 系列标题。
         videos: 属于该系列的视频卡片列表。
         is_linked: 是否为外部链接型系列（区别于本地导入）。
+        is_agent_managed: 是否由 agent/MCP 自动化流程创建并管理。
         source_url: 外部入口链接；本地系列时为空字符串。
     """
 
@@ -48,6 +49,7 @@ class LibrarySeriesDTO:
     title: str
     videos: list["LibraryVideoCardDTO"]
     is_linked: bool = False
+    is_agent_managed: bool = False
     source_url: str = ""
 
 
