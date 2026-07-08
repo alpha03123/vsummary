@@ -85,6 +85,7 @@ class SeriesResponse(BaseModel):
     title: str
     videos: list[VideoCardResponse]
     is_linked: bool
+    is_agent_managed: bool = False
     source_url: str
 
     @classmethod
@@ -102,6 +103,7 @@ class SeriesResponse(BaseModel):
             title=series.title,
             videos=[VideoCardResponse.from_model(video) for video in series.videos],
             is_linked=series.is_linked,
+            is_agent_managed=series.is_agent_managed,
             source_url=series.source_url,
         )
 

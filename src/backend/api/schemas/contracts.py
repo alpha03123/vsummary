@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GenerateVideoSummaryRequest(BaseModel):
@@ -32,6 +32,20 @@ class CancelSeriesSummariesRequest(BaseModel):
     """请求取消正在进行的系列批量生成任务。"""
 
     run_id: str | None = None
+
+
+class AgentSeriesCreateRequest(BaseModel):
+    """请求创建一个供 Agent 编排的空链接型系列。"""
+
+    title: str = Field(max_length=200)
+
+
+class AgentSeriesProcessRequest(BaseModel):
+    """请求后台处理一个 Agent 系列或其中一个视频。"""
+
+    video_ids: list[str] = Field(default_factory=list)
+    run_id: str | None = None
+    transcript_enhancement_enabled: bool | None = None
 
 
 class CreateVideoNoteRequest(BaseModel):

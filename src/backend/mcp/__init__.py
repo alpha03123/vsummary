@@ -1,0 +1,1 @@
+"""MCP integration for VSummary."""
