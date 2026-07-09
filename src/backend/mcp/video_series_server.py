@@ -4,7 +4,8 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from backend.mcp.video_series_client import VideoSeriesBackendClient
 
@@ -92,6 +93,22 @@ def create_mcp_server(client: VideoSeriesBackendClient | None = None):
 
 def install_mcp_http_endpoint(app: FastAPI) -> None:
     """Expose the VSummary MCP server as a Streamable HTTP endpoint on the FastAPI app."""
+    @app.middleware("http")
+    async def mcp_probe_middleware(request: Request, call_next):
+        if request.url.path == MCP_HTTP_PATH and "mcp-session-id" not in request.headers:
+            if request.method == "GET":
+                return JSONResponse(
+                    {
+                        "status": "ok",
+                        "server": MCP_SERVER_NAME,
+                        "transport": "streamable-http",
+                        "path": MCP_HTTP_PATH,
+                    }
+                )
+            if request.method == "DELETE":
+                return Response(status_code=204)
+        return await call_next(request)
+
     backend_client = VideoSeriesBackendClient(
         base_url="http://vsummary.local",
         transport=httpx.ASGITransport(app=app),

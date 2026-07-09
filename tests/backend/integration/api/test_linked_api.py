@@ -279,6 +279,29 @@ class LinkedApiTests(unittest.TestCase):
         )
         self.assertEqual(container.create_agent_series.calls, ["Agent 课程"])
 
+    def test_mcp_probe_get_without_session_returns_endpoint_metadata(self) -> None:
+        client = TestClient(create_app(_build_container()))
+
+        response = client.get("/mcp")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {
+                "status": "ok",
+                "server": "vsummary-video-series",
+                "transport": "streamable-http",
+                "path": "/mcp",
+            },
+            response.json(),
+        )
+
+    def test_mcp_cleanup_delete_without_session_is_noop(self) -> None:
+        client = TestClient(create_app(_build_container()))
+
+        response = client.delete("/mcp")
+
+        self.assertEqual(response.status_code, 204)
+
 
 def _build_container(
     videos: list[LibraryVideoCardDTO] | None = None,

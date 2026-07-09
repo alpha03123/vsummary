@@ -78,6 +78,7 @@ class FfmpegMediaProcessor:
         proc = subprocess.Popen(
             [
                 "ffmpeg",
+                "-nostdin",
                 "-y",
                 "-i",
                 str(video_path),
@@ -90,6 +91,7 @@ class FfmpegMediaProcessor:
                 "pcm_s16le",
                 str(audio_path),
             ],
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
