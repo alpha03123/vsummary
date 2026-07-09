@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import ExitStack
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 from urllib.parse import urlparse
@@ -95,6 +97,40 @@ class VideoSeriesBackendClient:
             "added_count": sum(1 for item in items if item["status"] == "added"),
             "failed_count": sum(1 for item in items if item["status"] != "added"),
             "items": items,
+        }
+
+    async def import_local_series(self, title: str, file_paths: list[str]) -> dict[str, Any]:
+        if not title.strip():
+            raise ValueError("title must not be blank")
+        media_paths = _resolve_local_media_paths(file_paths)
+        with ExitStack() as stack:
+            files = [("files", (path.name, stack.enter_context(path.open("rb")))) for path in media_paths]
+            series = await self._request_json(
+                "POST",
+                "/api/import/local/series",
+                data={"series_title": title},
+                files=files,
+            )
+        return {
+            "series_id": series["id"],
+            "title": series["title"],
+            "videos": series.get("videos", []),
+        }
+
+    async def add_local_series_videos(self, series_id: str, file_paths: list[str]) -> dict[str, Any]:
+        self._require_series_id(series_id)
+        media_paths = _resolve_local_media_paths(file_paths)
+        with ExitStack() as stack:
+            files = [("files", (path.name, stack.enter_context(path.open("rb")))) for path in media_paths]
+            videos = await self._request_json(
+                "POST",
+                f"/api/import/local/series/{self._path_segment(series_id)}",
+                files=files,
+            )
+        return {
+            "series_id": series_id,
+            "added_count": len(videos),
+            "videos": videos,
         }
 
     async def process_series(
@@ -350,3 +386,15 @@ def _overall_status(series_generation: dict[str, Any], videos: list[dict[str, An
 
 def _normalized_ids(values: list[str]) -> list[str]:
     return list(dict.fromkeys(item.strip() for item in values if item.strip()))
+
+
+def _resolve_local_media_paths(file_paths: list[str]) -> list[Path]:
+    if not file_paths:
+        raise ValueError("file_paths must not be empty")
+    resolved = []
+    for file_path in file_paths:
+        path = Path(file_path).expanduser()
+        if not path.is_file():
+            raise FileNotFoundError(f"local media file not found: {file_path}")
+        resolved.append(path)
+    return resolved

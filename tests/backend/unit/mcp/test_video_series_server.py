@@ -23,6 +23,14 @@ class FakeVideoSeriesClient:
         self.calls.append(("add_series_videos", {"series_id": series_id, "videos": videos}))
         return {"added_count": len(videos), "failed_count": 0, "items": []}
 
+    async def import_local_series(self, title: str, file_paths: list[str]) -> dict[str, Any]:
+        self.calls.append(("import_local_series", {"title": title, "file_paths": file_paths}))
+        return {"series_id": "audio-course", "title": title, "videos": []}
+
+    async def add_local_series_videos(self, series_id: str, file_paths: list[str]) -> dict[str, Any]:
+        self.calls.append(("add_local_series_videos", {"series_id": series_id, "file_paths": file_paths}))
+        return {"series_id": series_id, "added_count": len(file_paths), "videos": []}
+
     async def process_series(
         self,
         series_id: str,
@@ -71,6 +79,8 @@ class VideoSeriesToolsTests(unittest.IsolatedAsyncioTestCase):
         await tools.get_project_status(include_series=False)
         await tools.create_series(title="Transformer")
         await tools.add_series_videos(series_id="agent-transformer", videos=[{"url": "https://www.bilibili.com/video/BV1"}])
+        await tools.import_local_series(title="Audio Course", file_paths=["E:/media/lesson-1.mp3"])
+        await tools.add_local_series_videos(series_id="agent-transformer", file_paths=["E:/media/lesson-2.mp3"])
         await tools.process_series(series_id="agent-transformer", video_ids=["BV1"])
         await tools.get_series_status(series_id="agent-transformer")
         await tools.export_series(series_id="agent-transformer", kind="mixed")
@@ -83,6 +93,11 @@ class VideoSeriesToolsTests(unittest.IsolatedAsyncioTestCase):
                 (
                     "add_series_videos",
                     {"series_id": "agent-transformer", "videos": [{"url": "https://www.bilibili.com/video/BV1"}]},
+                ),
+                ("import_local_series", {"title": "Audio Course", "file_paths": ["E:/media/lesson-1.mp3"]}),
+                (
+                    "add_local_series_videos",
+                    {"series_id": "agent-transformer", "file_paths": ["E:/media/lesson-2.mp3"]},
                 ),
                 (
                     "process_series",
@@ -114,6 +129,8 @@ class VideoSeriesServerRegistrationTests(unittest.IsolatedAsyncioTestCase):
                 "get_project_status",
                 "create_series",
                 "add_series_videos",
+                "import_local_series",
+                "add_local_series_videos",
                 "process_series",
                 "get_series_status",
                 "export_series",

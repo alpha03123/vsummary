@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import unittest
 import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -124,6 +126,75 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(2, result["added_count"])
         self.assertEqual(0, result["failed_count"])
         self.assertEqual(["BV1", "BV2"], [item["video_id"] for item in result["items"]])
+
+    async def test_import_local_series_uploads_file_paths_to_existing_import_api(self) -> None:
+        seen_request: dict[str, str] = {}
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            body = request.read().decode("utf-8", errors="replace")
+            seen_request["path"] = request.url.path
+            seen_request["content_type"] = request.headers["content-type"]
+            seen_request["body"] = body
+            return httpx.Response(
+                200,
+                json={
+                    "id": "audio-course",
+                    "title": "Audio Course",
+                    "videos": [{"id": "lesson-1", "title": "lesson-1", "source_type": "audio"}],
+                    "is_linked": False,
+                    "is_agent_managed": False,
+                    "source_url": "",
+                },
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            media_path = Path(temp_dir) / "lesson-1.mp3"
+            media_path.write_bytes(b"audio")
+            client = VideoSeriesBackendClient(transport=httpx.MockTransport(handler))
+
+            result = await client.import_local_series(title="Audio Course", file_paths=[str(media_path)])
+
+        self.assertEqual("/api/import/local/series", seen_request["path"])
+        self.assertIn("multipart/form-data", seen_request["content_type"])
+        self.assertIn('name="series_title"', seen_request["body"])
+        self.assertIn("Audio Course", seen_request["body"])
+        self.assertIn('filename="lesson-1.mp3"', seen_request["body"])
+        self.assertEqual("audio-course", result["series_id"])
+        self.assertEqual("Audio Course", result["title"])
+        self.assertEqual([{"id": "lesson-1", "title": "lesson-1", "source_type": "audio"}], result["videos"])
+
+    async def test_add_local_series_videos_uploads_file_paths_to_existing_series_import_api(self) -> None:
+        seen_request: dict[str, str] = {}
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            body = request.read().decode("utf-8", errors="replace")
+            seen_request["path"] = request.url.raw_path.decode("ascii")
+            seen_request["content_type"] = request.headers["content-type"]
+            seen_request["body"] = body
+            return httpx.Response(
+                200,
+                json=[{"id": "clip", "title": "clip", "source_type": "video"}],
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            media_path = Path(temp_dir) / "clip.mp4"
+            media_path.write_bytes(b"video")
+            client = VideoSeriesBackendClient(transport=httpx.MockTransport(handler))
+
+            result = await client.add_local_series_videos(series_id="agent/a", file_paths=[str(media_path)])
+
+        self.assertEqual("/api/import/local/series/agent%2Fa", seen_request["path"])
+        self.assertIn("multipart/form-data", seen_request["content_type"])
+        self.assertIn('filename="clip.mp4"', seen_request["body"])
+        self.assertEqual("agent/a", result["series_id"])
+        self.assertEqual(1, result["added_count"])
+        self.assertEqual([{"id": "clip", "title": "clip", "source_type": "video"}], result["videos"])
+
+    async def test_import_local_series_rejects_missing_local_files_before_upload(self) -> None:
+        client = VideoSeriesBackendClient(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
+
+        with self.assertRaisesRegex(FileNotFoundError, "local media file not found"):
+            await client.import_local_series(title="Missing", file_paths=["missing.mp3"])
 
     async def test_process_series_starts_background_agent_process(self) -> None:
         seen_requests: list[tuple[str, bytes]] = []

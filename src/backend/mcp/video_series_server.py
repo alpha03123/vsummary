@@ -12,7 +12,7 @@ MCP_SERVER_NAME = "vsummary-video-series"
 MCP_HTTP_PATH = "/mcp"
 MCP_INSTRUCTIONS = (
     "Use this server to operate VSummary video-series workflows. "
-    "Create a series, add Bilibili URLs, process the series, poll status, "
+    "Create a series, add Bilibili URLs or local media file paths, process the series, poll status, "
     "then export Markdown text. Do not call raw VSummary HTTP APIs when MCP tools are available."
 )
 
@@ -31,6 +31,12 @@ class VideoSeriesTools:
 
     async def add_series_videos(self, series_id: str, videos: list[dict[str, Any]]) -> dict[str, Any]:
         return await self.client.add_series_videos(series_id=series_id, videos=videos)
+
+    async def import_local_series(self, title: str, file_paths: list[str]) -> dict[str, Any]:
+        return await self.client.import_local_series(title=title, file_paths=file_paths)
+
+    async def add_local_series_videos(self, series_id: str, file_paths: list[str]) -> dict[str, Any]:
+        return await self.client.add_local_series_videos(series_id=series_id, file_paths=file_paths)
 
     async def process_series(
         self,
@@ -75,6 +81,8 @@ def create_mcp_server(client: VideoSeriesBackendClient | None = None):
     app.tool()(tools.get_project_status)
     app.tool()(tools.create_series)
     app.tool()(tools.add_series_videos)
+    app.tool()(tools.import_local_series)
+    app.tool()(tools.add_local_series_videos)
     app.tool()(tools.process_series)
     app.tool()(tools.get_series_status)
     app.tool()(tools.export_series)
