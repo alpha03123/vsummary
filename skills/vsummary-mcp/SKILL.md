@@ -18,7 +18,7 @@ description: Use when 使用 VSummary 本地 MCP 服务处理视频系列，包�
 3. 处理本地视频/音频时，调用 `import_local_series(title, file_paths=[...])` 从本地文件路径创建新 series，或调用 `add_local_series_videos(series_id, file_paths=[...])` 把本地媒体追加到已有本地 series。
 4. 调用 `process_series` 启动处理。默认把 series 当成组织单位；只有用户明确要求处理部分视频时才传 `video_ids`。
 5. 轮询 `get_series_status`，直到 `overall_status` 变成 `completed`、`failed` 或 `cancelled`。
-6. 调用 `export_series` 导出 Markdown。除非用户指定其他类型，默认使用 `kind="mixed"`。
+6. 调用 `export_series` 导出 Markdown。除非用户指定其他类型，默认使用 `kind="mixed"`。短导出默认内联返回；长导出会返回预览和 `vsummary://exports/...` resource URI。用户明确或变相要求 Markdown 文件时，传 `force_file=true`；用户指定导出路径时传 `output_path`，不要再由 agent 手写返回内容。
 7. 只有用户明确要求删除或清理时，才调用 `delete_series`。
 
 ## 工具语义
@@ -30,7 +30,7 @@ description: Use when 使用 VSummary 本地 MCP 服务处理视频系列，包�
 - `add_local_series_videos(series_id, file_paths=["C:/path/audio.mp3", ...])`：通过后端上传已有本地视频/音频文件，并追加到已有本地 series。
 - `process_series(series_id, video_ids=None, run_id=None, transcript_enhancement_enabled=None, wait=false)`：启动处理。默认 `wait=false`，也就是只调度任务并快速返回。
 - `get_series_status(series_id, video_ids=None)`：读取 series 总体进度和每个视频的进度。这是 agent 查询处理进度的主接口。
-- `export_series(series_id, kind="mixed", video_ids=None)`：返回 Markdown 文本，不写入文件。
+- `export_series(series_id, kind="mixed", video_ids=None, force_file=false, output_path=None)`：导出 Markdown。短内容默认返回完整内联 `markdown`；长内容或 `force_file=true` 时写入 MCP 管理的导出存储，并返回 `delivery="resource"`、`preview`、`resource_uri`、`resource_link`、`filename`、`output_path` 等元数据，不在工具结果里塞完整 Markdown。`output_path` 有值时隐式强制文件输出，写到指定路径并返回 `delivery="file"`。
 - `delete_series(series_id)`：通过后端删除 series 及其 workspace 产物。只在用户明确要求时使用。
 
 识别 MCP/agent 创建的 series 时，使用 `is_agent_managed` 字段，不要依赖标题命名规则或 `source_url`。
@@ -53,7 +53,7 @@ Linked Bilibili 视频会先下载再生成。`yt-dlp` 下载期间，library �
 
 ## 导出行为
 
-`export_series` 返回 Markdown 字符串，不创建本地文件。结果里每个被选中的视频都有一项：
+`export_series` 使用 AUTO 交付策略。如果总 Markdown 较短，结果里每个被选中的视频都有内联 Markdown：
 
 ```json
 {
@@ -71,7 +71,9 @@ Linked Bilibili 视频会先下载再生成。`yt-dlp` 下载期间，library �
 }
 ```
 
-如果用户需要文件，由 agent 在导出后把返回的 Markdown 写入工作区。写入路径应由用户指定，或使用清晰的项目内路径。不要假设 `export_series` 已经生成了文件。
+如果导出内容较长，不要期待工具结果里包含完整 Markdown。应优先读取返回的 `resource_uri`，例如 `vsummary://exports/2026-07-09/143000-series-summary.md`；在本地文件可访问时，也可以使用返回的 `output_path`。完整内容存储在项目 `temp/mcp-exports/YYYY-MM-DD/` 目录下。
+
+如果用户说“导出 MD 文件”“保存为 Markdown”“给我文件路径”“写到某个路径”等需要实体文件的表达，调用 `export_series(..., force_file=true)`。如果用户给出了目标路径，调用 `export_series(..., output_path="...")`；`output_path` 本身就表示强制文件输出，不需要再额外读取 inline Markdown 后手动写文件。指定路径已存在时应报告错误并让用户换路径或明确覆盖策略，不要静默覆盖。
 
 ## 失败处理
 

@@ -62,9 +62,26 @@ class FakeVideoSeriesClient:
         series_id: str,
         kind: str = "mixed",
         video_ids: list[str] | None = None,
+        force_file: bool = False,
+        output_path: str | None = None,
     ) -> dict[str, Any]:
-        self.calls.append(("export_series", {"series_id": series_id, "kind": kind, "video_ids": video_ids}))
+        self.calls.append(
+            (
+                "export_series",
+                {
+                    "series_id": series_id,
+                    "kind": kind,
+                    "video_ids": video_ids,
+                    "force_file": force_file,
+                    "output_path": output_path,
+                },
+            )
+        )
         return {"series_id": series_id, "kind": kind, "items": []}
+
+    def read_export_resource(self, date: str, filename: str) -> str:
+        self.calls.append(("read_export_resource", {"date": date, "filename": filename}))
+        return "# Export\n"
 
     async def delete_series(self, series_id: str) -> dict[str, Any]:
         self.calls.append(("delete_series", {"series_id": series_id}))
@@ -83,7 +100,12 @@ class VideoSeriesToolsTests(unittest.IsolatedAsyncioTestCase):
         await tools.add_local_series_videos(series_id="agent-transformer", file_paths=["E:/media/lesson-2.mp3"])
         await tools.process_series(series_id="agent-transformer", video_ids=["BV1"])
         await tools.get_series_status(series_id="agent-transformer")
-        await tools.export_series(series_id="agent-transformer", kind="mixed")
+        await tools.export_series(
+            series_id="agent-transformer",
+            kind="mixed",
+            force_file=True,
+            output_path="E:/exports/agent-transformer.md",
+        )
         await tools.delete_series(series_id="agent-transformer")
 
         self.assertEqual(
@@ -110,7 +132,16 @@ class VideoSeriesToolsTests(unittest.IsolatedAsyncioTestCase):
                     },
                 ),
                 ("get_series_status", {"series_id": "agent-transformer", "video_ids": None}),
-                ("export_series", {"series_id": "agent-transformer", "kind": "mixed", "video_ids": None}),
+                (
+                    "export_series",
+                    {
+                        "series_id": "agent-transformer",
+                        "kind": "mixed",
+                        "video_ids": None,
+                        "force_file": True,
+                        "output_path": "E:/exports/agent-transformer.md",
+                    },
+                ),
                 ("delete_series", {"series_id": "agent-transformer"}),
             ],
             client.calls,
@@ -138,6 +169,16 @@ class VideoSeriesServerRegistrationTests(unittest.IsolatedAsyncioTestCase):
             },
             {tool.name for tool in tools},
         )
+
+    async def test_create_mcp_server_registers_export_resource_template(self) -> None:
+        client = FakeVideoSeriesClient()
+        app = create_mcp_server(client=client)
+
+        resources = await app.read_resource("vsummary://exports/2026-07-09/export.md")
+
+        self.assertEqual("# Export\n", resources[0].content)
+        self.assertEqual("text/markdown", resources[0].mime_type)
+        self.assertEqual(("read_export_resource", {"date": "2026-07-09", "filename": "export.md"}), client.calls[-1])
 
 
 if __name__ == "__main__":

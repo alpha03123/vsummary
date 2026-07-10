@@ -258,6 +258,127 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("# One\n", result["items"][0]["markdown"])
         self.assertEqual("missing", result["items"][1]["status"])
 
+    async def test_export_series_writes_large_markdown_to_mcp_resource(self) -> None:
+        large_markdown = "# One\n\n" + ("0123456789" * 700)
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/videos":
+                return httpx.Response(
+                    200,
+                    json={
+                        "series": [
+                            {
+                                "id": "agent-transformer",
+                                "title": "Transformer 入门",
+                                "videos": [{"id": "BV1", "title": "One", "processed": True, "is_linked": True}],
+                            }
+                        ],
+                    },
+                )
+            if request.url.path == "/api/videos/agent-transformer/BV1/exports/mixed.md":
+                return httpx.Response(200, text=large_markdown)
+            return httpx.Response(404, json={"detail": "not found"})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = VideoSeriesBackendClient(
+                transport=httpx.MockTransport(handler),
+                export_root=Path(temp_dir),
+            )
+
+            result = await client.export_series(series_id="agent-transformer", kind="mixed")
+
+            self.assertEqual("resource", result["delivery"])
+            self.assertEqual(1, result["exported_count"])
+            self.assertGreater(result["markdown_chars"], result["inline_limit_chars"])
+            self.assertTrue(result["truncated"])
+            self.assertIn("preview", result)
+            self.assertLessEqual(len(result["preview"]), result["preview_chars"])
+            self.assertTrue(result["resource_uri"].startswith("vsummary://exports/"))
+            self.assertEqual("resource_link", result["resource_link"]["type"])
+            self.assertEqual(result["resource_uri"], result["resource_link"]["uri"])
+            self.assertNotIn("markdown", result["items"][0])
+
+            export_path = Path(result["output_path"])
+            self.assertTrue(export_path.is_file())
+            exported = client.read_export_resource(result["resource_date"], result["filename"])
+            self.assertIn("# VSummary export: agent-transformer", exported)
+            self.assertIn("<!-- video_id: BV1 -->", exported)
+            self.assertIn(large_markdown, exported)
+
+    async def test_export_series_force_file_writes_short_markdown_to_mcp_resource(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/videos":
+                return httpx.Response(
+                    200,
+                    json={
+                        "series": [
+                            {
+                                "id": "agent-transformer",
+                                "title": "Transformer 入门",
+                                "videos": [{"id": "BV1", "title": "One", "processed": True, "is_linked": True}],
+                            }
+                        ],
+                    },
+                )
+            if request.url.path == "/api/videos/agent-transformer/BV1/exports/mixed.md":
+                return httpx.Response(200, text="# One\n")
+            return httpx.Response(404, json={"detail": "not found"})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = VideoSeriesBackendClient(
+                transport=httpx.MockTransport(handler),
+                export_root=Path(temp_dir),
+            )
+
+            result = await client.export_series(series_id="agent-transformer", kind="mixed", force_file=True)
+
+            self.assertEqual("resource", result["delivery"])
+            self.assertEqual(1, result["exported_count"])
+            self.assertFalse(result["truncated"])
+            self.assertTrue(result["resource_uri"].startswith("vsummary://exports/"))
+            self.assertNotIn("markdown", result["items"][0])
+            self.assertEqual(len("# One\n"), result["items"][0]["markdown_chars"])
+            self.assertTrue(Path(result["output_path"]).is_file())
+
+    async def test_export_series_output_path_writes_short_markdown_to_requested_file(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/videos":
+                return httpx.Response(
+                    200,
+                    json={
+                        "series": [
+                            {
+                                "id": "agent-transformer",
+                                "title": "Transformer 入门",
+                                "videos": [{"id": "BV1", "title": "One", "processed": True, "is_linked": True}],
+                            }
+                        ],
+                    },
+                )
+            if request.url.path == "/api/videos/agent-transformer/BV1/exports/mixed.md":
+                return httpx.Response(200, text="# One\n")
+            return httpx.Response(404, json={"detail": "not found"})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            requested_path = Path(temp_dir) / "requested.md"
+            client = VideoSeriesBackendClient(
+                transport=httpx.MockTransport(handler),
+                export_root=Path(temp_dir) / "exports",
+            )
+
+            result = await client.export_series(
+                series_id="agent-transformer",
+                kind="mixed",
+                output_path=str(requested_path),
+            )
+
+            self.assertEqual("file", result["delivery"])
+            self.assertEqual(str(requested_path), result["output_path"])
+            self.assertEqual("", result["resource_uri"])
+            self.assertNotIn("resource_link", result)
+            self.assertTrue(requested_path.is_file())
+            self.assertIn("# VSummary export: agent-transformer", requested_path.read_text(encoding="utf-8"))
+
     async def test_delete_series_uses_existing_backend_delete_api(self) -> None:
         seen_paths: list[str] = []
 
