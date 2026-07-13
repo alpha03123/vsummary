@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, Search } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, Search, Copy, Link2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function WorkspaceImportModal({
@@ -16,6 +16,7 @@ export function WorkspaceImportModal({
   onCancelChaoxingImport,
   onLoadChaoxingCourses,
   onImportChaoxingCourse,
+  onSelectLocalMedia,
   onImportLocalSeries,
   onImportSeriesVideos,
   onImportLocalPlaygroundVideos,
@@ -24,7 +25,9 @@ export function WorkspaceImportModal({
   const [externalProvider, setExternalProvider] = useState("bilibili");
   const [url, setUrl] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
-  const [files, setFiles] = useState([]);
+  const [sourcePaths, setSourcePaths] = useState([]);
+  const [storageMode, setStorageMode] = useState("copy");
+  const [hardlinkAvailable, setHardlinkAvailable] = useState(true);
   const [status, setStatus] = useState("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [preview, setPreview] = useState(null);
@@ -68,14 +71,14 @@ export function WorkspaceImportModal({
     });
   }, [chaoxingCourses, normalizedChaoxingCourseSearch]);
   const selectedFileSummary = useMemo(() => {
-    if (!files.length) {
+    if (!sourcePaths.length) {
       return "未选择文件";
     }
-    if (files.length === 1) {
-      return files[0].name;
+    if (sourcePaths.length === 1) {
+      return sourcePaths[0].split(/[\\/]/).pop() || sourcePaths[0];
     }
-    return `已选择 ${files.length} 个文件`;
-  }, [files]);
+    return `已选择 ${sourcePaths.length} 个文件`;
+  }, [sourcePaths]);
 
   useEffect(() => {
     loadChaoxingStatusRef.current = onLoadChaoxingStatus;
@@ -231,6 +234,30 @@ export function WorkspaceImportModal({
     onClose();
   }
 
+  async function handleSelectLocalMedia() {
+    if (!onSelectLocalMedia) {
+      return;
+    }
+    setStatus("selecting");
+    setErrorMsg("");
+    try {
+      const selection = await onSelectLocalMedia();
+      if (mountedRef.current) {
+        setSourcePaths(selection.sourcePaths);
+        setHardlinkAvailable(selection.hardlinkAvailable);
+        if (!selection.hardlinkAvailable && storageMode === "hardlink") {
+          setStorageMode("copy");
+        }
+        setStatus("idle");
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setStatus("error");
+        setErrorMsg(error instanceof Error ? error.message : "选择媒体文件失败");
+      }
+    }
+  }
+
   async function handleSubmit() {
     setStatus("loading");
     setErrorMsg("");
@@ -262,19 +289,19 @@ export function WorkspaceImportModal({
             : await onResolveVideo(trimmed, isSeriesVideo ? targetSeriesId : null);
         }
       } else {
-        if (!files.length) {
+        if (!sourcePaths.length) {
           setStatus("idle");
           return;
         }
         result = isSeriesCreation
-          ? await onImportLocalSeries(seriesTitle.trim(), files)
+          ? await onImportLocalSeries(seriesTitle.trim(), sourcePaths, storageMode)
           : isSeriesVideo
-            ? await onImportSeriesVideos(targetSeriesId, files)
-            : await onImportLocalPlaygroundVideos(files);
+            ? await onImportSeriesVideos(targetSeriesId, sourcePaths)
+            : await onImportLocalPlaygroundVideos(sourcePaths);
       }
       setPreview({
         title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : result.title ?? "Playground"),
-        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? (sourceType === "external" ? 1 : files.length),
+        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? (sourceType === "external" ? 1 : sourcePaths.length),
       });
       setStatus("success");
     } catch (error) {
@@ -284,10 +311,10 @@ export function WorkspaceImportModal({
     }
   }
 
-  const submitDisabled = status === "loading" || (
+  const submitDisabled = status === "loading" || status === "selecting" || (
     sourceType === "external"
       ? (externalProvider === "chaoxing" ? !selectedChaoxingCourseKey || !chaoxingStatus?.initialized : !url.trim())
-      : (isSeriesCreation ? !seriesTitle.trim() || !files.length : !files.length)
+      : (isSeriesCreation ? !seriesTitle.trim() || !sourcePaths.length : !sourcePaths.length)
   );
 
   return (
@@ -316,14 +343,14 @@ export function WorkspaceImportModal({
                 <FolderUp size={18} />
               </div>
               <div>
-                <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500">{subtitle}</p>
+                <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">{subtitle}</p>
                 <h2 className="text-base font-bold leading-tight text-stone-900 dark:text-stone-100">{title}</h2>
               </div>
             </div>
             <button
               type="button"
               onClick={handleClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-neutral-800 dark:hover:text-stone-200"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-neutral-800 dark:hover:text-stone-200"
             >
               <X size={18} />
             </button>
@@ -334,11 +361,10 @@ export function WorkspaceImportModal({
               <button
                 type="button"
                 onClick={() => setSourceType("local")}
-                className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${
-                  sourceType === "local"
+                className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${sourceType === "local"
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
-                }`}
+                  }`}
               >
                 本地媒体
                 <p className="mt-1 text-xs font-medium opacity-70">复制文件到 videos 目录。</p>
@@ -346,11 +372,10 @@ export function WorkspaceImportModal({
               <button
                 type="button"
                 onClick={() => setSourceType("external")}
-                className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${
-                  sourceType === "external"
+                className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${sourceType === "external"
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
-                }`}
+                  }`}
               >
                 外部来源
                 <p className="mt-1 text-xs font-medium opacity-70">外部API下载</p>
@@ -362,65 +387,63 @@ export function WorkspaceImportModal({
                 <div>
                   <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">渠道</p>
                   <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100 p-1 dark:border-stone-700 dark:bg-neutral-900">
-                  <button
-                    type="button"
-                    onClick={() => setExternalProvider("bilibili")}
-                    className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${
-                      externalProvider === "bilibili"
-                        ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
-                        : "text-stone-500 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
-                    }`}
-                  >
-                    Bilibili
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExternalProvider("chaoxing")}
-                    className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${
-                      externalProvider === "chaoxing"
-                        ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
-                        : "text-stone-500 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
-                    }`}
-                  >
-                    ChaoXing
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setExternalProvider("bilibili")}
+                      className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "bilibili"
+                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
+                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        }`}
+                    >
+                      Bilibili
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExternalProvider("chaoxing")}
+                      className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "chaoxing"
+                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
+                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        }`}
+                    >
+                      ChaoXing
+                    </button>
                   </div>
                 </div>
                 {externalProvider === "bilibili" ? (
-                <>
-                <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                  {isSeriesCreation ? "Bilibili 系列 / 多 P URL" : "Bilibili 视频 URL"}
-                </label>
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  placeholder={isSeriesCreation ? "https://www.bilibili.com/video/BV... 或合集链接" : "https://www.bilibili.com/video/BV..."}
-                  disabled={status === "loading"}
-                  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
-                  autoFocus
-                />
-                <p className="mt-2 text-[11px] text-stone-400 dark:text-zinc-500">
-                  遇到风控时请先获取 Cookie，再重新解析。
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleInitBilibiliCookie}
-                    disabled={bilibiliCookieLoading || status === "loading"}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-2 text-xs font-bold text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {bilibiliCookieLoading ? <Loader2 size={14} className="animate-spin" /> : null}
-                    {bilibiliCookieLoading ? "等待登录..." : "获取 Bilibili Cookie"}
-                  </button>
-                  {bilibiliCookieConfigured ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 size={14} />
-                      Cookie 已写入
-                    </span>
-                  ) : null}
-                </div>
-                </>
+                  <>
+                    <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                      {isSeriesCreation ? "Bilibili 系列 / 多 P URL" : "Bilibili 视频 URL"}
+                    </label>
+                    <input
+                      type="url"
+                      value={url}
+                      onChange={(event) => setUrl(event.target.value)}
+                      placeholder={isSeriesCreation ? "https://www.bilibili.com/video/BV... 或合集链接" : "https://www.bilibili.com/video/BV..."}
+                      disabled={status === "loading" || status === "selecting"}
+                      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                      autoFocus
+                    />
+                    <p className="mt-2 text-[11px] text-stone-500 dark:text-zinc-500">
+                      遇到风控时请先获取 Cookie，再重新解析。
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleInitBilibiliCookie}
+                        disabled={bilibiliCookieLoading || status === "loading"}
+                        className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-2 text-xs font-bold text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {bilibiliCookieLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                        {bilibiliCookieLoading ? "等待登录..." : "获取 Bilibili Cookie"}
+                      </button>
+                      {bilibiliCookieConfigured ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 size={14} />
+                          Cookie 已写入
+                        </span>
+                      ) : null}
+                    </div>
+                  </>
                 ) : (
                   <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-700 dark:bg-neutral-900">
                     {!chaoxingEnabledForMode ? (
@@ -441,7 +464,7 @@ export function WorkspaceImportModal({
                       <div className="flex flex-col gap-3">
                         <div>
                           <p className="text-sm font-bold text-stone-900 dark:text-stone-100">需要初始化超星登录</p>
-                          <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
+                          <p className="mt-1 text-xs text-stone-600 dark:text-zinc-400">
                             点击后会打开浏览器，请在浏览器中完成学习通登录。
                           </p>
                         </div>
@@ -470,7 +493,7 @@ export function WorkspaceImportModal({
                           </button>
                         </div>
                         <div className="relative mb-3">
-                          <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-zinc-500" />
+                          <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-zinc-500" />
                           <input
                             type="text"
                             value={chaoxingCourseSearch}
@@ -482,7 +505,7 @@ export function WorkspaceImportModal({
                             <button
                               type="button"
                               onClick={() => setChaoxingCourseSearch("")}
-                              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
                               aria-label="清空课程搜索"
                               title="清空课程搜索"
                             >
@@ -496,14 +519,13 @@ export function WorkspaceImportModal({
                               key={course.courseKey}
                               type="button"
                               onClick={() => setSelectedChaoxingCourseKey(course.courseKey)}
-                              className={`w-full cursor-pointer rounded-2xl border px-4 py-3 text-left transition-colors ${
-                                selectedChaoxingCourseKey === course.courseKey
+                              className={`w-full cursor-pointer rounded-2xl border px-4 py-3 text-left transition-colors ${selectedChaoxingCourseKey === course.courseKey
                                   ? "border-accent bg-accent/10"
                                   : "border-stone-200 bg-white dark:border-stone-700 dark:bg-neutral-950"
-                              }`}
+                                }`}
                             >
                               <p className="text-sm font-bold text-stone-900 dark:text-stone-100">{course.title}</p>
-                              <p className="mt-1 text-xs text-stone-500 dark:text-zinc-400">
+                              <p className="mt-1 text-xs text-stone-600 dark:text-zinc-400">
                                 {[course.teacher, course.openTime].filter(Boolean).join(" · ") || "超星课程"}
                               </p>
                             </button>
@@ -532,32 +554,65 @@ export function WorkspaceImportModal({
                   className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
                   autoFocus
                 />
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">媒体存储方式</p>
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="媒体存储方式">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={storageMode === "copy"}
+                      onClick={() => setStorageMode("copy")}
+                      disabled={status === "loading" || status === "selecting"}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${storageMode === "copy"
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-200"
+                        }`}
+                    >
+                      <Copy size={16} />
+                      复制到工作区
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={storageMode === "hardlink"}
+                      onClick={() => setStorageMode("hardlink")}
+                      disabled={status === "loading" || status === "selecting" || (sourcePaths.length > 0 && !hardlinkAvailable)}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${storageMode === "hardlink"
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-200"
+                        }`}
+                    >
+                      <Link2 size={16} />
+                      创建硬链接(节约空间)
+                    </button>
+                  </div>
+                  {sourcePaths.length > 0 && !hardlinkAvailable ? (
+                    <p className="mt-2 text-xs font-medium text-danger">所选文件与工作区不在同一磁盘分区，只能复制导入。</p>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
             {sourceType === "local" ? (
-            <div>
-              <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                选择媒体文件
-              </label>
-              <label className="flex cursor-pointer flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 transition hover:border-accent hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900">
-                <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
-                  <Film size={16} />
-                  {selectedFileSummary}
-                </div>
-                <p className="text-xs text-stone-500 dark:text-zinc-400">
-                  支持多选，导入时会复制到项目媒体目录。
-                </p>
-                <input
-                  type="file"
-                  accept="video/*,audio/*,.mp4,.mov,.mkv,.avi,.webm,.m4v,.mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.wma"
-                  multiple
-                  disabled={status === "loading"}
-                  onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-                  className="hidden"
-                />
-              </label>
-            </div>
+              <div>
+                <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                  选择媒体文件
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSelectLocalMedia}
+                  disabled={status === "loading" || status === "selecting"}
+                  className="flex w-full flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-left transition hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
+                    <Film size={16} />
+                    {selectedFileSummary}
+                  </div>
+                  <p className="text-xs text-stone-600 dark:text-zinc-400">
+                    {isSeriesCreation && storageMode === "hardlink" ? "支持多选，媒体文件需与工作区位于同一磁盘分区。" : "支持多选，媒体将按该系列的存储方式导入。"}
+                  </p>
+                </button>
+              </div>
             ) : null}
 
             {status === "success" && preview ? (

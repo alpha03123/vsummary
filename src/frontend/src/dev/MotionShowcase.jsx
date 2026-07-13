@@ -80,7 +80,7 @@ export function MotionShowcase() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Framer Motion 动效实验室</h1>
-          <p className="text-stone-500 mt-2">在这里体验原生系统级高级动效，选好感觉后我们再实装到主页面。</p>
+          <p className="text-stone-600 mt-2">在这里体验原生系统级高级动效，选好感觉后我们再实装到主页面。</p>
         </div>
         <button 
           onClick={() => window.location.hash = ""} 
@@ -95,7 +95,7 @@ export function MotionShowcase() {
         {/* 1. Layout Transition (侧边栏收缩重排) */}
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
           <h2 className="text-xl font-bold mb-4">1. 无缝布局重排 (Layout Animations)</h2>
-          <p className="text-sm text-stone-500 mb-4">当侧边栏宽度改变时，右侧内容块极其平滑地自动填补空缺，告别闪跳。</p>
+          <p className="text-sm text-stone-600 mb-4">当侧边栏宽度改变时，右侧内容块极其平滑地自动填补空缺，告别闪跳。</p>
           
           <button 
             onClick={() => setSidebarOpen(!isSidebarOpen)}
@@ -108,9 +108,9 @@ export function MotionShowcase() {
             <motion.div 
               layout
               transition={springTransition}
-              className={`${isSidebarOpen ? "w-[120px]" : "w-0"} bg-sky-100 rounded-xl flex items-center justify-center overflow-hidden shrink-0`}
+              className={`${isSidebarOpen ? "w-[120px]" : "w-0"} bg-indigo-100 rounded-xl flex items-center justify-center overflow-hidden shrink-0`}
             >
-              <span className="text-sky-800 font-bold whitespace-nowrap opacity-50">Sidebar</span>
+              <span className="text-indigo-800 font-bold whitespace-nowrap opacity-50">Sidebar</span>
             </motion.div>
             
             <motion.div 
@@ -130,7 +130,7 @@ export function MotionShowcase() {
         {/* 2. Shared Layout Transition (共享元素变形) */}
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
           <h2 className="text-xl font-bold mb-4">2. 共享元素变幻 (layoutId)</h2>
-          <p className="text-sm text-stone-500 mb-4">类似 Apple App Store 的卡片展开。卡片脱离文档流直接“飞”成详情页。</p>
+          <p className="text-sm text-stone-600 mb-4">类似 Apple App Store 的卡片展开。卡片脱离文档流直接“飞”成详情页。</p>
           
           <div className="flex gap-4 h-48 relative">
             {cards.map((card) => (
@@ -142,7 +142,7 @@ export function MotionShowcase() {
                 className="flex-1 bg-stone-100 rounded-2xl p-4 cursor-pointer hover:bg-stone-200"
               >
                 <motion.h3 layoutId={`card-title-${card.id}`} className="font-bold text-lg">{card.title}</motion.h3>
-                <p className="text-xs text-stone-500 mt-2">{card.desc}</p>
+                <p className="text-xs text-stone-600 mt-2">{card.desc}</p>
               </motion.div>
             ))}
 
@@ -176,9 +176,9 @@ export function MotionShowcase() {
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
           <div className="flex justify-between items-center mb-4">
              <h2 className="text-xl font-bold">3. 彻底告别生硬销毁 (Exit Animation)</h2>
-             <button onClick={resetMessages} className="text-sm text-sky-600 font-semibold hover:underline">Reset</button>
+             <button onClick={resetMessages} className="text-sm text-indigo-600 font-semibold hover:underline">Reset</button>
           </div>
-          <p className="text-sm text-stone-500 mb-4">点击列表项删除。你甚至能看到剩余的元素优雅地上移填补空缺。</p>
+          <p className="text-sm text-stone-600 mb-4">点击列表项删除。你甚至能看到剩余的元素优雅地上移填补空缺。</p>
           
           <ul className="flex flex-col gap-2">
             <AnimatePresence mode="popLayout">
@@ -203,7 +203,7 @@ export function MotionShowcase() {
         {/* 4. Drag and Constraints (物理拖拽缓冲) */}
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm overflow-hidden overflow-visible">
           <h2 className="text-xl font-bold mb-4">4. 极度真实的拖拽惯性 (Drag Physics)</h2>
-          <p className="text-sm text-stone-500 mb-4">非常适合思维导图画板的交互。试着在这个方框内用力甩动圆形节点，感受回弹停滞！</p>
+          <p className="text-sm text-stone-600 mb-4">非常适合思维导图画板的交互。试着在这个方框内用力甩动圆形节点，感受回弹停滞！</p>
           
           <motion.div className="h-48 bg-stone-100 rounded-2xl border-2 border-stone-200 border-dashed relative overflow-hidden flex items-center justify-center p-4">
              <motion.div
@@ -222,12 +222,12 @@ export function MotionShowcase() {
         {/* 5. Peer-to-Peer Switch (同级平滑切换) */}
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm lg:col-span-2">
           <h2 className="text-xl font-bold mb-2">5. 同级平滑切换 (Peer-to-Peer Switch)</h2>
-          <p className="text-sm text-stone-500 mb-6">这就是我们刚刚讨论的场景：在工作区左侧栏切换不同视频时，右侧主体内容的无缝过渡。</p>
+          <p className="text-sm text-stone-600 mb-6">这就是我们刚刚讨论的场景：在工作区左侧栏切换不同视频时，右侧主体内容的无缝过渡。</p>
           
           <div className="flex gap-4 mb-6">
             <span className="text-sm font-bold text-stone-700 flex items-center mr-2">选择动效风格:</span>
             {["fade", "slide", "blur"].map(effect => (
-              <label key={effect} className="flex flex-row items-center gap-2 text-sm cursor-pointer hover:text-sky-600">
+              <label key={effect} className="flex flex-row items-center gap-2 text-sm cursor-pointer hover:text-indigo-600">
                 <input type="radio" name="effect" checked={switchEffect === effect} onChange={() => setSwitchEffect(effect)} />
                 <span className="uppercase font-mono">{effect}</span>
               </label>
@@ -237,12 +237,12 @@ export function MotionShowcase() {
           <div className="flex flex-col md:flex-row h-72 rounded-2xl border overflow-hidden bg-stone-50">
             {/* Mock Sidebar */}
             <div className="w-full md:w-64 bg-stone-100 border-b md:border-b-0 md:border-r border-stone-200 p-4 flex flex-col gap-2 shrink-0">
-              <span className="text-xs font-bold text-stone-500 tracking-widest pl-2 mb-2">VIDEOS LIST</span>
+              <span className="text-xs font-bold text-stone-600 tracking-widest pl-2 mb-2">VIDEOS LIST</span>
               {["1-4 准备工作", "1-5 安装 Nacos", "1-6 仿 Manus 框架"].map(tab => (
                 <button 
                   key={tab} 
                   onClick={() => setSwitchTab(tab)}
-                  className={`text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${switchTab === tab ? "bg-white shadow-sm border border-stone-200 text-sky-600" : "text-stone-600 hover:bg-stone-200/50"}`}
+                  className={`text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${switchTab === tab ? "bg-white shadow-sm border border-stone-200 text-indigo-600" : "text-stone-600 hover:bg-stone-200/50"}`}
                 >
                   {tab}
                 </button>
@@ -263,7 +263,7 @@ export function MotionShowcase() {
                  >
                    <div className="w-16 h-16 rounded-full bg-stone-200 mx-auto mb-4" />
                    <h3 className="text-2xl font-bold text-stone-800 mb-2">{switchTab}</h3>
-                   <p className="text-stone-500 text-sm">这里是当前视频的详细信息、AI 总结内容等。感受 {switchEffect.toUpperCase()} 退场和进场时的优雅交接。</p>
+                   <p className="text-stone-600 text-sm">这里是当前视频的详细信息、AI 总结内容等。感受 {switchEffect.toUpperCase()} 退场和进场时的优雅交接。</p>
                  </motion.div>
                </AnimatePresence>
             </div>
@@ -273,7 +273,7 @@ export function MotionShowcase() {
         {/* 6. Active Indicator Slide (平滑选中框过渡) */}
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
           <h2 className="text-xl font-bold mb-4">6. 平滑选中框过渡 (Active Indicator)</h2>
-          <p className="text-sm text-stone-500 mb-6">点击任意项目。你想要的选中框“不仅是变色，而是丝滑滑过去”的神级效果。</p>
+          <p className="text-sm text-stone-600 mb-6">点击任意项目。你想要的选中框“不仅是变色，而是丝滑滑过去”的神级效果。</p>
           
           <div className="flex flex-col gap-1 w-full max-w-xs bg-stone-100 p-2 rounded-2xl relative">
             {menus.map((menu) => {
@@ -283,7 +283,7 @@ export function MotionShowcase() {
                   key={menu}
                   onClick={() => setActiveMenu(menu)}
                   className={`relative w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-colors duration-200 z-10 ${
-                    isActive ? "text-sky-900" : "text-stone-500 hover:text-stone-800"
+                    isActive ? "text-indigo-900" : "text-stone-600 hover:text-stone-800"
                   }`}
                 >
                   {/* The secret sauce: An absolutely positioned background with layoutId */}
@@ -314,7 +314,7 @@ export function MotionShowcase() {
                 </button>
              </div>
           </div>
-          <p className="text-sm text-stone-500 mb-6">具有方向感知（向左翻左入，向右翻右入），经常用在全屏图库或章节阅读里。</p>
+          <p className="text-sm text-stone-600 mb-6">具有方向感知（向左翻左入，向右翻右入），经常用在全屏图库或章节阅读里。</p>
 
           <div className="relative h-48 w-full flex items-center justify-center bg-stone-50 rounded-2xl border overflow-hidden">
             <AnimatePresence custom={direction} mode="popLayout">

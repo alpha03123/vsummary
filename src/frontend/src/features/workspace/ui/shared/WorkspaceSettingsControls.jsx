@@ -31,7 +31,7 @@ export function WorkspaceProviderSelect({ value, onChange, options, className = 
         className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-left text-sm text-stone-900 outline-none transition-colors hover:border-accent/50 focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
       >
         <span className="truncate font-medium">{selected?.label ?? value}</span>
-        <ChevronDown size={15} className={`shrink-0 text-stone-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={15} className={`shrink-0 text-stone-500 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
@@ -39,7 +39,7 @@ export function WorkspaceProviderSelect({ value, onChange, options, className = 
           {groups.map((group, gi) => (
             <div key={group}>
               {gi > 0 && <div className="mx-3 border-t border-stone-100 dark:border-stone-800" />}
-              <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+              <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500">
                 {group}
               </div>
               {groupMap[group].map((option) => {
@@ -56,7 +56,7 @@ export function WorkspaceProviderSelect({ value, onChange, options, className = 
                         {option.label}
                       </div>
                       {option.description && (
-                        <div className="mt-0.5 text-xs leading-snug text-stone-400 dark:text-stone-500">
+                        <div className="mt-0.5 text-xs leading-snug text-stone-500 dark:text-stone-500">
                           {option.description}
                         </div>
                       )}
@@ -80,7 +80,7 @@ export function WorkspaceSettingRow({ title, description, children, contentClass
     <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 2xl:flex-row 2xl:items-center">
       <div className="min-w-0 max-w-none 2xl:w-[260px] 2xl:shrink-0">
         <strong className="mb-1.5 block text-base font-bold text-stone-900 dark:text-stone-100">{title}</strong>
-        <span className="block text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">{description}</span>
+        <span className="block text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">{description}</span>
       </div>
       <div className={`flex min-w-0 w-full items-center justify-end ${contentLayoutClassName}`}>{children}</div>
     </div>
@@ -119,7 +119,7 @@ export function WorkspaceSegmentedControl({ value, options, onChange }) {
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               active
                 ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
-                : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+                : "text-stone-600 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
             }`}
             onClick={() => onChange(option.id)}
           >

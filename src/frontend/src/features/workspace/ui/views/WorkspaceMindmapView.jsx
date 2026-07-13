@@ -57,7 +57,7 @@ export function WorkspaceMindmapView({
           disabled={isGeneratingMindmapSelectedVideo}
           className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-all ${
             isGeneratingMindmapSelectedVideo
-              ? "motion-busy-button cursor-not-allowed bg-stone-200 text-stone-500"
+              ? "motion-busy-button cursor-not-allowed bg-stone-200 text-stone-600"
               : "bg-accent text-white shadow-sm hover:bg-accent/90"
           }`}
         >

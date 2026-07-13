@@ -24,6 +24,7 @@ import {
   loadChaoxingStatus,
   resolveBilibiliSeries,
   resolveBilibiliVideo,
+  selectLocalMedia,
   subscribeChaoxingImportProgress,
   startVideoDownload,
   subscribeMindmapGenerationProgress,
@@ -629,9 +630,18 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onImportLocalSeries(seriesTitle, files) {
+  async function onSelectLocalMedia() {
     try {
-      const rawSeries = await importLocalSeries(seriesTitle, files);
+      return await selectLocalMedia();
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "选择本机媒体失败" });
+      throw error;
+    }
+  }
+
+  async function onImportLocalSeries(seriesTitle, sourcePaths, storageMode) {
+    try {
+      const rawSeries = await importLocalSeries(seriesTitle, sourcePaths, storageMode);
       await reloadWorkspaceLibrary();
       return rawSeries;
     } catch (error) {
@@ -792,9 +802,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onImportLocalPlaygroundVideos(files) {
+  async function onImportLocalPlaygroundVideos(sourcePaths) {
     try {
-      const rawVideos = await importLocalPlaygroundVideos(files);
+      const rawVideos = await importLocalPlaygroundVideos(sourcePaths);
       await reloadWorkspaceLibrary();
       return rawVideos;
     } catch (error) {
@@ -803,9 +813,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onImportSeriesVideos(seriesId, files) {
+  async function onImportSeriesVideos(seriesId, sourcePaths) {
     try {
-      const rawVideos = await importLocalSeriesVideos(seriesId, files);
+      const rawVideos = await importLocalSeriesVideos(seriesId, sourcePaths);
       await reloadWorkspaceLibrary();
       return rawVideos;
     } catch (error) {
@@ -867,6 +877,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onUpdateNote,
     onDeleteNote,
     onResolveLinkedSeries,
+    onSelectLocalMedia,
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
     onInitBilibiliCookie,

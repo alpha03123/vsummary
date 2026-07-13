@@ -10,25 +10,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        sky: colors.indigo,
+        // `sky` previously aliased to indigo (confusing); dev showcase now uses
+        // `indigo-*` directly. `brand` teal palette was never referenced — removed.
         indigo: colors.indigo,
         accent: 'rgb(var(--workspace-accent-color) / <alpha-value>)',
-        brand: {
-          50: '#F0FDFA',
-          100: '#CCFBF1',
-          200: '#99F6E4',
-          300: '#5EEAD4',
-          400: '#2DD4BF',
-          500: '#14B8A6',
-          600: '#0D9488',
-          700: '#0F766E', // Primary teal
-          800: '#115E59',
-          900: '#134E4A',
-          950: '#042F2E',
-        },
       },
       fontFamily: {
-        sans: ['Public Sans', 'Inter', 'Segoe UI', 'sans-serif'],
+        // Match the fonts actually loaded in index.html (IBM Plex Sans + Space Grotesk).
+        // Previously declared 'Public Sans' which was never loaded, causing silent
+        // fallback to system fonts instead of the intended typography.
+        sans: ['"IBM Plex Sans"', 'Inter', '"Segoe UI"', 'sans-serif'],
+        display: ['"Space Grotesk"', '"IBM Plex Sans"', 'sans-serif'],
       },
       borderRadius: {
         '2xl': '1rem',      // 16px

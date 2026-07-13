@@ -21,7 +21,7 @@ export function WorkspaceMetricCard({
             ? "text-stone-700 dark:text-zinc-300"
             : accent === "info"
               ? "text-info"
-              : "text-stone-500 dark:text-stone-400"
+              : "text-stone-600 dark:text-stone-400"
         } ${labelClassName}`.trim()}
       >
         {label}

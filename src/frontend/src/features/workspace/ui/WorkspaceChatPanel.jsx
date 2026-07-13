@@ -138,7 +138,7 @@ export function WorkspaceChatPanel({
                 {currentPageLabel}
               </span>
             </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400">基于《{scopeLabel}》</p>
+            <p className="text-xs text-stone-600 dark:text-stone-400">基于《{scopeLabel}》</p>
           </div>
         </div>
         <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
@@ -196,7 +196,7 @@ export function WorkspaceChatPanel({
               <Sparkles size={28} className="text-accent" />
             </div>
             <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 mb-2">有什么我可以帮您的？</h2>
-            <p className="text-sm text-stone-500 dark:text-stone-400 mb-10 max-w-md text-center">您可以直接提问，或者尝试以下快速指令来探索当前上下文。</p>
+            <p className="text-sm text-stone-600 dark:text-stone-400 mb-10 max-w-md text-center">您可以直接提问，或者尝试以下快速指令来探索当前上下文。</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
               {suggestedPrompts.map((prompt, idx) => {
@@ -213,7 +213,7 @@ export function WorkspaceChatPanel({
                       <Icon size={16} />
                       {prompt.title}
                     </div>
-                    <div className="text-xs text-stone-500 dark:text-stone-400 font-medium leading-relaxed">
+                    <div className="text-xs text-stone-600 dark:text-stone-400 font-medium leading-relaxed">
                       {prompt.desc}
                     </div>
                   </button>
@@ -250,13 +250,13 @@ export function WorkspaceChatPanel({
                 >
                   {renderMessageContent(message, isAssistant)}
                 </div>
-                <div className={`flex items-center gap-2 text-xs text-stone-400 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
+                <div className={`flex items-center gap-2 text-xs text-stone-500 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
                   <span>{message.meta}</span>
                   {canCopy ? (
                     <CopyToClipboardButton
                       text={message.content}
                       iconSize={12}
-                      className="gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                      className="gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
                     />
                   ) : null}
                 </div>
@@ -315,8 +315,8 @@ export function WorkspaceChatPanel({
           </div>
         </div>
         <div className="flex items-center justify-center gap-2 mt-4 opacity-70">
-          <Sparkles size={12} className="text-stone-400 dark:text-stone-500" />
-          <p className="text-xs font-medium text-stone-400 dark:text-stone-500">
+          <Sparkles size={12} className="text-stone-500 dark:text-stone-500" />
+          <p className="text-xs font-medium text-stone-500 dark:text-stone-500">
             {chatLocked
               ? "概况生成完成后，这里会恢复正常提问"
               : seriesRagLocked
@@ -359,9 +359,9 @@ function WorkspaceContextUsageInline({ usage, loading }) {
         <div className="rounded-2xl border border-stone-200/80 bg-white/95 p-4 shadow-xl backdrop-blur-lg dark:border-stone-700 dark:bg-stone-900/95">
           <div className="flex items-center justify-between mb-2">
             <strong className="text-xs font-semibold text-stone-700 dark:text-stone-200">上下文预算</strong>
-            <span className="text-xs text-stone-500 dark:text-stone-400">剩余 {formatTokenCount(usage.remainingTokens)}</span>
+            <span className="text-xs text-stone-600 dark:text-stone-400">剩余 {formatTokenCount(usage.remainingTokens)}</span>
           </div>
-          <p className="text-[11px] text-stone-500 dark:text-stone-400 mb-3">
+          <p className="text-[11px] text-stone-600 dark:text-stone-400 mb-3">
             已估算 {usageLabel}，保留输出 {formatTokenCount(usage.reservedOutputTokens)}
           </p>
           <div className="h-1.5 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800 mb-3">
@@ -404,7 +404,7 @@ function WorkspaceToolTraceMessage({ message }) {
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-[15px] font-semibold">{message.content}</strong>
               {durationLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                   <Clock3 size={12} />
                   用时 {durationLabel}
                 </span>
@@ -420,7 +420,7 @@ function WorkspaceToolTraceMessage({ message }) {
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
               {isRunning
                 ? "工具正在执行中"
                 : isFailed
@@ -430,7 +430,7 @@ function WorkspaceToolTraceMessage({ message }) {
                     : "展开查看本轮实际调用的工具名和步骤说明"}
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
         </div>
       </summary>
 
@@ -455,10 +455,10 @@ function WorkspaceToolTraceMessage({ message }) {
                   {step.status === "running" ? "进行中" : step.status === "failed" ? "失败" : "已完成"}
                 </span>
                 {step.target ? (
-                  <span className="truncate text-xs text-stone-500 dark:text-stone-400">({step.target})</span>
+                  <span className="truncate text-xs text-stone-600 dark:text-stone-400">({step.target})</span>
                 ) : null}
                 {shouldShowDuration(step.durationMs) ? (
-                  <span className="text-xs text-stone-400 dark:text-stone-500">用时 {formatDurationLabel(step.durationMs)}</span>
+                  <span className="text-xs text-stone-500 dark:text-stone-500">用时 {formatDurationLabel(step.durationMs)}</span>
                 ) : null}
               </div>
             </div>
@@ -487,17 +487,17 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-[15px] font-semibold">{title}</strong>
             </div>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
               展开查看命中的转写片段，再决定是否跳到视频。
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
         </div>
       </summary>
 
       <div className="border-t border-info/20 px-4 py-4 dark:border-info/10">
         {reference.query ? (
-          <p className="text-xs font-medium text-stone-500 dark:text-stone-400">
+          <p className="text-xs font-medium text-stone-600 dark:text-stone-400">
             检索问题：{reference.query}
           </p>
         ) : null}
@@ -546,17 +546,17 @@ function WorkspaceThoughtTraceMessage({ message }) {
               <div className="flex flex-wrap items-center gap-2">
                 <strong className="text-[15px] font-semibold">{message.content}</strong>
                 {durationLabel ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                     <Clock3 size={12} />
                     用时 {durationLabel}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
                 {isRunning ? "当前按图节点顺序执行中" : isFailed ? "本轮图节点执行失败" : "本轮图节点执行已完成"}
               </p>
             </div>
-            <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
+            <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
           </div>
         </summary>
 
@@ -588,7 +588,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-stone-800 dark:text-stone-100">{stage.label}</div>
-                          <div className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{stage.nodeId}</div>
+                          <div className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">{stage.nodeId}</div>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -601,7 +601,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
                           {stageRunning ? "执行中" : stageFailed ? "失败" : "已完成"}
                         </span>
                         {stageDurationLabel ? (
-                          <span className="text-xs text-stone-400 dark:text-stone-500">用时 {stageDurationLabel}</span>
+                          <span className="text-xs text-stone-500 dark:text-stone-500">用时 {stageDurationLabel}</span>
                         ) : null}
                       </div>
                     </div>
@@ -626,17 +626,17 @@ function WorkspaceThoughtTraceMessage({ message }) {
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-[15px] font-semibold">{message.content}</strong>
               {durationLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                   <Clock3 size={12} />
                   用时 {durationLabel}
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
               {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : isFailed ? "本轮思路执行失败，展开查看错误摘要" : "展开查看本轮对问题的思路摘要"}
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-stone-400 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
         </div>
       </summary>
 

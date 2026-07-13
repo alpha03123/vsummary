@@ -46,7 +46,7 @@ export function WorkspaceConfirmDialog({
             </div>
             <div className="min-w-0">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">{description}</p>
+              <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{description}</p>
             </div>
           </div>
 

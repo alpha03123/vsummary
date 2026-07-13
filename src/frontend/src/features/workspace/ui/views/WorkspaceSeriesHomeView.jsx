@@ -10,7 +10,7 @@ export function WorkspaceSeriesHomeView({ activeSeries }) {
       <div className="workspace-panel rounded-[1.5rem] border p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500">转化进度</span>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">转化进度</span>
             <span className="px-2.5 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-[10px] font-bold text-stone-600 dark:text-zinc-400">
               {processedSeriesVideos.length} / {seriesVideos.length} 视频
             </span>

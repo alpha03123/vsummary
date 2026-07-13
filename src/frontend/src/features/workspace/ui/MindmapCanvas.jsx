@@ -81,7 +81,7 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }
 
   if (!root) {
     return (
-      <div className="p-8 text-stone-500 text-sm text-center">
+      <div className="p-8 text-stone-600 text-sm text-center">
         当前没有导图数据。
       </div>
     );

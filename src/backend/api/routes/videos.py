@@ -10,6 +10,7 @@ import asyncio
 import logging
 import json
 import mimetypes
+from pathlib import Path
 from threading import Lock
 from urllib.parse import quote
 
@@ -17,11 +18,14 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
+from backend.api.local_media_picker import select_local_media_paths
 from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
+    LocalMediaPathImportRequest,
+    LocalMediaSeriesPathImportRequest,
     UpdateVideoNoteRequest,
 )
 from backend.api.schemas.responses import (
@@ -994,6 +998,77 @@ def delete_video_source(series_id: str, video_id: str, container: ApiContainerDe
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return {"status": "deleted", "series_id": deleted.series_id, "video_id": deleted.video_id}
+
+
+@router.post("/api/import/local/select")
+def select_local_media(container: ApiContainerDep) -> dict[str, object]:
+    """POST /api/import/local/select — 由本机后端打开媒体文件选择框。"""
+    try:
+        source_paths = select_local_media_paths()
+        workspace_device = container.root_dir.stat().st_dev
+        incompatible_paths = [
+            Path(path).name
+            for path in source_paths
+            if Path(path).stat().st_dev != workspace_device
+        ]
+        return {
+            "source_paths": source_paths,
+            "hardlink_available": not incompatible_paths,
+            "incompatible_source_names": incompatible_paths,
+        }
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=f"无法打开本机文件选择框：{error}") from error
+
+
+@router.post("/api/import/local/series/from-paths", response_model=SeriesResponse)
+def import_local_series_from_paths(
+    request: LocalMediaSeriesPathImportRequest,
+    container: ApiContainerDep,
+) -> SeriesResponse:
+    """POST /api/import/local/series/from-paths — 从本机路径新建系列。"""
+    if request.storage_mode is None:
+        raise HTTPException(status_code=400, detail="storage_mode 不能为空。")
+    try:
+        series = container.import_local_series.run_from_paths(
+            title=request.series_title,
+            source_paths=[Path(path) for path in request.source_paths],
+            storage_mode=request.storage_mode,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return SeriesResponse.from_model(series)
+
+
+@router.post("/api/import/local/playground/from-paths", response_model=list[VideoCardResponse])
+def import_local_playground_videos_from_paths(
+    request: LocalMediaPathImportRequest,
+    container: ApiContainerDep,
+) -> list[VideoCardResponse]:
+    """POST /api/import/local/playground/from-paths — 从本机路径复制到 Playground。"""
+    try:
+        videos = container.import_local_playground_videos.run_from_paths(
+            source_paths=[Path(path) for path in request.source_paths],
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return [VideoCardResponse.from_model(video) for video in videos]
+
+
+@router.post("/api/import/local/series/{series_id}/from-paths", response_model=list[VideoCardResponse])
+def import_local_series_videos_from_paths(
+    series_id: str,
+    request: LocalMediaPathImportRequest,
+    container: ApiContainerDep,
+) -> list[VideoCardResponse]:
+    """POST /api/import/local/series/{series_id}/from-paths — 按系列模式追加本机媒体。"""
+    try:
+        videos = container.import_local_series_videos.run_from_paths(
+            series_id=series_id,
+            source_paths=[Path(path) for path in request.source_paths],
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return [VideoCardResponse.from_model(video) for video in videos]
 
 
 @router.post("/api/import/local/series", response_model=SeriesResponse)

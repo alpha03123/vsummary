@@ -28,12 +28,12 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
   if (!sourceSeries.length) {
     return (
       <section className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto text-center p-12 workspace-panel rounded-[2rem] border m-6">
-        <div className="w-16 h-16 workspace-muted-panel rounded-2xl border flex items-center justify-center text-stone-400 mb-6 shadow-sm">
+        <div className="w-16 h-16 workspace-muted-panel rounded-2xl border flex items-center justify-center text-stone-500 mb-6 shadow-sm">
           <FolderKanban size={32} />
         </div>
-        <p className="text-[11px] font-bold text-stone-500 dark:text-zinc-500 tracking-widest uppercase mb-4">Videos Library</p>
+        <p className="text-[11px] font-bold text-stone-600 dark:text-zinc-500 tracking-widest uppercase mb-4">Videos Library</p>
         <h2 className="text-3xl font-bold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">还没有分类 (Series)</h2>
-        <p className="text-stone-500 dark:text-zinc-400 leading-relaxed text-lg font-medium">
+        <p className="text-stone-600 dark:text-zinc-400 leading-relaxed text-lg font-medium">
           你可以直接使用导入入口创建系列，也可以手动把视频放进
           <code className="bg-stone-100 dark:bg-neutral-900 px-2 py-1 rounded-md text-stone-700 dark:text-zinc-300 font-mono text-sm mx-1 border border-stone-200 dark:border-white/5">videos/&lt;series&gt;/</code>
           目录。
@@ -61,11 +61,11 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
     return (
       <section className="flex h-full flex-col bg-transparent">
         <div className="border-b border-stone-200/80 dark:border-white/5 px-6 pb-5 pt-6 bg-stone-50/50 dark:bg-transparent">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500 mb-1.5 flex items-center gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500 mb-1.5 flex items-center gap-2">
             Series Shelf
           </p>
           <h2 className="text-2xl font-extrabold text-stone-900 dark:text-stone-100 tracking-tight">All Shelves</h2>
-          <p className="mt-2 text-[13px] font-medium leading-relaxed text-stone-500 dark:text-zinc-400">
+          <p className="mt-2 text-[13px] font-medium leading-relaxed text-stone-600 dark:text-zinc-400">
             点击下方任一系列来进入工作区
           </p>
 
@@ -79,7 +79,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
             </button>
           ) : null}
           <div className="relative mt-4">
-            <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+            <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-500" />
             <input
               type="text"
               value={searchText}
@@ -91,7 +91,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
               <button
                 type="button"
                 onClick={() => setSearchText("")}
-                className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
                 aria-label="清空系列搜索"
                 title="清空系列搜索"
               >
@@ -122,20 +122,20 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
                     <span className="inline-flex items-center rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 px-3 py-1 text-[11px] font-bold tracking-wide text-stone-600 dark:text-zinc-400 shadow-sm">
                       {seriesItem.videos.length} videos
                     </span>
-                    <span className="motion-arrow-shift flex h-8 w-8 items-center justify-center rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-400 dark:text-zinc-500 transition-colors group-hover:bg-accent group-hover:border-accent group-hover:text-white shadow-sm">
+                    <span className="motion-arrow-shift flex h-8 w-8 items-center justify-center rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-500 transition-colors group-hover:bg-accent group-hover:border-accent group-hover:text-white shadow-sm">
                       <ArrowRight size={15} strokeWidth={2.5} />
                     </span>
                   </div>
                   <strong className="text-lg font-extrabold tracking-tight leading-tight text-stone-900 dark:text-stone-100 relative z-10 group-hover:text-accent transition-colors">{seriesItem.title}</strong>
-                  <p className="mt-1 truncate font-mono text-[11px] font-medium text-stone-400 dark:text-zinc-500 relative z-10">videos/{seriesItem.id}/</p>
+                  <p className="mt-1 truncate font-mono text-[11px] font-medium text-stone-600 dark:text-zinc-500 relative z-10">videos/{seriesItem.id}/</p>
 
                   <div className="mt-5 border-t border-stone-200/60 dark:border-white/5 pt-4 text-xs relative z-10">
                     <span className="inline-flex items-center gap-2 font-bold text-stone-600 dark:text-zinc-300">
                       <PlayCircle size={14} className="text-accent" />
                       {processedCount} / {seriesItem.videos.length} 已处理
                     </span>
-                    <span className="mt-2.5 inline-flex items-start gap-2 font-medium text-stone-500 dark:text-zinc-500 w-full">
-                      <Sparkles size={13} className="mt-0.5 shrink-0 text-stone-400 dark:text-zinc-600" />
+                    <span className="mt-2.5 inline-flex items-start gap-2 font-medium text-stone-600 dark:text-zinc-500 w-full">
+                      <Sparkles size={13} className="mt-0.5 shrink-0 text-stone-600 dark:text-zinc-600" />
                       <span className="truncate">最近：{latestVideo?.title ?? "无"}</span>
                     </span>
                   </div>
@@ -144,7 +144,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
             })}
           </motion.div>
           ) : (
-            <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm font-semibold text-stone-500 dark:border-stone-800 dark:text-stone-400">
+            <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm font-semibold text-stone-600 dark:border-stone-800 dark:text-stone-400">
               没有匹配的系列。
             </div>
           )}
@@ -162,12 +162,12 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200 dark:border-white/5 w-fit shadow-sm mb-5">
             <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Videos Library</span>
           </div>
-          <h2 className="text-4xl lg:text-5xl font-extrabold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">All Shelves <span className="text-stone-400 dark:text-zinc-600 font-medium">(Series)</span></h2>
+          <h2 className="text-4xl lg:text-5xl font-extrabold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">All Shelves <span className="text-stone-600 dark:text-zinc-600 font-medium">(Series)</span></h2>
           <p className="text-stone-600 dark:text-zinc-400 text-[15px] font-medium leading-relaxed">
             首页总览所有的视频分类。点击进入某个分类后，可以查看具体视频、生成 AI 总结，并在右侧阅读核心要点。
           </p>
           <div className="relative mt-6 max-w-md">
-            <Search size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-zinc-500" />
+            <Search size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-600 dark:text-zinc-500" />
             <input
               type="text"
               value={searchText}
@@ -179,7 +179,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
               <button
                 type="button"
                 onClick={() => setSearchText("")}
-                className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
                 aria-label="清空系列搜索"
                 title="清空系列搜索"
               >
@@ -201,11 +201,11 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
       {/* Overview Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
         <article className="flex flex-col p-8 rounded-[2rem] workspace-panel border shadow-sm relative overflow-hidden group">
-          <span className="text-[11px] font-bold text-stone-500 dark:text-zinc-500 uppercase tracking-widest mb-3 relative z-10">系列总数</span>
+          <span className="text-[11px] font-bold text-stone-600 dark:text-zinc-500 uppercase tracking-widest mb-3 relative z-10">系列总数</span>
           <strong className="text-5xl font-black tracking-tighter text-stone-900 dark:text-stone-100 relative z-10 transition-transform group-hover:scale-105 origin-left">{series.length}</strong>
         </article>
         <article className="flex flex-col p-8 rounded-[2rem] workspace-panel border shadow-sm relative overflow-hidden group">
-          <span className="text-[11px] font-bold text-stone-500 dark:text-zinc-500 uppercase tracking-widest mb-3 relative z-10">视频总数</span>
+          <span className="text-[11px] font-bold text-stone-600 dark:text-zinc-500 uppercase tracking-widest mb-3 relative z-10">视频总数</span>
           <strong className="text-5xl font-black tracking-tighter text-stone-900 dark:text-stone-100 relative z-10 transition-transform group-hover:scale-105 origin-left">{totalVideos}</strong>
         </article>
         <article className="workspace-panel border-accent/30 bg-accent/5 dark:bg-accent/10 flex flex-col p-8 rounded-[2rem] shadow-sm relative overflow-hidden group">
@@ -239,7 +239,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-400 text-[11px] font-bold tracking-wide shadow-sm">
                   {seriesItem.videos.length} videos
                 </span>
-                <span className="motion-arrow-shift w-9 h-9 rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 flex items-center justify-center text-stone-400 dark:text-zinc-500 group-hover:bg-accent group-hover:border-accent group-hover:text-white transition-colors shadow-sm">
+                <span className="motion-arrow-shift w-9 h-9 rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 flex items-center justify-center text-stone-600 dark:text-zinc-500 group-hover:bg-accent group-hover:border-accent group-hover:text-white transition-colors shadow-sm">
                   <ArrowRight size={16} strokeWidth={2.5} />
                 </span>
               </div>
@@ -249,7 +249,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
                 <strong className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100 leading-tight group-hover:text-accent transition-colors">
                   {seriesItem.title}
                 </strong>
-                <p className="text-[12px] font-medium font-mono text-stone-400 dark:text-zinc-500 truncate">
+                <p className="text-[12px] font-medium font-mono text-stone-600 dark:text-zinc-500 truncate">
                   videos/{seriesItem.id}/
                 </p>
               </div>
@@ -260,8 +260,8 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
                   <PlayCircle size={15} className="text-accent" />
                   {processedCount} / {seriesItem.videos.length} 已处理
                 </span>
-                <span className="inline-flex items-start gap-2.5 text-xs font-medium text-stone-500 dark:text-zinc-500">
-                  <Sparkles size={14} className="text-stone-400 dark:text-zinc-600 shrink-0 mt-0.5" />
+                <span className="inline-flex items-start gap-2.5 text-xs font-medium text-stone-600 dark:text-zinc-500">
+                  <Sparkles size={14} className="text-stone-600 dark:text-zinc-600 shrink-0 mt-0.5" />
                   <span className="truncate">最近：{latestVideo?.title ?? "无"}</span>
                 </span>
               </div>
@@ -270,7 +270,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
         })}
       </motion.div>
       ) : (
-        <div className="workspace-elevated-panel rounded-[2rem] border border-dashed border-stone-200/80 px-6 py-12 text-center text-sm font-semibold text-stone-500 dark:border-stone-800 dark:text-stone-400">
+        <div className="workspace-elevated-panel rounded-[2rem] border border-dashed border-stone-200/80 px-6 py-12 text-center text-sm font-semibold text-stone-600 dark:border-stone-800 dark:text-stone-400">
           没有匹配的系列。
         </div>
       )}

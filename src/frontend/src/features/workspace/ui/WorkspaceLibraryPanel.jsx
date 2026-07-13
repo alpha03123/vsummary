@@ -45,7 +45,7 @@ function VideoBadge({ video }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border border-transparent">
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border border-transparent">
       <CircleDashed size={12} />
       未处理
     </span>
@@ -108,7 +108,7 @@ function SourceVideoLink({ sourceUrl, provider }) {
       href={sourceUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200 bg-stone-100 text-stone-500 transition-colors hover:border-accent/30 hover:text-accent dark:border-white/10 dark:bg-neutral-800 dark:text-zinc-400"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-stone-200 bg-stone-100 text-stone-600 transition-colors hover:border-accent/30 hover:text-accent dark:border-white/10 dark:bg-neutral-800 dark:text-zinc-400"
       title="在 Bilibili 中查看"
     >
       <ExternalLink size={15} />
@@ -149,7 +149,7 @@ function PanelFooter({
 
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">Playground Workspace</h3>
         </div>
-        <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+        <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-400">
           添加或选择一个视频
         </p>
       </div>
@@ -166,10 +166,10 @@ function PanelFooter({
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-1">
-          <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">Now Look At:</p>
+          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">Now Look At:</p>
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">Series scope</h3>
         </div>
-        <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+        <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-400">
           {embeddingNeedsDownload
             ? "当前向量检索模型尚未下载，下载后才能使用 series 问答。"
             : `你可以在当前对话栏询问关于整个系列的问题 ： ${activeSeries?.title}。`}
@@ -221,7 +221,7 @@ function PanelFooter({
   if (!selectedVideo) {
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex justify-center items-center h-[98px]">
-        <p className="text-xs text-stone-400 dark:text-stone-500 font-medium">可选择整个系列，或点某个视频进入视频工具</p>
+        <p className="text-xs text-stone-500 dark:text-stone-500 font-medium">可选择整个系列，或点某个视频进入视频工具</p>
       </div>
     );
   }
@@ -232,7 +232,7 @@ function PanelFooter({
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-3">
-          <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
+          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">{selectedVideo.title}</h3>
         </div>
         <div className="relative w-full overflow-hidden rounded-full bg-stone-200 h-2.5 mb-1.5 dark:bg-neutral-800">
@@ -250,7 +250,7 @@ function PanelFooter({
             />
           )}
         </div>
-        <p className="text-xs text-stone-500 dark:text-zinc-400 font-medium">
+        <p className="text-xs text-stone-600 dark:text-zinc-400 font-medium">
           {hasDownloadProgress ? `${pct.toFixed(0)}% 完成` : "下载中"}
         </p>
         <button
@@ -269,7 +269,7 @@ function PanelFooter({
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-3">
-          <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
+          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate" title={selectedVideo.title}>{selectedVideo.title}</h3>
         </div>
         <div className="flex gap-2">
@@ -313,7 +313,7 @@ function PanelFooter({
   return (
     <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
       <div className="mb-3">
-        <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
+        <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
         <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate" title={selectedVideo.title}>{selectedVideo.title}</h3>
       </div>
       {modelNeedsDownload ? (
@@ -327,7 +327,7 @@ function PanelFooter({
           className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${videoGenerationButton.tone === "danger"
             ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
             : videoGenerationButton.tone === "busy"
-              ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-not-allowed"
+              ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400 cursor-not-allowed"
               : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60 shadow-none active:scale-[0.98]"
             }`}
           onClick={
@@ -430,7 +430,7 @@ export function WorkspaceLibraryPanel({
           </div>
           <button
             type="button"
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
             onClick={onEnterLibraryHome}
             title="返回分类列表"
           >
@@ -472,7 +472,7 @@ export function WorkspaceLibraryPanel({
 
         {!isPlayground ? (
           <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+            <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-500" />
             <input
               type="text"
               value={filterText}
@@ -484,7 +484,7 @@ export function WorkspaceLibraryPanel({
               <button
                 type="button"
                 onClick={() => setFilterText("")}
-                className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
                 aria-label="清空筛选条件"
                 title="清空筛选条件"
               >
@@ -518,7 +518,7 @@ export function WorkspaceLibraryPanel({
               <strong className="text-base font-semibold line-clamp-2 tracking-[-0.01em] text-stone-900 dark:text-stone-100">
                 {activeSeries?.title}
               </strong>
-              <span className="text-xs truncate text-stone-500 dark:text-stone-400">
+              <span className="text-xs truncate text-stone-600 dark:text-stone-400">
                 聚焦整个 series，供 AI 和工具使用系列级上下文
               </span>
             </div>
@@ -548,7 +548,7 @@ export function WorkspaceLibraryPanel({
               )}
               <div className="flex justify-between items-start w-full gap-2">
                 <VideoBadge video={video} />
-                <FileVideo size={16} className={isActive ? "text-accent" : "text-stone-400 dark:text-stone-500"} />
+                <FileVideo size={16} className={isActive ? "text-accent" : "text-stone-500 dark:text-stone-500"} />
               </div>
               <div className="flex flex-col gap-0.5 mt-1">
                 <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
@@ -562,7 +562,7 @@ export function WorkspaceLibraryPanel({
                     {video.coreProblem}
                   </span>
                 ) : null}
-                <span className="text-xs text-stone-500 dark:text-stone-400 truncate">
+                <span className="text-xs text-stone-600 dark:text-stone-400 truncate">
                   {video.isLinked || video.status === "linked" ? video.sourceUrl || video.sourceName : video.sourceName}
                 </span>
               </div>
@@ -570,7 +570,7 @@ export function WorkspaceLibraryPanel({
           );
         })}
         {!isPlayground && filteredVideos.length === 0 ? (
-          <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm text-stone-500 dark:border-stone-800 dark:text-stone-400">
+          <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm text-stone-600 dark:border-stone-800 dark:text-stone-400">
             当前筛选条件下没有匹配的视频。
           </div>
         ) : null}

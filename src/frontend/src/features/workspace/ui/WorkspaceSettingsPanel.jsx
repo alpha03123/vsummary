@@ -129,7 +129,7 @@ export function WorkspaceSettingsPanel({
         <div className="mt-auto pt-6 border-t border-stone-200/80 dark:border-stone-800/50">
           <button
             type="button"
-            className="w-full text-left px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            className="w-full text-left px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
             onClick={() => setShowResetConfirm(true)}
           >
             恢复默认设置
@@ -142,7 +142,7 @@ export function WorkspaceSettingsPanel({
         <div className="sticky top-0 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-md z-30 p-6 flex justify-end">
           <button
             type="button"
-            className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-500 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors shadow-sm"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors shadow-sm"
             onClick={onClose}
             aria-label="关闭面板"
           >
@@ -162,7 +162,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">常规与显示</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">这里的配置会写入后端的 `settings.toml` 并实时生效</p>
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">这里的配置会写入后端的 `settings.toml` 并实时生效</p>
                 </div>
 
                 {/* Theme Setting */}
@@ -210,7 +210,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">AI 总结能力</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">控制总结流程，会写入 `settings.toml`。</p>
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制总结流程，会写入 `settings.toml`。</p>
                 </div>
 
                 <WorkspaceSettingRow
@@ -249,7 +249,7 @@ export function WorkspaceSettingsPanel({
                 >
                   <div className="w-full flex flex-col gap-3">
                     {fasterWhisperModelsLoading && !fasterWhisperModels.length ? (
-                      <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+                      <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
                         <LoaderCircle size={16} className="animate-spin" />
                         正在读取模型状态...
                       </div>
@@ -301,7 +301,7 @@ export function WorkspaceSettingsPanel({
                                     </span>
                                   ) : null}
                                 </div>
-                                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                                <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
                                   {isDownloading
                                     ? `正在下载... ${typeof downloadProgress === "number" ? `${Math.round(downloadProgress)}%` : ""}`.trim()
                                     : isCancelling
@@ -326,7 +326,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   disabled
-                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-400 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
                                 >
                                   取消中
                                 </button>
@@ -342,7 +342,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   disabled
-                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
                                 >
                                   使用中
                                 </button>
@@ -427,7 +427,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">对话管理</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">控制对话流程以及功能，会写入 `settings.toml`。</p>
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制对话流程以及功能，会写入 `settings.toml`。</p>
                 </div>
 
                 <WorkspaceSettingRow
@@ -583,11 +583,11 @@ export function WorkspaceSettingsPanel({
                     <div className="w-full min-w-0 max-w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
-                          <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-500 dark:text-stone-400"}`}>
+                          <p className={`text-sm font-semibold ${hasApiKey ? "text-success" : "text-stone-600 dark:text-stone-400"}`}>
                             {hasApiKey ? "已配置" : "未配置"}
                           </p>
                           {apiKeyStatus ? (
-                            <p className="mt-1 max-w-full break-all text-xs text-stone-500 [overflow-wrap:anywhere] dark:text-stone-400">
+                            <p className="mt-1 max-w-full break-all text-xs text-stone-600 [overflow-wrap:anywhere] dark:text-stone-400">
                               当前状态：{apiKeyDisplayValue}
                             </p>
                           ) : null}
@@ -722,7 +722,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">下载管理</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">
                     管理内容下载
                   </p>
                 </div>
@@ -747,7 +747,7 @@ export function WorkspaceSettingsPanel({
                 >
                   <div className="w-full flex flex-col gap-3">
                     {ragModelsLoading && !ragModels.length ? (
-                      <div className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+                      <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
                         <LoaderCircle size={16} className="animate-spin" />
                         正在读取 RAG 模型状态...
                       </div>
@@ -775,7 +775,7 @@ export function WorkspaceSettingsPanel({
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                               <div className="min-w-0">
                                 <strong className="break-words text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
-                                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{statusText}</p>
+                                <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{statusText}</p>
                                 {isDownloading ? (
                                   <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
                                     <div
@@ -794,7 +794,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   disabled
-                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-400 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
                                 >
                                   下载中
                                 </button>
@@ -802,7 +802,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   disabled
-                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
                                 >
                                   使用中
                                 </button>
@@ -831,7 +831,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">外部API</h3>
-                  <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">
                     控制外部API的设置。
                   </p>
                 </div>
@@ -883,7 +883,7 @@ export function WorkspaceSettingsPanel({
               className="bg-white dark:bg-neutral-900 border border-stone-200 dark:border-stone-700/60 p-7 rounded-[1.5rem] shadow-[0_20px_40px_rgba(0,0,0,0.15)] max-w-[340px] w-full text-center"
             >
               <h3 className="text-xl font-bold text-stone-900 dark:text-white mb-2">恢复默认设置？</h3>
-              <p className="text-[13px] leading-relaxed text-stone-500 dark:text-stone-400 mb-6">
+              <p className="text-[13px] leading-relaxed text-stone-600 dark:text-stone-400 mb-6">
                 此操作将恢复工作区默认设置，并立即覆盖真实的 <code className="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded text-stone-700 dark:text-stone-300">settings.toml</code>。`.env` 中的模型供应商配置不会被改动。确定继续？
               </p>
               <div className="flex gap-3 justify-center w-full">

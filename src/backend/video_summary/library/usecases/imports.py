@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 from backend.video_summary.library.ports import VideoImportStore
 
@@ -34,6 +36,20 @@ class ImportLocalSeries:
         """
         return self._workspace.import_local_series(title=title, files=files)
 
+    def run_from_paths(
+        self,
+        *,
+        title: str,
+        source_paths: list[Path],
+        storage_mode: str,
+    ) -> LibrarySeriesDTO:
+        """从本机绝对路径创建系列。"""
+        return self._workspace.import_local_series_from_paths(
+            title=title,
+            source_paths=source_paths,
+            storage_mode=storage_mode,
+        )
+
 
 class ImportLocalPlaygroundVideos:
     """把本地视频导入到内置的"沙盒演练"系列中。
@@ -56,6 +72,10 @@ class ImportLocalPlaygroundVideos:
             新加入沙盒系列的视频卡片 DTO 列表。
         """
         return self._workspace.import_local_playground_videos(files=files)
+
+    def run_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
+        """从本机绝对路径向沙盒追加媒体。"""
+        return self._workspace.import_local_playground_videos_from_paths(source_paths=source_paths)
 
 
 class ImportLocalSeriesVideos:
@@ -80,3 +100,10 @@ class ImportLocalSeriesVideos:
             追加完成后新加入的视频卡片 DTO 列表。
         """
         return self._workspace.import_local_series_videos(series_id=series_id, files=files)
+
+    def run_from_paths(self, *, series_id: str, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
+        """从本机绝对路径向系列追加媒体。"""
+        return self._workspace.import_local_series_videos_from_paths(
+            series_id=series_id,
+            source_paths=source_paths,
+        )
