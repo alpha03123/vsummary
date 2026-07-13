@@ -5,9 +5,9 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase mb-1">Tool Page</p>
+        <p className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase mb-1">Tool Page</p>
         <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 leading-snug">{meta?.label}</h2>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{meta?.description}</p>
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{meta?.description}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {exportActions.length ? <WorkspaceExportMenu exportActions={exportActions} /> : null}
@@ -51,7 +51,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
         type="button"
         disabled
         title={disabledReason}
-        className={`${className} cursor-not-allowed text-stone-400 opacity-50 dark:text-stone-500`}
+        className={`${className} cursor-not-allowed text-stone-500 opacity-50 dark:text-stone-500`}
       >
         <Download size={16} />
         {buttonLabel}
@@ -90,7 +90,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
               type="button"
               disabled
               title={action.disabledReason ?? "当前内容不可导出"}
-              className="flex w-full cursor-not-allowed items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-stone-400 opacity-60 dark:text-stone-500"
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-stone-500 opacity-60 dark:text-stone-500"
             >
               <Download size={15} />
               {action.label ?? "导出 MD"}

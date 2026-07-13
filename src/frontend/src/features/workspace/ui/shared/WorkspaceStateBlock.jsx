@@ -30,11 +30,11 @@ export function WorkspaceStateBlock({
           </div>
         ) : null}
         {eyebrow ? (
-          <p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{eyebrow}</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">{eyebrow}</p>
         ) : null}
         <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">{title}</h3>
         {description ? (
-          <p className="mt-3 text-sm leading-relaxed text-stone-500 dark:text-stone-400">{description}</p>
+          <p className="mt-3 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{description}</p>
         ) : null}
         {children ? <div className="mt-5">{children}</div> : null}
       </div>

@@ -23,7 +23,7 @@ export function WorkspaceToolGrid({ items, onSelect }) {
                 </span>
                 <span className="flex min-w-0 flex-col">
                   <span className="text-base font-bold">{meta.label}</span>
-                  <span className="mt-1 text-xs text-stone-500 dark:text-stone-400">{meta.description}</span>
+                  <span className="mt-1 text-xs text-stone-600 dark:text-stone-400">{meta.description}</span>
                   {hint ? <span className="mt-3 text-xs font-semibold text-stone-600 dark:text-stone-300">{hint}</span> : null}
                 </span>
               </div>

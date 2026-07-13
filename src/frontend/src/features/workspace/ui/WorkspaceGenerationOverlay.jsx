@@ -64,7 +64,7 @@ export function WorkspaceGenerationOverlay({
         <LoaderCircle size={36} className="animate-spin text-accent" strokeWidth={2.5} />
         <div className="w-full">
           <h3 className="mb-1.5 text-base font-bold text-stone-900 dark:text-stone-100">{title}</h3>
-          <p className="mb-2 text-[13px] font-medium text-stone-500 dark:text-stone-400">
+          <p className="mb-2 text-[13px] font-medium text-stone-600 dark:text-stone-400">
             {generationSnapshot?.detail ?? "正在阅读视频并提炼核心内容..."}
           </p>
           <p className="mb-3 text-xs font-bold text-accent">
@@ -88,9 +88,9 @@ export function WorkspaceGenerationOverlay({
             )}
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 text-left">
-            <WorkspaceMetricCard label="已耗时" value={elapsedLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-400 dark:text-stone-500" valueClassName="mt-1 text-sm" />
-            <WorkspaceMetricCard label="预计总时长" value={estimatedTotalLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-400 dark:text-stone-500" valueClassName="mt-1 text-sm" />
-            <WorkspaceMetricCard label="预计剩余" value={remainingLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-400 dark:text-stone-500" valueClassName="mt-1 text-sm" />
+            <WorkspaceMetricCard label="已耗时" value={elapsedLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-500 dark:text-stone-500" valueClassName="mt-1 text-sm" />
+            <WorkspaceMetricCard label="预计总时长" value={estimatedTotalLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-500 dark:text-stone-500" valueClassName="mt-1 text-sm" />
+            <WorkspaceMetricCard label="预计剩余" value={remainingLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-500 dark:text-stone-500" valueClassName="mt-1 text-sm" />
           </div>
           <div className="mt-4 flex flex-col gap-2">
             {GENERATION_STAGE_ITEMS.filter((item) => item.id !== "completed" || generationSnapshot?.status === "completed").map((item) => {
@@ -110,7 +110,7 @@ export function WorkspaceGenerationOverlay({
                   }`}
                 >
                   <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{item.label}</span>
-                  <span className="text-[11px] font-semibold text-stone-400 dark:text-stone-500">
+                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-500">
                     {isCurrent ? "进行中" : isDone ? "已完成" : "等待中"}
                   </span>
                 </div>

@@ -246,6 +246,7 @@ export function useWorkspaceController() {
     onOpenChatDrawer,
     onCloseChatDrawer,
     onResolveLinkedSeries: contentActions.onResolveLinkedSeries,
+    onSelectLocalMedia: contentActions.onSelectLocalMedia,
     onResolvePlaygroundVideo: contentActions.onResolvePlaygroundVideo,
     onResolveSeriesVideo: contentActions.onResolveSeriesVideo,
     onInitBilibiliCookie: contentActions.onInitBilibiliCookie,

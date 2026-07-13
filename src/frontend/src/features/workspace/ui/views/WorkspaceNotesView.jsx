@@ -100,7 +100,7 @@ export function WorkspaceNotesView({
           >
             <ChevronLeft size={16} /> 返回列表
           </button>
-          <h2 className="text-sm font-bold tracking-widest text-stone-400 uppercase dark:text-stone-500">新建笔记</h2>
+          <h2 className="text-sm font-bold tracking-widest text-stone-500 uppercase dark:text-stone-500">新建笔记</h2>
           <div className="w-[88px]" /> {/* 占位符以居中标题 */}
         </div>
         
@@ -166,7 +166,7 @@ export function WorkspaceNotesView({
               <>
                 <button
                   onClick={handleStartEdit}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
                   title="编辑"
                 >
                   <PencilLine size={15} />
@@ -174,7 +174,7 @@ export function WorkspaceNotesView({
                 <button
                   onClick={() => handleDeleteNote(selectedNote.id)}
                   disabled={savingNote}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-danger-subtle hover:text-danger dark:text-stone-400"
                   title="删除"
                 >
                   <Trash2 size={15} />
@@ -206,7 +206,7 @@ export function WorkspaceNotesView({
                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
                   {selectedNote.source === "agent" ? "🤖 Agent Note" : "✍️ Manual Note"}
                 </span>
-                <span className="text-xs font-medium text-stone-400 dark:text-stone-500">
+                <span className="text-xs font-medium text-stone-500 dark:text-stone-500">
                   {selectedNote.createdAt.replace("T", " ").replace("Z", "").substring(0, 16)}
                   {selectedNote.updatedAt !== selectedNote.createdAt && " (已编辑)"}
                 </span>
@@ -229,7 +229,7 @@ export function WorkspaceNotesView({
       <div className="flex items-center justify-between px-2">
         <div>
           <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">全部笔记</h2>
-          <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
+          <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
         </div>
         <button 
           onClick={() => setViewState("create")} 
@@ -253,10 +253,10 @@ export function WorkspaceNotesView({
                   {note.source === "agent" ? "🤖 Agent" : "✍️ Manual"}
                 </span>
               </div>
-              <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+              <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
                 {note.content}
               </p>
-              <div className="mt-4 flex items-center text-xs font-medium text-stone-400 dark:text-stone-500">
+              <div className="mt-4 flex items-center text-xs font-medium text-stone-500 dark:text-stone-500">
                 <Calendar size={12} className="mr-1.5" />
                 {note.createdAt.replace("T", " ").substring(0, 16)}
               </div>

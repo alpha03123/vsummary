@@ -74,7 +74,7 @@ export function WorkspaceOverviewView({
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Sparkles size={64} />
         </div>
-        <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+        <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
           Core Problem
         </p>
         <p className="relative z-10 text-base font-medium leading-relaxed">
@@ -121,7 +121,7 @@ export function WorkspaceOverviewView({
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Chapter {index + 1}</p>
                 <h3 className="text-lg font-bold leading-tight text-stone-900 dark:text-stone-100">{chapter.title}</h3>
               </div>
-              <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-xs font-mono font-bold text-stone-500 dark:bg-stone-900 dark:text-stone-400">
+              <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-xs font-mono font-bold text-stone-600 dark:bg-stone-900 dark:text-stone-400">
                 {formatRange(chapter.start_seconds, chapter.end_seconds)}
               </span>
             </button>
@@ -146,10 +146,10 @@ export function WorkspaceOverviewView({
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">查看本章原文</p>
-                      <p className="text-xs text-stone-500 dark:text-stone-400">{chapter.transcript_segments.length} 段转写</p>
+                      <p className="text-xs text-stone-600 dark:text-stone-400">{chapter.transcript_segments.length} 段转写</p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+                  <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">
                     {formatRange(chapter.start_seconds, chapter.end_seconds)}
                   </span>
                 </summary>
@@ -167,7 +167,7 @@ export function WorkspaceOverviewView({
                         })}
                         className="block w-full rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors hover:bg-accent/5 dark:bg-neutral-900 dark:hover:bg-accent/10"
                       >
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
                           {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
                         </p>
                         <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>

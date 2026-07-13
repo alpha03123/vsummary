@@ -67,7 +67,7 @@ export function WorkspaceKnowledgeCardsView({
         <div className="mt-6 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800">
           <div className="h-full w-1/2 animate-pulse rounded-full bg-accent" />
         </div>
-        <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">生成完成后会自动展示结果。</p>
+        <p className="mt-3 text-xs text-stone-600 dark:text-stone-400">生成完成后会自动展示结果。</p>
       </WorkspaceStateBlock>
     );
   }
@@ -136,7 +136,7 @@ export function WorkspaceKnowledgeCardsView({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">{card.kind}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">{card.kind}</p>
                 <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
               </div>
               <CopyToClipboardButton text={buildCardMarkdown(card)} className="shrink-0" />

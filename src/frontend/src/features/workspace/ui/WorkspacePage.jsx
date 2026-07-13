@@ -11,6 +11,7 @@ import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { blurVariant } from "../../../lib/animations";
+import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import {
   clampMiddleWidth,
@@ -68,6 +69,12 @@ export function WorkspacePage({ page }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const containerRef = useRef(null);
+  const settingsModalRef = useRef(null);
+  const usageModalRef = useRef(null);
+  // Engage focus trap on open modals so keyboard users stay inside
+  // (WCAG 2.4.3 Focus Order) and focus returns to the trigger on close.
+  useFocusTrap(settingsModalRef, state.settingsPanelOpen);
+  useFocusTrap(usageModalRef, state.usagePageOpen);
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const hasRightPane = Boolean(activeSeries);
@@ -227,7 +234,7 @@ export function WorkspacePage({ page }) {
           <h1 className="text-2xl font-bold text-stone-900 mb-3">
             {waitingForBackend ? "正在启动服务..." : "正在载入知识工作台"}
           </h1>
-          <p className="text-stone-500">
+          <p className="text-stone-600">
             {waitingForBackend
               ? "正在等待后端服务响应，连接成功后会自动进入工作区。"
               : "正在扫描 `videos/` 目录并构建当前工作区。"}
@@ -340,7 +347,7 @@ export function WorkspacePage({ page }) {
         />
 
         {state.error && (
-          <div className="mx-6 mt-4 flex items-start justify-between gap-4 rounded-2xl border border-red-100 bg-red-50/90 p-4 text-sm text-red-800 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200 flex-shrink-0 relative z-20">
+          <div className="mx-6 mt-4 flex items-start justify-between gap-4 rounded-2xl border border-danger bg-danger-subtle p-4 text-sm text-danger flex-shrink-0 relative z-20">
             <div className="min-w-0 flex-1 break-words">
               {state.error}
             </div>
@@ -348,7 +355,7 @@ export function WorkspacePage({ page }) {
               <button
                 type="button"
                 onClick={actions.clearError}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-500 transition-colors hover:bg-red-100 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-950/50 dark:hover:text-red-100"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-danger-muted transition-colors hover:bg-danger-subtle hover:text-danger"
                 title="关闭错误提示"
                 aria-label="关闭错误提示"
               >
@@ -434,10 +441,17 @@ export function WorkspacePage({ page }) {
         <AnimatePresence>
           {state.settingsPanelOpen && (
             <motion.div
+              ref={settingsModalRef}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  actions.closeSettingsPanel();
+                }
+              }}
               className="absolute inset-0 z-50 bg-stone-900/20 dark:bg-black/50 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
             >
               <Suspense fallback={<WorkspaceModalLoadingState />}>
@@ -479,10 +493,17 @@ export function WorkspacePage({ page }) {
         <AnimatePresence>
           {state.usagePageOpen && (
             <motion.div
+              ref={usageModalRef}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  actions.closeUsagePage();
+                }
+              }}
               className="absolute inset-0 z-50 bg-stone-900/20 dark:bg-black/50 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
             >
               <Suspense fallback={<WorkspaceModalLoadingState />}>
@@ -527,9 +548,10 @@ export function WorkspacePage({ page }) {
           onCancelChaoxingImport={actions.cancelChaoxingImport}
           onLoadChaoxingCourses={actions.loadChaoxingCourses}
           onImportChaoxingCourse={actions.importChaoxingCourse}
-          onImportLocalSeries={async (seriesTitle, files) => actions.importLocalSeries(seriesTitle, files)}
-          onImportSeriesVideos={async (seriesId, files) => actions.importSeriesVideos(seriesId, files)}
-          onImportLocalPlaygroundVideos={async (files) => actions.importLocalPlaygroundVideos(files)}
+          onSelectLocalMedia={actions.selectLocalMedia}
+          onImportLocalSeries={async (seriesTitle, sourcePaths, storageMode) => actions.importLocalSeries(seriesTitle, sourcePaths, storageMode)}
+          onImportSeriesVideos={async (seriesId, sourcePaths) => actions.importSeriesVideos(seriesId, sourcePaths)}
+          onImportLocalPlaygroundVideos={async (sourcePaths) => actions.importLocalPlaygroundVideos(sourcePaths)}
         />
       )}
 
@@ -595,8 +617,8 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
     : snapshot.detail ?? (isRunning ? "正在重建 RAG 索引与 catalog 记忆。" : "RAG 索引已可用于检索。");
   const progressText = typeof snapshot.progress === "number" ? `${Math.round(snapshot.progress)}%` : "";
   const toneClassName = isFailed
-    ? "border-red-100 bg-red-50/90 text-red-800 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-200"
-    : "border-amber-100 bg-amber-50/90 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100";
+    ? "border-danger bg-danger-subtle text-danger"
+    : "border-warning bg-warning-subtle text-warning";
 
   return (
     <div className={`mx-6 mt-4 flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${toneClassName}`}>

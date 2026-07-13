@@ -5,7 +5,7 @@
 
 - 把视频库中的"系列 / 视频 / 制品"以目录 + JSON 文件的形式落到磁盘；
 - 提供笔记等需要"按视频串行化"的写入能力（基于 `KeyedLockManager`）；
-- 在导入系列 / 视频时做去重、原子复制与失败回滚；
+- 在导入系列 / 视频时做去重、复制或硬链接与失败回滚；
 - 在删除系列 / 视频时同步清理本地媒体与制品目录，必要时回写 linked 元数据。
 
 目录布局约定：
@@ -59,6 +59,7 @@ from backend.video_summary.library.models import (
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 MEDIA_SUFFIXES = VIDEO_SUFFIXES | AUDIO_SUFFIXES
+STORAGE_MODES = {"copy", "hardlink"}
 
 LINKED_SERIES_META_FILE = "linked_series.json"
 SERIES_META_FILE = "series_meta.json"
@@ -651,8 +652,46 @@ class FileSystemVideoWorkspace:
 
         try:
             series_dir.mkdir(parents=True, exist_ok=False)
-            self._write_series_title(series_id, title.strip())
+            self._write_series_meta(series_id, title.strip(), storage_mode="copy")
             self._copy_video_streams(series_dir=series_dir, files=files)
+            return LibrarySeriesDTO(
+                id=series_id,
+                title=title.strip(),
+                videos=self._list_videos_for_series(series_dir),
+            )
+        except Exception:
+            if series_dir.exists():
+                shutil.rmtree(series_dir)
+            meta_path = self._workspace_dir / series_id / SERIES_META_FILE
+            if meta_path.exists():
+                meta_path.unlink()
+            raise
+
+    def import_local_series_from_paths(
+        self,
+        *,
+        title: str,
+        source_paths: list[Path],
+        storage_mode: str,
+    ) -> LibrarySeriesDTO:
+        """从原始媒体路径新建系列，复制或创建硬链接。"""
+        normalized_mode = _require_storage_mode(storage_mode)
+        series_id = _normalize_series_id(title)
+        if series_id == PLAYGROUND_SERIES_ID:
+            raise ValueError("Playground 请使用单独的“添加 Playground 媒体”入口。")
+        series_dir = self._videos_dir / series_id
+        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if series_dir.exists() or linked_meta_path.exists():
+            raise ValueError(f"系列已存在：{series_id}")
+
+        try:
+            series_dir.mkdir(parents=True, exist_ok=False)
+            self._write_series_meta(series_id, title.strip(), storage_mode=normalized_mode)
+            self._import_media_paths(
+                series_dir=series_dir,
+                source_paths=source_paths,
+                storage_mode=normalized_mode,
+            )
             return LibrarySeriesDTO(
                 id=series_id,
                 title=title.strip(),
@@ -680,6 +719,17 @@ class FileSystemVideoWorkspace:
         imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
         return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
 
+    def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
+        """从本机路径复制媒体到 Playground；Playground 固定使用复制模式。"""
+        series_dir = self._videos_dir / PLAYGROUND_SERIES_ID
+        series_dir.mkdir(parents=True, exist_ok=True)
+        imported_paths = self._import_media_paths(
+            series_dir=series_dir,
+            source_paths=source_paths,
+            storage_mode="copy",
+        )
+        return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
+
     def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
         """把媒体追加到既有本地系列；Playground 系列则转交 playground 入口。
 
@@ -697,9 +747,31 @@ class FileSystemVideoWorkspace:
             return self.import_local_playground_videos(files=files)
         if not self._series_exists(series_id):
             raise ValueError(f"系列不存在：{series_id}")
+        if self._read_series_storage_mode(series_id) == "hardlink":
+            raise ValueError("该系列使用硬链接，请通过本机路径选择器添加媒体。")
         series_dir = self._videos_dir / series_id
         series_dir.mkdir(parents=True, exist_ok=True)
         imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
+        return [self._build_local_video_card(series_id, path) for path in imported_paths]
+
+    def import_local_series_videos_from_paths(
+        self,
+        *,
+        series_id: str,
+        source_paths: list[Path],
+    ) -> list[LibraryVideoCardDTO]:
+        """从本机路径追加媒体，并继承系列存储方式。"""
+        if series_id == PLAYGROUND_SERIES_ID:
+            return self.import_local_playground_videos_from_paths(source_paths=source_paths)
+        if not self._series_exists(series_id):
+            raise ValueError(f"系列不存在：{series_id}")
+        series_dir = self._videos_dir / series_id
+        series_dir.mkdir(parents=True, exist_ok=True)
+        imported_paths = self._import_media_paths(
+            series_dir=series_dir,
+            source_paths=source_paths,
+            storage_mode=self._read_series_storage_mode(series_id),
+        )
         return [self._build_local_video_card(series_id, path) for path in imported_paths]
 
     def _list_videos_for_series(self, series_dir: Path) -> list[LibraryVideoCardDTO]:
@@ -869,6 +941,39 @@ class FileSystemVideoWorkspace:
             copied_paths.append(target_path)
         return copied_paths
 
+    def _import_media_paths(
+        self,
+        *,
+        series_dir: Path,
+        source_paths: list[Path],
+        storage_mode: str,
+    ) -> list[Path]:
+        """将本机媒体路径按系列指定的方式写入目标目录。"""
+        normalized_paths = _normalize_media_paths(source_paths)
+        _validate_media_names(series_dir, [path.name for path in normalized_paths])
+        if storage_mode == "hardlink":
+            target_device = series_dir.stat().st_dev
+            unsupported_paths = [path for path in normalized_paths if path.stat().st_dev != target_device]
+            if unsupported_paths:
+                names = ", ".join(path.name for path in unsupported_paths)
+                raise ValueError(f"无法创建硬链接：媒体文件必须与工作区位于同一磁盘分区：{names}")
+
+        imported_paths: list[Path] = []
+        try:
+            for source_path in normalized_paths:
+                target_path = series_dir / source_path.name
+                if storage_mode == "hardlink":
+                    target_path.hardlink_to(source_path)
+                else:
+                    shutil.copyfile(source_path, target_path)
+                imported_paths.append(target_path)
+        except OSError as error:
+            for imported_path in imported_paths:
+                imported_path.unlink()
+            action = "创建硬链接" if storage_mode == "hardlink" else "复制媒体"
+            raise ValueError(f"{action}失败：{error}") from error
+        return imported_paths
+
     def save_linked_series(self, series: LinkedSeries) -> None:
         """把 linked 系列（含其视频列表）原子写为 `linked_series.json`。"""
         payload = {
@@ -1031,13 +1136,22 @@ class FileSystemVideoWorkspace:
             return None
         return title.strip()
 
-    def _write_series_title(self, series_id: str, title: str) -> None:
-        """把系列标题原子写为 `series_meta.json`，按需创建 series 目录。"""
+    def _read_series_storage_mode(self, series_id: str) -> str:
+        """读取系列存储方式；未标记的历史系列均为复制模式。"""
+        meta_path = self._workspace_dir / series_id / SERIES_META_FILE
+        if not meta_path.exists():
+            return "copy"
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        value = payload.get("storage_mode", "copy")
+        return _require_storage_mode(value)
+
+    def _write_series_meta(self, series_id: str, title: str, *, storage_mode: str) -> None:
+        """原子写入系列标题与不可变的媒体存储方式。"""
         output_dir = self._workspace_dir / series_id
         output_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_text(
             output_dir / SERIES_META_FILE,
-            json.dumps({"title": title}, ensure_ascii=False, indent=2),
+            json.dumps({"title": title, "storage_mode": storage_mode}, ensure_ascii=False, indent=2),
         )
 
     def _get_video_output_dir(self, series_id: str, video_id: str) -> Path:
@@ -1151,6 +1265,41 @@ def _normalize_import_files(files: list[tuple[str, object]]) -> list[tuple[str, 
             raise ValueError(f"不支持的媒体格式：{path.name}")
         normalized.append((path.name, stream))
     return normalized
+
+
+def _normalize_media_paths(source_paths: list[Path]) -> list[Path]:
+    """校验本机媒体路径，确保它们可直接被复制或创建硬链接。"""
+    if not source_paths:
+        raise ValueError("至少选择一个媒体文件。")
+    normalized_paths: list[Path] = []
+    for source_path in source_paths:
+        if not source_path.is_absolute():
+            raise ValueError(f"媒体路径必须为绝对路径：{source_path}")
+        if not source_path.is_file():
+            raise ValueError(f"媒体文件不存在或不是普通文件：{source_path}")
+        if not _is_media_suffix(source_path.suffix):
+            raise ValueError(f"不支持的媒体格式：{source_path.name}")
+        normalized_paths.append(source_path)
+    return normalized_paths
+
+
+def _validate_media_names(series_dir: Path, filenames: list[str]) -> None:
+    """校验媒体名在本批次及目标系列中均不冲突。"""
+    existing_stems = {path.stem for path in series_dir.iterdir() if _is_media_file(path)} if series_dir.exists() else set()
+    incoming_stems = [Path(filename).stem for filename in filenames]
+    duplicate_stems = sorted({stem for stem in incoming_stems if incoming_stems.count(stem) > 1})
+    if duplicate_stems:
+        raise ValueError(f"导入文件存在重复媒体名：{', '.join(duplicate_stems)}")
+    conflicting_stems = sorted(existing_stems.intersection(incoming_stems))
+    if conflicting_stems:
+        raise ValueError(f"目标目录中已存在同名媒体：{', '.join(conflicting_stems)}")
+
+
+def _require_storage_mode(value: object) -> str:
+    """校验本地系列的媒体存储方式。"""
+    if not isinstance(value, str) or value not in STORAGE_MODES:
+        raise ValueError("storage_mode 必须是 copy 或 hardlink。")
+    return value
 
 
 def _is_media_suffix(suffix: str) -> bool:

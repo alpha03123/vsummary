@@ -9,54 +9,58 @@ import {
   MessageSquare,
 } from "lucide-react";
 
+/**
+ * Shared visual styling for every tool tile.
+ *
+ * Previously each of the 8 tiles repeated the same `palette` / `iconShell` /
+ * `arrowShell` strings verbatim (~1.4 KB of duplication). They are now sourced
+ * from a single object so the look-and-feel of tool tiles can be tuned in one
+ * place. Tile entries only declare their semantic identity (label/description/icon).
+ */
+const SHARED_TOOL_VISUALS = {
+  palette:
+    "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
+  iconShell: "bg-accent/10 text-accent border border-accent/20",
+  arrowShell:
+    "bg-stone-50 text-stone-500 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+};
+
 export const TOOL_TILES = {
   "chat-management": {
     label: "对话管理",
     description: "用于切换会话记录",
     icon: MessageSquare,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
   overview: {
     label: "AI概况",
     description: "章节与关键结论",
     icon: FileText,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
   mindmap: {
     label: "思维导图(beta)",
     description: "结构化知识图谱",
     icon: Network,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
   "knowledge-cards": {
     label: "知识卡片(beta)",
     description: "原子知识、标签与来源锚点",
     icon: BrainCircuit,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
   notes: {
     label: "笔记",
     description: "手记与 Agent 记录",
     icon: StickyNote,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
   preview: {
     label: "视频预览",
     description: "查看原始视频内容",
     icon: PlaySquare,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
 };
 
@@ -65,17 +69,13 @@ export const SERIES_TOOL_TILES = {
     label: "对话管理",
     description: "用于切换会话记录",
     icon: MessageSquare,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
   "series-mindmap": {
     label: "全局思维导图",
     description: "结构化展现系列知识脉络 (暂未实现)",
     icon: Network,
-    palette: "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-    iconShell: "bg-accent/10 text-accent border border-accent/20",
-    arrowShell: "bg-stone-50 text-stone-400 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    ...SHARED_TOOL_VISUALS,
   },
 };
 

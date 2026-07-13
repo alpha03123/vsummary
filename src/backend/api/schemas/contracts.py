@@ -66,6 +66,19 @@ class UpdateVideoNoteRequest(BaseModel):
     content: str
 
 
+class LocalMediaPathImportRequest(BaseModel):
+    """从运行后端的本机文件系统导入媒体。"""
+
+    source_paths: list[str] = Field(min_length=1)
+    storage_mode: str | None = None
+
+
+class LocalMediaSeriesPathImportRequest(LocalMediaPathImportRequest):
+    """从本机路径创建系列的请求。"""
+
+    series_title: str = Field(min_length=1, max_length=200)
+
+
 class WorkspaceSettingsResponse(BaseModel):
     """工作区全局设置的响应模型。
 

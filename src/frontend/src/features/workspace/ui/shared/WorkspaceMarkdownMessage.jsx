@@ -183,10 +183,10 @@ function CitationPreviewCard({ preview, position }) {
     >
       <span className="block font-semibold text-stone-900 dark:text-stone-100">{preview.title}</span>
       {preview.sourceType ? (
-        <span className="mt-1 block text-[11px] uppercase tracking-wide text-stone-400 dark:text-stone-500">{preview.sourceType}</span>
+        <span className="mt-1 block text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-500">{preview.sourceType}</span>
       ) : null}
       {preview.detail ? (
-        <span className="mt-2 block text-[11px] text-stone-500 dark:text-stone-400">{preview.detail}</span>
+        <span className="mt-2 block text-[11px] text-stone-600 dark:text-stone-400">{preview.detail}</span>
       ) : null}
       {preview.text ? (
         <span className="mt-2 block leading-relaxed text-stone-600 dark:text-stone-300">{preview.text}</span>
@@ -247,7 +247,7 @@ function ThinkBlock({ content }) {
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-stone-500 dark:text-stone-400"
+        className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-stone-600 dark:text-stone-400"
       >
         思考过程
         <span aria-hidden="true">{expanded ? "收起" : "展开"}</span>

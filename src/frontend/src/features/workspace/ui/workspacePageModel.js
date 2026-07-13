@@ -128,6 +128,7 @@ export function buildWorkspacePageModel(controller) {
       resetSettings: controller.onResetSettings,
       clearError: controller.onClearError,
       resolveLinkedSeries: controller.onResolveLinkedSeries,
+      selectLocalMedia: controller.onSelectLocalMedia,
       resolvePlaygroundVideo: controller.onResolvePlaygroundVideo,
       resolveSeriesVideo: controller.onResolveSeriesVideo,
       initBilibiliCookie: controller.onInitBilibiliCookie,

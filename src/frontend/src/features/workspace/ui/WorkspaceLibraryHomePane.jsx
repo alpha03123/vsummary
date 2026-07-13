@@ -52,7 +52,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
 
           <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
             Welcome to your{" "}
-            <span className="text-stone-400 dark:text-zinc-500">Knowledge Base.</span>
+            <span className="text-stone-600 dark:text-zinc-500">Knowledge Base.</span>
           </h2>
 
         </motion.div>
@@ -63,12 +63,12 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
           {/* Main Progress Card (Spans 8 cols) */}
           <motion.article variants={blurVariant} className="md:col-span-8 workspace-elevated-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-between overflow-hidden relative">
             <div className="relative z-10">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500 mb-3 flex items-center gap-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500 mb-3 flex items-center gap-2">
                 Processing Overview
               </p>
               <div className="flex items-baseline gap-3 mb-2">
                 <h3 className="text-5xl font-black text-stone-900 dark:text-stone-100 tracking-tighter">{progressPercentage}%</h3>
-                <p className="text-sm font-semibold text-stone-500 dark:text-zinc-400 pb-1">processed</p>
+                <p className="text-sm font-semibold text-stone-600 dark:text-zinc-400 pb-1">processed</p>
               </div>
 
               <div className="h-3 w-full bg-stone-200/60 dark:bg-neutral-900/80 rounded-full overflow-hidden mt-4 shadow-inner relative">
@@ -79,7 +79,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
                   className="absolute top-0 left-0 h-full bg-accent rounded-full"
                 />
               </div>
-              <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-500 dark:text-zinc-500">
+              <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-600 dark:text-zinc-500">
                 <span>已解析 {librarySummary.processedVideos} 个视频</span>
                 <span>库内共计 {librarySummary.totalVideos} 个视频</span>
               </div>
@@ -90,19 +90,19 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
           <motion.div variants={blurVariant} className="md:col-span-4 flex flex-col gap-4">
             <div className="workspace-panel flex-1 rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-center items-center text-center group">
               <span className="text-4xl font-black text-stone-900 dark:text-stone-100 mb-2 transition-transform group-hover:scale-105">{librarySummary.seriesCount}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500">Total Series</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Total Series</span>
             </div>
             <div className="workspace-panel flex-1 rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-center items-center text-center group">
               <span className="text-4xl font-black text-stone-900 dark:text-stone-100 mb-2 transition-transform group-hover:scale-105">{librarySummary.totalVideos}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500">Total Videos</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Total Videos</span>
             </div>
           </motion.div>
 
           {/* Recent Shelves (Spans 7 cols) */}
           <motion.article variants={blurVariant} className="md:col-span-7 workspace-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500">Recent Shelves</p>
-              <span className="text-[10px] font-bold uppercase text-stone-500 dark:text-zinc-400 bg-stone-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-stone-200 dark:border-white/5 shadow-sm">Top {librarySummary.latestSeries.length}</span>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Recent Shelves</p>
+              <span className="text-[10px] font-bold uppercase text-stone-600 dark:text-zinc-400 bg-stone-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-stone-200 dark:border-white/5 shadow-sm">Top {librarySummary.latestSeries.length}</span>
             </div>
 
             {librarySummary.latestSeries.length > 0 ? (
@@ -118,7 +118,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
                   >
                     <div>
                       <strong className="block text-[14px] font-bold text-stone-900 dark:text-stone-100 group-hover:text-accent transition-colors">{seriesItem.title}</strong>
-                      <span className="block text-xs font-semibold text-stone-500 dark:text-zinc-500 mt-1">{seriesItem.videos.length} 个视频片段</span>
+                      <span className="block text-xs font-semibold text-stone-600 dark:text-zinc-500 mt-1">{seriesItem.videos.length} 个视频片段</span>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-stone-200/50 dark:bg-neutral-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0 border border-stone-300/50 dark:border-white/5">
                       <span className="text-stone-600 dark:text-zinc-300 text-xs font-bold">→</span>
@@ -128,7 +128,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
               </div>
             ) : (
               <div className="h-32 flex items-center justify-center border-2 border-dashed border-stone-200 dark:border-white/5 rounded-2xl">
-                <p className="text-sm font-semibold text-stone-400">暂无阅读记录</p>
+                <p className="text-sm font-semibold text-stone-500">暂无阅读记录</p>
               </div>
             )}
           </motion.article>
@@ -136,18 +136,18 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
           {/* Playground Card (Spans 5 cols) */}
           <motion.article variants={blurVariant} className="md:col-span-5 workspace-muted-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 relative overflow-hidden flex flex-col">
             <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 dark:bg-accent/[0.06] rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
-            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-500 dark:text-zinc-500 mb-4 relative z-10">Playground</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500 mb-4 relative z-10">Playground</p>
             <div className="relative z-10 flex flex-col gap-4 flex-1">
               <div>
                 <h3 className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">排练场</h3>
-                <p className="mt-2 text-sm font-medium leading-relaxed text-stone-500 dark:text-zinc-400">
+                <p className="mt-2 text-sm font-medium leading-relaxed text-stone-600 dark:text-zinc-400">
                   处理非系列视频
                 </p>
               </div>
               <div className="mt-2">
                 <div className="flex items-baseline gap-3 mb-2">
                   <h3 className="text-3xl font-black text-stone-900 dark:text-stone-100 tracking-tighter">{playgroundProgressPercentage}%</h3>
-                  <p className="text-xs font-semibold text-stone-500 dark:text-zinc-400 pb-1">AI 处理率</p>
+                  <p className="text-xs font-semibold text-stone-600 dark:text-zinc-400 pb-1">AI 处理率</p>
                 </div>
                 <div className="h-2.5 w-full bg-stone-200/60 dark:bg-neutral-900/80 rounded-full overflow-hidden mt-3 shadow-inner relative">
                   <motion.div
@@ -157,7 +157,7 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
                     className="absolute top-0 left-0 h-full bg-accent rounded-full"
                   />
                 </div>
-                <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-500 dark:text-zinc-500">
+                <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-600 dark:text-zinc-500">
                   <span>已解析 {playgroundProcessedCount} 个视频</span>
                   <span>库内共计 {playgroundVideoCount} 个视频</span>
                 </div>

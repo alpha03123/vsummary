@@ -1,4 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap");
+/* Fonts (IBM Plex Sans + Space Grotesk) are preloaded via <link> in index.html.
+   Previously this file @imported "Public Sans", which was never referenced by
+   the Tailwind fontFamily config actually in use — a redundant network request
+   that has been removed to keep typography single-sourced. */
 
 @tailwind base;
 @tailwind components;
@@ -168,6 +171,23 @@
   button,
   input {
     font: inherit;
+  }
+
+  /* ── Keyboard focus indicator (WCAG 2.4.7 Focus Visible) ──
+     Provides a consistent accent-colored outline for keyboard
+     navigation. Elements that already declare their own focus style
+     (e.g. inputs with `focus:border-accent` + `outline-none`) keep
+     that style because Tailwind utilities win source-order over base.
+     This rule fills the gap for icon buttons / link-style controls
+     that previously had no visible focus ring. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--workspace-accent-color));
+    outline-offset: 2px;
+  }
+
+  /* Mouse clicks should not show the keyboard focus ring */
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 
   * {

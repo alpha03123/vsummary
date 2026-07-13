@@ -35,13 +35,13 @@ export function WorkspaceChatManagementView({ chat }) {
       </div>
 
       <div>
-        <h3 className="text-sm font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 mb-5 flex items-center gap-2">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-5 flex items-center gap-2">
           <Clock3 size={16} /> 历史记录 ({sessions.length})
         </h3>
         {sessions.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-stone-200/80 bg-stone-50/50 p-12 text-center dark:border-stone-800 dark:bg-stone-950/30">
             <MessageSquare size={32} className="mx-auto mb-3 text-stone-300 dark:text-stone-700" />
-            <p className="text-stone-500 dark:text-stone-400 font-medium">暂无历史对话记录</p>
+            <p className="text-stone-600 dark:text-stone-400 font-medium">暂无历史对话记录</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
@@ -58,7 +58,7 @@ export function WorkspaceChatManagementView({ chat }) {
                 <div className="flex items-center justify-between w-full">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${session.id === activeSessionId
                       ? "bg-accent/15 text-accent"
-                      : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400 group-hover:bg-accent/10 group-hover:text-accent"
+                      : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 group-hover:bg-accent/10 group-hover:text-accent"
                     } transition-colors`}>
                     <MessageSquare size={18} />
                   </div>

@@ -766,15 +766,28 @@ function buildRecoveredMeta(role, createdAt) {
   return `${actor} • ${suffix}`;
 }
 
-export async function importLocalSeries(seriesTitle, files) {
-  const payload = new FormData();
-  payload.append("series_title", seriesTitle);
-  for (const file of files) {
-    payload.append("files", file);
-  }
-  return fetchJson("/api/import/local/series", {
+export async function selectLocalMedia() {
+  const payload = await fetchJson("/api/import/local/select", {
     method: "POST",
-    body: payload,
+  });
+  const sourcePaths = Array.isArray(payload.source_paths)
+    ? payload.source_paths.filter((path) => typeof path === "string" && path)
+    : [];
+  return {
+    sourcePaths,
+    hardlinkAvailable: payload.hardlink_available !== false,
+  };
+}
+
+export async function importLocalSeries(seriesTitle, sourcePaths, storageMode) {
+  return fetchJson("/api/import/local/series/from-paths", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      series_title: seriesTitle,
+      source_paths: sourcePaths,
+      storage_mode: storageMode,
+    }),
   });
 }
 
@@ -864,25 +877,19 @@ export function subscribeChaoxingImportProgress(taskId, listener) {
   );
 }
 
-export async function importLocalPlaygroundVideos(files) {
-  const payload = new FormData();
-  for (const file of files) {
-    payload.append("files", file);
-  }
-  return fetchJson("/api/import/local/playground", {
+export async function importLocalPlaygroundVideos(sourcePaths) {
+  return fetchJson("/api/import/local/playground/from-paths", {
     method: "POST",
-    body: payload,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source_paths: sourcePaths }),
   });
 }
 
-export async function importLocalSeriesVideos(seriesId, files) {
-  const payload = new FormData();
-  for (const file of files) {
-    payload.append("files", file);
-  }
-  return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}`, {
+export async function importLocalSeriesVideos(seriesId, sourcePaths) {
+  return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}/from-paths`, {
     method: "POST",
-    body: payload,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source_paths: sourcePaths }),
   });
 }
 

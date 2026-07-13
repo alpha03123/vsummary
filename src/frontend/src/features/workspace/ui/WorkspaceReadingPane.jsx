@@ -373,9 +373,9 @@ function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="mb-1 text-xs font-bold uppercase text-stone-500 dark:text-stone-400">{eyebrow}</p>
+        <p className="mb-1 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">{eyebrow}</p>
         <h2 className="text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{title}</h2>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{description}</p>
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{description}</p>
       </div>
       {children ? <div className="shrink-0">{children}</div> : null}
     </div>
