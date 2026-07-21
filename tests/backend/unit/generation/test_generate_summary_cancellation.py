@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -395,6 +396,37 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(first_enhancer.calls, 1)
             self.assertEqual(second_enhancer.calls, 0)
             self.assertTrue((output_dir / ".cache" / "transcript-enhance" / "transcript.enhanced.json").exists())
+
+    async def test_external_staging_removal_matches_issue_50_and_retry_recovers(self) -> None:
+        """External staging deletion matches Issue #50 without poisoning a retry."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            video_path = root / "v.mp4"
+            video_path.write_text("video", encoding="utf-8")
+            output_dir = root / "workspace" / "series-1" / "video-1"
+            use_case = GenerateVideoSummary(
+                media_processor=WritingMediaProcessor(),
+                transcriber=FakeTranscriber(),
+                transcript_enhancer=None,
+                summarizer=FakeSummarizer(),
+                artifact_store=FileSystemGenerationArtifactStore(),
+            )
+            original_write_text = Path.write_text
+
+            def remove_staging_before_temp_write(path: Path, *args, **kwargs):
+                if path.name.startswith(".transcript.cleaned.json."):
+                    shutil.rmtree(path.parent)
+                return original_write_text(path, *args, **kwargs)
+
+            with patch.object(Path, "write_text", new=remove_staging_before_temp_write):
+                with self.assertRaisesRegex(FileNotFoundError, r"\.transcript\.cleaned\.json\..+\.tmp"):
+                    await use_case.run(video_path, output_dir)
+
+            document = await use_case.run(video_path, output_dir)
+
+            self.assertEqual(document.summary_data["title"], "Test")
+            self.assertTrue((output_dir / "transcript.cleaned.json").exists())
+            self.assertTrue((output_dir / "summary.json").exists())
 
 
 async def _fake_to_thread(func, *args, **kwargs):
