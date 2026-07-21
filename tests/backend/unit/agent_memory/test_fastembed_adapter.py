@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from backend.video_summary.infrastructure.rag.agent_memory import fastembed_adapter
 from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import FastEmbedEmbedding
 
 
@@ -51,6 +55,28 @@ class FastEmbedEmbeddingTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "CUDAExecutionProvider 未激活"):
                 FastEmbedEmbedding(model_name="model", device="gpu", embed_batch_size=4)
+
+    def test_cuda_dll_dirs_precede_system_cuda_path_idempotently(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            package_dirs = [root / "runtime" / "nvidia" / name / "bin" for name in ("cublas", "cudnn")]
+            for path in package_dirs:
+                path.mkdir(parents=True)
+            system_cuda_dir = root / "system-cuda" / "bin"
+            system_cuda_dir.mkdir(parents=True)
+
+            with (
+                patch.object(fastembed_adapter, "_iter_python_environment_cuda_dll_dirs", return_value=package_dirs),
+                patch.dict(os.environ, {"PATH": os.pathsep.join([str(system_cuda_dir), str(package_dirs[0])])}, clear=True),
+            ):
+                fastembed_adapter._prepend_python_environment_cuda_dll_dirs_to_path()
+                first_path = os.environ["PATH"]
+                fastembed_adapter._prepend_python_environment_cuda_dll_dirs_to_path()
+                self.assertEqual(os.environ["PATH"], first_path)
+                self.assertEqual(
+                    first_path.split(os.pathsep),
+                    [str(package_dirs[0]), str(package_dirs[1]), str(system_cuda_dir)],
+                )
 
 
 class _FakeTextEmbedding:

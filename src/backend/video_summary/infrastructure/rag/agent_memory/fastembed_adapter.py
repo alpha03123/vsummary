@@ -194,9 +194,14 @@ def _add_python_environment_cuda_dll_directories() -> None:
 
 
 def _prepare_cuda_runtime() -> None:
-    """GPU 初始化前的 Windows CUDA 运行时准备：注册 DLL 搜索路径并预加载关键 DLL。"""
+    """GPU 初始化前的 Windows CUDA 运行时准备。
+
+    整合包自带的 CUDA DLL 必须排在系统 CUDA 目录之前，避免 Windows
+    将不同版本的 cudart / cuDNN 混合加载。
+    """
     if sys.platform != "win32":
         return
+    _prepend_python_environment_cuda_dll_dirs_to_path()
     _add_python_environment_cuda_dll_directories()
     _preload_python_environment_cuda_dlls()
 
@@ -211,6 +216,28 @@ def _preload_python_environment_cuda_dlls() -> None:
         if dll_path is None:
             continue
         _PRELOADED_CUDA_DLLS.append(ctypes.CDLL(str(dll_path)))
+
+
+def _prepend_python_environment_cuda_dll_dirs_to_path() -> None:
+    """将整合包 CUDA DLL 目录前置到进程 PATH，且重复调用不会累积条目。"""
+    dll_dirs = _iter_python_environment_cuda_dll_dirs()
+    if not dll_dirs:
+        return
+
+    package_entries = [str(path) for path in dll_dirs]
+    package_entry_keys = {_normalize_path_entry(entry) for entry in package_entries}
+    existing_entries = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    remaining_entries = [
+        entry
+        for entry in existing_entries
+        if _normalize_path_entry(entry) not in package_entry_keys
+    ]
+    os.environ["PATH"] = os.pathsep.join([*package_entries, *remaining_entries])
+
+
+def _normalize_path_entry(entry: str) -> str:
+    """生成用于 PATH 去重的跨平台规范化键。"""
+    return os.path.normcase(os.path.normpath(entry))
 
 
 def _find_cuda_dll(dll_dirs: list[Path], dll_name: str) -> Path | None:
