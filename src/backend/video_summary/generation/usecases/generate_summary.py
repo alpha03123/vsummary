@@ -144,22 +144,28 @@ class GenerateVideoSummary:
         """前置取消检查 → 准备 staging 目录 → 跑核心流水线 → 清理 staging。
 
         任何阶段失败/取消都会通过 `finally` 清理 staging 目录，
-        确保既有 `output_dir` 不会被污染。
+        确保既有 `output_dir` 不会被污染。若 staging 目录在流水线中被
+        异常删除，则只重试一次，并复用已完成的阶段缓存。
         """
         _raise_if_cancelled(progress_reporter)
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
-        staging_dir = output_dir.parent / f".{output_dir.name}.generation-{uuid4().hex}.tmp"
-        await asyncio.to_thread(staging_dir.mkdir, parents=True, exist_ok=False)
-        try:
-            return await self._run_to_staging(
-                video_path=video_path,
-                output_dir=output_dir,
-                staging_dir=staging_dir,
-                progress_reporter=progress_reporter,
-                cancellation=cancellation,
-            )
-        finally:
-            await asyncio.to_thread(_remove_tree_if_exists, staging_dir)
+        for attempt in range(2):
+            staging_dir = output_dir.parent / f".{output_dir.name}.generation-{uuid4().hex}.tmp"
+            await asyncio.to_thread(staging_dir.mkdir, parents=True, exist_ok=False)
+            try:
+                return await self._run_to_staging(
+                    video_path=video_path,
+                    output_dir=output_dir,
+                    staging_dir=staging_dir,
+                    progress_reporter=progress_reporter,
+                    cancellation=cancellation,
+                )
+            except FileNotFoundError:
+                if attempt == 0 and not staging_dir.exists():
+                    continue
+                raise
+            finally:
+                await asyncio.to_thread(_remove_tree_if_exists, staging_dir)
 
     async def _run_to_staging(
         self,
