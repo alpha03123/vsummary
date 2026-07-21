@@ -397,34 +397,39 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(second_enhancer.calls, 0)
             self.assertTrue((output_dir / ".cache" / "transcript-enhance" / "transcript.enhanced.json").exists())
 
-    async def test_external_staging_removal_matches_issue_50_and_retry_recovers(self) -> None:
-        """External staging deletion matches Issue #50 without poisoning a retry."""
+    async def test_external_staging_removal_retries_generation_once(self) -> None:
+        """A lost staging directory restarts from durable stage cache once."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             video_path = root / "v.mp4"
             video_path.write_text("video", encoding="utf-8")
             output_dir = root / "workspace" / "series-1" / "video-1"
+            media_processor = WritingMediaProcessor()
+            transcriber = FakeTranscriber()
             use_case = GenerateVideoSummary(
-                media_processor=WritingMediaProcessor(),
-                transcriber=FakeTranscriber(),
+                media_processor=media_processor,
+                transcriber=transcriber,
                 transcript_enhancer=None,
                 summarizer=FakeSummarizer(),
                 artifact_store=FileSystemGenerationArtifactStore(),
             )
             original_write_text = Path.write_text
+            removed_staging = False
 
             def remove_staging_before_temp_write(path: Path, *args, **kwargs):
-                if path.name.startswith(".transcript.cleaned.json."):
+                nonlocal removed_staging
+                if not removed_staging and path.name.startswith(".transcript.cleaned.json."):
+                    removed_staging = True
                     shutil.rmtree(path.parent)
                 return original_write_text(path, *args, **kwargs)
 
             with patch.object(Path, "write_text", new=remove_staging_before_temp_write):
-                with self.assertRaisesRegex(FileNotFoundError, r"\.transcript\.cleaned\.json\..+\.tmp"):
-                    await use_case.run(video_path, output_dir)
+                document = await use_case.run(video_path, output_dir)
 
-            document = await use_case.run(video_path, output_dir)
-
+            self.assertTrue(removed_staging)
             self.assertEqual(document.summary_data["title"], "Test")
+            self.assertEqual(media_processor.extract_calls, 1)
+            self.assertEqual(transcriber.calls, 1)
             self.assertTrue((output_dir / "transcript.cleaned.json").exists())
             self.assertTrue((output_dir / "summary.json").exists())
 
