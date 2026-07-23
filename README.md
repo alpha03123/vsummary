@@ -95,6 +95,7 @@
 ```bat
 conda env create -f environment.yml
 conda activate vsummary
+python -m pip install --force-reinstall --no-deps "onnxruntime-gpu>=1.20,<1.27"
 ```
 
 这会自动安装：
@@ -102,6 +103,10 @@ conda activate vsummary
 - Python 3.11
 - FFmpeg
 - 后端依赖
+
+最后一条命令会确保 GPU 版 ONNX Runtime 生效。`faster-whisper` 会安装 CPU 版
+`onnxruntime`，其文件可能覆盖 `onnxruntime-gpu`；省略该命令时，RAG 的 GPU
+embedding 可能找不到 `CUDAExecutionProvider`。
 
 #### 2. 安装前端依赖
 
@@ -212,20 +217,8 @@ npm run dev
 device = "gpu"
 ```
 
-### CUDA 11 用户
-
-
-如果你的机器仍然停留在 CUDA 11，建议：
-
-1. 优先使用 CPU 模式
-2. 或尝试把 `environment.yml` 中默认的 CUDA 12 运行时包改成 CUDA 11 对应包
-```yaml
-- nvidia-cublas-cu11
-- nvidia-cudnn-cu11
-- nvidia-cuda-runtime-cu11
-- nvidia-cuda-nvrtc-cu11
-```
-
+源码部署会通过 `environment.yml` 安装 CUDA 12 的 Python 运行时依赖；请确保
+NVIDIA 驱动可用，无需手动将依赖替换为 CUDA 11。
 
 ### RAG / embedding GPU
 
