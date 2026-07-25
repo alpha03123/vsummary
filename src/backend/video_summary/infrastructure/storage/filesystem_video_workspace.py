@@ -92,7 +92,7 @@ class FileSystemVideoWorkspace:
 
     def get_workspace(self) -> WorkspaceDTO:
         """返回工作区自身的 DTO：id 取根目录名，title 经标题化处理。"""
-        workspace_id = self._root_dir.name
+        workspace_id = self._root_dir.name or self._root_dir.drive or self._root_dir.anchor
         return WorkspaceDTO(
             id=workspace_id,
             title=_to_title(workspace_id),

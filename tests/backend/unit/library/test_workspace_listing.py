@@ -17,6 +17,16 @@ def _make_workspace(root: Path) -> FileSystemVideoWorkspace:
     return FileSystemVideoWorkspace(root)
 
 
+class WorkspaceIdentityTests(unittest.TestCase):
+    def test_root_directory_uses_its_volume_identifier(self) -> None:
+        root_dir = Path(Path.cwd().anchor)
+
+        workspace = FileSystemVideoWorkspace(root_dir).get_workspace()
+
+        self.assertEqual(workspace.id, root_dir.drive or root_dir.anchor)
+        self.assertTrue(workspace.title)
+
+
 class ReadCoreProblemTests(unittest.TestCase):
     """_read_core_problem 4 种降级路径 + 正常路径(B2 验收)。"""
 
