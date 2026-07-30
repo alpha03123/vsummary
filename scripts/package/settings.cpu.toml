@@ -8,6 +8,7 @@ device = "cpu"
 model_size = "large-v3-turbo"
 compute_type = "int8"
 transcription_mode = "accurate"
+initial_prompt = "以下为简体中文普通话转写文本。"
 
 [workspace_ui]
 theme = "light"

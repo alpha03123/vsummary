@@ -150,6 +150,7 @@ def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeIn
                 compute_type=settings.asr.faster_whisper.compute_type,
                 transcription_mode=settings.asr.faster_whisper.transcription_mode,
                 language=settings.asr.language,
+                initial_prompt=settings.asr.faster_whisper.initial_prompt,
             ),
             AsrRuntimeInfo(
                 provider=provider,

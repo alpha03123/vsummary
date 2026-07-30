@@ -29,7 +29,7 @@ class FasterWhisperTranscriber:
     通常以"全局单例/单 process 持有"的方式复用。
 
     Attributes:
-        cache_identity: 由类名 + 关键参数（模型、设备、计算精度、转写模式、语言）
+        cache_identity: 由类名 + 关键参数（模型、设备、计算精度、转写模式、语言、提示词）
             拼接而成的字符串，用于上层判断"两个转写器实例是否可复用 cache"。
     """
 
@@ -40,6 +40,7 @@ class FasterWhisperTranscriber:
         compute_type: str,
         transcription_mode: str,
         language: str = "zh",
+        initial_prompt: str = "",
     ) -> None:
         """加载 faster-whisper 模型并预编译解码参数。
 
@@ -51,6 +52,7 @@ class FasterWhisperTranscriber:
             transcription_mode: 转写模式，决定 beam_size 等解码参数
                 （见 `_build_decode_options`）。
             language: 强制指定的语言代码，默认 `zh`。
+            initial_prompt: 转写首段的上下文提示词；用于引导输出为简体中文。
 
         Raises:
             RuntimeError: faster-whisper 未安装，或要求 GPU 但未检测到 NVIDIA runtime。
@@ -68,6 +70,7 @@ class FasterWhisperTranscriber:
                 compute_type,
                 transcription_mode,
                 language,
+                initial_prompt,
             ]
         )
         try:
@@ -76,7 +79,7 @@ class FasterWhisperTranscriber:
             raise RuntimeError("faster-whisper is not installed.") from error
 
         self._language = language
-        self._decode_options = _build_decode_options(transcription_mode)
+        self._decode_options = _build_decode_options(transcription_mode, initial_prompt)
         self._model = WhisperModel(
             model_size,
             device=resolved_device,
@@ -233,7 +236,7 @@ def _discover_nvidia_bin_dirs() -> list[Path]:
     return candidates
 
 
-def _build_decode_options(transcription_mode: str) -> dict[str, object]:
+def _build_decode_options(transcription_mode: str, initial_prompt: str) -> dict[str, object]:
     """根据 `transcription_mode` 构造 faster-whisper 的解码参数。
 
     模式：
@@ -243,27 +246,32 @@ def _build_decode_options(transcription_mode: str) -> dict[str, object]:
 
     Args:
         transcription_mode: 模式名，大小写不敏感；未知值走 fast 路径。
+        initial_prompt: 转写首段的上下文提示词；空字符串时不传给模型。
 
     Returns:
         将被 `WhisperModel.transcribe` 解包为关键字参数的 dict。
     """
     if transcription_mode == "accurate":
-        return {
+        options = {
             "beam_size": 5,
             "best_of": 5,
             "condition_on_previous_text": True,
             "temperature": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
         }
-    if transcription_mode == "balanced":
-        return {
+    elif transcription_mode == "balanced":
+        options = {
             "beam_size": 3,
             "best_of": 3,
             "condition_on_previous_text": True,
             "temperature": 0.0,
         }
-    return {
-        "beam_size": 1,
-        "best_of": 1,
-        "condition_on_previous_text": False,
-        "temperature": 0.0,
-    }
+    else:
+        options = {
+            "beam_size": 1,
+            "best_of": 1,
+            "condition_on_previous_text": False,
+            "temperature": 0.0,
+        }
+    if initial_prompt:
+        options["initial_prompt"] = initial_prompt
+    return options
