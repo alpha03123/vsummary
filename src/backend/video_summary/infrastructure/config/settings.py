@@ -27,7 +27,7 @@ from backend.shared.filesystem import atomic_write_text
 
 
 VALID_DEVICES = {"auto", "cpu", "gpu"}
-VALID_ASR_PROVIDERS = {"faster_whisper"}
+VALID_ASR_PROVIDERS = {"faster_whisper", "aliyun_bailian"}
 VALID_THEMES = {"light", "dark"}
 VALID_WORKSPACE_LAYOUT_MODES = {"video_center", "chat_center"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
@@ -139,6 +139,8 @@ DEFAULT_WEB_SEARCH_MODE = "native"
 DEFAULT_WEB_SEARCH_CONTEXT_SIZE = "medium"
 DEFAULT_WEB_SEARCH_MAX_RESULTS = 5
 DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS = 10
+DEFAULT_ASR_ALIYUN_BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com"
+DEFAULT_ASR_ALIYUN_BAILIAN_MODEL = "paraformer-v2"
 DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS = 0.2
 DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS = 0.3
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
@@ -164,6 +166,15 @@ class FasterWhisperSettings:
 
 
 @dataclass(frozen=True)
+class AliyunBailianAsrSettings:
+    """阿里云百炼 ASR provider 的子配置。"""
+
+    base_url: str
+    model: str
+    api_key: str
+
+
+@dataclass(frozen=True)
 class AsrSettings:
     """ASR 总配置：provider + 语言 + 是否启用转写增强 + provider 子配置。
 
@@ -172,12 +183,14 @@ class AsrSettings:
         language: 强制指定的语言代码，默认 `zh`。
         transcript_enhancement_enabled: 是否启用 LLM 转写增强。
         faster_whisper: faster-whisper provider 的具体参数。
+        aliyun_bailian: 阿里云百炼 provider 的具体参数。
     """
 
     provider: str
     language: str
     transcript_enhancement_enabled: bool
     faster_whisper: FasterWhisperSettings
+    aliyun_bailian: AliyunBailianAsrSettings
 
 
 @dataclass(frozen=True)
@@ -382,12 +395,26 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         transcription_mode=_normalize_transcription_mode(faster_payload.get("transcription_mode")),
         models_dir=root_dir / "data" / "models" / "faster-whisper",
     )
+    aliyun_payload = asr_payload.get("aliyun_bailian", {})
+    aliyun_settings = AliyunBailianAsrSettings(
+        base_url=_normalize_http_base_url(
+            aliyun_payload.get("base_url"),
+            default=DEFAULT_ASR_ALIYUN_BAILIAN_BASE_URL,
+            field_name="asr.aliyun_bailian.base_url",
+        ),
+        model=_normalize_string(
+            aliyun_payload.get("model"),
+            default=DEFAULT_ASR_ALIYUN_BAILIAN_MODEL,
+        ),
+        api_key=env_values.dashscope_api_key,
+    )
 
     asr_settings = AsrSettings(
         provider=provider,
         language=asr_payload.get("language", "zh"),
         transcript_enhancement_enabled=bool(asr_payload.get("transcript_enhancement_enabled", True)),
         faster_whisper=faster_settings,
+        aliyun_bailian=aliyun_settings,
     )
 
     openai_settings = OpenAISettings(
@@ -582,6 +609,38 @@ def ensure_settings_file(config_path: Path) -> None:
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:
     """派生仅替换 `workspace_ui` 字段的新 `AppSettings`。"""
     return replace(settings, workspace_ui=workspace_ui)
+
+
+def replace_asr_provider(settings: AppSettings, provider: str) -> AppSettings:
+    """派生替换 ASR provider（已校验枚举）。"""
+    normalized_provider = provider.strip().lower()
+    if normalized_provider not in VALID_ASR_PROVIDERS:
+        raise ValueError(f"Unsupported asr.provider: {normalized_provider}")
+    return replace(settings, asr=replace(settings.asr, provider=normalized_provider))
+
+
+def replace_aliyun_bailian_asr_settings(
+    settings: AppSettings,
+    *,
+    base_url: str,
+    model: str,
+) -> AppSettings:
+    """派生替换阿里云百炼 ASR 配置。"""
+    return replace(
+        settings,
+        asr=replace(
+            settings.asr,
+            aliyun_bailian=AliyunBailianAsrSettings(
+                base_url=_normalize_http_base_url(
+                    base_url,
+                    default=DEFAULT_ASR_ALIYUN_BAILIAN_BASE_URL,
+                    field_name="asr.aliyun_bailian.base_url",
+                ),
+                model=_normalize_string(model, default=DEFAULT_ASR_ALIYUN_BAILIAN_MODEL),
+                api_key=settings.asr.aliyun_bailian.api_key,
+            ),
+        ),
+    )
 
 
 def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) -> AppSettings:
@@ -817,6 +876,14 @@ def normalize_openai_base_url(value: str) -> str:
     return normalize_provider_base_url(value)
 
 
+def _normalize_http_base_url(value: object, *, default: str, field_name: str) -> str:
+    """校验普通 HTTP base_url，不追加 `/v1`。"""
+    normalized = _normalize_string(value, default=default).rstrip("/")
+    if not normalized.startswith(("http://", "https://")):
+        raise ValueError(f"{field_name} must start with http:// or https://")
+    return normalized
+
+
 def apply_runtime_env_overrides(root_dir: Path) -> None:
     """把 `.env` 中受支持的环境变量（HF_ENDPOINT 等）写入 `os.environ`。
 
@@ -862,6 +929,10 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'model_size = "{settings.asr.faster_whisper.model_size}"',
         f'compute_type = "{settings.asr.faster_whisper.compute_type}"',
         f'transcription_mode = "{settings.asr.faster_whisper.transcription_mode}"',
+        "",
+        "[asr.aliyun_bailian]",
+        f'base_url = "{settings.asr.aliyun_bailian.base_url}"',
+        f'model = "{settings.asr.aliyun_bailian.model}"',
         "",
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
@@ -1049,6 +1120,7 @@ class EnvSettings:
     model: str
     api_key: str
     hf_endpoint: str = ""
+    dashscope_api_key: str = ""
 
 
 def load_env_settings(root_dir: Path) -> EnvSettings:
@@ -1060,6 +1132,7 @@ def load_env_settings(root_dir: Path) -> EnvSettings:
         model=values.get("OPENAI_MODEL", "").strip(),
         api_key=values.get("OPENAI_API_KEY", "").strip(),
         hf_endpoint=values.get("HF_ENDPOINT", "").strip(),
+        dashscope_api_key=values.get("DASHSCOPE_API_KEY", "").strip(),
     )
 
 
@@ -1073,6 +1146,7 @@ def save_env_settings(root_dir: Path, settings: EnvSettings) -> None:
         "OPENAI_MODEL": settings.model,
         "OPENAI_API_KEY": settings.api_key,
         "HF_ENDPOINT": settings.hf_endpoint.strip(),
+        "DASHSCOPE_API_KEY": settings.dashscope_api_key.strip(),
     }
     next_lines: list[str] = []
     seen_keys: set[str] = set()

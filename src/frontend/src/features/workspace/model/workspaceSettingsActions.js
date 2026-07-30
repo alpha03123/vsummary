@@ -2,11 +2,13 @@ import {
   cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
+  loadAsrApiKey,
   loadFasterWhisperModels,
   loadOpenaiApiKey,
   loadRagModels,
   subscribeFasterWhisperModelDownloadProgress,
   subscribeRagModelDownloadProgress,
+  testAsrSettings,
   testProviderSettings,
   updateProviderSettings,
   updateWorkspaceSettings,
@@ -15,6 +17,7 @@ import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 
 const PROVIDER_TEXT_SETTING_KEYS = new Set(["openaiBaseUrl", "openaiModel", "hfEndpoint"]);
+const ASR_TEXT_SETTING_KEYS = new Set(["asrBaseUrl", "asrCloudModel"]);
 const DOWNLOAD_FAILURE_VISIBLE_MS = 4000;
 
 function isCompletedDownloadStatus(payload) {
@@ -59,7 +62,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   }
 
   async function onChangeSetting(key, value) {
-    if (PROVIDER_TEXT_SETTING_KEYS.has(key)) {
+    if (PROVIDER_TEXT_SETTING_KEYS.has(key) || ASR_TEXT_SETTING_KEYS.has(key)) {
       dispatch({ type: "workspace_setting_edited", key, value });
       return;
     }
@@ -70,7 +73,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     });
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
-    if (key === "openaiApiKey") {
+    if (key === "openaiApiKey" || key === "asrApiKey") {
       return;
     }
 
@@ -128,6 +131,48 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
+  async function onSaveAsrSettings() {
+    const nextUi = normalizeUiSettings(state.ui);
+    if (nextUi.asrBaseUrl && !isSaveableOpenaiBaseUrl(nextUi.asrBaseUrl)) {
+      dispatch({ type: "load_failed", message: "ASR API 地址必须包含 http:// 或 https://。" });
+      return;
+    }
+    try {
+      const savedSettings = await updateWorkspaceSettings(nextUi);
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...nextUi,
+          ...savedSettings,
+          asrApiKey: "",
+        },
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "ASR 设置保存失败",
+      });
+    }
+  }
+
+  async function onRevealAsrApiKey() {
+    try {
+      const asrApiKey = await loadAsrApiKey();
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...state.ui,
+          asrApiKey,
+        },
+      });
+      return asrApiKey;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ASR API Key 读取失败";
+      dispatch({ type: "load_failed", message });
+      return "";
+    }
+  }
+
   async function onSaveProviderSettings() {
     const nextUi = normalizeUiSettings(state.ui);
     if (nextUi.openaiBaseUrl && !isSaveableOpenaiBaseUrl(nextUi.openaiBaseUrl)) {
@@ -170,6 +215,24 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     }
   }
 
+  async function onTestAsrConnection() {
+    const nextUi = normalizeUiSettings(state.ui);
+    try {
+      const result = await testAsrSettings(nextUi);
+      return {
+        ok: result.ok === true,
+        message: typeof result.message === "string" ? result.message : "ASR 连接正常",
+      };
+    } catch (error) {
+      const message = toAsrTestErrorMessage(error);
+      dispatch({ type: "load_failed", message });
+      return {
+        ok: false,
+        message,
+      };
+    }
+  }
+
   async function onTestProviderConnection() {
     const nextUi = normalizeUiSettings(state.ui);
     try {
@@ -198,6 +261,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       hasOpenaiApiKey: state.ui.hasOpenaiApiKey,
       openaiApiKeyMasked: state.ui.openaiApiKeyMasked,
       openaiApiKey: "",
+      asrApiKey: "",
     });
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
@@ -414,6 +478,9 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onChangeProviderUsageRange,
     onSaveProviderSettings,
     onSaveApiKey,
+    onSaveAsrSettings,
+    onRevealAsrApiKey,
+    onTestAsrConnection,
     onRevealOpenaiApiKey,
     onTestProviderConnection,
     onResetSettings,
@@ -430,6 +497,17 @@ export function toProviderTestErrorMessage(error) {
   const message = error instanceof Error ? error.message : "模型连接测试失败";
   if (/^\d{3}\s+模型超时$/.test(message)) {
     return "模型超时";
+  }
+  return message;
+}
+
+export function toAsrTestErrorMessage(error) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "ASR 连接测试超时";
+  }
+  const message = error instanceof Error ? error.message : "ASR 连接测试失败";
+  if (/^\d{3}\s+/.test(message)) {
+    return message.replace(/^\d{3}\s+/, "");
   }
   return message;
 }

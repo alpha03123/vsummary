@@ -15,9 +15,11 @@ from threading import Lock
 from typing import Protocol
 
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.asr.aliyun_bailian_transcriber import _normalize_dashscope_base_address
 from backend.video_summary.infrastructure.rag.rag_models import RAG_RERANKER_REQUIRED_MESSAGE, RagModelManager
 from backend.video_summary.infrastructure.config.settings import (
     EnvSettings,
+    VALID_ASR_PROVIDERS,
     VALID_THEMES,
     VALID_WORKSPACE_LAYOUT_MODES,
     VALID_TRANSCRIPTION_MODES,
@@ -30,6 +32,8 @@ from backend.video_summary.infrastructure.config.settings import (
     load_settings,
     normalize_openai_base_url,
     replace_agent_retrieval_runtime_settings,
+    replace_aliyun_bailian_asr_settings,
+    replace_asr_provider,
     replace_agent_context_window_tokens,
     replace_agent_context_answer_detail_level,
     replace_agent_context_reasoning_effort,
@@ -99,8 +103,13 @@ class WorkspaceSettings:
     show_takeaways: bool
     layout_mode: str
     transcript_enhancement_enabled: bool
+    asr_provider: str
     asr_model_quality: str
     transcription_mode: str
+    asr_cloud_model: str
+    asr_base_url: str
+    has_asr_api_key: bool
+    asr_api_key_masked: str
     rag_embedding_device: str
     rag_max_hits: int
     rag_rerank_enabled: bool
@@ -142,6 +151,10 @@ class SettingsServicePort(Protocol):
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        asr_provider: str = "faster_whisper",
+        asr_cloud_model: str = "paraformer-v2",
+        asr_base_url: str = "https://dashscope.aliyuncs.com",
+        asr_api_key: str | None = None,
         talk_custom_prompt: str = "",
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
@@ -155,6 +168,21 @@ class SettingsServicePort(Protocol):
 
     def get_openai_api_key(self) -> str:
         """返回当前 `.env` 中明文保存的 OpenAI API Key（供内部调用 LLM 使用）。"""
+        ...
+
+    def get_asr_api_key(self) -> str:
+        """返回当前 `.env` 中明文保存的 ASR API Key。"""
+        ...
+
+    def test_asr_settings(
+        self,
+        *,
+        asr_provider: str,
+        asr_cloud_model: str,
+        asr_base_url: str,
+        asr_api_key: str | None,
+    ) -> str:
+        """测试 ASR provider 连接，返回回执文本。"""
         ...
 
     def update_provider_settings(
@@ -222,6 +250,7 @@ class SettingsService:
             下载状态影响。
         """
         settings = load_settings(self._config_path, self._root_dir)
+        env_settings = load_env_settings(self._root_dir)
         rag_rerank_enabled = settings.agent_retrieval.rerank_enabled and (
             self._rag_model_manager is None or self._rag_model_manager.is_downloaded("reranker")
         )
@@ -230,8 +259,13 @@ class SettingsService:
             show_takeaways=settings.workspace_ui.show_takeaways,
             layout_mode=settings.workspace_ui.layout_mode,
             transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
+            asr_provider=settings.asr.provider,
             asr_model_quality=settings.asr.faster_whisper.model_size,
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
+            asr_cloud_model=settings.asr.aliyun_bailian.model,
+            asr_base_url=settings.asr.aliyun_bailian.base_url,
+            has_asr_api_key=bool(env_settings.dashscope_api_key),
+            asr_api_key_masked=_mask_api_key(env_settings.dashscope_api_key),
             rag_embedding_device=settings.agent_retrieval.embedding_device,
             rag_max_hits=settings.agent_retrieval.max_hits,
             rag_rerank_enabled=rag_rerank_enabled,
@@ -262,6 +296,10 @@ class SettingsService:
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        asr_provider: str = "faster_whisper",
+        asr_cloud_model: str = "paraformer-v2",
+        asr_base_url: str = "https://dashscope.aliyuncs.com",
+        asr_api_key: str | None = None,
         talk_custom_prompt: str = "",
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
@@ -301,8 +339,15 @@ class SettingsService:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
         if layout_mode not in VALID_WORKSPACE_LAYOUT_MODES:
             raise SettingsValidationError(f"unsupported workspace layout mode '{layout_mode}'")
+        normalized_asr_provider = asr_provider.strip().lower()
+        if normalized_asr_provider not in VALID_ASR_PROVIDERS:
+            raise SettingsValidationError(f"unsupported asr provider '{normalized_asr_provider}'")
         if not self._faster_whisper_model_manager.is_supported(asr_model_quality):
             raise SettingsValidationError(f"unsupported asr model '{asr_model_quality}'")
+        if asr_base_url and not asr_base_url.strip().startswith(("http://", "https://")):
+            raise SettingsValidationError("ASR API 地址必须包含 http:// 或 https://。")
+        if not asr_cloud_model.strip():
+            raise SettingsValidationError("ASR 云端模型名称不能为空。")
         if transcription_mode not in VALID_TRANSCRIPTION_MODES:
             raise SettingsValidationError(f"unsupported transcription mode '{transcription_mode}'")
         if window_tokens <= 0:
@@ -337,8 +382,14 @@ class SettingsService:
                 ),
             )
             next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
+            next_settings = replace_asr_provider(next_settings, normalized_asr_provider)
             next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
             next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
+            next_settings = replace_aliyun_bailian_asr_settings(
+                next_settings,
+                base_url=asr_base_url,
+                model=asr_cloud_model,
+            )
             next_settings = replace_agent_retrieval_runtime_settings(
                 next_settings,
                 embedding_device=rag_embedding_device,
@@ -357,14 +408,34 @@ class SettingsService:
                 init_course_delay_seconds=chaoxing_init_course_delay_seconds,
             )
             save_settings(self._config_path, next_settings)
+            if asr_api_key is not None:
+                env_settings = load_env_settings(self._root_dir)
+                save_env_settings(
+                    self._root_dir,
+                    EnvSettings(
+                        provider=env_settings.provider,
+                        base_url=env_settings.base_url,
+                        model=env_settings.model,
+                        api_key=env_settings.api_key,
+                        hf_endpoint=env_settings.hf_endpoint,
+                        dashscope_api_key=asr_api_key.strip(),
+                    ),
+                )
+                apply_runtime_env_overrides(self._root_dir)
 
+        env_settings = load_env_settings(self._root_dir)
         return WorkspaceSettings(
             theme=theme,
             show_takeaways=show_takeaways,
             layout_mode=layout_mode,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
+            asr_provider=next_settings.asr.provider,
             asr_model_quality=asr_model_quality,
             transcription_mode=transcription_mode,
+            asr_cloud_model=next_settings.asr.aliyun_bailian.model,
+            asr_base_url=next_settings.asr.aliyun_bailian.base_url,
+            has_asr_api_key=bool(env_settings.dashscope_api_key),
+            asr_api_key_masked=_mask_api_key(env_settings.dashscope_api_key),
             rag_embedding_device=next_settings.agent_retrieval.embedding_device,
             rag_max_hits=next_settings.agent_retrieval.max_hits,
             rag_rerank_enabled=next_settings.agent_retrieval.rerank_enabled,
@@ -398,6 +469,56 @@ class SettingsService:
     def get_openai_api_key(self) -> str:
         """读取 `.env` 中明文保存的 OpenAI API Key（供内部 LLM 调用使用）。"""
         return load_env_settings(self._root_dir).api_key
+
+    def get_asr_api_key(self) -> str:
+        """读取 `.env` 中明文保存的 ASR API Key。"""
+        return load_env_settings(self._root_dir).dashscope_api_key
+
+    def test_asr_settings(
+        self,
+        *,
+        asr_provider: str,
+        asr_cloud_model: str,
+        asr_base_url: str,
+        asr_api_key: str | None,
+    ) -> str:
+        """测试 ASR provider 连接，不持久化配置、不上传用户音频。"""
+        normalized_provider = asr_provider.strip().lower()
+        if normalized_provider not in VALID_ASR_PROVIDERS:
+            raise SettingsValidationError(f"unsupported asr provider '{normalized_provider}'")
+        if normalized_provider == "faster_whisper":
+            return "本地 faster-whisper 无需云端连接测试。"
+        if normalized_provider != "aliyun_bailian":
+            raise SettingsValidationError(f"unsupported asr provider '{normalized_provider}'")
+
+        model = asr_cloud_model.strip()
+        if not model:
+            raise SettingsValidationError("ASR 云端模型名称不能为空。")
+        base_address = _normalize_dashscope_base_address(asr_base_url)
+        api_key = self._resolve_asr_api_key(asr_api_key)
+        if not api_key:
+            raise SettingsValidationError("请先填写阿里云百炼 ASR API Key。")
+
+        try:
+            from dashscope.utils.oss_utils import OssUtils
+        except ImportError as error:
+            raise RuntimeError("dashscope is not installed.") from error
+
+        try:
+            response = OssUtils.get_upload_certificate(
+                model=model,
+                api_key=api_key,
+                base_address=base_address,
+            )
+        except Exception as error:
+            raise RuntimeError(f"阿里云百炼 ASR 连接失败：{error}") from error
+
+        status_code = getattr(response, "status_code", None)
+        if status_code != 200:
+            code = getattr(response, "code", "") or ""
+            message = getattr(response, "message", "") or str(response)
+            raise RuntimeError(f"阿里云百炼 ASR 连接失败：{code} {message}".strip())
+        return "阿里云百炼 ASR 连接正常。"
 
     def update_provider_settings(
         self,
@@ -505,6 +626,7 @@ class SettingsService:
                 model=openai_model,
                 api_key=openai_api_key,
                 hf_endpoint=hf_endpoint,
+                dashscope_api_key=load_env_settings(self._root_dir).dashscope_api_key,
             ),
         )
         apply_runtime_env_overrides(self._root_dir)
@@ -569,6 +691,12 @@ class SettingsService:
         if openai_api_key is None:
             return load_env_settings(self._root_dir).api_key
         return openai_api_key.strip()
+
+    def _resolve_asr_api_key(self, asr_api_key: str | None) -> str:
+        """解析"本次传入"的 ASR API Key：`None` 时回落到 `.env` 现有值。"""
+        if asr_api_key is None:
+            return load_env_settings(self._root_dir).dashscope_api_key
+        return asr_api_key.strip()
 
 
 def _mask_api_key(api_key: str) -> str:

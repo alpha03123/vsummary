@@ -9,6 +9,10 @@ model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
 
+[asr.aliyun_bailian]
+base_url = "https://dashscope.aliyuncs.com"
+model = "paraformer-v2"
+
 [workspace_ui]
 theme = "light"
 show_takeaways = true

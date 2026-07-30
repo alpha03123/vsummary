@@ -18,6 +18,10 @@ compute_type = "float16"
 # 转写策略。"fast" 更快，"balanced" 平衡速度和质量，"accurate" 更重视准确度。
 transcription_mode = "accurate"
 
+[asr.aliyun_bailian]
+base_url = "https://dashscope.aliyuncs.com"
+model = "paraformer-v2"
+
 # 前端工作区显示设置。
 [workspace_ui]
 # 主题模式。"light" 为亮色，"dark" 为暗色。

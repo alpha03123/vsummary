@@ -213,7 +213,7 @@ class GenerateVideoSummary:
         _raise_if_cancelled(progress_reporter)
 
         if progress_reporter is not None:
-            progress_reporter.update("transcribe", 20.0, "正在使用 Whisper 转写音频")
+            progress_reporter.update("transcribe", 20.0, "正在转写音频")
         transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
         if transcript is None:
             transcript = await asyncio.to_thread(
@@ -365,7 +365,7 @@ def _handle_transcribe_progress(progress_reporter: ProgressReporter, ratio: floa
     progress_reporter.update(
         "transcribe",
         20.0 + max(0.0, min(1.0, ratio)) * 55.0,
-        "Whisper 正在转写音频",
+        "正在转写音频",
     )
 
 

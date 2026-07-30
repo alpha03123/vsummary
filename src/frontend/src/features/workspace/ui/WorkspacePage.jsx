@@ -472,6 +472,9 @@ export function WorkspacePage({ page }) {
                   onChangeSetting={actions.changeSetting}
                   onSaveProviderSettings={actions.saveProviderSettings}
                   onSaveApiKey={actions.saveApiKey}
+                  onSaveAsrSettings={actions.saveAsrSettings}
+                  onRevealAsrApiKey={actions.revealAsrApiKey}
+                  onTestAsrConnection={actions.testAsrConnection}
                   onRevealOpenaiApiKey={actions.revealOpenaiApiKey}
                   onTestProviderConnection={actions.testProviderConnection}
                   onDownloadFasterWhisperModel={actions.downloadFasterWhisperModel}
