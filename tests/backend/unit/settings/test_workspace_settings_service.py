@@ -327,6 +327,21 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertEqual(settings.web_search.max_results, 5)
             self.assertEqual(settings.web_search.timeout_seconds, 10)
 
+    def test_load_settings_uses_simplified_chinese_prompt_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+
+            settings = load_settings(config_path, root_dir)
+
+            self.assertEqual(
+                settings.asr.faster_whisper.initial_prompt,
+                "以下为简体中文普通话转写文本。",
+            )
+
     def test_load_settings_creates_local_settings_from_example_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)

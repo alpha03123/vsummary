@@ -8,6 +8,7 @@ device = "gpu"
 model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
+initial_prompt = "以下为简体中文普通话转写文本。"
 
 [asr.aliyun_bailian]
 base_url = "https://dashscope.aliyuncs.com"

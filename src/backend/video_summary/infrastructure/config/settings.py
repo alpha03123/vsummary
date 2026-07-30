@@ -143,6 +143,7 @@ DEFAULT_ASR_ALIYUN_BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com"
 DEFAULT_ASR_ALIYUN_BAILIAN_MODEL = "paraformer-v2"
 DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS = 0.2
 DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS = 0.3
+DEFAULT_FASTER_WHISPER_INITIAL_PROMPT = "以下为简体中文普通话转写文本。"
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -155,6 +156,7 @@ class FasterWhisperSettings:
         model_size: 模型 ID（如 `small` / `large-v3-turbo`）。
         compute_type: 计算精度（如 `int8` / `float16`）。
         transcription_mode: 转写模式，决定 beam_size 等解码参数。
+        initial_prompt: 转写首段的上下文提示词，用于引导模型输出风格。
         models_dir: faster-whisper 模型缓存根目录。
     """
 
@@ -162,6 +164,7 @@ class FasterWhisperSettings:
     model_size: str
     compute_type: str
     transcription_mode: str
+    initial_prompt: str
     models_dir: Path
 
 
@@ -393,6 +396,10 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         model_size=faster_payload["model_size"],
         compute_type=faster_payload["compute_type"],
         transcription_mode=_normalize_transcription_mode(faster_payload.get("transcription_mode")),
+        initial_prompt=_normalize_string(
+            faster_payload.get("initial_prompt"),
+            default=DEFAULT_FASTER_WHISPER_INITIAL_PROMPT,
+        ),
         models_dir=root_dir / "data" / "models" / "faster-whisper",
     )
     aliyun_payload = asr_payload.get("aliyun_bailian", {})
@@ -929,6 +936,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'model_size = "{settings.asr.faster_whisper.model_size}"',
         f'compute_type = "{settings.asr.faster_whisper.compute_type}"',
         f'transcription_mode = "{settings.asr.faster_whisper.transcription_mode}"',
+        f"initial_prompt = {_toml_string(settings.asr.faster_whisper.initial_prompt)}",
         "",
         "[asr.aliyun_bailian]",
         f'base_url = "{settings.asr.aliyun_bailian.base_url}"',

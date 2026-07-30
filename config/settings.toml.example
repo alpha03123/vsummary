@@ -17,6 +17,8 @@ model_size = "large-v3-turbo"
 compute_type = "float16"
 # 转写策略。"fast" 更快，"balanced" 平衡速度和质量，"accurate" 更重视准确度。
 transcription_mode = "accurate"
+# 转写首段上下文提示词，用于引导 Whisper 优先使用简体中文。
+initial_prompt = "以下为简体中文普通话转写文本。"
 
 [asr.aliyun_bailian]
 base_url = "https://dashscope.aliyuncs.com"
