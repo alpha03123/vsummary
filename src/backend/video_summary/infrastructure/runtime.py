@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from backend.video_summary.infrastructure.asr.aliyun_bailian_transcriber import AliyunBailianTranscriber
 from backend.video_summary.infrastructure.asr.faster_whisper_transcriber import FasterWhisperTranscriber
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.shared.llm import LiteLLMCompletionGateway
@@ -119,8 +120,8 @@ def build_video_summary_runtime(
 def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeInfo]:
     """根据 `settings.asr.provider` 分发到对应的转写器实现。
 
-    当前仅支持 `faster_whisper`：会先校验模型是否已下载，未下载则抛出
-    `AsrModelNotReadyError` 以便上层引导用户去设置页下载。
+    `faster_whisper` 会先校验模型是否已下载；`aliyun_bailian` 使用 DashScope
+    SDK 临时上传音频并调用云端 Paraformer。
     """
     provider = settings.asr.provider
     if provider == "faster_whisper":
@@ -141,6 +142,20 @@ def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeIn
                 provider=provider,
                 device=settings.asr.faster_whisper.device,
                 model_label=settings.asr.faster_whisper.model_size,
+            ),
+        )
+    if provider == "aliyun_bailian":
+        return (
+            AliyunBailianTranscriber(
+                model=settings.asr.aliyun_bailian.model,
+                base_url=settings.asr.aliyun_bailian.base_url,
+                api_key=settings.asr.aliyun_bailian.api_key,
+                language=settings.asr.language,
+            ),
+            AsrRuntimeInfo(
+                provider=provider,
+                device="cloud",
+                model_label=settings.asr.aliyun_bailian.model,
             ),
         )
 

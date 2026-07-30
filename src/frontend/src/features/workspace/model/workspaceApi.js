@@ -29,8 +29,14 @@ export async function loadWorkspaceSettings() {
     showTakeaways: payload.show_takeaways,
     layoutMode: payload.layout_mode,
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
+    asrProvider: payload.asr_provider,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
+    asrCloudModel: payload.asr_cloud_model,
+    asrBaseUrl: payload.asr_base_url,
+    hasAsrApiKey: payload.has_asr_api_key,
+    asrApiKeyMasked: payload.asr_api_key_masked,
+    asrApiKey: "",
     ragEmbeddingDevice: payload.rag_embedding_device,
     ragMaxHits: payload.rag_max_hits,
     ragRerankEnabled: payload.rag_rerank_enabled,
@@ -68,6 +74,11 @@ export async function loadOpenaiApiKey() {
   return typeof payload.openai_api_key === "string" ? payload.openai_api_key : "";
 }
 
+export async function loadAsrApiKey() {
+  const payload = await fetchJson("/api/settings/asr-api-key");
+  return typeof payload.asr_api_key === "string" ? payload.asr_api_key : "";
+}
+
 export async function updateWorkspaceSettings(settings) {
   const payload = await fetchJson("/api/settings", {
     method: "PUT",
@@ -79,8 +90,12 @@ export async function updateWorkspaceSettings(settings) {
       show_takeaways: settings.showTakeaways,
       layout_mode: settings.layoutMode,
       transcript_enhancement_enabled: settings.transcriptEnhancementEnabled,
+      asr_provider: settings.asrProvider,
       asr_model_quality: settings.asrModelQuality,
       transcription_mode: settings.transcriptionMode,
+      asr_cloud_model: settings.asrCloudModel,
+      asr_base_url: settings.asrBaseUrl,
+      asr_api_key: settings.asrApiKey && settings.asrApiKey.trim() ? settings.asrApiKey : null,
       rag_embedding_device: settings.ragEmbeddingDevice,
       rag_max_hits: settings.ragMaxHits,
       rag_rerank_enabled: settings.ragRerankEnabled,
@@ -99,8 +114,14 @@ export async function updateWorkspaceSettings(settings) {
     showTakeaways: payload.show_takeaways,
     layoutMode: payload.layout_mode,
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
+    asrProvider: payload.asr_provider,
     asrModelQuality: payload.asr_model_quality,
     transcriptionMode: payload.transcription_mode,
+    asrCloudModel: payload.asr_cloud_model,
+    asrBaseUrl: payload.asr_base_url,
+    hasAsrApiKey: payload.has_asr_api_key,
+    asrApiKeyMasked: payload.asr_api_key_masked,
+    asrApiKey: "",
     ragEmbeddingDevice: payload.rag_embedding_device,
     ragMaxHits: payload.rag_max_hits,
     ragRerankEnabled: payload.rag_rerank_enabled,
@@ -156,6 +177,28 @@ export async function testProviderSettings(settings) {
         openai_model: settings.openaiModel,
         openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
         hf_endpoint: settings.hfEndpoint,
+      }),
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+export async function testAsrSettings(settings) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 10000);
+  try {
+    return await fetchJson("/api/settings/asr/test", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        asr_provider: settings.asrProvider,
+        asr_cloud_model: settings.asrCloudModel,
+        asr_base_url: settings.asrBaseUrl,
+        asr_api_key: settings.asrApiKey.trim() ? settings.asrApiKey : null,
       }),
     });
   } finally {

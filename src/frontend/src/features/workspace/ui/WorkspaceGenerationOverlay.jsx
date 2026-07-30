@@ -6,7 +6,7 @@ const GENERATION_STAGE_ITEMS = [
   { id: "batch", label: "批量处理" },
   { id: "probe", label: "分析视频" },
   { id: "extract_audio", label: "MP4 转音频" },
-  { id: "transcribe", label: "Whisper 转写" },
+  { id: "transcribe", label: "语音转写" },
   { id: "enhance_transcript", label: "AI 修正文本" },
   { id: "summarize", label: "AI 生成概况" },
   { id: "completed", label: "完成" },

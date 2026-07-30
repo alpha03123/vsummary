@@ -3,8 +3,14 @@ export const defaultUiSettings = {
   theme: "light",
   layoutMode: "video_center",
   transcriptEnhancementEnabled: true,
+  asrProvider: "faster_whisper",
   asrModelQuality: "large-v3-turbo",
   transcriptionMode: "fast",
+  asrCloudModel: "paraformer-v2",
+  asrBaseUrl: "https://dashscope.aliyuncs.com",
+  asrApiKey: "",
+  hasAsrApiKey: false,
+  asrApiKeyMasked: "",
   ragEmbeddingDevice: "cpu",
   ragMaxHits: 5,
   ragRerankEnabled: true,
@@ -706,6 +712,7 @@ export function normalizeUiSettings(value) {
     layoutMode: record.layoutMode === "chat_center" ? "chat_center" : "video_center",
     transcriptEnhancementEnabled:
       typeof record.transcriptEnhancementEnabled === "boolean" ? record.transcriptEnhancementEnabled : true,
+    asrProvider: record.asrProvider === "aliyun_bailian" ? "aliyun_bailian" : "faster_whisper",
     asrModelQuality:
       typeof record.asrModelQuality === "string" && record.asrModelQuality.trim()
         ? record.asrModelQuality.trim()
@@ -714,6 +721,17 @@ export function normalizeUiSettings(value) {
       record.transcriptionMode === "accurate" || record.transcriptionMode === "balanced"
         ? record.transcriptionMode
         : "fast",
+    asrCloudModel:
+      typeof record.asrCloudModel === "string" && record.asrCloudModel.trim()
+        ? record.asrCloudModel.trim()
+        : "paraformer-v2",
+    asrBaseUrl:
+      typeof record.asrBaseUrl === "string" && record.asrBaseUrl.trim()
+        ? record.asrBaseUrl.trim()
+        : "https://dashscope.aliyuncs.com",
+    asrApiKey: typeof record.asrApiKey === "string" ? record.asrApiKey : "",
+    hasAsrApiKey: typeof record.hasAsrApiKey === "boolean" ? record.hasAsrApiKey : false,
+    asrApiKeyMasked: typeof record.asrApiKeyMasked === "string" ? record.asrApiKeyMasked : "",
     ragEmbeddingDevice:
       record.ragEmbeddingDevice === "gpu" || record.ragEmbeddingDevice === "auto"
         ? record.ragEmbeddingDevice

@@ -89,8 +89,13 @@ class WorkspaceSettingsResponse(BaseModel):
     show_takeaways: bool
     layout_mode: str
     transcript_enhancement_enabled: bool
+    asr_provider: str
     asr_model_quality: str
     transcription_mode: str
+    asr_cloud_model: str
+    asr_base_url: str
+    has_asr_api_key: bool
+    asr_api_key_masked: str
     rag_embedding_device: str
     rag_max_hits: int
     rag_rerank_enabled: bool
@@ -114,8 +119,12 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     show_takeaways: bool
     layout_mode: str
     transcript_enhancement_enabled: bool
+    asr_provider: str = "faster_whisper"
     asr_model_quality: str
     transcription_mode: str
+    asr_cloud_model: str = "paraformer-v2"
+    asr_base_url: str = "https://dashscope.aliyuncs.com"
+    asr_api_key: str | None = None
     rag_embedding_device: str
     rag_max_hits: int
     rag_rerank_enabled: bool
@@ -212,6 +221,21 @@ class ProviderApiKeyResponse(BaseModel):
     """
 
     openai_api_key: str
+
+
+class AsrApiKeyResponse(BaseModel):
+    """明文 ASR API Key 的响应模型。"""
+
+    asr_api_key: str
+
+
+class TestAsrSettingsRequest(BaseModel):
+    """测试 ASR provider 连通性的请求体。"""
+
+    asr_provider: str = "faster_whisper"
+    asr_cloud_model: str = "paraformer-v2"
+    asr_base_url: str = "https://dashscope.aliyuncs.com"
+    asr_api_key: str | None = None
 
 
 class UpdateProviderSettingsRequest(BaseModel):

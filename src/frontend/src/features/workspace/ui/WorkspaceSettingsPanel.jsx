@@ -30,6 +30,9 @@ export function WorkspaceSettingsPanel({
   onOpenUsagePage,
   onSaveProviderSettings,
   onSaveApiKey,
+  onSaveAsrSettings,
+  onRevealAsrApiKey,
+  onTestAsrConnection,
   onRevealOpenaiApiKey,
   onTestProviderConnection,
   onDownloadFasterWhisperModel,
@@ -42,8 +45,11 @@ export function WorkspaceSettingsPanel({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmDownloadModelId, setConfirmDownloadModelId] = useState(null);
   const [showApiKeyValue, setShowApiKeyValue] = useState(false);
+  const [showAsrApiKeyValue, setShowAsrApiKeyValue] = useState(false);
   const [apiKeyRevealLoading, setApiKeyRevealLoading] = useState(false);
+  const [asrApiKeyRevealLoading, setAsrApiKeyRevealLoading] = useState(false);
   const [providerTest, setProviderTest] = useState({ status: "idle", message: "" });
+  const [asrTest, setAsrTest] = useState({ status: "idle", message: "" });
   const isOllamaProvider = ui.llmProvider === "ollama";
   const hasApiKey = ui.hasOpenaiApiKey;
   const draftApiKey = ui.openaiApiKey.trim();
@@ -51,6 +57,15 @@ export function WorkspaceSettingsPanel({
     ? (showApiKeyValue ? draftApiKey : ui.openaiApiKeyMasked || "待保存的新密钥")
     : ui.openaiApiKeyMasked;
   const apiKeyStatus = draftApiKey || ui.openaiApiKeyMasked;
+  const currentAsrProvider = ui.asrProvider === "aliyun_bailian" ? "aliyun_bailian" : "faster_whisper";
+  const asrCloudModel = ui.asrCloudModel || "paraformer-v2";
+  const asrBaseUrl = ui.asrBaseUrl || "https://dashscope.aliyuncs.com";
+  const draftAsrApiKey = (ui.asrApiKey || "").trim();
+  const asrApiKeyMasked = ui.asrApiKeyMasked || "";
+  const asrApiKeyDisplayValue = draftAsrApiKey
+    ? (showAsrApiKeyValue ? draftAsrApiKey : asrApiKeyMasked || "待保存的新密钥")
+    : asrApiKeyMasked;
+  const asrApiKeyStatus = draftAsrApiKey || asrApiKeyMasked;
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const isRerankerDownloading = rerankerModel?.status === "running" || downloadingRagModelKey === "reranker";
@@ -229,6 +244,26 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
+                  title="语音识别供应商"
+                  description={
+                    currentAsrProvider === "aliyun_bailian"
+                      ? "使用阿里云百炼云端 ASR，适合没有 GPU 或不想下载本地模型的环境。"
+                      : "使用本地 faster-whisper，音视频不会上传，首次使用需下载本地模型。"
+                  }
+                >
+                  <WorkspaceSegmentedControl
+                    value={currentAsrProvider}
+                    options={[
+                      { id: "faster_whisper", label: "本地 faster-whisper" },
+                      { id: "aliyun_bailian", label: "阿里云百炼" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("asrProvider", nextValue)}
+                  />
+                </WorkspaceSettingRow>
+
+                {currentAsrProvider === "faster_whisper" && (
+                  <>
+                <WorkspaceSettingRow
                   title="转写模式"
                   description="控制 faster-whisper 的解码策略"
                 >
@@ -384,6 +419,126 @@ export function WorkspaceSettingsPanel({
                     )}
                   </div>
                 </WorkspaceSettingRow>
+                  </>
+                )}
+
+                {currentAsrProvider === "aliyun_bailian" && (
+                  <WorkspaceSettingRow
+                    title="阿里云百炼 ASR"
+                    description="云端转写配置。API Key 只保存到本机 .env，不写入 settings.toml。"
+                    contentClassName="2xl:flex-1"
+                  >
+                    <div className="w-full rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                      <div className="grid gap-4">
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-bold text-stone-600 dark:text-stone-400">模型</span>
+                          <WorkspaceSelect
+                            value={asrCloudModel}
+                            options={[
+                              { id: "paraformer-v2", label: "paraformer-v2" },
+                            ]}
+                            onChange={(nextValue) => onChangeSetting("asrCloudModel", nextValue)}
+                            className="w-full"
+                          />
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-bold text-stone-600 dark:text-stone-400">API 地址</span>
+                          <WorkspaceTextInput
+                            value={asrBaseUrl}
+                            onChange={(nextValue) => onChangeSetting("asrBaseUrl", nextValue)}
+                            onBlur={() => onSaveAsrSettings?.()}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                onSaveAsrSettings?.();
+                              }
+                            }}
+                            placeholder="https://dashscope.aliyuncs.com"
+                            className="w-full"
+                          />
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-bold text-stone-600 dark:text-stone-400">API Key</span>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <WorkspaceTextInput
+                              value={asrApiKeyDisplayValue}
+                              onChange={(nextValue) => onChangeSetting("asrApiKey", nextValue)}
+                              placeholder={ui.hasAsrApiKey ? "已保存" : "填写 DASHSCOPE_API_KEY"}
+                              className="w-full"
+                              type={showAsrApiKeyValue ? "text" : "password"}
+                            />
+                            <button
+                              type="button"
+                              disabled={asrApiKeyRevealLoading || !asrApiKeyStatus}
+                              onClick={async () => {
+                                if (!showAsrApiKeyValue && !draftAsrApiKey && ui.hasAsrApiKey) {
+                                  setAsrApiKeyRevealLoading(true);
+                                  const revealed = await onRevealAsrApiKey?.();
+                                  setAsrApiKeyRevealLoading(false);
+                                  if (!revealed) {
+                                    return;
+                                  }
+                                }
+                                setShowAsrApiKeyValue((value) => !value);
+                              }}
+                              className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-700 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
+                            >
+                              {asrApiKeyRevealLoading ? "读取中" : showAsrApiKeyValue ? "隐藏" : "显示"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onSaveAsrSettings?.()}
+                              className="rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-accent/90"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </label>
+                        <div>
+                          <button
+                            type="button"
+                            disabled={asrTest.status === "testing"}
+                            onClick={async () => {
+                              if (typeof onTestAsrConnection !== "function") {
+                                return;
+                              }
+                              setAsrTest({ status: "testing", message: "正在测试 ASR 连接..." });
+                              const result = await onTestAsrConnection();
+                              setAsrTest({
+                                status: result?.ok ? "success" : "failed",
+                                message: result?.message ?? "ASR 连接测试失败",
+                              });
+                            }}
+                            className="w-full rounded-xl bg-stone-900 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
+                          >
+                            {asrTest.status === "testing" ? "测试中..." : "测试 ASR 连接"}
+                          </button>
+                          {asrTest.message ? (
+                            <div
+                              className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${asrTest.status === "success"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                : asrTest.status === "failed"
+                                  ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                                  : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+                                }`}
+                            >
+                              <span className="min-w-0 flex-1">{asrTest.message}</span>
+                              <button
+                                type="button"
+                                onClick={() => setAsrTest({ status: "idle", message: "" })}
+                                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-white/70 hover:opacity-100 dark:hover:bg-black/20"
+                                title="关闭测试结果"
+                                aria-label="关闭测试结果"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </WorkspaceSettingRow>
+                )}
 
                 <WorkspaceSettingRow
                   title="上下文大小"

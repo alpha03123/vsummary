@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import os
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -411,6 +412,73 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                         openai_api_key=None,
                         hf_endpoint=None,
                     )
+
+    def test_asr_settings_test_uses_dashscope_upload_certificate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("DASHSCOPE_API_KEY=saved-dashscope-key\n", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+            calls: list[tuple[str, str, str]] = []
+
+            class OssUtils:
+                @classmethod
+                def get_upload_certificate(cls, *, model, api_key, base_address):
+                    calls.append((model, api_key, base_address))
+                    return types.SimpleNamespace(status_code=200, code="", message="")
+
+            dashscope_module = types.ModuleType("dashscope")
+            utils_module = types.ModuleType("dashscope.utils")
+            oss_utils_module = types.ModuleType("dashscope.utils.oss_utils")
+            oss_utils_module.OssUtils = OssUtils
+            with patch.dict(
+                sys.modules,
+                {
+                    "dashscope": dashscope_module,
+                    "dashscope.utils": utils_module,
+                    "dashscope.utils.oss_utils": oss_utils_module,
+                },
+            ):
+                service = SettingsService(
+                    config_path=config_path,
+                    root_dir=root_dir,
+                    faster_whisper_model_manager=FakeFasterWhisperModelManager(),
+                )
+
+                message = service.test_asr_settings(
+                    asr_provider="aliyun_bailian",
+                    asr_cloud_model="paraformer-v2",
+                    asr_base_url="https://dashscope.aliyuncs.com",
+                    asr_api_key=None,
+                )
+
+            self.assertEqual(message, "阿里云百炼 ASR 连接正常。")
+            self.assertEqual(
+                calls,
+                [("paraformer-v2", "saved-dashscope-key", "https://dashscope.aliyuncs.com/api/v1")],
+            )
+
+    def test_asr_settings_test_requires_dashscope_api_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+            service = SettingsService(
+                config_path=config_path,
+                root_dir=root_dir,
+                faster_whisper_model_manager=FakeFasterWhisperModelManager(),
+            )
+
+            with self.assertRaisesRegex(SettingsValidationError, "ASR API Key"):
+                service.test_asr_settings(
+                    asr_provider="aliyun_bailian",
+                    asr_cloud_model="paraformer-v2",
+                    asr_base_url="https://dashscope.aliyuncs.com",
+                    asr_api_key=None,
+                )
 
 
 class FakeFasterWhisperModelManager:

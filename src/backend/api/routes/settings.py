@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
 from backend.api.schemas.contracts import (
+    AsrApiKeyResponse,
     FasterWhisperModelResponse,
     ProviderApiKeyResponse,
     ProviderSettingsResponse,
@@ -24,6 +25,7 @@ from backend.api.schemas.contracts import (
     ProviderUsageTimelineBucketResponse,
     ProviderUsageTotalsResponse,
     RagModelResponse,
+    TestAsrSettingsRequest,
     TestProviderSettingsResponse,
     UpdateProviderSettingsRequest,
     UpdateWorkspaceSettingsRequest,
@@ -63,8 +65,13 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         show_takeaways=settings.show_takeaways,
         layout_mode=settings.layout_mode,
         transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
+        asr_provider=settings.asr_provider,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
+        asr_cloud_model=settings.asr_cloud_model,
+        asr_base_url=settings.asr_base_url,
+        has_asr_api_key=settings.has_asr_api_key,
+        asr_api_key_masked=settings.asr_api_key_masked,
         rag_embedding_device=settings.rag_embedding_device,
         rag_max_hits=settings.rag_max_hits,
         rag_rerank_enabled=settings.rag_rerank_enabled,
@@ -105,8 +112,12 @@ async def update_workspace_settings(
             show_takeaways=request.show_takeaways,
             layout_mode=request.layout_mode,
             transcript_enhancement_enabled=request.transcript_enhancement_enabled,
+            asr_provider=request.asr_provider,
             asr_model_quality=request.asr_model_quality,
             transcription_mode=request.transcription_mode,
+            asr_cloud_model=request.asr_cloud_model,
+            asr_base_url=request.asr_base_url,
+            asr_api_key=request.asr_api_key,
             rag_embedding_device=request.rag_embedding_device,
             rag_max_hits=request.rag_max_hits,
             rag_rerank_enabled=request.rag_rerank_enabled,
@@ -137,8 +148,13 @@ async def update_workspace_settings(
         show_takeaways=settings.show_takeaways,
         layout_mode=settings.layout_mode,
         transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
+        asr_provider=settings.asr_provider,
         asr_model_quality=settings.asr_model_quality,
         transcription_mode=settings.transcription_mode,
+        asr_cloud_model=settings.asr_cloud_model,
+        asr_base_url=settings.asr_base_url,
+        has_asr_api_key=settings.has_asr_api_key,
+        asr_api_key_masked=settings.asr_api_key_masked,
         rag_embedding_device=settings.rag_embedding_device,
         rag_max_hits=settings.rag_max_hits,
         rag_rerank_enabled=settings.rag_rerank_enabled,
@@ -151,6 +167,36 @@ async def update_workspace_settings(
         chaoxing_request_delay_seconds=settings.chaoxing_request_delay_seconds,
         chaoxing_init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
     )
+
+
+
+
+@router.get("/api/settings/asr-api-key", response_model=AsrApiKeyResponse)
+def get_settings_asr_api_key(container: ApiContainerDep) -> AsrApiKeyResponse:
+    """GET /api/settings/asr-api-key — 获取 ASR API Key 原文。"""
+    return AsrApiKeyResponse(asr_api_key=container.settings_service.get_asr_api_key())
+
+
+@router.post("/api/settings/asr/test", response_model=TestProviderSettingsResponse)
+def test_asr_settings(
+    request: TestAsrSettingsRequest,
+    container: ApiContainerDep,
+) -> TestProviderSettingsResponse:
+    """POST /api/settings/asr/test — 测试 ASR provider 连接。"""
+    try:
+        response = container.settings_service.test_asr_settings(
+            asr_provider=request.asr_provider,
+            asr_cloud_model=request.asr_cloud_model,
+            asr_base_url=request.asr_base_url,
+            asr_api_key=request.asr_api_key,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return TestProviderSettingsResponse(ok=True, message=response)
 
 
 @router.get("/api/provider-settings", response_model=ProviderSettingsResponse)
