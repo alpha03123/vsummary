@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-
 class GenerateVideoSummaryRequest(BaseModel):
     """请求生成单个视频的结构化总结。
 
@@ -64,6 +63,18 @@ class UpdateVideoNoteRequest(BaseModel):
 
     title: str
     content: str
+
+
+class UpdateVideoSummaryRequest(BaseModel):
+    """更新用户修订后的原始 Markdown 总结。"""
+
+    markdown: str
+
+
+class UpdateVideoTranscriptRequest(BaseModel):
+    """更新用户修订后的原始 Markdown 转写。"""
+
+    markdown: str
 
 
 class LocalMediaPathImportRequest(BaseModel):

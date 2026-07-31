@@ -34,6 +34,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.shared.filesystem import KeyedLockManager, atomic_write_text
+from backend.video_summary.generation.renderers import parse_markdown
+from backend.video_summary.generation.schemas import TranscriptSegmentPayload
+from backend.video_summary.library.markdown_exports import parse_transcript_markdown
 from backend.video_summary.infrastructure.rag.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
@@ -89,6 +92,7 @@ class FileSystemVideoWorkspace:
         self._videos_dir = root_dir / "videos"
         self._workspace_dir = root_dir / "workspace"
         self._notes_locks = KeyedLockManager()
+        self._content_locks = KeyedLockManager()
 
     def get_workspace(self) -> WorkspaceDTO:
         """返回工作区自身的 DTO：id 取根目录名，title 经标题化处理。"""
@@ -227,6 +231,28 @@ class FileSystemVideoWorkspace:
             summary=summary,
         )
 
+    def update_video_summary(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        markdown: str,
+    ) -> VideoSummaryDTO | None:
+        """校验并覆盖原始 Markdown 总结，使依赖旧内容的制品失效。"""
+        if self.get_video_source(series_id, video_id) is None:
+            return None
+
+        normalized = parse_markdown(markdown)
+        output_dir = self._get_video_output_dir(series_id, video_id)
+        with self._content_locks.hold(_content_lock_key(series_id, video_id)):
+            atomic_write_text(output_dir / "summary.json", json.dumps(normalized, ensure_ascii=False, indent=2))
+            atomic_write_text(output_dir / "summary.md", markdown.strip() + "\n")
+            _invalidate_content_derivatives(output_dir)
+            series_mindmap_path = self._workspace_dir / series_id / "mindmap.json"
+            if series_mindmap_path.exists():
+                series_mindmap_path.unlink()
+        return self.get_video_summary(series_id, video_id)
+
     def get_series_catalog(self, series_id: str) -> dict[str, object] | None:
         """读取系列目录（Agent 知识记忆用）并按 `SeriesCatalogPayload` 校验。
 
@@ -315,6 +341,38 @@ class FileSystemVideoWorkspace:
                 for segment in _normalize_transcript_segments(payload.get("segments"))
             ],
         )
+
+    def update_video_transcript(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        markdown: str,
+    ) -> VideoTranscriptDTO | None:
+        """校验并覆盖清理后的转写制品，使依赖旧内容的制品失效。"""
+        video = self.get_video_source(series_id, video_id)
+        if video is None:
+            return None
+
+        transcript_path = self._get_video_output_dir(series_id, video_id) / "transcript.cleaned.json"
+        if not transcript_path.exists():
+            return None
+        existing = json.loads(transcript_path.read_text(encoding="utf-8"))
+        normalized_segments = [_validate_editable_transcript_segment(item, index) for index, item in enumerate(parse_transcript_markdown(markdown))]
+        output_dir = self._get_video_output_dir(series_id, video_id)
+        payload = {
+            "title": str(existing.get("title", video.title)).strip() or video.title,
+            "language": str(existing.get("language", "")).strip(),
+            "duration_seconds": existing.get("duration_seconds"),
+            "segments": normalized_segments,
+        }
+        with self._content_locks.hold(_content_lock_key(series_id, video_id)):
+            atomic_write_text(transcript_path, json.dumps(payload, ensure_ascii=False, indent=2))
+            enhanced_path = output_dir / "transcript.enhanced.json"
+            if enhanced_path.exists():
+                enhanced_path.unlink()
+            _invalidate_content_derivatives(output_dir)
+        return self.get_video_transcript(series_id, video_id)
 
     def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
         """读取 `mindmap.json` 并以总结标题（缺失时退回视频标题）组装 DTO。
@@ -1203,6 +1261,31 @@ def _is_media_file(path: Path) -> bool:
 def _notes_lock_key(series_id: str, video_id: str) -> str:
     """构造 `KeyedLockManager` 用的笔记锁 key：`{series_id}/{video_id}`。"""
     return f"{series_id}/{video_id}"
+
+
+def _content_lock_key(series_id: str, video_id: str) -> str:
+    return f"{series_id}/{video_id}"
+
+
+def _validate_editable_transcript_segment(item: dict[str, object], index: int) -> dict[str, object]:
+    segment = TranscriptSegmentPayload.model_validate(item)
+    text = segment.text.strip()
+    if not text:
+        raise ValueError(f"segments[{index}].text 不能为空")
+    if segment.end_seconds < segment.start_seconds:
+        raise ValueError(f"segments[{index}] 的结束时间不能早于开始时间")
+    return {
+        "start_seconds": segment.start_seconds,
+        "end_seconds": segment.end_seconds,
+        "text": text,
+    }
+
+
+def _invalidate_content_derivatives(output_dir: Path) -> None:
+    for filename in ("mindmap.json", "knowledge_cards.json"):
+        path = output_dir / filename
+        if path.exists():
+            path.unlink()
 
 
 def _normalize_series_id(value: str) -> str:

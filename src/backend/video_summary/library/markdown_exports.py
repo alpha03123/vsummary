@@ -7,6 +7,7 @@ Markdown 文本；同时附带强类型校验，缺字段时抛出 `ValueError`�
 from __future__ import annotations
 
 from typing import Any
+import re
 
 from backend.video_summary.generation.prompts import format_timestamp
 
@@ -50,6 +51,48 @@ def render_transcript_markdown(payload: dict[str, Any]) -> str:
         lines.append("")
 
     return "\n".join(lines).strip() + "\n"
+
+
+def parse_transcript_markdown(markdown: str) -> list[dict[str, object]]:
+    """严格解析 ``render_transcript_markdown`` 生成的转写 Markdown。"""
+    lines = markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if not lines or not re.fullmatch(r"# .+ 转写稿", lines[0]):
+        raise ValueError("第 1 行必须是 '# 视频标题 转写稿'。")
+    try:
+        start = lines.index("## 原文转写") + 1
+    except ValueError as error:
+        raise ValueError("缺少 '## 原文转写' 标题。") from error
+    header = re.compile(r"^### (?P<start>\d{2}:\d{2}(?::\d{2})?) - (?P<end>\d{2}:\d{2}(?::\d{2})?)$")
+    segments: list[dict[str, object]] = []
+    index = start
+    while index < len(lines):
+        if not lines[index].strip():
+            index += 1
+            continue
+        match = header.fullmatch(lines[index])
+        if match is None:
+            raise ValueError(f"原文转写第 {index + 1} 行必须是 '### 00:00 - 00:00'。")
+        index += 1
+        text_lines: list[str] = []
+        while index < len(lines) and not lines[index].startswith("### "):
+            text_lines.append(lines[index])
+            index += 1
+        while text_lines and not text_lines[0].strip():
+            text_lines.pop(0)
+        while text_lines and not text_lines[-1].strip():
+            text_lines.pop()
+        text = "\n".join(text_lines).strip()
+        if not text:
+            raise ValueError(f"时间段 {match.group('start')} - {match.group('end')} 的转写不能为空。")
+        segments.append({"start_seconds": _parse_timestamp(match.group("start")), "end_seconds": _parse_timestamp(match.group("end")), "text": text})
+    return segments
+
+
+def _parse_timestamp(value: str) -> float:
+    parts = [int(part) for part in value.split(":")]
+    if len(parts) == 2:
+        return float(parts[0] * 60 + parts[1])
+    return float(parts[0] * 3600 + parts[1] * 60 + parts[2])
 
 
 def render_knowledge_cards_markdown(payload: dict[str, Any]) -> str:

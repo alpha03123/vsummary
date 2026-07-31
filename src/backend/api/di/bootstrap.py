@@ -52,6 +52,7 @@ from backend.video_summary.library.usecases import (
     GetVideoNotes,
     GetVideoSource,
     GetVideoSummary,
+    GetVideoTranscript,
     GetVideoWorkspaceTools,
     ImportLocalPlaygroundVideos,
     ImportLocalSeries,
@@ -63,6 +64,8 @@ from backend.video_summary.library.usecases import (
     CreateVideoNote,
     DeleteVideoNote,
     UpdateVideoNote,
+    UpdateVideoSummary,
+    UpdateVideoTranscript,
 )
 
 
@@ -74,6 +77,7 @@ class ApiContainer:
     list_video_library: ListVideoLibrary
     get_video_source: GetVideoSource
     get_video_summary: GetVideoSummary
+    get_video_transcript: GetVideoTranscript
     get_video_mindmap: GetVideoMindmap
     get_video_chapter_cards: GetVideoChapterCards
     get_video_cards: GetVideoKnowledgeCards
@@ -81,6 +85,8 @@ class ApiContainer:
     get_video_notes: GetVideoNotes
     create_video_note: CreateVideoNote
     update_video_note: UpdateVideoNote
+    update_video_summary: UpdateVideoSummary
+    update_video_transcript: UpdateVideoTranscript
     delete_video_note: DeleteVideoNote
     get_video_workspace_tools: GetVideoWorkspaceTools
     generate_video_summary: GenerateVideoSummaryFromLibrary
@@ -231,6 +237,7 @@ def build_api_container(
         list_video_library=ListVideoLibrary(workspace),
         get_video_source=GetVideoSource(workspace),
         get_video_summary=GetVideoSummary(workspace),
+        get_video_transcript=GetVideoTranscript(workspace),
         get_video_mindmap=GetVideoMindmap(workspace),
         get_video_chapter_cards=GetVideoChapterCards(workspace),
         get_video_cards=GetVideoKnowledgeCards(workspace),
@@ -238,6 +245,8 @@ def build_api_container(
         get_video_notes=GetVideoNotes(workspace),
         create_video_note=CreateVideoNote(workspace, index_refresher),
         update_video_note=UpdateVideoNote(workspace, index_refresher),
+        update_video_summary=UpdateVideoSummary(workspace, series_memory_refresher),
+        update_video_transcript=UpdateVideoTranscript(workspace, index_refresher),
         delete_video_note=DeleteVideoNote(workspace, index_refresher),
         get_video_workspace_tools=GetVideoWorkspaceTools(workspace),
         generate_video_summary=summary_generation_use_case,

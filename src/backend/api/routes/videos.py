@@ -27,6 +27,8 @@ from backend.api.schemas.contracts import (
     LocalMediaPathImportRequest,
     LocalMediaSeriesPathImportRequest,
     UpdateVideoNoteRequest,
+    UpdateVideoSummaryRequest,
+    UpdateVideoTranscriptRequest,
 )
 from backend.api.schemas.responses import (
     SeriesResponse,
@@ -46,6 +48,7 @@ from backend.video_summary.library.markdown_exports import render_knowledge_card
 from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
+from backend.video_summary.generation.renderers import render_markdown
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 from backend.video_summary.library.usecases.summary_generation import GenerationScopeBusyError
@@ -106,6 +109,110 @@ def get_video_summary(series_id: str, video_id: str, container: ApiContainerDep)
     if video_summary is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
     return video_summary.summary
+
+
+@router.put("/api/videos/{series_id}/{video_id}/summary")
+def update_video_summary(
+    series_id: str,
+    video_id: str,
+    request: UpdateVideoSummaryRequest,
+    container: ApiContainerDep,
+) -> dict[str, object]:
+    """保存用户修订后的结构化总结。"""
+    try:
+        summary = container.update_video_summary.run(
+            series_id,
+            video_id,
+            markdown=request.markdown,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+    return summary.summary
+
+
+@router.get("/api/videos/{series_id}/{video_id}/summary/markdown")
+def get_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
+    """获取可直接编辑的原始 ``summary.md``。"""
+    source = _ensure_video_exists(container, series_id, video_id)
+    path = source.output_dir / "summary.md"
+    if path.exists():
+        return {"markdown": path.read_text(encoding="utf-8")}
+    summary = container.get_video_summary.run(series_id, video_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
+    return {"markdown": render_markdown(summary.summary)}
+
+
+@router.get("/api/videos/{series_id}/{video_id}/transcript")
+def get_video_transcript(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
+    """获取可编辑的完整转写分段。"""
+    _ensure_video_exists(container, series_id, video_id)
+    transcript = container.get_video_transcript.run(series_id, video_id)
+    if transcript is None:
+        raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
+    return {
+        "title": transcript.title,
+        "duration_seconds": transcript.duration_seconds,
+        "segments": [
+            {
+                "start_seconds": segment.start_seconds,
+                "end_seconds": segment.end_seconds,
+                "text": segment.text,
+            }
+            for segment in transcript.segments
+        ],
+    }
+
+
+@router.get("/api/videos/{series_id}/{video_id}/transcript/markdown")
+def get_video_transcript_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
+    """获取可直接编辑的原始 Markdown 转写。"""
+    _ensure_video_exists(container, series_id, video_id)
+    transcript = container.get_video_transcript.run(series_id, video_id)
+    if transcript is None:
+        raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
+    return {"markdown": render_transcript_markdown({
+        "title": transcript.title,
+        "duration_seconds": transcript.duration_seconds,
+        "segments": [
+            {"start_seconds": segment.start_seconds, "end_seconds": segment.end_seconds, "text": segment.text}
+            for segment in transcript.segments
+        ],
+    })}
+
+
+@router.put("/api/videos/{series_id}/{video_id}/transcript")
+def update_video_transcript(
+    series_id: str,
+    video_id: str,
+    request: UpdateVideoTranscriptRequest,
+    container: ApiContainerDep,
+) -> dict[str, object]:
+    """保存用户修订后的完整转写分段。"""
+    try:
+        transcript = container.update_video_transcript.run(
+            series_id,
+            video_id,
+            markdown=request.markdown,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if transcript is None:
+        raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
+    return {
+        "title": transcript.title,
+        "duration_seconds": transcript.duration_seconds,
+        "segments": [
+            {
+                "start_seconds": segment.start_seconds,
+                "end_seconds": segment.end_seconds,
+                "text": segment.text,
+            }
+            for segment in transcript.segments
+        ],
+    }
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary.md")

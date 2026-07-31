@@ -100,6 +100,10 @@ export function WorkspaceReadingPane({
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
+  onLoadTranscriptMarkdown,
+  onLoadSummaryMarkdown,
+  onUpdateSummary,
+  onUpdateTranscript,
 }) {
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
@@ -222,6 +226,10 @@ export function WorkspaceReadingPane({
                       summaryLoading={summaryLoading}
                       isGeneratingSelectedVideo={isGeneratingSelectedVideo}
                       onSeek={onSeek}
+                      onLoadTranscriptMarkdown={onLoadTranscriptMarkdown}
+                      onLoadSummaryMarkdown={onLoadSummaryMarkdown}
+                      onUpdateSummary={onUpdateSummary}
+                      onUpdateTranscript={onUpdateTranscript}
                     />
                   ) : null}
                   {selectedToolId === "mindmap" ? (
