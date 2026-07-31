@@ -19,6 +19,9 @@ import {
   importLocalSeries,
   importLocalSeriesVideos,
   loadWorkspaceLibrary,
+  loadVideoSummary,
+  loadVideoSummaryMarkdown,
+  loadVideoTranscriptMarkdown,
   initChaoxing,
   loadChaoxingCourses,
   loadChaoxingStatus,
@@ -31,6 +34,8 @@ import {
   subscribeSeriesMindmapGenerationProgress,
   subscribeVideoDownloadProgress,
   updateVideoNote,
+  updateVideoSummary,
+  updateVideoTranscript,
 } from "./workspaceApi";
 import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
@@ -630,6 +635,41 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onLoadTranscriptMarkdown() {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      throw new Error("请先选择视频。");
+    }
+    return loadVideoTranscriptMarkdown(state.selectedSeriesId, state.selectedVideoId);
+  }
+
+  async function onLoadSummaryMarkdown() {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      throw new Error("请先选择视频。");
+    }
+    return loadVideoSummaryMarkdown(state.selectedSeriesId, state.selectedVideoId);
+  }
+
+  async function onUpdateSummary(summary) {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      throw new Error("请先选择视频。");
+    }
+    const updated = await updateVideoSummary(state.selectedSeriesId, state.selectedVideoId, summary);
+    await reloadWorkspaceLibrary();
+    dispatch({ type: "summary_loaded", summary: updated });
+    return updated;
+  }
+
+  async function onUpdateTranscript(markdown) {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      throw new Error("请先选择视频。");
+    }
+    await updateVideoTranscript(state.selectedSeriesId, state.selectedVideoId, markdown);
+    const updatedSummary = await loadVideoSummary(state.selectedSeriesId, state.selectedVideoId);
+    await reloadWorkspaceLibrary();
+    dispatch({ type: "summary_loaded", summary: updatedSummary });
+    return updatedSummary;
+  }
+
   async function onSelectLocalMedia() {
     try {
       return await selectLocalMedia();
@@ -876,6 +916,10 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onCreateNote,
     onUpdateNote,
     onDeleteNote,
+    onLoadTranscriptMarkdown,
+    onLoadSummaryMarkdown,
+    onUpdateSummary,
+    onUpdateTranscript,
     onResolveLinkedSeries,
     onSelectLocalMedia,
     onResolvePlaygroundVideo,

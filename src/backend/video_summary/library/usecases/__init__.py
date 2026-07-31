@@ -17,6 +17,7 @@ from backend.video_summary.library.usecases.notes import (
     GetVideoNotes,
     UpdateVideoNote,
 )
+from backend.video_summary.library.usecases.content_editing import UpdateVideoSummary, UpdateVideoTranscript
 from backend.video_summary.library.usecases.imports import (
     ImportLocalPlaygroundVideos,
     ImportLocalSeries,
@@ -70,4 +71,6 @@ __all__ = [
     "RefreshSeriesKnowledgeMemory",
     "StartLinkedVideoDownload",
     "UpdateVideoNote",
+    "UpdateVideoSummary",
+    "UpdateVideoTranscript",
 ]

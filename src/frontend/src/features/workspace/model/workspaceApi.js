@@ -285,6 +285,40 @@ export async function loadVideoSummary(seriesId, videoId) {
   return toWorkspaceSummary(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/summary`));
 }
 
+export async function updateVideoSummary(seriesId, videoId, summary) {
+  return toWorkspaceSummary(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/summary`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markdown: summary }),
+    }),
+  );
+}
+
+export async function loadVideoSummaryMarkdown(seriesId, videoId) {
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/summary/markdown`);
+  if (typeof payload.markdown !== "string") {
+    throw new Error("summary markdown 不是有效文本。");
+  }
+  return payload.markdown;
+}
+
+export async function loadVideoTranscriptMarkdown(seriesId, videoId) {
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/transcript/markdown`);
+  if (typeof payload.markdown !== "string") {
+    throw new Error("transcript markdown 不是有效文本。");
+  }
+  return payload.markdown;
+}
+
+export async function updateVideoTranscript(seriesId, videoId, markdown) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/transcript`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ markdown }),
+  });
+}
+
 export async function loadVideoTools(seriesId, videoId) {
   return toWorkspaceTools(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/tools`));
 }

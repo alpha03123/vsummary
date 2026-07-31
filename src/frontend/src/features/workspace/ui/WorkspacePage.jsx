@@ -221,6 +221,10 @@ export function WorkspacePage({ page }) {
         onCreateNote={actions.createNote}
         onUpdateNote={actions.updateNote}
         onDeleteNote={actions.deleteNote}
+        onLoadTranscriptMarkdown={actions.loadTranscriptMarkdown}
+        onLoadSummaryMarkdown={actions.loadSummaryMarkdown}
+        onUpdateSummary={actions.updateSummary}
+        onUpdateTranscript={actions.updateTranscript}
       />
     );
   }

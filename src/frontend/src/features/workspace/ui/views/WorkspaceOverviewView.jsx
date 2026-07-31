@@ -1,7 +1,9 @@
-import { Captions, LoaderCircle, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Captions, LoaderCircle, Pencil, Sparkles } from "lucide-react";
 
 import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceContentEditorModal } from "./WorkspaceContentEditorModal";
 
 export function WorkspaceOverviewView({
   ui,
@@ -12,7 +14,12 @@ export function WorkspaceOverviewView({
   summaryLoading,
   isGeneratingSelectedVideo,
   onSeek,
+  onLoadTranscriptMarkdown,
+  onLoadSummaryMarkdown,
+  onUpdateSummary,
+  onUpdateTranscript,
 }) {
+  const [editorOpen, setEditorOpen] = useState(false);
   const hasSummary = Boolean(summary);
   const overviewTitle = summary?.title ?? selectedVideo?.title ?? "AI 概况";
 
@@ -70,6 +77,9 @@ export function WorkspaceOverviewView({
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-8 pb-32">
+      <div className="flex justify-end">
+        <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"><Pencil size={16} />编辑内容</button>
+      </div>
       <article className="workspace-accent-panel relative overflow-hidden rounded-3xl border p-6 text-stone-900 dark:text-stone-100">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Sparkles size={64} />
@@ -180,6 +190,7 @@ export function WorkspaceOverviewView({
           </article>
         ))}
       </div>
+      {editorOpen ? <WorkspaceContentEditorModal onClose={() => setEditorOpen(false)} onLoadSummaryMarkdown={onLoadSummaryMarkdown} onLoadTranscriptMarkdown={onLoadTranscriptMarkdown} onUpdateSummary={onUpdateSummary} onUpdateTranscript={onUpdateTranscript} /> : null}
     </div>
   );
 }

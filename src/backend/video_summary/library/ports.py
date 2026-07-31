@@ -157,6 +157,28 @@ class VideoNotesStore(Protocol):
         """删除一条笔记；`True` 表示实际删除，`False` 表示未找到，`None` 由实现自定义语义。"""
 
 
+class VideoContentEditor(Protocol):
+    """视频总结与转写制品的人工修订端口。"""
+
+    def update_video_summary(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        markdown: str,
+    ) -> VideoSummaryDTO | None:
+        """校验并覆盖原始 Markdown 总结，同时使依赖旧总结的制品失效。"""
+
+    def update_video_transcript(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        markdown: str,
+    ) -> VideoTranscriptDTO | None:
+        """校验并覆盖原始 Markdown 转写，同时使依赖旧转写的制品失效。"""
+
+
 class VideoImportStore(Protocol):
     """本地视频导入的端口。
 
