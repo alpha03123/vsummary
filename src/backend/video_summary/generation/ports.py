@@ -43,6 +43,18 @@ class Transcriber(Protocol):
         """把音频文件转写为 `Transcript`；`on_progress` 回调传入 0.0-1.0 的进度比。"""
 
 
+class SubtitleTranscriptSource(Protocol):
+    """从视频关联的字幕来源取得可直接总结的转写。"""
+
+    def load(
+        self,
+        video_path: Path,
+        staging_dir: Path,
+        cancellation: "GenerationCancellationContext | None" = None,
+    ) -> Transcript | None:
+        """返回中文字幕转写；当前视频没有可用字幕时返回 ``None``。"""
+
+
 class Summarizer(Protocol):
     """LLM 总结端口。"""
 

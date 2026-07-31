@@ -16,6 +16,7 @@ from backend.video_summary.infrastructure.storage.filesystem_generation_artifact
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
+from backend.video_summary.infrastructure.subtitle_transcripts import SubtitleTranscriptProvider
 from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
     build_video_summary_runtime,
@@ -92,6 +93,7 @@ def build_video_summary_application(
         ),
         summarizer=runtime.summarizer,
         artifact_store=artifact_store,
+        subtitle_provider=SubtitleTranscriptProvider(),
     )
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 

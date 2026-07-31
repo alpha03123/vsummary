@@ -13,21 +13,26 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
 import httpx
 
+from backend.shared.bilibili_ytdlp import (
+    BILIBILI_COOKIE_ENV,
+    BILIBILI_USER_AGENT,
+    build_yt_dlp_add_header_flags,
+    build_yt_dlp_proxy_flags,
+    load_bilibili_headers,
+    parse_cookie_pairs,
+    resolve_yt_dlp_proxy,
+    write_bilibili_cookies_file,
+)
 from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
 
-_BILIBILI_USER_AGENT = "Mozilla/5.0"
-_BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
-_BILIBILI_SESSDATA_ENV = "BILIBILI_SESSDATA"
-_BILIBILI_YTDLP_PROXY_ENV = "BILIBILI_YTDLP_PROXY"
 BILIBILI_COOKIE_REQUIRED_MESSAGE = "风控拦截，请配置cookie"
 _BILIBILI_LOGIN_URL = "https://passport.bilibili.com/login"
 _BILIBILI_DEFAULT_BROWSER_PORT = 9223
@@ -200,8 +205,8 @@ class BilibiliDownloader:
         if page > 1:
             url = f"{url}?p={page}"
         output_template = str(dest_dir / f"{stem}.%(ext)s")
-        headers = _load_bilibili_headers(bvid)
-        cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
+        headers = load_bilibili_headers(bvid)
+        cookie_file = write_bilibili_cookies_file(headers.pop("Cookie", ""))
         failures: list[str] = []
         try:
             for index, (format_label, format_selector) in enumerate(_BILIBILI_DOWNLOAD_FORMATS):
@@ -223,8 +228,8 @@ class BilibiliDownloader:
                     "--output",
                     output_template,
                     "--newline",
-                    *_build_yt_dlp_proxy_flags(),
-                    *_build_yt_dlp_add_header_flags(headers),
+                    *build_yt_dlp_proxy_flags(),
+                    *build_yt_dlp_add_header_flags(headers),
                     *(["--cookies", str(cookie_file)] if cookie_file is not None else []),
                     url,
                 ]
@@ -348,8 +353,8 @@ class DrissionBilibiliCookieInitializer:
             while time.monotonic() <= deadline:
                 cookie_header = _format_bilibili_cookie_header(_page_cookies(page))
                 if _has_bilibili_login_cookie(cookie_header):
-                    _write_dotenv_value(self._root_dir / ".env", _BILIBILI_COOKIE_ENV, cookie_header)
-                    os.environ[_BILIBILI_COOKIE_ENV] = cookie_header
+                    _write_dotenv_value(self._root_dir / ".env", BILIBILI_COOKIE_ENV, cookie_header)
+                    os.environ[BILIBILI_COOKIE_ENV] = cookie_header
                     return True
                 time.sleep(self._poll_interval_seconds)
             raise BilibiliCookieInitError("Bilibili 登录超时，未获取到 Cookie。")
@@ -386,42 +391,6 @@ def _download_cancel_requested(reporter: ProgressReporter) -> bool:
     return False
 
 
-def _load_bilibili_headers(bvid: str) -> dict[str, str]:
-    cookie = os.environ.get(_BILIBILI_COOKIE_ENV, "").strip()
-    if not cookie:
-        sessdata = os.environ.get(_BILIBILI_SESSDATA_ENV, "").strip()
-        cookie = f"SESSDATA={sessdata}" if sessdata else ""
-    headers = {
-        "User-Agent": _BILIBILI_USER_AGENT,
-        "Referer": f"https://www.bilibili.com/video/{bvid}/",
-    }
-    if cookie:
-        headers["Cookie"] = cookie
-    return headers
-
-
-def _build_yt_dlp_add_header_flags(headers: dict[str, str]) -> list[str]:
-    flags: list[str] = []
-    for key, value in headers.items():
-        if not value:
-            continue
-        flags.extend(["--add-header", f"{key}:{value}"])
-    return flags
-
-
-def _build_yt_dlp_proxy_flags() -> list[str]:
-    proxy = _resolve_yt_dlp_proxy()
-    return [] if proxy is None else ["--proxy", proxy]
-
-
-def _resolve_yt_dlp_proxy() -> str | None:
-    raw_proxy = os.environ.get(_BILIBILI_YTDLP_PROXY_ENV)
-    if raw_proxy is None or not raw_proxy.strip():
-        return None
-    proxy = raw_proxy.strip()
-    return "" if proxy.lower() in {"direct", "none", "off"} else proxy
-
-
 def _find_download_outputs(dest_dir: Path, stem: str) -> list[Path]:
     return [
         path
@@ -441,33 +410,6 @@ def _format_yt_dlp_failure(returncode: int | None, recent_output: deque[str]) ->
     if not recent_output:
         return message
     return f"{message}；最近输出：\n" + "\n".join(recent_output)
-
-
-def _write_bilibili_cookies_file(cookie: str) -> Path | None:
-    if not cookie.strip():
-        return None
-    cookie_pairs = _parse_cookie_pairs(cookie)
-    if not cookie_pairs:
-        return None
-    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".cookies.txt")
-    with handle:
-        handle.write("# Netscape HTTP Cookie File\n")
-        for name, value in cookie_pairs:
-            handle.write(f".bilibili.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}\n")
-    return Path(handle.name)
-
-
-def _parse_cookie_pairs(cookie: str) -> list[tuple[str, str]]:
-    pairs: list[tuple[str, str]] = []
-    for part in cookie.split(";"):
-        if "=" not in part:
-            continue
-        name, value = part.split("=", 1)
-        normalized_name = name.strip()
-        normalized_value = value.strip()
-        if normalized_name:
-            pairs.append((normalized_name, normalized_value))
-    return pairs
 
 
 def _create_drission_page(user_data_dir: str, browser_port: int) -> object:
@@ -558,7 +500,7 @@ def _format_bilibili_cookie_header(cookies: list[Mapping[str, object]]) -> str:
 
 
 def _has_bilibili_login_cookie(cookie_header: str) -> bool:
-    names = {name for name, _ in _parse_cookie_pairs(cookie_header)}
+    names = {name for name, _ in parse_cookie_pairs(cookie_header)}
     return "SESSDATA" in names
 
 
@@ -713,11 +655,11 @@ def _extract_info(url: str) -> dict[str, object]:
     from yt_dlp import YoutubeDL
 
     bvid = _extract_bvid_from_text(url)
-    headers = _load_bilibili_headers(bvid) if bvid else {
-        "User-Agent": _BILIBILI_USER_AGENT,
+    headers = load_bilibili_headers(bvid) if bvid else {
+        "User-Agent": BILIBILI_USER_AGENT,
         "Referer": "https://www.bilibili.com/",
     }
-    cookie_file = _write_bilibili_cookies_file(headers.pop("Cookie", ""))
+    cookie_file = write_bilibili_cookies_file(headers.pop("Cookie", ""))
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -725,7 +667,7 @@ def _extract_info(url: str) -> dict[str, object]:
         "skip_download": True,
         "http_headers": headers,
     }
-    proxy = _resolve_yt_dlp_proxy()
+    proxy = resolve_yt_dlp_proxy()
     if proxy is not None:
         options["proxy"] = proxy
     if cookie_file is not None:
