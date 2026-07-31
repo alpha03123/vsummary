@@ -34,6 +34,7 @@ from backend.video_summary.generation.ports import (
     GenerationArtifactStore,
     MediaProcessor,
     ProgressReporter,
+    SubtitleTranscriptSource,
     Summarizer,
     TranscriptEnhancer,
     Transcriber,
@@ -70,6 +71,7 @@ class GenerateVideoSummary:
         transcript_enhancer: TranscriptEnhancer | None,
         summarizer: Summarizer,
         artifact_store: GenerationArtifactStore,
+        subtitle_provider: SubtitleTranscriptSource | None = None,
     ) -> None:
         """注入媒体处理、转写、（可选）转写增强、总结与制品落盘端口。
 
@@ -86,6 +88,7 @@ class GenerateVideoSummary:
         self._transcript_enhancer = transcript_enhancer
         self._summarizer = summarizer
         self._artifact_store = artifact_store
+        self._subtitle_provider = subtitle_provider
 
     async def run(
         self,
@@ -147,7 +150,7 @@ class GenerateVideoSummary:
         确保既有 `output_dir` 不会被污染。若 staging 目录在流水线中被
         异常删除，则只重试一次，并复用已完成的阶段缓存。
         """
-        _raise_if_cancelled(progress_reporter)
+        _raise_if_cancelled(progress_reporter, cancellation)
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
         for attempt in range(2):
             staging_dir = output_dir.parent / f".{output_dir.name}.generation-{uuid4().hex}.tmp"
@@ -183,60 +186,86 @@ class GenerateVideoSummary:
         2. 优先尝试从 `GenerationStageCache` 复用上一次的中间产物；
         3. 在阻塞调用之前检查取消信号，避免浪费昂贵的计算。
         """
-        audio_path = staging_dir / "audio.wav"
-        transcript_stem = staging_dir / "transcript"
         stage_cache = GenerationStageCache(output_dir / ".cache", video_path)
-        media_identity = _cache_identity(self._media_processor)
-        transcriber_identity = _cache_identity(self._transcriber)
+        subtitle_transcript = None
+        if self._subtitle_provider is not None:
+            if progress_reporter is not None:
+                progress_reporter.update("probe_subtitles", 5.0, "正在检查中文字幕")
+            try:
+                subtitle_transcript = await asyncio.to_thread(
+                    self._subtitle_provider.load,
+                    video_path,
+                    staging_dir,
+                    cancellation,
+                )
+            except InterruptedError as error:
+                raise GenerateCancelledError(str(error) or "生成已取消") from error
+            _raise_if_cancelled(progress_reporter, cancellation)
+
+        if subtitle_transcript is not None:
+            video = VideoAsset(
+                source_path=video_path,
+                title=video_path.stem,
+                duration_seconds=max(segment.end_seconds for segment in subtitle_transcript.segments),
+            )
+            transcript = subtitle_transcript
+            transcript_source_identity = f"subtitle:{_cache_identity(self._subtitle_provider)}"
+            if progress_reporter is not None:
+                progress_reporter.update("extract_subtitles", 20.0, "已读取中文字幕，跳过语音识别")
+        else:
+            audio_path = staging_dir / "audio.wav"
+            transcript_stem = staging_dir / "transcript"
+            media_identity = _cache_identity(self._media_processor)
+            transcriber_identity = _cache_identity(self._transcriber)
+            transcript_source_identity = f"whisper:{transcriber_identity}"
+            if progress_reporter is not None:
+                progress_reporter.update("probe", 5.0, "未找到可用中文字幕，正在分析视频信息")
+            video = VideoAsset(
+                source_path=video_path,
+                title=video_path.stem,
+                duration_seconds=await asyncio.to_thread(self._media_processor.probe_duration, video_path),
+            )
+            _raise_if_cancelled(progress_reporter, cancellation)
+
+            if progress_reporter is not None:
+                progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
+            audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
+            if not audio_restored:
+                await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
+                _raise_if_cancelled(progress_reporter, cancellation)
+                await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
+            _raise_if_cancelled(progress_reporter, cancellation)
+
+            if progress_reporter is not None:
+                progress_reporter.update("transcribe", 20.0, "正在转写音频")
+            transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
+            if transcript is None:
+                transcript = await asyncio.to_thread(
+                    self._transcriber.transcribe,
+                    audio_path,
+                    transcript_stem,
+                    None
+                    if progress_reporter is None
+                    else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
+                )
+                _raise_if_cancelled(progress_reporter, cancellation)
+                await asyncio.to_thread(
+                    stage_cache.store_transcript,
+                    "whisper",
+                    transcript,
+                    identity=transcriber_identity,
+                )
+            _raise_if_cancelled(progress_reporter, cancellation)
+
         enhancer_identity = (
-            _cache_identity(self._transcript_enhancer)
+            f"{_cache_identity(self._transcript_enhancer)}|source={transcript_source_identity}"
             if self._transcript_enhancer is not None
             else ""
         )
-
-        if progress_reporter is not None:
-            progress_reporter.update("probe", 5.0, "正在分析视频信息")
-        video = VideoAsset(
-            source_path=video_path,
-            title=video_path.stem,
-            duration_seconds=await asyncio.to_thread(self._media_processor.probe_duration, video_path),
-        )
-        _raise_if_cancelled(progress_reporter)
-
-        if progress_reporter is not None:
-            progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
-        audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
-        if not audio_restored:
-            await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
-            _raise_if_cancelled(progress_reporter)
-            await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
-        _raise_if_cancelled(progress_reporter)
-
-        if progress_reporter is not None:
-            progress_reporter.update("transcribe", 20.0, "正在转写音频")
-        transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
-        if transcript is None:
-            transcript = await asyncio.to_thread(
-                self._transcriber.transcribe,
-                audio_path,
-                transcript_stem,
-                None
-                if progress_reporter is None
-                else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
-            )
-            _raise_if_cancelled(progress_reporter)
-            await asyncio.to_thread(
-                stage_cache.store_transcript,
-                "whisper",
-                transcript,
-                identity=transcriber_identity,
-            )
-        _raise_if_cancelled(progress_reporter)
-
         if self._transcript_enhancer is not None:
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
-            _raise_if_cancelled(progress_reporter)
+            _raise_if_cancelled(progress_reporter, cancellation)
             enhanced_transcript = await asyncio.to_thread(
                 stage_cache.load_transcript,
                 "transcript-enhance",
@@ -249,7 +278,7 @@ class GenerateVideoSummary:
                     raise
                 except Exception as error:
                     raise RuntimeError(_build_llm_stage_error("AI 内容增强", error)) from error
-                _raise_if_cancelled(progress_reporter)
+                _raise_if_cancelled(progress_reporter, cancellation)
                 await asyncio.to_thread(
                     stage_cache.store_transcript,
                     "transcript-enhance",
@@ -257,32 +286,32 @@ class GenerateVideoSummary:
                     identity=enhancer_identity,
                 )
             transcript = enhanced_transcript
-            _raise_if_cancelled(progress_reporter)
+            _raise_if_cancelled(progress_reporter, cancellation)
             await self._artifact_store.save_enhanced_transcript(
                 transcript=transcript,
                 output_dir=staging_dir,
             )
-            _raise_if_cancelled(progress_reporter)
+            _raise_if_cancelled(progress_reporter, cancellation)
 
         await self._artifact_store.save_cleaned_transcript(
             video=video,
             transcript=transcript,
             output_dir=staging_dir,
         )
-        _raise_if_cancelled(progress_reporter)
+        _raise_if_cancelled(progress_reporter, cancellation)
 
         if progress_reporter is not None:
             progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
-        _raise_if_cancelled(progress_reporter)
+        _raise_if_cancelled(progress_reporter, cancellation)
         try:
             summary_document = await self._summarizer.summarize(video, transcript, cancellation)
         except GenerateCancelledError:
             raise
         except Exception as error:
             raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
-        _raise_if_cancelled(progress_reporter)
+        _raise_if_cancelled(progress_reporter, cancellation)
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
-        _raise_if_cancelled(progress_reporter)
+        _raise_if_cancelled(progress_reporter, cancellation)
         await asyncio.to_thread(_commit_generation_artifacts, staging_dir, output_dir)
         return summary_document
 
@@ -385,7 +414,10 @@ async def _mirror_progress_cancellation(
         await asyncio.sleep(0.05)
 
 
-def _raise_if_cancelled(progress_reporter: ProgressReporter | None) -> None:
+def _raise_if_cancelled(
+    progress_reporter: ProgressReporter | None,
+    cancellation: GenerationCancellationContext | None = None,
+) -> None:
     """若 reporter 已收到取消信号，则抛 `GenerateCancelledError`。
 
     Args:
@@ -394,6 +426,8 @@ def _raise_if_cancelled(progress_reporter: ProgressReporter | None) -> None:
     Raises:
         GenerateCancelledError: reporter 处于取消态时抛出。
     """
+    if cancellation is not None and cancellation.cancel_requested:
+        raise GenerateCancelledError("生成已取消")
     if progress_reporter is None:
         return
     try:

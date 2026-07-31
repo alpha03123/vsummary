@@ -32,4 +32,5 @@ dependencies:
     - nvidia-cufft-cu12
     - nvidia-curand-cu12
     - yt-dlp>=2024.1,<2027
+    - srt>=3.5,<4
     - chaoxing-downloader==0.1.3

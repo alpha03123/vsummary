@@ -26,4 +26,5 @@ dependencies:
     - fastembed>=0.7,<1
     - onnxruntime>=1.20,<2
     - yt-dlp>=2024.1,<2027
+    - srt>=3.5,<4
     - chaoxing-downloader==0.1.3
