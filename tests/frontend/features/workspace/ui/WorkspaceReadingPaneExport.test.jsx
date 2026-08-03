@@ -17,12 +17,11 @@ function renderPane(overrides = {}) {
   render(
     <WorkspaceReadingPane
       ui={{ showTakeaways: true }}
-      tools={{
+      tools={overrides.tools === undefined ? {
         overview: { generated: true },
         knowledgeCards: { available: true, generated: false },
         preview: {},
-        ...overrides.tools,
-      }}
+      } : overrides.tools}
       chat={null}
       summary={null}
       mindmap={null}
@@ -36,7 +35,7 @@ function renderPane(overrides = {}) {
       selectedNode={null}
       selectedToolId={overrides.selectedToolId ?? "overview"}
       selectedChapterId={null}
-      toolsLoading={false}
+      toolsLoading={overrides.toolsLoading ?? false}
       summaryLoading={false}
       mindmapLoading={false}
       knowledgeCardsLoading={false}
@@ -58,6 +57,13 @@ function renderPane(overrides = {}) {
 }
 
 describe("WorkspaceReadingPane markdown exports", () => {
+  it("keeps the selected tool available while its status is loading", async () => {
+    renderPane({ tools: null, toolsLoading: true });
+
+    expect(screen.queryByText("读取工具状态")).toBeNull();
+    expect(await screen.findByText("第一讲")).toBeInTheDocument();
+  });
+
   it("uses the active series and selected video in overview export links", async () => {
     renderPane();
 
