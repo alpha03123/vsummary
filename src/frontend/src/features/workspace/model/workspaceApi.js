@@ -868,6 +868,16 @@ export async function importLocalSeries(seriesTitle, sourcePaths, storageMode) {
   });
 }
 
+export async function uploadLocalSeries(seriesTitle, files) {
+  const formData = new FormData();
+  formData.append("series_title", seriesTitle);
+  appendMediaFiles(formData, files);
+  return fetchJson("/api/import/local/series", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function resolveBilibiliSeries(url) {
   return fetchJson("/api/linked/bilibili/resolve/series", {
     method: "POST",
@@ -962,12 +972,36 @@ export async function importLocalPlaygroundVideos(sourcePaths) {
   });
 }
 
+export async function uploadLocalPlaygroundVideos(files) {
+  const formData = new FormData();
+  appendMediaFiles(formData, files);
+  return fetchJson("/api/import/local/playground", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function importLocalSeriesVideos(seriesId, sourcePaths) {
   return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}/from-paths`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source_paths: sourcePaths }),
   });
+}
+
+export async function uploadLocalSeriesVideos(seriesId, files) {
+  const formData = new FormData();
+  appendMediaFiles(formData, files);
+  return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+function appendMediaFiles(formData, files) {
+  for (const file of files) {
+    formData.append("files", file, file.name);
+  }
 }
 
 export async function deleteSeries(seriesId) {

@@ -570,8 +570,11 @@ export function WorkspacePage({ page }) {
           onImportChaoxingCourse={actions.importChaoxingCourse}
           onSelectLocalMedia={actions.selectLocalMedia}
           onImportLocalSeries={async (seriesTitle, sourcePaths, storageMode) => actions.importLocalSeries(seriesTitle, sourcePaths, storageMode)}
+          onUploadLocalSeries={async (seriesTitle, files) => actions.uploadLocalSeries(seriesTitle, files)}
           onImportSeriesVideos={async (seriesId, sourcePaths) => actions.importSeriesVideos(seriesId, sourcePaths)}
+          onUploadSeriesVideos={async (seriesId, files) => actions.uploadSeriesVideos(seriesId, files)}
           onImportLocalPlaygroundVideos={async (sourcePaths) => actions.importLocalPlaygroundVideos(sourcePaths)}
+          onUploadLocalPlaygroundVideos={async (files) => actions.uploadLocalPlaygroundVideos(files)}
         />
       )}
 

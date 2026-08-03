@@ -18,6 +18,9 @@ import {
   importLocalPlaygroundVideos,
   importLocalSeries,
   importLocalSeriesVideos,
+  uploadLocalPlaygroundVideos,
+  uploadLocalSeries,
+  uploadLocalSeriesVideos,
   loadWorkspaceLibrary,
   loadVideoSummary,
   loadVideoSummaryMarkdown,
@@ -692,6 +695,17 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onUploadLocalSeries(seriesTitle, files) {
+    try {
+      const rawSeries = await uploadLocalSeries(seriesTitle, files);
+      await reloadWorkspaceLibrary();
+      return rawSeries;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "上传本地系列失败" });
+      throw error;
+    }
+  }
+
   async function onResolveLinkedSeries(url) {
     try {
       const rawSeries = await resolveBilibiliSeries(url);
@@ -855,6 +869,17 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onUploadLocalPlaygroundVideos(files) {
+    try {
+      const rawVideos = await uploadLocalPlaygroundVideos(files);
+      await reloadWorkspaceLibrary();
+      return rawVideos;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "上传 Playground 媒体失败" });
+      throw error;
+    }
+  }
+
   async function onImportSeriesVideos(seriesId, sourcePaths) {
     try {
       const rawVideos = await importLocalSeriesVideos(seriesId, sourcePaths);
@@ -862,6 +887,17 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return rawVideos;
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列导入媒体失败" });
+      throw error;
+    }
+  }
+
+  async function onUploadSeriesVideos(seriesId, files) {
+    try {
+      const rawVideos = await uploadLocalSeriesVideos(seriesId, files);
+      await reloadWorkspaceLibrary();
+      return rawVideos;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "上传系列媒体失败" });
       throw error;
     }
   }
@@ -934,8 +970,11 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onLoadChaoxingCourses,
     onImportChaoxingCourse,
     onImportLocalSeries,
+    onUploadLocalSeries,
     onImportLocalPlaygroundVideos,
+    onUploadLocalPlaygroundVideos,
     onImportSeriesVideos,
+    onUploadSeriesVideos,
     onDeleteSeries,
     onDeleteCurrentVideo,
     onDownloadVideo,

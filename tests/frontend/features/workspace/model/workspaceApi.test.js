@@ -4,6 +4,7 @@ import {
   loadAgentSessionRecovery,
   loadProviderUsage,
   loadSeriesMindmap,
+  uploadLocalSeries,
 } from "@src/features/workspace/model/workspaceApi";
 
 afterEach(() => {
@@ -147,5 +148,25 @@ describe("loadProviderUsage", () => {
       chatTokens: 5,
       totalTokens: 15,
     });
+  });
+});
+
+describe("uploadLocalSeries", () => {
+  test("sends dropped files through the multipart upload endpoint", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ id: "series-1", title: "课程", videos: [] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["video"], "lesson.mp4", { type: "video/mp4" });
+
+    await uploadLocalSeries("课程", [file]);
+
+    const [, request] = fetchMock.mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledWith("/api/import/local/series", expect.objectContaining({ method: "POST" }));
+    expect(request.body).toBeInstanceOf(FormData);
+    expect(request.body.get("series_title")).toBe("课程");
+    expect(request.body.getAll("files")).toHaveLength(1);
+    expect(request.body.get("files").name).toBe("lesson.mp4");
   });
 });
