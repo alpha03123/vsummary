@@ -15,11 +15,13 @@ export function WorkspaceSeriesProgressView({ activeSeries }) {
                   <strong className="mt-1 block text-sm font-semibold text-stone-900 dark:text-stone-100">{video.title}</strong>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  video.processed
+                  video.status === "untranscribable"
+                    ? "bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/70"
+                    : video.processed
                     ? "bg-stone-100 text-stone-900 dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10"
                     : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
                 }`}>
-                  {video.processed ? "已完成" : "待处理"}
+                  {video.status === "untranscribable" ? "异常" : video.processed ? "已完成" : "待处理"}
                 </span>
               </div>
             </div>

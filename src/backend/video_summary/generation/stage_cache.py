@@ -73,7 +73,8 @@ class GenerationStageCache:
         """读取某阶段的转写缓存。
 
         Args:
-            stage: 转写阶段名，目前支持 `whisper` 与 `transcript-enhance`。
+            stage: 转写阶段名，目前支持 `whisper`、`transcript-enhance` 与
+                `no-transcribable-audio`。
             identity: 对应阶段的实现身份（whisper 模型或增强器）。
 
         Returns:
@@ -101,6 +102,8 @@ class GenerationStageCache:
             file_name = "transcript.raw.json"
         elif stage == "transcript-enhance":
             file_name = "transcript.enhanced.json"
+        elif stage == "no-transcribable-audio":
+            file_name = "transcript.placeholder.json"
         else:
             raise ValueError(f"Unsupported transcript cache stage: {stage}")
         return self._cache_dir / stage / file_name

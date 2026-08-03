@@ -223,6 +223,21 @@ class ListSeriesCoreProblemTests(unittest.TestCase):
             self.assertEqual(len(cards), 1)
             self.assertEqual(cards[0].core_problem, "")
 
+    def test_untranscribable_summary_is_listed_as_an_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._seed_workspace(root, "s1", "v1", with_summary=True)
+            summary_path = root / "workspace" / "s1" / "v1" / "summary.json"
+            summary_path.write_text(
+                json.dumps({"transcription_status": "untranscribable"}),
+                encoding="utf-8",
+            )
+
+            cards = FileSystemVideoWorkspace(root).list_series()[0].videos
+
+            self.assertTrue(cards[0].processed)
+            self.assertEqual(cards[0].status, "untranscribable")
+
     def test_linked_without_local_file_has_empty_core_problem(self) -> None:
         """linked 系列,本地无视频文件,core_problem 必为空。"""
         with tempfile.TemporaryDirectory() as tmp:

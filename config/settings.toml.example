@@ -2,8 +2,8 @@
 [asr]
 # 转写引擎。目前支持 "faster_whisper"。
 provider = "faster_whisper"
-# 默认转写语言。中文使用 "zh"，英文使用 "en"。
-language = "zh"
+# 转写语言。"auto" 自动识别；也可强制指定 "zh" 或 "en"。
+language = "auto"
 # 是否启用转写增强。开启后会调用 LLM 对转写文本做语义修正和分段。
 transcript_enhancement_enabled = false
 
@@ -17,8 +17,8 @@ model_size = "large-v3-turbo"
 compute_type = "float16"
 # 转写策略。"fast" 更快，"balanced" 平衡速度和质量，"accurate" 更重视准确度。
 transcription_mode = "accurate"
-# 转写首段上下文提示词，用于引导 Whisper 优先使用简体中文。
-initial_prompt = "以下为简体中文普通话转写文本。"
+# 转写首段上下文提示词。自动识别语言时建议留空；中文 ASR 输出会自动规范为简体。
+initial_prompt = ""
 
 [asr.aliyun_bailian]
 base_url = "https://dashscope.aliyuncs.com"

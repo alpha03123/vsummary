@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, ProcessHandle
+from backend.video_summary.generation.ports import NoTranscribableAudioError
 
 
 class FfmpegMediaProcessor:
@@ -72,9 +73,12 @@ class FfmpegMediaProcessor:
             写入后的 `audio_path`。
 
         Raises:
+            NoTranscribableAudioError: 输入媒体不含音频流。
             subprocess.CalledProcessError: ffmpeg 退出码非 0 且非取消导致时抛出。
         """
         audio_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self._has_audio_stream(video_path):
+            raise NoTranscribableAudioError(f"媒体文件不含音频流：{video_path.name}")
         proc = subprocess.Popen(
             [
                 "ffmpeg",
@@ -108,3 +112,26 @@ class FfmpegMediaProcessor:
         if proc.returncode != 0 and not (cancellation is not None and cancellation.cancel_requested):
             raise subprocess.CalledProcessError(proc.returncode, "ffmpeg")
         return audio_path
+
+    @staticmethod
+    def _has_audio_stream(video_path: Path) -> bool:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(video_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        return bool(result.stdout.strip())

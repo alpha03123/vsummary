@@ -21,7 +21,7 @@ class LiteLLMTranscriptEnhancer:
     LLM，让其修正 ASR 噪声、补全标点，同时严格保留原始时间戳与语言。
 
     实现要点：
-    - 提示词构造：固定中文 prompt 模板 + 视频标题 + 分块进度 + JSON 形式的
+    - 提示词构造：按转写语言生成的 prompt 模板 + 视频标题 + 分块进度 + JSON 形式的
       待纠正段落，由 `_build_transcript_enhancement_prompt` 渲染；
     - 输出约束：使用 `TranscriptEnhancementPayload` Pydantic schema 强制
       LLM 输出结构，时间戳会被强制转 `float`；
@@ -71,7 +71,7 @@ class LiteLLMTranscriptEnhancer:
                 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
                 raise GenerateCancelledError("任务已取消")
             coro = self._gateway.acomplete_structured(
-                [{"role": "user", "content": _build_transcript_enhancement_prompt(video, chunk, index, len(chunks))}],
+                [{"role": "user", "content": _build_transcript_enhancement_prompt(video, transcript.language, chunk, index, len(chunks))}],
                 response_model=TranscriptEnhancementPayload,
             )
             if cancellation is not None:
@@ -88,14 +88,16 @@ class LiteLLMTranscriptEnhancer:
 
 def _build_transcript_enhancement_prompt(
     video: VideoAsset,
+    language: str,
     segments: list[TranscriptSegment],
     index: int,
     total_chunks: int,
 ) -> str:
-    """渲染转写增强的中文提示词。
+    """渲染与转写语言匹配的纠错提示词。
 
     Args:
         video: 视频元信息。
+        language: 转写识别出的语言代码。
         segments: 当前分块内的转写段落。
         index: 当前分块序号（从 1 开始）。
         total_chunks: 分块总数。
@@ -103,13 +105,14 @@ def _build_transcript_enhancement_prompt(
     Returns:
         渲染完成的提示词字符串（含任务要求与待纠正 JSON）。
     """
+    language_label = "中文" if language == "zh" else "原始识别语言" if language == "auto" else language.upper()
     return (
-        "你正在纠正中文视频转写文本。\n"
+        f"你正在纠正{language_label}视频转写文本。\n"
         f"视频标题：{video.title}\n"
         f"当前片段块：{index}/{total_chunks}\n\n"
         "任务要求：\n"
         "1. 只修正明显的 ASR 错字、断句问题、标点问题、同音误识别。\n"
-        "2. 严禁凭空补充视频里没说过的事实。\n"
+        "2. 保持原始语言，不要翻译；严禁凭空补充视频里没说过的事实。\n"
         "3. 如果原句存在少量噪声或含糊片段，保留可确认部分，不要写“后文文本混乱”“内容无法识别”等评价性描述。\n"
         "4. 必须保留每条 segment 的 start_seconds 和 end_seconds。\n"
         "5. 输出 JSON，格式如下：\n"

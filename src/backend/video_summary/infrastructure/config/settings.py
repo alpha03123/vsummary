@@ -143,7 +143,8 @@ DEFAULT_ASR_ALIYUN_BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com"
 DEFAULT_ASR_ALIYUN_BAILIAN_MODEL = "paraformer-v2"
 DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS = 0.2
 DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS = 0.3
-DEFAULT_FASTER_WHISPER_INITIAL_PROMPT = "以下为简体中文普通话转写文本。"
+DEFAULT_ASR_LANGUAGE = "auto"
+DEFAULT_FASTER_WHISPER_INITIAL_PROMPT = ""
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -183,7 +184,7 @@ class AsrSettings:
 
     Attributes:
         provider: ASR provider 标识（当前仅 `faster_whisper`）。
-        language: 强制指定的语言代码，默认 `zh`。
+        language: 语言代码或 `auto`；`auto` 表示由 ASR 自动识别。
         transcript_enhancement_enabled: 是否启用 LLM 转写增强。
         faster_whisper: faster-whisper provider 的具体参数。
         aliyun_bailian: 阿里云百炼 provider 的具体参数。
@@ -418,7 +419,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
 
     asr_settings = AsrSettings(
         provider=provider,
-        language=asr_payload.get("language", "zh"),
+        language=_normalize_asr_language(asr_payload.get("language")),
         transcript_enhancement_enabled=bool(asr_payload.get("transcript_enhancement_enabled", True)),
         faster_whisper=faster_settings,
         aliyun_bailian=aliyun_settings,
@@ -876,6 +877,22 @@ def _normalize_transcription_mode(value: object) -> str:
         if normalized in VALID_TRANSCRIPTION_MODES:
             return normalized
     return "fast"
+
+
+def _normalize_asr_language(value: object) -> str:
+    """校验 ASR 语言配置，`auto` 表示让 provider 自动检测。"""
+    if value is None:
+        return DEFAULT_ASR_LANGUAGE
+    if not isinstance(value, str):
+        raise ValueError("asr.language 必须是语言代码或 auto。")
+    normalized = value.strip().lower()
+    if not normalized:
+        return DEFAULT_ASR_LANGUAGE
+    if normalized == "auto":
+        return normalized
+    if len(normalized) not in {2, 3} or not normalized.isalpha():
+        raise ValueError(f"Unsupported asr.language: {value!r}")
+    return normalized
 
 
 def normalize_openai_base_url(value: str) -> str:

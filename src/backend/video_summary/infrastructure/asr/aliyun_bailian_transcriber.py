@@ -36,7 +36,7 @@ class AliyunBailianTranscriber:
         self._model = normalized_model
         self._base_address = _normalize_dashscope_base_address(base_url)
         self._api_key = normalized_api_key
-        self._language = language.strip() or "zh"
+        self._language = language.strip().lower() or "auto"
         self.cache_identity = "|".join(
             [
                 type(self).__module__,
@@ -97,12 +97,17 @@ class AliyunBailianTranscriber:
             raise RuntimeError("dashscope is not installed.") from error
 
         try:
+            request_kwargs = {
+                "model": self._model,
+                "file_urls": [oss_url],
+                "api_key": self._api_key,
+                "base_address": self._base_address,
+                "headers": {"X-DashScope-OssResourceResolve": "enable"},
+            }
+            if self._language != "auto":
+                request_kwargs["language_hints"] = [self._language]
             response = Transcription.async_call(
-                model=self._model,
-                file_urls=[oss_url],
-                api_key=self._api_key,
-                base_address=self._base_address,
-                headers={"X-DashScope-OssResourceResolve": "enable"},
+                **request_kwargs,
             )
         except Exception as error:
             raise RuntimeError(f"提交阿里云百炼转写任务失败：{error}") from error

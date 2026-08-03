@@ -1251,7 +1251,7 @@ export function workspaceReducer(state, action) {
           state.selectedVideoId === action.videoId;
         const nextState = {
           ...state,
-          library: markVideoAsReady(state.library, action.seriesId, action.videoId),
+          library: action.library ?? markVideoAsReady(state.library, action.seriesId, action.videoId),
           tools: !isCurrentVideo || state.tools == null
             ? state.tools
             : {

@@ -198,12 +198,14 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const summaryResult = await generateVideoSummary(seriesId, videoId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
       });
+      const library = await reloadWorkspaceLibrary();
       dispatch({
         type: "generation_succeeded",
         taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
         seriesId,
         videoId,
         summary: summaryResult,
+        library,
       });
     } catch (error) {
       if (isGenerationCancelledError(error)) {

@@ -16,6 +16,10 @@ if TYPE_CHECKING:
     from backend.video_summary.generation.cancellation import GenerationCancellationContext
 
 
+class NoTranscribableAudioError(RuntimeError):
+    """媒体不含可供 ASR 转写的音频流。"""
+
+
 class MediaProcessor(Protocol):
     """音视频文件预处理端口。"""
 

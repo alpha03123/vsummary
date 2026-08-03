@@ -59,6 +59,9 @@ from backend.video_summary.library.models import (
     WorkspaceToolDTO as WorkspaceToolDTO,
 )
 
+
+_UNTRANSCRIBABLE_STATUS = "untranscribable"
+
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 MEDIA_SUFFIXES = VIDEO_SUFFIXES | AUDIO_SUFFIXES
@@ -896,7 +899,7 @@ class FileSystemVideoWorkspace:
                         source_name=local_file.name,
                         source_type=_source_type_for_path(local_file),
                         processed=has_summary,
-                        status="ready" if has_summary else "pending",
+                        status=self._read_video_processing_status(summary_path),
                         core_problem=self._read_core_problem(series_id, video_id),
                         is_linked=False,
                         bilibili_bvid=bvid,
@@ -929,7 +932,7 @@ class FileSystemVideoWorkspace:
         return cards
 
     def _build_local_video_card(self, series_id: str, video_path: Path) -> LibraryVideoCardDTO:
-        """按媒体文件路径构造本地视频卡片，状态以 `summary.json` 是否存在为判据。"""
+        """按媒体文件路径构造本地视频卡片，状态由 `summary.json` 的转写标记决定。"""
         summary_path = self._workspace_dir / series_id / video_path.stem / "summary.json"
         has_summary = summary_path.is_file()
         return LibraryVideoCardDTO(
@@ -938,7 +941,7 @@ class FileSystemVideoWorkspace:
             source_name=video_path.name,
             source_type=_source_type_for_path(video_path),
             processed=has_summary,
-            status="ready" if has_summary else "pending",
+            status=self._read_video_processing_status(summary_path),
             core_problem=self._read_core_problem(series_id, video_path.stem),
         )
 
@@ -961,6 +964,17 @@ class FileSystemVideoWorkspace:
             return ""
         value = payload.get("core_problem", "")
         return value.strip() if isinstance(value, str) else ""
+
+    @staticmethod
+    def _read_video_processing_status(summary_path: Path) -> str:
+        """读取 summary 的转写状态；无摘要为 pending，旧摘要保持 ready。"""
+        if not summary_path.is_file():
+            return "pending"
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return "ready"
+        return _UNTRANSCRIBABLE_STATUS if payload.get("transcription_status") == _UNTRANSCRIBABLE_STATUS else "ready"
 
     def _copy_video_streams(self, *, series_dir: Path, files: list[tuple[str, object]]) -> list[Path]:
         """把 `[(filename, stream), ...]` 复制到目标系列目录中。

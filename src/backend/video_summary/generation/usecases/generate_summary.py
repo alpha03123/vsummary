@@ -28,11 +28,13 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
-from backend.video_summary.domain.models import SummaryDocument, VideoAsset
+from backend.video_summary.domain.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
+from backend.video_summary.generation.renderers import render_markdown
 from backend.video_summary.generation.ports import (
     GenerationArtifactStore,
     MediaProcessor,
+    NoTranscribableAudioError,
     ProgressReporter,
     SubtitleTranscriptSource,
     Summarizer,
@@ -187,6 +189,7 @@ class GenerateVideoSummary:
         3. 在阻塞调用之前检查取消信号，避免浪费昂贵的计算。
         """
         stage_cache = GenerationStageCache(output_dir / ".cache", video_path)
+        unavailable_reason: str | None = None
         subtitle_transcript = None
         if self._subtitle_provider is not None:
             if progress_reporter is not None:
@@ -229,32 +232,52 @@ class GenerateVideoSummary:
 
             if progress_reporter is not None:
                 progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
-            audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
-            if not audio_restored:
-                await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
-                _raise_if_cancelled(progress_reporter, cancellation)
-                await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
-            _raise_if_cancelled(progress_reporter, cancellation)
-
-            if progress_reporter is not None:
-                progress_reporter.update("transcribe", 20.0, "正在转写音频")
-            transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
-            if transcript is None:
+            try:
+                audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
+                if not audio_restored:
+                    await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
+                    _raise_if_cancelled(progress_reporter, cancellation)
+                    await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
+            except NoTranscribableAudioError:
+                unavailable_reason = "未找到可用中文字幕，且视频不含可供转写的音频流。"
+                transcript_source_identity = "no-transcribable-audio-v1"
                 transcript = await asyncio.to_thread(
-                    self._transcriber.transcribe,
-                    audio_path,
-                    transcript_stem,
-                    None
-                    if progress_reporter is None
-                    else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
+                    stage_cache.load_transcript,
+                    "no-transcribable-audio",
+                    identity=transcript_source_identity,
                 )
+                if transcript is None:
+                    transcript = _build_no_transcribable_audio_transcript(video.duration_seconds)
+                    await asyncio.to_thread(
+                        stage_cache.store_transcript,
+                        "no-transcribable-audio",
+                        transcript,
+                        identity=transcript_source_identity,
+                    )
+                if progress_reporter is not None:
+                    progress_reporter.update("transcribe", 80.0, "视频没有可供转写的信息，正在写入占位概况")
+            else:
                 _raise_if_cancelled(progress_reporter, cancellation)
-                await asyncio.to_thread(
-                    stage_cache.store_transcript,
-                    "whisper",
-                    transcript,
-                    identity=transcriber_identity,
-                )
+
+                if progress_reporter is not None:
+                    progress_reporter.update("transcribe", 20.0, "正在转写音频")
+                transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
+                if transcript is None:
+                    transcript = await asyncio.to_thread(
+                        self._transcriber.transcribe,
+                        audio_path,
+                        transcript_stem,
+                        None
+                        if progress_reporter is None
+                        else lambda ratio: _handle_transcribe_progress(progress_reporter, ratio),
+                    )
+                    _raise_if_cancelled(progress_reporter, cancellation)
+                    await asyncio.to_thread(
+                        stage_cache.store_transcript,
+                        "whisper",
+                        transcript,
+                        identity=transcriber_identity,
+                    )
             _raise_if_cancelled(progress_reporter, cancellation)
 
         enhancer_identity = (
@@ -262,7 +285,7 @@ class GenerateVideoSummary:
             if self._transcript_enhancer is not None
             else ""
         )
-        if self._transcript_enhancer is not None:
+        if self._transcript_enhancer is not None and unavailable_reason is None:
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
             _raise_if_cancelled(progress_reporter, cancellation)
@@ -300,20 +323,48 @@ class GenerateVideoSummary:
         )
         _raise_if_cancelled(progress_reporter, cancellation)
 
-        if progress_reporter is not None:
-            progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
-        _raise_if_cancelled(progress_reporter, cancellation)
-        try:
-            summary_document = await self._summarizer.summarize(video, transcript, cancellation)
-        except GenerateCancelledError:
-            raise
-        except Exception as error:
-            raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
+        if unavailable_reason is not None:
+            summary_document = _build_no_transcribable_audio_summary(video, unavailable_reason)
+        else:
+            if progress_reporter is not None:
+                progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
+            _raise_if_cancelled(progress_reporter, cancellation)
+            try:
+                summary_document = await self._summarizer.summarize(video, transcript, cancellation)
+            except GenerateCancelledError:
+                raise
+            except Exception as error:
+                raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         _raise_if_cancelled(progress_reporter, cancellation)
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
         await asyncio.to_thread(_commit_generation_artifacts, staging_dir, output_dir)
         return summary_document
+
+
+def _build_no_transcribable_audio_transcript(duration_seconds: float) -> Transcript:
+    return Transcript(
+        language="und",
+        segments=[
+            TranscriptSegment(
+                start_seconds=0.0,
+                end_seconds=max(0.0, duration_seconds),
+                text="该视频没有可供转写的音频或中文字幕。",
+            )
+        ],
+    )
+
+
+def _build_no_transcribable_audio_summary(video: VideoAsset, reason: str) -> SummaryDocument:
+    summary_data = {
+        "title": video.title,
+        "transcription_status": "untranscribable",
+        "one_sentence_summary": "该视频没有可供转写的信息，无法生成内容概况。",
+        "core_problem": "",
+        "chapters": [],
+        "key_takeaways": [reason],
+    }
+    return SummaryDocument(markdown=render_markdown(summary_data), summary_data=summary_data)
 
 
 def _build_llm_stage_error(stage_label: str, error: Exception) -> str:

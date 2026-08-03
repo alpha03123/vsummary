@@ -160,11 +160,17 @@ HF_ENDPOINT=https://hf-mirror.com
 程序第一次运行后会生成 `config/settings.toml`。推荐重点检查这两段：
 
 ```toml
+[asr]
+# "auto" 会根据音频自动识别语言；识别为中文时会将 ASR 文本规范为简体。
+language = "auto"
+
 [asr.faster_whisper]
 device = "auto"
 model_size = "large-v3-turbo"
 compute_type = "float16"
 transcription_mode = "accurate"
+# 自动识别语言时保持为空，避免某一种语言的提示词干扰其他语言。
+initial_prompt = ""
 
 [agent_retrieval]
 embedding_provider = "fastembed"
@@ -176,6 +182,8 @@ embedding_batch_size = 8
 说明：
 
 - `device` 控制 **视频转写（fast whisper模型）** 用 CPU 还是 NVIDIA GPU（建议GPU）
+- `language` 可设为 `auto`、`zh` 或 `en`；默认 `auto`。`auto` 下 faster-whisper 的中文转写会自动繁转简；百炼会使用默认的中英语种候选识别。
+- `initial_prompt` 仅建议在强制指定转写语言时使用；自动识别时应保持为空。
 - `embedding_device` 控制 **RAG 向量检索模型** 用 CPU 还是 GPU（默认 GPU）
 
 #### 7. 启动服务

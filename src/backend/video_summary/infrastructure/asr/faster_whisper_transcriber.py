@@ -19,6 +19,8 @@ from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
 _CUDA_DLL_HANDLES: list[object] = []
 _CUDA_DLL_DIRS_READY = False
+_CHINESE_LANGUAGE_CODE = "zh"
+_CHINESE_SCRIPT_NORMALIZATION_IDENTITY = "opencc-t2s-v1"
 
 
 class FasterWhisperTranscriber:
@@ -39,7 +41,7 @@ class FasterWhisperTranscriber:
         device: str,
         compute_type: str,
         transcription_mode: str,
-        language: str = "zh",
+        language: str = "auto",
         initial_prompt: str = "",
     ) -> None:
         """加载 faster-whisper 模型并预编译解码参数。
@@ -51,8 +53,8 @@ class FasterWhisperTranscriber:
             compute_type: faster-whisper 计算精度（如 `int8` / `float16`）。
             transcription_mode: 转写模式，决定 beam_size 等解码参数
                 （见 `_build_decode_options`）。
-            language: 强制指定的语言代码，默认 `zh`。
-            initial_prompt: 转写首段的上下文提示词；用于引导输出为简体中文。
+            language: 语言代码，或使用 `auto` 自动检测。
+            initial_prompt: 转写首段的上下文提示词；自动语言检测时建议留空。
 
         Raises:
             RuntimeError: faster-whisper 未安装，或要求 GPU 但未检测到 NVIDIA runtime。
@@ -71,6 +73,7 @@ class FasterWhisperTranscriber:
                 transcription_mode,
                 language,
                 initial_prompt,
+                _CHINESE_SCRIPT_NORMALIZATION_IDENTITY,
             ]
         )
         try:
@@ -78,8 +81,10 @@ class FasterWhisperTranscriber:
         except ImportError as error:
             raise RuntimeError("faster-whisper is not installed.") from error
 
-        self._language = language
+        self._language = None if language == "auto" else language
+        self._configured_language = language
         self._decode_options = _build_decode_options(transcription_mode, initial_prompt)
+        self._simplify_chinese: Callable[[str], str] | None = None
         self._model = WhisperModel(
             model_size,
             device=resolved_device,
@@ -120,6 +125,8 @@ class FasterWhisperTranscriber:
             **self._decode_options,
         )
         total_duration = getattr(info, "duration", None)
+        detected_language = getattr(info, "language", self._language) or self._configured_language
+        normalize_chinese = detected_language == _CHINESE_LANGUAGE_CODE
         segments = []
         for segment in segments_iter:
             if not segment.text.strip():
@@ -128,12 +135,28 @@ class FasterWhisperTranscriber:
                 TranscriptSegment(
                     start_seconds=float(segment.start),
                     end_seconds=float(segment.end),
-                    text=segment.text.strip(),
+                    text=self._normalize_segment_text(segment.text, normalize_chinese),
                 ),
             )
             if on_progress is not None and total_duration:
                 on_progress(float(segment.end) / float(total_duration))
-        return Transcript(language=getattr(info, "language", self._language), segments=segments)
+        return Transcript(language=detected_language, segments=segments)
+
+    def _normalize_segment_text(self, text: str, normalize_chinese: bool) -> str:
+        normalized = text.strip()
+        if not normalize_chinese:
+            return normalized
+        if self._simplify_chinese is None:
+            self._simplify_chinese = _load_chinese_simplifier()
+        return self._simplify_chinese(normalized)
+
+
+def _load_chinese_simplifier() -> Callable[[str], str]:
+    try:
+        from opencc import OpenCC
+    except ImportError as error:
+        raise RuntimeError("OpenCC is required to normalize Chinese ASR output to Simplified Chinese.") from error
+    return OpenCC("t2s").convert
 
 
 def _resolve_device(device: str) -> str:

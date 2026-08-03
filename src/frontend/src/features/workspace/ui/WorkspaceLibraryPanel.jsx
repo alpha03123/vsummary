@@ -6,6 +6,7 @@ import {
   Sparkles,
   FileVideo,
   CheckCircle2,
+  AlertTriangle,
   CircleDashed,
   FolderKanban,
   Link2,
@@ -33,6 +34,17 @@ function VideoBadge({ video }) {
       <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
         <ArrowDown size={11} className="animate-bounce" />
         下载中
+      </span>
+    );
+  }
+  if (video.status === "untranscribable") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/70"
+        title="没有可供转写使用的信息"
+      >
+        <AlertTriangle size={12} />
+        异常
       </span>
     );
   }

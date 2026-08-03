@@ -63,8 +63,8 @@ def test_aliyun_bailian_transcriber_uploads_audio_and_maps_sentences(monkeypatch
 
     class Transcription:
         @classmethod
-        def async_call(cls, *, model, file_urls, api_key, base_address, headers):
-            calls.append(("async_call", (model, file_urls, api_key, base_address, headers)))
+        def async_call(cls, *, model, file_urls, api_key, base_address, headers, language_hints=None):
+            calls.append(("async_call", (model, file_urls, api_key, base_address, headers, language_hints)))
             return _Response(output={"task_id": "task-1", "task_status": "PENDING"})
 
         @classmethod
@@ -124,14 +124,39 @@ def test_aliyun_bailian_transcriber_uploads_audio_and_maps_sentences(monkeypatch
             "dashscope-key",
             "https://dashscope.aliyuncs.com/api/v1",
             {"X-DashScope-OssResourceResolve": "enable"},
+            ["zh"],
         ),
     )
+
+
+def test_aliyun_bailian_transcriber_omits_language_hints_for_auto(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class Transcription:
+        @classmethod
+        def async_call(cls, **kwargs):
+            calls.append(kwargs)
+            return _Response(output={"task_id": "task-1", "task_status": "PENDING"})
+
+    asr_module = types.ModuleType("dashscope.audio.asr")
+    asr_module.Transcription = Transcription
+    monkeypatch.setitem(sys.modules, "dashscope.audio.asr", asr_module)
+
+    transcriber = AliyunBailianTranscriber(
+        model="paraformer-v2",
+        base_url="https://dashscope.aliyuncs.com",
+        api_key="dashscope-key",
+        language="auto",
+    )
+    transcriber._submit_transcription("oss://dashscope-instant/audio.wav")
+
+    assert "language_hints" not in calls[0]
 
 
 def test_aliyun_bailian_transcriber_no_valid_fragment_returns_placeholder(monkeypatch, tmp_path: Path, caplog) -> None:
     class Transcription:
         @classmethod
-        def async_call(cls, *, model, file_urls, api_key, base_address, headers):
+        def async_call(cls, *, model, file_urls, api_key, base_address, headers, language_hints=None):
             return _Response(output={"task_id": "task-1", "task_status": "PENDING"})
 
         @classmethod

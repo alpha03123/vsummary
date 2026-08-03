@@ -14,6 +14,7 @@ import { blurVariant } from "../../../lib/animations";
 import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import {
+  clampChatDrawerWidth,
   clampMiddleWidth,
   clampSidebarWidth,
   loadWorkspaceLayout,
@@ -153,6 +154,16 @@ export function WorkspacePage({ page }) {
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp, { once: true });
+  }
+
+  function updateChatDrawerWidth(proposedWidth) {
+    setLayout((current) => ({
+      ...current,
+      chatDrawerWidth: clampChatDrawerWidth({
+        proposedWidth,
+        viewportWidth: window.innerWidth,
+      }),
+    }));
   }
 
   function renderVideoPlayerPane() {
@@ -532,6 +543,8 @@ export function WorkspacePage({ page }) {
         <ChatDrawer
           isOpen={chat.drawerOpen}
           onClose={chat.closeDrawer}
+          width={layout.chatDrawerWidth}
+          onWidthChange={updateChatDrawerWidth}
           {...chatPanelProps}
         />
       ) : null}

@@ -4,6 +4,10 @@ export const WORKSPACE_LAYOUT_LIMITS = {
   sidebarDefaultWidth: 320,
   sidebarExpandedWidth: 380,
   sidebarMinWidth: 260,
+  chatDrawerDefaultWidth: 480,
+  chatDrawerMinWidth: 360,
+  chatDrawerMaxWidth: 960,
+  chatDrawerViewportMaxShare: 0.85,
   middleDefaultWidth: 640,
   middleMinWidth: 320,
   middleMaxShare: 0.72,
@@ -15,6 +19,7 @@ export function loadWorkspaceLayout() {
   if (typeof window === "undefined") {
     return {
       sidebarWidth: WORKSPACE_LAYOUT_LIMITS.sidebarDefaultWidth,
+      chatDrawerWidth: WORKSPACE_LAYOUT_LIMITS.chatDrawerDefaultWidth,
       middleWidth: WORKSPACE_LAYOUT_LIMITS.middleDefaultWidth,
     };
   }
@@ -24,17 +29,20 @@ export function loadWorkspaceLayout() {
     if (!raw) {
       return {
         sidebarWidth: WORKSPACE_LAYOUT_LIMITS.sidebarDefaultWidth,
+        chatDrawerWidth: WORKSPACE_LAYOUT_LIMITS.chatDrawerDefaultWidth,
         middleWidth: WORKSPACE_LAYOUT_LIMITS.middleDefaultWidth,
       };
     }
     const parsed = JSON.parse(raw);
     return {
       sidebarWidth: normalizeDimension(parsed?.sidebarWidth, WORKSPACE_LAYOUT_LIMITS.sidebarDefaultWidth),
+      chatDrawerWidth: normalizeDimension(parsed?.chatDrawerWidth, WORKSPACE_LAYOUT_LIMITS.chatDrawerDefaultWidth),
       middleWidth: normalizeDimension(parsed?.middleWidth, WORKSPACE_LAYOUT_LIMITS.middleDefaultWidth),
     };
   } catch {
     return {
       sidebarWidth: WORKSPACE_LAYOUT_LIMITS.sidebarDefaultWidth,
+      chatDrawerWidth: WORKSPACE_LAYOUT_LIMITS.chatDrawerDefaultWidth,
       middleWidth: WORKSPACE_LAYOUT_LIMITS.middleDefaultWidth,
     };
   }
@@ -67,6 +75,15 @@ export function clampMiddleWidth({ proposedWidth, containerWidth, sidebarWidth }
     ),
   );
   return clamp(proposedWidth, limits.middleMinWidth, maxWidth);
+}
+
+export function clampChatDrawerWidth({ proposedWidth, viewportWidth }) {
+  const limits = WORKSPACE_LAYOUT_LIMITS;
+  const maxWidth = Math.max(
+    limits.chatDrawerMinWidth,
+    Math.min(limits.chatDrawerMaxWidth, viewportWidth * limits.chatDrawerViewportMaxShare),
+  );
+  return clamp(proposedWidth, limits.chatDrawerMinWidth, maxWidth);
 }
 
 function normalizeDimension(value, fallback) {
