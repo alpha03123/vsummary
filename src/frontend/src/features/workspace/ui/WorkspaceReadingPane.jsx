@@ -77,7 +77,6 @@ export function WorkspaceReadingPane({
   playerSeekRequest,
   selectedToolId,
   selectedChapterId,
-  toolsLoading,
   summaryLoading,
   mindmapLoading,
   knowledgeCardsLoading,
@@ -156,16 +155,7 @@ export function WorkspaceReadingPane({
             </header>
 
             <div className="relative min-h-0 flex-1 overflow-y-auto">
-              {toolsLoading ? (
-                <WorkspaceStateBlock
-                  title="读取工具状态"
-                  description="正在同步当前视频的工具状态。"
-                  loading
-                />
-              ) : null}
-
-              {!toolsLoading ? (
-                <Suspense fallback={<WorkspaceToolLoadingState toolName={currentToolMeta.label} />}>
+              <Suspense fallback={<WorkspaceToolLoadingState toolName={currentToolMeta.label} />}>
                   {isSeriesHome ? (
                     <div className="flex flex-col gap-6">
                       <WorkspaceToolGrid
@@ -273,8 +263,7 @@ export function WorkspaceReadingPane({
                   {selectedToolId === "preview" ? (
                     <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={playerSeekRequest} />
                   ) : null}
-                </Suspense>
-              ) : null}
+              </Suspense>
             </div>
           </div>
         )}
