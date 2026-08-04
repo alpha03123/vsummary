@@ -119,22 +119,28 @@ function buildCitationPreview(citation) {
   };
 }
 
-function buildCitationSeekReference(citation) {
+function buildCitationReference(citation) {
   if (!citation || typeof citation !== "object") {
     return null;
   }
   const slots = Array.isArray(citation.slots) ? citation.slots.filter((slot) => slot && typeof slot === "object") : [];
   const videoSlot = slots.find((slot) => slot.target_type === "video" && typeof slot.start_seconds === "number");
-  if (!videoSlot) {
+  const summarySlot = slots.find((slot) => slot.target_type === "summary");
+  const locationSlot = videoSlot ?? summarySlot;
+  if (!locationSlot) {
     return null;
   }
   const transcriptSlot = slots.find((slot) => slot.target_type === "transcript" && typeof slot.text === "string" && slot.text.trim());
   const matchedText = transcriptSlot?.text?.trim() ?? "";
+  const videoId = typeof locationSlot.video_id === "string" ? locationSlot.video_id.trim() : "";
+  const chapterId = typeof locationSlot.chapter_id === "string" ? locationSlot.chapter_id.trim() : "";
   return {
-    seconds: videoSlot.start_seconds,
-    endSeconds: typeof videoSlot.end_seconds === "number" ? videoSlot.end_seconds : null,
+    ...(videoId ? { videoId } : {}),
+    ...(chapterId ? { chapterId } : {}),
+    seconds: typeof locationSlot.start_seconds === "number" ? locationSlot.start_seconds : null,
+    endSeconds: typeof locationSlot.end_seconds === "number" ? locationSlot.end_seconds : null,
     matchedText,
-    chapterTitle: typeof videoSlot.video_title === "string" ? videoSlot.video_title.trim() : "",
+    chapterTitle: typeof locationSlot.video_title === "string" ? locationSlot.video_title.trim() : "",
     query: "",
   };
 }
@@ -199,7 +205,7 @@ function CitationPreviewCard({ preview, position }) {
   );
 }
 
-function CitationLink({ href, children, preview, seekReference, onOpenSeekReference, ...props }) {
+function CitationLink({ href, children, preview, citationReference, onOpenCitationReference, ...props }) {
   const [position, setPosition] = useState(null);
 
   function showPreview(event) {
@@ -215,8 +221,8 @@ function CitationLink({ href, children, preview, seekReference, onOpenSeekRefere
 
   function handleClick(event) {
     event.preventDefault();
-    if (seekReference) {
-      onOpenSeekReference?.(seekReference);
+    if (citationReference) {
+      onOpenCitationReference?.(citationReference);
     }
   }
 
@@ -257,7 +263,7 @@ function ThinkBlock({ content }) {
   );
 }
 
-function MarkdownSegment({ content, citations, onOpenSeekReference }) {
+function MarkdownSegment({ content, citations, onOpenCitationReference }) {
   const normalizedCitations = normalizeCitations(citations);
   const renderedContent = injectCitationLinks(normalizeMathDelimiters(content), normalizedCitations);
   const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
@@ -271,14 +277,14 @@ function MarkdownSegment({ content, citations, onOpenSeekReference }) {
             const citationId = href.replace("#citation-", "");
             const citation = citationMap.get(citationId);
             const preview = buildCitationPreview(citation);
-            const seekReference = buildCitationSeekReference(citation);
+            const citationReference = buildCitationReference(citation);
             return (
               <CitationLink
                 {...props}
                 href={href}
                 preview={preview}
-                seekReference={seekReference}
-                onOpenSeekReference={onOpenSeekReference}
+                citationReference={citationReference}
+                onOpenCitationReference={onOpenCitationReference}
               >
                 {children}
               </CitationLink>
@@ -303,7 +309,7 @@ function MarkdownSegment({ content, citations, onOpenSeekReference }) {
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null, onOpenSeekReference }) {
+export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCitationReference }) {
   const parts = splitThinkBlocks(content);
   return (
     <div className="flex flex-col gap-4">
@@ -315,7 +321,7 @@ export function WorkspaceMarkdownMessage({ content, citations = null, onOpenSeek
             key={`${part.type}-${index}`}
             content={part.content}
             citations={citations}
-            onOpenSeekReference={onOpenSeekReference}
+            onOpenCitationReference={onOpenCitationReference}
           />
         )
       ))}

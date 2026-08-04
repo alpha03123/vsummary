@@ -10,6 +10,7 @@ export function createWorkspaceChatActions({
   state,
   dispatch,
   contentActions,
+  chatAbortControllerRef,
 }) {
   async function onSubmitChat(message) {
     const trimmedMessage = message.trim();
@@ -30,6 +31,12 @@ export function createWorkspaceChatActions({
     );
 
     const requestId = Date.now();
+    const abortController = new AbortController();
+    chatAbortControllerRef.current = {
+      controller: abortController,
+      requestId,
+      sessionId,
+    };
 
     dispatch({
       type: "chat_request_started",
@@ -48,7 +55,10 @@ export function createWorkspaceChatActions({
         });
 
         await applyAgentStreamSideEffects(event);
-      });
+      }, { signal: abortController.signal });
+      if (chatAbortControllerRef.current?.requestId !== requestId) {
+        return;
+      }
       const usage = await loadAgentContextUsage(sessionId, context);
       dispatch({
         type: "context_usage_loaded",
@@ -57,6 +67,9 @@ export function createWorkspaceChatActions({
         usage,
       });
     } catch (error) {
+      if (isChatRequestAborted(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "AI 对话失败";
       if (!error?.streamErrorDispatched) {
         dispatch({
@@ -74,7 +87,29 @@ export function createWorkspaceChatActions({
         type: "load_failed",
         message,
       });
+    } finally {
+      if (chatAbortControllerRef.current?.requestId === requestId) {
+        chatAbortControllerRef.current = null;
+      }
     }
+  }
+
+  function onCancelChat() {
+    const activeRequest = chatAbortControllerRef.current;
+    if (!activeRequest) {
+      return;
+    }
+    chatAbortControllerRef.current = null;
+    activeRequest.controller.abort();
+    dispatch({
+      type: "chat_stream_event_received",
+      chatScopeKey: activeRequest.sessionId,
+      requestId: activeRequest.requestId,
+      event: {
+        type: "cancelled",
+        payload: { message: "本次对话已中断" },
+      },
+    });
   }
 
   function onStartNewChat() {
@@ -130,10 +165,58 @@ export function createWorkspaceChatActions({
     }
   }
 
+  function onOpenCitationReference(reference) {
+    if (!reference) {
+      return;
+    }
+
+    if (state.selectedToolId === "preview") {
+      if (typeof reference.seconds !== "number") {
+        return;
+      }
+      if (reference.videoId && reference.videoId !== state.selectedVideoId) {
+        return;
+      }
+      dispatchPlayerSeek(reference);
+      return;
+    }
+
+    if (state.selectedToolId === "overview") {
+      if (reference.videoId && reference.videoId !== state.selectedVideoId) {
+        return;
+      }
+      if (typeof reference.seconds !== "number" && !reference.chapterId) {
+        return;
+      }
+      dispatch({
+        type: "citation_focus_requested",
+        focus: {
+          ...reference,
+          requestId: `${Date.now()}-${reference.seconds ?? reference.chapterId}`,
+        },
+      });
+      return;
+    }
+
+    if (state.selectedToolId === "series-overview" && reference.videoId) {
+      dispatch({
+        type: "citation_focus_requested",
+        focus: {
+          ...reference,
+          requestId: `${Date.now()}-${reference.videoId}`,
+        },
+      });
+    }
+  }
+
   function onOpenSeekReference(reference) {
     if (!reference || typeof reference.seconds !== "number") {
       return;
     }
+    dispatchPlayerSeek(reference);
+  }
+
+  function dispatchPlayerSeek(reference) {
     dispatch({
       type: "player_seek_requested",
       seconds: reference.seconds,
@@ -194,9 +277,15 @@ export function createWorkspaceChatActions({
 
   return {
     onSubmitChat,
+    onCancelChat,
     onStartNewChat,
     onSelectChatSession,
     onClearChat,
     onOpenSeekReference,
+    onOpenCitationReference,
   };
+}
+
+function isChatRequestAborted(error) {
+  return error instanceof DOMException && error.name === "AbortError";
 }

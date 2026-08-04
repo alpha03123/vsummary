@@ -71,6 +71,12 @@ export const SERIES_TOOL_TILES = {
     icon: MessageSquare,
     ...SHARED_TOOL_VISUALS,
   },
+  "series-overview": {
+    label: "全局 AI 概览",
+    description: "集中查看各视频 AI 概况",
+    icon: FileText,
+    ...SHARED_TOOL_VISUALS,
+  },
   "series-mindmap": {
     label: "全局思维导图",
     description: "结构化展现系列知识脉络 (暂未实现)",

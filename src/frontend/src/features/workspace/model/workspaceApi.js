@@ -539,7 +539,7 @@ export async function clearAgentSession(sessionId, context) {
   });
 }
 
-export async function streamAgentChat(sessionId, message, context, listener) {
+export async function streamAgentChat(sessionId, message, context, listener, { signal } = {}) {
   const response = await fetch("/api/agent/chat/stream", {
     method: "POST",
     headers: {
@@ -550,6 +550,7 @@ export async function streamAgentChat(sessionId, message, context, listener) {
       message,
       context: context ?? null,
     }),
+    signal,
   });
   if (!response.ok) {
     let detail = "";
@@ -569,30 +570,34 @@ export async function streamAgentChat(sessionId, message, context, listener) {
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
 
-    let boundary = buffer.indexOf("\n\n");
-    while (boundary !== -1) {
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const event = parseSseEvent(rawEvent);
-      if (event != null) {
-        if (event.type === "error") {
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const rawEvent = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const event = parseSseEvent(rawEvent);
+        if (event != null) {
+          if (event.type === "error") {
+            listener(event);
+            const error = new Error(typeof event.payload?.message === "string" ? event.payload.message : "AI 对话失败");
+            error.streamErrorDispatched = true;
+            throw error;
+          }
           listener(event);
-          const error = new Error(typeof event.payload?.message === "string" ? event.payload.message : "AI 对话失败");
-          error.streamErrorDispatched = true;
-          throw error;
         }
-        listener(event);
+        boundary = buffer.indexOf("\n\n");
       }
-      boundary = buffer.indexOf("\n\n");
-    }
 
-    if (done) {
-      break;
+      if (done) {
+        break;
+      }
     }
+  } finally {
+    reader.releaseLock();
   }
 }
 

@@ -712,6 +712,47 @@ export function useWorkspaceDataEffects(state, dispatch) {
   }, [dispatch, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
 
   useEffect(() => {
+    if (
+      state.selectedContextType !== "series" ||
+      state.selectedToolId !== "series-overview"
+    ) {
+      dispatch({ type: "series_overview_cleared" });
+      return;
+    }
+
+    const activeSeries = state.library?.series?.find((series) => series.id === state.selectedSeriesId);
+    const processedVideos = activeSeries?.videos?.filter((video) => video.processed) ?? [];
+    if (!processedVideos.length) {
+      dispatch({ type: "series_overview_loaded", summariesByVideoId: {} });
+      return;
+    }
+
+    let cancelled = false;
+    dispatch({ type: "series_overview_loading_started" });
+    Promise.all(
+      processedVideos.map(async (video) => [
+        video.id,
+        await loadVideoSummary(state.selectedSeriesId, video.id),
+      ]),
+    )
+      .then((entries) => {
+        if (!cancelled) {
+          dispatch({
+            type: "series_overview_loaded",
+            summariesByVideoId: Object.fromEntries(entries),
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "加载系列概览失败" });
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
+
+  useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
     if (
       !selectedVideo ||

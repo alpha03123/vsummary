@@ -49,7 +49,13 @@ from backend.agent_graph.prompts import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
 from backend.api.schemas.responses import AgentChatResponse
 from backend.shared.llm.json_mode import validate_json_response
 from backend.video_summary.tools.notes import SAVE_NOTE_TOOL
-from backend.video_summary.library.models import TranscriptSegmentDTO, VideoSummaryDTO, VideoTranscriptDTO
+from backend.video_summary.library.models import (
+    LibrarySeriesDTO,
+    LibraryVideoCardDTO,
+    TranscriptSegmentDTO,
+    VideoSummaryDTO,
+    VideoTranscriptDTO,
+)
 
 
 class SeriesScopeContractTests(unittest.TestCase):
@@ -187,6 +193,49 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertEqual(retriever.last_search_kwargs["max_hits"], 5)
         self.assertNotIn("query_plan", result)
         self.assertNotIn("current_subplan", result)
+
+    def test_series_graph_injects_all_transcripts_when_full_series_fits_budget(self) -> None:
+        workspace = FakeSeriesContextWorkspace(transcript_text="完整系列转写")
+        graph = build_agent_graph(
+            series_query_processor=ExplodingSeriesQueryProcessor(),
+            retrieval_service=ExplodingSeriesRetriever(),
+            series_answer_synthesizer=FakeSeriesAnswerSynthesizer(),
+            workspace=workspace,
+            context_window_tokens=1_000,
+            reserved_output_tokens=100,
+        )
+
+        result = graph.invoke(series_graph_input("概括整个系列"))
+
+        self.assertEqual(result["series_context_mode"], "full_series")
+        self.assertEqual(result["retrieval_request"]["mode"], "full_series")
+        self.assertEqual(
+            [item["source_type"] for item in result["retrieval_results"]],
+            ["summary_global", "transcript_full", "summary_global", "transcript_full"],
+        )
+        self.assertEqual(
+            [item["text"] for item in result["retrieval_results"] if item["source_type"] == "transcript_full"],
+            ["[00:00] 完整系列转写 video-1", "[00:00] 完整系列转写 video-2"],
+        )
+
+    def test_series_graph_falls_back_to_rag_when_full_series_exceeds_budget(self) -> None:
+        retriever = FakeSeriesRetriever()
+        query_processor = FakeSeriesQueryProcessor()
+        graph = build_agent_graph(
+            series_query_processor=query_processor,
+            retrieval_service=retriever,
+            series_answer_synthesizer=FakeSeriesAnswerSynthesizer(),
+            workspace=FakeSeriesContextWorkspace(transcript_text="超长转写 " * 500),
+            context_window_tokens=300,
+            reserved_output_tokens=100,
+        )
+
+        result = graph.invoke(series_graph_input("概括整个系列"))
+
+        self.assertEqual(result["series_context_mode"], "rag")
+        self.assertIn("executed_queries", result["retrieval_request"])
+        self.assertTrue(retriever.search_calls)
+        self.assertEqual(query_processor.calls, 1)
 
     def test_series_retrieval_uses_subqueries_and_diversifies_by_video(self) -> None:
         retriever = QueryAwareSeriesRetriever()
@@ -1165,6 +1214,22 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertIn("[2.1] (00:12) 第一句", user_content)
         self.assertIn("[2.2] (00:42) 第二句", user_content)
         self.assertIn("必须使用 segment 的 anchor_id", messages[0].content)
+        self.assertIn("每个自然段或列表项最多使用 2 个引用", messages[0].content)
+
+    def test_series_answer_stream_messages_limit_citations_per_block(self) -> None:
+        synthesizer = SeriesAnswerSynthesizer(gateway=FakeAnswerGateway())
+
+        messages = synthesizer.build_text_messages(
+            user_message="这个系列讲了什么？",
+            query_understanding=SeriesQueryUnderstanding(
+                normalized_query="这个系列讲了什么？",
+                subqueries=["这个系列讲了什么？"],
+                filters={"series_id": "series-1"},
+            ),
+            series_catalog={"series_id": "series-1", "videos": []},
+        )
+
+        self.assertIn("每个自然段或列表项最多使用 2 个引用", messages[0].content)
 
 
 class FakeQueryGateway:
@@ -1211,6 +1276,18 @@ class ExplodingRetriever:
     def search(self, **kwargs):
         del kwargs
         raise AssertionError("small video transcript should be injected without RAG")
+
+
+class ExplodingSeriesRetriever:
+    def search(self, **kwargs):
+        del kwargs
+        raise AssertionError("small series should be injected without RAG")
+
+
+class ExplodingSeriesQueryProcessor:
+    def run(self, **kwargs):
+        del kwargs
+        raise AssertionError("small series should bypass query understanding")
 
 
 class FakeTranscriptRetriever:
@@ -1366,8 +1443,54 @@ class FakeVideoWorkspace:
         )
 
 
+class FakeSeriesContextWorkspace:
+    def __init__(self, *, transcript_text: str) -> None:
+        self._transcript_text = transcript_text
+        self._series = LibrarySeriesDTO(
+            id="series-1",
+            title="Series 1",
+            videos=[
+                LibraryVideoCardDTO(id="video-1", title="Video 1", source_name="video-1.mp4", processed=True, status="ready"),
+                LibraryVideoCardDTO(id="video-2", title="Video 2", source_name="video-2.mp4", processed=True, status="ready"),
+            ],
+        )
+
+    def list_series(self):
+        return [self._series]
+
+    def get_series_catalog(self, series_id: str):
+        del series_id
+        return None
+
+    def get_video_summary(self, series_id: str, video_id: str):
+        return VideoSummaryDTO(
+            series_id=series_id,
+            video_id=video_id,
+            title=f"Video {video_id[-1]}",
+            summary={"one_sentence_summary": f"{video_id} 摘要", "chapters": []},
+        )
+
+    def get_video_transcript(self, series_id: str, video_id: str):
+        return VideoTranscriptDTO(
+            series_id=series_id,
+            video_id=video_id,
+            title=f"Video {video_id[-1]}",
+            duration_seconds=10.0,
+            segments=[
+                TranscriptSegmentDTO(
+                    start_seconds=0.0,
+                    end_seconds=10.0,
+                    text=f"{self._transcript_text} {video_id}",
+                )
+            ],
+        )
+
 class FakeSeriesQueryProcessor:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def run(self, **kwargs):
+        self.calls += 1
         debug_trace = kwargs.get("debug_trace")
         result = SeriesQueryUnderstanding(
             normalized_query="这个系列主要讲哪些主题，以及推荐的学习顺序是什么？",
@@ -1605,6 +1728,17 @@ def video_graph_input(user_message: str) -> dict[str, object]:
         "scope_type": "video",
         "series_id": "series-1",
         "video_id": "video-1",
+        "user_message": user_message,
+        "memory_messages": [],
+    }
+
+
+def series_graph_input(user_message: str) -> dict[str, object]:
+    return {
+        "session_id": "series|series-1|series-home",
+        "scope_type": "series",
+        "series_id": "series-1",
+        "video_id": "",
         "user_message": user_message,
         "memory_messages": [],
     }

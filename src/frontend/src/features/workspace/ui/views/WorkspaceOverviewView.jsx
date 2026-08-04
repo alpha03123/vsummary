@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Captions, LoaderCircle, Pencil, Sparkles } from "lucide-react";
+import { LoaderCircle, Pencil } from "lucide-react";
 
-import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { WorkspaceContentEditorModal } from "./WorkspaceContentEditorModal";
+import { WorkspaceOverviewContent } from "./WorkspaceOverviewContent";
 
 export function WorkspaceOverviewView({
   ui,
@@ -11,6 +11,7 @@ export function WorkspaceOverviewView({
   summary,
   selectedVideo,
   selectedChapterId,
+  citationFocus,
   summaryLoading,
   isGeneratingSelectedVideo,
   onSeek,
@@ -80,116 +81,13 @@ export function WorkspaceOverviewView({
       <div className="flex justify-end">
         <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"><Pencil size={16} />编辑内容</button>
       </div>
-      <article className="workspace-accent-panel relative overflow-hidden rounded-3xl border p-6 text-stone-900 dark:text-stone-100">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Sparkles size={64} />
-        </div>
-        <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
-          Core Problem
-        </p>
-        <p className="relative z-10 text-base font-medium leading-relaxed">
-          {summary.core_problem ?? "无核心问题描述。"}
-        </p>
-      </article>
-
-      {ui.showTakeaways && summary.key_takeaways.length ? (
-        <article className="workspace-muted-panel rounded-3xl border p-6">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Key Takeaways</p>
-          <div className="flex flex-col gap-3">
-            {summary.key_takeaways.map((takeaway) => (
-              <div key={takeaway} className="flex items-start gap-3">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-                <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300">{takeaway}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-      ) : null}
-
-      <div className="mt-2 flex flex-col gap-4">
-        <h2 className="mb-2 text-xl font-bold text-stone-800">章节纪要</h2>
-        {(summary.chapters ?? []).map((chapter, index) => (
-          <article
-            key={chapter.id}
-            id={chapter.id}
-            className={`workspace-elevated-panel flex flex-col gap-4 rounded-3xl border p-5 transition-all duration-300 ${
-              chapter.id === selectedChapterId
-                ? "border-accent shadow-md ring-2 ring-accent/10"
-                : "border-stone-200/70 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => onSeek?.({
-                seconds: chapter.start_seconds,
-                endSeconds: chapter.end_seconds,
-                chapterTitle: chapter.title,
-              })}
-              className="flex w-full items-start justify-between gap-3 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-stone-100/60 dark:hover:bg-neutral-800/60"
-            >
-              <div>
-                <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Chapter {index + 1}</p>
-                <h3 className="text-lg font-bold leading-tight text-stone-900 dark:text-stone-100">{chapter.title}</h3>
-              </div>
-              <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-xs font-mono font-bold text-stone-600 dark:bg-stone-900 dark:text-stone-400">
-                {formatRange(chapter.start_seconds, chapter.end_seconds)}
-              </span>
-            </button>
-
-            <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">{chapter.summary}</p>
-
-            <div className="mt-2 flex flex-col gap-2.5">
-              {chapter.key_points.map((point) => (
-                <div key={point} className="flex items-start gap-3">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-                  <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300">{point}</p>
-                </div>
-              ))}
-            </div>
-
-            {chapter.transcript_segments.length ? (
-              <details className="group mt-1 rounded-2xl border border-stone-200/80 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-950/60">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-accent shadow-sm dark:bg-stone-900">
-                      <Captions size={16} />
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">查看本章原文</p>
-                      <p className="text-xs text-stone-600 dark:text-stone-400">{chapter.transcript_segments.length} 段转写</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">
-                    {formatRange(chapter.start_seconds, chapter.end_seconds)}
-                  </span>
-                </summary>
-
-                <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
-                  <div className="flex flex-col gap-3">
-                    {chapter.transcript_segments.map((segment) => (
-                      <button
-                        key={`${chapter.id}-${segment.start_seconds}-${segment.end_seconds}`}
-                        type="button"
-                        onClick={() => onSeek?.({
-                          seconds: segment.start_seconds,
-                          endSeconds: segment.end_seconds,
-                          chapterTitle: chapter.title,
-                        })}
-                        className="block w-full rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors hover:bg-accent/5 dark:bg-neutral-900 dark:hover:bg-accent/10"
-                      >
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
-                          {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
-                        </p>
-                        <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </details>
-            ) : null}
-          </article>
-        ))}
-      </div>
+      <WorkspaceOverviewContent
+        ui={ui}
+        summary={summary}
+        selectedChapterId={selectedChapterId}
+        citationFocus={citationFocus}
+        onSeek={onSeek}
+      />
       {editorOpen ? <WorkspaceContentEditorModal onClose={() => setEditorOpen(false)} onLoadSummaryMarkdown={onLoadSummaryMarkdown} onLoadTranscriptMarkdown={onLoadTranscriptMarkdown} onUpdateSummary={onUpdateSummary} onUpdateTranscript={onUpdateTranscript} /> : null}
     </div>
   );

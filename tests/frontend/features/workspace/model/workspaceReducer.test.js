@@ -8,6 +8,28 @@ import {
   createInitialWorkspaceState,
 } from "@src/features/workspace/model/workspaceState";
 
+describe("workspaceReducer series overview", () => {
+  it("stores summaries independently from the selected video summary", () => {
+    let state = workspaceReducer(createInitialWorkspaceState(), {
+      type: "series_overview_loading_started",
+    });
+    state = workspaceReducer(state, {
+      type: "series_overview_loaded",
+      summariesByVideoId: {
+        "video-1": { title: "第一讲" },
+        "video-2": { title: "第二讲" },
+      },
+    });
+
+    expect(state.seriesOverviewLoading).toBe(false);
+    expect(state.seriesOverviewSummariesByVideoId).toEqual({
+      "video-1": { title: "第一讲" },
+      "video-2": { title: "第二讲" },
+    });
+    expect(state.summary).toBeNull();
+  });
+});
+
 describe("workspaceReducer model download failures", () => {
   it("keeps faster-whisper download failure on the matching model", () => {
     const state = {

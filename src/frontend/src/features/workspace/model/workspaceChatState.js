@@ -109,6 +109,13 @@ export function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
         (messages) => markChatStreamFailed(messages, requestId, event.payload?.message),
         false,
       );
+    case "cancelled":
+      return transformChatThreadMessages(
+        state,
+        chatScopeKey,
+        (messages) => markChatStreamCancelled(messages, requestId, event.payload?.message),
+        false,
+      );
     default:
       return state;
   }
@@ -145,8 +152,8 @@ function buildThinkingMessage(requestId, payload, { status }) {
     role: "assistant",
     kind: "thought-trace",
     content: hasStages
-      ? status === "running" ? "执行中" : status === "failed" ? "执行失败" : "执行完成"
-      : status === "running" ? "思考中" : status === "failed" ? "思路失败" : "思路已完成",
+      ? status === "running" ? "执行中" : status === "failed" ? "执行失败" : status === "cancelled" ? "已中断" : "执行完成"
+      : status === "running" ? "思考中" : status === "failed" ? "思路失败" : status === "cancelled" ? "已中断" : "思路已完成",
     thoughtTrace: {
       status,
       summary,
@@ -157,6 +164,8 @@ function buildThinkingMessage(requestId, payload, { status }) {
       ? hasStages ? "Notebook Assistant • 执行中" : "Notebook Assistant • 思考中"
       : status === "failed"
         ? `Notebook Assistant • ${hasStages ? "执行失败" : "思路失败"}`
+      : status === "cancelled"
+        ? `Notebook Assistant • ${hasStages ? "执行已中断" : "思路已中断"}`
       : buildStatusMeta(hasStages ? "执行" : "思路", durationMs),
   };
 }
@@ -335,6 +344,8 @@ function buildStreamingAnswerMessage(requestId, content, status, durationMs, usa
       ? "Notebook Assistant • 输出中"
       : status === "failed"
         ? "Notebook Assistant • 输出失败"
+        : status === "cancelled"
+          ? "Notebook Assistant • 已中断"
       : buildAssistantChatMeta(durationMs, usage),
   };
 }
@@ -395,6 +406,67 @@ function markChatStreamFailed(messages, requestId, errorMessage) {
 
   if (thoughtIndex === -1 && toolTraceIndex === -1 && answerIndex === -1) {
     nextMessages.push(buildStreamingAnswerMessage(requestId, nextErrorMessage, "failed", null, null));
+  }
+
+  return nextMessages;
+}
+
+function markChatStreamCancelled(messages, requestId, cancellationMessage) {
+  const nextMessages = [...messages];
+  const message = typeof cancellationMessage === "string" && cancellationMessage.trim()
+    ? cancellationMessage.trim()
+    : "本次对话已中断";
+  const thoughtIndex = nextMessages.findIndex((item) => item.id === `thought-${requestId}`);
+  if (thoughtIndex !== -1) {
+    const currentMessage = nextMessages[thoughtIndex];
+    nextMessages[thoughtIndex] = buildThinkingMessage(
+      requestId,
+      {
+        summary: currentMessage?.thoughtTrace?.summary ?? message,
+        duration_ms: currentMessage?.thoughtTrace?.durationMs ?? null,
+        previous_stages: (currentMessage?.thoughtTrace?.stages ?? []).map((stage) => ({
+          ...stage,
+          status: stage.status === "running" ? "cancelled" : stage.status,
+        })),
+      },
+      { status: "cancelled" },
+    );
+  }
+
+  const toolTraceIndex = nextMessages.findIndex((item) => item.id === `tool-trace-${requestId}`);
+  if (toolTraceIndex !== -1) {
+    const currentMessage = nextMessages[toolTraceIndex];
+    const currentSteps = Array.isArray(currentMessage?.toolTrace?.steps) ? currentMessage.toolTrace.steps : [];
+    nextMessages[toolTraceIndex] = {
+      ...currentMessage,
+      content: "工具调用已中断",
+      toolTrace: {
+        ...currentMessage.toolTrace,
+        status: "cancelled",
+        steps: currentSteps.map((step) => ({
+          ...step,
+          status: step.status === "running" ? "cancelled" : step.status,
+        })),
+      },
+      meta: "Notebook Assistant • 工具链已中断",
+    };
+  }
+
+  const answerIndex = nextMessages.findIndex((item) => item.id === `assistant-${requestId}`);
+  if (answerIndex !== -1) {
+    const currentMessage = nextMessages[answerIndex];
+    nextMessages[answerIndex] = buildStreamingAnswerMessage(
+      requestId,
+      currentMessage?.content || message,
+      "cancelled",
+      null,
+      currentMessage?.usage ?? null,
+      currentMessage?.citations ?? null,
+    );
+  }
+
+  if (thoughtIndex === -1 && toolTraceIndex === -1 && answerIndex === -1) {
+    nextMessages.push(buildStreamingAnswerMessage(requestId, message, "cancelled", null, null));
   }
 
   return nextMessages;

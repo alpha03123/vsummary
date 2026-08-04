@@ -465,6 +465,7 @@ export function workspaceReducer(state, action) {
         generationMode: null,
         generatingMindmapKey: null,
         seriesMindmapLoading: false,
+        seriesOverviewLoading: false,
         generatingSeriesMindmap: false,
         generationProgress: null,
         generationSnapshot: null,
@@ -592,8 +593,14 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         selectedToolId: action.toolId,
+        citationFocus: null,
         knowledgeCardsFeedback: action.toolId === "knowledge-cards" ? state.knowledgeCardsFeedback : null,
         error: "",
+      };
+    case "citation_focus_requested":
+      return {
+        ...state,
+        citationFocus: action.focus,
       };
     case "series_context_selected": {
       const chatBaseScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");
@@ -662,6 +669,26 @@ export function workspaceReducer(state, action) {
         summary: null,
         summaryLoading: false,
         selectedChapterId: null,
+      };
+    case "series_overview_loading_started":
+      return {
+        ...state,
+        seriesOverviewSummariesByVideoId: {},
+        seriesOverviewLoading: true,
+        error: "",
+      };
+    case "series_overview_loaded":
+      return {
+        ...state,
+        seriesOverviewSummariesByVideoId: action.summariesByVideoId,
+        seriesOverviewLoading: false,
+        error: "",
+      };
+    case "series_overview_cleared":
+      return {
+        ...state,
+        seriesOverviewSummariesByVideoId: {},
+        seriesOverviewLoading: false,
       };
     case "mindmap_loading_started":
       return {

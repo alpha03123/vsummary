@@ -75,8 +75,8 @@ describe("WorkspaceMarkdownMessage", () => {
     expect(screen.getByText(/^字幕内容.*\.\.\.$/)).toBeInTheDocument();
   });
 
-  it("opens video seek references when clicking transcript citations", () => {
-    const onOpenSeekReference = vi.fn();
+  it("opens citation references with video locations when clicking transcript citations", () => {
+    const onOpenCitationReference = vi.fn();
 
     render(
       <WorkspaceMarkdownMessage
@@ -90,6 +90,7 @@ describe("WorkspaceMarkdownMessage", () => {
               {
                 slot: 1,
                 target_type: "video",
+                video_id: "video-1",
                 video_title: "Video 1",
                 start_seconds: 42,
                 end_seconds: 55,
@@ -103,13 +104,14 @@ describe("WorkspaceMarkdownMessage", () => {
             ],
           },
         ]}
-        onOpenSeekReference={onOpenSeekReference}
+        onOpenCitationReference={onOpenCitationReference}
       />,
     );
 
     fireEvent.click(screen.getByRole("link", { name: "1" }));
 
-    expect(onOpenSeekReference).toHaveBeenCalledWith({
+    expect(onOpenCitationReference).toHaveBeenCalledWith({
+      videoId: "video-1",
       seconds: 42,
       endSeconds: 55,
       matchedText: "关键知识点对应的字幕",
@@ -118,8 +120,8 @@ describe("WorkspaceMarkdownMessage", () => {
     });
   });
 
-  it("opens video seek references for transcript segment citation anchors", () => {
-    const onOpenSeekReference = vi.fn();
+  it("opens citation references for transcript segment citation anchors", () => {
+    const onOpenCitationReference = vi.fn();
 
     render(
       <WorkspaceMarkdownMessage
@@ -146,13 +148,13 @@ describe("WorkspaceMarkdownMessage", () => {
             ],
           },
         ]}
-        onOpenSeekReference={onOpenSeekReference}
+        onOpenCitationReference={onOpenCitationReference}
       />,
     );
 
     fireEvent.click(screen.getByRole("link", { name: "2.1" }));
 
-    expect(onOpenSeekReference).toHaveBeenCalledWith({
+    expect(onOpenCitationReference).toHaveBeenCalledWith({
       seconds: 12,
       endSeconds: 18,
       matchedText: "关键知识点对应的精确字幕",

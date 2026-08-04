@@ -25,4 +25,5 @@ describe("WorkspaceChatPanel", () => {
 
     expect(onSubmitChat).toHaveBeenCalledWith("当前视频处理到哪一步了？");
   });
+
 });

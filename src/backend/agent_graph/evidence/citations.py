@@ -82,6 +82,8 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
                             video_id=video_id,
                             video_title=title,
                             chapter_id=_as_str(item.get("chapter_id")),
+                            start_seconds=_as_float(item.get("start_seconds")),
+                            end_seconds=_as_float(item.get("end_seconds")),
                             text=_as_str(item.get("snippet")) or _as_str(item.get("text")) or "summary evidence",
                         )
                     ],
@@ -307,6 +309,8 @@ def _append_summary_items(citations: list[CitationReference], items: object, nex
                         video_id=video_id,
                         video_title=title,
                         chapter_id=_as_str(item.get("chapter_id")),
+                        start_seconds=_as_float(item.get("start_seconds")),
+                        end_seconds=_as_float(item.get("end_seconds")),
                         text=_as_str(item.get("snippet")) or _as_str(item.get("text")) or "summary evidence",
                     )
                 ],

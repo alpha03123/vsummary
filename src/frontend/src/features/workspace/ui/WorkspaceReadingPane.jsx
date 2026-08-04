@@ -46,6 +46,11 @@ const WorkspaceSeriesMindmapView = lazy(() =>
     default: module.WorkspaceSeriesMindmapView,
   })),
 );
+const WorkspaceSeriesOverviewView = lazy(() =>
+  import("./views/WorkspaceSeriesOverviewView").then((module) => ({
+    default: module.WorkspaceSeriesOverviewView,
+  })),
+);
 
 const WorkspaceChatManagementView = lazy(() =>
   import("./views/WorkspaceChatManagementView").then((module) => ({
@@ -75,6 +80,7 @@ export function WorkspaceReadingPane({
   selectedNode,
   previewUrl,
   playerSeekRequest,
+  citationFocus,
   selectedToolId,
   selectedChapterId,
   summaryLoading,
@@ -87,8 +93,11 @@ export function WorkspaceReadingPane({
   seriesMindmap,
   seriesMindmapAvailable,
   seriesMindmapLoading,
+  seriesOverviewSummariesByVideoId,
+  seriesOverviewLoading,
   generatingSeriesMindmap,
   onGenerateSeriesMindmap,
+  onSelectVideo,
   mindmapGenerationProgress,
   onSelectTool,
   onFocusNode,
@@ -182,6 +191,19 @@ export function WorkspaceReadingPane({
                       mindmapGenerationProgress={mindmapGenerationProgress}
                     />
                   ) : null}
+                  {selectedToolId === "series-overview" ? (
+                    <WorkspaceSeriesOverviewView
+                      activeSeries={activeSeries}
+                      ui={ui}
+                      summariesByVideoId={seriesOverviewSummariesByVideoId}
+                      loading={seriesOverviewLoading}
+                      citationFocus={citationFocus}
+                      onOpenVideoOverview={(videoId) => {
+                        onSelectVideo(activeSeries.id, videoId);
+                        onSelectTool("overview");
+                      }}
+                    />
+                  ) : null}
                   {isStudioHome ? (
                     <div className="pb-8 pt-2">
                       {isPlaygroundHome ? (
@@ -213,6 +235,7 @@ export function WorkspaceReadingPane({
                       summary={summary}
                       selectedVideo={selectedVideo}
                       selectedChapterId={selectedChapterId}
+                      citationFocus={citationFocus}
                       summaryLoading={summaryLoading}
                       isGeneratingSelectedVideo={isGeneratingSelectedVideo}
                       onSeek={onSeek}
@@ -368,13 +391,13 @@ function videoSourceExportUrl(seriesId, videoId) {
 }
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-[min(100%,20rem)] flex-1">
         <p className="mb-1 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">{eyebrow}</p>
-        <h2 className="text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{title}</h2>
+        <h2 className="break-words text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{title}</h2>
         <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{description}</p>
       </div>
-      {children ? <div className="shrink-0">{children}</div> : null}
+      {children ? <div className="ml-auto shrink-0">{children}</div> : null}
     </div>
   );
 }

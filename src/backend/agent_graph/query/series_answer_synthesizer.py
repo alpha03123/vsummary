@@ -239,6 +239,9 @@ _STREAMING_CITED_ANSWER_PROMPT = (
     "- evidence_items 已按 Source 1、Source 2 等数字编号。\n"
     "- summary / web evidence 使用 Source 编号引用，例如 [1] 或 [2]。\n"
     "- transcript evidence 如果包含 segments，必须使用 segment 的 anchor_id 引用，例如 [2.1]，不要用粗粒度 [2]。\n"
+    "- 引用只用于支撑关键事实、结论或可跳转定位；不必为每句都引用。\n"
+    "- 每个自然段或列表项最多使用 2 个引用；相邻的多个字幕片段支撑同一结论时，只选最直接的一条。\n"
+    "- 将引用放在对应自然段或列表项的结尾；同一自然段或列表项内不要重复相同引用。\n"
     "- 只能使用真实存在的 Source 编号或 transcript anchor_id，不要输出 evidence_id、local-*、web-* 或 e* 这类内部 ID，不要编造引用编号。\n"
     "- 不要输出 JSON，不要输出 citations 或 used_source_types 字段。\n"
 )

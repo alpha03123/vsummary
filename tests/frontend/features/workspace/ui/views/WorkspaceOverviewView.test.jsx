@@ -86,6 +86,21 @@ describe("WorkspaceOverviewView chapter + transcript clicks", () => {
     });
   });
 
+  it("opens and highlights the cited transcript segment", () => {
+    renderView({
+      citationFocus: {
+        seconds: 12,
+        endSeconds: 18,
+        requestId: "citation-1",
+      },
+    });
+
+    const details = document.querySelector("details");
+    const segment = screen.getByText("段落二").closest("button");
+    expect(details).toHaveAttribute("open");
+    expect(segment).toHaveClass("ring-2");
+  });
+
   it("clicking on summary or key_points does NOT call onSeek", () => {
     const { onSeek } = renderView();
     fireEvent.click(screen.getByText("本章讲了一些东西"));

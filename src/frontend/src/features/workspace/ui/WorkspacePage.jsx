@@ -53,6 +53,7 @@ export function WorkspacePage({ page }) {
     mindmap,
     seriesMindmap,
     seriesMindmapAvailable,
+    seriesOverviewSummariesByVideoId,
     knowledgeCards,
     knowledgeCardsGenerating,
     knowledgeCardsFeedback,
@@ -62,6 +63,7 @@ export function WorkspacePage({ page }) {
     selectedNode,
     previewUrl,
     playerSeekRequest,
+    citationFocus,
     selectedContextType,
   } = shell;
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -97,8 +99,10 @@ export function WorkspacePage({ page }) {
     knowledgeMemorySnapshot: state.knowledgeMemorySnapshot,
     onSelectChatSession: chat.selectChatSession,
     onOpenSeekReference: chat.openSeekReference,
+    onOpenCitationReference: chat.openCitationReference,
     onOpenSettings: () => actions.openSettingsPanel("network"),
     onSubmitChat: chat.submit,
+    onCancelChat: chat.cancel,
   };
 
   useEffect(() => {
@@ -200,6 +204,8 @@ export function WorkspacePage({ page }) {
         seriesMindmap={seriesMindmap}
         seriesMindmapAvailable={seriesMindmapAvailable}
         seriesMindmapLoading={generation.seriesMindmapLoading}
+        seriesOverviewSummariesByVideoId={seriesOverviewSummariesByVideoId}
+        seriesOverviewLoading={generation.seriesOverviewLoading}
         generatingSeriesMindmap={generation.generatingSeriesMindmap}
         mindmapGenerationProgress={generation.mindmapGenerationProgress}
         knowledgeCards={knowledgeCards}
@@ -212,6 +218,7 @@ export function WorkspacePage({ page }) {
         selectedNode={selectedNode}
         previewUrl={previewUrl}
         playerSeekRequest={playerSeekRequest}
+        citationFocus={citationFocus}
         onSeek={shell.player.seekToTime}
         selectedToolId={state.selectedToolId}
         selectedChapterId={state.selectedChapterId}
@@ -224,6 +231,7 @@ export function WorkspacePage({ page }) {
         isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
         isGeneratingSelectedVideo={generation.isGeneratingSummary}
         onSelectTool={actions.selectTool}
+        onSelectVideo={actions.selectVideo}
         onFocusNode={actions.focusNode}
         onGenerateMindmap={actions.generateMindmap}
         onGenerateSeriesMindmap={actions.generateSeriesMindmap}

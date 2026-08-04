@@ -177,7 +177,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">常规与显示</h3>
-                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">这里的配置会写入后端的 `settings.toml` 并实时生效</p>
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">常规配置项</p>
                 </div>
 
                 {/* Theme Setting */}
@@ -225,7 +225,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">AI 总结能力</h3>
-                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制总结流程，会写入 `settings.toml`。</p>
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制总结流程</p>
                 </div>
 
                 <WorkspaceSettingRow
@@ -582,7 +582,7 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">对话管理</h3>
-                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制对话流程以及功能，会写入 `settings.toml`。</p>
+                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制对话流程以及功能</p>
                 </div>
 
                 <WorkspaceSettingRow

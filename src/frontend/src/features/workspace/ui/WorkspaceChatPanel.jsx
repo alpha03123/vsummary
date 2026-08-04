@@ -1,6 +1,6 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, ArrowUp, LoaderCircle, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle } from "lucide-react";
+import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 import { CopyToClipboardButton } from "./shared/CopyToClipboardButton";
@@ -52,10 +52,15 @@ export function WorkspaceChatPanel({
   knowledgeMemorySnapshot = null,
   onSelectChatSession,
   onOpenSeekReference,
+  onOpenCitationReference,
   onOpenSettings,
   onSubmitChat,
+  onCancelChat,
 }) {
   const [draft, setDraft] = useState("");
+  const chatHistoryRef = useRef(null);
+  const bottomAlignedSessionRef = useRef(null);
+  const visibleSessionRef = useRef(null);
   const scopeLabel = selectedContextType === "series"
     ? activeSeries?.title ?? "当前系列"
     : selectedVideo?.title ?? activeSeries?.title ?? workspaceTitle ?? "当前视频";
@@ -67,12 +72,41 @@ export function WorkspaceChatPanel({
     knowledgeMemorySnapshot?.status === "running";
   const interactionDisabled = chatPending || seriesRagLocked || seriesIndexingLocked;
   const lockedContentClass = seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
+  const conversationTurns = useMemo(
+    () => chatMessages
+      .filter((message) => message.role === "user" && message.kind == null && typeof message.content === "string" && message.content.trim())
+      .map((message) => ({ id: message.id, prompt: message.content.trim() })),
+    [chatMessages],
+  );
   const suggestedPrompts = [
     { title: "总结核心结论", desc: "给我总结一下这个视频的核心结论", icon: Sparkles },
     { title: "记录重点知识", desc: "帮我记一下这个视频的重点", icon: FileText },
     { title: "提取系列主题", desc: "这个系列主要讲了哪些主题？", icon: BrainCircuit },
     { title: "时间轴定位", desc: "某个知识点在视频里的什么时间出现？", icon: Clock3 },
   ];
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      return undefined;
+    }
+    if (visibleSessionRef.current !== activeSessionId) {
+      visibleSessionRef.current = activeSessionId;
+      bottomAlignedSessionRef.current = null;
+    }
+    if (chatMessages.length === 0 || bottomAlignedSessionRef.current === activeSessionId) {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const chatHistory = chatHistoryRef.current;
+      if (!chatHistory) {
+        return;
+      }
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+      bottomAlignedSessionRef.current = activeSessionId;
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeSessionId, chatMessages.length]);
 
   function handleSubmit() {
     const trimmed = draft.trim();
@@ -81,6 +115,11 @@ export function WorkspaceChatPanel({
     }
     onSubmitChat(trimmed);
     setDraft("");
+  }
+
+  function jumpToConversationTurn(messageId) {
+    const target = document.getElementById(`chat-message-${messageId}`);
+    target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
   function renderMessageContent(message, isAssistant) {
@@ -105,7 +144,7 @@ export function WorkspaceChatPanel({
         <WorkspaceMarkdownMessage
           content={message.content}
           citations={message.citations}
-          onOpenSeekReference={onOpenSeekReference}
+          onOpenCitationReference={onOpenCitationReference}
         />
       </Suspense>
     );
@@ -165,9 +204,11 @@ export function WorkspaceChatPanel({
 
 
       {/* Chat History Area */}
-      <div
-        className={`flex-1 overflow-auto p-6 md:p-8 flex flex-col gap-6 transition ${lockedContentClass}`}
-      >
+      <div className={`relative min-h-0 flex-1 transition ${lockedContentClass}`}>
+        <div
+          ref={chatHistoryRef}
+          className="h-full overflow-auto p-6 pl-14 md:p-8 md:pl-16 flex flex-col gap-6"
+        >
         {chatMessages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 mt-8">
             <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-6 border border-accent/20 shadow-sm">
@@ -207,6 +248,7 @@ export function WorkspaceChatPanel({
           return (
             <div
               key={message.id}
+              id={`chat-message-${message.id}`}
               className={`flex items-start gap-4 max-w-2xl ${isAssistant ? "" : "self-end justify-end"}`}
             >
               {isAssistant ? (
@@ -253,6 +295,8 @@ export function WorkspaceChatPanel({
             </div>
           </div>
         ) : null}
+        </div>
+        <ConversationJumpRail turns={conversationTurns} onJump={jumpToConversationTurn} />
       </div>
 
       {/* Floating Composer Area */}
@@ -282,11 +326,13 @@ export function WorkspaceChatPanel({
           <div className="absolute right-3 bottom-3">
             <button
               type="button"
-              onClick={handleSubmit}
-              disabled={interactionDisabled || !draft.trim()}
+              onClick={chatPending ? onCancelChat : handleSubmit}
+              disabled={chatPending ? false : interactionDisabled || !draft.trim()}
+              aria-label={chatPending ? "中断对话" : "发送消息"}
+              title={chatPending ? "中断对话" : "发送消息"}
               className="flex items-center justify-center w-10 h-10 rounded-[14px] bg-stone-900 dark:bg-white text-white dark:text-black hover:bg-accent hover:text-white dark:hover:bg-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group-focus-within:bg-accent group-focus-within:text-white"
             >
-              {chatPending ? <LoaderCircle size={18} className="animate-spin" /> : <ArrowUp size={20} strokeWidth={2.5} />}
+              {chatPending ? <Square size={16} fill="currentColor" /> : <ArrowUp size={20} strokeWidth={2.5} />}
             </button>
           </div>
         </div>
@@ -307,6 +353,81 @@ export function WorkspaceChatPanel({
 
 function AssistantMessageFallback({ content }) {
   return <div className="whitespace-pre-wrap break-words">{content}</div>;
+}
+
+function ConversationJumpRail({ turns, onJump }) {
+  const [activeTurnId, setActiveTurnId] = useState(null);
+  const activeIndex = turns.findIndex((turn) => turn.id === activeTurnId);
+  const activeTurn = activeIndex >= 0 ? turns[activeIndex] : null;
+
+  if (!turns.length) {
+    return null;
+  }
+
+  function getNearestTurn(event) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativePosition = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
+    const index = Math.max(0, Math.min(turns.length - 1, Math.round(relativePosition * (turns.length - 1))));
+    return turns[index];
+  }
+
+  function activateNearestTurn(event, shouldJump = false) {
+    const turn = getNearestTurn(event);
+    setActiveTurnId(turn.id);
+    if (shouldJump) {
+      onJump(turn.id);
+    }
+  }
+
+  return (
+    <nav
+      aria-label="对话快速跳转"
+      onPointerMove={(event) => activateNearestTurn(event)}
+      onClick={(event) => activateNearestTurn(event, true)}
+      onMouseLeave={() => setActiveTurnId(null)}
+      className="absolute left-2 top-1/2 z-20 -translate-y-1/2"
+    >
+      <div className="relative flex flex-col items-start gap-1.5 py-2">
+        {turns.map((turn, index) => {
+          const distance = activeIndex < 0 ? null : Math.abs(index - activeIndex);
+          const width = distance == null ? 10 : Math.max(10, 34 - distance * 7);
+          const selected = index === activeIndex;
+          return (
+            <button
+              key={turn.id}
+              type="button"
+              aria-label={`跳转到：${turn.prompt}`}
+              aria-current={selected ? "true" : undefined}
+              onMouseEnter={() => setActiveTurnId(turn.id)}
+              onFocus={() => setActiveTurnId(turn.id)}
+              onBlur={() => setActiveTurnId(null)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setActiveTurnId(turn.id);
+                onJump(turn.id);
+              }}
+              className={`h-1 rounded-full transition-[width,background-color] duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 ${
+                selected
+                  ? "bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.16)] dark:bg-white"
+                  : "bg-stone-400/80 hover:bg-stone-500 dark:bg-stone-600 dark:hover:bg-stone-400"
+              }`}
+              style={{ width: `${width}px` }}
+            />
+          );
+        })}
+      </div>
+      {activeTurn ? (
+        <div className="pointer-events-none absolute left-full top-1/2 ml-3 w-52 -translate-y-1/2 rounded-md border border-stone-200/90 bg-white/95 px-3 py-2 text-xs font-medium leading-5 text-stone-700 shadow-lg backdrop-blur dark:border-stone-700 dark:bg-stone-950/95 dark:text-stone-200">
+          {truncateConversationPrompt(activeTurn.prompt)}
+        </div>
+      ) : null}
+    </nav>
+  );
+}
+
+function truncateConversationPrompt(prompt) {
+  const maximumLength = 42;
+  return prompt.length > maximumLength ? `${prompt.slice(0, maximumLength).trimEnd()}...` : prompt;
 }
 
 function WorkspaceContextUsageInline({ usage, loading }) {
@@ -366,6 +487,7 @@ function WorkspaceToolTraceMessage({ message }) {
   const isRunning = message.toolTrace?.status === "running";
   const isIdle = message.toolTrace?.status === "idle";
   const isFailed = message.toolTrace?.status === "failed";
+  const isCancelled = message.toolTrace?.status === "cancelled";
 
   return (
     <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
@@ -392,6 +514,10 @@ function WorkspaceToolTraceMessage({ message }) {
                 <span className="inline-flex items-center gap-1 rounded-full bg-danger-subtle px-2 py-0.5 text-[11px] font-medium text-danger">
                   失败
                 </span>
+              ) : isCancelled ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                  已中断
+                </span>
               ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
@@ -399,6 +525,8 @@ function WorkspaceToolTraceMessage({ message }) {
                 ? "工具正在执行中"
                 : isFailed
                   ? "工具调用过程中发生错误"
+                  : isCancelled
+                    ? "本轮工具调用已中断"
                   : isIdle
                     ? "当前这一步已完成，等待下一步规划"
                     : "展开查看本轮实际调用的工具名和步骤说明"}
@@ -424,9 +552,11 @@ function WorkspaceToolTraceMessage({ message }) {
                   ? "bg-warning-subtle text-warning"
                   : step.status === "failed"
                     ? "bg-danger-subtle text-danger"
+                    : step.status === "cancelled"
+                      ? "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
                     : "bg-success-subtle text-success"
                   }`}>
-                  {step.status === "running" ? "进行中" : step.status === "failed" ? "失败" : "已完成"}
+                  {step.status === "running" ? "进行中" : step.status === "failed" ? "失败" : step.status === "cancelled" ? "已中断" : "已完成"}
                 </span>
                 {step.target ? (
                   <span className="truncate text-xs text-stone-600 dark:text-stone-400">({step.target})</span>
@@ -502,6 +632,7 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
 function WorkspaceThoughtTraceMessage({ message }) {
   const isRunning = message.thoughtTrace?.status === "running";
   const isFailed = message.thoughtTrace?.status === "failed";
+  const isCancelled = message.thoughtTrace?.status === "cancelled";
   const durationLabel = formatDurationLabel(message.thoughtTrace?.durationMs);
   const summary = typeof message.thoughtTrace?.summary === "string" ? message.thoughtTrace.summary : "";
   const stages = Array.isArray(message.thoughtTrace?.stages) ? message.thoughtTrace.stages : [];
@@ -527,7 +658,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
                 ) : null}
               </div>
               <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                {isRunning ? "当前按图节点顺序执行中" : isFailed ? "本轮图节点执行失败" : "本轮图节点执行已完成"}
+                {isRunning ? "当前按图节点顺序执行中" : isFailed ? "本轮图节点执行失败" : isCancelled ? "本轮图节点执行已中断" : "本轮图节点执行已完成"}
               </p>
             </div>
             <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
@@ -540,6 +671,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
               {stages.map((stage) => {
                 const stageRunning = stage.status === "running";
                 const stageFailed = stage.status === "failed";
+                const stageCancelled = stage.status === "cancelled";
                 const stageDurationLabel = formatDurationLabel(stage.durationMs);
                 return (
                   <motion.div
@@ -556,6 +688,8 @@ function WorkspaceThoughtTraceMessage({ message }) {
                           ? "bg-info-subtle text-info"
                           : stageFailed
                             ? "bg-danger-subtle text-danger"
+                            : stageCancelled
+                              ? "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
                             : "bg-success-subtle text-success"
                           }`}>
                           {stageRunning ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
@@ -570,9 +704,11 @@ function WorkspaceThoughtTraceMessage({ message }) {
                           ? "bg-info-subtle text-info"
                           : stageFailed
                             ? "bg-danger-subtle text-danger"
+                            : stageCancelled
+                              ? "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
                             : "bg-success-subtle text-success"
                           }`}>
-                          {stageRunning ? "执行中" : stageFailed ? "失败" : "已完成"}
+                          {stageRunning ? "执行中" : stageFailed ? "失败" : stageCancelled ? "已中断" : "已完成"}
                         </span>
                         {stageDurationLabel ? (
                           <span className="text-xs text-stone-500 dark:text-stone-500">用时 {stageDurationLabel}</span>
@@ -607,7 +743,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
               ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-              {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : isFailed ? "本轮思路执行失败，展开查看错误摘要" : "展开查看本轮对问题的思路摘要"}
+              {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : isFailed ? "本轮思路执行失败，展开查看错误摘要" : isCancelled ? "本轮思路已中断" : "展开查看本轮对问题的思路摘要"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />

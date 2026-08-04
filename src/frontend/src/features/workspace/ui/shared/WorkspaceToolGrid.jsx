@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 
 export function WorkspaceToolGrid({ items, onSelect }) {
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
       {items.map(({ id, meta, disabled = false, hint }, index) => {
         const Icon = meta.icon;
         return (

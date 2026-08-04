@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 
 import { getVideoPreviewUrl } from "./workspaceApi";
 import { findChapterForNode, findNodeById } from "./workspaceTree";
@@ -20,6 +20,7 @@ import { createWorkspaceSettingsActions } from "./workspaceSettingsActions";
 
 export function useWorkspaceController() {
   const [state, dispatch] = useReducer(workspaceReducer, undefined, createInitialWorkspaceState);
+  const chatAbortControllerRef = useRef(null);
 
   useWorkspaceDataEffects(state, dispatch);
 
@@ -39,6 +40,8 @@ export function useWorkspaceController() {
   const mindmap = state.mindmap;
   const seriesMindmap = state.seriesMindmap;
   const seriesMindmapLoading = state.seriesMindmapLoading;
+  const seriesOverviewSummariesByVideoId = state.seriesOverviewSummariesByVideoId;
+  const seriesOverviewLoading = state.seriesOverviewLoading;
   const generatingSeriesMindmap = state.generatingSeriesMindmap;
   const mindmapGenerationProgress = state.mindmapGenerationProgress;
 
@@ -78,6 +81,7 @@ export function useWorkspaceController() {
     state,
     dispatch,
     contentActions,
+    chatAbortControllerRef,
   });
   const settingsActions = createWorkspaceSettingsActions({
     state,
@@ -178,6 +182,8 @@ export function useWorkspaceController() {
     seriesMindmap,
     seriesMindmapAvailable,
     seriesMindmapLoading,
+    seriesOverviewSummariesByVideoId,
+    seriesOverviewLoading,
     generatingSeriesMindmap,
     mindmapGenerationProgress,
     knowledgeCards: state.knowledgeCards,
@@ -189,6 +195,7 @@ export function useWorkspaceController() {
     selectedNode,
     previewUrl,
     playerSeekRequest: state.playerSeekRequest,
+    citationFocus: state.citationFocus,
     chatMessages: state.chatMessages,
     chatSessions: getChatSessionListForScope(state.chatSessionListsByScope, state.chatBaseScopeKey),
     activeChatSessionId: state.chatScopeKey,
@@ -211,9 +218,11 @@ export function useWorkspaceController() {
     onSelectTool,
     onFocusNode,
     onSubmitChat: chatActions.onSubmitChat,
+    onCancelChat: chatActions.onCancelChat,
     onStartNewChat: chatActions.onStartNewChat,
     onSelectChatSession: chatActions.onSelectChatSession,
     onOpenSeekReference: chatActions.onOpenSeekReference,
+    onOpenCitationReference: chatActions.onOpenCitationReference,
     onClearChat: chatActions.onClearChat,
     onGenerateVideo: contentActions.onGenerateVideo,
     onGenerateMindmap: contentActions.onGenerateMindmap,
