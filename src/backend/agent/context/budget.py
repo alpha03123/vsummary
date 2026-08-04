@@ -152,8 +152,8 @@ class AgentContextBudgetService:
                 ]
         context = _merge_context(context, context_override)
         memory_key = session_id
-        system_prompt_tokens = _estimate_tokens(GRAPH_RUNTIME_BASELINE)
-        memory_tokens = _estimate_tokens(memory_messages)
+        system_prompt_tokens = estimate_tokens(GRAPH_RUNTIME_BASELINE)
+        memory_tokens = estimate_tokens(memory_messages)
         workspace_context_tokens = _estimate_workspace_context_tokens(context)
         tool_results_tokens = 0
         estimated_total_tokens = (
@@ -217,7 +217,7 @@ def _estimate_workspace_context_tokens(context: AgentContext) -> int:
         估算的 token 数（采用字节/3 过近似）。
     """
     payload = context.model_dump(mode="json")
-    return _estimate_tokens(payload)
+    return estimate_tokens(payload)
 
 
 def _merge_context(base_context: AgentContext, context_override: AgentContext | None) -> AgentContext:
@@ -241,7 +241,7 @@ def _merge_context(base_context: AgentContext, context_override: AgentContext | 
     return AgentContext.model_validate(merged_payload)
 
 
-def _estimate_tokens(value: object) -> int:
+def estimate_tokens(value: object) -> int:
     """粗略估算一段字符串或可序列化对象的 token 数。
 
     算法：先序列化为紧凑字符串（`ensure_ascii=False`），再按"UTF-8 字节数 / 3"
@@ -264,6 +264,21 @@ def _estimate_tokens(value: object) -> int:
     if not text:
         return 0
     return max(1, ceil(len(text.encode("utf-8")) / 3))
+
+
+def fits_context_budget(
+    *,
+    payload: object,
+    window_tokens: int,
+    reserved_output_tokens: int,
+) -> bool:
+    """判断待注入内容是否能放入模型输入预算。
+
+    与 ``AgentContextBudgetService`` 使用同一套保守 token 估算，供图节点在
+    "全文上下文"和"检索上下文"之间做确定性选择。
+    """
+    available_input_tokens = max(0, int(window_tokens) - int(reserved_output_tokens))
+    return estimate_tokens(payload) <= available_input_tokens
 
 
 def _resolve_usage_level(

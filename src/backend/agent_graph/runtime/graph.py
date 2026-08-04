@@ -19,6 +19,7 @@ from backend.agent_graph.runtime.nodes import (
     build_answer_node,
     build_evidence_items_node,
     build_optional_web_search_node,
+    build_prepare_series_context_node,
     build_retrieve_evidence_node,
     build_synthesize_answer_node,
     build_understand_query_node,
@@ -81,6 +82,14 @@ def build_agent_graph(
         ),
     )
     graph.add_node(
+        "prepare_series_context",
+        build_prepare_series_context_node(
+            workspace=workspace,
+            context_window_tokens=context_window_tokens,
+            reserved_output_tokens=reserved_output_tokens,
+        ),
+    )
+    graph.add_node(
         "understand_query",
         build_understand_query_node(
             series_query_processor=series_query_processor,
@@ -89,7 +98,12 @@ def build_agent_graph(
     )
     graph.add_node(
         "retrieve_evidence",
-        build_retrieve_evidence_node(retrieval_service=resolved_retrieval_service),
+        build_retrieve_evidence_node(
+            retrieval_service=resolved_retrieval_service,
+            workspace=workspace,
+            context_window_tokens=context_window_tokens,
+            reserved_output_tokens=reserved_output_tokens,
+        ),
     )
     graph.add_node(
         "optional_web_search",
@@ -120,8 +134,16 @@ def build_agent_graph(
         "route_scope",
         _route_after_scope,
         {
-            "series": "understand_query",
+            "series": "prepare_series_context",
             "video": "build_video_context",
+        },
+    )
+    graph.add_conditional_edges(
+        "prepare_series_context",
+        _route_after_series_context,
+        {
+            "full_series": "optional_web_search",
+            "rag": "understand_query",
         },
     )
     graph.add_edge("understand_query", "retrieve_evidence")
@@ -185,3 +207,11 @@ def _route_after_scope(state: AgentGraphState) -> str:
 def _route_after_evidence_items(state: AgentGraphState) -> str:
     """在 `build_evidence_items` 之后再次按 scope 路由（series 合成 / video 规划执行）。"""
     return _route_after_scope(state)
+
+
+def _route_after_series_context(state: AgentGraphState) -> str:
+    """按预算预检结果决定全文回答或原有 RAG 链路。"""
+    mode = str(state.get("series_context_mode", "")).strip()
+    if mode in {"full_series", "rag"}:
+        return mode
+    raise ValueError(f"Unsupported series context mode: {mode}")

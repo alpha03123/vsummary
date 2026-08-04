@@ -15,9 +15,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from math import ceil
 from time import monotonic
 
+from backend.agent.context.budget import fits_context_budget
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.messages import AgentChatMessage
 from backend.agent_graph.runtime.state import AgentGraphState
@@ -183,7 +183,10 @@ def build_understand_query_node(*, series_query_processor, workspace=None) -> Ca
         if series_query_processor is None:
             raise RuntimeError("Series query processor 尚未注入。")
         series_id = str(state.get("series_id", "")).strip()
-        catalog = _load_series_catalog(workspace=workspace, series_id=series_id)
+        catalog = dict(state.get("series_catalog", {})) or _load_series_catalog(
+            workspace=workspace,
+            series_id=series_id,
+        )
         result = series_query_processor.run(
             user_message=state["user_message"],
             series_id=series_id,
@@ -192,35 +195,104 @@ def build_understand_query_node(*, series_query_processor, workspace=None) -> Ca
             memory_messages=list(state.get("memory_messages", [])),
             debug_trace=None,
         )
-        next_state = dict(state)
-        next_state["query_understanding"] = result.model_dump(mode="json")
-        next_state["series_catalog"] = catalog
-        next_state["retrieval_request"] = {}
-        next_state["retrieval_results"] = []
-        next_state["web_search_results"] = []
-        next_state["web_search_used"] = False
-        next_state["evidence_items"] = []
-        next_state["answer_payload"] = {}
-        next_state["tool_results"] = []
-        return next_state
+        return _initialize_series_execution_state(
+            state,
+            catalog=catalog,
+            query_understanding=result.model_dump(mode="json"),
+        )
 
     return understand_query
 
 
-def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphState], AgentGraphState]:
-    """构造 `retrieve_evidence` 节点：基于 `query_understanding` 做系列级 RAG 检索。
+def build_prepare_series_context_node(
+    *,
+    workspace=None,
+    context_window_tokens: int,
+    reserved_output_tokens: int,
+) -> Callable[[AgentGraphState], AgentGraphState]:
+    """预检 series 全文上下文，只有超预算时才进入查询理解与 RAG。"""
+    def prepare_series_context(state: AgentGraphState) -> AgentGraphState:
+        series_id = str(state.get("series_id", "")).strip()
+        catalog = _load_series_catalog(workspace=workspace, series_id=series_id)
+        direct_query_understanding = {
+            "normalized_query": state["user_message"],
+            "subqueries": [],
+            "filters": {"series_id": series_id},
+        }
+        full_series_items = _build_full_series_context_items(
+            workspace=workspace,
+            state=state,
+            series_id=series_id,
+        )
+        next_state = _initialize_series_execution_state(
+            state,
+            catalog=catalog,
+            query_understanding=direct_query_understanding,
+        )
+        if full_series_items and _fits_context_budget(
+            state=state,
+            items=full_series_items,
+            context_window_tokens=context_window_tokens,
+            reserved_output_tokens=reserved_output_tokens,
+            series_catalog=catalog,
+            query_understanding=direct_query_understanding,
+        ):
+            next_state["retrieval_request"] = {
+                "mode": "full_series",
+                "filters": {"series_id": series_id},
+            }
+            next_state["retrieval_results"] = full_series_items
+            next_state["series_context_mode"] = "full_series"
+            return next_state
 
-    流程：拿 `normalized_query` + 子问题拼检索 query 列表 → 调 `retrieval_service`
-    → 对结果做去重 + 多视频多样化 → 写入 `retrieval_results` 与 `retrieval_request`。
+        next_state["series_context_mode"] = "rag"
+        return next_state
+
+    return prepare_series_context
+
+
+def _initialize_series_execution_state(
+    state: AgentGraphState,
+    *,
+    catalog: dict[str, object],
+    query_understanding: dict[str, object],
+) -> AgentGraphState:
+    """写入 series 后续节点共用的目录、查询和空白中间状态。"""
+    next_state = dict(state)
+    next_state["query_understanding"] = query_understanding
+    next_state["series_catalog"] = catalog
+    next_state["retrieval_request"] = {}
+    next_state["retrieval_results"] = []
+    next_state["web_search_results"] = []
+    next_state["web_search_used"] = False
+    next_state["evidence_items"] = []
+    next_state["answer_payload"] = {}
+    next_state["tool_results"] = []
+    return next_state
+
+
+def build_retrieve_evidence_node(
+    *,
+    retrieval_service,
+    workspace=None,
+    context_window_tokens: int,
+    reserved_output_tokens: int,
+) -> Callable[[AgentGraphState], AgentGraphState]:
+    """构造 series RAG 检索节点。
+
+    全文上下文已在 ``prepare_series_context`` 节点完成预算预检；只有超预算
+    的系列会进入本节点，由查询理解结果驱动检索与去重流程。
 
     Args:
-        retrieval_service: 系列级 RAG 检索服务（`SeriesRetrievalService` 或兼容实现）。
+        retrieval_service: 系列级 RAG 检索服务。
+        workspace: 保留该依赖形状，供后续检索扩展使用。
+        context_window_tokens: 模型上下文窗口 token 上限。
+        reserved_output_tokens: 模型输出预留 token。
 
     Returns:
         LangGraph 节点函数。
     """
     def retrieve_evidence(state: AgentGraphState) -> AgentGraphState:
-        max_hits = _resolve_retrieval_max_hits(retrieval_service)
         query_understanding = dict(state.get("query_understanding", {}))
         normalized_query = str(query_understanding.get("normalized_query", "")).strip() or state["user_message"]
         subqueries = [
@@ -230,6 +302,7 @@ def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphSt
         ]
         filters = dict(query_understanding.get("filters", {}))
         series_id = str(filters.get("series_id", state.get("series_id", ""))).strip()
+        max_hits = _resolve_retrieval_max_hits(retrieval_service)
         queries = _build_retrieval_queries(normalized_query, subqueries)
         retrieval_results = _search_series_queries(
             retrieval_service=retrieval_service,
@@ -245,6 +318,7 @@ def build_retrieve_evidence_node(*, retrieval_service) -> Callable[[AgentGraphSt
             "executed_queries": queries,
         }
         next_state["retrieval_results"] = retrieval_results
+        next_state["series_context_mode"] = "rag"
         return next_state
 
     return retrieve_evidence
@@ -556,6 +630,38 @@ def _load_series_catalog(*, workspace, series_id: str) -> dict[str, object]:
     return build_series_catalog_payload(workspace, series_id)
 
 
+def _build_full_series_context_items(*, workspace, state: AgentGraphState, series_id: str) -> list[dict[str, object]]:
+    """构造系列全部已处理视频的完整 summary / transcript 上下文。
+
+    仅当每个已处理视频都具备可用 transcript 时返回候选集；否则由调用方回退
+    RAG，避免把不完整的全文上下文伪装成完整系列资料。
+    """
+    if workspace is None or not series_id:
+        return []
+    series = next((item for item in workspace.list_series() if item.id == series_id), None)
+    if series is None:
+        return []
+
+    items: list[dict[str, object]] = []
+    for video in series.videos:
+        if not video.processed:
+            continue
+        video_state = {**state, "series_id": series_id, "video_id": video.id}
+        summary_item = _build_video_summary_context_item(
+            video_state,
+            workspace.get_video_summary(series_id, video.id),
+        )
+        transcript_item = _build_full_transcript_context_item(
+            workspace.get_video_transcript(series_id, video.id),
+        )
+        if transcript_item is None:
+            return []
+        if summary_item is not None:
+            items.append(summary_item)
+        items.append(transcript_item)
+    return items
+
+
 def _resolve_retrieval_max_hits(retrieval_service) -> int:
     """读取检索服务的 `default_max_hits` 配置；不可用时回退到 5。"""
     default_max_hits = getattr(retrieval_service, "default_max_hits", None)
@@ -857,15 +963,22 @@ def _fits_context_budget(
     items: list[dict[str, object]],
     context_window_tokens: int,
     reserved_output_tokens: int,
+    series_catalog: dict[str, object] | None = None,
+    query_understanding: dict[str, object] | None = None,
 ) -> bool:
-    """判断 user_message + memory + items 是否能塞进上下文窗口（粗略 token 估算）。"""
-    available = max(0, int(context_window_tokens) - int(reserved_output_tokens))
+    """判断最终回答输入中的本地上下文是否能放入预算。"""
     payload = {
         "user_message": state.get("user_message", ""),
         "memory_messages": state.get("memory_messages", []),
+        "series_catalog": series_catalog or {},
+        "query_understanding": query_understanding or {},
         "retrieval_results": items,
     }
-    return _estimate_tokens(payload) <= available
+    return fits_context_budget(
+        payload=payload,
+        window_tokens=context_window_tokens,
+        reserved_output_tokens=reserved_output_tokens,
+    )
 
 
 def _render_video_summary_text(summary: dict[str, object]) -> str:
@@ -888,21 +1001,6 @@ def _render_video_summary_text(summary: dict[str, object]) -> str:
             if title or chapter_summary:
                 parts.append("：".join(part for part in [title, chapter_summary] if part))
     return "\n".join(parts).strip()
-
-
-def _estimate_tokens(value: object) -> int:
-    """粗略估算 token 数：按 UTF-8 字节数 / 3 计算；空字符串返回 0，最少 1。"""
-    if value is None:
-        return 0
-    if isinstance(value, str):
-        text = value.strip()
-    else:
-        from json import dumps
-
-        text = dumps(value, ensure_ascii=False, separators=(",", ":")).strip()
-    if not text:
-        return 0
-    return max(1, ceil(len(text.encode("utf-8")) / 3))
 
 
 def _format_seconds(value: object) -> str:

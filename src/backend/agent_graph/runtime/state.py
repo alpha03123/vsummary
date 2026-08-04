@@ -35,6 +35,7 @@ class AgentGraphState(TypedDict):
         tool_results: 工具调用的实际返回结果列表。
         action_summary: 工具调用链路的自然语言总结。
         video_context_mode: 视频上下文构建模式（"summary"/"transcript"/"rag" 等）。
+        series_context_mode: 系列上下文构建模式（"full_series" / "rag"）。
         video_summary_included: 最终答案是否包含了视频总结内容。
         defer_answer_stream: 是否延迟到所有工具完成后再流式输出答案。
         stream_answer_messages: 流式输出过程中已发送的消息分片。
@@ -62,6 +63,7 @@ class AgentGraphState(TypedDict):
     tool_results: NotRequired[list[dict[str, object]]]
     action_summary: NotRequired[str]
     video_context_mode: NotRequired[str]
+    series_context_mode: NotRequired[str]
     video_summary_included: NotRequired[bool]
     defer_answer_stream: NotRequired[bool]
     stream_answer_messages: NotRequired[list[dict[str, object]]]
