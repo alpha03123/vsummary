@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, ProcessHandle
-from backend.video_summary.generation.ports import NoTranscribableAudioError
+from backend.video_summary.generation.ports import NoTranscribableAudioError, NoVideoFramesError
 
 
 class FfmpegMediaProcessor:
@@ -113,6 +113,55 @@ class FfmpegMediaProcessor:
             raise subprocess.CalledProcessError(proc.returncode, "ffmpeg")
         return audio_path
 
+    def extract_frame(
+        self,
+        video_path: Path,
+        timestamp_seconds: float,
+        output_path: Path,
+        cancellation: GenerationCancellationContext | None = None,
+    ) -> Path:
+        """用 ffmpeg 在指定时间点抽取 JPEG 图片。"""
+        if timestamp_seconds < 0:
+            raise ValueError("截图时间不能小于 0")
+        if not self._has_video_stream(video_path):
+            raise NoVideoFramesError(f"媒体不含可供截图的视频流：{video_path.name}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.Popen(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-y",
+                "-ss",
+                f"{timestamp_seconds:.3f}",
+                "-i",
+                str(video_path),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "3",
+                str(output_path),
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if cancellation is not None:
+            handle = ProcessHandle(_proc=proc)
+            cancellation.register(handle)
+            try:
+                proc.wait()
+            finally:
+                cancellation.unregister(handle)
+        else:
+            proc.wait()
+        if proc.returncode != 0 and not (cancellation is not None and cancellation.cancel_requested):
+            raise subprocess.CalledProcessError(proc.returncode, "ffmpeg")
+        if cancellation is not None and cancellation.cancel_requested:
+            raise InterruptedError("生成已取消")
+        if not output_path.is_file():
+            raise RuntimeError(f"ffmpeg 未生成截图：{output_path.name}")
+        return output_path
+
     @staticmethod
     def _has_audio_stream(video_path: Path) -> bool:
         result = subprocess.run(
@@ -122,6 +171,29 @@ class FfmpegMediaProcessor:
                 "error",
                 "-select_streams",
                 "a:0",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(video_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        return bool(result.stdout.strip())
+
+    @staticmethod
+    def _has_video_stream(video_path: Path) -> bool:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
                 "-show_entries",
                 "stream=index",
                 "-of",

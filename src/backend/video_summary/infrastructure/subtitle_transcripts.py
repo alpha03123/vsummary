@@ -15,7 +15,7 @@ from backend.shared.bilibili_ytdlp import (
     resolve_yt_dlp_proxy,
     write_bilibili_cookies_file,
 )
-from backend.video_summary.domain.models import Transcript, TranscriptSegment
+from backend.video_summary.domain.models import ManualTranscriptInput, Transcript, TranscriptSegment
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, ProcessHandle
 
 LOGGER = logging.getLogger(__name__)
@@ -43,6 +43,21 @@ class SubtitleTranscriptProvider:
         if bilibili is not None:
             return bilibili
         return _load_embedded_subtitle(video_path, staging_dir / "subtitle.srt", cancellation)
+
+
+class ManualSrtTranscriptProvider:
+    """读取当前视频已提交的人工 SRT。"""
+
+    def load(self, output_dir: Path) -> ManualTranscriptInput | None:
+        path = output_dir / "transcript.manual.srt"
+        if not path.is_file():
+            return None
+        raw_srt = path.read_text(encoding="utf-8-sig")
+        return ManualTranscriptInput(
+            transcript=parse_srt_transcript(raw_srt),
+            raw_srt=raw_srt,
+            filename=path.name,
+        )
 
 
 class _SilentYtDlpLogger:

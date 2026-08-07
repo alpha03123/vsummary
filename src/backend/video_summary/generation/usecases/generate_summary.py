@@ -28,13 +28,16 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
-from backend.video_summary.domain.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
+from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
 from backend.video_summary.generation.renderers import render_markdown
 from backend.video_summary.generation.ports import (
+    FrameExtractor,
     GenerationArtifactStore,
     MediaProcessor,
+    ManualTranscriptSource,
     NoTranscribableAudioError,
+    NoVideoFramesError,
     ProgressReporter,
     SubtitleTranscriptSource,
     Summarizer,
@@ -74,6 +77,8 @@ class GenerateVideoSummary:
         summarizer: Summarizer,
         artifact_store: GenerationArtifactStore,
         subtitle_provider: SubtitleTranscriptSource | None = None,
+        manual_transcript_provider: ManualTranscriptSource | None = None,
+        frame_extractor: FrameExtractor | None = None,
     ) -> None:
         """注入媒体处理、转写、（可选）转写增强、总结与制品落盘端口。
 
@@ -91,6 +96,8 @@ class GenerateVideoSummary:
         self._summarizer = summarizer
         self._artifact_store = artifact_store
         self._subtitle_provider = subtitle_provider
+        self._manual_transcript_provider = manual_transcript_provider
+        self._frame_extractor = frame_extractor
 
     async def run(
         self,
@@ -98,6 +105,8 @@ class GenerateVideoSummary:
         output_dir: Path,
         progress_reporter: ProgressReporter | None = None,
         cancellation: GenerationCancellationContext | None = None,
+        manual_transcript: ManualTranscriptInput | None = None,
+        use_saved_manual_transcript: bool = True,
     ) -> SummaryDocument:
         """为指定视频生成结构化总结文档。
 
@@ -131,6 +140,8 @@ class GenerateVideoSummary:
                 output_dir=output_dir,
                 progress_reporter=progress_reporter,
                 cancellation=resolved_cancellation,
+                manual_transcript=manual_transcript,
+                use_saved_manual_transcript=use_saved_manual_transcript,
             )
         finally:
             if cancel_watch_task is not None:
@@ -145,6 +156,8 @@ class GenerateVideoSummary:
         output_dir: Path,
         progress_reporter: ProgressReporter | None,
         cancellation: GenerationCancellationContext | None,
+        manual_transcript: ManualTranscriptInput | None,
+        use_saved_manual_transcript: bool,
     ) -> SummaryDocument:
         """前置取消检查 → 准备 staging 目录 → 跑核心流水线 → 清理 staging。
 
@@ -164,6 +177,8 @@ class GenerateVideoSummary:
                     staging_dir=staging_dir,
                     progress_reporter=progress_reporter,
                     cancellation=cancellation,
+                    manual_transcript=manual_transcript,
+                    use_saved_manual_transcript=use_saved_manual_transcript,
                 )
             except FileNotFoundError:
                 if attempt == 0 and not staging_dir.exists():
@@ -180,6 +195,8 @@ class GenerateVideoSummary:
         staging_dir: Path,
         progress_reporter: ProgressReporter | None,
         cancellation: GenerationCancellationContext | None,
+        manual_transcript: ManualTranscriptInput | None,
+        use_saved_manual_transcript: bool,
     ) -> SummaryDocument:
         """在 staging 目录下依次跑各生成阶段，全部成功后原子提交到 `output_dir`。
 
@@ -190,8 +207,25 @@ class GenerateVideoSummary:
         """
         stage_cache = GenerationStageCache(output_dir / ".cache", video_path)
         unavailable_reason: str | None = None
+        resolved_manual_transcript = manual_transcript
+        if resolved_manual_transcript is None and use_saved_manual_transcript and self._manual_transcript_provider is not None:
+            resolved_manual_transcript = await asyncio.to_thread(
+                self._manual_transcript_provider.load,
+                output_dir,
+            )
+
         subtitle_transcript = None
-        if self._subtitle_provider is not None:
+        if resolved_manual_transcript is not None:
+            transcript = resolved_manual_transcript.transcript
+            video = VideoAsset(
+                source_path=video_path,
+                title=video_path.stem,
+                duration_seconds=max(segment.end_seconds for segment in transcript.segments),
+            )
+            transcript_source_identity = "manual-srt-v1"
+            if progress_reporter is not None:
+                progress_reporter.update("load_manual_srt", 20.0, "已读取人工 SRT，跳过字幕探测和语音识别")
+        elif self._subtitle_provider is not None:
             if progress_reporter is not None:
                 progress_reporter.update("probe_subtitles", 5.0, "正在检查中文字幕")
             try:
@@ -205,7 +239,7 @@ class GenerateVideoSummary:
                 raise GenerateCancelledError(str(error) or "生成已取消") from error
             _raise_if_cancelled(progress_reporter, cancellation)
 
-        if subtitle_transcript is not None:
+        if resolved_manual_transcript is None and subtitle_transcript is not None:
             video = VideoAsset(
                 source_path=video_path,
                 title=video_path.stem,
@@ -215,7 +249,7 @@ class GenerateVideoSummary:
             transcript_source_identity = f"subtitle:{_cache_identity(self._subtitle_provider)}"
             if progress_reporter is not None:
                 progress_reporter.update("extract_subtitles", 20.0, "已读取中文字幕，跳过语音识别")
-        else:
+        elif resolved_manual_transcript is None:
             audio_path = staging_dir / "audio.wav"
             transcript_stem = staging_dir / "transcript"
             media_identity = _cache_identity(self._media_processor)
@@ -285,7 +319,7 @@ class GenerateVideoSummary:
             if self._transcript_enhancer is not None
             else ""
         )
-        if self._transcript_enhancer is not None and unavailable_reason is None:
+        if self._transcript_enhancer is not None and unavailable_reason is None and resolved_manual_transcript is None:
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
             _raise_if_cancelled(progress_reporter, cancellation)
@@ -316,6 +350,13 @@ class GenerateVideoSummary:
             )
             _raise_if_cancelled(progress_reporter, cancellation)
 
+        if resolved_manual_transcript is not None:
+            await self._artifact_store.save_manual_transcript(
+                manual_transcript=resolved_manual_transcript,
+                output_dir=staging_dir,
+            )
+            _raise_if_cancelled(progress_reporter, cancellation)
+
         await self._artifact_store.save_cleaned_transcript(
             video=video,
             transcript=transcript,
@@ -336,10 +377,83 @@ class GenerateVideoSummary:
             except Exception as error:
                 raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         _raise_if_cancelled(progress_reporter, cancellation)
+        summary_document = await _attach_chapter_screenshots(
+            summary_document,
+            video=video,
+            staging_dir=staging_dir,
+            frame_extractor=self._frame_extractor,
+            progress_reporter=progress_reporter,
+            cancellation=cancellation,
+        )
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
-        await asyncio.to_thread(_commit_generation_artifacts, staging_dir, output_dir)
+        await asyncio.to_thread(
+            _commit_generation_artifacts,
+            staging_dir,
+            output_dir,
+            remove_manual_source=not use_saved_manual_transcript,
+        )
         return summary_document
+
+
+async def _attach_chapter_screenshots(
+    document: SummaryDocument,
+    *,
+    video: VideoAsset,
+    staging_dir: Path,
+    frame_extractor: FrameExtractor | None,
+    progress_reporter: ProgressReporter | None,
+    cancellation: GenerationCancellationContext | None,
+) -> SummaryDocument:
+    """为每章抽取中点截图，并将相对文件名写回概况制品。"""
+    chapters = document.summary_data.get("chapters")
+    if frame_extractor is None or not isinstance(chapters, list) or not chapters:
+        return document
+
+    summary_data = dict(document.summary_data)
+    enriched_chapters: list[object] = []
+    screenshot_dir = staging_dir / "screenshots"
+    for index, raw_chapter in enumerate(chapters, start=1):
+        if not isinstance(raw_chapter, dict):
+            raise ValueError(f"chapters[{index - 1}] 必须是对象。")
+        start_seconds = raw_chapter.get("start_seconds")
+        end_seconds = raw_chapter.get("end_seconds")
+        if not isinstance(start_seconds, int | float) or not isinstance(end_seconds, int | float):
+            raise ValueError(f"chapters[{index - 1}] 缺少有效时间范围。")
+        if end_seconds < start_seconds:
+            raise ValueError(f"chapters[{index - 1}] 的结束时间早于开始时间。")
+        timestamp = min(max((float(start_seconds) + float(end_seconds)) / 2, 0.0), video.duration_seconds)
+        filename = f"chapter-{index:02d}.jpg"
+        if progress_reporter is not None:
+            progress_reporter.update(
+                "extract_screenshots",
+                92.0 + index * 6.0 / len(chapters),
+                f"正在生成章节插图 {index}/{len(chapters)}",
+            )
+        _raise_if_cancelled(progress_reporter, cancellation)
+        try:
+            await asyncio.to_thread(
+                frame_extractor.extract_frame,
+                video.source_path,
+                timestamp,
+                screenshot_dir / filename,
+                cancellation,
+            )
+        except InterruptedError as error:
+            raise GenerateCancelledError(str(error) or "生成已取消") from error
+        except NoVideoFramesError:
+            return document
+        except Exception as error:
+            raise RuntimeError(f"章节插图生成失败：{error}") from error
+        _raise_if_cancelled(progress_reporter, cancellation)
+        enriched_chapters.append({**raw_chapter, "image_filename": filename})
+
+    summary_data["chapters"] = enriched_chapters
+    return SummaryDocument(
+        markdown=render_markdown(summary_data),
+        summary_data=summary_data,
+        mindmap_data=document.mindmap_data,
+    )
 
 
 def _build_no_transcribable_audio_transcript(duration_seconds: float) -> Transcript:
@@ -487,7 +601,12 @@ def _raise_if_cancelled(
         raise GenerateCancelledError(str(error) or "生成已取消") from error
 
 
-def _commit_generation_artifacts(staging_dir: Path, output_dir: Path) -> None:
+def _commit_generation_artifacts(
+    staging_dir: Path,
+    output_dir: Path,
+    *,
+    remove_manual_source: bool = False,
+) -> None:
     """把 staging 目录里的全部产物原子提交到 `output_dir`。
 
     目录条目使用 `shutil.move` 整体替换（先 `rmtree` 旧目录），文件
@@ -498,6 +617,7 @@ def _commit_generation_artifacts(staging_dir: Path, output_dir: Path) -> None:
         output_dir: 最终制品目录。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    staged_names = {source.name for source in staging_dir.iterdir()}
     for source in staging_dir.iterdir():
         target = output_dir / source.name
         if source.is_dir():
@@ -506,6 +626,15 @@ def _commit_generation_artifacts(staging_dir: Path, output_dir: Path) -> None:
             shutil.move(str(source), str(target))
             continue
         source.replace(target)
+    for artifact_name in ("transcript.enhanced.json", "mindmap.json", "knowledge_cards.json"):
+        if artifact_name not in staged_names:
+            (output_dir / artifact_name).unlink(missing_ok=True)
+    if "screenshots" not in staged_names:
+        _remove_tree_if_exists(output_dir / "screenshots")
+    (output_dir.parent / "mindmap.json").unlink(missing_ok=True)
+    if remove_manual_source:
+        (output_dir / "transcript.manual.srt").unlink(missing_ok=True)
+        (output_dir / "transcript.source.json").unlink(missing_ok=True)
 
 
 def _remove_tree_if_exists(path: Path) -> None:

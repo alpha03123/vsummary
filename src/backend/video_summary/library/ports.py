@@ -11,6 +11,7 @@ from pathlib import Path
 from pathlib import Path
 from typing import Protocol
 
+from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import (
     BilibiliUrlInfoDTO,
@@ -274,6 +275,8 @@ class VideoSummaryGenerator(Protocol):
         video_id: str,
         progress_reporter: ProgressReporter | None = None,
         transcript_enhancement_enabled: bool | None = None,
+        manual_transcript: ManualTranscriptInput | None = None,
+        use_saved_manual_transcript: bool = True,
     ) -> None:
         """为指定视频生成总结制品，副作用是落盘到视频制品目录。"""
 

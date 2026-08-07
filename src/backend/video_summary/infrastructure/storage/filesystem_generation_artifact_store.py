@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from backend.shared.filesystem import atomic_write_text
-from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
+from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.ports import GenerationArtifactStore
 
 
@@ -71,6 +71,24 @@ class FileSystemGenerationArtifactStore(GenerationArtifactStore):
             ],
         }
         await _write_json(output_dir / "transcript.enhanced.json", payload)
+
+    async def save_manual_transcript(
+        self,
+        *,
+        manual_transcript: ManualTranscriptInput,
+        output_dir: Path,
+    ) -> None:
+        """保存原始人工 SRT 及其来源元数据。"""
+        await asyncio.gather(
+            _write_text(output_dir / "transcript.manual.srt", manual_transcript.raw_srt),
+            _write_json(
+                output_dir / "transcript.source.json",
+                {
+                    "source": "manual_srt",
+                    "filename": manual_transcript.filename,
+                },
+            ),
+        )
 
     async def save_summary_document(self, *, document: SummaryDocument, output_dir: Path) -> None:
         """把总结文档同时写到 `summary.md`（可读）与 `summary.json`（结构化）。

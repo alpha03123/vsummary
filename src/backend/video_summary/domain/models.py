@@ -70,6 +70,19 @@ class Transcript:
 
 
 @dataclass(frozen=True)
+class ManualTranscriptInput:
+    """用户上传的 SRT 及其解析结果。
+
+    原始 SRT 与 ``Transcript`` 在同一次生成任务中进入 staging，只有概况
+    同时生成成功才会成为当前制品，避免出现新字幕配旧概况。
+    """
+
+    transcript: Transcript
+    raw_srt: str
+    filename: str
+
+
+@dataclass(frozen=True)
 class SummaryDocument:
     """结构化总结文档。
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Protocol
 
-from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
+from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, VideoAsset
 
 if TYPE_CHECKING:
     from backend.video_summary.generation.cancellation import GenerationCancellationContext
@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 
 class NoTranscribableAudioError(RuntimeError):
     """媒体不含可供 ASR 转写的音频流。"""
+
+
+class NoVideoFramesError(RuntimeError):
+    """媒体不含可用于截图的视频流。"""
 
 
 class MediaProcessor(Protocol):
@@ -33,6 +37,19 @@ class MediaProcessor(Protocol):
         cancellation: "GenerationCancellationContext | None" = None,
     ) -> Path:
         """从视频中抽取音频到目标路径，返回实际写入的音频文件路径。"""
+
+
+class FrameExtractor(Protocol):
+    """按时间点从媒体提取单帧图片。"""
+
+    def extract_frame(
+        self,
+        video_path: Path,
+        timestamp_seconds: float,
+        output_path: Path,
+        cancellation: "GenerationCancellationContext | None" = None,
+    ) -> Path:
+        """将指定时间点的画面写入图片文件。"""
 
 
 class Transcriber(Protocol):
@@ -57,6 +74,13 @@ class SubtitleTranscriptSource(Protocol):
         cancellation: "GenerationCancellationContext | None" = None,
     ) -> Transcript | None:
         """返回中文字幕转写；当前视频没有可用字幕时返回 ``None``。"""
+
+
+class ManualTranscriptSource(Protocol):
+    """读取已提交的人工字幕来源。"""
+
+    def load(self, output_dir: Path) -> ManualTranscriptInput | None:
+        """返回当前人工 SRT；不存在时返回 ``None``。"""
 
 
 class Summarizer(Protocol):
@@ -129,6 +153,14 @@ class GenerationArtifactStore(Protocol):
         output_dir: Path,
     ) -> None:
         """保存增强后的转写制品；未启用增强时不调用。"""
+
+    async def save_manual_transcript(
+        self,
+        *,
+        manual_transcript: ManualTranscriptInput,
+        output_dir: Path,
+    ) -> None:
+        """保存用户上传的原始 SRT 与转写来源元数据。"""
 
     async def save_summary_document(self, *, document: SummaryDocument, output_dir: Path) -> None:
         """保存结构化总结文档（Markdown/结构化字段/思维导图）。"""

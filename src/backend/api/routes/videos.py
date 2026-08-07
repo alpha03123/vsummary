@@ -7,12 +7,14 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 import logging
 import json
 import mimetypes
 from pathlib import Path
 from threading import Lock
 from urllib.parse import quote
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
@@ -43,7 +45,9 @@ from backend.api.schemas.responses import (
 from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
+from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.infrastructure.subtitle_transcripts import parse_srt_transcript
 from backend.video_summary.library.markdown_exports import render_knowledge_cards_markdown
 from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
@@ -241,6 +245,42 @@ def export_video_summary_markdown(series_id: str, video_id: str, container: ApiC
         media_type="text/markdown; charset=utf-8",
         filename=_export_filename(video_id, "summary"),
     )
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/summary-with-screenshots.zip")
+def export_video_summary_with_screenshots(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    """导出概况 Markdown 与章节截图，保持相对图片链接可离线读取。"""
+    source = _ensure_video_exists(container, series_id, video_id)
+    summary_path = source.output_dir / "summary.md"
+    screenshots_dir = source.output_dir / "screenshots"
+    if not summary_path.is_file() or not screenshots_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"summary screenshots not found for video '{series_id}/{video_id}'")
+    screenshots = sorted(path for path in screenshots_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg")
+    if not screenshots:
+        raise HTTPException(status_code=404, detail=f"summary screenshots not found for video '{series_id}/{video_id}'")
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("summary.md", summary_path.read_bytes())
+        for screenshot in screenshots:
+            archive.write(screenshot, f"screenshots/{screenshot.name}")
+    return _zip_response(buffer.getvalue(), f"{_safe_filename_part(video_id)}-summary-with-screenshots.zip")
+
+
+@router.get("/api/videos/{series_id}/{video_id}/screenshots/{filename}")
+def get_video_summary_screenshot(
+    series_id: str,
+    video_id: str,
+    filename: str,
+    container: ApiContainerDep,
+) -> FileResponse:
+    """返回已随概况成功提交的章节截图。"""
+    if Path(filename).name != filename or Path(filename).suffix.lower() != ".jpg":
+        raise HTTPException(status_code=404, detail="screenshot not found")
+    source = _ensure_video_exists(container, series_id, video_id)
+    screenshot = source.output_dir / "screenshots" / filename
+    if not screenshot.is_file():
+        raise HTTPException(status_code=404, detail="screenshot not found")
+    return FileResponse(screenshot, media_type="image/jpeg")
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/video")
@@ -709,6 +749,85 @@ async def generate_video_summary(
             transcript_enhancement_enabled=(
                 None if request is None else request.transcript_enhancement_enabled
             ),
+        )
+    except AsrModelNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except GenerateCancelledError as error:
+        raise HTTPException(status_code=409, detail="generation cancelled") from error
+    except GenerationScopeBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if video_summary is None:
+        snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
+        if snapshot.status == "cancelled":
+            raise HTTPException(status_code=409, detail="generation cancelled")
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    return video_summary.summary
+
+
+@router.post("/api/videos/{series_id}/{video_id}/transcript/srt-and-generate")
+async def upload_srt_and_generate_video_summary(
+    series_id: str,
+    video_id: str,
+    file: UploadFile = File(...),
+    container: ApiContainerDep = None,
+) -> dict[str, object]:
+    """上传人工 SRT，并在同一原子生成任务中产出新的 AI 概况。"""
+    filename = Path(file.filename or "").name
+    if Path(filename).suffix.lower() != ".srt":
+        raise HTTPException(status_code=400, detail="请选择 .srt 字幕文件")
+    try:
+        raw_srt = (await file.read()).decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=400, detail="SRT 文件必须使用 UTF-8 编码") from error
+    try:
+        manual_transcript = ManualTranscriptInput(
+            transcript=parse_srt_transcript(raw_srt),
+            raw_srt=raw_srt,
+            filename=filename,
+        )
+    except (ValueError, TypeError) as error:
+        raise HTTPException(status_code=400, detail=f"SRT 解析失败：{error}") from error
+
+    try:
+        video_summary = await container.generate_video_summary.run(
+            series_id,
+            video_id,
+            manual_transcript=manual_transcript,
+        )
+    except AsrModelNotReadyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except GenerateCancelledError as error:
+        raise HTTPException(status_code=409, detail="generation cancelled") from error
+    except GenerationScopeBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if video_summary is None:
+        snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
+        if snapshot.status == "cancelled":
+            raise HTTPException(status_code=409, detail="generation cancelled")
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    return video_summary.summary
+
+
+@router.post("/api/videos/{series_id}/{video_id}/transcript/restore-auto-and-generate")
+async def restore_automatic_transcript_and_generate_video_summary(
+    series_id: str,
+    video_id: str,
+    container: ApiContainerDep = None,
+) -> dict[str, object]:
+    """改用自动字幕/ASR 重新生成，成功后才移除当前人工 SRT。"""
+    try:
+        video_summary = await container.generate_video_summary.run(
+            series_id,
+            video_id,
+            use_saved_manual_transcript=False,
         )
     except AsrModelNotReadyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error

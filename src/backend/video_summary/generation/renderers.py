@@ -44,6 +44,10 @@ def render_markdown(summary_data: dict[str, Any]) -> str:
         lines.append(f"<a id=\"{chapter['id']}\"></a>")
         lines.append(chapter["summary"])
         lines.append("")
+        image_filename = chapter.get("image_filename")
+        if isinstance(image_filename, str) and image_filename and "/" not in image_filename and "\\" not in image_filename:
+            lines.append(f"![章节插图](screenshots/{image_filename})")
+            lines.append("")
         if chapter["key_points"]:
             for point in chapter["key_points"]:
                 lines.append(f"- {point}")
@@ -99,6 +103,7 @@ def _parse_markdown_chapters(lines: list[str]) -> list[dict[str, Any]]:
     index = 0
     header = re.compile(r"^### (?P<title>.+) \((?P<start>\d{2}:\d{2}(?::\d{2})?) - (?P<end>\d{2}:\d{2}(?::\d{2})?)\)$")
     anchor = re.compile(r'^<a id="(?P<id>[^"]+)"></a>$')
+    chapter_image = re.compile(r"^!\[章节插图\]\(screenshots/[^/\\)]+\.jpg\)$")
     while index < len(lines):
         if not lines[index].strip():
             index += 1
@@ -117,6 +122,8 @@ def _parse_markdown_chapters(lines: list[str]) -> list[dict[str, Any]]:
             if line.startswith("- "):
                 reading_points = True
                 points.append(line[2:].strip())
+            elif not reading_points and chapter_image.fullmatch(line):
+                pass
             elif reading_points and line.strip():
                 raise ValueError(f"章节 '{match.group('title')}' 的要点必须使用 '- ' 列表。")
             elif not reading_points:

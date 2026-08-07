@@ -226,6 +226,10 @@ class FileSystemVideoWorkspace:
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         transcript = _load_transcript_segments(self._workspace_dir / series_id / video_id / "transcript.cleaned.json")
         summary = _attach_chapter_transcript(summary, transcript)
+        summary = _attach_chapter_screenshot_urls(summary, series_id, video_id)
+        transcript_source = _read_transcript_source(self._workspace_dir / series_id / video_id)
+        if transcript_source is not None:
+            summary["transcript_source"] = transcript_source
         title = str(summary.get("title", video.title)).strip() or video.title
         return VideoSummaryDTO(
             series_id=series_id,
@@ -1300,6 +1304,9 @@ def _invalidate_content_derivatives(output_dir: Path) -> None:
         path = output_dir / filename
         if path.exists():
             path.unlink()
+    screenshots_dir = output_dir / "screenshots"
+    if screenshots_dir.exists():
+        shutil.rmtree(screenshots_dir)
 
 
 def _normalize_series_id(value: str) -> str:
@@ -1416,6 +1423,15 @@ def _to_title(raw_value: str) -> str:
     return raw_value.replace("_", " ").replace("-", " ").title()
 
 
+def _read_transcript_source(output_dir: Path) -> str | None:
+    """读取当前转写来源；仅暴露已知的人工 SRT 标识。"""
+    path = output_dir / "transcript.source.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return "manual_srt" if payload.get("source") == "manual_srt" else None
+
+
 def _load_transcript_segments(transcript_path: Path) -> list[dict[str, object]]:
     """从 `transcript.cleaned.json` 读出 segments（文件缺失时返回空列表）。"""
     if not transcript_path.exists():
@@ -1453,6 +1469,33 @@ def _normalize_transcript_segments(value: object) -> list[dict[str, object]]:
             }
         )
     return normalized_segments
+
+
+def _attach_chapter_screenshot_urls(
+    summary: dict[str, object],
+    series_id: str,
+    video_id: str,
+) -> dict[str, object]:
+    """将已提交章节截图映射为 API 可读取的 URL。"""
+    chapters = summary.get("chapters")
+    if not isinstance(chapters, list):
+        return summary
+    enriched_chapters: list[object] = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            enriched_chapters.append(chapter)
+            continue
+        filename = chapter.get("image_filename")
+        if isinstance(filename, str) and filename and Path(filename).name == filename:
+            enriched_chapters.append(
+                {
+                    **chapter,
+                    "image_url": f"/api/videos/{series_id}/{video_id}/screenshots/{filename}",
+                }
+            )
+            continue
+        enriched_chapters.append(chapter)
+    return {**summary, "chapters": enriched_chapters}
 
 
 def _attach_chapter_transcript(summary: dict[str, object], transcript_segments: list[dict[str, object]]) -> dict[str, object]:

@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Lock
 
+from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_video_summary_application
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file
@@ -49,6 +50,8 @@ class ConfiguredVideoSummaryWorkflow:
         output_dir: Path,
         progress_reporter: ProgressReporter | None = None,
         transcript_enhancement_enabled: bool | None = None,
+        manual_transcript: ManualTranscriptInput | None = None,
+        use_saved_manual_transcript: bool = True,
     ) -> None:
         """基于当前配置执行一次视频总结生成。
 
@@ -75,6 +78,8 @@ class ConfiguredVideoSummaryWorkflow:
             video_path=source_path,
             output_dir=output_dir,
             progress_reporter=resolved_progress_reporter,
+            manual_transcript=manual_transcript,
+            use_saved_manual_transcript=use_saved_manual_transcript,
         )
 
     def _get_application(self, transcript_enhancement_enabled: bool | None):

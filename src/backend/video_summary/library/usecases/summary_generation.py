@@ -18,6 +18,7 @@ from threading import Lock
 from anyio import CapacityLimiter
 
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import LibrarySeriesDTO
 from backend.video_summary.library.models import VideoSummaryDTO
@@ -135,6 +136,8 @@ class GenerateVideoSummaryFromLibrary:
         transcript_enhancement_enabled: bool | None = None,
         progress_reporter: ProgressReporter | None = None,
         internal_series_generation: bool = False,
+        manual_transcript: ManualTranscriptInput | None = None,
+        use_saved_manual_transcript: bool = True,
     ) -> VideoSummaryDTO | None:
         """为指定视频启动一次生成并返回最终总结 DTO。
 
@@ -163,6 +166,8 @@ class GenerateVideoSummaryFromLibrary:
             transcript_enhancement_enabled=transcript_enhancement_enabled,
             progress_reporter=progress_reporter,
             internal_series_generation=internal_series_generation,
+            manual_transcript=manual_transcript,
+            use_saved_manual_transcript=use_saved_manual_transcript,
         )
         return await asyncio.shield(task)
 
@@ -197,6 +202,8 @@ class GenerateVideoSummaryFromLibrary:
         transcript_enhancement_enabled: bool | None,
         progress_reporter: ProgressReporter | None,
         internal_series_generation: bool,
+        manual_transcript: ManualTranscriptInput | None,
+        use_saved_manual_transcript: bool,
     ) -> asyncio.Task[VideoSummaryDTO | None]:
         """获取或创建单视频生成任务，复用已有任务避免重复触发。
 
@@ -213,6 +220,8 @@ class GenerateVideoSummaryFromLibrary:
 
             existing = self._active_tasks.get(task_id)
             if existing is not None:
+                if manual_transcript is not None or not use_saved_manual_transcript:
+                    raise GenerationScopeBusyError(f"video '{series_id}/{video_id}' generation is already running")
                 return existing
 
             task = asyncio.create_task(
@@ -222,6 +231,8 @@ class GenerateVideoSummaryFromLibrary:
                     video_id=video_id,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
                     progress_reporter=progress_reporter,
+                    manual_transcript=manual_transcript,
+                    use_saved_manual_transcript=use_saved_manual_transcript,
                 )
             )
             self._active_tasks[task_id] = task
@@ -237,6 +248,8 @@ class GenerateVideoSummaryFromLibrary:
         video_id: str,
         transcript_enhancement_enabled: bool | None,
         progress_reporter: ProgressReporter | None,
+        manual_transcript: ManualTranscriptInput | None,
+        use_saved_manual_transcript: bool,
     ) -> VideoSummaryDTO | None:
         """执行单视频生成的实际步骤：占并发槽 → 调生成器 → 刷新系列记忆 → 回读 DTO。
 
@@ -256,6 +269,8 @@ class GenerateVideoSummaryFromLibrary:
                     video_id=video_id,
                     progress_reporter=reporter,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
+                    manual_transcript=manual_transcript,
+                    use_saved_manual_transcript=use_saved_manual_transcript,
                 )
                 if self._series_memory_refresher is not None:
                     try:

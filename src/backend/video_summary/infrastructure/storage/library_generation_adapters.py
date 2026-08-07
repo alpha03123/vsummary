@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.series_mindmap_workflow import ConfiguredSeriesMindmapWorkflow
@@ -46,6 +47,8 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
         video_id: str,
         progress_reporter: ProgressReporter | None = None,
         transcript_enhancement_enabled: bool | None = None,
+        manual_transcript: ManualTranscriptInput | None = None,
+        use_saved_manual_transcript: bool = True,
     ) -> None:
         """为指定视频触发一次完整的生成工作流。
 
@@ -66,6 +69,8 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
             video.output_dir,
             progress_reporter=progress_reporter,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
+            manual_transcript=manual_transcript,
+            use_saved_manual_transcript=use_saved_manual_transcript,
         )
 
 
