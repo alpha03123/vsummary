@@ -37,7 +37,9 @@ for /f "tokens=1,*" %%A in ('call "%CONDA_BAT%" env list ^| findstr /R /C:"^[* ]
 
 if not defined ENV_PATH (
     echo [error] Conda environment "%ENV_NAME%" not found.
-    echo Please run: conda env create -f environment.yml
+    echo Please create one source environment first:
+    echo   NVIDIA: conda env create -f environment.yml
+    echo   AMD CPU/Vulkan: conda env create -f environment.cpu.yml
     pause
     exit /b 1
 )
@@ -45,7 +47,7 @@ if not defined ENV_PATH (
 set "PYTHON=%ENV_PATH%\python.exe"
 if not exist "%PYTHON%" (
     echo [error] Python executable not found in "%ENV_PATH%".
-    echo Please recreate the Conda environment: conda env create -f environment.yml
+    echo Please recreate the source environment selected for this machine.
     pause
     exit /b 1
 )
