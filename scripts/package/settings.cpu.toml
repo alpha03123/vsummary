@@ -10,6 +10,10 @@ compute_type = "int8"
 transcription_mode = "accurate"
 initial_prompt = ""
 
+[asr.whisper_cpp]
+binary_path = "whisper-cli"
+model = "large-v3-turbo-q5_0"
+
 [asr.aliyun_bailian]
 base_url = "https://dashscope.aliyuncs.com"
 model = "paraformer-v2"

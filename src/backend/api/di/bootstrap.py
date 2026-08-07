@@ -19,6 +19,7 @@ from backend.bilibili import (
 from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.storage.library_generation_adapters import (
     WorkspaceBackedSeriesMindmapGenerator,
@@ -74,6 +75,7 @@ class ApiContainer:
     config_path: Path
     root_dir: Path
     faster_whisper_model_manager: FasterWhisperModelManager
+    whisper_cpp_model_manager: WhisperCppModelManager
     list_video_library: ListVideoLibrary
     get_video_source: GetVideoSource
     get_video_summary: GetVideoSummary
@@ -131,6 +133,7 @@ def build_api_container(
     mindmap_generator: VideoMindmapGenerator | None = None,
     knowledge_card_generator: KnowledgeCardGenerator | None = None,
     faster_whisper_model_manager: FasterWhisperModelManager | None = None,
+    whisper_cpp_model_manager: WhisperCppModelManager | None = None,
 ) -> ApiContainer:
     config_path = root_dir / "config" / "settings.toml"
     settings = load_settings(config_path, root_dir)
@@ -159,6 +162,9 @@ def build_api_container(
     )
     model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
         root_dir / "data" / "models" / "faster-whisper"
+    )
+    whisper_cpp_manager = whisper_cpp_model_manager or WhisperCppModelManager(
+        root_dir / "data" / "models" / "whisper-cpp"
     )
     resolved_generator = generator or WorkspaceBackedVideoSummaryGenerator(
         workspace=workspace,
@@ -234,6 +240,7 @@ def build_api_container(
         config_path=config_path,
         root_dir=root_dir,
         faster_whisper_model_manager=model_manager,
+        whisper_cpp_model_manager=whisper_cpp_manager,
         list_video_library=ListVideoLibrary(workspace),
         get_video_source=GetVideoSource(workspace),
         get_video_summary=GetVideoSummary(workspace),
@@ -279,6 +286,7 @@ def build_api_container(
             config_path=config_path,
             root_dir=root_dir,
             faster_whisper_model_manager=model_manager,
+            whisper_cpp_model_manager=whisper_cpp_manager,
             rag_model_manager=rag_model_manager,
         ),
         usage_store=usage_store,

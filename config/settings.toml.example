@@ -1,6 +1,6 @@
 # 语音转写设置。
 [asr]
-# 转写引擎。目前支持 "faster_whisper"。
+# 转写引擎。支持 "faster_whisper"、"whisper_cpp"、"aliyun_bailian"。
 provider = "faster_whisper"
 # 转写语言。"auto" 自动识别；也可强制指定 "zh" 或 "en"。
 language = "auto"
@@ -19,6 +19,13 @@ compute_type = "float16"
 transcription_mode = "accurate"
 # 转写首段上下文提示词。自动识别语言时建议留空；中文 ASR 输出会自动规范为简体。
 initial_prompt = ""
+
+# whisper.cpp 转写引擎配置。模型由设置页下载，或手动放入 data/models/whisper-cpp/<model>/。
+[asr.whisper_cpp]
+# whisper-cli 可执行文件的绝对路径，或已加入 PATH 的命令名。
+binary_path = "whisper-cli"
+# GGML 模型 ID；与 faster-whisper 模型目录和格式不通用。
+model = "large-v3-turbo-q5_0"
 
 [asr.aliyun_bailian]
 base_url = "https://dashscope.aliyuncs.com"

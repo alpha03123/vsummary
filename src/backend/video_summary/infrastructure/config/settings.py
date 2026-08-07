@@ -27,7 +27,7 @@ from backend.shared.filesystem import atomic_write_text
 
 
 VALID_DEVICES = {"auto", "cpu", "gpu"}
-VALID_ASR_PROVIDERS = {"faster_whisper", "aliyun_bailian"}
+VALID_ASR_PROVIDERS = {"faster_whisper", "whisper_cpp", "aliyun_bailian"}
 VALID_THEMES = {"light", "dark"}
 VALID_WORKSPACE_LAYOUT_MODES = {"video_center", "chat_center"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
@@ -145,6 +145,8 @@ DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS = 0.2
 DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS = 0.3
 DEFAULT_ASR_LANGUAGE = "auto"
 DEFAULT_FASTER_WHISPER_INITIAL_PROMPT = ""
+DEFAULT_WHISPER_CPP_BINARY_PATH = "whisper-cli"
+DEFAULT_WHISPER_CPP_MODEL = "large-v3-turbo-q5_0"
 SUPPORTED_HUGGINGFACE_ENV_KEYS = ("HF_ENDPOINT", "HF_HOME", "HUGGINGFACE_HUB_CACHE")
 
 
@@ -179,11 +181,20 @@ class AliyunBailianAsrSettings:
 
 
 @dataclass(frozen=True)
+class WhisperCppSettings:
+    """whisper.cpp 外部命令行 provider 的配置。"""
+
+    binary_path: str
+    model: str
+    models_dir: Path
+
+
+@dataclass(frozen=True)
 class AsrSettings:
     """ASR 总配置：provider + 语言 + 是否启用转写增强 + provider 子配置。
 
     Attributes:
-        provider: ASR provider 标识（当前仅 `faster_whisper`）。
+        provider: ASR provider 标识。
         language: 语言代码或 `auto`；`auto` 表示由 ASR 自动识别。
         transcript_enhancement_enabled: 是否启用 LLM 转写增强。
         faster_whisper: faster-whisper provider 的具体参数。
@@ -194,6 +205,7 @@ class AsrSettings:
     language: str
     transcript_enhancement_enabled: bool
     faster_whisper: FasterWhisperSettings
+    whisper_cpp: WhisperCppSettings
     aliyun_bailian: AliyunBailianAsrSettings
 
 
@@ -403,6 +415,18 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         ),
         models_dir=root_dir / "data" / "models" / "faster-whisper",
     )
+    whisper_cpp_payload = asr_payload.get("whisper_cpp", {})
+    whisper_cpp_settings = WhisperCppSettings(
+        binary_path=_normalize_string(
+            whisper_cpp_payload.get("binary_path"),
+            default=DEFAULT_WHISPER_CPP_BINARY_PATH,
+        ),
+        model=_normalize_string(
+            whisper_cpp_payload.get("model"),
+            default=DEFAULT_WHISPER_CPP_MODEL,
+        ),
+        models_dir=root_dir / "data" / "models" / "whisper-cpp",
+    )
     aliyun_payload = asr_payload.get("aliyun_bailian", {})
     aliyun_settings = AliyunBailianAsrSettings(
         base_url=_normalize_http_base_url(
@@ -422,6 +446,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         language=_normalize_asr_language(asr_payload.get("language")),
         transcript_enhancement_enabled=bool(asr_payload.get("transcript_enhancement_enabled", True)),
         faster_whisper=faster_settings,
+        whisper_cpp=whisper_cpp_settings,
         aliyun_bailian=aliyun_settings,
     )
 
@@ -659,6 +684,14 @@ def replace_faster_whisper_model_size(settings: AppSettings, model_size: str) ->
             settings.asr,
             faster_whisper=replace(settings.asr.faster_whisper, model_size=model_size),
         ),
+    )
+
+
+def replace_whisper_cpp_model(settings: AppSettings, model: str) -> AppSettings:
+    """派生替换 whisper.cpp 当前模型。"""
+    return replace(
+        settings,
+        asr=replace(settings.asr, whisper_cpp=replace(settings.asr.whisper_cpp, model=model)),
     )
 
 
@@ -954,6 +987,10 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'compute_type = "{settings.asr.faster_whisper.compute_type}"',
         f'transcription_mode = "{settings.asr.faster_whisper.transcription_mode}"',
         f"initial_prompt = {_toml_string(settings.asr.faster_whisper.initial_prompt)}",
+        "",
+        "[asr.whisper_cpp]",
+        f'binary_path = {_toml_string(settings.asr.whisper_cpp.binary_path)}',
+        f'model = {_toml_string(settings.asr.whisper_cpp.model)}',
         "",
         "[asr.aliyun_bailian]",
         f'base_url = "{settings.asr.aliyun_bailian.base_url}"',

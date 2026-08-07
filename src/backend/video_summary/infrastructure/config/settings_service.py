@@ -15,6 +15,7 @@ from threading import Lock
 from typing import Protocol
 
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.asr.aliyun_bailian_transcriber import _normalize_dashscope_base_address
 from backend.video_summary.infrastructure.rag.rag_models import RAG_RERANKER_REQUIRED_MESSAGE, RagModelManager
 from backend.video_summary.infrastructure.config.settings import (
@@ -39,6 +40,7 @@ from backend.video_summary.infrastructure.config.settings import (
     replace_agent_context_reasoning_effort,
     replace_agent_context_talk_custom_prompt,
     replace_faster_whisper_model_size,
+    replace_whisper_cpp_model,
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
     replace_chaoxing_import_settings,
@@ -224,6 +226,7 @@ class SettingsService:
         config_path: Path,
         root_dir: Path,
         faster_whisper_model_manager: FasterWhisperModelManager,
+        whisper_cpp_model_manager: WhisperCppModelManager | None = None,
         rag_model_manager: RagModelManager | None = None,
     ) -> None:
         """注入 `settings.toml` 路径、项目根目录与 ASR / RAG 模型管理器。
@@ -238,6 +241,9 @@ class SettingsService:
         self._config_path = config_path
         self._root_dir = root_dir
         self._faster_whisper_model_manager = faster_whisper_model_manager
+        self._whisper_cpp_model_manager = whisper_cpp_model_manager or WhisperCppModelManager(
+            root_dir / "data" / "models" / "whisper-cpp"
+        )
         self._rag_model_manager = rag_model_manager
         self._settings_lock = Lock()
 
@@ -260,7 +266,11 @@ class SettingsService:
             layout_mode=settings.workspace_ui.layout_mode,
             transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
             asr_provider=settings.asr.provider,
-            asr_model_quality=settings.asr.faster_whisper.model_size,
+            asr_model_quality=(
+                settings.asr.whisper_cpp.model
+                if settings.asr.provider == "whisper_cpp"
+                else settings.asr.faster_whisper.model_size
+            ),
             transcription_mode=settings.asr.faster_whisper.transcription_mode,
             asr_cloud_model=settings.asr.aliyun_bailian.model,
             asr_base_url=settings.asr.aliyun_bailian.base_url,
@@ -342,7 +352,12 @@ class SettingsService:
         normalized_asr_provider = asr_provider.strip().lower()
         if normalized_asr_provider not in VALID_ASR_PROVIDERS:
             raise SettingsValidationError(f"unsupported asr provider '{normalized_asr_provider}'")
-        if not self._faster_whisper_model_manager.is_supported(asr_model_quality):
+        model_manager = (
+            self._whisper_cpp_model_manager
+            if normalized_asr_provider == "whisper_cpp"
+            else self._faster_whisper_model_manager
+        )
+        if normalized_asr_provider != "aliyun_bailian" and not model_manager.is_supported(asr_model_quality):
             raise SettingsValidationError(f"unsupported asr model '{asr_model_quality}'")
         if asr_base_url and not asr_base_url.strip().startswith(("http://", "https://")):
             raise SettingsValidationError("ASR API 地址必须包含 http:// 或 https://。")
@@ -383,7 +398,10 @@ class SettingsService:
             )
             next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
             next_settings = replace_asr_provider(next_settings, normalized_asr_provider)
-            next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
+            if normalized_asr_provider == "whisper_cpp":
+                next_settings = replace_whisper_cpp_model(next_settings, asr_model_quality)
+            elif normalized_asr_provider == "faster_whisper":
+                next_settings = replace_faster_whisper_model_size(next_settings, asr_model_quality)
             next_settings = replace_faster_whisper_transcription_mode(next_settings, transcription_mode)
             next_settings = replace_aliyun_bailian_asr_settings(
                 next_settings,
@@ -430,7 +448,11 @@ class SettingsService:
             layout_mode=layout_mode,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
             asr_provider=next_settings.asr.provider,
-            asr_model_quality=asr_model_quality,
+            asr_model_quality=(
+                next_settings.asr.whisper_cpp.model
+                if next_settings.asr.provider == "whisper_cpp"
+                else next_settings.asr.faster_whisper.model_size
+            ),
             transcription_mode=transcription_mode,
             asr_cloud_model=next_settings.asr.aliyun_bailian.model,
             asr_base_url=next_settings.asr.aliyun_bailian.base_url,
@@ -488,6 +510,8 @@ class SettingsService:
             raise SettingsValidationError(f"unsupported asr provider '{normalized_provider}'")
         if normalized_provider == "faster_whisper":
             return "本地 faster-whisper 无需云端连接测试。"
+        if normalized_provider == "whisper_cpp":
+            return "本地 whisper.cpp 无需云端连接测试。"
         if normalized_provider != "aliyun_bailian":
             raise SettingsValidationError(f"unsupported asr provider '{normalized_provider}'")
 

@@ -387,9 +387,9 @@ def test_provider_settings(
     return TestProviderSettingsResponse(ok=True, message=f"模型连接成功：{response}")
 
 
-@router.get("/api/asr/faster-whisper/models", response_model=list[FasterWhisperModelResponse])
-def list_faster_whisper_models(container: ApiContainerDep) -> list[FasterWhisperModelResponse]:
-    """GET /api/asr/faster-whisper/models — 列出可用的 faster-whisper ASR 模型。
+@router.get("/api/asr/{provider}/models", response_model=list[FasterWhisperModelResponse])
+def list_asr_models(provider: str, container: ApiContainerDep) -> list[FasterWhisperModelResponse]:
+    """GET /api/asr/{provider}/models — 列出本地 ASR provider 的模型。
 
     返回满足当前 model_size 配置的所有可用模型及其下载状态、
     推荐标记、当前进度等信息。
@@ -403,19 +403,20 @@ def list_faster_whisper_models(container: ApiContainerDep) -> list[FasterWhisper
     Raises:
         HTTPException(400): 配置文件读取异常。
     """
+    manager = _get_asr_model_manager(provider, container)
     try:
         settings = load_settings(container.config_path, container.root_dir)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return [
-        _to_faster_whisper_model_response(model, container)
-        for model in container.faster_whisper_model_manager.list_models(settings.asr.faster_whisper.model_size)
+        _to_asr_model_response(provider, model, container)
+        for model in manager.list_models(_current_asr_model(provider, settings))
     ]
 
 
-@router.post("/api/asr/faster-whisper/models/{model_id}/download", response_model=FasterWhisperModelResponse)
-def download_faster_whisper_model(model_id: str, container: ApiContainerDep) -> FasterWhisperModelResponse:
-    """POST /api/asr/faster-whisper/models/{model_id}/download — 触发 faster-whisper 模型下载。
+@router.post("/api/asr/{provider}/models/{model_id}/download", response_model=FasterWhisperModelResponse)
+def download_asr_model(provider: str, model_id: str, container: ApiContainerDep) -> FasterWhisperModelResponse:
+    """POST /api/asr/{provider}/models/{model_id}/download — 触发 ASR 模型下载。
 
     在后台线程启动模型下载，同一模型同时只允许一个下载任务；
     返回模型当前信息（含下载进度），前端通过对应的 SSE 端点订阅进度。
@@ -430,10 +431,11 @@ def download_faster_whisper_model(model_id: str, container: ApiContainerDep) -> 
     Raises:
         HTTPException(400): 不支持的模型 ID。
     """
-    if not container.faster_whisper_model_manager.is_supported(model_id):
-        raise HTTPException(status_code=400, detail=f"unsupported faster-whisper model '{model_id}'")
+    manager = _get_asr_model_manager(provider, container)
+    if not manager.is_supported(model_id):
+        raise HTTPException(status_code=400, detail=f"unsupported {provider} model '{model_id}'")
 
-    task_id = _build_model_download_task_id(model_id)
+    task_id = _build_model_download_task_id(provider, model_id)
     should_start = False
     with _ASR_DOWNLOAD_LOCK:
         if task_id not in _ACTIVE_ASR_DOWNLOADS:
@@ -443,33 +445,35 @@ def download_faster_whisper_model(model_id: str, container: ApiContainerDep) -> 
     if should_start:
         reporter = container.model_download_progress_tracker.create_reporter(task_id)
         Thread(
-            target=_run_faster_whisper_model_download,
-            args=(model_id, task_id, container, reporter),
+            target=_run_asr_model_download,
+            args=(provider, model_id, task_id, manager, reporter),
             daemon=True,
         ).start()
 
     settings = load_settings(container.config_path, container.root_dir)
     downloaded_model = next(
         model
-        for model in container.faster_whisper_model_manager.list_models(settings.asr.faster_whisper.model_size)
+        for model in manager.list_models(_current_asr_model(provider, settings))
         if model.id == model_id
     )
-    return _to_faster_whisper_model_response(downloaded_model, container)
+    return _to_asr_model_response(provider, downloaded_model, container)
 
 
-@router.post("/api/asr/faster-whisper/models/{model_id}/download/cancel")
-def cancel_faster_whisper_model_download(model_id: str, container: ApiContainerDep) -> dict[str, str]:
+@router.post("/api/asr/{provider}/models/{model_id}/download/cancel")
+def cancel_asr_model_download(provider: str, model_id: str, container: ApiContainerDep) -> dict[str, str]:
     """POST /api/asr/faster-whisper/models/{model_id}/download/cancel — 请求取消 ASR 模型下载。"""
-    if not container.faster_whisper_model_manager.is_supported(model_id):
-        raise HTTPException(status_code=400, detail=f"unsupported faster-whisper model '{model_id}'")
+    manager = _get_asr_model_manager(provider, container)
+    if not manager.is_supported(model_id):
+        raise HTTPException(status_code=400, detail=f"unsupported {provider} model '{model_id}'")
 
-    task_id = _build_model_download_task_id(model_id)
+    task_id = _build_model_download_task_id(provider, model_id)
     container.model_download_progress_tracker.request_cancel(task_id)
     return {"status": "cancelling", "task_id": task_id}
 
 
-@router.get("/api/asr/faster-whisper/models/{model_id}/download/progress")
-async def stream_faster_whisper_model_download_progress(
+@router.get("/api/asr/{provider}/models/{model_id}/download/progress")
+async def stream_asr_model_download_progress(
+    provider: str,
     model_id: str,
     container: ApiContainerDep,
 ) -> StreamingResponse:
@@ -485,7 +489,8 @@ async def stream_faster_whisper_model_download_progress(
     Returns:
         StreamingResponse（`text/event-stream`）。
     """
-    task_id = _build_model_download_task_id(model_id)
+    _get_asr_model_manager(provider, container)
+    task_id = _build_model_download_task_id(provider, model_id)
     return StreamingResponse(
         stream_progress_events(
             tracker=container.model_download_progress_tracker,
@@ -576,7 +581,7 @@ async def stream_rag_model_download_progress(
     )
 
 
-def _build_model_download_task_id(model_id: str) -> str:
+def _build_model_download_task_id(provider: str, model_id: str) -> str:
     """构建 ASR 模型下载的进度跟踪任务 ID。
 
     Args:
@@ -585,10 +590,10 @@ def _build_model_download_task_id(model_id: str) -> str:
     Returns:
         格式为 `asr-download/{model_id}` 的任务 ID。
     """
-    return f"asr-download/{model_id}"
+    return f"asr-download/{provider}/{model_id}"
 
 
-def _run_faster_whisper_model_download(model_id: str, task_id: str, container: ApiContainerDep, reporter) -> None:
+def _run_asr_model_download(provider: str, model_id: str, task_id: str, manager, reporter) -> None:
     """在后台线程中执行 faster-whisper 模型下载。
 
     完成后自动清理 `_ACTIVE_ASR_DOWNLOADS` 集合中的任务记录。
@@ -600,7 +605,7 @@ def _run_faster_whisper_model_download(model_id: str, task_id: str, container: A
         reporter: 进度报告器。
     """
     try:
-        container.faster_whisper_model_manager.download(model_id, progress_reporter=reporter)
+        manager.download(model_id, progress_reporter=reporter)
     except HuggingFaceDownloadCancelled:
         reporter.cancelled("模型下载已取消")
     except Exception as error:
@@ -610,7 +615,7 @@ def _run_faster_whisper_model_download(model_id: str, task_id: str, container: A
             _ACTIVE_ASR_DOWNLOADS.discard(task_id)
 
 
-def _to_faster_whisper_model_response(model, container: ApiContainerDep) -> FasterWhisperModelResponse:
+def _to_asr_model_response(provider: str, model, container: ApiContainerDep) -> FasterWhisperModelResponse:
     """将 faster-whisper 模型对象转换为 API 响应 DTO，含当前下载进度快照。
 
     Args:
@@ -620,7 +625,7 @@ def _to_faster_whisper_model_response(model, container: ApiContainerDep) -> Fast
     Returns:
         附加了下载进度的 FasterWhisperModelResponse。
     """
-    snapshot = container.model_download_progress_tracker.get_snapshot(_build_model_download_task_id(model.id))
+    snapshot = container.model_download_progress_tracker.get_snapshot(_build_model_download_task_id(provider, model.id))
     return FasterWhisperModelResponse(
         id=model.id,
         label=model.label,
@@ -632,6 +637,19 @@ def _to_faster_whisper_model_response(model, container: ApiContainerDep) -> Fast
         detail=snapshot.detail,
         error=snapshot.error,
     )
+
+
+def _get_asr_model_manager(provider: str, container: ApiContainerDep):
+    normalized_provider = provider.strip().lower()
+    if normalized_provider == "faster_whisper":
+        return container.faster_whisper_model_manager
+    if normalized_provider == "whisper_cpp":
+        return container.whisper_cpp_model_manager
+    raise HTTPException(status_code=400, detail=f"ASR provider '{provider}' does not manage local models")
+
+
+def _current_asr_model(provider: str, settings) -> str:
+    return settings.asr.whisper_cpp.model if provider == "whisper_cpp" else settings.asr.faster_whisper.model_size
 
 
 def _to_rag_model_response(model) -> RagModelResponse:

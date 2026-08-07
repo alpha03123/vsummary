@@ -22,6 +22,8 @@ from pathlib import Path
 from backend.video_summary.infrastructure.asr.aliyun_bailian_transcriber import AliyunBailianTranscriber
 from backend.video_summary.infrastructure.asr.faster_whisper_transcriber import FasterWhisperTranscriber
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
+from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
+from backend.video_summary.infrastructure.asr.whisper_cpp_transcriber import WhisperCppTranscriber
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.infrastructure.llm.litellm_summarizer import LiteLLMCompletionSummarizer
 from backend.video_summary.infrastructure.config.settings import AppSettings
@@ -120,7 +122,7 @@ def build_video_summary_runtime(
 def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeInfo]:
     """根据 `settings.asr.provider` 分发到对应的转写器实现。
 
-    `faster_whisper` 会先校验模型是否已下载；`aliyun_bailian` 使用 DashScope
+    本地 provider 会先校验模型是否已下载；`aliyun_bailian` 使用 DashScope
     SDK 临时上传音频并调用云端 Paraformer。
     """
     provider = settings.asr.provider
@@ -143,6 +145,22 @@ def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeIn
                 provider=provider,
                 device=settings.asr.faster_whisper.device,
                 model_label=settings.asr.faster_whisper.model_size,
+            ),
+        )
+    if provider == "whisper_cpp":
+        model_manager = WhisperCppModelManager(settings.asr.whisper_cpp.models_dir)
+        if not model_manager.is_downloaded(settings.asr.whisper_cpp.model):
+            raise AsrModelNotReadyError("当前 whisper.cpp 模型尚未下载，请先到设置中下载后再生成 AI 概况。")
+        return (
+            WhisperCppTranscriber(
+                binary_path=settings.asr.whisper_cpp.binary_path,
+                model_path=model_manager.resolve_model_path(settings.asr.whisper_cpp.model),
+                language=settings.asr.language,
+            ),
+            AsrRuntimeInfo(
+                provider=provider,
+                device="external",
+                model_label=settings.asr.whisper_cpp.model,
             ),
         )
     if provider == "aliyun_bailian":
