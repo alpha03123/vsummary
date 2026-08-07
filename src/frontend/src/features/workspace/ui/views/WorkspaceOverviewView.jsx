@@ -86,7 +86,7 @@ export function WorkspaceOverviewView({
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-8 pb-32">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-32">
       {isGeneratingSelectedVideo ? (
         <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-sm text-stone-700 dark:text-stone-200">
           <LoaderCircle size={16} className="animate-spin text-accent" />

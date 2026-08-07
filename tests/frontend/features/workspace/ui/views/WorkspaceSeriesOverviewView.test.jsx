@@ -63,7 +63,9 @@ describe("WorkspaceSeriesOverviewView", () => {
   it("filters to the selected video without changing series context", () => {
     renderView();
 
-    fireEvent.change(screen.getByLabelText("选择视频概况"), { target: { value: "video-2" } });
+    // open the custom scope picker then click the second video option
+    fireEvent.click(screen.getByLabelText("选择视频概况"));
+    fireEvent.click(screen.getByRole("option", { name: /第二讲/ }));
 
     expect(screen.queryByText("第一讲概况")).not.toBeInTheDocument();
     expect(screen.getByText("第二讲概况")).toBeInTheDocument();

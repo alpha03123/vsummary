@@ -120,6 +120,12 @@ export function WorkspaceReadingPane({
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
+  const toolHeaderBadge = resolveSeriesOverviewBadge({
+    selectedToolId,
+    activeSeries,
+    seriesOverviewSummariesByVideoId,
+    seriesOverviewLoading,
+  });
 
   return (
     <section className="relative flex h-full w-full flex-col bg-transparent">
@@ -153,6 +159,7 @@ export function WorkspaceReadingPane({
               ) : (
                 <WorkspaceToolHeader
                   meta={currentToolMeta}
+                  badge={toolHeaderBadge}
                   onBack={() => onSelectTool(selectedContextType === "series" ? "series-home" : "studio")}
                   exportActions={buildExportActions({
                     activeSeries,
@@ -298,6 +305,23 @@ export function WorkspaceReadingPane({
       </div>
     </section>
   );
+}
+
+function resolveSeriesOverviewBadge({
+  selectedToolId,
+  activeSeries,
+  seriesOverviewSummariesByVideoId,
+  seriesOverviewLoading,
+}) {
+  if (selectedToolId !== "series-overview" || seriesOverviewLoading) {
+    return null;
+  }
+  const videos = activeSeries?.videos ?? [];
+  if (!videos.length) {
+    return null;
+  }
+  const generated = videos.filter((video) => seriesOverviewSummariesByVideoId?.[video.id]).length;
+  return `${generated} / ${videos.length} 视频概况`;
 }
 
 function buildExportActions({ activeSeries, notes, summary, selectedToolId, selectedVideo, tools }) {

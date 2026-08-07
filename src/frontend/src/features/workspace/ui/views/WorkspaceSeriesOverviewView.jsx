@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, ListFilter } from "lucide-react";
+import { ExternalLink, Sparkles } from "lucide-react";
 
 import { WorkspaceOverviewContent } from "./WorkspaceOverviewContent";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceVideoScopePicker } from "../shared/WorkspaceVideoScopePicker";
 
 export function WorkspaceSeriesOverviewView({
   activeSeries,
@@ -14,10 +15,10 @@ export function WorkspaceSeriesOverviewView({
 }) {
   const [selectedVideoId, setSelectedVideoId] = useState("all");
   const seriesVideos = activeSeries?.videos ?? [];
-  const visibleVideos = selectedVideoId === "all"
+  const showingAll = selectedVideoId === "all";
+  const visibleVideos = showingAll
     ? seriesVideos
     : seriesVideos.filter((video) => video.id === selectedVideoId);
-  const overviewCount = seriesVideos.filter((video) => summariesByVideoId?.[video.id]).length;
 
   useEffect(() => {
     if (!citationFocus?.videoId) {
@@ -59,62 +60,69 @@ export function WorkspaceSeriesOverviewView({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200/80 pb-5 dark:border-white/5">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">Series AI Overview</p>
-          <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{overviewCount} / {seriesVideos.length} 视频概况</p>
-        </div>
-        <label className="flex min-w-52 flex-col gap-1.5 text-sm font-semibold text-stone-700 dark:text-stone-300">
-          <span className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400"><ListFilter size={14} />查看范围</span>
-          <select
-            aria-label="选择视频概况"
-            value={selectedVideoId}
-            onChange={(event) => setSelectedVideoId(event.target.value)}
-            className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-800 outline-none transition-colors focus:border-accent dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100"
-          >
-            <option value="all">全部视频 AI 概况</option>
-            {seriesVideos.map((video) => (
-              <option key={video.id} value={video.id}>{video.title}</option>
-            ))}
-          </select>
-        </label>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-24">
+      <div className="flex border-b border-stone-200/80 pb-5 dark:border-white/5">
+        <WorkspaceVideoScopePicker
+          videos={seriesVideos}
+          value={selectedVideoId}
+          onChange={setSelectedVideoId}
+        />
       </div>
 
       {visibleVideos.map((video) => {
         const summary = summariesByVideoId?.[video.id] ?? null;
+
         if (!summary) {
           return (
-            <article id={`series-overview-${video.id}`} key={video.id} className="workspace-muted-panel rounded-lg border px-5 py-4">
-              <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">{video.title}</h2>
-              <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">尚未生成 AI 概况</p>
+            <article
+              id={`series-overview-${video.id}`}
+              key={video.id}
+              className="workspace-muted-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-4"
+            >
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-bold text-stone-900 dark:text-stone-100">{video.title}</h2>
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">尚未生成 AI 概况</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenVideoOverview?.(video.id)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-accent/25 bg-accent/5 px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/10"
+              >
+                <Sparkles size={15} aria-hidden="true" />
+                去生成概况
+              </button>
             </article>
           );
         }
+
+        const title = summary.title ?? video.title;
 
         return (
           <section
             id={`series-overview-${video.id}`}
             key={video.id}
             className={`flex flex-col gap-6 border-b border-stone-200/80 pb-10 last:border-b-0 dark:border-white/5 ${
-              citationFocus?.videoId === video.id ? "rounded-lg ring-2 ring-accent/20" : ""
+              citationFocus?.videoId === video.id ? "rounded-2xl ring-2 ring-accent/20" : ""
             }`}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">Video AI Overview</p>
-                <h2 className="mt-1 text-xl font-bold text-stone-900 dark:text-stone-100">{summary.title ?? video.title}</h2>
-              </div>
+            <div
+              className={`flex items-center justify-between gap-4 ${
+                showingAll
+                  ? "sticky top-0 z-20 border-b border-stone-200/70 bg-white/85 py-3 backdrop-blur dark:border-white/5 dark:bg-neutral-950/85"
+                  : ""
+              }`}
+            >
+              <h2 className="min-w-0 truncate text-xl font-bold text-stone-900 dark:text-stone-100">{title}</h2>
               <button
                 type="button"
                 onClick={() => onOpenVideoOverview?.(video.id)}
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-neutral-800 dark:hover:text-stone-100"
               >
                 进入视频概况
-                <ExternalLink size={15} />
+                <ExternalLink size={14} aria-hidden="true" />
               </button>
             </div>
-            <WorkspaceOverviewContent ui={ui} summary={summary} />
+            <WorkspaceOverviewContent ui={ui} summary={summary} sectionHeadingLevel={3} />
           </section>
         );
       })}

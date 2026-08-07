@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, Download } from "lucide-react";
 
-export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [] }) {
+export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [], badge = null }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <div>
-        <p className="text-xs font-bold text-stone-600 dark:text-stone-400 uppercase mb-1">Tool Page</p>
-        <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 leading-snug">{meta?.label}</h2>
+      <div className="min-w-0">
+        <p className="mb-1 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Tool Page</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h1 className="text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{meta?.label}</h1>
+          {badge ? (
+            <span className="inline-flex shrink-0 items-center rounded-full border border-stone-200 bg-stone-100/80 px-2.5 py-0.5 text-xs font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800/70 dark:text-stone-300">
+              {badge}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{meta?.description}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -14,7 +21,7 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
         <button
           type="button"
           onClick={onBack}
-          className="workspace-elevated-panel inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 transition-all hover:border-stone-300 dark:hover:border-white/16 hover:bg-white dark:hover:bg-neutral-800 hover:text-stone-900 dark:hover:text-stone-100 hover:-translate-y-0.5"
+          className="workspace-elevated-panel inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold text-stone-700 transition-all hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:text-stone-900 dark:text-stone-200 dark:hover:border-white/16 dark:hover:bg-neutral-800 dark:hover:text-stone-100"
         >
           <ArrowLeft size={16} />
           {backLabel}
@@ -30,7 +37,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
   const enabledActions = exportActions.filter((action) => action.enabled);
   const disabledReason = exportActions.find((action) => !action.enabled)?.disabledReason ?? "当前内容不可导出";
   const disabled = enabledActions.length === 0;
-  const className = "workspace-elevated-panel inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition-all";
+  const className = "workspace-elevated-panel inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all";
 
   useEffect(() => {
     if (!open) {

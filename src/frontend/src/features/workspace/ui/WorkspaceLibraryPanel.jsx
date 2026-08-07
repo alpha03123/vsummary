@@ -15,9 +15,11 @@ import {
   Square,
   CheckSquare,
   X,
+  MoreHorizontal,
+  CheckCheck,
 } from "lucide-react";
-import { motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildVideoKey } from "../model/workspaceControllerUtils";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
@@ -419,11 +421,25 @@ export function WorkspaceLibraryPanel({
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedVideoIds, setSelectedVideoIds] = useState([]);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef(null);
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const handler = (e) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target)) {
+        setOverflowOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [overflowOpen]);
   useEffect(() => {
     const existingIds = new Set(videos.map((video) => video.id));
     setSelectedVideoIds((current) => current.filter((videoId) => existingIds.has(videoId)));
   }, [videos]);
   const normalizedFilter = filterText.trim().toLowerCase();
+  const generatedCount = useMemo(() => videos.filter((v) => v.processed).length, [videos]);
+  const pendingCount = useMemo(() => videos.filter((v) => !v.processed).length, [videos]);
   const filteredVideos = useMemo(() => {
     return videos.filter((video) => {
       if (statusFilter === "generated" && !video.processed) {
@@ -478,24 +494,42 @@ export function WorkspaceLibraryPanel({
           </button>
         </div>
         {!isPlayground ? (
-          <div className="mb-4 flex gap-2">
+          <div className="mb-4 flex items-center gap-2">
             <button
               type="button"
               onClick={() => onAddSeriesVideo?.()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/14 hover:border-accent/60"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent/8 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/14 hover:border-accent/60"
             >
               <ArrowDown size={14} />
               添加视频
             </button>
-            <button
-              type="button"
-              onClick={() => onRequestDeleteSeries?.()}
-              disabled={seriesDeleteButton.disabled}
-              className="btn-danger-ghost inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Trash2 size={14} />
-              {seriesDeleteButton.disabled ? seriesDeleteButton.label : "删除整个系列"}
-            </button>
+            <div className="relative" ref={overflowRef}>
+              <button
+                type="button"
+                onClick={() => setOverflowOpen(!overflowOpen)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                title="更多操作"
+                aria-label="更多操作"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+              {overflowOpen && (
+                <div className="absolute right-0 top-full mt-1 z-30 min-w-[140px] rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-neutral-900">
+                  <button
+                    type="button"
+                    disabled={seriesDeleteButton.disabled}
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      onRequestDeleteSeries?.();
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                  >
+                    <Trash2 size={14} />
+                    {seriesDeleteButton.disabled ? seriesDeleteButton.label : "删除整个系列"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         ) : onAddPlaygroundVideo ? (
           <div className="mb-4">
@@ -511,14 +545,14 @@ export function WorkspaceLibraryPanel({
         ) : null}
 
         {!isPlayground ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-500" />
             <input
               type="text"
               value={filterText}
               onChange={(event) => setFilterText(event.target.value)}
-              placeholder="筛选当前系列内容"
+              placeholder="搜索视频"
               className="w-full rounded-2xl border border-stone-200/80 bg-white px-10 py-2.5 pr-10 text-sm text-stone-700 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500"
             />
             {filterText ? (
@@ -526,62 +560,41 @@ export function WorkspaceLibraryPanel({
                 type="button"
                 onClick={() => setFilterText("")}
                 className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-                aria-label="清空筛选条件"
-                title="清空筛选条件"
+                aria-label="清空搜索"
+                title="清空搜索"
               >
                 <X size={14} />
               </button>
               ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="视频状态筛选">
+            <div className="flex rounded-xl bg-stone-100 p-1 dark:bg-stone-800/80" role="group" aria-label="视频状态筛选">
               {[
-                ["all", "全部"],
-                ["generated", "已生成"],
-                ["pending", "未处理"],
-              ].map(([value, label]) => (
+                ["all", "全部", videos.length],
+                ["generated", "已生成", generatedCount],
+                ["pending", "未处理", pendingCount],
+              ].map(([value, label, count]) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setStatusFilter(value)}
                   aria-pressed={statusFilter === value}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`relative flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-all duration-200 ${
                     statusFilter === value
-                      ? "bg-accent text-white"
-                      : "text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                      ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
+                      : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
                   }`}
                 >
                   {label}
+                  <span className={`ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 py-px text-[10px] font-bold leading-none ${
+                    statusFilter === value
+                      ? "bg-accent/10 text-accent"
+                      : "bg-stone-200/80 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
+                  }`}>{count}</span>
                 </button>
               ))}
             </div>
-            <div className="flex items-center justify-between gap-2 border-t border-stone-200/80 pt-3 dark:border-stone-800">
-              <span className="text-xs text-stone-600 dark:text-stone-400">已选 {selectedCount} 项</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={seriesHasActiveWork || filteredVideos.length === 0}
-                  onClick={selectFilteredVideos}
-                  className="rounded-md px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
-                >
-                  全选当前筛选
-                </button>
-                <button
-                  type="button"
-                  disabled={seriesHasActiveWork || selectedCount === 0}
-                  onClick={() => onRequestBulkDelete?.(selectedVideoIds)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                  aria-label="批量删除所选视频"
-                  title={seriesHasActiveWork ? activeWorkSummary || "系列中有任务正在处理，暂不能批量删除" : "批量删除所选视频"}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </div>
-            {seriesHasActiveWork ? (
-              <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
-            ) : null}
             {bulkDeleteResult ? (
-              <div className="text-xs leading-relaxed text-stone-700 dark:text-stone-300">
+              <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-relaxed text-stone-700 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-300">
                 已删除 {bulkDeleteResult.deleted.length} 项{bulkDeleteResult.failed.length ? `，${bulkDeleteResult.failed.length} 项未删除。` : "。"}
                 {bulkDeleteResult.failed.length ? (
                   <ul className="mt-1 list-disc pl-4">
@@ -596,7 +609,8 @@ export function WorkspaceLibraryPanel({
       </div>
 
       {/* Video / Source List */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3" aria-label="视频列表">
+      <div className="relative flex-1 overflow-y-auto" aria-label="视频列表">
+        <div className={`p-4 flex flex-col gap-3 ${selectedCount > 0 ? "pb-20" : ""}`}>
         {!isPlayground ? (
           <button
             type="button"
@@ -618,7 +632,7 @@ export function WorkspaceLibraryPanel({
                 {activeSeries?.title}
               </strong>
               <span className="text-xs truncate text-stone-600 dark:text-stone-400">
-                聚焦整个 series，供 AI 和工具使用系列级上下文
+                聚焦整个系列，使用系列级上下文进行分析
               </span>
             </div>
           </button>
@@ -663,10 +677,14 @@ export function WorkspaceLibraryPanel({
                         event.stopPropagation();
                         toggleVideoSelection(video.id);
                       }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-400 dark:hover:bg-stone-800"
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        selectedVideoSet.has(video.id)
+                          ? "bg-accent/10 text-accent"
+                          : "text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:text-stone-500 dark:hover:bg-stone-700 dark:hover:text-stone-300"
+                      }`}
                       aria-label={selectedVideoSet.has(video.id) ? `取消选择 ${video.title}` : `选择 ${video.title}`}
                     >
-                      {selectedVideoSet.has(video.id) ? <CheckSquare size={16} className="text-accent" /> : <Square size={16} />}
+                      {selectedVideoSet.has(video.id) ? <CheckSquare size={16} /> : <Square size={16} />}
                     </button>
                   ) : null}
                   <FileVideo size={16} className={isActive ? "text-accent" : "text-stone-500 dark:text-stone-500"} />
@@ -696,6 +714,57 @@ export function WorkspaceLibraryPanel({
             当前筛选条件下没有匹配的视频。
           </div>
         ) : null}
+        </div>
+
+        {/* Floating Bulk Action Bar */}
+        <AnimatePresence>
+          {!isPlayground && selectedCount > 0 && (
+            <motion.div
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 28 }}
+              className="sticky bottom-0 z-20 mx-3 mb-3"
+            >
+              <div className="flex items-center justify-between gap-2 rounded-2xl border border-stone-200/80 bg-white/95 px-4 py-2.5 shadow-lg backdrop-blur-sm dark:border-stone-700 dark:bg-neutral-900/95">
+                <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">
+                  已选 {selectedCount} 项
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={seriesHasActiveWork || filteredVideos.length === 0}
+                    onClick={selectFilteredVideos}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
+                  >
+                    <CheckCheck size={14} />
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVideoIds([])}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    disabled={seriesHasActiveWork}
+                    onClick={() => onRequestBulkDelete?.(selectedVideoIds)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+                    title={seriesHasActiveWork ? activeWorkSummary || "系列中有任务正在处理，暂不能批量删除" : "删除所选视频"}
+                  >
+                    <Trash2 size={14} />
+                    删除
+                  </button>
+                </div>
+              </div>
+              {seriesHasActiveWork ? (
+                <p className="mt-1.5 px-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
+              ) : null}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <PanelFooter
