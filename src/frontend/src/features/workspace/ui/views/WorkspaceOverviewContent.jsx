@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from "react";
-import { Captions, ChevronUp, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Captions, ChevronUp, Sparkles, X } from "lucide-react";
 
 import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
 
 export function WorkspaceOverviewContent({ ui, summary, selectedChapterId = null, citationFocus = null, onSeek }) {
+  const [previewImage, setPreviewImage] = useState(null);
   const canSeek = typeof onSeek === "function";
   const citationTarget = useMemo(
     () => resolveCitationTarget(summary, citationFocus),
@@ -92,6 +93,20 @@ export function WorkspaceOverviewContent({ ui, summary, selectedChapterId = null
 
             <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">{chapter.summary}</p>
 
+            {chapter.image_url ? (
+              <button
+                type="button"
+                onClick={() => setPreviewImage({ src: chapter.image_url, alt: `${chapter.title} 视频截图` })}
+                className="group relative block w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-left dark:border-stone-800 dark:bg-stone-950"
+              >
+                <img
+                  src={chapter.image_url}
+                  alt={`${chapter.title} 视频截图`}
+                  className="aspect-video w-full object-cover transition-transform duration-200 group-hover:scale-[1.01]"
+                />
+              </button>
+            ) : null}
+
             <div className="mt-2 flex flex-col gap-2.5">
               {chapter.key_points.map((point) => (
                 <div key={point} className="flex items-start gap-3">
@@ -171,7 +186,44 @@ export function WorkspaceOverviewContent({ ui, summary, selectedChapterId = null
           </article>
         ))}
       </div>
+      {previewImage ? <ScreenshotLightbox image={previewImage} onClose={() => setPreviewImage(null)} /> : null}
     </>
+  );
+}
+
+function ScreenshotLightbox({ image, onClose }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="视频截图预览"
+      onMouseDown={onClose}
+    >
+      <div className="relative max-h-full max-w-5xl" onMouseDown={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+          aria-label="关闭截图预览"
+          title="关闭"
+          autoFocus
+        >
+          <X size={18} />
+        </button>
+        <img src={image.src} alt={image.alt} className="max-h-[calc(100vh-2rem)] max-w-full object-contain" />
+      </div>
+    </div>
   );
 }
 

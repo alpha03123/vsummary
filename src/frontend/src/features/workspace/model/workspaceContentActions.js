@@ -13,6 +13,7 @@ import {
   generateVideoMindmap,
   generateSeriesSummaries,
   generateVideoSummary,
+  restoreAutomaticTranscriptAndGenerateVideoSummary,
   initBilibiliCookie,
   importChaoxingCourse,
   importLocalPlaygroundVideos,
@@ -39,6 +40,7 @@ import {
   updateVideoNote,
   updateVideoSummary,
   updateVideoTranscript,
+  uploadSrtAndGenerateVideoSummary,
 } from "./workspaceApi";
 import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
@@ -278,7 +280,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           runId,
           videoId: video.id,
           videoTitle: video.title,
-          detail: `正在下载未缓存视频 ${index + 1}/${linkedVideos.length}`,
+          detail: `正在下载在线视频 ${index + 1}/${linkedVideos.length}`,
         });
         try {
           await downloadLinkedVideo(seriesId, video.id, { cancelCheck: () => cancellation.requested });
@@ -695,6 +697,69 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function runTranscriptGeneration(startGeneration, fallbackMessage) {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      return;
+    }
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    const videoKey = buildVideoKey(seriesId, videoId);
+    dispatch({ type: "generation_started", videoKey, seriesId, videoId });
+    try {
+      const summaryResult = await startGeneration(seriesId, videoId);
+      const library = await reloadWorkspaceLibrary();
+      dispatch({
+        type: "generation_succeeded",
+        taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        seriesId,
+        videoId,
+        summary: summaryResult,
+        library,
+      });
+    } catch (error) {
+      if (isGenerationCancelledError(error)) {
+        dispatch({
+          type: "generation_cancelled",
+          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          mode: "video",
+          seriesId,
+          videoId,
+          snapshot: { status: "cancelled", stage: "cancelled", progress: null, detail: "任务已取消，当前内容未改变", error: null },
+        });
+        return;
+      }
+      const message = errorMessage(error, fallbackMessage);
+      dispatch({ type: "load_failed", message });
+      dispatch({
+        type: "generation_status_loaded",
+        taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        mode: "video",
+        seriesId,
+        videoId,
+        snapshot: { status: "failed", stage: "failed", progress: null, detail: null, error: message },
+        subscriptionActive: false,
+      });
+    }
+  }
+
+  async function onUploadSrt(file) {
+    if (!file || typeof file.name !== "string" || file.name.toLowerCase().endsWith(".srt") === false) {
+      dispatch({ type: "load_failed", message: "请选择 .srt 字幕文件" });
+      return;
+    }
+    await runTranscriptGeneration(
+      (seriesId, videoId) => uploadSrtAndGenerateVideoSummary(seriesId, videoId, file),
+      "导入 SRT 并生成概况失败",
+    );
+  }
+
+  async function onRestoreAutomaticTranscript() {
+    await runTranscriptGeneration(
+      restoreAutomaticTranscriptAndGenerateVideoSummary,
+      "改用自动转写并重新生成失败",
+    );
+  }
+
   async function onUploadLocalSeries(seriesTitle, files) {
     try {
       const rawSeries = await uploadLocalSeries(seriesTitle, files);
@@ -943,10 +1008,38 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onDeleteVideos(videoIds) {
+    const seriesId = state.selectedSeriesId;
+    const targets = Array.isArray(videoIds) ? Array.from(new Set(videoIds)) : [];
+    if (!seriesId || targets.length === 0) {
+      return { deleted: [], failed: [] };
+    }
+    const videosById = new Map((state.library?.series?.find((series) => series.id === seriesId)?.videos ?? []).map((video) => [video.id, video]));
+    const deleted = [];
+    const failed = [];
+    for (const videoId of targets) {
+      try {
+        await deleteVideoSource(seriesId, videoId);
+        deleted.push(videoId);
+      } catch (error) {
+        failed.push({
+          videoId,
+          title: videosById.get(videoId)?.title ?? videoId,
+          error: errorMessage(error, "删除失败"),
+        });
+      }
+    }
+    await reloadWorkspaceLibrary();
+    dispatch({ type: "series_context_selected" });
+    return { deleted, failed };
+  }
+
   return {
     onGenerateKnowledgeCards,
     onClearKnowledgeCardsFeedback,
     onGenerateVideo,
+    onUploadSrt,
+    onRestoreAutomaticTranscript,
     onGenerateMindmap,
     onGenerateSeriesMindmap,
     onGenerateSeries,
@@ -977,6 +1070,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onUploadSeriesVideos,
     onDeleteSeries,
     onDeleteCurrentVideo,
+    onDeleteVideos,
     onDownloadVideo,
   };
 }

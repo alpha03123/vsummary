@@ -225,6 +225,8 @@ export function useWorkspaceController() {
     onOpenCitationReference: chatActions.onOpenCitationReference,
     onClearChat: chatActions.onClearChat,
     onGenerateVideo: contentActions.onGenerateVideo,
+    onUploadSrt: contentActions.onUploadSrt,
+    onRestoreAutomaticTranscript: contentActions.onRestoreAutomaticTranscript,
     onGenerateMindmap: contentActions.onGenerateMindmap,
     onGenerateSeriesMindmap: contentActions.onGenerateSeriesMindmap,
     onGenerateSeries: contentActions.onGenerateSeries,
@@ -277,6 +279,7 @@ export function useWorkspaceController() {
     onImportSeriesVideos: contentActions.onImportSeriesVideos,
     onDeleteSeries: contentActions.onDeleteSeries,
     onDeleteCurrentVideo: contentActions.onDeleteCurrentVideo,
+    onDeleteVideos: contentActions.onDeleteVideos,
     onDownloadVideo: contentActions.onDownloadVideo,
   };
 }

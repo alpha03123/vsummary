@@ -244,6 +244,8 @@ export function WorkspacePage({ page }) {
         onLoadSummaryMarkdown={actions.loadSummaryMarkdown}
         onUpdateSummary={actions.updateSummary}
         onUpdateTranscript={actions.updateTranscript}
+        onUploadSrt={actions.uploadSrt}
+        onRestoreAutomaticTranscript={actions.restoreAutomaticTranscript}
       />
     );
   }
@@ -644,8 +646,8 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
   const Icon = isRunning ? LoaderCircle : isFailed ? Database : CheckCircle2;
   const title = isRunning ? "数据库整理中" : isFailed ? "数据库整理失败" : "数据库已整理";
   const detail = isFailed
-    ? snapshot.error ?? "请查看后端日志。"
-    : snapshot.detail ?? (isRunning ? "正在重建 RAG 索引与 catalog 记忆。" : "RAG 索引已可用于检索。");
+    ? snapshot.error ?? "服务发生异常，请稍后重试。"
+    : snapshot.detail ?? (isRunning ? "正在构建视频关联知识库，完成后即可开始提问。" : "知识库已准备就绪，可用于问答检索。");
   const progressText = typeof snapshot.progress === "number" ? `${Math.round(snapshot.progress)}%` : "";
   const toneClassName = isFailed
     ? "border-danger bg-danger-subtle text-danger"

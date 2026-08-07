@@ -119,6 +119,7 @@ function asChapter(value, label) {
     key_points: asStringList(record.key_points, `${label}.key_points`),
     start_seconds: asNumber(record.start_seconds, `${label}.start_seconds`),
     end_seconds: asNumber(record.end_seconds, `${label}.end_seconds`),
+    image_url: asOptionalString(record.image_url),
     transcript_segments: asTranscriptSegments(record.transcript_segments, `${label}.transcript_segments`),
   };
 }
@@ -169,6 +170,7 @@ export function toWorkspaceSummary(payload) {
     title: asString(record.title, "summary.title"),
     one_sentence_summary: asOptionalString(record.one_sentence_summary),
     core_problem: asOptionalString(record.core_problem),
+    transcriptSource: asOptionalString(record.transcript_source),
     key_takeaways: Array.isArray(record.key_takeaways)
       ? asStringList(record.key_takeaways, "summary.key_takeaways")
       : [],

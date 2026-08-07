@@ -107,7 +107,7 @@ describe("WorkspaceLibraryPanel", () => {
     const titleNodes = screen.getAllByText(linkedDownloadedVideo.title);
     const titleStrong = titleNodes.find((node) => node.tagName.toLowerCase() === "strong");
     expect(titleStrong).toBeTruthy();
-    const card = titleStrong.closest("button");
+    const card = titleStrong.closest('[role="button"]');
     const coreProblemSpan = card?.querySelector("span.line-clamp-2");
     expect(coreProblemSpan === null || coreProblemSpan.textContent === "").toBe(true);
   });
@@ -125,6 +125,79 @@ describe("WorkspaceLibraryPanel", () => {
     expect(screen.getByText("拆解复杂问题")).toBeInTheDocument();
   });
 
+  it("combines generated status filter with text search", () => {
+    render(
+      <WorkspaceLibraryPanel
+        activeSeries={{
+          id: "s1",
+          title: "S1",
+          videos: [
+            { ...linkedDownloadedVideo, id: "done", title: "已生成视频", processed: true },
+            { ...linkedDownloadedVideo, id: "pending", title: "未处理视频", processed: false },
+          ],
+        }}
+        selectedContextType="video"
+        selectedVideo={linkedDownloadedVideo}
+        isGeneratingSelectedVideo={false}
+        isGeneratingSeries={false}
+        seriesGenerationQueue={null}
+        currentAsrModel={{ id: "large-v3-turbo", label: "large-v3-turbo", downloaded: true }}
+        ragModels={[]}
+        onEnterLibraryHome={vi.fn()}
+        onSelectSeriesContext={vi.fn()}
+        onSelectVideo={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onGenerateSeries={vi.fn()}
+        onCancelGeneration={vi.fn()}
+        onDownloadVideo={vi.fn()}
+        onAddSeriesVideo={vi.fn()}
+        onRequestDeleteCurrentVideo={vi.fn()}
+        onRequestDeleteSeries={vi.fn()}
+        onRequestBulkDelete={vi.fn()}
+        downloadProgress={null}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "已生成" }));
+    expect(screen.getByText("已生成视频")).toBeInTheDocument();
+    expect(screen.queryByText("未处理视频")).not.toBeInTheDocument();
+  });
+
+  it("disables bulk deletion while any series work is active", () => {
+    const onRequestBulkDelete = vi.fn();
+    render(
+      <WorkspaceLibraryPanel
+        activeSeries={{ id: "s1", title: "S1", videos: [linkedDownloadedVideo] }}
+        selectedContextType="video"
+        selectedVideo={linkedDownloadedVideo}
+        isGeneratingSelectedVideo={false}
+        isGeneratingSeries={false}
+        seriesGenerationQueue={null}
+        currentAsrModel={{ id: "large-v3-turbo", label: "large-v3-turbo", downloaded: true }}
+        ragModels={[]}
+        onEnterLibraryHome={vi.fn()}
+        onSelectSeriesContext={vi.fn()}
+        onSelectVideo={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onGenerateSeries={vi.fn()}
+        onCancelGeneration={vi.fn()}
+        onDownloadVideo={vi.fn()}
+        onAddSeriesVideo={vi.fn()}
+        onRequestDeleteCurrentVideo={vi.fn()}
+        onRequestDeleteSeries={vi.fn()}
+        onRequestBulkDelete={onRequestBulkDelete}
+        seriesHasActiveWork
+        activeWorkSummary="系列中有 1 个任务正在处理，暂不能批量删除。"
+        downloadProgress={null}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("批量删除所选视频")).toBeDisabled();
+    expect(screen.getByText("系列中有 1 个任务正在处理，暂不能批量删除。")).toBeInTheDocument();
+  });
+
   it("renders embedded newlines in core_problem with whitespace-pre-line", () => {
     renderPanelWithVideo({
       ...linkedDownloadedVideo,
@@ -134,7 +207,7 @@ describe("WorkspaceLibraryPanel", () => {
     // 使用 querySelectorAll 找到含换行符的 span (title= attribute 也是证据)
     const card = screen.getAllByText(linkedDownloadedVideo.title)
       .find((node) => node.tagName.toLowerCase() === "strong")
-      ?.closest("button");
+      ?.closest('[role="button"]');
     expect(card).toBeTruthy();
     const spans = Array.from(card.querySelectorAll("span"));
     const span = spans.find((node) => node.textContent?.includes("第一行"));

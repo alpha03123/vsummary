@@ -15,6 +15,8 @@ vi.mock("@src/features/workspace/ui/WorkspaceSeriesGrid", () => ({
 vi.mock("@src/features/workspace/ui/WorkspaceReadingPane", () => ({
   WorkspaceReadingPane: ({
     onGenerateSeriesMindmap,
+    onUploadSrt,
+    onRestoreAutomaticTranscript,
     onSeek,
     seriesMindmap,
     seriesMindmapAvailable,
@@ -25,6 +27,8 @@ vi.mock("@src/features/workspace/ui/WorkspaceReadingPane", () => ({
     <div
       data-testid="reading-pane"
       data-on-seek={Boolean(onSeek)}
+      data-on-upload-srt={Boolean(onUploadSrt)}
+      data-on-restore-automatic-transcript={Boolean(onRestoreAutomaticTranscript)}
       data-series-mindmap={seriesMindmap?.id ?? ""}
       data-series-mindmap-available={String(seriesMindmapAvailable)}
       data-series-mindmap-loading={String(seriesMindmapLoading)}
@@ -127,6 +131,13 @@ describe("WorkspacePage new layout", () => {
     render(<WorkspacePage page={makePage()} />);
     const pane = screen.getByTestId("reading-pane");
     expect(pane.getAttribute("data-on-seek")).toBe("true");
+  });
+
+  it("forwards transcript generation actions to WorkspaceReadingPane", () => {
+    render(<WorkspacePage page={makePage()} />);
+    const pane = screen.getByTestId("reading-pane");
+    expect(pane.getAttribute("data-on-upload-srt")).toBe("true");
+    expect(pane.getAttribute("data-on-restore-automatic-transcript")).toBe("true");
   });
 
   it("forwards series mindmap state to WorkspaceReadingPane", () => {

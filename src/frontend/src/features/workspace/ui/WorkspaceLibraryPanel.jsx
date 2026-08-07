@@ -12,10 +12,12 @@ import {
   Link2,
   ExternalLink,
   Trash2,
+  Square,
+  CheckSquare,
   X,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildVideoKey } from "../model/workspaceControllerUtils";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
@@ -404,6 +406,10 @@ export function WorkspaceLibraryPanel({
   onDeleteSeries,
   onRequestDeleteCurrentVideo,
   onRequestDeleteSeries,
+  onRequestBulkDelete,
+  seriesHasActiveWork = false,
+  activeWorkSummary = "",
+  bulkDeleteResult = null,
   downloadProgress,
   onOpenSettings,
 }) {
@@ -411,18 +417,40 @@ export function WorkspaceLibraryPanel({
   const isPlayground = activeSeries?.id === "__playground__";
   const isLinkedSeries = Boolean(activeSeries?.isLinked);
   const [filterText, setFilterText] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedVideoIds, setSelectedVideoIds] = useState([]);
+  useEffect(() => {
+    const existingIds = new Set(videos.map((video) => video.id));
+    setSelectedVideoIds((current) => current.filter((videoId) => existingIds.has(videoId)));
+  }, [videos]);
   const normalizedFilter = filterText.trim().toLowerCase();
   const filteredVideos = useMemo(() => {
-    if (!normalizedFilter) {
-      return videos;
-    }
     return videos.filter((video) => {
+      if (statusFilter === "generated" && !video.processed) {
+        return false;
+      }
+      if (statusFilter === "pending" && video.processed) {
+        return false;
+      }
+      if (!normalizedFilter) {
+        return true;
+      }
       const haystacks = [video.title, video.sourceName, video.sourceUrl, video.coreProblem]
         .filter((value) => typeof value === "string")
         .map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(normalizedFilter));
     });
-  }, [normalizedFilter, videos]);
+  }, [normalizedFilter, statusFilter, videos]);
+  const selectedVideoSet = useMemo(() => new Set(selectedVideoIds), [selectedVideoIds]);
+  const selectedCount = selectedVideoIds.length;
+  const toggleVideoSelection = (videoId) => {
+    setSelectedVideoIds((current) => current.includes(videoId)
+      ? current.filter((id) => id !== videoId)
+      : [...current, videoId]);
+  };
+  const selectFilteredVideos = () => {
+    setSelectedVideoIds(filteredVideos.map((video) => video.id));
+  };
   const seriesDeleteButton = getDeleteButtonState({
     isGeneratingSeries,
     isGeneratingSelectedVideo: false,
@@ -483,7 +511,8 @@ export function WorkspaceLibraryPanel({
         ) : null}
 
         {!isPlayground ? (
-          <div className="relative">
+          <div className="flex flex-col gap-3">
+            <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-500" />
             <input
               type="text"
@@ -502,6 +531,64 @@ export function WorkspaceLibraryPanel({
               >
                 <X size={14} />
               </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="视频状态筛选">
+              {[
+                ["all", "全部"],
+                ["generated", "已生成"],
+                ["pending", "未处理"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setStatusFilter(value)}
+                  aria-pressed={statusFilter === value}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    statusFilter === value
+                      ? "bg-accent text-white"
+                      : "text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-stone-200/80 pt-3 dark:border-stone-800">
+              <span className="text-xs text-stone-600 dark:text-stone-400">已选 {selectedCount} 项</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={seriesHasActiveWork || filteredVideos.length === 0}
+                  onClick={selectFilteredVideos}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
+                >
+                  全选当前筛选
+                </button>
+                <button
+                  type="button"
+                  disabled={seriesHasActiveWork || selectedCount === 0}
+                  onClick={() => onRequestBulkDelete?.(selectedVideoIds)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                  aria-label="批量删除所选视频"
+                  title={seriesHasActiveWork ? activeWorkSummary || "系列中有任务正在处理，暂不能批量删除" : "批量删除所选视频"}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </div>
+            {seriesHasActiveWork ? (
+              <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
+            ) : null}
+            {bulkDeleteResult ? (
+              <div className="text-xs leading-relaxed text-stone-700 dark:text-stone-300">
+                已删除 {bulkDeleteResult.deleted.length} 项{bulkDeleteResult.failed.length ? `，${bulkDeleteResult.failed.length} 项未删除。` : "。"}
+                {bulkDeleteResult.failed.length ? (
+                  <ul className="mt-1 list-disc pl-4">
+                    {bulkDeleteResult.failed.map((item) => <li key={item.videoId}>{item.title}：{item.error}</li>)}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -540,9 +627,10 @@ export function WorkspaceLibraryPanel({
         {filteredVideos.map((video, index) => {
           const isActive = video.id === selectedVideo?.id && selectedContextType !== "series";
           return (
-            <button
-              key={video.id}
-              type="button"
+          <div
+            key={video.id}
+            role="button"
+            tabIndex={0}
               className={`motion-stagger text-left flex flex-col gap-2 p-4 rounded-[1.5rem] border transition-all duration-200 outline-none cursor-pointer relative z-10
                 ${isActive
                   ? "border-transparent"
@@ -550,6 +638,12 @@ export function WorkspaceLibraryPanel({
                 }`}
               style={{ "--stagger-index": index }}
               onClick={() => onSelectVideo(activeSeries.id, video.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectVideo(activeSeries.id, video.id);
+                }
+              }}
             >
               {isActive && (
                 <motion.div
@@ -560,7 +654,23 @@ export function WorkspaceLibraryPanel({
               )}
               <div className="flex justify-between items-start w-full gap-2">
                 <VideoBadge video={video} />
-                <FileVideo size={16} className={isActive ? "text-accent" : "text-stone-500 dark:text-stone-500"} />
+                <div className="flex items-center gap-2">
+                  {!isPlayground ? (
+                    <button
+                      type="button"
+                      disabled={seriesHasActiveWork}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleVideoSelection(video.id);
+                      }}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-400 dark:hover:bg-stone-800"
+                      aria-label={selectedVideoSet.has(video.id) ? `取消选择 ${video.title}` : `选择 ${video.title}`}
+                    >
+                      {selectedVideoSet.has(video.id) ? <CheckSquare size={16} className="text-accent" /> : <Square size={16} />}
+                    </button>
+                  ) : null}
+                  <FileVideo size={16} className={isActive ? "text-accent" : "text-stone-500 dark:text-stone-500"} />
+                </div>
               </div>
               <div className="flex flex-col gap-0.5 mt-1">
                 <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
@@ -578,7 +688,7 @@ export function WorkspaceLibraryPanel({
                   {video.isLinked || video.status === "linked" ? video.sourceUrl || video.sourceName : video.sourceName}
                 </span>
               </div>
-            </button>
+          </div>
           );
         })}
         {!isPlayground && filteredVideos.length === 0 ? (

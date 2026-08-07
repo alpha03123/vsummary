@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { LoaderCircle, Pencil } from "lucide-react";
+import { useRef, useState } from "react";
+import { FileUp, LoaderCircle, Pencil, RotateCcw } from "lucide-react";
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceConfirmDialog } from "../shared/WorkspaceConfirmDialog";
 import { WorkspaceContentEditorModal } from "./WorkspaceContentEditorModal";
 import { WorkspaceOverviewContent } from "./WorkspaceOverviewContent";
 
@@ -19,6 +20,8 @@ export function WorkspaceOverviewView({
   onLoadSummaryMarkdown,
   onUpdateSummary,
   onUpdateTranscript,
+  onUploadSrt,
+  onRestoreAutomaticTranscript,
 }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const hasSummary = Boolean(summary);
@@ -42,6 +45,12 @@ export function WorkspaceOverviewView({
         title={overviewTitle}
         description="先在左侧点击生成，生成完成后这里会显示 AI 概况、章节纪要和关键结论。"
       >
+        <OverviewTranscriptActions
+          summary={summary}
+          disabled={isGeneratingSelectedVideo}
+          onUploadSrt={onUploadSrt}
+          onRestoreAutomaticTranscript={onRestoreAutomaticTranscript}
+        />
         {isGeneratingSelectedVideo ? (
           <div className="motion-fade-up mt-6 w-full max-w-xl">
             <div className="motion-busy-button inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 shadow-sm">
@@ -78,7 +87,19 @@ export function WorkspaceOverviewView({
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-8 pb-32">
-      <div className="flex justify-end">
+      {isGeneratingSelectedVideo ? (
+        <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-sm text-stone-700 dark:text-stone-200">
+          <LoaderCircle size={16} className="animate-spin text-accent" />
+          正在生成概况，当前仍显示上一次结果。
+        </div>
+      ) : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        <OverviewTranscriptActions
+          summary={summary}
+          disabled={isGeneratingSelectedVideo}
+          onUploadSrt={onUploadSrt}
+          onRestoreAutomaticTranscript={onRestoreAutomaticTranscript}
+        />
         <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"><Pencil size={16} />编辑内容</button>
       </div>
       <WorkspaceOverviewContent
@@ -90,5 +111,75 @@ export function WorkspaceOverviewView({
       />
       {editorOpen ? <WorkspaceContentEditorModal onClose={() => setEditorOpen(false)} onLoadSummaryMarkdown={onLoadSummaryMarkdown} onLoadTranscriptMarkdown={onLoadTranscriptMarkdown} onUpdateSummary={onUpdateSummary} onUpdateTranscript={onUpdateTranscript} /> : null}
     </div>
+  );
+}
+
+function OverviewTranscriptActions({ summary, disabled, onUploadSrt, onRestoreAutomaticTranscript }) {
+  const inputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const hasManualSrt = summary?.transcriptSource === "manual_srt";
+
+  return (
+    <>
+      {hasManualSrt ? (
+        <span className="inline-flex items-center rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-sm font-medium text-accent">
+          人工 SRT
+        </span>
+      ) : null}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".srt,application/x-subrip,text/plain"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0] ?? null;
+          setSelectedFile(file);
+          event.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"
+      >
+        <FileUp size={16} />导入 SRT
+      </button>
+      {hasManualSrt ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setRestoreOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"
+        >
+          <RotateCcw size={16} />改用自动转写
+        </button>
+      ) : null}
+      <WorkspaceConfirmDialog
+        open={selectedFile != null}
+        title="导入 SRT"
+        description={`将使用 ${selectedFile?.name ?? "所选字幕"} 重新生成概况，您当前的内容将会被覆盖。`}
+        confirmLabel="开始生成"
+        onCancel={() => setSelectedFile(null)}
+        onConfirm={() => {
+          if (selectedFile) {
+            onUploadSrt?.(selectedFile);
+          }
+          setSelectedFile(null);
+        }}
+      />
+      <WorkspaceConfirmDialog
+        open={restoreOpen}
+        title="确认恢复自动转写？"
+        description="系统将重新自动生成字幕和概况，您手动编辑的内容将会被覆盖。"
+        confirmLabel="开始生成"
+        onCancel={() => setRestoreOpen(false)}
+        onConfirm={() => {
+          onRestoreAutomaticTranscript?.();
+          setRestoreOpen(false);
+        }}
+      />
+    </>
   );
 }

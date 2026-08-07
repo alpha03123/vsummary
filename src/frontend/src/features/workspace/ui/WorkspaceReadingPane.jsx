@@ -112,6 +112,8 @@ export function WorkspaceReadingPane({
   onLoadSummaryMarkdown,
   onUpdateSummary,
   onUpdateTranscript,
+  onUploadSrt,
+  onRestoreAutomaticTranscript,
 }) {
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
@@ -155,6 +157,7 @@ export function WorkspaceReadingPane({
                   exportActions={buildExportActions({
                     activeSeries,
                     notes,
+                    summary,
                     selectedToolId,
                     selectedVideo,
                     tools,
@@ -243,6 +246,8 @@ export function WorkspaceReadingPane({
                       onLoadSummaryMarkdown={onLoadSummaryMarkdown}
                       onUpdateSummary={onUpdateSummary}
                       onUpdateTranscript={onUpdateTranscript}
+                      onUploadSrt={onUploadSrt}
+                      onRestoreAutomaticTranscript={onRestoreAutomaticTranscript}
                     />
                   ) : null}
                   {selectedToolId === "mindmap" ? (
@@ -295,18 +300,25 @@ export function WorkspaceReadingPane({
   );
 }
 
-function buildExportActions({ activeSeries, notes, selectedToolId, selectedVideo, tools }) {
+function buildExportActions({ activeSeries, notes, summary, selectedToolId, selectedVideo, tools }) {
   if (!activeSeries || !selectedVideo) {
     return [];
   }
   if (selectedToolId === "overview") {
     const overviewGenerated = tools?.overview?.generated === true;
+    const screenshotsGenerated = Array.isArray(summary?.chapters) && summary.chapters.some((chapter) => chapter.image_url);
     return [
       {
         href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"),
         enabled: overviewGenerated,
         label: "概况导出",
         disabledReason: "AI 概况生成后才能导出",
+      },
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary-with-screenshots.zip"),
+        enabled: screenshotsGenerated,
+        label: "概况与截图导出",
+        disabledReason: "AI 概况和章节截图生成后才能导出",
       },
       {
         href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"),
@@ -379,6 +391,9 @@ function buildSeriesExportActions(activeSeries) {
 }
 
 function videoExportUrl(seriesId, videoId, exportName) {
+  if (exportName.endsWith(".zip")) {
+    return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}`;
+  }
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;
 }
 

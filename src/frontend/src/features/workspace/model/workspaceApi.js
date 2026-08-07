@@ -601,6 +601,25 @@ export async function streamAgentChat(sessionId, message, context, listener, { s
   }
 }
 
+export async function uploadSrtAndGenerateVideoSummary(seriesId, videoId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return toWorkspaceSummary(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/transcript/srt-and-generate`, {
+      method: "POST",
+      body: formData,
+    }),
+  );
+}
+
+export async function restoreAutomaticTranscriptAndGenerateVideoSummary(seriesId, videoId) {
+  return toWorkspaceSummary(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/transcript/restore-auto-and-generate`, {
+      method: "POST",
+    }),
+  );
+}
+
 export function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
   const eventSource = new EventSource(
     `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate/progress`,
