@@ -87,7 +87,7 @@ export function WorkspaceKnowledgeCardsView({
       <WorkspaceStateBlock
         eyebrow="Knowledge Cards"
         title="知识卡片尚未生成"
-        description="这里展示的是独立的知识资产，不是章节摘要换皮。生成后会落盘到 `knowledge_cards.json`。"
+        description="提取并保存视频中独立的知识要点卡片。"
       >
         <button
           type="button"

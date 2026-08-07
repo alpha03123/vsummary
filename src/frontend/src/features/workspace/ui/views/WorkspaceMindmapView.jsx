@@ -49,7 +49,7 @@ export function WorkspaceMindmapView({
       <WorkspaceStateBlock
         eyebrow="Mindmap Tool"
         title="导图未生成"
-        description="思维导图不是默认产物。点击下面按钮后，后端会基于当前 AI 概况单独生成 `mindmap.json`。"
+        description="思维导图需要单独生成。系统将分析当前 AI 概况，为您构建可视化的知识导图。"
       >
         <button
           type="button"

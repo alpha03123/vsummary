@@ -193,10 +193,10 @@ export function WorkspaceChatPanel({
         <div className="border-b border-blue-200/80 bg-blue-50/90 px-6 py-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-100">
           <div className="flex items-center gap-2 font-semibold">
             <LoaderCircle size={15} className="animate-spin" />
-            数据库正在整理
+            知识库正在构建
           </div>
           <p className="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
-            正在重建 RAG 索引，series 问答会在整理完成后恢复。
+            正在扫描视频并建立关联索引，系列问答将在构建完成后恢复。
           </p>
         </div>
       ) : null}
@@ -291,7 +291,7 @@ export function WorkspaceChatPanel({
               <LoaderCircle size={16} className="animate-spin text-white" />
             </div>
             <div className="workspace-elevated-panel p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-600 dark:text-stone-300">
-              正在思考当前工具和上下文...
+              正在分析您的问题...
             </div>
           </div>
         ) : null}
@@ -522,14 +522,14 @@ function WorkspaceToolTraceMessage({ message }) {
             </div>
             <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
               {isRunning
-                ? "工具正在执行中"
+                ? "正在处理后台任务..."
                 : isFailed
-                  ? "工具调用过程中发生错误"
+                  ? "任务执行过程中发生错误"
                   : isCancelled
-                    ? "本轮工具调用已中断"
+                    ? "任务已被中断"
                   : isIdle
-                    ? "当前这一步已完成，等待下一步规划"
-                    : "展开查看本轮实际调用的工具名和步骤说明"}
+                    ? "当前步骤已完成，正在准备后续处理"
+                    : "展开查看具体的执行步骤说明"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
@@ -637,7 +637,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
   const summary = typeof message.thoughtTrace?.summary === "string" ? message.thoughtTrace.summary : "";
   const stages = Array.isArray(message.thoughtTrace?.stages) ? message.thoughtTrace.stages : [];
   const hasStages = stages.length > 0;
-  const displaySummary = summary || (isRunning ? "正在思考中..." : "本轮未返回思路摘要。");
+  const displaySummary = summary || (isRunning ? "正在思考中..." : "暂无思考过程摘要。");
 
   if (hasStages) {
     return (
@@ -743,7 +743,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
               ) : null}
             </div>
             <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-              {isRunning ? "正在分析当前问题与上下文，思路会实时展开" : isFailed ? "本轮思路执行失败，展开查看错误摘要" : isCancelled ? "本轮思路已中断" : "展开查看本轮对问题的思路摘要"}
+              {isRunning ? "正在分析当前问题，思考过程将实时展开" : isFailed ? "思考过程执行失败，展开查看错误摘要" : isCancelled ? "思考过程已中断" : "展开查看对问题的思考过程摘要"}
             </p>
           </div>
           <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
