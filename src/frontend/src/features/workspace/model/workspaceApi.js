@@ -206,8 +206,8 @@ export async function testAsrSettings(settings) {
   }
 }
 
-export async function loadFasterWhisperModels() {
-  return fetchJson("/api/asr/faster-whisper/models");
+export async function loadFasterWhisperModels(provider = "faster_whisper") {
+  return fetchJson(`/api/asr/${encodeURIComponent(provider)}/models`);
 }
 
 export async function loadRagModels() {
@@ -228,21 +228,21 @@ export function subscribeRagModelDownloadProgress(modelKey, listener) {
   );
 }
 
-export async function downloadFasterWhisperModel(modelId) {
-  return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download`, {
+export async function downloadFasterWhisperModel(provider, modelId) {
+  return fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download`, {
     method: "POST",
   });
 }
 
-export async function cancelFasterWhisperModelDownload(modelId) {
-  return fetchJson(`/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/cancel`, {
+export async function cancelFasterWhisperModelDownload(provider, modelId) {
+  return fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download/cancel`, {
     method: "POST",
   });
 }
 
-export function subscribeFasterWhisperModelDownloadProgress(modelId, listener) {
+export function subscribeFasterWhisperModelDownloadProgress(provider, modelId, listener) {
   return subscribeProgress(
-    `/api/asr/faster-whisper/models/${encodeURIComponent(modelId)}/download/progress`,
+    `/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download/progress`,
     listener,
     "模型下载进度连接已中断",
   );

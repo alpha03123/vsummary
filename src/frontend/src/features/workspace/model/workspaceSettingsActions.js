@@ -37,6 +37,8 @@ function scheduleFailureClear(dispatch, action) {
 }
 
 export function createWorkspaceSettingsActions({ state, dispatch }) {
+  const currentAsrProvider = () => state.ui.asrProvider || "faster_whisper";
+
   function onToggleSettingsPanel() {
     dispatch({ type: "settings_panel_toggled" });
   }
@@ -67,10 +69,27 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       return;
     }
 
-    const nextUi = normalizeUiSettings({
+    let nextUi = normalizeUiSettings({
       ...state.ui,
       [key]: value,
     });
+    if (key === "asrProvider" && value !== "aliyun_bailian") {
+      try {
+        const models = await loadFasterWhisperModels(value);
+        const recommendedModel = models.find((model) => model.recommended) ?? models[0];
+        if (!recommendedModel) {
+          throw new Error("当前 ASR provider 未提供可用模型");
+        }
+        nextUi = { ...nextUi, asrModelQuality: recommendedModel.id };
+        dispatch({ type: "faster_whisper_models_loaded", models });
+      } catch (error) {
+        dispatch({
+          type: "load_failed",
+          message: error instanceof Error ? error.message : "语音模型列表加载失败",
+        });
+        return;
+      }
+    }
     dispatch({ type: "workspace_settings_loaded", settings: nextUi });
 
     if (key === "openaiApiKey" || key === "asrApiKey") {
@@ -97,7 +116,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
             ...savedSettings,
           },
         });
-        const models = await loadFasterWhisperModels();
+        const models = await loadFasterWhisperModels(savedSettings.asrProvider);
         dispatch({ type: "faster_whisper_models_loaded", models });
       }
     } catch (error) {
@@ -274,7 +293,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
           ...savedSettings,
         },
       });
-      const models = await loadFasterWhisperModels();
+      const models = await loadFasterWhisperModels(nextUi.asrProvider);
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
       dispatch({
@@ -302,7 +321,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       });
     };
     const downloadCompleted = new Promise((resolve, reject) => {
-      unsubscribe = subscribeFasterWhisperModelDownloadProgress(modelId, (snapshot) => {
+      unsubscribe = subscribeFasterWhisperModelDownloadProgress(currentAsrProvider(), modelId, (snapshot) => {
         if (
           snapshot.status === "running" ||
           snapshot.status === "cancelling" ||
@@ -332,7 +351,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       });
     });
     try {
-      const started = await downloadFasterWhisperModel(modelId);
+      const started = await downloadFasterWhisperModel(currentAsrProvider(), modelId);
       if (isFailedDownloadStatus(started)) {
         throw new Error(started.error || MODEL_DOWNLOAD_FAILED_MESSAGE);
       }
@@ -367,7 +386,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
           },
         });
       }
-      const models = await loadFasterWhisperModels();
+      const models = await loadFasterWhisperModels(currentAsrProvider());
       dispatch({ type: "faster_whisper_models_loaded", models });
     } catch (error) {
       const message = error instanceof Error ? error.message : "语音模型下载失败";
@@ -386,7 +405,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onCancelFasterWhisperModelDownload(modelId) {
     dispatch({ type: "faster_whisper_model_download_cancel_requested", modelId });
     try {
-      await cancelFasterWhisperModelDownload(modelId);
+      await cancelFasterWhisperModelDownload(currentAsrProvider(), modelId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "语音模型取消失败";
       dispatch({

@@ -57,7 +57,9 @@ export function WorkspaceSettingsPanel({
     ? (showApiKeyValue ? draftApiKey : ui.openaiApiKeyMasked || "待保存的新密钥")
     : ui.openaiApiKeyMasked;
   const apiKeyStatus = draftApiKey || ui.openaiApiKeyMasked;
-  const currentAsrProvider = ui.asrProvider === "aliyun_bailian" ? "aliyun_bailian" : "faster_whisper";
+  const currentAsrProvider = ["faster_whisper", "whisper_cpp", "aliyun_bailian"].includes(ui.asrProvider)
+    ? ui.asrProvider
+    : "faster_whisper";
   const asrCloudModel = ui.asrCloudModel || "paraformer-v2";
   const asrBaseUrl = ui.asrBaseUrl || "https://dashscope.aliyuncs.com";
   const draftAsrApiKey = (ui.asrApiKey || "").trim();
@@ -248,21 +250,25 @@ export function WorkspaceSettingsPanel({
                   description={
                     currentAsrProvider === "aliyun_bailian"
                       ? "使用阿里云百炼云端 ASR，适合没有 GPU 或不想下载本地模型的环境。"
-                      : "使用本地 faster-whisper，音视频不会上传，首次使用需下载本地模型。"
+                      : currentAsrProvider === "whisper_cpp"
+                        ? "使用本地 whisper.cpp，首次使用需下载 GGML 模型并配置 whisper-cli。"
+                        : "使用本地 faster-whisper，音视频不会上传，首次使用需下载本地模型。"
                   }
                 >
                   <WorkspaceSegmentedControl
                     value={currentAsrProvider}
                     options={[
                       { id: "faster_whisper", label: "本地 faster-whisper" },
+                      { id: "whisper_cpp", label: "本地 whisper.cpp" },
                       { id: "aliyun_bailian", label: "阿里云百炼" },
                     ]}
                     onChange={(nextValue) => onChangeSetting("asrProvider", nextValue)}
                   />
                 </WorkspaceSettingRow>
 
-                {currentAsrProvider === "faster_whisper" && (
+                {currentAsrProvider !== "aliyun_bailian" && (
                   <>
+                {currentAsrProvider === "faster_whisper" && (
                 <WorkspaceSettingRow
                   title="转写模式"
                   description="控制 faster-whisper 的解码策略"
@@ -277,6 +283,7 @@ export function WorkspaceSettingsPanel({
                     onChange={(nextValue) => onChangeSetting("transcriptionMode", nextValue)}
                   />
                 </WorkspaceSettingRow>
+                )}
 
                 <WorkspaceSettingRow
                   title="语音模型质量"

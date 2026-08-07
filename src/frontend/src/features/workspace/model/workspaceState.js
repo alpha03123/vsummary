@@ -715,7 +715,10 @@ export function normalizeUiSettings(value) {
     layoutMode: record.layoutMode === "chat_center" ? "chat_center" : "video_center",
     transcriptEnhancementEnabled:
       typeof record.transcriptEnhancementEnabled === "boolean" ? record.transcriptEnhancementEnabled : true,
-    asrProvider: record.asrProvider === "aliyun_bailian" ? "aliyun_bailian" : "faster_whisper",
+    asrProvider:
+      record.asrProvider === "aliyun_bailian" || record.asrProvider === "whisper_cpp"
+        ? record.asrProvider
+        : "faster_whisper",
     asrModelQuality:
       typeof record.asrModelQuality === "string" && record.asrModelQuality.trim()
         ? record.asrModelQuality.trim()

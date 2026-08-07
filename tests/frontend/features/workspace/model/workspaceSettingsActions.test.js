@@ -59,7 +59,7 @@ describe("createWorkspaceSettingsActions downloads", () => {
     const actions = [];
     cancelFasterWhisperModelDownload.mockResolvedValue({
       status: "cancelling",
-      task_id: "asr-download/large-v3-turbo",
+      task_id: "asr-download/faster_whisper/large-v3-turbo",
     });
     const controller = createWorkspaceSettingsActions({
       state: { ui: {} },
@@ -68,7 +68,7 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
     await controller.onCancelFasterWhisperModelDownload("large-v3-turbo");
 
-    expect(cancelFasterWhisperModelDownload).toHaveBeenCalledWith("large-v3-turbo");
+    expect(cancelFasterWhisperModelDownload).toHaveBeenCalledWith("faster_whisper", "large-v3-turbo");
     expect(actions).toEqual([
       {
         type: "faster_whisper_model_download_cancel_requested",
@@ -79,7 +79,9 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
   it("does not show a global failure when faster-whisper download is cancelled", async () => {
     const actions = [];
-    subscribeFasterWhisperModelDownloadProgress.mockImplementation((modelId, listener) => {
+    subscribeFasterWhisperModelDownloadProgress.mockImplementation((provider, modelId, listener) => {
+      expect(provider).toBe("faster_whisper");
+      expect(modelId).toBe("large-v3-turbo");
       listener({
         status: "cancelled",
         progress: null,
@@ -122,7 +124,9 @@ describe("createWorkspaceSettingsActions downloads", () => {
   it("keeps backend faster-whisper download errors instead of replacing them", async () => {
     vi.useFakeTimers();
     const actions = [];
-    subscribeFasterWhisperModelDownloadProgress.mockImplementation((modelId, listener) => {
+    subscribeFasterWhisperModelDownloadProgress.mockImplementation((provider, modelId, listener) => {
+      expect(provider).toBe("faster_whisper");
+      expect(modelId).toBe("large-v3-turbo");
       listener({
         status: "failed",
         error: "ConnectTimeout: huggingface.co timed out",

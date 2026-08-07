@@ -243,7 +243,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
   }, [dispatch, state.backendReady]);
 
   useEffect(() => {
-    if (!state.backendReady) {
+    if (!state.backendReady || state.ui.asrProvider === "aliyun_bailian") {
       return;
     }
 
@@ -252,7 +252,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
 
     const pollFasterWhisperModels = async () => {
       try {
-        const models = await loadFasterWhisperModels();
+        const models = await loadFasterWhisperModels(state.ui.asrProvider);
         if (cancelled) {
           return;
         }
@@ -279,7 +279,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [dispatch, state.backendReady]);
+  }, [dispatch, state.backendReady, state.ui.asrProvider]);
 
   useEffect(() => {
     if (!state.backendReady) {
