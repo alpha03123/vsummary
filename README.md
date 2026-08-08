@@ -44,6 +44,18 @@
 点击工具栏的 💬 按钮从右侧滑出分析助手；按 `Esc` 或点击背景即可关闭。播放器继续播放，不被打断。
 
 <img src="./assets/showcase-chat-drawer.png" alt="聊天抽屉" />
+
+### MCP：整理本地录音
+
+将 VSummary 接入 MCP 后，AI 助手可以创建系列、导入本地媒体、发起处理并导出 Markdown。下面演示将两段录音处理为一份可编辑的结构化总结。
+
+[<img src="./assets/showcase-mcp-recording-summary.png" alt="MCP 处理并总结本地录音，点击播放 MP4" />](./assets/showcase-mcp-recording-summary.mp4)
+
+### MCP：自主探索 Bilibili
+
+AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 下载、转写和生成概况；处理完成后可继续读取和整理导出的内容。
+
+[<img src="./assets/showcase-mcp-bilibili-explore.png" alt="MCP 自主探索 Bilibili 并处理视频，点击播放 MP4" />](./assets/showcase-mcp-bilibili-explore.mp4)
 ---
 
 ## 核心特性
@@ -56,6 +68,7 @@
 - **分析助手按需唤起**：原本固定在中间的"分析助手"聊天面板被收进工具栏的 💬 抽屉——需要提问时点开，关闭后中栏播放器立即可用。`Esc` 或点击背景都能关闭。
 - **围绕视频内容对话**：可以在单视频或整个系列范围内提问，让系统基于已经整理好的转写、摘要、笔记和知识卡片回答。
 - **外部课程导入**：支持 Bilibili 外链导入，也支持通过 `chaoxing-downloader` 导入超星学习通课程。
+- **MCP 自动化工作流**：通过 MCP 工具让 AI 助手创建和管理视频系列，导入本地媒体或 Bilibili 链接，跟踪处理进度，并导出 Markdown。
 - **本地优先**：原始视频、转写结果、摘要、笔记和知识索引都保存在本地目录中；除了调用你配置的模型供应商外，不需要把视频上传到第三方平台。
 - **低门槛启动**：提供 CPU / GPU 两种整合包，普通用户下载整合包解压后运行 `start.bat` 即可使用
 
