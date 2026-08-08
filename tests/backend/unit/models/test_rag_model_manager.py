@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -12,8 +14,13 @@ from tests import _path_setup  # noqa: F401
 
 from backend.api.http.app import create_app
 from backend.api.di.bootstrap import ApiContainer
+from backend.video_summary.infrastructure.asr.huggingface_model_downloader import HuggingFaceCacheWarmSpec
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.rag.rag_models import RAG_EMBEDDING_REQUIRED_MESSAGE, RagModelManager
+from backend.video_summary.infrastructure.rag.rag_models import (
+    _FASTEMBED_BASE_ALLOW_PATTERNS,
+    RAG_EMBEDDING_REQUIRED_MESSAGE,
+    RagModelManager,
+)
 
 
 class RagModelManagerTests(unittest.TestCase):
@@ -98,10 +105,15 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertIn("RAG 模型下载后校验失败", snapshot.error or "")
             self.assertEqual(completed, [])
 
-    def test_failed_download_cleans_partial_model_cache_and_lock_directory(self) -> None:
+    def test_failed_download_preserves_hf_cache_for_resume_but_clears_lock_directory(self) -> None:
+        """失败时 HF 缓存目录必须保留：里面的半成品 blob 是下次续传的锚点。
+
+        锁目录仍然要清掉——它不含数据，残留会挡住下一次下载。
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
             model_dir = root_dir / "data" / "models" / "fastembed" / "models--Qdrant--bge-small-zh-v1.5"
+            blob_dir = model_dir / "blobs"
             lock_dir = root_dir / "data" / "models" / "fastembed" / ".locks" / "models--Qdrant--bge-small-zh-v1.5"
             unrelated_lock_dir = root_dir / "data" / "models" / "fastembed" / ".locks" / "models--BAAI--bge-reranker-base"
             unrelated_lock_dir.mkdir(parents=True)
@@ -109,8 +121,8 @@ class RagModelManagerTests(unittest.TestCase):
 
             def failing_downloader(spec, reporter) -> None:
                 del spec, reporter
-                model_dir.mkdir(parents=True)
-                (model_dir / "config.json").write_text("{}", encoding="utf-8")
+                blob_dir.mkdir(parents=True)
+                (blob_dir / "abc123.incomplete").write_bytes(b"partial-bytes")
                 lock_dir.mkdir(parents=True)
                 (lock_dir / "download.lock").write_text("", encoding="utf-8")
                 raise RuntimeError("network failed")
@@ -127,23 +139,49 @@ class RagModelManagerTests(unittest.TestCase):
 
             self.assertEqual(snapshot.status, "failed")
             self.assertIn("network failed", snapshot.error or "")
-            self.assertFalse(model_dir.exists())
+            self.assertTrue((blob_dir / "abc123.incomplete").is_file())
+            self.assertEqual((blob_dir / "abc123.incomplete").read_bytes(), b"partial-bytes")
+            self.assertFalse(manager.is_downloaded("embedding"))
             self.assertFalse(lock_dir.exists())
             self.assertTrue(unrelated_lock_dir.exists())
 
-    def test_download_start_cleans_stale_partial_cache_before_retry(self) -> None:
+    def test_failed_download_still_cleans_legacy_tarball_cache_layout(self) -> None:
+        """tarball 布局（`fast-xxx/`）没有 blob 续传机制，半成品仍应删除。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            legacy_dir = root_dir / "data" / "models" / "fastembed" / "fast-bge-small-zh-v1.5"
+
+            def failing_downloader(spec, reporter) -> None:
+                del spec, reporter
+                legacy_dir.mkdir(parents=True)
+                (legacy_dir / "config.json").write_text("{}", encoding="utf-8")
+                raise RuntimeError("network failed")
+
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                downloader=failing_downloader,
+            )
+
+            manager.start_download("embedding")
+            _wait_until(lambda: not manager.has_active_download())
+
+            self.assertFalse(legacy_dir.exists())
+
+    def test_download_start_preserves_stale_hf_cache_but_clears_stale_lock(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
             stale_model_dir = root_dir / "data" / "models" / "fastembed" / "models--Qdrant--bge-small-zh-v1.5"
             stale_lock_dir = root_dir / "data" / "models" / "fastembed" / ".locks" / "models--Qdrant--bge-small-zh-v1.5"
-            stale_model_dir.mkdir(parents=True)
-            (stale_model_dir / "config.json").write_text("{}", encoding="utf-8")
+            stale_blob = stale_model_dir / "blobs" / "abc123.incomplete"
+            stale_blob.parent.mkdir(parents=True)
+            stale_blob.write_bytes(b"partial-bytes")
             stale_lock_dir.mkdir(parents=True)
             (stale_lock_dir / "download.lock").write_text("", encoding="utf-8")
 
             def retry_downloader(spec, reporter) -> None:
                 del spec, reporter
-                self.assertFalse(stale_model_dir.exists())
+                self.assertTrue(stale_blob.is_file())
                 self.assertFalse(stale_lock_dir.exists())
                 _write_model_marker(root_dir, "models--Qdrant--bge-small-zh-v1.5", extra_files=("model_optimized.onnx",))
 
@@ -159,6 +197,125 @@ class RagModelManagerTests(unittest.TestCase):
 
             self.assertEqual(snapshot.status, "completed")
             self.assertTrue(manager.is_downloaded("embedding"))
+
+    def test_prewarm_uses_sources_hf_repo_id_not_model_name(self) -> None:
+        """预热必须用 `sources.hf`（`Qdrant/...`）而不是 `model_name`（`BAAI/...`）。
+
+        两者不同：ONNX 权重托管在 Qdrant 的镜像仓库下，用 `model_name` 去预热会
+        下到错误的仓库或直接 404。
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            recorder = _RecordingModelDownloader(
+                on_warm=lambda: _write_model_marker(
+                    root_dir,
+                    "models--Qdrant--bge-small-zh-v1.5",
+                    extra_files=("model_optimized.onnx",),
+                )
+            )
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                model_downloader=recorder,
+            )
+
+            with mock.patch.dict(os.environ, {"HF_ENDPOINT": "https://hf-mirror.com"}):
+                manager.start_download("embedding")
+                _wait_until(lambda: not manager.has_active_download())
+
+            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
+            self.assertEqual(snapshot.status, "completed", snapshot.error)
+            self.assertEqual(len(recorder.specs), 1)
+
+            warm_spec = recorder.specs[0]
+            self.assertEqual(warm_spec.repo_id, "Qdrant/bge-small-zh-v1.5")
+            self.assertNotEqual(warm_spec.repo_id, "BAAI/bge-small-zh-v1.5")
+            self.assertEqual(warm_spec.cache_dir, root_dir / "data" / "models" / "fastembed")
+            self.assertEqual(warm_spec.endpoint, "https://hf-mirror.com")
+            self.assertIn("model_optimized.onnx", warm_spec.allow_patterns)
+
+    def test_prewarm_allow_patterns_match_fastembed_base_list(self) -> None:
+        """`allow_patterns` 必须逐字覆盖 fastembed 自己的 5 个固定 JSON。
+
+        少一个都会让 fastembed 的 `local_files_only=True` 加载失败并回退到 GCS
+        tarball（绕开镜像），等于白预热。
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            recorder = _RecordingModelDownloader(
+                on_warm=lambda: _write_model_marker(
+                    root_dir,
+                    "models--BAAI--bge-reranker-base",
+                    extra_files=("onnx/model.onnx",),
+                )
+            )
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                model_downloader=recorder,
+            )
+
+            manager.start_download("reranker")
+            _wait_until(lambda: not manager.has_active_download())
+
+            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("reranker"))
+            self.assertEqual(snapshot.status, "completed", snapshot.error)
+
+            warm_spec = recorder.specs[0]
+            self.assertEqual(warm_spec.repo_id, "BAAI/bge-reranker-base")
+            for base_pattern in _FASTEMBED_BASE_ALLOW_PATTERNS:
+                self.assertIn(base_pattern, warm_spec.allow_patterns)
+            self.assertGreater(len(warm_spec.allow_patterns), len(_FASTEMBED_BASE_ALLOW_PATTERNS))
+            self.assertEqual(len(warm_spec.allow_patterns), len(set(warm_spec.allow_patterns)))
+
+    def test_prewarm_reports_progress_and_reaches_completed(self) -> None:
+        """预热必须经由 reporter 上报进度：这是 fastembed 自带下载完全没有的能力。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            recorder = _RecordingModelDownloader(
+                on_warm=lambda: _write_model_marker(
+                    root_dir,
+                    "models--Qdrant--bge-small-zh-v1.5",
+                    extra_files=("model_optimized.onnx",),
+                ),
+                report_progress=True,
+            )
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                model_downloader=recorder,
+            )
+
+            manager.start_download("embedding")
+            _wait_until(lambda: not manager.has_active_download())
+
+            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
+            self.assertEqual(snapshot.status, "completed", snapshot.error)
+            self.assertEqual(recorder.reported_progress, [10.0, 60.0])
+
+
+class _RecordingModelDownloader:
+    """`HuggingFaceModelDownloader` 的测试替身，只记录 `warm_cache` 的入参。
+
+    只替换"真正下字节"的那一层，仓库 ID 推导与 `allow_patterns` 拼装仍走真实代码，
+    因此这些断言校验的是生产逻辑而不是替身自己。
+    """
+
+    def __init__(self, *, on_warm=None, report_progress: bool = False) -> None:
+        self.specs: list[HuggingFaceCacheWarmSpec] = []
+        self.reported_progress: list[float] = []
+        self._on_warm = on_warm
+        self._report_progress = report_progress
+
+    def warm_cache(self, spec: HuggingFaceCacheWarmSpec, reporter) -> Path:
+        self.specs.append(spec)
+        if self._report_progress:
+            for percent in (10.0, 60.0):
+                self.reported_progress.append(percent)
+                reporter.update("download", percent, "正在下载模型文件")
+        if self._on_warm is not None:
+            self._on_warm()
+        return spec.cache_dir / f"models--{spec.repo_id.replace('/', '--')}"
 
 
 class RagModelAgentRouteTests(unittest.TestCase):

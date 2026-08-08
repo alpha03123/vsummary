@@ -945,7 +945,11 @@ def apply_runtime_env_overrides(root_dir: Path) -> None:
     """把 `.env` 中受支持的环境变量（HF_ENDPOINT 等）写入 `os.environ`。
 
     这样 huggingface_hub、fastembed 等第三方 SDK 直接 `os.environ.get` 也能
-    拿到镜像配置；空值则删除已有变量。
+    拿到镜像配置。
+
+    空值语义是"没有意见"，直接跳过：既不写入也不删除已有变量。`start.bat` /
+    `build_release.ps1` 会把 `HF_HOME` 与 `HUGGINGFACE_HUB_CACHE` 指向项目内目录，
+    若空值执行 `os.environ.pop` 会把这些外部设置抹掉，导致缓存回落到用户目录。
     """
     values = _load_dotenv(root_dir / ".env")
     for key in SUPPORTED_HUGGINGFACE_ENV_KEYS:
@@ -954,8 +958,6 @@ def apply_runtime_env_overrides(root_dir: Path) -> None:
         value = values[key].strip()
         if value:
             os.environ[key] = value
-        else:
-            os.environ.pop(key, None)
     _refresh_loaded_huggingface_hub_endpoint()
 
 
@@ -1251,12 +1253,13 @@ def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
             values[normalized_key] = normalized_value
     # 顺手把 .env 里的值灌进 os.environ——这样 BILIBILI_COOKIE / BILIBILI_SESSDATA
     # 这类不需要 EnvSettings 显式建模的变量也能被子进程和 os.environ.get 拿到。
-    # 空的 HuggingFace endpoint 表示使用官方默认源，不能把空字符串暴露给
-    # huggingface_hub，否则它会拼出没有 scheme 的相对 URL。
+    # 空的 HuggingFace 变量表示"本文件不表态"，直接跳过：既不能把空字符串暴露给
+    # huggingface_hub（它会拼出没有 scheme 的相对 URL），也不能删除外部已设的值——
+    # `start.bat` / `build_release.ps1` 会设 HF_HOME 与 HUGGINGFACE_HUB_CACHE 指向
+    # 项目内目录，删掉会让缓存回落到用户目录。
     # 用 setdefault 尊重 shell 里已经显式设的值。
     for k, v in values.items():
         if k in SUPPORTED_HUGGINGFACE_ENV_KEYS and not v:
-            os.environ.pop(k, None)
             continue
         os.environ.setdefault(k, v)
     return values
