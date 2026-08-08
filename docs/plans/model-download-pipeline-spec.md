@@ -289,13 +289,14 @@
 
 ### 尚未实施
 
-- RAG 下载取消路由（`warm_cache()` 已在文件边界响应取消标志，但缺少对外的取消 API 与 `_run_download` 的 `cancelled` / `failed` 区分）。
+- **RAG 对外的取消 API**。取消的两层已就位：`warm_cache()` 在文件边界检查取消标志并抛 `HuggingFaceDownloadCancelled`，`_run_download()` 已把它与失败分开上报为 `cancelled`（且取消路径不做清理，保留续传现场）。缺的只是一个像 ASR 那样的 HTTP 路由去把取消标志置上——目前没有入口能触发它。
 - `agent_runtime_provider.py:201` 的 `.parent` 与 `fastembed_adapter.py` 的 `_resolve_specific_model_path()` 在 HF 布局下的显式覆盖测试。
 - 真实弱网验证：需下载 `large-v3` 并中途断网，确认从断点续传而非重新开始。此项无法在开发环境复现，须由使用者验证。
 
 ### 测试与检查结果
 
 - `tests/backend/unit/asr/test_huggingface_model_downloader.py`：9 passed（0.44s，全离线）。
-- `tests/backend/unit/models/test_rag_model_manager.py`：14 passed（7.04s；改造前 10 tests / 35.30s，耗时下降源于预热路径可注入，不再经 fastembed 构造函数触网）。
-- 后端全量：19 failed / 422 passed。这 19 项在干净树上同样失败（`CancelledGenerator.run()` 缺 `manual_transcript` 参数等测试替身签名漂移），与本期无关。
+- `tests/backend/unit/models/test_rag_model_manager.py`：15 passed（7.64s；改造前 10 tests / 35.30s，耗时下降源于预热路径可注入，不再经 fastembed 构造函数触网）。
+- `tests/backend/unit/settings/test_workspace_settings_service.py`：19 passed（0.90s）。
+- 后端全量：19 failed / 423 passed。这 19 项在干净树上同样失败（`CancelledGenerator.run()` 缺 `manual_transcript` 参数等测试替身签名漂移），与本期无关；已用 `git stash` 在干净树上复核确认。
 - `import-linter`：10 contracts kept, 0 broken（需 `PYTHONPATH=src`）。

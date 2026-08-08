@@ -14,7 +14,10 @@ from tests import _path_setup  # noqa: F401
 
 from backend.api.http.app import create_app
 from backend.api.di.bootstrap import ApiContainer
-from backend.video_summary.infrastructure.asr.huggingface_model_downloader import HuggingFaceCacheWarmSpec
+from backend.video_summary.infrastructure.asr.huggingface_model_downloader import (
+    HuggingFaceCacheWarmSpec,
+    HuggingFaceDownloadCancelled,
+)
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.rag.rag_models import (
     _FASTEMBED_BASE_ALLOW_PATTERNS,
@@ -293,6 +296,36 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertEqual(snapshot.status, "completed", snapshot.error)
             self.assertEqual(recorder.reported_progress, [10.0, 60.0])
 
+    def test_cancelled_prewarm_reports_cancelled_and_keeps_resume_state(self) -> None:
+        """取消不能被当成失败上报，且已下好的 blob 必须留着续传。
+
+        `_run_download` 的 `except Exception` 会吞掉 `HuggingFaceDownloadCancelled`
+        并报 `failed`，前端就会显示"下载出错"——而用户明明是自己点的取消。
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            blob = root_dir / "data" / "models" / "fastembed" / "models--Qdrant--bge-small-zh-v1.5" / "blobs" / "abc.incomplete"
+
+            def cancel_midway() -> None:
+                blob.parent.mkdir(parents=True, exist_ok=True)
+                blob.write_bytes(b"partial-bytes")
+                raise HuggingFaceDownloadCancelled("模型下载已取消")
+
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                model_downloader=_RecordingModelDownloader(on_warm=cancel_midway),
+            )
+
+            manager.start_download("embedding")
+            _wait_until(lambda: not manager.has_active_download())
+
+            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
+            self.assertEqual(snapshot.status, "cancelled")
+            self.assertTrue(blob.is_file())
+            self.assertEqual(blob.read_bytes(), b"partial-bytes")
+            self.assertFalse(manager.is_downloaded("embedding"))
+
 
 class _RecordingModelDownloader:
     """`HuggingFaceModelDownloader` 的测试替身，只记录 `warm_cache` 的入参。
@@ -301,11 +334,12 @@ class _RecordingModelDownloader:
     因此这些断言校验的是生产逻辑而不是替身自己。
     """
 
-    def __init__(self, *, on_warm=None, report_progress: bool = False) -> None:
+    def __init__(self, *, on_warm=None, report_progress: bool = False, raise_cancelled: bool = False) -> None:
         self.specs: list[HuggingFaceCacheWarmSpec] = []
         self.reported_progress: list[float] = []
         self._on_warm = on_warm
         self._report_progress = report_progress
+        self._raise_cancelled = raise_cancelled
 
     def warm_cache(self, spec: HuggingFaceCacheWarmSpec, reporter) -> Path:
         self.specs.append(spec)
@@ -315,6 +349,8 @@ class _RecordingModelDownloader:
                 reporter.update("download", percent, "正在下载模型文件")
         if self._on_warm is not None:
             self._on_warm()
+        if self._raise_cancelled:
+            raise HuggingFaceDownloadCancelled("模型下载已取消")
         return spec.cache_dir / f"models--{spec.repo_id.replace('/', '--')}"
 
 

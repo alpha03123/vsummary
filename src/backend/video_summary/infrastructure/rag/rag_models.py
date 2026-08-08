@@ -17,6 +17,7 @@ from typing import Callable, Literal
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.asr.huggingface_model_downloader import (
     HuggingFaceCacheWarmSpec,
+    HuggingFaceDownloadCancelled,
     HuggingFaceModelDownloader,
 )
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -241,7 +242,12 @@ class RagModelManager:
         return candidates[0]
 
     def _run_download(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
-        """后台线程的下载主循环：调用注入的下载器，校验完成后通知回调。"""
+        """后台线程的下载主循环：调用注入的下载器，校验完成后通知回调。
+
+        取消与失败必须分开上报：预热链路会抛 `HuggingFaceDownloadCancelled`，
+        若混进下面的 `except Exception` 会被当成 `failed`，前端显示成"下载出错"，
+        而用户明明是自己点的取消。取消路径也不做清理——保留半成品才能续传。
+        """
         try:
             self._cleanup_incomplete_model_cache(spec)
             self._downloader(spec, reporter)
@@ -250,6 +256,8 @@ class RagModelManager:
             reporter.completed(f"RAG 模型已下载：{spec.label}")
             if self._on_download_completed is not None:
                 self._on_download_completed(spec.key)
+        except HuggingFaceDownloadCancelled:
+            reporter.cancelled(f"RAG 模型下载已取消：{spec.label}")
         except Exception as error:
             cleanup_error = self._try_cleanup_incomplete_model_cache(spec)
             if cleanup_error is None:
