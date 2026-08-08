@@ -49,13 +49,13 @@
 
 将 VSummary 接入 MCP 后，AI 助手可以创建系列、导入本地媒体、发起处理并导出 Markdown。下面演示将两段录音处理为一份可编辑的结构化总结。
 
-[<img src="./assets/showcase-mcp-recording-summary.png" alt="MCP 处理并总结本地录音，点击播放 MP4" />](./assets/showcase-mcp-recording-summary.mp4)
+<img src="./assets/showcase-mcp-recording-summary.gif" alt="MCP 处理并总结本地录音" />
 
 ### MCP：自主探索 Bilibili
 
 AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 下载、转写和生成概况；处理完成后可继续读取和整理导出的内容。
 
-[<img src="./assets/showcase-mcp-bilibili-explore.png" alt="MCP 自主探索 Bilibili 并处理视频，点击播放 MP4" />](./assets/showcase-mcp-bilibili-explore.mp4)
+<img src="./assets/showcase-mcp-bilibili-explore.gif" alt="MCP 自主探索 Bilibili 并处理视频" />
 ---
 
 ## 核心特性
