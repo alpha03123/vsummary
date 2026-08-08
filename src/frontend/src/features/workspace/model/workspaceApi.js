@@ -24,6 +24,10 @@ export async function checkBackendHealth() {
 
 export async function loadWorkspaceSettings() {
   const payload = await fetchJson("/api/settings");
+  return toWorkspaceSettings(payload);
+}
+
+function toWorkspaceSettings(payload) {
   return {
     theme: payload.theme,
     showTakeaways: payload.show_takeaways,
@@ -48,6 +52,7 @@ export async function loadWorkspaceSettings() {
     videoGenerationConcurrency: payload.video_generation_concurrency,
     chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
     chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
+    runtimeCapabilities: payload.runtime_capabilities,
   };
 }
 
@@ -109,31 +114,7 @@ export async function updateWorkspaceSettings(settings) {
       chaoxing_init_course_delay_seconds: settings.chaoxingInitCourseDelaySeconds,
     }),
   });
-  return {
-    theme: payload.theme,
-    showTakeaways: payload.show_takeaways,
-    layoutMode: payload.layout_mode,
-    transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
-    asrProvider: payload.asr_provider,
-    asrModelQuality: payload.asr_model_quality,
-    transcriptionMode: payload.transcription_mode,
-    asrCloudModel: payload.asr_cloud_model,
-    asrBaseUrl: payload.asr_base_url,
-    hasAsrApiKey: payload.has_asr_api_key,
-    asrApiKeyMasked: payload.asr_api_key_masked,
-    asrApiKey: "",
-    ragEmbeddingDevice: payload.rag_embedding_device,
-    ragMaxHits: payload.rag_max_hits,
-    ragRerankEnabled: payload.rag_rerank_enabled,
-    webSearchEnabled: payload.web_search_enabled,
-    windowTokens: payload.window_tokens,
-    answerDetailLevel: payload.answer_detail_level,
-    reasoningEffort: payload.reasoning_effort,
-    talkCustomPrompt: payload.talk_custom_prompt,
-    videoGenerationConcurrency: payload.video_generation_concurrency,
-    chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
-    chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
-  };
+  return toWorkspaceSettings(payload);
 }
 
 export async function updateProviderSettings(settings) {

@@ -74,10 +74,10 @@ export function WorkspaceProviderSelect({ value, onChange, options, className = 
 }
 
 export function WorkspaceSettingRow({ title, description, children, contentClassName = "" }) {
-  const contentLayoutClassName = contentClassName || "2xl:w-auto 2xl:shrink-0";
+  const contentLayoutClassName = contentClassName || "2xl:w-auto 2xl:min-w-0";
 
   return (
-    <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 2xl:flex-row 2xl:items-center">
+    <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 2xl:flex-row 2xl:items-center min-w-0">
       <div className="min-w-0 max-w-none 2xl:w-[260px] 2xl:shrink-0">
         <strong className="mb-1.5 block text-base font-bold text-stone-900 dark:text-stone-100">{title}</strong>
         <span className="block text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">{description}</span>
@@ -107,23 +107,31 @@ export function WorkspaceToggleSwitch({ checked, disabled = false, onChange }) {
   );
 }
 
-export function WorkspaceSegmentedControl({ value, options, onChange }) {
+export function WorkspaceSegmentedControl({ value, options, onChange, className = "" }) {
+  const columnsClass =
+    options.length === 2
+      ? "grid-cols-2"
+      : options.length === 3
+      ? "grid-cols-3"
+      : "grid-cols-4";
   return (
-    <div className="flex flex-wrap rounded-xl bg-stone-100 p-1 dark:bg-stone-800/60" role="group">
+    <div className={`grid w-full min-w-0 ${columnsClass} rounded-xl bg-stone-100 p-1 dark:bg-stone-800/60 ${className}`} role="group">
       {options.map((option) => {
         const active = option.id === value;
         return (
           <button
             key={option.id}
             type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            disabled={option.disabled}
+            title={option.disabled ? option.disabledReason || option.label : option.label}
+            className={`min-w-0 rounded-lg px-2 py-1.5 text-xs sm:text-xs md:text-sm font-medium leading-5 transition-colors disabled:cursor-not-allowed disabled:opacity-45 text-center ${
               active
                 ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
                 : "text-stone-600 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
             }`}
             onClick={() => onChange(option.id)}
           >
-            {option.label}
+            <span className="block truncate">{option.label}</span>
           </button>
         );
       })}

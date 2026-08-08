@@ -11,6 +11,7 @@ export const defaultUiSettings = {
   asrApiKey: "",
   hasAsrApiKey: false,
   asrApiKeyMasked: "",
+  runtimeCapabilities: null,
   ragEmbeddingDevice: "cpu",
   ragMaxHits: 5,
   ragRerankEnabled: true,
@@ -738,6 +739,7 @@ export function normalizeUiSettings(value) {
     asrApiKey: typeof record.asrApiKey === "string" ? record.asrApiKey : "",
     hasAsrApiKey: typeof record.hasAsrApiKey === "boolean" ? record.hasAsrApiKey : false,
     asrApiKeyMasked: typeof record.asrApiKeyMasked === "string" ? record.asrApiKeyMasked : "",
+    runtimeCapabilities: normalizeRuntimeCapabilities(record.runtimeCapabilities),
     ragEmbeddingDevice:
       record.ragEmbeddingDevice === "gpu" || record.ragEmbeddingDevice === "auto"
         ? record.ragEmbeddingDevice
@@ -787,6 +789,24 @@ export function normalizeUiSettings(value) {
         : 1,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),
+  };
+}
+
+function normalizeRuntimeCapabilities(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return {
+    platform: typeof value.platform === "string" ? value.platform : "unknown",
+    accelerator: typeof value.accelerator === "string" ? value.accelerator : "unknown",
+    fasterWhisperAvailable: value.faster_whisper_available === true || value.fasterWhisperAvailable === true,
+    gpuEmbeddingAvailable: value.gpu_embedding_available === true || value.gpuEmbeddingAvailable === true,
+    unavailableReason:
+      typeof value.unavailable_reason === "string"
+        ? value.unavailable_reason
+        : typeof value.unavailableReason === "string"
+          ? value.unavailableReason
+          : "",
   };
 }
 

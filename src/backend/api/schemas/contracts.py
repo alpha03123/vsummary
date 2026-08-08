@@ -90,6 +90,16 @@ class LocalMediaSeriesPathImportRequest(LocalMediaPathImportRequest):
     series_title: str = Field(min_length=1, max_length=200)
 
 
+class RuntimeCapabilitiesResponse(BaseModel):
+    """本机可用于本地 ASR 与 embedding 的硬件能力。"""
+
+    platform: str
+    accelerator: str
+    faster_whisper_available: bool
+    gpu_embedding_available: bool
+    unavailable_reason: str | None = None
+
+
 class WorkspaceSettingsResponse(BaseModel):
     """工作区全局设置的响应模型。
 
@@ -118,6 +128,7 @@ class WorkspaceSettingsResponse(BaseModel):
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3
+    runtime_capabilities: RuntimeCapabilitiesResponse
 
 
 class UpdateWorkspaceSettingsRequest(BaseModel):

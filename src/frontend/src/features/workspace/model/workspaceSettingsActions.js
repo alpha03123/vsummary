@@ -32,6 +32,12 @@ function isCancelledDownloadStatus(payload) {
   return payload?.status === "cancelled";
 }
 
+function canLoadLocalAsrModels(provider, runtimeCapabilities) {
+  return provider !== "aliyun_bailian" && (
+    provider !== "faster_whisper" || runtimeCapabilities?.fasterWhisperAvailable !== false
+  );
+}
+
 function scheduleFailureClear(dispatch, action) {
   window.setTimeout(() => dispatch(action), DOWNLOAD_FAILURE_VISIBLE_MS);
 }
@@ -66,6 +72,15 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onChangeSetting(key, value) {
     if (PROVIDER_TEXT_SETTING_KEYS.has(key) || ASR_TEXT_SETTING_KEYS.has(key)) {
       dispatch({ type: "workspace_setting_edited", key, value });
+      return;
+    }
+
+    if (key === "asrProvider" && value === "faster_whisper" && state.ui.runtimeCapabilities?.fasterWhisperAvailable === false) {
+      dispatch({ type: "load_failed", message: state.ui.runtimeCapabilities.unavailableReason });
+      return;
+    }
+    if (key === "ragEmbeddingDevice" && value === "gpu" && state.ui.runtimeCapabilities?.gpuEmbeddingAvailable === false) {
+      dispatch({ type: "load_failed", message: state.ui.runtimeCapabilities.unavailableReason });
       return;
     }
 
@@ -116,8 +131,10 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
             ...savedSettings,
           },
         });
-        const models = await loadFasterWhisperModels(savedSettings.asrProvider);
-        dispatch({ type: "faster_whisper_models_loaded", models });
+        if (canLoadLocalAsrModels(savedSettings.asrProvider, savedSettings.runtimeCapabilities)) {
+          const models = await loadFasterWhisperModels(savedSettings.asrProvider);
+          dispatch({ type: "faster_whisper_models_loaded", models });
+        }
       }
     } catch (error) {
       dispatch({
@@ -293,8 +310,10 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
           ...savedSettings,
         },
       });
-      const models = await loadFasterWhisperModels(nextUi.asrProvider);
-      dispatch({ type: "faster_whisper_models_loaded", models });
+      if (canLoadLocalAsrModels(nextUi.asrProvider, nextUi.runtimeCapabilities)) {
+        const models = await loadFasterWhisperModels(nextUi.asrProvider);
+        dispatch({ type: "faster_whisper_models_loaded", models });
+      }
     } catch (error) {
       dispatch({
         type: "load_failed",
@@ -386,8 +405,10 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
           },
         });
       }
-      const models = await loadFasterWhisperModels(currentAsrProvider());
-      dispatch({ type: "faster_whisper_models_loaded", models });
+      if (canLoadLocalAsrModels(currentAsrProvider(), state.ui.runtimeCapabilities)) {
+        const models = await loadFasterWhisperModels(currentAsrProvider());
+        dispatch({ type: "faster_whisper_models_loaded", models });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "语音模型下载失败";
       if (!failedDispatched) {

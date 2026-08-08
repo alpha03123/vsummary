@@ -68,6 +68,10 @@ export function WorkspaceSettingsPanel({
     ? (showAsrApiKeyValue ? draftAsrApiKey : asrApiKeyMasked || "待保存的新密钥")
     : asrApiKeyMasked;
   const asrApiKeyStatus = draftAsrApiKey || asrApiKeyMasked;
+  const runtimeCapabilities = ui.runtimeCapabilities;
+  const fasterWhisperAvailable = runtimeCapabilities?.fasterWhisperAvailable !== false;
+  const gpuEmbeddingAvailable = runtimeCapabilities?.gpuEmbeddingAvailable !== false;
+  const unavailableReason = runtimeCapabilities?.unavailableReason || "当前运行环境不支持 NVIDIA CUDA 加速。";
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
   const isRerankerDownloading = rerankerModel?.status === "running" || downloadingRagModelKey === "reranker";
@@ -199,7 +203,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="显示关键收获"
-                  description="在详情正文顶部优先显示由 AI 提炼的全局“Key Takeaways”。"
+                  description="在概况内容顶部优先展示 AI 归纳的核心要点。"
                 >
                   <WorkspaceToggleSwitch
                     checked={ui.showTakeaways}
@@ -209,7 +213,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="显示模式"
-                  description="选择工作区中间区域优先展示视频播放器还是 AI 对话。"
+                  description="设定界面主视区优先展示视频播放器或 AI 对话框。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.layoutMode}
@@ -248,17 +252,24 @@ export function WorkspaceSettingsPanel({
                 <WorkspaceSettingRow
                   title="语音识别供应商"
                   description={
-                    currentAsrProvider === "aliyun_bailian"
-                      ? "使用阿里云百炼云端 ASR，适合没有 GPU 或不想下载本地模型的环境。"
-                      : currentAsrProvider === "whisper_cpp"
-                        ? "使用本地 whisper.cpp，首次使用需下载 GGML 模型并配置 whisper-cli。"
-                        : "使用本地 faster-whisper，音视频不会上传，首次使用需下载本地模型。"
+                    !fasterWhisperAvailable && currentAsrProvider === "faster_whisper"
+                      ? `${unavailableReason} 请改用 whisper.cpp 或阿里云百炼。`
+                      : currentAsrProvider === "aliyun_bailian"
+                        ? "云端极速转写，无需依赖本地显卡或下载模型，开箱即用。"
+                        : currentAsrProvider === "whisper_cpp"
+                          ? "适用于 Mac (Metal)、AMD 显卡或纯 CPU 环境的本地引擎，跨平台兼容性好且资源占用低。"
+                          : "基于 NVIDIA 显卡 (CUDA) 的高性能本地识别，数据完全保存在本机，速度与精度兼备（首次需下载模型）。"
                   }
                 >
                   <WorkspaceSegmentedControl
                     value={currentAsrProvider}
                     options={[
-                      { id: "faster_whisper", label: "本地 faster-whisper" },
+                      {
+                        id: "faster_whisper",
+                        label: "本地 faster-whisper",
+                        disabled: !fasterWhisperAvailable,
+                        disabledReason: unavailableReason,
+                      },
                       { id: "whisper_cpp", label: "本地 whisper.cpp" },
                       { id: "aliyun_bailian", label: "阿里云百炼" },
                     ]}
@@ -268,164 +279,164 @@ export function WorkspaceSettingsPanel({
 
                 {currentAsrProvider !== "aliyun_bailian" && (
                   <>
-                {currentAsrProvider === "faster_whisper" && (
-                <WorkspaceSettingRow
-                  title="转写模式"
-                  description="控制 faster-whisper 的解码策略"
-                >
-                  <WorkspaceSegmentedControl
-                    value={ui.transcriptionMode}
-                    options={[
-                      { id: "fast", label: "极速" },
-                      { id: "balanced", label: "平衡" },
-                      { id: "accurate", label: "高精度(建议)" },
-                    ]}
-                    onChange={(nextValue) => onChangeSetting("transcriptionMode", nextValue)}
-                  />
-                </WorkspaceSettingRow>
-                )}
-
-                <WorkspaceSettingRow
-                  title="语音模型质量"
-                  description="控制转写精确度"
-                >
-                  <div className="w-full flex flex-col gap-3">
-                    {fasterWhisperModelsLoading && !fasterWhisperModels.length ? (
-                      <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
-                        <LoaderCircle size={16} className="animate-spin" />
-                        正在读取模型状态...
-                      </div>
-                    ) : (
-                      fasterWhisperModels.map((model) => {
-                        const needsConfirm = confirmDownloadModelId === model.id;
-                        const isCurrent = ui.asrModelQuality === model.id;
-                        const modelDownload = modelDownloadsById?.[model.id] ?? null;
-                        const isCancelling =
-                          modelDownload?.status === "cancelling" ||
-                          (downloadingModelId === model.id && modelDownloadStatus === "cancelling");
-                        const isDownloading =
-                          modelDownload?.status === "running" ||
-                          (downloadingModelId === model.id && modelDownloadStatus === "running");
-                        const downloadFailed =
-                          modelDownload?.status === "failed" ||
-                          (modelDownloadErrorModelId === model.id && Boolean(modelDownloadError));
-                        const downloadProgress =
-                          typeof modelDownload?.progress === "number"
-                            ? modelDownload.progress
-                            : modelDownloadProgress;
-                        const isReady = model.downloaded === true;
-                        const statusText = model.downloaded
-                          ? "已下载到本地"
-                          : isCancelling
-                            ? "正在取消下载..."
-                          : downloadFailed
-                            ? "下载失败"
-                            : isCurrent
-                              ? "当前默认模型，需先下载"
-                              : "尚未下载";
-                        return (
-                          <div
-                            key={model.id}
-                            className={`rounded-2xl border p-4 transition-colors ${downloadFailed
-                              ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
-                              : isCurrent
-                                ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
-                                : "border-stone-200 dark:border-stone-800"
-                              }`}
-                          >
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <strong className="min-w-0 break-words text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
-                                  {model.recommended ? (
-                                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
-                                      推荐
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                                  {isDownloading
-                                    ? `正在下载... ${typeof downloadProgress === "number" ? `${Math.round(downloadProgress)}%` : ""}`.trim()
-                                    : isCancelling
-                                      ? "正在取消下载..."
-                                    : statusText}
-                                </p>
-                                {isDownloading || isCancelling ? (
-                                  <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full transition-[width] duration-200 ease-out ${isCancelling ? "bg-amber-500" : "bg-accent"}`}
-                                      style={{ width: `${typeof downloadProgress === "number" ? downloadProgress : 8}%` }}
-                                    />
-                                  </div>
-                                ) : null}
-                                {downloadFailed ? (
-                                  <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-                                    {MODEL_DOWNLOAD_FAILED_MESSAGE}
-                                  </p>
-                                ) : null}
-                              </div>
-                              {isCancelling ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
-                                >
-                                  取消中
-                                </button>
-                              ) : isDownloading ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onCancelFasterWhisperModelDownload?.(model.id)}
-                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
-                                >
-                                  取消下载
-                                </button>
-                              ) : isCurrent && isReady ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
-                                >
-                                  使用中
-                                </button>
-                              ) : isReady ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setConfirmDownloadModelId(null);
-                                    onChangeSetting("asrModelQuality", model.id);
-                                  }}
-                                  className="rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white hover:bg-accent/90 transition-colors"
-                                >
-                                  使用
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (downloadFailed || needsConfirm) {
-                                      setConfirmDownloadModelId(null);
-                                      onDownloadFasterWhisperModel(model.id);
-                                      return;
-                                    }
-                                    setConfirmDownloadModelId(model.id);
-                                  }}
-                                  className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${needsConfirm
-                                    ? "bg-warning text-white hover:opacity-85"
-                                    : "bg-stone-900 text-white hover:bg-black dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
-                                    }`}
-                                >
-                                  <Download size={14} />
-                                  {downloadFailed ? "重试下载" : needsConfirm ? "确认下载?" : (isCurrent ? "下载并使用" : "下载")}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
+                    {currentAsrProvider === "faster_whisper" && (
+                      <WorkspaceSettingRow
+                        title="转写模式"
+                        description="平衡语音转写的解码速度与文本识别准确率。"
+                      >
+                        <WorkspaceSegmentedControl
+                          value={ui.transcriptionMode}
+                          options={[
+                            { id: "fast", label: "极速" },
+                            { id: "balanced", label: "平衡" },
+                            { id: "accurate", label: "高精度(建议)" },
+                          ]}
+                          onChange={(nextValue) => onChangeSetting("transcriptionMode", nextValue)}
+                        />
+                      </WorkspaceSettingRow>
                     )}
-                  </div>
-                </WorkspaceSettingRow>
+
+                    <WorkspaceSettingRow
+                      title="语音模型质量"
+                      description="选择本地识别模型规格，模型越大识别精度越高。"
+                    >
+                      <div className="w-full flex flex-col gap-3">
+                        {fasterWhisperModelsLoading && !fasterWhisperModels.length ? (
+                          <div className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
+                            <LoaderCircle size={16} className="animate-spin" />
+                            正在读取模型状态...
+                          </div>
+                        ) : (
+                          fasterWhisperModels.map((model) => {
+                            const needsConfirm = confirmDownloadModelId === model.id;
+                            const isCurrent = ui.asrModelQuality === model.id;
+                            const modelDownload = modelDownloadsById?.[model.id] ?? null;
+                            const isCancelling =
+                              modelDownload?.status === "cancelling" ||
+                              (downloadingModelId === model.id && modelDownloadStatus === "cancelling");
+                            const isDownloading =
+                              modelDownload?.status === "running" ||
+                              (downloadingModelId === model.id && modelDownloadStatus === "running");
+                            const downloadFailed =
+                              modelDownload?.status === "failed" ||
+                              (modelDownloadErrorModelId === model.id && Boolean(modelDownloadError));
+                            const downloadProgress =
+                              typeof modelDownload?.progress === "number"
+                                ? modelDownload.progress
+                                : modelDownloadProgress;
+                            const isReady = model.downloaded === true;
+                            const statusText = model.downloaded
+                              ? "已下载到本地"
+                              : isCancelling
+                                ? "正在取消下载..."
+                                : downloadFailed
+                                  ? "下载失败"
+                                  : isCurrent
+                                    ? "当前默认模型，需先下载"
+                                    : "尚未下载";
+                            return (
+                              <div
+                                key={model.id}
+                                className={`rounded-2xl border p-4 transition-colors ${downloadFailed
+                                  ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
+                                  : isCurrent
+                                    ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
+                                    : "border-stone-200 dark:border-stone-800"
+                                  }`}
+                              >
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <strong className="min-w-0 break-words text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
+                                      {model.recommended ? (
+                                        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
+                                          推荐
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                                      {isDownloading
+                                        ? `正在下载... ${typeof downloadProgress === "number" ? `${Math.round(downloadProgress)}%` : ""}`.trim()
+                                        : isCancelling
+                                          ? "正在取消下载..."
+                                          : statusText}
+                                    </p>
+                                    {isDownloading || isCancelling ? (
+                                      <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full transition-[width] duration-200 ease-out ${isCancelling ? "bg-amber-500" : "bg-accent"}`}
+                                          style={{ width: `${typeof downloadProgress === "number" ? downloadProgress : 8}%` }}
+                                        />
+                                      </div>
+                                    ) : null}
+                                    {downloadFailed ? (
+                                      <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                        {MODEL_DOWNLOAD_FAILED_MESSAGE}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  {isCancelling ? (
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
+                                    >
+                                      取消中
+                                    </button>
+                                  ) : isDownloading ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onCancelFasterWhisperModelDownload?.(model.id)}
+                                      className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+                                    >
+                                      取消下载
+                                    </button>
+                                  ) : isCurrent && isReady ? (
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+                                    >
+                                      使用中
+                                    </button>
+                                  ) : isReady ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setConfirmDownloadModelId(null);
+                                        onChangeSetting("asrModelQuality", model.id);
+                                      }}
+                                      className="rounded-xl bg-accent px-3 py-2 text-xs font-bold text-white hover:bg-accent/90 transition-colors"
+                                    >
+                                      使用
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (downloadFailed || needsConfirm) {
+                                          setConfirmDownloadModelId(null);
+                                          onDownloadFasterWhisperModel(model.id);
+                                          return;
+                                        }
+                                        setConfirmDownloadModelId(model.id);
+                                      }}
+                                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${needsConfirm
+                                        ? "bg-warning text-white hover:opacity-85"
+                                        : "bg-stone-900 text-white hover:bg-black dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
+                                        }`}
+                                    >
+                                      <Download size={14} />
+                                      {downloadFailed ? "重试下载" : needsConfirm ? "确认下载?" : (isCurrent ? "下载并使用" : "下载")}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </WorkspaceSettingRow>
                   </>
                 )}
 
@@ -607,14 +618,19 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
-                  title="检索模型"
-                  description="控制检索模型运行在 CPU 还是 GPU。"
+                  title="检索硬件引擎"
+                  description="选择向量检索的硬件计算引擎（CPU / GPU / 自动）。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.ragEmbeddingDevice}
                     options={[
                       { id: "cpu", label: "CPU" },
-                      { id: "gpu", label: "GPU" },
+                      {
+                        id: "gpu",
+                        label: "GPU",
+                        disabled: !gpuEmbeddingAvailable,
+                        disabledReason: unavailableReason,
+                      },
                       { id: "auto", label: "自动" },
                     ]}
                     onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
@@ -626,7 +642,7 @@ export function WorkspaceSettingsPanel({
                   description={
                     rerankerNeedsDownload
                       ? "重排序模型尚未下载，下载前不能开启 reranking。"
-                      : "开启后，series下检索速度会变慢，但是检索精度会提高"
+                      : "开启后将对检索到的资料进行二次精细筛选，提高回答准确度（响应时间略增）。"
                   }
                 >
                   <div className="flex flex-col items-end gap-2">
@@ -657,8 +673,8 @@ export function WorkspaceSettingsPanel({
                   title="RAG 证据数量"
                   description={
                     effectiveRerankEnabled
-                      ? `最终进入回答的证据数。会先用 embedding 召回 ${ui.ragMaxHits * 4} 条候选，再重排保留 ${ui.ragMaxHits} 条。`
-                      : `最终进入回答的证据数，直接通过embedding召回 ${ui.ragMaxHits} 条候选。`
+                      ? `参考资料的引用数量。将从初步检索到的 ${ui.ragMaxHits * 4} 条候选段落中，精选最相关的 ${ui.ragMaxHits} 条作为回答依据。`
+                      : `参考资料的引用数量。当前直接从检索结果中选取 ${ui.ragMaxHits} 条作为回答依据。`
                   }
                 >
                   <WorkspaceTextInput
@@ -680,7 +696,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="模型协议"
-                  description="选择 LiteLLM 调用协议；自定义中转通常选 openai。"
+                  description="选择模型服务商对接协议（第三方中转接口通常选择 openai）。"
                 >
                   <WorkspaceProviderSelect
                     value={ui.llmProvider}
@@ -692,7 +708,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="API 根地址"
-                  description="模型的URL,填写根地址即可,不填写默认指向官方地址"
+                  description="自定义服务商的 API 基础 URL（留空则默认使用官方地址）。"
                 >
                   <div className="w-full sm:w-[340px]">
                     <WorkspaceTextInput
@@ -708,7 +724,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="模型名称"
-                  description="填写模型名称，例如 `gpt-5.4`、`deepseek-v4-pro`、`qwen3-max`"
+                  description="调用的大语言模型标识码，如 `gpt-4o`、`deepseek-chat`、`qwen-max`。"
                 >
                   <WorkspaceTextInput
                     value={ui.openaiModel}
@@ -739,7 +755,7 @@ export function WorkspaceSettingsPanel({
                 {!isOllamaProvider ? (
                   <WorkspaceSettingRow
                     title="API Key"
-                    description="写入项目根目录 `.env` 的 `OPENAI_API_KEY`。"
+                    description="访问大语言模型服务所需的授权 API 密钥。"
                     contentClassName="2xl:w-full 2xl:flex-1 2xl:shrink"
                   >
                     <div className="w-full min-w-0 max-w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">

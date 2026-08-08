@@ -25,6 +25,7 @@ from backend.api.schemas.contracts import (
     ProviderUsageTimelineBucketResponse,
     ProviderUsageTotalsResponse,
     RagModelResponse,
+    RuntimeCapabilitiesResponse,
     TestAsrSettingsRequest,
     TestProviderSettingsResponse,
     UpdateProviderSettingsRequest,
@@ -34,6 +35,7 @@ from backend.api.schemas.contracts import (
 from backend.api.schemas.sse import stream_progress_events
 from backend.video_summary.infrastructure.asr.huggingface_model_downloader import HuggingFaceDownloadCancelled
 from backend.video_summary.infrastructure.config.settings import load_settings
+from backend.video_summary.infrastructure.runtime_capabilities import detect_runtime_capabilities
 
 router = APIRouter()
 _ASR_DOWNLOAD_LOCK = Lock()
@@ -60,6 +62,11 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         settings = container.settings_service.get_workspace_settings()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    return _to_workspace_settings_response(settings)
+
+
+def _to_workspace_settings_response(settings) -> WorkspaceSettingsResponse:
+    capabilities = detect_runtime_capabilities()
     return WorkspaceSettingsResponse(
         theme=settings.theme,
         show_takeaways=settings.show_takeaways,
@@ -83,6 +90,13 @@ def get_workspace_settings(container: ApiContainerDep) -> WorkspaceSettingsRespo
         web_search_enabled=settings.web_search_enabled,
         chaoxing_request_delay_seconds=settings.chaoxing_request_delay_seconds,
         chaoxing_init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
+        runtime_capabilities=RuntimeCapabilitiesResponse(
+            platform=capabilities.platform,
+            accelerator=capabilities.accelerator,
+            faster_whisper_available=capabilities.faster_whisper_available,
+            gpu_embedding_available=capabilities.gpu_embedding_available,
+            unavailable_reason=capabilities.unavailable_reason,
+        ),
     )
 
 
@@ -143,30 +157,7 @@ async def update_workspace_settings(
         init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
     )
 
-    return WorkspaceSettingsResponse(
-        theme=settings.theme,
-        show_takeaways=settings.show_takeaways,
-        layout_mode=settings.layout_mode,
-        transcript_enhancement_enabled=settings.transcript_enhancement_enabled,
-        asr_provider=settings.asr_provider,
-        asr_model_quality=settings.asr_model_quality,
-        transcription_mode=settings.transcription_mode,
-        asr_cloud_model=settings.asr_cloud_model,
-        asr_base_url=settings.asr_base_url,
-        has_asr_api_key=settings.has_asr_api_key,
-        asr_api_key_masked=settings.asr_api_key_masked,
-        rag_embedding_device=settings.rag_embedding_device,
-        rag_max_hits=settings.rag_max_hits,
-        rag_rerank_enabled=settings.rag_rerank_enabled,
-        window_tokens=settings.window_tokens,
-        answer_detail_level=settings.answer_detail_level,
-        reasoning_effort=settings.reasoning_effort,
-        talk_custom_prompt=settings.talk_custom_prompt,
-        video_generation_concurrency=settings.video_generation_concurrency,
-        web_search_enabled=settings.web_search_enabled,
-        chaoxing_request_delay_seconds=settings.chaoxing_request_delay_seconds,
-        chaoxing_init_course_delay_seconds=settings.chaoxing_init_course_delay_seconds,
-    )
+    return _to_workspace_settings_response(settings)
 
 
 
@@ -642,6 +633,9 @@ def _to_asr_model_response(provider: str, model, container: ApiContainerDep) -> 
 def _get_asr_model_manager(provider: str, container: ApiContainerDep):
     normalized_provider = provider.strip().lower()
     if normalized_provider == "faster_whisper":
+        capabilities = detect_runtime_capabilities()
+        if not capabilities.faster_whisper_available:
+            raise HTTPException(status_code=400, detail=capabilities.unavailable_reason)
         return container.faster_whisper_model_manager
     if normalized_provider == "whisper_cpp":
         return container.whisper_cpp_model_manager

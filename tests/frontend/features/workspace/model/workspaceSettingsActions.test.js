@@ -318,6 +318,26 @@ describe("createWorkspaceSettingsActions downloads", () => {
 });
 
 describe("createWorkspaceSettingsActions provider settings", () => {
+  it("does not request local ASR models after saving Aliyun settings", async () => {
+    updateWorkspaceSettings.mockResolvedValue({
+      asrProvider: "aliyun_bailian",
+      runtimeCapabilities: null,
+    });
+    const controller = createWorkspaceSettingsActions({
+      state: {
+        ui: {
+          asrProvider: "aliyun_bailian",
+          answerDetailLevel: "medium",
+        },
+      },
+      dispatch: vi.fn(),
+    });
+
+    await controller.onChangeSetting("answerDetailLevel", "long");
+
+    expect(loadFasterWhisperModels).not.toHaveBeenCalled();
+  });
+
   it("edits provider text fields locally without saving on every keystroke", async () => {
     const actions = [];
     const controller = createWorkspaceSettingsActions({

@@ -50,6 +50,7 @@ from backend.video_summary.infrastructure.config.settings import (
     save_env_settings,
     save_settings,
 )
+from backend.video_summary.infrastructure.runtime_capabilities import detect_runtime_capabilities
 from backend.shared.llm import LiteLLMCompletionGateway
 
 
@@ -352,6 +353,12 @@ class SettingsService:
         normalized_asr_provider = asr_provider.strip().lower()
         if normalized_asr_provider not in VALID_ASR_PROVIDERS:
             raise SettingsValidationError(f"unsupported asr provider '{normalized_asr_provider}'")
+        capabilities = detect_runtime_capabilities()
+        if normalized_asr_provider == "faster_whisper" and not capabilities.faster_whisper_available:
+            raise SettingsValidationError(capabilities.unavailable_reason or "本机不支持 faster-whisper。")
+        normalized_embedding_device = rag_embedding_device.strip().lower()
+        if normalized_embedding_device in {"gpu", "cuda"} and not capabilities.gpu_embedding_available:
+            raise SettingsValidationError(capabilities.unavailable_reason or "本机不支持 FastEmbed GPU。")
         model_manager = (
             self._whisper_cpp_model_manager
             if normalized_asr_provider == "whisper_cpp"

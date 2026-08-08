@@ -243,7 +243,14 @@ export function useWorkspaceDataEffects(state, dispatch) {
   }, [dispatch, state.backendReady]);
 
   useEffect(() => {
-    if (!state.backendReady || state.ui.asrProvider === "aliyun_bailian") {
+    if (
+      !state.backendReady
+      || state.ui.asrProvider === "aliyun_bailian"
+      || (
+        state.ui.asrProvider === "faster_whisper"
+        && state.ui.runtimeCapabilities?.fasterWhisperAvailable === false
+      )
+    ) {
       return;
     }
 
