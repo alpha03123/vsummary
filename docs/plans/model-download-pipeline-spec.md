@@ -287,16 +287,31 @@
 
 仍待确认：第 1 条（清理缓存入口）与第 2 条（空值语义兼容影响）。
 
+### 补齐的规格项
+
+初版实施遗漏了规格自带的测试计划中 3 项与验收标准中 2 项，已全部补上：
+
+| 规格项 | 补齐方式 |
+| --- | --- |
+| 测试计划：sidecar 清理（降级路径下正式目录无 `.cache/huggingface/`） | `test_missing_tqdm_bar_falls_back_to_hf_hub_download` 一并覆盖 |
+| 测试计划：能力探测降级（`http_get` 缺 `_tqdm_bar` 时走 `hf_hub_download`） | 同上；用 `assert not legacy.called` 锁住"确实走了降级分支"，避免测试悄悄走正常路径也通过 |
+| 测试计划：残留剪除 | `test_unplanned_leftover_files_are_pruned_before_replace`（预置计划外文件与嵌套目录） |
+| 测试计划：RAG 预热命中（离线可加载） | `PrewarmedCacheLayoutTests` 两条：正例断言 `snapshot_download(local_files_only=True)` 解析到 `snapshots/<hash>`；反例断言只有 `refs/` 无 `snapshots/` 时抛 `LocalEntryNotFoundError`（防止正例因错误原因通过） |
+| 验收标准 P0：现有模型不触发重下 | 实测 `large-v3-turbo` / `small` 均 `is_downloaded=True`，`large-v3` 为 `False` |
+| 验收标准 P2：RAG 可取消且状态为 `cancelled` | 新增 `POST /api/rag/models/{model_key}/download/cancel`，并由 `test_cancel_route_drives_real_cancel_chain_to_cancelled_status` 走完整链条 |
+
+关于取消测试的一点说明：原先的 `test_cancelled_prewarm_reports_cancelled_and_keeps_resume_state` 由替身直接抛 `HuggingFaceDownloadCancelled`，只验证了 `_run_download` 的分支，**没有**验证 `request_cancel` → `is_cancel_requested` → 抛异常这条真实链路。新增的路由测试用真实 tracker 与真实 `_raise_if_download_cancelled` 补上了这一段。
+
 ### 尚未实施
 
-- **RAG 对外的取消 API**。取消的两层已就位：`warm_cache()` 在文件边界检查取消标志并抛 `HuggingFaceDownloadCancelled`，`_run_download()` 已把它与失败分开上报为 `cancelled`（且取消路径不做清理，保留续传现场）。缺的只是一个像 ASR 那样的 HTTP 路由去把取消标志置上——目前没有入口能触发它。
-- `agent_runtime_provider.py:201` 的 `.parent` 与 `fastembed_adapter.py` 的 `_resolve_specific_model_path()` 在 HF 布局下的显式覆盖测试。
+- `agent_runtime_provider.py:201` 的 `.parent` 与 `fastembed_adapter.py` 的 `_resolve_specific_model_path()` 在 HF 布局下的显式覆盖测试。两者均已读码确认行为正确（`.parent` 解析到 fastembed 缓存根；`_resolve_specific_model_path()` 只探 `fast-<name>` / `<name>`，HF 布局下返回 `None` 从而回落到 fastembed 自身解析并命中预热缓存），但没有测试锁住。
+- 审查决策第 1 条的"清理下载缓存"入口。保留 `.incomplete` 会长期占盘，需要一个显式入口让用户主动丢弃；这是产品决策，未擅自实现。
 - 真实弱网验证：需下载 `large-v3` 并中途断网，确认从断点续传而非重新开始。此项无法在开发环境复现，须由使用者验证。
 
 ### 测试与检查结果
 
-- `tests/backend/unit/asr/test_huggingface_model_downloader.py`：9 passed（0.44s，全离线）。
-- `tests/backend/unit/models/test_rag_model_manager.py`：15 passed（7.64s；改造前 10 tests / 35.30s，耗时下降源于预热路径可注入，不再经 fastembed 构造函数触网）。
+- `tests/backend/unit/asr/test_huggingface_model_downloader.py`：11 passed（0.38s，全离线）。
+- `tests/backend/unit/models/test_rag_model_manager.py`：19 passed（6.17s；改造前 10 tests / 35.30s，耗时下降源于预热路径可注入，不再经 fastembed 构造函数触网）。
 - `tests/backend/unit/settings/test_workspace_settings_service.py`：19 passed（0.90s）。
-- 后端全量：19 failed / 423 passed。这 19 项在干净树上同样失败（`CancelledGenerator.run()` 缺 `manual_transcript` 参数等测试替身签名漂移），与本期无关；已用 `git stash` 在干净树上复核确认。
+- 后端全量：19 failed / 429 passed。这 19 项在干净树上同样失败（`CancelledGenerator.run()` 缺 `manual_transcript` 参数等测试替身签名漂移），与本期无关；已用 `git stash` 在干净树上复核确认。
 - `import-linter`：10 contracts kept, 0 broken（需 `PYTHONPATH=src`）。

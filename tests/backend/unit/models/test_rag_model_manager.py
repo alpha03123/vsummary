@@ -17,6 +17,7 @@ from backend.api.di.bootstrap import ApiContainer
 from backend.video_summary.infrastructure.asr.huggingface_model_downloader import (
     HuggingFaceCacheWarmSpec,
     HuggingFaceDownloadCancelled,
+    _raise_if_download_cancelled,
 )
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.rag.rag_models import (
@@ -326,6 +327,59 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertEqual(blob.read_bytes(), b"partial-bytes")
             self.assertFalse(manager.is_downloaded("embedding"))
 
+    def test_cancel_route_drives_real_cancel_chain_to_cancelled_status(self) -> None:
+        """端到端串起真实取消链路，不靠替身直接抛异常。
+
+        覆盖 `POST /api/rag/models/{key}/download/cancel` →
+        `tracker.request_cancel` → `reporter.is_cancel_requested` →
+        `_raise_if_download_cancelled` → `_run_download` 上报 `cancelled`。
+        上面那个用例是替身直接抛 `HuggingFaceDownloadCancelled`，
+        并不能证明取消标志真的能传导进下载循环。
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            entered = threading.Event()
+
+            class _BlockingDownloader:
+                def warm_cache(self, spec, reporter) -> Path:
+                    del spec
+                    entered.set()
+                    # 模拟"逐文件下载"循环：每轮用生产代码的取消点检做检查。
+                    for _ in range(200):
+                        _raise_if_download_cancelled(reporter)
+                        time.sleep(0.01)
+                    raise AssertionError("cancel flag never reached the download loop")
+
+            manager = RagModelManager(
+                root_dir=root_dir,
+                progress_tracker=InMemoryProgressTracker(),
+                model_downloader=_BlockingDownloader(),
+            )
+            client = TestClient(create_app(FakeContainer(rag_model_manager=manager)))
+
+            manager.start_download("embedding")
+            self.assertTrue(entered.wait(2.0), "downloader never started")
+
+            response = client.post("/api/rag/models/embedding/download/cancel")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["status"], "cancelling")
+            _wait_until(lambda: not manager.has_active_download())
+            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
+            self.assertEqual(snapshot.status, "cancelled", snapshot.error)
+
+    def test_cancel_route_rejects_unknown_model_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = RagModelManager(
+                root_dir=Path(temp_dir),
+                progress_tracker=InMemoryProgressTracker(),
+            )
+            client = TestClient(create_app(FakeContainer(rag_model_manager=manager)))
+
+            response = client.post("/api/rag/models/nope/download/cancel")
+
+            self.assertEqual(response.status_code, 400)
+
 
 class _RecordingModelDownloader:
     """`HuggingFaceModelDownloader` 的测试替身，只记录 `warm_cache` 的入参。
@@ -475,6 +529,59 @@ def _wait_until(predicate, *, timeout_seconds: float = 2.0) -> None:
             return
         time.sleep(0.01)
     raise AssertionError("condition was not met before timeout")
+
+
+class PrewarmedCacheLayoutTests(unittest.TestCase):
+    """预热产出的目录布局必须能被 fastembed 的离线探测命中。
+
+    这是整条 RAG 预热设计的地基：fastembed 的 `download_model()` 第一步就是
+    `snapshot_download(local_files_only=True)`，命中则直接返回、永不触网，也永不
+    降级到 GCS。若布局不被识别，预热就是白做——因此这条契约必须有测试锁住，
+    而不是只靠读源码得出的结论。
+    """
+
+    def test_hf_cache_layout_resolves_offline_via_snapshot_download(self) -> None:
+        from huggingface_hub import snapshot_download
+
+        commit_hash = "0" * 40
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_dir = Path(temp_dir)
+            repo_dir = cache_dir / "models--Qdrant--bge-small-zh-v1.5"
+            # 复刻 hf_hub_download(cache_dir=...) 的落盘形态：refs/<revision> 存
+            # commit hash，实际文件在 snapshots/<hash>/ 下。
+            (repo_dir / "refs").mkdir(parents=True)
+            (repo_dir / "refs" / "main").write_text(commit_hash, encoding="utf-8")
+            snapshot_dir = repo_dir / "snapshots" / commit_hash
+            snapshot_dir.mkdir(parents=True)
+            (snapshot_dir / "config.json").write_text("{}", encoding="utf-8")
+            (snapshot_dir / "model_optimized.onnx").write_bytes(b"onnx")
+
+            resolved = snapshot_download(
+                repo_id="Qdrant/bge-small-zh-v1.5",
+                cache_dir=str(cache_dir),
+                local_files_only=True,
+            )
+
+            self.assertEqual(Path(resolved), snapshot_dir)
+            self.assertTrue((Path(resolved) / "model_optimized.onnx").is_file())
+
+    def test_missing_snapshot_dir_is_not_falsely_resolved(self) -> None:
+        """只有 refs 没有 snapshots 时必须报错，否则会把半成品当成已就绪。"""
+        from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import LocalEntryNotFoundError
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_dir = Path(temp_dir)
+            repo_dir = cache_dir / "models--Qdrant--bge-small-zh-v1.5"
+            (repo_dir / "refs").mkdir(parents=True)
+            (repo_dir / "refs" / "main").write_text("0" * 40, encoding="utf-8")
+
+            with self.assertRaises(LocalEntryNotFoundError):
+                snapshot_download(
+                    repo_id="Qdrant/bge-small-zh-v1.5",
+                    cache_dir=str(cache_dir),
+                    local_files_only=True,
+                )
 
 
 if __name__ == "__main__":

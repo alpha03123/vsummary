@@ -305,3 +305,79 @@ def test_progress_is_monotonic_within_download_band(monkeypatch, tmp_path: Path)
     assert band, "应至少上报一次下载阶段进度"
     assert all(5.0 <= value <= 95.0 for value in band)
     assert band == sorted(band), "进度不应回退"
+
+
+class _LegacyHttpGet:
+    """缺少 `_tqdm_bar` 的旧签名 `http_get`，用于触发能力探测降级。"""
+
+    def __init__(self) -> None:
+        self.called = False
+
+    def __call__(self, url, temp_file, *, proxies=None, resume_size: int = 0, headers=None) -> None:
+        del url, temp_file, proxies, resume_size, headers
+        self.called = True
+        raise AssertionError("签名不兼容时不应调用 http_get，应改走 hf_hub_download")
+
+
+def test_missing_tqdm_bar_falls_back_to_hf_hub_download(monkeypatch, tmp_path: Path) -> None:
+    """`http_get` 签名不兼容时降级到公开 `hf_hub_download`，并清掉它留下的 sidecar。
+
+    覆盖 spec 的两条：能力探测降级、降级路径下正式目录不含 `.cache/huggingface/`。
+    `_tqdm_bar` / `resume_size` 是下划线前缀的半公开参数，上游改签名时必须还能下载，
+    只是失去字节级进度。
+    """
+    reporter = _Reporter()
+    contents = _contents()
+    _install_fakes(monkeypatch, siblings=_siblings(), contents=contents)
+
+    legacy = _LegacyHttpGet()
+    monkeypatch.setattr("huggingface_hub.file_download.http_get", legacy)
+
+    calls: list[str] = []
+
+    def fake_hf_hub_download(*, repo_id, filename, endpoint=None, local_dir=None):
+        del repo_id, endpoint
+        calls.append(filename)
+        local_root = Path(local_dir)
+        target = local_root / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(contents[filename])
+        # 真实 hf_hub_download(local_dir=...) 会留下这个 sidecar。
+        sidecar = local_root / ".cache" / "huggingface" / "download"
+        sidecar.mkdir(parents=True, exist_ok=True)
+        (sidecar / f"{filename}.metadata").write_text("meta", encoding="utf-8")
+        return str(target)
+
+    monkeypatch.setattr("huggingface_hub.hf_hub_download", fake_hf_hub_download)
+
+    target_dir = tmp_path / "model"
+    result = HuggingFaceModelDownloader().download(_make_spec(target_dir), reporter)
+
+    assert not legacy.called
+    assert sorted(calls) == ["config.json", "model.bin"]
+    assert result == target_dir
+    assert (target_dir / "model.bin").read_bytes() == b"m" * 100
+    assert (target_dir / "config.json").read_bytes() == b"c" * 20
+    assert not (target_dir / ".cache").exists(), "降级路径的 sidecar 不得进入正式目录"
+    assert not (target_dir / ".incomplete").exists()
+
+
+def test_unplanned_leftover_files_are_pruned_before_replace(monkeypatch, tmp_path: Path) -> None:
+    """上次 allow_patterns 更宽时留下的文件不得被原子替换带进正式目录。"""
+    reporter = _Reporter()
+    _install_fakes(monkeypatch, siblings=_siblings(), contents=_contents())
+
+    target_dir = tmp_path / "model"
+    temp_dir = target_dir.with_name(".model.download")
+    stale = temp_dir / "old-weights.bin"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(b"stale")
+    stale_nested = temp_dir / "extra" / "notes.txt"
+    stale_nested.parent.mkdir(parents=True, exist_ok=True)
+    stale_nested.write_text("stale", encoding="utf-8")
+
+    HuggingFaceModelDownloader().download(_make_spec(target_dir), reporter)
+
+    assert (target_dir / "model.bin").is_file()
+    assert not (target_dir / "old-weights.bin").exists()
+    assert not (target_dir / "extra").exists()
