@@ -534,6 +534,31 @@ def download_rag_model(model_key: str, container: ApiContainerDep) -> RagModelRe
     return _to_rag_model_response(status)
 
 
+@router.post("/api/rag/models/{model_key}/download/cancel")
+def cancel_rag_model_download(model_key: str, container: ApiContainerDep) -> dict[str, str]:
+    """POST /api/rag/models/{model_key}/download/cancel — 请求取消 RAG 模型下载。
+
+    取消在文件边界生效：`warm_cache()` 每下完一个文件检查一次取消标志。已下载的
+    blob 与 `.incomplete` 一律保留，下次下载从断点继续。
+
+    Args:
+        model_key: 模型 key，来自模型列表响应。
+        container: FastAPI 依赖注入的 API 容器。
+
+    Returns:
+        `{"status": "cancelling", "task_id": ...}`。
+
+    Raises:
+        HTTPException(400): 不支持的模型 key。
+    """
+    try:
+        task_id = container.rag_model_manager.stream_task_id(model_key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    container.rag_model_manager.progress_tracker.request_cancel(task_id)
+    return {"status": "cancelling", "task_id": task_id}
+
+
 @router.get("/api/rag/models/{model_key}/download/progress")
 async def stream_rag_model_download_progress(
     model_key: str,

@@ -21,7 +21,13 @@ from backend.video_summary.infrastructure.config.settings import (
 
 
 class WorkspaceSettingsServiceTests(unittest.TestCase):
-    def test_runtime_env_overrides_clear_explicit_empty_hf_endpoint(self) -> None:
+    def test_runtime_env_overrides_keep_existing_env_when_dotenv_value_is_empty(self) -> None:
+        """`.env` 里的空值表示"本文件不表态"，不得覆盖 shell 里已设好的值。
+
+        这条语义很关键：`start.bat` / `build_release.ps1` 会先把 `HF_ENDPOINT`
+        `HF_HOME` `HUGGINGFACE_HUB_CACHE` 指到项目内目录，随后才加载 `.env`。
+        旧行为会 `pop` 掉这些变量，导致镜像失效、缓存跑回用户主目录。
+        """
         import huggingface_hub.constants as hf_constants
 
         previous = os.environ.get("HF_ENDPOINT")
@@ -35,8 +41,8 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
 
                 apply_runtime_env_overrides(root_dir)
 
-                self.assertNotIn("HF_ENDPOINT", os.environ)
-                self.assertEqual(hf_constants.ENDPOINT, "https://huggingface.co")
+                self.assertEqual(os.environ.get("HF_ENDPOINT"), "https://hf-mirror.com")
+                self.assertEqual(hf_constants.ENDPOINT, "https://hf-mirror.com")
         finally:
             if previous is None:
                 os.environ.pop("HF_ENDPOINT", None)

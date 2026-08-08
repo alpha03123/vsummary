@@ -140,6 +140,7 @@ export function buildWorkspacePageModel(controller) {
       downloadFasterWhisperModel: controller.onDownloadFasterWhisperModel,
       cancelFasterWhisperModelDownload: controller.onCancelFasterWhisperModelDownload,
       downloadRagModel: controller.onDownloadRagModel,
+      cancelRagModelDownload: controller.onCancelRagModelDownload,
       resetSettings: controller.onResetSettings,
       clearError: controller.onClearError,
       resolveLinkedSeries: controller.onResolveLinkedSeries,

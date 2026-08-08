@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isSaveableOpenaiBaseUrl, toProviderTestErrorMessage, createWorkspaceSettingsActions } from "@src/features/workspace/model/workspaceSettingsActions";
 import {
+  cancelRagModelDownload,
   cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
@@ -14,6 +15,7 @@ import {
 } from "@src/features/workspace/model/workspaceApi";
 
 vi.mock("@src/features/workspace/model/workspaceApi", () => ({
+  cancelRagModelDownload: vi.fn(),
   cancelFasterWhisperModelDownload: vi.fn(),
   downloadFasterWhisperModel: vi.fn(),
   downloadRagModel: vi.fn(),
@@ -74,6 +76,25 @@ describe("createWorkspaceSettingsActions downloads", () => {
         type: "faster_whisper_model_download_cancel_requested",
         modelId: "large-v3-turbo",
       },
+    ]);
+  });
+
+  it("requests RAG download cancellation", async () => {
+    const actions = [];
+    cancelRagModelDownload.mockResolvedValue({
+      status: "cancelling",
+      task_id: "rag-model-download/embedding",
+    });
+    const controller = createWorkspaceSettingsActions({
+      state: { ui: {} },
+      dispatch: (action) => actions.push(action),
+    });
+
+    await controller.onCancelRagModelDownload("embedding");
+
+    expect(cancelRagModelDownload).toHaveBeenCalledWith("embedding");
+    expect(actions).toEqual([
+      { type: "rag_model_download_cancel_requested", modelKey: "embedding" },
     ]);
   });
 
@@ -315,6 +336,30 @@ describe("createWorkspaceSettingsActions downloads", () => {
       ],
     });
   });
+
+  it("does not show a global failure when RAG download is cancelled", async () => {
+    const actions = [];
+    subscribeRagModelDownloadProgress.mockImplementation((modelKey, listener) => {
+      expect(modelKey).toBe("embedding");
+      listener({ status: "cancelled", progress: null });
+      return () => {};
+    });
+    downloadRagModel.mockResolvedValue({ key: "embedding", downloaded: false, status: "running" });
+    loadRagModels.mockResolvedValue([]);
+    const controller = createWorkspaceSettingsActions({
+      state: { ui: {} },
+      dispatch: (action) => actions.push(action),
+    });
+
+    await controller.onDownloadRagModel("embedding");
+
+    expect(actions).toContainEqual(expect.objectContaining({
+      type: "rag_model_download_progress_updated",
+      modelKey: "embedding",
+      status: "cancelled",
+    }));
+    expect(actions.some((action) => action.type === "load_failed")).toBe(false);
+  });
 });
 
 describe("createWorkspaceSettingsActions provider settings", () => {
@@ -362,12 +407,12 @@ describe("createWorkspaceSettingsActions provider settings", () => {
     ]);
   });
 
-  it("saves provider text fields explicitly", async () => {
+  it("saves an empty HuggingFace endpoint as the official source", async () => {
     updateProviderSettings.mockResolvedValue({
       llmProvider: "openai",
       openaiBaseUrl: "",
       openaiModel: "gpt-5.4",
-      hfEndpoint: "",
+      hfEndpoint: "https://huggingface.co",
       openaiApiKey: "",
     });
     const actions = [];
@@ -387,12 +432,12 @@ describe("createWorkspaceSettingsActions provider settings", () => {
 
     expect(updateProviderSettings).toHaveBeenCalledTimes(1);
     expect(updateProviderSettings).toHaveBeenCalledWith(expect.objectContaining({
-      hfEndpoint: "",
+      hfEndpoint: "https://huggingface.co",
       openaiModel: "gpt-5.4",
     }));
     expect(actions).toContainEqual({
       type: "workspace_settings_loaded",
-      settings: expect.objectContaining({ hfEndpoint: "" }),
+      settings: expect.objectContaining({ hfEndpoint: "https://huggingface.co" }),
     });
   });
 });

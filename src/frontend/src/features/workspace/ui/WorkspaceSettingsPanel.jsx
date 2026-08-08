@@ -38,6 +38,7 @@ export function WorkspaceSettingsPanel({
   onDownloadFasterWhisperModel,
   onCancelFasterWhisperModelDownload,
   onDownloadRagModel,
+  onCancelRagModelDownload,
   onResetSettings,
   onClose,
 }) {
@@ -74,7 +75,11 @@ export function WorkspaceSettingsPanel({
   const unavailableReason = runtimeCapabilities?.unavailableReason || "当前运行环境不支持 NVIDIA CUDA 加速。";
   const rerankerModel = ragModels.find((model) => model.key === "reranker") ?? null;
   const rerankerNeedsDownload = rerankerModel != null && !rerankerModel.downloaded;
-  const isRerankerDownloading = rerankerModel?.status === "running" || downloadingRagModelKey === "reranker";
+  const isRerankerDownloading = (
+    rerankerModel?.status === "running" ||
+    rerankerModel?.status === "cancelling" ||
+    downloadingRagModelKey === "reranker"
+  );
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
   const saveProviderSettingsOnEnter = (event) => {
     if (event.key !== "Enter" || typeof onSaveProviderSettings !== "function") {
@@ -907,7 +912,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="HuggingFace 镜像地址"
-                  description="Huggingface镜像,如果无法下载模型请配置此设置,留空时默认使用 HuggingFace 官方源。"
+                  description="模型下载镜像地址。留空后保存将使用 HuggingFace 官方源。"
                 >
                   <WorkspaceTextInput
                     value={ui.hfEndpoint}
@@ -931,11 +936,16 @@ export function WorkspaceSettingsPanel({
                       </div>
                     ) : (
                       ragModels.map((model) => {
-                        const isDownloading = model.status === "running" || downloadingRagModelKey === model.key;
+                        const isCancelling = model.status === "cancelling";
+                        const isDownloading = !isCancelling && (
+                          model.status === "running" || downloadingRagModelKey === model.key
+                        );
                         const downloadFailed = model.status === "failed" && Boolean(model.error);
                         const statusText = model.downloaded
                           ? "已下载到本地"
-                          : isDownloading
+                          : isCancelling
+                            ? "正在取消下载..."
+                            : isDownloading
                             ? `正在下载 RAG 模型... ${typeof model.progress === "number" ? `${Math.round(model.progress)}%` : ""}`.trim()
                             : downloadFailed
                               ? "下载失败"
@@ -954,7 +964,7 @@ export function WorkspaceSettingsPanel({
                               <div className="min-w-0">
                                 <strong className="break-words text-sm font-bold text-stone-900 dark:text-stone-100">{model.label}</strong>
                                 <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{statusText}</p>
-                                {isDownloading ? (
+                                {isDownloading || isCancelling ? (
                                   <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
                                     <div
                                       className="h-full bg-accent transition-[width] duration-200 ease-out"
@@ -968,13 +978,21 @@ export function WorkspaceSettingsPanel({
                                   </p>
                                 ) : null}
                               </div>
-                              {isDownloading ? (
+                              {isCancelling ? (
                                 <button
                                   type="button"
                                   disabled
                                   className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-stone-500 disabled:cursor-wait disabled:opacity-70 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500"
                                 >
-                                  下载中
+                                  取消中
+                                </button>
+                              ) : isDownloading ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onCancelRagModelDownload?.(model.key)}
+                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+                                >
+                                  取消下载
                                 </button>
                               ) : model.downloaded ? (
                                 <button

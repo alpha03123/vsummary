@@ -405,6 +405,17 @@ export function workspaceReducer(state, action) {
           : model),
       };
       }
+    case "rag_model_download_cancel_requested":
+      return {
+        ...state,
+        ragModels: state.ragModels.map((model) => model.key === action.modelKey
+          ? {
+            ...model,
+            status: "cancelling",
+            error: null,
+          }
+          : model),
+      };
     case "rag_model_download_failed":
       {
         const downloadingRagModelKeys = removeDownloadingKey(state.downloadingRagModelKeys, action.modelKey);
@@ -439,7 +450,7 @@ export function workspaceReducer(state, action) {
     case "rag_models_loaded":
       {
         const downloadingRagModelKeys = action.models
-          .filter((model) => model.status === "running")
+          .filter((model) => isActiveDownloadStatus(model.status))
           .map((model) => model.key);
       return {
         ...state,

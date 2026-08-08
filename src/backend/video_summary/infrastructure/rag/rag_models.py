@@ -8,14 +8,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import shutil
 from threading import Lock, Thread
 from typing import Callable, Literal
 
 from backend.video_summary.generation.ports import ProgressReporter
+from backend.video_summary.infrastructure.asr.huggingface_model_downloader import (
+    HuggingFaceCacheWarmSpec,
+    HuggingFaceDownloadCancelled,
+    HuggingFaceModelDownloader,
+)
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.config.settings import apply_runtime_env_overrides
+
+
+_FASTEMBED_BASE_ALLOW_PATTERNS = (
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+    "preprocessor_config.json",
+)
+_HF_CACHE_DIR_PREFIX = "models--"
 
 
 RAG_MODEL_DOWNLOAD_MESSAGE = "正在下载 RAG 模型，请等待下载完成后再提问。"
@@ -107,6 +123,7 @@ class RagModelManager:
         progress_tracker: InMemoryProgressTracker,
         downloader: Callable[[RagModelSpec, ProgressReporter], None] | None = None,
         on_download_completed: Callable[[str], None] | None = None,
+        model_downloader: HuggingFaceModelDownloader | None = None,
     ) -> None:
         """注入项目根目录、进度跟踪器与可选的自定义下载器 / 完成回调。
 
@@ -114,13 +131,17 @@ class RagModelManager:
             root_dir: 项目根目录；模型缓存目录解析为 `root_dir/data/models/fastembed/`。
             progress_tracker: 用于写入下载进度并被前端 SSE 订阅的 `InMemoryProgressTracker`。
             downloader: 可选的自定义下载器；为 `None` 时使用默认的
-                `_download_from_huggingface` 实现。
+                `_download_from_huggingface` 实现。整条下载流程都被替换。
             on_download_completed: 下载完成后的回调（接收模型 key），
                 为 `None` 时不通知。
+            model_downloader: 可选的 HF 下载器实现；为 `None` 时新建
+                `HuggingFaceModelDownloader`。与 `downloader` 的区别是这里只替换
+                "真正下字节"的那一层，仓库 ID 推导与 `allow_patterns` 拼装仍然照常执行。
         """
         self._root_dir = root_dir
         self._models_root = root_dir / "data" / "models" / "fastembed"
         self._progress_tracker = progress_tracker
+        self._downloader_impl = model_downloader or HuggingFaceModelDownloader()
         self._downloader = downloader or self._download_from_huggingface
         self._on_download_completed = on_download_completed
         self._lock = Lock()
@@ -221,7 +242,12 @@ class RagModelManager:
         return candidates[0]
 
     def _run_download(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
-        """后台线程的下载主循环：调用注入的下载器，校验完成后通知回调。"""
+        """后台线程的下载主循环：调用注入的下载器，校验完成后通知回调。
+
+        取消与失败必须分开上报：预热链路会抛 `HuggingFaceDownloadCancelled`，
+        若混进下面的 `except Exception` 会被当成 `failed`，前端显示成"下载出错"，
+        而用户明明是自己点的取消。取消路径也不做清理——保留半成品才能续传。
+        """
         try:
             self._cleanup_incomplete_model_cache(spec)
             self._downloader(spec, reporter)
@@ -230,6 +256,8 @@ class RagModelManager:
             reporter.completed(f"RAG 模型已下载：{spec.label}")
             if self._on_download_completed is not None:
                 self._on_download_completed(spec.key)
+        except HuggingFaceDownloadCancelled:
+            reporter.cancelled(f"RAG 模型下载已取消：{spec.label}")
         except Exception as error:
             cleanup_error = self._try_cleanup_incomplete_model_cache(spec)
             if cleanup_error is None:
@@ -249,22 +277,65 @@ class RagModelManager:
         return None
 
     def _cleanup_incomplete_model_cache(self, spec: RagModelSpec) -> None:
-        """删除目标模型的半成品缓存目录和对应 FastEmbed 锁目录。"""
+        """删除目标模型的半成品缓存目录和对应 FastEmbed 锁目录。
+
+        **HF 缓存布局目录（`models--owner--name/`）例外，一律保留**：它由
+        `hf_hub_download` 自己管理，里面的 `blobs/*.incomplete` 正是下次续传的锚点。
+        删掉它等于把已下好的字节全部作废——这正是之前 ASR 链路"末段断线丢掉整个
+        进度"的同一个缺陷。半成品由 HF 自身的 blob 机制兜底：未写完的 blob 不会被
+        提交进 `snapshots/`，因此保留它不会让 `is_downloaded` 误判成已完成。
+        """
         metadata = self._get_fastembed_metadata(spec)
         model_file = _metadata_model_file(metadata)
         candidates = self._candidate_model_dirs(spec, metadata)
         for model_dir in candidates:
+            if _is_hf_cache_dir(model_dir):
+                continue
             if model_dir.exists() and not _has_required_file(model_dir, model_file):
                 _remove_path(model_dir)
         _remove_model_lock_entries(self._models_root / ".locks", candidates)
 
     def _download_from_huggingface(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
-        """默认下载实现：实例化 FastEmbed 的 `TextEmbedding` / `TextCrossEncoder`。
+        """默认下载实现：自己把 HF 缓存预热好，再让 fastembed 离线加载。
 
-        FastEmbed 在首次构造时会按 `cache_dir` 自动从 HuggingFace 下载模型；
-        这里不直接调 huggingface_hub，是为了与 fastembed 自身的缓存格式保持一致。
+        为什么不直接构造 `TextEmbedding` / `TextCrossEncoder` 让 fastembed 自己下载：
+
+        1. **镜像被绕过**。fastembed 内部对 GCS tarball 的回退走的是自己拼的
+           `storage.googleapis.com` 直链，`HF_ENDPOINT` 完全不参与；一旦 HF 直连
+           失败就会静默转向 GCS，用户配的镜像形同虚设。磁盘上遗留的
+           `fast-bge-small-zh-v1.5/` 目录就是这条回退路径留下的痕迹。
+        2. **无进度、无取消**。fastembed 只在构造函数里闷头下载，既不回调进度也
+           不响应取消。
+        3. **`bge-reranker-base` 没有 GCS 回退**（`sources.url` 为 `None`），HF
+           直连失败就彻底没得下。
+
+        预热后 fastembed 的 `download_model()` 会在第一步就用
+        `local_files_only=True` 命中本地缓存并直接返回，不再触碰网络。
         """
         apply_runtime_env_overrides(self._root_dir)
+        metadata = self._get_fastembed_metadata(spec)
+        repo_id = _hf_source_repo(metadata)
+        if repo_id is None:
+            self._download_via_fastembed(spec, reporter)
+            return
+
+        self._downloader_impl.warm_cache(
+            HuggingFaceCacheWarmSpec(
+                repo_id=repo_id,
+                cache_dir=self._models_root,
+                allow_patterns=_fastembed_allow_patterns(metadata),
+                endpoint=os.environ.get("HF_ENDPOINT", "").strip() or None,
+            ),
+            reporter,
+        )
+        reporter.update("validate", 95.0, f"正在校验 RAG 模型：{spec.label}")
+
+    def _download_via_fastembed(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
+        """兜底下载实现：交给 fastembed 自己下载（仅用于没有 HF 源的模型）。
+
+        这条路没有进度与取消，也不保证走镜像；只在 fastembed 元数据未提供
+        `sources.hf` 时使用，避免这类模型完全无法下载。
+        """
         reporter.update("download", 5.0, f"正在下载模型文件：{spec.model_name}")
         if spec.model_kind == "embedding":
             from fastembed import TextEmbedding
@@ -355,6 +426,47 @@ def _metadata_model_file(metadata: dict) -> str:
     if not isinstance(model_file, str) or not model_file.strip():
         raise RuntimeError("FastEmbed 模型元数据缺少 model_file。")
     return model_file.strip()
+
+
+def _hf_source_repo(metadata: dict) -> str | None:
+    """读取 FastEmbed 元数据里的 `sources.hf` 仓库 ID；没有 HF 源时返回 `None`。
+
+    注意这里**不能**用 `RagModelSpec.model_name`：两者经常不同。例如
+    `BAAI/bge-small-zh-v1.5` 的 ONNX 权重实际托管在 `Qdrant/bge-small-zh-v1.5`，
+    用 `model_name` 去预热会下到错误的仓库（或 404）。
+    """
+    sources = metadata.get("sources")
+    if not isinstance(sources, dict):
+        return None
+    hf_source = sources.get("hf")
+    if isinstance(hf_source, str) and hf_source.strip():
+        return hf_source.strip()
+    return None
+
+
+def _fastembed_allow_patterns(metadata: dict) -> tuple[str, ...]:
+    """拼出与 fastembed 自身完全一致的 `allow_patterns`。
+
+    必须逐字对齐 `fastembed.common.model_management` 里的清单（5 个固定 JSON +
+    `model_file` + `additional_files`）：预热多了是浪费带宽，少了会让 fastembed
+    的离线加载失败并回退到 GCS，等于白预热。
+    """
+    patterns = list(_FASTEMBED_BASE_ALLOW_PATTERNS)
+    patterns.append(_metadata_model_file(metadata))
+    additional_files = metadata.get("additional_files")
+    if isinstance(additional_files, list):
+        patterns.extend(str(item).strip() for item in additional_files if str(item).strip())
+    return tuple(dict.fromkeys(patterns))
+
+
+def _is_hf_cache_dir(model_dir: Path) -> bool:
+    """判断候选目录是否是 huggingface_hub 自己管理的缓存布局。
+
+    判据是目录名前缀 `models--`，与 `_candidate_model_dirs` 里 `sources.hf`
+    分支的拼法一致。这类目录里的 `blobs/*.incomplete` 是续传锚点，清理时必须
+    跳过；`fast-xxx/`（GCS tarball 解压产物）则没有续传语义，可以安全删除。
+    """
+    return model_dir.name.startswith(_HF_CACHE_DIR_PREFIX)
 
 
 def _remove_model_lock_entries(locks_root: Path, model_dirs: list[Path]) -> None:

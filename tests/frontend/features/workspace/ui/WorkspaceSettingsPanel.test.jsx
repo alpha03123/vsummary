@@ -60,4 +60,24 @@ describe("WorkspaceSettingsPanel provider settings", () => {
 
     expect(onOpenUsagePage).toHaveBeenCalledTimes(1);
   });
+
+  it("allows an in-progress RAG download to be cancelled", () => {
+    const onCancelRagModelDownload = vi.fn();
+    renderPanel({}, {
+      initialTab: "network",
+      downloadingRagModelKey: "embedding",
+      ragModels: [{
+        key: "embedding",
+        label: "bge-small-zh-v1.5",
+        downloaded: false,
+        status: "running",
+        progress: 42,
+      }],
+      onCancelRagModelDownload,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "取消下载" }));
+
+    expect(onCancelRagModelDownload).toHaveBeenCalledWith("embedding");
+  });
 });

@@ -1,4 +1,5 @@
 import {
+  cancelRagModelDownload,
   cancelFasterWhisperModelDownload,
   downloadFasterWhisperModel,
   downloadRagModel,
@@ -19,6 +20,7 @@ import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 const PROVIDER_TEXT_SETTING_KEYS = new Set(["openaiBaseUrl", "openaiModel", "hfEndpoint"]);
 const ASR_TEXT_SETTING_KEYS = new Set(["asrBaseUrl", "asrCloudModel"]);
 const DOWNLOAD_FAILURE_VISIBLE_MS = 4000;
+const HUGGINGFACE_OFFICIAL_ENDPOINT = "https://huggingface.co";
 
 function isCompletedDownloadStatus(payload) {
   return payload?.status === "completed" || payload?.downloaded === true;
@@ -210,7 +212,11 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   }
 
   async function onSaveProviderSettings() {
-    const nextUi = normalizeUiSettings(state.ui);
+    const normalizedUi = normalizeUiSettings(state.ui);
+    const nextUi = {
+      ...normalizedUi,
+      hfEndpoint: normalizedUi.hfEndpoint || HUGGINGFACE_OFFICIAL_ENDPOINT,
+    };
     if (nextUi.openaiBaseUrl && !isSaveableOpenaiBaseUrl(nextUi.openaiBaseUrl)) {
       dispatch({ type: "load_failed", message: "模型接口地址必须包含 http:// 或 https://。" });
       return;
@@ -454,7 +460,12 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     };
     const downloadCompleted = new Promise((resolve, reject) => {
       unsubscribe = subscribeRagModelDownloadProgress(modelKey, (snapshot) => {
-        if (snapshot.status === "running" || snapshot.status === "completed") {
+        if (
+          snapshot.status === "running" ||
+          snapshot.status === "cancelling" ||
+          snapshot.status === "completed" ||
+          snapshot.status === "cancelled"
+        ) {
           dispatch({
             type: "rag_model_download_progress_updated",
             modelKey,
@@ -473,6 +484,9 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         if (snapshot.status === "completed") {
           resolve();
         }
+        if (snapshot.status === "cancelled") {
+          resolve();
+        }
       });
     });
     try {
@@ -488,6 +502,15 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
           progress: 100,
           detail: started.detail,
           error: started.error,
+        });
+      } else if (isCancelledDownloadStatus(started)) {
+        dispatch({
+          type: "rag_model_download_progress_updated",
+          modelKey,
+          status: "cancelled",
+          progress: null,
+          detail: started.detail,
+          error: null,
         });
       } else {
         await downloadCompleted;
@@ -505,6 +528,16 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
       });
     } finally {
       unsubscribe();
+    }
+  }
+
+  async function onCancelRagModelDownload(modelKey) {
+    dispatch({ type: "rag_model_download_cancel_requested", modelKey });
+    try {
+      await cancelRagModelDownload(modelKey);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "RAG 模型取消失败";
+      dispatch({ type: "load_failed", message });
     }
   }
 
@@ -527,6 +560,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onDownloadFasterWhisperModel,
     onCancelFasterWhisperModelDownload,
     onDownloadRagModel,
+    onCancelRagModelDownload,
   };
 }
 

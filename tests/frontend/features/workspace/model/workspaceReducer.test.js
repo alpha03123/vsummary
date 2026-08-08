@@ -476,6 +476,21 @@ describe("workspaceReducer video download cancellation", () => {
     expect(nextState.videoDownloadProgress).toBeNull();
     expect(nextState.library.series[0].videos[0].status).toBe("linked");
   });
+
+  it("marks the selected RAG download as cancelling", () => {
+    const state = {
+      downloadingRagModelKeys: ["embedding"],
+      ragModels: [{ key: "embedding", status: "running", progress: 42, error: null }],
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "rag_model_download_cancel_requested",
+      modelKey: "embedding",
+    });
+
+    expect(nextState.downloadingRagModelKeys).toEqual(["embedding"]);
+    expect(nextState.ragModels[0]).toMatchObject({ status: "cancelling", progress: 42, error: null });
+  });
 });
 
 describe("workspaceReducer provider usage", () => {

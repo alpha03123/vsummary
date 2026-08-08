@@ -201,6 +201,12 @@ export async function downloadRagModel(modelKey) {
   });
 }
 
+export async function cancelRagModelDownload(modelKey) {
+  return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download/cancel`, {
+    method: "POST",
+  });
+}
+
 export function subscribeRagModelDownloadProgress(modelKey, listener) {
   return subscribeProgress(
     `/api/rag/models/${encodeURIComponent(modelKey)}/download/progress`,
