@@ -6,9 +6,60 @@ import unittest
 from pathlib import Path
 
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 
 class LocalMediaImportTests(unittest.TestCase):
+    def test_renaming_local_series_and_video_preserves_stable_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            workspace = FileSystemVideoWorkspace(root_dir)
+            series = workspace.import_local_series(
+                title="Original Series",
+                files=[("original-video.mp4", io.BytesIO(b"video"))],
+            )
+
+            self.assertTrue(workspace.rename_series(series.id, "Renamed Series"))
+            self.assertTrue(workspace.rename_video(series.id, "original-video", "Renamed Video"))
+
+            listed_series = next(item for item in workspace.list_series() if item.id == series.id)
+            self.assertEqual(listed_series.title, "Renamed Series")
+            self.assertEqual(listed_series.videos[0].id, "original-video")
+            self.assertEqual(listed_series.videos[0].title, "Renamed Video")
+            source = workspace.get_video_source(series.id, "original-video")
+            self.assertIsNotNone(source)
+            self.assertEqual(source.title, "Renamed Video")
+            self.assertTrue((root_dir / "videos" / series.id / "original-video.mp4").exists())
+
+    def test_renaming_linked_series_and_video_updates_link_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = FileSystemVideoWorkspace(Path(temp_dir))
+            workspace.save_linked_series(
+                LinkedSeries(
+                    series_id="linked-series",
+                    title="Original Linked Series",
+                    cover_url="",
+                    source_url="",
+                    videos=[
+                        LinkedVideo(
+                            bvid="BV1example",
+                            page=1,
+                            title="Original Linked Video",
+                            cover_url="",
+                            duration_seconds=0,
+                            source_url="",
+                        )
+                    ],
+                )
+            )
+
+            self.assertTrue(workspace.rename_series("linked-series", "Renamed Linked Series"))
+            self.assertTrue(workspace.rename_video("linked-series", "BV1example", "Renamed Linked Video"))
+
+            listed_series = next(item for item in workspace.list_series() if item.id == "linked-series")
+            self.assertEqual(listed_series.title, "Renamed Linked Series")
+            self.assertEqual(listed_series.videos[0].title, "Renamed Linked Video")
+
     def test_import_local_series_accepts_audio_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = FileSystemVideoWorkspace(Path(temp_dir))

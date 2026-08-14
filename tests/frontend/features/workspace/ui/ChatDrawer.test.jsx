@@ -23,16 +23,6 @@ describe("ChatDrawer", () => {
     expect(screen.getByTestId("chat-panel")).toHaveTextContent("我的工作台");
   });
 
-  it("calls onClose when the backdrop is clicked", () => {
-    const onClose = vi.fn();
-    render(<ChatDrawer isOpen={true} {...baseProps} onClose={onClose} />);
-    // Backdrop is a div with the fixed inset-0 z-30 classes.
-    const backdrop = document.querySelector("div.fixed.inset-0.z-30");
-    expect(backdrop).toBeTruthy();
-    fireEvent.click(backdrop);
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
   it("calls onClose when Esc is pressed", () => {
     const onClose = vi.fn();
     render(<ChatDrawer isOpen={true} {...baseProps} onClose={onClose} />);

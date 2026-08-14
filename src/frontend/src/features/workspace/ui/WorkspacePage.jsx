@@ -9,6 +9,7 @@ import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
 import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
+import { WorkspaceRenameDialog } from "./shared/WorkspaceRenameDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { blurVariant } from "../../../lib/animations";
 import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
@@ -71,6 +72,8 @@ export function WorkspacePage({ page }) {
   const [importModalState, setImportModalState] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [pendingRename, setPendingRename] = useState(null);
+  const [renamePending, setRenamePending] = useState(false);
   const containerRef = useRef(null);
   const settingsModalRef = useRef(null);
   const usageModalRef = useRef(null);
@@ -309,6 +312,11 @@ export function WorkspacePage({ page }) {
                 });
               }}
               onDeleteSeries={actions.deleteSeries}
+              onRequestRenameSeries={() => {
+                if (activeSeries) {
+                  setPendingRename({ kind: "series", title: activeSeries.title, entityLabel: "系列名称" });
+                }
+              }}
               onRequestDeleteSeries={() => {
                 if (!activeSeries) {
                   return;
@@ -328,6 +336,11 @@ export function WorkspacePage({ page }) {
                   title: "删除当前视频？",
                   description: `将删除“${selectedVideo.title}”及其相关产物。该操作不可撤销。`,
                 });
+              }}
+              onRequestRenameCurrentVideo={() => {
+                if (selectedVideo) {
+                  setPendingRename({ kind: "video", title: selectedVideo.title, entityLabel: "视频名称" });
+                }
               }}
               downloadProgress={generation.videoDownloadProgress}
               currentAsrModel={currentAsrModel}
@@ -615,6 +628,29 @@ export function WorkspacePage({ page }) {
             setPendingDelete(null);
           } finally {
             setDeletePending(false);
+          }
+        }}
+      />
+      <WorkspaceRenameDialog
+        open={pendingRename != null}
+        entityLabel={pendingRename?.entityLabel ?? ""}
+        initialTitle={pendingRename?.title ?? ""}
+        pending={renamePending}
+        onCancel={() => {
+          if (!renamePending) setPendingRename(null);
+        }}
+        onConfirm={async (title) => {
+          if (!pendingRename || renamePending) return;
+          setRenamePending(true);
+          try {
+            if (pendingRename.kind === "series") {
+              await actions.renameSeries?.(title);
+            } else {
+              await actions.renameCurrentVideo?.(title);
+            }
+            setPendingRename(null);
+          } finally {
+            setRenamePending(false);
           }
         }}
       />

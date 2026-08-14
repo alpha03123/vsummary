@@ -1021,9 +1021,25 @@ export async function deleteSeries(seriesId) {
   });
 }
 
+export async function renameSeries(seriesId, title) {
+  return fetchJson(`/api/series/${encodeURIComponent(seriesId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
 export async function deleteVideoSource(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}`, {
     method: "DELETE",
+  });
+}
+
+export async function renameVideoSource(seriesId, videoId, title) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
   });
 }
 

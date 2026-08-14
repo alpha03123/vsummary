@@ -28,6 +28,7 @@ from backend.api.schemas.contracts import (
     GenerateVideoSummaryRequest,
     LocalMediaPathImportRequest,
     LocalMediaSeriesPathImportRequest,
+    RenameTitleRequest,
     UpdateVideoNoteRequest,
     UpdateVideoSummaryRequest,
     UpdateVideoTranscriptRequest,
@@ -1199,6 +1200,22 @@ def delete_series(series_id: str, container: ApiContainerDep) -> dict[str, objec
     return {"status": "deleted", "series_id": deleted.series_id}
 
 
+@router.patch("/api/series/{series_id}")
+def rename_series(
+    series_id: str,
+    request: RenameTitleRequest,
+    container: ApiContainerDep,
+) -> dict[str, str]:
+    """更新系列展示名称，不改变文件夹名称或系列 ID。"""
+    try:
+        renamed = container.rename_series.run(series_id, request.title)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"series_id": renamed.series_id, "title": renamed.title}
+
+
 @router.delete("/api/videos/{series_id}/{video_id}")
 def delete_video_source(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
     """DELETE /api/videos/{series_id}/{video_id} — 删除单个视频及其全部制品。
@@ -1224,6 +1241,23 @@ def delete_video_source(series_id: str, video_id: str, container: ApiContainerDe
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return {"status": "deleted", "series_id": deleted.series_id, "video_id": deleted.video_id}
+
+
+@router.patch("/api/videos/{series_id}/{video_id}")
+def rename_video(
+    series_id: str,
+    video_id: str,
+    request: RenameTitleRequest,
+    container: ApiContainerDep,
+) -> dict[str, str]:
+    """更新视频展示名称，不重命名原媒体文件或视频 ID。"""
+    try:
+        renamed = container.rename_video.run(series_id, video_id, request.title)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"series_id": renamed.series_id, "video_id": renamed.video_id, "title": renamed.title}
 
 
 @router.post("/api/import/local/select")

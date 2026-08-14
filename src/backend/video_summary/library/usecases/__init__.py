@@ -32,6 +32,8 @@ from backend.video_summary.library.usecases.linked_videos import (
 from backend.video_summary.library.usecases.mutations import (
     DeleteSeries,
     DeleteVideoSource,
+    RenameSeries,
+    RenameVideo,
 )
 from backend.video_summary.library.usecases.summary_generation import (
     GenerateSeriesSummaryFromLibrary,
@@ -47,6 +49,8 @@ __all__ = [
     "DeleteVideoNote",
     "DeleteSeries",
     "DeleteVideoSource",
+    "RenameSeries",
+    "RenameVideo",
     "GenerateVideoKnowledgeCards",
     "GenerateSeriesMindmapFromLibrary",
     "GenerateVideoMindmapFromLibrary",

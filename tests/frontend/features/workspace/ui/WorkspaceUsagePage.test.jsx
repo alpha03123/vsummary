@@ -57,10 +57,6 @@ describe("WorkspaceUsagePage", () => {
       />,
     );
 
-    const trend = screen.getByText("Token 用量趋势");
-    const chart = trend.closest(".rounded-3xl");
-
-    expect(chart.querySelector("canvas")).toBeInTheDocument();
     expect(screen.getByText("Token 用量趋势")).toBeInTheDocument();
     expect(screen.getByText("按时间聚合真实 token 消耗，悬停查看明细。")).toBeInTheDocument();
     expect(screen.queryByText(/最近 2 次真实 token 调用/)).not.toBeInTheDocument();

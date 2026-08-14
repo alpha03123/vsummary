@@ -278,7 +278,9 @@ export function useWorkspaceController() {
     onImportLocalPlaygroundVideos: contentActions.onImportLocalPlaygroundVideos,
     onImportSeriesVideos: contentActions.onImportSeriesVideos,
     onDeleteSeries: contentActions.onDeleteSeries,
+    onRenameSeries: contentActions.onRenameSeries,
     onDeleteCurrentVideo: contentActions.onDeleteCurrentVideo,
+    onRenameCurrentVideo: contentActions.onRenameCurrentVideo,
     onDeleteVideos: contentActions.onDeleteVideos,
     onDownloadVideo: contentActions.onDownloadVideo,
   };

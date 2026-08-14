@@ -1,4 +1,4 @@
-import { BrainCircuit } from "lucide-react";
+import { BrainCircuit, RefreshCw } from "lucide-react";
 
 import { CopyToClipboardButton } from "../shared/CopyToClipboardButton";
 import { WorkspaceFeedbackBanner } from "../shared/WorkspaceFeedbackBanner";
@@ -120,7 +120,16 @@ export function WorkspaceKnowledgeCardsView({
           eyebrow="Knowledge Cards"
           title="还没有可展示的卡片"
           description="当前视频还没有抽取出足够稳定的知识原子，可稍后重新生成。"
-        />
+        >
+          <button
+            type="button"
+            onClick={onGenerateKnowledgeCards}
+            className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/8 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/14"
+          >
+            <RefreshCw size={16} strokeWidth={2.2} />
+            重新生成知识卡片
+          </button>
+        </WorkspaceStateBlock>
       </div>
     );
   }
@@ -128,6 +137,16 @@ export function WorkspaceKnowledgeCardsView({
   return (
     <div className="flex flex-col gap-4">
       <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} onDismiss={onClearKnowledgeCardsFeedback} />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onGenerateKnowledgeCards}
+          className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition-colors hover:border-accent/30 hover:bg-accent/8 hover:text-accent dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-300"
+        >
+          <RefreshCw size={14} strokeWidth={2.2} />
+          重新生成知识卡片
+        </button>
+      </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {knowledgeCards.cards.map((card) => (
           <article

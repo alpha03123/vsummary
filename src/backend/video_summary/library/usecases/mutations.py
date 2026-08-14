@@ -48,6 +48,53 @@ class GenerationInProgressError(RuntimeError):
     """
 
 
+@dataclass(frozen=True)
+class RenameSeriesResult:
+    """系列标题更新结果。"""
+
+    series_id: str
+    title: str
+
+
+@dataclass(frozen=True)
+class RenameVideoResult:
+    """视频标题更新结果。"""
+
+    series_id: str
+    video_id: str
+    title: str
+
+
+class RenameSeries:
+    """仅更新系列展示标题，不改变稳定的系列 ID 或任何制品路径。"""
+
+    def __init__(self, workspace: VideoMutationStore) -> None:
+        self._workspace = workspace
+
+    def run(self, series_id: str, title: str) -> RenameSeriesResult:
+        normalized = title.strip()
+        if not normalized:
+            raise ValueError("系列名称不能为空。")
+        if not self._workspace.rename_series(series_id, normalized):
+            raise LookupError(f"series not found '{series_id}'")
+        return RenameSeriesResult(series_id=series_id, title=normalized)
+
+
+class RenameVideo:
+    """仅更新视频展示标题，不重命名原媒体文件或视频 ID。"""
+
+    def __init__(self, workspace: VideoMutationStore) -> None:
+        self._workspace = workspace
+
+    def run(self, series_id: str, video_id: str, title: str) -> RenameVideoResult:
+        normalized = title.strip()
+        if not normalized:
+            raise ValueError("视频名称不能为空。")
+        if not self._workspace.rename_video(series_id, video_id, normalized):
+            raise LookupError(f"video not found '{series_id}/{video_id}'")
+        return RenameVideoResult(series_id=series_id, video_id=video_id, title=normalized)
+
+
 class DeleteSeries:
     """删除一个系列及其全部制品。
 

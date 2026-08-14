@@ -18,7 +18,7 @@ describe("WorkspaceImportModal", () => {
     fireEvent.change(screen.getByPlaceholderText("例如：Agent Frameworks"), {
       target: { value: "课程" },
     });
-    const dropZone = screen.getByText("未选择文件").closest("button");
+    const dropZone = screen.getByRole("button", { name: /未选择文件/ });
     const file = new File(["video"], "lesson.mp4", { type: "video/mp4" });
     fireEvent.drop(dropZone, {
       dataTransfer: { files: [file], types: ["Files"] },

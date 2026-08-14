@@ -67,7 +67,7 @@ describe("WorkspaceMindmapView — regenerate button", () => {
 
   it("regenerate button disabled while generating", () => {
     render(<WorkspaceMindmapView {...baseProps} isGeneratingMindmapSelectedVideo={true} />);
-    expect(screen.getByText("重新生成").closest("button").disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "重新生成" })).toBeDisabled();
   });
 });
 

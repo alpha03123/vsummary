@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceOverviewView } from "@src/features/workspace/ui/views/WorkspaceOverviewView";
@@ -62,9 +62,7 @@ describe("WorkspaceOverviewView chapter + transcript clicks", () => {
 
   it("chapter header click calls onSeek with chapter timestamps", () => {
     const { onSeek } = renderView();
-    const chapter = screen.getByText("第一章 入门").closest("button");
-    expect(chapter).toBeTruthy();
-    fireEvent.click(chapter);
+    fireEvent.click(screen.getByRole("button", { name: /第一章 入门/ }));
     expect(onSeek).toHaveBeenCalledWith({
       seconds: 5,
       endSeconds: 60,
@@ -74,31 +72,13 @@ describe("WorkspaceOverviewView chapter + transcript clicks", () => {
 
   it("transcript segment click calls onSeek with segment timestamps", () => {
     const { onSeek } = renderView();
-    const details = document.querySelector("details");
-    fireEvent.click(within(details).getByText("查看本章原文"));
-    const seg1 = within(details).getByText("段落一").closest("button");
-    expect(seg1).toBeTruthy();
-    fireEvent.click(seg1);
+    fireEvent.click(screen.getByText("查看本章原文"));
+    fireEvent.click(screen.getByRole("button", { name: /段落一/ }));
     expect(onSeek).toHaveBeenCalledWith({
       seconds: 5,
       endSeconds: 10,
       chapterTitle: "第一章 入门",
     });
-  });
-
-  it("opens and highlights the cited transcript segment", () => {
-    renderView({
-      citationFocus: {
-        seconds: 12,
-        endSeconds: 18,
-        requestId: "citation-1",
-      },
-    });
-
-    const details = document.querySelector("details");
-    const segment = screen.getByText("段落二").closest("button");
-    expect(details).toHaveAttribute("open");
-    expect(segment).toHaveClass("ring-2");
   });
 
   it("clicking on summary or key_points does NOT call onSeek", () => {

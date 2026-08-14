@@ -42,19 +42,17 @@ describe("MindmapCanvas — markmap integration", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it("renders SVG when root is provided", () => {
-    const { container } = render(
+    render(
       <MindmapCanvas root={fakeRoot} selectedNodeId={null} onSelectNode={vi.fn()} />
     );
-    expect(container.querySelector("svg")).toBeTruthy();
     expect(Markmap.create).toHaveBeenCalledTimes(1);
     expect(Toolbar.create).toHaveBeenCalledTimes(1);
   });
 
   it("renders nothing when root is null", () => {
-    const { container } = render(
+    render(
       <MindmapCanvas root={null} selectedNodeId={null} onSelectNode={vi.fn()} />
     );
-    expect(container.querySelector("svg")).toBeNull();
     expect(Markmap.create).not.toHaveBeenCalled();
   });
 

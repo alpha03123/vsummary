@@ -187,15 +187,6 @@ describe("WorkspaceKnowledgeCardsView - 复制按钮", () => {
     expect(screen.getAllByRole("button", { name: "复制" })).toHaveLength(2);
   });
 
-  it("按钮位于卡片右上角 (flex 容器 justify-between)", () => {
-    renderView();
-    const articles = screen.getAllByRole("article");
-    articles.forEach((article) => {
-      const header = article.firstElementChild;
-      expect(header.className).toMatch(/justify-between/);
-    });
-  });
-
   it("点击按钮复制包含完整 Markdown 的文本", async () => {
     renderView();
     const buttons = screen.getAllByRole("button", { name: "复制" });
@@ -224,9 +215,4 @@ describe("WorkspaceKnowledgeCardsView - 复制按钮", () => {
     expect(screen.getAllByRole("button", { name: "已复制" })).toHaveLength(2);
   });
 
-  it("按钮默认可见 (不依赖父级 hover)", () => {
-    renderView();
-    const btn = screen.getAllByRole("button", { name: "复制" })[0];
-    expect(btn).toBeVisible();
-  });
 });

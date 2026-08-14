@@ -218,7 +218,7 @@ class VideoImportStore(Protocol):
 
 
 class VideoMutationStore(Protocol):
-    """库内结构性变更的端口（删除系列/删除视频）。
+    """库内结构性变更的端口（改名/删除系列/删除视频）。
 
     此类操作会级联清理制品目录与 RAG 索引，因此与只读端口分开。
     """
@@ -228,6 +228,12 @@ class VideoMutationStore(Protocol):
 
     def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         """取视频的源文件信息（删除前确认）。"""
+
+    def rename_series(self, series_id: str, title: str) -> bool:
+        """更新系列展示标题；返回目标是否存在。"""
+
+    def rename_video(self, series_id: str, video_id: str, title: str) -> bool:
+        """更新视频展示标题；返回目标是否存在。"""
 
     def delete_series(self, series_id: str) -> bool:
         """删除整个系列及其全部制品；返回是否实际删除了记录。"""

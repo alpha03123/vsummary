@@ -77,6 +77,12 @@ class UpdateVideoTranscriptRequest(BaseModel):
     markdown: str
 
 
+class RenameTitleRequest(BaseModel):
+    """更新系列或视频的展示标题。"""
+
+    title: str = Field(min_length=1, max_length=200)
+
+
 class LocalMediaPathImportRequest(BaseModel):
     """从运行后端的本机文件系统导入媒体。"""
 

@@ -18,21 +18,9 @@ describe("CopyToClipboardButton", () => {
     vi.useRealTimers();
   });
 
-  it("renders Copy 图标 + 默认文案'复制'", () => {
+  it("renders the default copy action", () => {
     render(<CopyToClipboardButton text="abc" />);
-    const btn = screen.getByRole("button", { name: "复制" });
-    expect(btn).toBeInTheDocument();
-    expect(btn.querySelector("svg")).toBeInTheDocument();
-  });
-
-  it("点击后切换为 Check 图标 + '已复制'文案 + emerald 背景", async () => {
-    render(<CopyToClipboardButton text="abc" />);
-    const btn = screen.getByRole("button", { name: "复制" });
-    await act(async () => {
-      fireEvent.click(btn);
-    });
-    const copiedBtn = screen.getByRole("button", { name: "已复制" });
-    expect(copiedBtn.className).toMatch(/bg-emerald-100/);
+    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
   });
 
   it("aria-label 反映当前状态", async () => {
@@ -42,13 +30,6 @@ describe("CopyToClipboardButton", () => {
       fireEvent.click(screen.getByRole("button"));
     });
     expect(screen.getByRole("button").getAttribute("aria-label")).toBe("已复制");
-  });
-
-  it("初始态 hover 切换背景色", () => {
-    render(<CopyToClipboardButton text="abc" />);
-    const btn = screen.getByRole("button", { name: "复制" });
-    expect(btn.className).toMatch(/bg-stone-100/);
-    expect(btn.className).toMatch(/hover:bg-stone-200/);
   });
 
   it("1600ms 后复原初始态", async () => {

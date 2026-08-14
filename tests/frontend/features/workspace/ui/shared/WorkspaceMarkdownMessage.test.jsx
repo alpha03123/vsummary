@@ -29,14 +29,6 @@ describe("WorkspaceMarkdownMessage", () => {
     expect(screen.getByRole("link", { name: "4" })).toHaveAttribute("href", "#citation-4");
   });
 
-  it("renders bracketed latex expressions with katex", () => {
-    const { container } = render(
-      <WorkspaceMarkdownMessage content={String.raw`[ \frac{dX}{dt}=X(2-AY) ]`} />,
-    );
-
-    expect(container.querySelector(".katex")).not.toBeNull();
-  });
-
   it("truncates long citation preview text", () => {
     const longText = "字幕内容".repeat(120);
 

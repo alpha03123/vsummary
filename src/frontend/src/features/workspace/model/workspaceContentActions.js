@@ -8,6 +8,8 @@ import {
   deleteSeries,
   deleteVideoNote,
   deleteVideoSource,
+  renameSeries,
+  renameVideoSource,
   generateSeriesMindmap,
   generateVideoKnowledgeCards,
   generateVideoMindmap,
@@ -1008,6 +1010,31 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onRenameSeries(title) {
+    const seriesId = state.selectedSeriesId;
+    if (!seriesId) return;
+    try {
+      await renameSeries(seriesId, title);
+      await reloadWorkspaceLibrary();
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "重命名系列失败" });
+      throw error;
+    }
+  }
+
+  async function onRenameCurrentVideo(title) {
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    if (!seriesId || !videoId) return;
+    try {
+      await renameVideoSource(seriesId, videoId, title);
+      await reloadWorkspaceLibrary();
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "重命名视频失败" });
+      throw error;
+    }
+  }
+
   async function onDeleteVideos(videoIds) {
     const seriesId = state.selectedSeriesId;
     const targets = Array.isArray(videoIds) ? Array.from(new Set(videoIds)) : [];
@@ -1069,7 +1096,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onImportSeriesVideos,
     onUploadSeriesVideos,
     onDeleteSeries,
+    onRenameSeries,
     onDeleteCurrentVideo,
+    onRenameCurrentVideo,
     onDeleteVideos,
     onDownloadVideo,
   };

@@ -158,7 +158,9 @@ export function buildWorkspacePageModel(controller) {
       importLocalPlaygroundVideos: controller.onImportLocalPlaygroundVideos,
       importSeriesVideos: controller.onImportSeriesVideos,
       deleteSeries: controller.onDeleteSeries,
+      renameSeries: controller.onRenameSeries,
       deleteCurrentVideo: controller.onDeleteCurrentVideo,
+      renameCurrentVideo: controller.onRenameCurrentVideo,
       downloadVideo: controller.onDownloadVideo,
     },
   };

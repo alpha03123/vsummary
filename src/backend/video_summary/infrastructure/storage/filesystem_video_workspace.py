@@ -69,6 +69,7 @@ STORAGE_MODES = {"copy", "hardlink"}
 
 LINKED_SERIES_META_FILE = "linked_series.json"
 SERIES_META_FILE = "series_meta.json"
+VIDEO_META_FILE = "video_meta.json"
 SERIES_CATALOG_FILE = "series_catalog.json"
 
 
@@ -196,7 +197,7 @@ class FileSystemVideoWorkspace:
         return VideoSourceDTO(
             series_id=series_id,
             video_id=video_id,
-            title=video_path.stem,
+            title=self._read_video_title(series_id, video_id) or video_path.stem,
             source_name=video_path.name,
             source_type=_source_type_for_path(video_path),
             source_path=video_path,
@@ -941,7 +942,7 @@ class FileSystemVideoWorkspace:
         has_summary = summary_path.is_file()
         return LibraryVideoCardDTO(
             id=video_path.stem,
-            title=video_path.stem,
+            title=self._read_video_title(series_id, video_path.stem) or video_path.stem,
             source_name=video_path.name,
             source_type=_source_type_for_path(video_path),
             processed=has_summary,
@@ -1156,6 +1157,58 @@ class FileSystemVideoWorkspace:
 
         return removed
 
+    def rename_series(self, series_id: str, title: str) -> bool:
+        """更新系列展示标题，保持文件夹名称和稳定 ID 不变。"""
+        normalized = title.strip()
+        if not normalized:
+            raise ValueError("系列名称不能为空。")
+
+        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if linked_meta_path.exists():
+            payload = json.loads(linked_meta_path.read_text(encoding="utf-8"))
+            payload["title"] = normalized
+            atomic_write_text(linked_meta_path, json.dumps(payload, ensure_ascii=False, indent=2))
+            return True
+
+        if not self._series_exists(series_id):
+            return False
+        self._write_series_meta(
+            series_id,
+            normalized,
+            storage_mode=self._read_series_storage_mode(series_id),
+        )
+        return True
+
+    def rename_video(self, series_id: str, video_id: str, title: str) -> bool:
+        """更新视频展示标题，不重命名媒体文件或其制品目录。"""
+        normalized = title.strip()
+        if not normalized:
+            raise ValueError("视频名称不能为空。")
+
+        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
+        if linked_meta_path.exists():
+            payload = json.loads(linked_meta_path.read_text(encoding="utf-8"))
+            videos = payload.get("videos")
+            if not isinstance(videos, list):
+                raise ValueError("linked_series.json 格式错误：videos 必须是数组。")
+            for item in videos:
+                if not isinstance(item, dict):
+                    continue
+                bvid = item.get("bvid")
+                page = item.get("page", 1)
+                if not isinstance(bvid, str) or not bvid.strip():
+                    continue
+                item_video_id = bvid if _as_positive_int(page, 1) == 1 else f"{bvid}_p{_as_positive_int(page, 1)}"
+                if item_video_id == video_id:
+                    item["title"] = normalized
+                    atomic_write_text(linked_meta_path, json.dumps(payload, ensure_ascii=False, indent=2))
+                    return True
+
+        if self.get_video_source(series_id, video_id) is None:
+            return False
+        self._write_video_title(series_id, video_id, normalized)
+        return True
+
     def delete_video(self, series_id: str, video_id: str) -> bool:
         """删除单个视频：清掉原始媒体、制品目录；必要时回写 linked 元数据。
 
@@ -1212,6 +1265,17 @@ class FileSystemVideoWorkspace:
             return None
         return title.strip()
 
+    def _read_video_title(self, series_id: str, video_id: str) -> str | None:
+        """读取视频展示标题；缺失时由调用方回退到媒体文件名。"""
+        meta_path = self._get_video_output_dir(series_id, video_id) / VIDEO_META_FILE
+        if not meta_path.exists():
+            return None
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        title = payload.get("title")
+        if not isinstance(title, str) or not title.strip():
+            return None
+        return title.strip()
+
     def _read_series_storage_mode(self, series_id: str) -> str:
         """读取系列存储方式；未标记的历史系列均为复制模式。"""
         meta_path = self._workspace_dir / series_id / SERIES_META_FILE
@@ -1228,6 +1292,14 @@ class FileSystemVideoWorkspace:
         atomic_write_text(
             output_dir / SERIES_META_FILE,
             json.dumps({"title": title, "storage_mode": storage_mode}, ensure_ascii=False, indent=2),
+        )
+
+    def _write_video_title(self, series_id: str, video_id: str, title: str) -> None:
+        output_dir = self._get_video_output_dir(series_id, video_id)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            output_dir / VIDEO_META_FILE,
+            json.dumps({"title": title}, ensure_ascii=False, indent=2),
         )
 
     def _get_video_output_dir(self, series_id: str, video_id: str) -> Path:

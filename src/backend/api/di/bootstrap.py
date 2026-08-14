@@ -39,6 +39,8 @@ from backend.video_summary.library.usecases import (
     CreateAgentLinkedSeries,
     DeleteSeries,
     DeleteVideoSource,
+    RenameSeries,
+    RenameVideo,
     ExportSeriesArchive,
     GenerateVideoKnowledgeCards,
     RefreshSeriesKnowledgeMemory,
@@ -98,6 +100,8 @@ class ApiContainer:
     get_series_mindmap: GetSeriesMindmap
     delete_series: DeleteSeries
     delete_video_source: DeleteVideoSource
+    rename_series: RenameSeries
+    rename_video: RenameVideo
     export_series_archive: ExportSeriesArchive
     import_local_series: ImportLocalSeries
     import_local_playground_videos: ImportLocalPlaygroundVideos
@@ -263,6 +267,8 @@ def build_api_container(
         get_series_mindmap=GetSeriesMindmap(workspace),
         delete_series=DeleteSeries(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
         delete_video_source=DeleteVideoSource(workspace, index_refresher, generation_activity_checker=series_generation_use_case),
+        rename_series=RenameSeries(workspace),
+        rename_video=RenameVideo(workspace),
         export_series_archive=ExportSeriesArchive(workspace),
         import_local_series=ImportLocalSeries(workspace),
         import_local_playground_videos=ImportLocalPlaygroundVideos(workspace),
