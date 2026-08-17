@@ -93,3 +93,5 @@ AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 
 常见问题见 [docs/questions.md](docs/questions.md)。
 ## 沟通和联系
 - QQ群:点击链接加入群聊【vsummary交流沟通群】：https://qm.qq.com/q/nxKBApDVF
+
+<img src="./assets/qq-group-qrcode.jpg" width="240" alt="vsummary 交流群二维码" />

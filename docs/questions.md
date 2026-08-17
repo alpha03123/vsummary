@@ -51,3 +51,22 @@ runtime\python.exe -c "import onnxruntime as ort; print(ort.__version__); print(
 ```
 
 说明 FastEmbed / ONNX Runtime 没有启用 CUDA。手动分配独显只解决 Windows 显卡调度问题；如果仍然没有 `CUDAExecutionProvider`，还需要继续检查 `onnxruntime-gpu` 是否被 CPU 版覆盖、CUDA / cuDNN DLL 是否完整、NVIDIA 驱动是否匹配，以及启动脚本是否把 `runtime` 下的 DLL 目录加入了 `PATH`。
+
+## 4. 未找到 whisper.cpp 可执行文件：`whisper-cli`
+
+该错误表示当前选择了“本地 whisper.cpp”转写引擎，但系统无法找到 `whisper-cli`。`whisper-cli` 是 whisper.cpp 提供的外部可执行文件，项目不会自动下载。
+
+请按[安装文档](installation.md)下载或构建 whisper.cpp，然后选择以下任一方式配置：
+
+1. 将 `whisper-cli.exe` 所在目录加入系统 `PATH`，并在命令行执行 `where.exe whisper-cli` 确认可以找到；
+2. 在项目根目录的 `config/settings.toml` 中指定可执行文件的绝对路径：
+
+```toml
+[asr.whisper_cpp]
+binary_path = "C:/path/to/whisper-cli.exe"
+model = "large-v3-turbo-q5_0"
+```
+
+还需要在设置页下载与该引擎匹配的 GGML 模型。`whisper_cpp` 与 `faster_whisper` 的模型格式不能互用。保存配置后重启应用。
+
+如果不准备使用 whisper.cpp，可以在设置中将转写引擎切换为 `faster_whisper` 或 `aliyun_bailian`。
