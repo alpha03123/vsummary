@@ -26,6 +26,7 @@ playwright/.cache/
 
 # Logs / Temp
 *.log
+logs/
 tmp/
 /temp/
 /unused/

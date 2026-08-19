@@ -8,11 +8,15 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, ProcessHandle
 from backend.video_summary.generation.ports import NoTranscribableAudioError, NoVideoFramesError
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class FfmpegMediaProcessor:
@@ -79,38 +83,48 @@ class FfmpegMediaProcessor:
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         if not self._has_audio_stream(video_path):
             raise NoTranscribableAudioError(f"媒体文件不含音频流：{video_path.name}")
+        command = [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            str(audio_path),
+        ]
         proc = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-nostdin",
-                "-y",
-                "-i",
-                str(video_path),
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-c:a",
-                "pcm_s16le",
-                str(audio_path),
-            ],
+            command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
+        stderr = b""
         if cancellation is not None:
             handle = ProcessHandle(_proc=proc)
             cancellation.register(handle)
             try:
-                proc.wait()
+                _, stderr = proc.communicate()
             finally:
                 cancellation.unregister(handle)
         else:
-            proc.wait()
+            _, stderr = proc.communicate()
 
         if proc.returncode != 0 and not (cancellation is not None and cancellation.cancel_requested):
-            raise subprocess.CalledProcessError(proc.returncode, "ffmpeg")
+            _raise_ffmpeg_failure(
+                operation="audio extraction",
+                command=command,
+                returncode=proc.returncode,
+                stderr=stderr,
+                video_path=video_path,
+            )
         return audio_path
 
     def extract_frame(
@@ -126,36 +140,49 @@ class FfmpegMediaProcessor:
         if not self._has_video_stream(video_path):
             raise NoVideoFramesError(f"媒体不含可供截图的视频流：{video_path.name}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-ss",
+            f"{timestamp_seconds:.3f}",
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-update",
+            "1",
+            "-q:v",
+            "3",
+            str(output_path),
+        ]
         proc = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-nostdin",
-                "-y",
-                "-ss",
-                f"{timestamp_seconds:.3f}",
-                "-i",
-                str(video_path),
-                "-frames:v",
-                "1",
-                "-q:v",
-                "3",
-                str(output_path),
-            ],
+            command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
+        stderr = b""
         if cancellation is not None:
             handle = ProcessHandle(_proc=proc)
             cancellation.register(handle)
             try:
-                proc.wait()
+                _, stderr = proc.communicate()
             finally:
                 cancellation.unregister(handle)
         else:
-            proc.wait()
+            _, stderr = proc.communicate()
         if proc.returncode != 0 and not (cancellation is not None and cancellation.cancel_requested):
-            raise subprocess.CalledProcessError(proc.returncode, "ffmpeg")
+            _raise_ffmpeg_failure(
+                operation="frame extraction",
+                command=command,
+                returncode=proc.returncode,
+                stderr=stderr,
+                video_path=video_path,
+                timestamp_seconds=timestamp_seconds,
+            )
         if cancellation is not None and cancellation.cancel_requested:
             raise InterruptedError("生成已取消")
         if not output_path.is_file():
@@ -207,3 +234,32 @@ class FfmpegMediaProcessor:
             errors="replace",
         )
         return bool(result.stdout.strip())
+
+
+def _raise_ffmpeg_failure(
+    *,
+    operation: str,
+    command: list[str],
+    returncode: int,
+    stderr: bytes,
+    video_path: Path,
+    timestamp_seconds: float | None = None,
+) -> None:
+    """记录 FFmpeg 原始失败证据后立即抛出原始 ``CalledProcessError``。"""
+    error = subprocess.CalledProcessError(returncode, command, stderr=stderr)
+    try:
+        raise error
+    except subprocess.CalledProcessError:
+        LOGGER.exception(
+            "ffmpeg %s failed",
+            operation,
+            extra={
+                "event": "ffmpeg_failed",
+                "command": command,
+                "returncode": returncode,
+                "stderr": stderr.decode("utf-8", errors="replace"),
+                "video_path": video_path,
+                "timestamp_seconds": timestamp_seconds,
+            },
+        )
+        raise

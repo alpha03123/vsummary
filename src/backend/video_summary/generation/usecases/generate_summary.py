@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+import logging
+import math
 from pathlib import Path
 import shutil
 from uuid import uuid4
@@ -45,6 +47,9 @@ from backend.video_summary.generation.ports import (
     Transcriber,
 )
 from backend.video_summary.generation.stage_cache import GenerationStageCache
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class GenerateCancelledError(RuntimeError):
@@ -405,23 +410,42 @@ async def _attach_chapter_screenshots(
     progress_reporter: ProgressReporter | None,
     cancellation: GenerationCancellationContext | None,
 ) -> SummaryDocument:
-    """为每章抽取中点截图，并将相对文件名写回概况制品。"""
+    """为每章抽取中点截图；失败时保留概况并记录可见警告。"""
     chapters = document.summary_data.get("chapters")
     if frame_extractor is None or not isinstance(chapters, list) or not chapters:
         return document
 
     summary_data = dict(document.summary_data)
     enriched_chapters: list[object] = []
+    warnings: list[str] = []
     screenshot_dir = staging_dir / "screenshots"
     for index, raw_chapter in enumerate(chapters, start=1):
         if not isinstance(raw_chapter, dict):
-            raise ValueError(f"chapters[{index - 1}] 必须是对象。")
+            message = f"第 {index} 章插图未生成：章节数据不是对象。"
+            LOGGER.warning(message, extra={"event": "chapter_screenshot_skipped"})
+            warnings.append(message)
+            enriched_chapters.append(raw_chapter)
+            continue
         start_seconds = raw_chapter.get("start_seconds")
         end_seconds = raw_chapter.get("end_seconds")
         if not isinstance(start_seconds, int | float) or not isinstance(end_seconds, int | float):
-            raise ValueError(f"chapters[{index - 1}] 缺少有效时间范围。")
-        if end_seconds < start_seconds:
-            raise ValueError(f"chapters[{index - 1}] 的结束时间早于开始时间。")
+            message = f"第 {index} 章插图未生成：章节时间范围无效。"
+            LOGGER.warning(message, extra={"event": "chapter_screenshot_skipped"})
+            warnings.append(message)
+            enriched_chapters.append(raw_chapter)
+            continue
+        if not math.isfinite(start_seconds) or not math.isfinite(end_seconds) or end_seconds < start_seconds:
+            message = f"第 {index} 章插图未生成：章节时间范围无效。"
+            LOGGER.warning(
+                message,
+                extra={
+                    "event": "chapter_screenshot_skipped",
+                    "timestamp_seconds": {"start": start_seconds, "end": end_seconds},
+                },
+            )
+            warnings.append(message)
+            enriched_chapters.append(raw_chapter)
+            continue
         timestamp = min(max((float(start_seconds) + float(end_seconds)) / 2, 0.0), video.duration_seconds)
         filename = f"chapter-{index:02d}.jpg"
         if progress_reporter is not None:
@@ -442,13 +466,28 @@ async def _attach_chapter_screenshots(
         except InterruptedError as error:
             raise GenerateCancelledError(str(error) or "生成已取消") from error
         except NoVideoFramesError:
-            return document
+            message = "章节插图未生成：视频不含可供截图的视频流，概况已保留。"
+            LOGGER.warning(message, extra={"event": "chapter_screenshot_skipped"})
+            warnings.append(message)
+            enriched_chapters.append(raw_chapter)
+            enriched_chapters.extend(chapters[index:])
+            break
         except Exception as error:
-            raise RuntimeError(f"章节插图生成失败：{error}") from error
+            message = f"第 {index} 章插图未生成，概况已保留。"
+            LOGGER.warning(
+                message,
+                extra={"event": "chapter_screenshot_failed", "timestamp_seconds": timestamp},
+                exc_info=error,
+            )
+            warnings.append(message)
+            enriched_chapters.append(raw_chapter)
+            continue
         _raise_if_cancelled(progress_reporter, cancellation)
         enriched_chapters.append({**raw_chapter, "image_filename": filename})
 
     summary_data["chapters"] = enriched_chapters
+    if warnings:
+        summary_data["generation_warnings"] = warnings
     return SummaryDocument(
         markdown=render_markdown(summary_data),
         summary_data=summary_data,

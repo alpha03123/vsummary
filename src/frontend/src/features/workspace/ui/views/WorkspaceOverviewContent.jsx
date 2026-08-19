@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Captions, ChevronUp, Minus, Plus, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Captions, ChevronUp, Minus, Plus, Sparkles, X } from "lucide-react";
 
 import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
 
@@ -53,6 +53,15 @@ export function WorkspaceOverviewContent({
           {summary.core_problem ?? "无核心问题描述。"}
         </p>
       </article>
+
+      {summary.generationWarnings?.length ? (
+        <div role="alert" className="flex items-start gap-3 border-l-4 border-warning bg-warning-subtle px-4 py-3 text-sm text-stone-700 dark:text-stone-200">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+          <div className="space-y-1">
+            {summary.generationWarnings.map((warning) => <p key={warning}>{warning}</p>)}
+          </div>
+        </div>
+      ) : null}
 
       {ui.showTakeaways && summary.key_takeaways.length ? (
         <article className="workspace-muted-panel rounded-2xl border p-6">

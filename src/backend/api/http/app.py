@@ -6,9 +6,13 @@
 
 from __future__ import annotations
 
+import logging
+import time
+from uuid import uuid4
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi import Request
 
 from backend.api.http.access_log import install_access_log_filters
 from backend.api.di.bootstrap import ApiContainer
@@ -21,16 +25,25 @@ from backend.api.routes.settings import router as settings_router
 from backend.api.routes.videos import router as videos_router
 from backend.api.http.static_assets import mount_frontend_dist
 from backend.mcp.video_series_server import install_mcp_http_endpoint
+from backend.shared.observability import bind_request_id, close_application_logging, configure_application_logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     mcp_server = getattr(app.state, "mcp_server", None)
-    if mcp_server is None:
-        yield
-        return
-    async with mcp_server.session_manager.run():
-        yield
+    try:
+        if mcp_server is None:
+            yield
+        else:
+            async with mcp_server.session_manager.run():
+                yield
+    finally:
+        root_dir = getattr(getattr(app.state, "container", None), "root_dir", None)
+        if root_dir is not None:
+            close_application_logging(root_dir)
 
 
 def include_api_routers(app: FastAPI) -> None:
@@ -58,15 +71,44 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     Returns:
         已完成初始化的 FastAPI 应用实例，可直接传给 ``uvicorn.run()``。
     """
+    resolved_container = container or build_default_container()
+    root_dir = getattr(resolved_container, "root_dir", None)
+    if root_dir is not None:
+        configure_application_logging(root_dir)
     install_access_log_filters()
     application = FastAPI(title="video_include api", lifespan=lifespan)
-    resolved_container = container or build_default_container()
     application.state.container = resolved_container
     include_api_routers(application)
     install_mcp_http_endpoint(application)
-    root_dir = getattr(resolved_container, "root_dir", None)
     if root_dir is not None:
         mount_frontend_dist(application, root_dir)
+
+    @application.middleware("http")
+    async def log_request(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        started_at = time.perf_counter()
+        with bind_request_id(request_id):
+            try:
+                response = await call_next(request)
+            except Exception:
+                LOGGER.exception(
+                    "request failed",
+                    extra={"event": "request_failed", "method": request.method, "path": request.url.path},
+                )
+                raise
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
+            LOGGER.info(
+                "request completed",
+                extra={
+                    "event": "request_completed",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": duration_ms,
+                },
+            )
+            response.headers["X-Request-ID"] = request_id
+            return response
     return application
 
 

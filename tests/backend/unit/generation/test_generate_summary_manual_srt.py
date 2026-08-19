@@ -79,6 +79,14 @@ class _FrameExtractor:
         return output_path
 
 
+class _PartiallyFailingFrameExtractor(_FrameExtractor):
+    def extract_frame(self, video_path: Path, timestamp_seconds: float, output_path: Path, cancellation=None) -> Path:
+        if not self.timestamps:
+            self.timestamps.append(timestamp_seconds)
+            raise RuntimeError("decoder failed")
+        return super().extract_frame(video_path, timestamp_seconds, output_path, cancellation)
+
+
 class _ChapterSummarizer:
     async def summarize(self, video, transcript, cancellation=None) -> SummaryDocument:
         return SummaryDocument(
@@ -100,6 +108,22 @@ class _ChapterSummarizer:
                 "key_takeaways": [],
             },
         )
+
+
+class _TwoChapterSummarizer(_ChapterSummarizer):
+    async def summarize(self, video, transcript, cancellation=None) -> SummaryDocument:
+        document = await super().summarize(video, transcript, cancellation)
+        document.summary_data["chapters"].append(
+            {
+                "id": "chapter-2",
+                "title": "第二章",
+                "start_seconds": 2.0,
+                "end_seconds": 4.0,
+                "summary": "第二章摘要",
+                "key_points": [],
+            }
+        )
+        return document
 
 
 def _manual_input() -> ManualTranscriptInput:
@@ -200,3 +224,25 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             markdown = (output_dir / "summary.md").read_text(encoding="utf-8")
             self.assertIn("![章节插图](screenshots/chapter-01.jpg)", markdown)
             self.assertEqual(parse_markdown(markdown)["chapters"][0]["summary"], "章节摘要")
+
+    async def test_chapter_screenshot_failure_preserves_summary_and_continues(self) -> None:
+        frame_extractor = _PartiallyFailingFrameExtractor()
+        use_case = GenerateVideoSummary(
+            media_processor=_UnexpectedMediaProcessor(),
+            transcriber=_UnexpectedTranscriber(),
+            transcript_enhancer=None,
+            summarizer=_TwoChapterSummarizer(),
+            artifact_store=FileSystemGenerationArtifactStore(),
+            subtitle_provider=_UnexpectedSubtitleProvider(),
+            frame_extractor=frame_extractor,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            output_dir = root / "output"
+            document = await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
+
+            self.assertEqual(frame_extractor.timestamps, [2.0, 3.0])
+            self.assertNotIn("image_filename", document.summary_data["chapters"][0])
+            self.assertEqual(document.summary_data["chapters"][1]["image_filename"], "chapter-02.jpg")
+            self.assertEqual(document.summary_data["generation_warnings"], ["第 1 章插图未生成，概况已保留。"])
+            self.assertTrue((output_dir / "screenshots" / "chapter-02.jpg").is_file())

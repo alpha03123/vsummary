@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,10 @@ from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_video_summary_application
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.shared.llm.usage import LlmUsageRecorder
+from backend.shared.observability import bind_task_id
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ConfiguredVideoSummaryWorkflow:
@@ -74,13 +79,30 @@ class ConfiguredVideoSummaryWorkflow:
                 wrapped=progress_reporter,
                 log_path=output_dir / "debug.log",
             )
-        await application.use_case.run(
-            video_path=source_path,
-            output_dir=output_dir,
-            progress_reporter=resolved_progress_reporter,
-            manual_transcript=manual_transcript,
-            use_saved_manual_transcript=use_saved_manual_transcript,
-        )
+        task_id = _task_id_for(self._root_dir, output_dir)
+        with bind_task_id(task_id):
+            LOGGER.info(
+                "video summary started",
+                extra={"event": "video_summary_started", "video_path": source_path},
+            )
+            try:
+                await application.use_case.run(
+                    video_path=source_path,
+                    output_dir=output_dir,
+                    progress_reporter=resolved_progress_reporter,
+                    manual_transcript=manual_transcript,
+                    use_saved_manual_transcript=use_saved_manual_transcript,
+                )
+            except Exception:
+                LOGGER.exception(
+                    "video summary failed",
+                    extra={"event": "video_summary_failed", "video_path": source_path},
+                )
+                raise
+            LOGGER.info(
+                "video summary completed",
+                extra={"event": "video_summary_completed", "video_path": source_path},
+            )
 
     def _get_application(self, transcript_enhancement_enabled: bool | None):
         """获取（必要时重建）用例。
@@ -258,3 +280,12 @@ def _round_seconds(value: float | None) -> float | None:
     if value is None:
         return None
     return round(max(0.0, value), 3)
+
+
+def _task_id_for(root_dir: Path, output_dir: Path) -> str:
+    """返回可跨 API、后台任务和子进程日志关联的视频任务 ID。"""
+    workspace_dir = root_dir / "workspace"
+    try:
+        return output_dir.relative_to(workspace_dir).as_posix()
+    except ValueError:
+        return output_dir.as_posix()

@@ -23,8 +23,8 @@ class SummaryChapterPayload(BaseModel):
 
     id: str
     title: str
-    start_seconds: float = Field(default=0.0)
-    end_seconds: float = Field(default=0.0)
+    start_seconds: float = Field(default=0.0, allow_inf_nan=False)
+    end_seconds: float = Field(default=0.0, allow_inf_nan=False)
     summary: str = ""
     key_points: list[str] = Field(default_factory=list)
 

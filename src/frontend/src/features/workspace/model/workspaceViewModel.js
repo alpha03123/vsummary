@@ -171,6 +171,9 @@ export function toWorkspaceSummary(payload) {
     one_sentence_summary: asOptionalString(record.one_sentence_summary),
     core_problem: asOptionalString(record.core_problem),
     transcriptSource: asOptionalString(record.transcript_source),
+    generationWarnings: Array.isArray(record.generation_warnings)
+      ? asStringList(record.generation_warnings, "summary.generation_warnings")
+      : [],
     key_takeaways: Array.isArray(record.key_takeaways)
       ? asStringList(record.key_takeaways, "summary.key_takeaways")
       : [],
