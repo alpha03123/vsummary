@@ -42,6 +42,7 @@ STRUCTURED_RESPONSE_FORMAT_ERROR_MARKERS = (
     "response_format",
     "json_schema",
     "json_object",
+    "invalid json schema",
     "schema is not supported",
     "not support schema",
 )

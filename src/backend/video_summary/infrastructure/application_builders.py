@@ -123,7 +123,10 @@ def build_mindmap_application(
         usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
     )
     use_case = GenerateMindmap(
-        generator=LiteLLMMindmapGenerator(gateway=gateway),
+        generator=LiteLLMMindmapGenerator(
+            gateway=gateway,
+            output_encoding="flat",
+        ),
         artifact_store=FileSystemGenerationArtifactStore(),
     )
     return MindmapApplication(settings=settings, use_case=use_case)
@@ -154,7 +157,10 @@ def build_series_mindmap_application(
         usage_category=LlmUsageCategory.GENERATION if usage_recorder is not None else None,
     )
     use_case = GenerateSeriesMindmap(
-        generator=LiteLLMSeriesMindmapGenerator(gateway=gateway),
+        generator=LiteLLMSeriesMindmapGenerator(
+            gateway=gateway,
+            output_encoding="flat",
+        ),
         artifact_store=FileSystemGenerationArtifactStore(),
     )
     return MindmapApplication(settings=settings, use_case=use_case)

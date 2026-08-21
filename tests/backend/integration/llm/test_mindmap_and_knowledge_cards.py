@@ -10,7 +10,10 @@ from pathlib import Path
 from backend.api.schemas.responses import VideoKnowledgeCardsResponse
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import build_mindmap_prompt
+from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import build_series_mindmap_prompt
+from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
+from backend.video_summary.generation import FlatMindmapPayload
 from backend.video_summary.library.models import KnowledgeCardDTO, VideoKnowledgeCardsDTO
 
 
@@ -36,6 +39,7 @@ class MindmapPromptTests(unittest.TestCase):
 
         self.assertIn("层级深度由内容复杂度决定", prompt)
         self.assertNotIn("二三级节点用于展开要点", prompt)
+        self.assertIn("不要输出 children 字段", prompt)
 
 
 class SeriesMindmapPromptTests(unittest.TestCase):
@@ -56,6 +60,41 @@ class SeriesMindmapPromptTests(unittest.TestCase):
         self.assertIn("第一讲", prompt)
         self.assertIn("介绍核心概念", prompt)
         self.assertIn("按知识主题组织二级节点", prompt)
+
+
+class FlatMindmapGenerationTests(unittest.TestCase):
+    def test_single_video_flat_output_is_restored_to_a_tree(self) -> None:
+        gateway = FakeFlatMindmapGateway()
+        generator = LiteLLMMindmapGenerator(gateway, output_encoding="flat")
+
+        result = _run(
+            generator.generate(
+                title="测试视频",
+                duration_seconds=60,
+                summary_data={"chapters": []},
+            )
+        )
+
+        self.assertIs(gateway.response_model, FlatMindmapPayload)
+        self.assertEqual(result["id"], "root")
+        self.assertEqual(result["children"][0]["id"], "topic")
+        self.assertIn("不要输出 children 字段", gateway.messages[0]["content"])
+
+    def test_series_flat_output_is_restored_to_a_tree(self) -> None:
+        gateway = FakeFlatMindmapGateway()
+        generator = LiteLLMSeriesMindmapGenerator(gateway, output_encoding="flat")
+
+        result = _run(
+            generator.generate(
+                series_title="测试系列",
+                catalog=None,
+                video_summaries=[],
+            )
+        )
+
+        self.assertIs(gateway.response_model, FlatMindmapPayload)
+        self.assertEqual(result["children"][0]["id"], "topic")
+        self.assertIn("不要输出 children 字段", gateway.messages[0]["content"])
 
 
 class LLMKnowledgeCardGeneratorTests(unittest.TestCase):
@@ -201,6 +240,32 @@ class FakeKnowledgeCardGateway:
                 },
             ]
         )
+
+
+class FakeFlatMindmapGateway:
+    def __init__(self) -> None:
+        self.messages = []
+        self.response_model = None
+
+    async def acomplete_structured(self, messages, *, response_model, temperature=0, retries=2, timeout=None):
+        del temperature, retries, timeout
+        self.messages = list(messages)
+        self.response_model = response_model
+        return FlatMindmapPayload.model_validate(
+            {
+                "root_id": "root",
+                "nodes": [
+                    {"id": "root", "parent_id": None, "title": "根节点"},
+                    {"id": "topic", "parent_id": "root", "title": "主题"},
+                ],
+            }
+        )
+
+
+def _run(coroutine):
+    import asyncio
+
+    return asyncio.run(coroutine)
 
 
 if __name__ == "__main__":

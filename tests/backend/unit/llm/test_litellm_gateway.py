@@ -263,6 +263,27 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         self.assertIn("只输出一个 JSON 对象", prompt)
         self.assertNotIn("JSON Schema", prompt)
 
+    def test_falls_back_when_lm_studio_rejects_a_circular_json_schema(self) -> None:
+        completion = LmStudioCircularSchemaRejectionCompletion(
+            '{"answer": "ok", "citations": [], "used_source_types": []}'
+        )
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        result = gateway.complete_structured(
+            [{"role": "user", "content": "回答问题"}],
+            response_model=SeriesAnswerPayload,
+        )
+
+        self.assertEqual(result.answer, "ok")
+        self.assertEqual(completion.response_formats, [SeriesAnswerPayload, {"type": "json_object"}])
+
     def test_caches_schema_mode_after_success_for_same_endpoint(self) -> None:
         completion = CapturingCompletion(
             '{"answer": "ok", "citations": ["e1"], "used_source_types": ["transcript"]}'
@@ -520,6 +541,18 @@ class RejectingFirstResponseFormatCompletion(CapturingCompletion):
         self.response_formats.append(response_format)
         if response_format is self._rejected_format:
             raise RuntimeError("response_format json_schema is not supported")
+        return {"choices": [{"message": {"content": self._content}}]}
+
+
+class LmStudioCircularSchemaRejectionCompletion(CapturingCompletion):
+    def __call__(self, **kwargs):
+        self.messages.append(list(kwargs["messages"]))
+        response_format = kwargs.get("response_format")
+        self.response_formats.append(response_format)
+        if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+            raise RuntimeError(
+                "Invalid JSON Schema: Converting circular structure to JSON"
+            )
         return {"choices": [{"message": {"content": self._content}}]}
 
 

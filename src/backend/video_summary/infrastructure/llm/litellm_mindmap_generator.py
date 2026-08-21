@@ -1,17 +1,21 @@
 """基于 LiteLLM 的思维导图生成适配器。
 
 把 `MindmapGenerator` 端口绑定到 LiteLLM 入口：使用总结数据 + 视频元信息
-构造中文提示词，调用 LLM 输出结构化的 `MindmapNodePayload`（节点/边字典）。
+构造中文提示词，调用 LLM 输出非递归的节点表，再还原为前端使用的树结构。
 """
 
 from __future__ import annotations
 
 import json
+from typing import Literal
 
 from backend.shared.llm import LiteLLMCompletionGateway
 from backend.video_summary.generation.ports import MindmapGenerator
 from backend.video_summary.infrastructure.llm.prompts import MINDMAP_PROMPT_TEMPLATE
-from backend.video_summary.generation import MindmapNodePayload
+from backend.video_summary.generation import FlatMindmapPayload, MindmapNodePayload
+
+
+MindmapOutputEncoding = Literal["tree", "flat"]
 
 
 class LiteLLMMindmapGenerator(MindmapGenerator):
@@ -23,19 +27,27 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
     实现要点：
     - 提示词构造：把 `title` / `duration_seconds` / `summary_data`（JSON）
       注入到 `MINDMAP_PROMPT_TEMPLATE` 模板；
-    - 输出约束：使用 `MindmapNodePayload` Pydantic schema 强制 LLM 输出结构，
+    - 输出约束：使用非递归 `FlatMindmapPayload` Pydantic schema 强制 LLM 输出结构，
       失败时由 `LiteLLMCompletionGateway` 自动重试最多 3 次；
     - 错误处理：LLM 解析失败、网关超时等异常由网关层抛出，本适配器
       不做静默兜底。
     """
 
-    def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
+    def __init__(
+        self,
+        gateway: LiteLLMCompletionGateway,
+        *,
+        output_encoding: MindmapOutputEncoding = "flat",
+    ) -> None:
         """注入 LiteLLM 网关实例。
 
         Args:
             gateway: 提供 `acomplete_structured` 能力的 LLM 网关。
         """
+        if output_encoding not in {"tree", "flat"}:
+            raise ValueError(f"Unsupported mindmap output encoding: {output_encoding}")
         self._gateway = gateway
+        self._output_encoding = output_encoding
 
     async def generate(
         self,
@@ -65,17 +77,28 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             duration_seconds=duration_seconds,
             summary_data=summary_data,
             transcript_text=transcript_text,
+            output_encoding=self._output_encoding,
         )
+        response_model = FlatMindmapPayload if self._output_encoding == "flat" else MindmapNodePayload
         payload = await self._gateway.acomplete_structured(
             [{"role": "user", "content": prompt}],
-            response_model=MindmapNodePayload,
+            response_model=response_model,
             retries=3,
             timeout=120,
         )
+        if isinstance(payload, FlatMindmapPayload):
+            return payload.to_tree().model_dump()
         return payload.model_dump()
 
 
-def build_mindmap_prompt(*, title: str, duration_seconds: float, summary_data: dict[str, object], transcript_text: str = "") -> str:
+def build_mindmap_prompt(
+    *,
+    title: str,
+    duration_seconds: float,
+    summary_data: dict[str, object],
+    transcript_text: str = "",
+    output_encoding: MindmapOutputEncoding = "flat",
+) -> str:
     """渲染思维导图提示词模板。
 
     Args:
@@ -88,9 +111,18 @@ def build_mindmap_prompt(*, title: str, duration_seconds: float, summary_data: d
         渲染完成的提示词字符串。
     """
     truncated = transcript_text[:3000] if transcript_text else ""
-    return MINDMAP_PROMPT_TEMPLATE.format(
+    prompt = MINDMAP_PROMPT_TEMPLATE.format(
         title=title,
         duration_seconds=int(duration_seconds),
         summary_json=json.dumps(summary_data, ensure_ascii=False, indent=2),
         transcript_text=truncated,
     )
+    if output_encoding == "flat":
+        return (
+            f"{prompt}\n"
+            "输出格式使用非递归节点表：顶层必须包含 root_id 和 nodes。"
+            "nodes 中每项必须包含 id、parent_id、title、summary、start_seconds、end_seconds。"
+            "根节点的 parent_id 必须为 null；其它节点的 parent_id 必须是其父节点 id。"
+            "不要输出 children 字段。\n"
+        )
+    return prompt
