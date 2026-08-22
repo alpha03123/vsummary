@@ -198,7 +198,16 @@ function Resolve-ReleaseVersion {
         return $Version
     }
 
-    $tag = & git -C $RepoRoot describe --tags --exact-match 2>$null
+    $tag = $null
+    try {
+        $tag = & git -C $RepoRoot describe --tags --exact-match 2>$null
+    }
+    catch {
+        # Windows PowerShell 5.1 treats git's expected "no exact tag" exit code as a terminating error.
+        if ($LASTEXITCODE -eq 0) {
+            throw
+        }
+    }
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
         return $tag.Trim()
     }
