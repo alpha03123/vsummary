@@ -51,13 +51,14 @@ class FakeMindmapGenerator:
     def __init__(self):
         self.last_call_args = None
 
-    async def run(self, *, series_id, video_id, summary_data, transcript_text="", progress_reporter=None):
+    async def run(self, *, series_id, video_id, summary_data, transcript_text="", progress_reporter=None, max_depth=None):
         self.last_call_args = {
             "series_id": series_id,
             "video_id": video_id,
             "summary_data": summary_data,
             "transcript_text": transcript_text,
             "progress_reporter": progress_reporter,
+            "max_depth": max_depth,
         }
 
 
@@ -73,6 +74,19 @@ class GenerateVideoMindmapTranscriptTests(unittest.TestCase):
         use_case = GenerateVideoMindmapFromLibrary(workspace, generator)
         asyncio.run(use_case.run("s1", "v1"))
         self.assertEqual(generator.last_call_args["transcript_text"], "转写全文内容在这里")
+
+    def test_passes_requested_max_depth_to_generator(self):
+        generator = FakeMindmapGenerator()
+        workspace = FakeWorkspaceForMindmap(
+            summary=VideoSummaryDTO(
+                series_id="s1", video_id="v1", title="Test", summary={"chapters": []}
+            )
+        )
+        use_case = GenerateVideoMindmapFromLibrary(workspace, generator)
+
+        asyncio.run(use_case.run("s1", "v1", max_depth=3))
+
+        self.assertEqual(generator.last_call_args["max_depth"], 3)
 
     def test_passes_empty_string_when_transcript_is_none(self):
         generator = FakeMindmapGenerator()

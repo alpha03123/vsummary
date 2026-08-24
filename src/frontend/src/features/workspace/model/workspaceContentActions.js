@@ -524,7 +524,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "cancelled" });
   }
 
-  async function onGenerateMindmap() {
+  async function onGenerateMindmap(maxDepth = null) {
     if (!state.selectedSeriesId || !state.selectedVideoId) {
       return;
     }
@@ -539,7 +539,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     });
 
     try {
-      const mindmapResult = await generateVideoMindmap(seriesId, videoId);
+      const mindmapResult = await generateVideoMindmap(seriesId, videoId, maxDepth);
       unsubscribe();
       dispatch({ type: "mindmap_generation_progress_cleared" });
       dispatch({
@@ -556,7 +556,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onGenerateSeriesMindmap() {
+  async function onGenerateSeriesMindmap(maxDepth = null) {
     if (!state.selectedSeriesId) return;
 
     const seriesId = state.selectedSeriesId;
@@ -567,7 +567,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     });
 
     try {
-      const mindmapResult = await generateSeriesMindmap(seriesId);
+      const mindmapResult = await generateSeriesMindmap(seriesId, maxDepth);
       unsubscribe();
       dispatch({ type: "mindmap_generation_progress_cleared" });
       dispatch({ type: "series_mindmap_generation_succeeded", mindmap: mindmapResult });

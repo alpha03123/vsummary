@@ -37,6 +37,7 @@ class GenerateMindmap:
         output_dir: Path,
         transcript_text: str = "",
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> dict[str, object]:
         """基于总结数据生成思维导图并落盘。
 
@@ -58,6 +59,7 @@ class GenerateMindmap:
             duration_seconds=duration_seconds,
             summary_data=summary_data,
             transcript_text=transcript_text,
+            max_depth=max_depth,
         )
         if progress_reporter is not None:
             progress_reporter.update("save", 80.0, "正在保存思维导图")

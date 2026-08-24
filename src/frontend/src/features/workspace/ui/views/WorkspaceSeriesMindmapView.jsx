@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
+import { MINDMAP_DEPTH_OPTIONS } from "../../model/mindmapDepthOptions";
 import { MindmapCanvas } from "../MindmapCanvas";
+import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { exportMindmapAsSVG } from "../mindmapSVGExport";
 
@@ -17,6 +19,7 @@ export function WorkspaceSeriesMindmapView({
   mindmapGenerationProgress,
 }) {
   const [exportOpen, setExportOpen] = useState(false);
+  const [maxDepth, setMaxDepth] = useState(null);
   const exportRef = useRef(null);
   const markmapRef = useRef(null);
 
@@ -59,28 +62,42 @@ export function WorkspaceSeriesMindmapView({
         title="导图未生成"
         description="点击下面按钮，基于系列中所有视频的概况生成跨视频知识结构导图。"
       >
-        <button
-          type="button"
-          onClick={onGenerateSeriesMindmap}
-          disabled={generatingSeriesMindmap}
-          className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-all ${
-            generatingSeriesMindmap
-              ? "motion-busy-button cursor-not-allowed bg-stone-200 text-stone-600"
-              : "bg-accent text-white shadow-sm hover:bg-accent/90"
-          }`}
-        >
-          {generatingSeriesMindmap ? (
-            <>
-              <LoaderCircle size={16} strokeWidth={2.2} className="animate-spin" />
-              正在生成...
-            </>
-          ) : (
-            <>
-              <Network size={16} strokeWidth={2.2} />
-              生成系列导图
-            </>
-          )}
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 dark:text-stone-300">
+            层级
+            <WorkspaceProviderSelect
+              ariaLabel="导图层级"
+              value={maxDepth === null ? "auto" : String(maxDepth)}
+              onChange={(value) => setMaxDepth(value === "auto" ? null : Number(value))}
+              options={MINDMAP_DEPTH_OPTIONS}
+              disabled={generatingSeriesMindmap}
+              hideGroupLabels
+              className="w-24"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => onGenerateSeriesMindmap(maxDepth)}
+            disabled={generatingSeriesMindmap}
+            className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-all ${
+              generatingSeriesMindmap
+                ? "motion-busy-button cursor-not-allowed bg-stone-200 text-stone-600"
+                : "bg-accent text-white shadow-sm hover:bg-accent/90"
+            }`}
+          >
+            {generatingSeriesMindmap ? (
+              <>
+                <LoaderCircle size={16} strokeWidth={2.2} className="animate-spin" />
+                正在生成
+              </>
+            ) : (
+              <>
+                <Network size={16} strokeWidth={2.2} />
+                生成系列导图
+              </>
+            )}
+          </button>
+        </div>
         {generatingSeriesMindmap && mindmapGenerationProgress ? (
           <div className="motion-fade-up mt-6 w-full max-w-2xl">
             <div className="workspace-elevated-panel rounded-3xl border p-5 flex items-center gap-3">
@@ -105,9 +122,21 @@ export function WorkspaceSeriesMindmapView({
         <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Series Mindmap</p>
       </div>
       <div className="pointer-events-auto absolute top-4 right-4 z-10 flex items-center gap-2">
+        <label className="inline-flex">
+          <span className="sr-only">导图层级</span>
+          <WorkspaceProviderSelect
+            ariaLabel="导图层级"
+            value={maxDepth === null ? "auto" : String(maxDepth)}
+            onChange={(value) => setMaxDepth(value === "auto" ? null : Number(value))}
+            options={MINDMAP_DEPTH_OPTIONS}
+            disabled={generatingSeriesMindmap}
+            hideGroupLabels
+            className="w-24"
+          />
+        </label>
         <button
           type="button"
-          onClick={onGenerateSeriesMindmap}
+          onClick={() => onGenerateSeriesMindmap(maxDepth)}
           disabled={generatingSeriesMindmap}
           className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >

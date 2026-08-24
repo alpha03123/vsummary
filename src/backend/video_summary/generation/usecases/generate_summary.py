@@ -410,7 +410,7 @@ async def _attach_chapter_screenshots(
     progress_reporter: ProgressReporter | None,
     cancellation: GenerationCancellationContext | None,
 ) -> SummaryDocument:
-    """为每章抽取中点截图；失败时保留概况并记录可见警告。"""
+    """为每章抽取中点截图；音频媒体跳过，其他失败记录可见警告。"""
     chapters = document.summary_data.get("chapters")
     if frame_extractor is None or not isinstance(chapters, list) or not chapters:
         return document
@@ -466,9 +466,10 @@ async def _attach_chapter_screenshots(
         except InterruptedError as error:
             raise GenerateCancelledError(str(error) or "生成已取消") from error
         except NoVideoFramesError:
-            message = "章节插图未生成：视频不含可供截图的视频流，概况已保留。"
-            LOGGER.warning(message, extra={"event": "chapter_screenshot_skipped"})
-            warnings.append(message)
+            LOGGER.info(
+                "媒体不含视频流，跳过章节截图",
+                extra={"event": "chapter_screenshot_skipped_no_video_stream"},
+            )
             enriched_chapters.append(raw_chapter)
             enriched_chapters.extend(chapters[index:])
             break

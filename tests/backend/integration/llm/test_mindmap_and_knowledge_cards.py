@@ -41,6 +41,17 @@ class MindmapPromptTests(unittest.TestCase):
         self.assertNotIn("二三级节点用于展开要点", prompt)
         self.assertIn("不要输出 children 字段", prompt)
 
+    def test_prompt_limits_depth_only_when_requested(self) -> None:
+        prompt = build_mindmap_prompt(
+            title="测试视频",
+            duration_seconds=300.0,
+            summary_data={"chapters": []},
+            max_depth=3,
+        )
+
+        self.assertIn("尽可能使用 3 层", prompt)
+        self.assertIn("仅在内容不足时允许少于该层数", prompt)
+
 
 class SeriesMindmapPromptTests(unittest.TestCase):
     def test_prompt_includes_series_catalog_and_video_summaries(self) -> None:
@@ -60,6 +71,16 @@ class SeriesMindmapPromptTests(unittest.TestCase):
         self.assertIn("第一讲", prompt)
         self.assertIn("介绍核心概念", prompt)
         self.assertIn("按知识主题组织二级节点", prompt)
+
+    def test_prompt_limits_series_depth_when_requested(self) -> None:
+        prompt = build_series_mindmap_prompt(
+            series_title="测试系列",
+            catalog=None,
+            video_summaries=[],
+            max_depth=4,
+        )
+
+        self.assertIn("尽可能使用 4 层", prompt)
 
 
 class FlatMindmapGenerationTests(unittest.TestCase):

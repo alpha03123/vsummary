@@ -44,6 +44,7 @@ class ConfiguredSeriesMindmapWorkflow:
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> None:
         """基于当前配置执行一次系列级思维导图生成。
 
@@ -61,6 +62,7 @@ class ConfiguredSeriesMindmapWorkflow:
             video_summaries=video_summaries,
             output_dir=series_dir,
             progress_reporter=progress_reporter,
+            max_depth=max_depth,
         )
 
     def _get_application(self):

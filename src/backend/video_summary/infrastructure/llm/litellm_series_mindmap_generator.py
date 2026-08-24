@@ -55,6 +55,7 @@ class LiteLLMSeriesMindmapGenerator(SeriesMindmapGenerator):
         series_title: str,
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
+        max_depth: int | None = None,
     ) -> dict[str, object]:
         """生成一次系列级跨视频思维导图节点/边字典。
 
@@ -75,6 +76,7 @@ class LiteLLMSeriesMindmapGenerator(SeriesMindmapGenerator):
             catalog=catalog,
             video_summaries=video_summaries,
             output_encoding=self._output_encoding,
+            max_depth=max_depth,
         )
         response_model = FlatMindmapPayload if self._output_encoding == "flat" else MindmapNodePayload
         payload = await self._gateway.acomplete_structured(
@@ -94,6 +96,7 @@ def build_series_mindmap_prompt(
     catalog: dict[str, object] | None,
     video_summaries: list[dict[str, object]],
     output_encoding: MindmapOutputEncoding = "flat",
+    max_depth: int | None = None,
 ) -> str:
     """渲染系列思维导图提示词模板。
 
@@ -121,6 +124,13 @@ def build_series_mindmap_prompt(
         series_catalog_json=catalog_json,
         video_summaries_json=json.dumps(trimmed, ensure_ascii=False, indent=2),
     )
+    if max_depth is not None:
+        _validate_max_depth(max_depth)
+        prompt = (
+            f"{prompt}\n"
+            f"本次导图应尽可能使用 {max_depth} 层（根节点为第 1 层），不得超过该层数。"
+            "仅在内容不足时允许少于该层数，不要为凑层级添加空泛节点。\n"
+        )
     if output_encoding == "flat":
         return (
             f"{prompt}\n"
@@ -130,3 +140,8 @@ def build_series_mindmap_prompt(
             "不要输出 children 字段。\n"
         )
     return prompt
+
+
+def _validate_max_depth(max_depth: int) -> None:
+    if not 2 <= max_depth <= 5:
+        raise ValueError("思维导图最大层级必须在 2 到 5 之间。")

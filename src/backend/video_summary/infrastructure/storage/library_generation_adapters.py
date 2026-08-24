@@ -103,6 +103,7 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
         summary_data: dict[str, object],
         transcript_text: str = "",
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> None:
         """为指定视频重新生成思维导图。
 
@@ -124,6 +125,7 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
             summary_data,
             transcript_text=transcript_text,
             progress_reporter=progress_reporter,
+            max_depth=max_depth,
         )
 
 
@@ -156,6 +158,7 @@ class WorkspaceBackedSeriesMindmapGenerator(SeriesMindmapGenerator):
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> None:
         """为指定系列生成跨视频思维导图。
 
@@ -174,6 +177,7 @@ class WorkspaceBackedSeriesMindmapGenerator(SeriesMindmapGenerator):
             catalog,
             video_summaries,
             progress_reporter=progress_reporter,
+            max_depth=max_depth,
         )
 
 

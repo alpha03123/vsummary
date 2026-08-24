@@ -17,6 +17,12 @@ class GenerateVideoSummaryRequest(BaseModel):
     transcript_enhancement_enabled: bool | None = None
 
 
+class GenerateMindmapRequest(BaseModel):
+    """请求生成思维导图的选项。"""
+
+    max_depth: int | None = Field(default=None, ge=2, le=5)
+
+
 class GenerateSeriesSummariesRequest(BaseModel):
     """请求批量生成一个系列下所有视频的总结。
 

@@ -298,6 +298,7 @@ class VideoMindmapGenerator(Protocol):
         summary_data: dict[str, object],
         transcript_text: str = "",
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> None:
         """基于已生成的总结数据生成思维导图，副作用是落盘到视频制品目录。
 
@@ -307,6 +308,7 @@ class VideoMindmapGenerator(Protocol):
             summary_data: 总结数据字典，作为思维导图的输入。
             transcript_text: 转写全文文本，可选注入以丰富导图层级细节。
             progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
+            max_depth: 最大层级深度；为 `None` 时由模型自行决定。
         """
 
 
@@ -320,6 +322,7 @@ class SeriesMindmapGenerator(Protocol):
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> None:
         """基于系列目录与视频概况生成跨视频思维导图，落盘到系列制品目录。
 
@@ -329,6 +332,7 @@ class SeriesMindmapGenerator(Protocol):
             catalog: 系列目录数据字典（series_catalog.json 的内容）。
             video_summaries: 各视频概括列表，每项应包含 title / one_sentence_summary / chapters 等字段。
             progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
+            max_depth: 最大层级深度；为 `None` 时由模型自行决定。
         """
 
 

@@ -41,6 +41,7 @@ class GenerateSeriesMindmap:
         video_summaries: list[dict[str, object]],
         output_dir: Path,
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> dict[str, object]:
         """基于系列目录与视频概况生成思维导图并落盘。
 
@@ -60,6 +61,7 @@ class GenerateSeriesMindmap:
             series_title=series_title,
             catalog=catalog,
             video_summaries=video_summaries,
+            max_depth=max_depth,
         )
         if progress_reporter is not None:
             progress_reporter.update("save", 80.0, "正在保存系列思维导图")

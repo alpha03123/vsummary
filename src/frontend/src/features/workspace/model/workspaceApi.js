@@ -144,7 +144,7 @@ export async function updateProviderSettings(settings) {
 
 export async function testProviderSettings(settings) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 45000);
   try {
     return await fetchJson("/api/provider-settings/test", {
       method: "POST",
@@ -440,10 +440,12 @@ export async function loadSeriesGenerationStatus(seriesId) {
   };
 }
 
-export async function generateVideoMindmap(seriesId, videoId) {
+export async function generateVideoMindmap(seriesId, videoId, maxDepth = null) {
   return toWorkspaceMindmap(
     await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ max_depth: maxDepth }),
     }),
   );
 }
@@ -1075,9 +1077,11 @@ export async function loadSeriesMindmap(seriesId) {
   return toWorkspaceMindmap(payload);
 }
 
-export async function generateSeriesMindmap(seriesId) {
+export async function generateSeriesMindmap(seriesId, maxDepth = null) {
   const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/mindmap/generate`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ max_depth: maxDepth }),
   });
   return toWorkspaceMindmap(payload);
 }

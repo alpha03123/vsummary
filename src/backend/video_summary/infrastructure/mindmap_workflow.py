@@ -44,6 +44,7 @@ class ConfiguredMindmapWorkflow:
         summary_data: dict[str, object],
         transcript_text: str = "",
         progress_reporter=None,
+        max_depth: int | None = None,
     ) -> None:
         """基于当前配置执行一次思维导图生成。
 
@@ -65,6 +66,7 @@ class ConfiguredMindmapWorkflow:
             output_dir=output_dir,
             transcript_text=transcript_text,
             progress_reporter=progress_reporter,
+            max_depth=max_depth,
         )
 
     def _get_application(self):

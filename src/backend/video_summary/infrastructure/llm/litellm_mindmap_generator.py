@@ -56,6 +56,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
         duration_seconds: float,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        max_depth: int | None = None,
     ) -> dict[str, object]:
         """生成一次思维导图节点/边字典。
 
@@ -78,6 +79,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             summary_data=summary_data,
             transcript_text=transcript_text,
             output_encoding=self._output_encoding,
+            max_depth=max_depth,
         )
         response_model = FlatMindmapPayload if self._output_encoding == "flat" else MindmapNodePayload
         payload = await self._gateway.acomplete_structured(
@@ -98,6 +100,7 @@ def build_mindmap_prompt(
     summary_data: dict[str, object],
     transcript_text: str = "",
     output_encoding: MindmapOutputEncoding = "flat",
+    max_depth: int | None = None,
 ) -> str:
     """渲染思维导图提示词模板。
 
@@ -117,6 +120,13 @@ def build_mindmap_prompt(
         summary_json=json.dumps(summary_data, ensure_ascii=False, indent=2),
         transcript_text=truncated,
     )
+    if max_depth is not None:
+        _validate_max_depth(max_depth)
+        prompt = (
+            f"{prompt}\n"
+            f"本次导图应尽可能使用 {max_depth} 层（根节点为第 1 层），不得超过该层数。"
+            "仅在内容不足时允许少于该层数，不要为凑层级添加空泛节点。\n"
+        )
     if output_encoding == "flat":
         return (
             f"{prompt}\n"
@@ -126,3 +136,8 @@ def build_mindmap_prompt(
             "不要输出 children 字段。\n"
         )
     return prompt
+
+
+def _validate_max_depth(max_depth: int) -> None:
+    if not 2 <= max_depth <= 5:
+        raise ValueError("思维导图最大层级必须在 2 到 5 之间。")

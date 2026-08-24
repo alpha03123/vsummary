@@ -4,6 +4,7 @@ import {
   loadAgentSessionRecovery,
   loadProviderUsage,
   loadSeriesMindmap,
+  generateVideoMindmap,
   uploadLocalSeries,
 } from "@src/features/workspace/model/workspaceApi";
 
@@ -148,6 +149,26 @@ describe("loadProviderUsage", () => {
       chatTokens: 5,
       totalTokens: 15,
     });
+  });
+});
+
+describe("generateVideoMindmap", () => {
+  test("sends the selected maximum depth", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ id: "root", title: "导图", children: [] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await generateVideoMindmap("series-1", "video-1", 4);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/videos/series-1/video-1/mindmap/generate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ max_depth: 4 }),
+      }),
+    );
   });
 });
 

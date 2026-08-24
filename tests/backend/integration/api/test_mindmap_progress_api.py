@@ -40,10 +40,12 @@ class MindmapProgressApiTests(unittest.TestCase):
             raise_error: use-case 应抛出的异常；优先于 mindmap_result。
         """
         tracker = InMemoryProgressTracker()
+        received_max_depths: list[int | None] = []
 
         class FakeUseCase:
-            async def run(self, series_id, video_id, progress_reporter=None):
+            async def run(self, series_id, video_id, progress_reporter=None, max_depth=None):
                 del series_id, video_id
+                received_max_depths.append(max_depth)
                 if progress_reporter is not None:
                     progress_reporter.update("generate", 50.0, "正在生成思维导图节点")
                 if gate is not None:
@@ -57,8 +59,20 @@ class MindmapProgressApiTests(unittest.TestCase):
         return SimpleNamespace(
             mindmap_progress_tracker=tracker,
             generate_video_mindmap=FakeUseCase(),
+            received_max_depths=received_max_depths,
             gate=gate,
         )
+
+    def test_generation_passes_requested_max_depth_to_use_case(self) -> None:
+        container = self._build_container(
+            mindmap_result={"id": "root", "title": "T", "summary": "", "children": []},
+        )
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/videos/s1/v1/mindmap/generate", json={"max_depth": 4})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(container.received_max_depths, [4])
 
     def test_progress_endpoint_returns_sse_when_completed(self) -> None:
         """POST 触发完成后，GET 进度端点应返回 text/event-stream，且末帧状态为 completed。"""
@@ -163,8 +177,8 @@ class SeriesMindmapProgressApiTests(unittest.TestCase):
         tracker = InMemoryProgressTracker()
 
         class FakeUseCase:
-            async def run(self, series_id, progress_reporter=None):
-                del series_id
+            async def run(self, series_id, progress_reporter=None, max_depth=None):
+                del series_id, max_depth
                 if progress_reporter is not None:
                     progress_reporter.update("generate", 50.0, "正在生成系列思维导图")
                 if gate is not None:

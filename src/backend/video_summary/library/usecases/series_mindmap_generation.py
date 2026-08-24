@@ -9,7 +9,12 @@ class GenerateSeriesMindmapFromLibrary:
         self._workspace = workspace
         self._generator = generator
 
-    async def run(self, series_id: str, progress_reporter: ProgressReporter | None = None):
+    async def run(
+        self,
+        series_id: str,
+        progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
+    ):
         series_list = self._workspace.list_series()
         series = next((s for s in series_list if s.id == series_id), None)
         if series is None or not series.videos:
@@ -33,6 +38,7 @@ class GenerateSeriesMindmapFromLibrary:
                 catalog=catalog,
                 video_summaries=summaries,
                 progress_reporter=progress_reporter,
+                max_depth=max_depth,
             )
         except LookupError:
             return None

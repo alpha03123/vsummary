@@ -117,6 +117,7 @@ class MindmapGenerator(Protocol):
         duration_seconds: float,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        max_depth: int | None = None,
     ) -> dict[str, object]:
         """基于总结数据生成思维导图节点/边字典。"""
 
@@ -130,6 +131,7 @@ class SeriesMindmapGenerator(Protocol):
         series_title: str,
         catalog: dict[str, object] | None,
         video_summaries: list[dict[str, object]],
+        max_depth: int | None = None,
     ) -> dict[str, object]:
         """基于系列目录与视频概况列表生成跨视频思维导图节点/边字典。"""
 

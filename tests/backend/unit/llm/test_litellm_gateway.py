@@ -71,6 +71,21 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(completion.api_bases, ["https://jiuuij.de5.net/v1"])
 
+    def test_connection_uses_a_45_second_timeout(self) -> None:
+        completion = CapturingCompletion("ok")
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            completion_fn=completion,
+            acompletion_fn=unused_async_completion,
+        )
+
+        gateway.test_connection()
+
+        self.assertEqual(completion.timeouts, [45])
+
     def test_passes_reasoning_effort_to_litellm_requests(self) -> None:
         completion = CapturingCompletion("ok")
         gateway = LiteLLMCompletionGateway(
@@ -497,6 +512,7 @@ class CapturingCompletion:
         self.allowed_openai_params: list[object] = []
         self.models: list[str] = []
         self.api_keys: list[object] = []
+        self.timeouts: list[object] = []
 
     def __call__(self, **kwargs):
         self.messages.append(list(kwargs["messages"]))
@@ -506,6 +522,7 @@ class CapturingCompletion:
         self.allowed_openai_params.append(kwargs.get("allowed_openai_params"))
         self.models.append(kwargs["model"])
         self.api_keys.append(kwargs.get("api_key"))
+        self.timeouts.append(kwargs.get("timeout"))
         return {"choices": [{"message": {"content": self._content}}]}
 
 

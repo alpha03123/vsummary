@@ -358,7 +358,7 @@ class LiteLLMCompletionGateway:
         """发送一条极简 prompt 以验证 LLM 连接是否畅通。
 
         发送 ``"Reply with exactly: ok"`` 并要求模型回复 ``ok``；
-        超时设为 5 秒，最大 token 数设为 8。
+        超时设为 45 秒，最大 token 数设为 8。
 
         Returns:
             模型返回的文本（预期为 ``"ok"``）。
@@ -370,7 +370,7 @@ class LiteLLMCompletionGateway:
             [{"role": "user", "content": "Reply with exactly: ok"}],
             temperature=0,
             max_tokens=8,
-            timeout=5,
+            timeout=45,
         )
 
     def _record_usage(self, usage: dict[str, int]) -> None:

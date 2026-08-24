@@ -16,7 +16,7 @@ from threading import Lock
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
@@ -24,6 +24,7 @@ from backend.api.local_media_picker import select_local_media_paths
 from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
+    GenerateMindmapRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
     LocalMediaPathImportRequest,
@@ -988,6 +989,7 @@ async def generate_video_mindmap(
     series_id: str,
     video_id: str,
     container: ApiContainerDep,
+    request: GenerateMindmapRequest = Body(default_factory=GenerateMindmapRequest),
 ) -> dict[str, object]:
     """POST /api/videos/{series_id}/{video_id}/mindmap/generate — 生成视频思维导图。
 
@@ -1013,6 +1015,7 @@ async def generate_video_mindmap(
             series_id,
             video_id,
             progress_reporter=reporter,
+            max_depth=request.max_depth,
         )
     except Exception:
         reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "思维导图生成失败")
@@ -1070,7 +1073,11 @@ def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, 
 
 
 @router.post("/api/series/{series_id}/mindmap/generate")
-async def generate_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+async def generate_series_mindmap(
+    series_id: str,
+    container: ApiContainerDep,
+    request: GenerateMindmapRequest = Body(default_factory=GenerateMindmapRequest),
+) -> dict[str, object]:
     """POST /api/series/{series_id}/mindmap/generate — 触发系列思维导图生成。
 
     基于系列下已生成概况的视频聚合生成思维导图；通过 SSE 进度端点订阅实时状态。
@@ -1098,6 +1105,7 @@ async def generate_series_mindmap(series_id: str, container: ApiContainerDep) ->
             mindmap = await container.generate_series_mindmap.run(
                 series_id,
                 progress_reporter=reporter,
+                max_depth=request.max_depth,
             )
         except Exception:
             reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "系列思维导图生成失败")

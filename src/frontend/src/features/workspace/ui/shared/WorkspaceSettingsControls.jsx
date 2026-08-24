@@ -1,7 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 
-export function WorkspaceProviderSelect({ value, onChange, options, className = "" }) {
+export function WorkspaceProviderSelect({
+  value,
+  onChange,
+  options,
+  className = "",
+  disabled = false,
+  hideGroupLabels = false,
+  ariaLabel,
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = options.find((o) => o.id === value);
@@ -27,8 +35,10 @@ export function WorkspaceProviderSelect({ value, onChange, options, className = 
     <div ref={ref} className={`relative ${className}`}>
       <button
         type="button"
+        aria-label={ariaLabel}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-left text-sm text-stone-900 outline-none transition-colors hover:border-accent/50 focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-left text-sm text-stone-900 outline-none transition-colors hover:border-accent/50 focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
       >
         <span className="truncate font-medium">{selected?.label ?? value}</span>
         <ChevronDown size={15} className={`shrink-0 text-stone-500 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -39,9 +49,11 @@ export function WorkspaceProviderSelect({ value, onChange, options, className = 
           {groups.map((group, gi) => (
             <div key={group}>
               {gi > 0 && <div className="mx-3 border-t border-stone-100 dark:border-stone-800" />}
-              <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500">
-                {group}
-              </div>
+              {!hideGroupLabels ? (
+                <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500">
+                  {group}
+                </div>
+              ) : null}
               {groupMap[group].map((option) => {
                 const active = option.id === value;
                 return (
@@ -166,12 +178,14 @@ export function WorkspaceSelect({
   onChange,
   options,
   className = "",
+  disabled = false,
 }) {
   return (
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
+      disabled={disabled}
+      className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     >
       {options.map((option) => (
         <option key={option.id} value={option.id}>

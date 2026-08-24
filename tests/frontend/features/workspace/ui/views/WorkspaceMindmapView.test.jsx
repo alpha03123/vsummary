@@ -63,6 +63,20 @@ describe("WorkspaceMindmapView — regenerate button", () => {
     render(<WorkspaceMindmapView {...baseProps} onGenerateMindmap={onGenerate} />);
     fireEvent.click(screen.getByText("重新生成"));
     expect(onGenerate).toHaveBeenCalledOnce();
+    expect(onGenerate).toHaveBeenCalledWith(null);
+  });
+
+  it("passes the selected maximum depth when regenerating", () => {
+    const onGenerate = vi.fn();
+    render(<WorkspaceMindmapView {...baseProps} onGenerateMindmap={onGenerate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "导图层级" }));
+    expect(screen.getByRole("button", { name: "自动" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "3 层" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "3 层" }));
+    fireEvent.click(screen.getByText("重新生成"));
+
+    expect(onGenerate).toHaveBeenCalledWith(3);
   });
 
   it("regenerate button disabled while generating", () => {

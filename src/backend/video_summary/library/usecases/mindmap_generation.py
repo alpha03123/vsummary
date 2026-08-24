@@ -35,6 +35,7 @@ class GenerateVideoMindmapFromLibrary:
         series_id: str,
         video_id: str,
         progress_reporter: ProgressReporter | None = None,
+        max_depth: int | None = None,
     ) -> VideoMindmapDTO | None:
         """为指定视频生成思维导图并返回最终制品 DTO。
 
@@ -61,6 +62,7 @@ class GenerateVideoMindmapFromLibrary:
                 summary_data=summary.summary,
                 transcript_text=transcript_text,
                 progress_reporter=progress_reporter,
+                max_depth=max_depth,
             )
         except LookupError:
             return None

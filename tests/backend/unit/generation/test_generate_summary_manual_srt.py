@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, TranscriptSegment
+from backend.video_summary.generation.ports import NoVideoFramesError
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
 from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
@@ -85,6 +86,15 @@ class _PartiallyFailingFrameExtractor(_FrameExtractor):
             self.timestamps.append(timestamp_seconds)
             raise RuntimeError("decoder failed")
         return super().extract_frame(video_path, timestamp_seconds, output_path, cancellation)
+
+
+class _AudioOnlyFrameExtractor:
+    def __init__(self) -> None:
+        self.timestamps: list[float] = []
+
+    def extract_frame(self, video_path: Path, timestamp_seconds: float, output_path: Path, cancellation=None) -> Path:
+        self.timestamps.append(timestamp_seconds)
+        raise NoVideoFramesError("媒体不含可供截图的视频流")
 
 
 class _ChapterSummarizer:
@@ -246,3 +256,23 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(document.summary_data["chapters"][1]["image_filename"], "chapter-02.jpg")
             self.assertEqual(document.summary_data["generation_warnings"], ["第 1 章插图未生成，概况已保留。"])
             self.assertTrue((output_dir / "screenshots" / "chapter-02.jpg").is_file())
+
+    async def test_audio_only_media_skips_chapter_screenshots_without_warning(self) -> None:
+        frame_extractor = _AudioOnlyFrameExtractor()
+        use_case = GenerateVideoSummary(
+            media_processor=_UnexpectedMediaProcessor(),
+            transcriber=_UnexpectedTranscriber(),
+            transcript_enhancer=None,
+            summarizer=_TwoChapterSummarizer(),
+            artifact_store=FileSystemGenerationArtifactStore(),
+            subtitle_provider=_UnexpectedSubtitleProvider(),
+            frame_extractor=frame_extractor,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            document = await use_case.run(root / "audio.m4a", root / "output", manual_transcript=_manual_input())
+
+            self.assertEqual(frame_extractor.timestamps, [2.0])
+            self.assertNotIn("generation_warnings", document.summary_data)
+            self.assertEqual(len(document.summary_data["chapters"]), 2)
+            self.assertTrue(all("image_filename" not in chapter for chapter in document.summary_data["chapters"]))
