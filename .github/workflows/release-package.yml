@@ -14,7 +14,6 @@ jobs:
     timeout-minutes: 360
     env:
       CONDA_EXE: C:\Miniconda\Scripts\conda.exe
-      PACK_ROOT: ${{ runner.temp }}\vsummary-packs
       RELEASE_TAG: ${{ github.event.release.tag_name }}
       GH_TOKEN: ${{ github.token }}
 
@@ -24,6 +23,10 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
+
+      - name: Initialize package directory
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_ENV -Value "PACK_ROOT=$($env:RUNNER_TEMP)\vsummary-packs"
 
       - name: Install conda-pack
         shell: pwsh
