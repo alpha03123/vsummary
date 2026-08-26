@@ -690,4 +690,29 @@
 .mindmap-svg .markmap-node {
   cursor: pointer;
   user-select: none;
+  transition: filter 160ms ease;
+}
+
+.mindmap-svg .markmap-node:hover > circle {
+  stroke: var(--color-accent, #3b82f6);
+  stroke-width: 2.5;
+}
+
+.mindmap-svg .markmap-node.mindmap-hovered > circle {
+  stroke: var(--color-accent, #3b82f6);
+  stroke-width: 2.5;
+}
+
+.mindmap-svg .markmap-node:hover .markmap-foreign > div > div,
+.mindmap-svg .markmap-node.mindmap-hovered .markmap-foreign > div > div {
+  background: color-mix(in srgb, var(--color-accent, #3b82f6) 7%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #3b82f6) 22%, transparent);
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.mindmap-svg .markmap-foreign,
+.mindmap-svg .markmap-foreign * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }

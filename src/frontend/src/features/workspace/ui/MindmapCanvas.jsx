@@ -31,10 +31,14 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }
     svgRef.current.parentElement?.appendChild(toolbar.el);
     toolbarRef.current = toolbar.el;
 
-    d3.select(svgRef.current).on("click", (event) => {
-      const target = event.target.closest(".markmap-node");
-      if (!target || !onSelectNode) return;
-      const nodeData = d3.select(target).datum();
+    const preventTextSelection = (event) => {
+      if (event.target.closest(".markmap-node")) {
+        event.preventDefault();
+      }
+    };
+    const selectNode = (nodeElement) => {
+      if (!nodeElement || !onSelectNode) return;
+      const nodeData = d3.select(nodeElement).datum();
       if (!nodeData) return;
       onSelectNode({
         id: nodeData.payload?.id,
@@ -44,11 +48,31 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }
         end_seconds: nodeData.payload?.endSeconds ?? 0,
         children: nodeData.children || [],
       });
+    };
+    svgRef.current.addEventListener("mousedown", preventTextSelection, true);
+
+    const svg = d3.select(svgRef.current);
+    svg.on("mouseover.mindmap-hover", (event) => {
+      event.target.closest(".markmap-node")?.classList.add("mindmap-hovered");
+    });
+    svg.on("mouseout.mindmap-hover", (event) => {
+      const node = event.target.closest(".markmap-node");
+      if (node && !node.contains(event.relatedTarget)) {
+        node.classList.remove("mindmap-hovered");
+      }
+    });
+    svg.on("click", (event) => {
+      const target = event.target.closest(".markmap-node");
+      if (!target) return;
+      event.preventDefault();
+      selectNode(target);
     });
 
     return () => {
       toolbarRef.current?.remove();
       toolbarRef.current = null;
+      svg.on(".mindmap-hover", null);
+      svgRef.current?.removeEventListener("mousedown", preventTextSelection, true);
       mm.destroy();
       mmRef.current = null;
       if (markmapRef) markmapRef.current = null;
