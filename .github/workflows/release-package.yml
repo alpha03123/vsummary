@@ -1,0 +1,56 @@
+name: Package release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build and attach Windows packages
+    runs-on: windows-2022
+    timeout-minutes: 360
+    env:
+      CONDA_EXE: C:\Miniconda\Scripts\conda.exe
+      PACK_ROOT: ${{ runner.temp }}\vsummary-packs
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Install conda-pack
+        shell: pwsh
+        run: |
+          & $env:CONDA_EXE -m pip install --upgrade pip conda-pack
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Miniconda\Scripts'
+
+      - name: Build release packages
+        shell: pwsh
+        run: |
+          ./scripts/build_release.ps1 -Target all -OutputRoot $env:PACK_ROOT -CleanNodeModules -CleanBuildArtifacts
+
+      - name: Upload release assets
+        shell: pwsh
+        run: |
+          $expectedNames = @(
+            "vsummary-app-$env:RELEASE_TAG.zip",
+            "vsummary-full-cpu-$env:RELEASE_TAG.7z",
+            "vsummary-full-gpu-$env:RELEASE_TAG.7z",
+            'vsummary-manifest.json'
+          )
+          $assets = @(
+            Get-ChildItem -LiteralPath $env:PACK_ROOT -Recurse -File |
+              Where-Object { $_.Name -in $expectedNames }
+          )
+          $missing = $expectedNames | Where-Object { $_ -notin $assets.Name }
+          if ($missing) {
+            throw "Missing release assets: $($missing -join ', ')"
+          }
+          gh release upload $env:RELEASE_TAG @($assets.FullName) --clobber
