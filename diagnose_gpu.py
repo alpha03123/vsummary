@@ -153,6 +153,7 @@ def main() -> int:
         _report_onnxruntime_provider_dlls(dll_dirs, reporter)
         _report_onnxruntime(reporter)
         _report_ctranslate2(reporter)
+        _report_fastembed_gpu_session(root, reporter)
         _report_conclusion(reporter)
     except Exception:
         reporter.failed = True
@@ -620,6 +621,46 @@ def _report_ctranslate2(reporter: Reporter) -> None:
         reporter.check("import faster_whisper", "FAIL", repr(error))
     else:
         reporter.check("import faster_whisper", "OK", getattr(faster_whisper, "__file__", "unknown"))
+
+
+def _report_fastembed_gpu_session(root: Path, reporter: Reporter) -> None:
+    """按应用实际配置创建 FastEmbed GPU session，验证 CUDA Provider 真能落地。"""
+    reporter.section("FastEmbed GPU session")
+    model_name = "BAAI/bge-small-zh-v1.5"
+    cache_dir = root / "data" / "models" / "fastembed"
+    if not cache_dir.is_dir():
+        reporter.check("FastEmbed GPU session", "WARN", f"model cache missing: {cache_dir}")
+        return
+
+    source_root = root / "src"
+    if source_root.is_dir():
+        sys.path.insert(0, str(source_root))
+
+    try:
+        from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import build_fastembed_embedding
+
+        embedding = build_fastembed_embedding(
+            model_name=model_name,
+            device="gpu",
+            embed_batch_size=1,
+            cache_dir=str(cache_dir),
+        )
+        providers = _resolve_fastembed_providers(embedding)
+    except Exception as error:
+        reporter.check("FastEmbed GPU session", "FAIL", repr(error))
+        return
+
+    reporter.check("FastEmbed GPU session", "OK", f"providers: {providers}")
+
+
+def _resolve_fastembed_providers(embedding: object) -> list[str]:
+    inner_model = getattr(embedding, "_embedding", None)
+    model = getattr(inner_model, "model", None)
+    session = getattr(model, "model", None)
+    get_providers = getattr(session, "get_providers", None)
+    if not callable(get_providers):
+        return []
+    return [str(provider) for provider in get_providers()]
 
 
 def _report_conclusion(reporter: Reporter) -> None:

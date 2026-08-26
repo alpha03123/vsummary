@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from pathlib import Path
+from uuid import uuid4
 
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, ProcessHandle
 from backend.video_summary.generation.ports import NoTranscribableAudioError, NoVideoFramesError
@@ -189,6 +190,56 @@ class FfmpegMediaProcessor:
             raise RuntimeError(f"ffmpeg 未生成截图：{output_path.name}")
         return output_path
 
+    def ensure_browser_playable_mp4(self, video_path: Path) -> Path:
+        """将索引位于媒体数据之后的 MP4 无损重封装为可快速起播的文件。
+
+        仅处理 MP4 家族容器；已经将 ``moov`` 索引置于 ``mdat`` 前的文件直接
+        返回，不重复读写。重封装成功后原子替换库内媒体副本，避免长期占用双份
+        磁盘空间。
+        """
+        if video_path.suffix.lower() not in {".mp4", ".m4v", ".mov"} or _has_front_moov(video_path):
+            return video_path
+
+        temporary_path = video_path.with_name(
+            f".{video_path.stem}.{uuid4().hex}.faststart{video_path.suffix}"
+        )
+        command = [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(video_path),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(temporary_path),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+            )
+            if result.returncode != 0:
+                _raise_ffmpeg_failure(
+                    operation="browser playback preparation",
+                    command=command,
+                    returncode=result.returncode,
+                    stderr=result.stderr,
+                    video_path=video_path,
+                )
+            if not temporary_path.is_file():
+                raise RuntimeError(f"ffmpeg 未生成浏览器播放文件：{temporary_path.name}")
+            temporary_path.replace(video_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+        return video_path
+
     @staticmethod
     def _has_audio_stream(video_path: Path) -> bool:
         result = subprocess.run(
@@ -263,3 +314,32 @@ def _raise_ffmpeg_failure(
             },
         )
         raise
+
+
+def _has_front_moov(video_path: Path) -> bool:
+    """判断 ISO BMFF 文件的 ``moov`` 索引是否位于首个 ``mdat`` 前。"""
+    file_size = video_path.stat().st_size
+    offset = 0
+    with video_path.open("rb") as handle:
+        while offset + 8 <= file_size:
+            handle.seek(offset)
+            header = handle.read(8)
+            box_size = int.from_bytes(header[:4], "big")
+            box_type = header[4:]
+            header_size = 8
+            if box_size == 1:
+                extended_size = handle.read(8)
+                if len(extended_size) != 8:
+                    return False
+                box_size = int.from_bytes(extended_size, "big")
+                header_size = 16
+            elif box_size == 0:
+                box_size = file_size - offset
+            if box_size < header_size or offset + box_size > file_size:
+                return False
+            if box_type == b"moov":
+                return True
+            if box_type == b"mdat":
+                return False
+            offset += box_size
+    return False

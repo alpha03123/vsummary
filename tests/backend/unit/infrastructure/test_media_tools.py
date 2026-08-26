@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -89,6 +90,44 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
                 FfmpegMediaProcessor().extract_audio(Path("silent.mp4"), Path("output.wav"))
 
         popen.assert_not_called()
+
+    def test_ensure_browser_playable_mp4_skips_faststart_media(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            video_path = Path(temp_dir) / "faststart.mp4"
+            video_path.write_bytes(_mp4(b"ftyp", b"moov", b"mdat"))
+
+            with patch("backend.video_summary.infrastructure.media_tools.subprocess.run") as run:
+                result = FfmpegMediaProcessor().ensure_browser_playable_mp4(video_path)
+
+        self.assertEqual(video_path, result)
+        run.assert_not_called()
+
+    def test_ensure_browser_playable_mp4_remuxes_tail_index_media(self) -> None:
+        run_calls: list[list[str]] = []
+
+        def fake_run(command: list[str], **kwargs: Any) -> SimpleNamespace:
+            del kwargs
+            run_calls.append(command)
+            Path(command[-1]).write_bytes(_mp4(b"ftyp", b"moov", b"mdat"))
+            return SimpleNamespace(returncode=0, stderr=b"")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            video_path = Path(temp_dir) / "tail-index.mp4"
+            video_path.write_bytes(_mp4(b"ftyp", b"mdat", b"moov"))
+
+            with patch("backend.video_summary.infrastructure.media_tools.subprocess.run", fake_run):
+                result = FfmpegMediaProcessor().ensure_browser_playable_mp4(video_path)
+
+            self.assertEqual(video_path, result)
+            self.assertEqual(_mp4(b"ftyp", b"moov", b"mdat"), video_path.read_bytes())
+
+        command = run_calls[0]
+        self.assertEqual("copy", command[command.index("-c") + 1])
+        self.assertEqual("+faststart", command[command.index("-movflags") + 1])
+
+
+def _mp4(*box_types: bytes) -> bytes:
+    return b"".join((8).to_bytes(4, "big") + box_type for box_type in box_types)
 
 
 if __name__ == "__main__":

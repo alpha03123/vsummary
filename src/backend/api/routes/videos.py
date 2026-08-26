@@ -11,6 +11,7 @@ from io import BytesIO
 import logging
 import json
 import mimetypes
+import subprocess
 from pathlib import Path
 from threading import Lock
 from urllib.parse import quote
@@ -47,6 +48,7 @@ from backend.api.schemas.responses import (
 from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
+from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.subtitle_transcripts import parse_srt_transcript
@@ -65,6 +67,9 @@ LOGGER = logging.getLogger(__name__)
 
 _series_mindmap_locks: dict[str, Lock] = {}
 _series_mindmap_locks_guard = Lock()
+_preview_media_processor = FfmpegMediaProcessor()
+_preview_locks: dict[Path, Lock] = {}
+_preview_locks_guard = Lock()
 
 def _acquire_series_mindmap_lock(series_id: str) -> bool:
     with _series_mindmap_locks_guard:
@@ -76,6 +81,14 @@ def _acquire_series_mindmap_lock(series_id: str) -> bool:
 def _release_series_mindmap_lock(series_id: str) -> None:
     with _series_mindmap_locks_guard:
         _series_mindmap_locks.pop(series_id, None)
+
+
+def _prepare_preview_source(source_path: Path) -> Path:
+    """串行化同一媒体的浏览器播放优化，避免并发重封装。"""
+    with _preview_locks_guard:
+        lock = _preview_locks.setdefault(source_path, Lock())
+    with lock:
+        return _preview_media_processor.ensure_browser_playable_mp4(source_path)
 
 
 @router.get("/api/videos", response_model=VideoLibraryResponse)
@@ -706,7 +719,7 @@ def preview_video(series_id: str, video_id: str, container: ApiContainerDep) -> 
         container: FastAPI 依赖注入的 API 容器。
 
     Returns:
-        FileResponse，直接返回原始视频文件。
+        FileResponse。MP4 索引在文件尾部时会先无损重封装为可快速起播的文件。
 
     Raises:
         HTTPException(404): 视频不存在。
@@ -714,7 +727,12 @@ def preview_video(series_id: str, video_id: str, container: ApiContainerDep) -> 
     source = container.get_video_source.run(series_id, video_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
-    return FileResponse(source.source_path)
+    try:
+        preview_path = _prepare_preview_source(source.source_path)
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        LOGGER.exception("browser preview preparation failed", extra={"video_path": source.source_path})
+        raise HTTPException(status_code=500, detail=f"浏览器播放文件准备失败：{error}") from error
+    return FileResponse(preview_path)
 
 
 @router.post("/api/videos/{series_id}/{video_id}/generate")
