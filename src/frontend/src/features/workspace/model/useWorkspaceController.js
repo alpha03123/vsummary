@@ -124,11 +124,12 @@ export function useWorkspaceController() {
       chapterId,
     });
 
-    requestAnimationFrame(() => {
-      if (chapterId) {
-        document.getElementById(chapterId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+    onSeekToTime({
+      seconds: node.start_seconds,
+      endSeconds: node.end_seconds,
+      chapterTitle: node.title,
     });
+
   }
 
   function onClearError() {

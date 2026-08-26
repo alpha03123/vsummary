@@ -45,6 +45,24 @@ describe("useWorkspaceController.onSeekToTime", () => {
     });
     expect(result.current.playerSeekRequest).toBeNull();
   });
+
+  it("seeks the video when a mindmap node is focused", () => {
+    const { result } = renderHook(() => useWorkspaceController());
+    act(() => {
+      result.current.onFocusNode({
+        id: "mindmap-node",
+        title: "接口创建",
+        start_seconds: 42.5,
+        end_seconds: 55,
+      });
+    });
+
+    expect(result.current.playerSeekRequest).toMatchObject({
+      seconds: 42.5,
+      endSeconds: 55,
+      chapterTitle: "接口创建",
+    });
+  });
 });
 
 describe("useWorkspaceController chat-drawer actions", () => {

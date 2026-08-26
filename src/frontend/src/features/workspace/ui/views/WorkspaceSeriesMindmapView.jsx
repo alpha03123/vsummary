@@ -20,8 +20,29 @@ export function WorkspaceSeriesMindmapView({
 }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [maxDepth, setMaxDepth] = useState(null);
+  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const exportRef = useRef(null);
   const markmapRef = useRef(null);
+
+  useEffect(() => {
+    const progress = mindmapGenerationProgress;
+    if (!progress || progress.status !== "running") {
+      setLiveElapsedSeconds(0);
+      return undefined;
+    }
+
+    const getElapsedSeconds = () => {
+      const snapshotElapsed = Number(progress.elapsed_seconds) || 0;
+      const startedAt = Number(progress.started_at);
+      const clockElapsed = Number.isFinite(startedAt) ? Math.max(0, Date.now() / 1000 - startedAt) : 0;
+      return Math.max(snapshotElapsed, clockElapsed);
+    };
+
+    const updateElapsed = () => setLiveElapsedSeconds(getElapsedSeconds());
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [mindmapGenerationProgress]);
 
   useEffect(() => {
     if (!exportOpen) return;
@@ -106,7 +127,7 @@ export function WorkspaceSeriesMindmapView({
                 {mindmapGenerationProgress.detail || "正在生成系列思维导图"}
                 <span className="mx-2 text-stone-300 dark:text-zinc-600">·</span>
                 <span className="font-medium text-stone-700 dark:text-zinc-200">
-                  已用 {Math.round(mindmapGenerationProgress.elapsed_seconds ?? 0)} 秒
+                  已用 {Math.round(liveElapsedSeconds)} 秒
                 </span>
               </p>
             </div>

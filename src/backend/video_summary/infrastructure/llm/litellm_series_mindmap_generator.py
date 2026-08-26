@@ -134,7 +134,7 @@ def build_series_mindmap_prompt(
     if output_encoding == "flat":
         return (
             f"{prompt}\n"
-            "输出格式使用非递归节点表：顶层必须包含 root_id 和 nodes。"
+            "输出格式使用非递归节点表：顶层只包含 nodes 数组。"
             "nodes 中每项必须包含 id、parent_id、title、summary、start_seconds、end_seconds。"
             "根节点的 parent_id 必须为 null；其它节点的 parent_id 必须是其父节点 id。"
             "不要输出 children 字段。\n"

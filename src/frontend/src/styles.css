@@ -678,5 +678,16 @@
 
 .mindmap-selected > circle {
   stroke: var(--color-accent, #3b82f6);
-  stroke-width: 3;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--color-accent, #3b82f6) 55%, transparent));
+}
+
+.mindmap-selected text {
+  fill: var(--color-accent, #3b82f6);
+  font-weight: 700;
+}
+
+.mindmap-svg .markmap-node {
+  cursor: pointer;
+  user-select: none;
 }

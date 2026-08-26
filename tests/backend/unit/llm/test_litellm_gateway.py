@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from backend.shared.llm.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
 from backend.shared.llm.usage import LlmUsageCategory
@@ -500,6 +500,49 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         )
 
         self.assertEqual(recorded_timeouts, [None])
+
+    def test_async_structured_validation_error_retries_after_serializing_value_error(self) -> None:
+        responses = iter(
+            [
+                '{"value": "bad"}',
+                '{"value": "ok"}',
+            ]
+        )
+        calls = 0
+
+        async def retrying_acompletion(**kwargs):
+            nonlocal calls
+            calls += 1
+            return {"choices": [{"message": {"content": next(responses)}}]}
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            acompletion_fn=retrying_acompletion,
+        )
+
+        result = asyncio.run(
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "生成结构化结果"}],
+                response_model=ValueCheckedPayload,
+                retries=1,
+            )
+        )
+
+        self.assertEqual(result.value, "ok")
+        self.assertEqual(calls, 2)
+
+
+class ValueCheckedPayload(BaseModel):
+    value: str
+
+    @model_validator(mode="after")
+    def reject_bad_value(self) -> "ValueCheckedPayload":
+        if self.value == "bad":
+            raise ValueError("value 不能为 bad")
+        return self
 
 
 class CapturingCompletion:

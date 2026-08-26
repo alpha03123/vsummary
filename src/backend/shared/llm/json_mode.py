@@ -48,8 +48,34 @@ def describe_validation_error(error: Exception) -> str:
         描述校验失败原因的错误字符串。
     """
     if isinstance(error, ValidationError):
-        return json.dumps(error.errors(include_url=False), ensure_ascii=False)
+        errors = error.errors(include_url=False)
+        return json.dumps(_sanitize_validation_errors(errors), ensure_ascii=False)
     return str(error)
+
+
+def _sanitize_validation_errors(errors: list[dict]) -> list[dict]:
+    """递归地将 Pydantic 错误字典中的异常对象转换为字符串。
+
+    Pydantic 的 errors() 返回的字典中，ctx 字段可能包含原始异常对象，
+    json.dumps 无法直接序列化。本函数递归遍历所有字典和列表，
+    将遇到的 Exception 实例转换为字符串。
+
+    Args:
+        errors: Pydantic 的 errors() 返回值。
+
+    Returns:
+        可安全序列化为 JSON 的错误列表。
+    """
+    def sanitize_value(value: object) -> object:
+        if isinstance(value, Exception):
+            return str(value)
+        if isinstance(value, dict):
+            return {k: sanitize_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [sanitize_value(item) for item in value]
+        return value
+
+    return [sanitize_value(error) for error in errors]
 
 
 def extract_json_document(raw_text: str, *, require_object: bool = False) -> object:

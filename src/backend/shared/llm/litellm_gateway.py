@@ -45,6 +45,8 @@ STRUCTURED_RESPONSE_FORMAT_ERROR_MARKERS = (
     "invalid json schema",
     "schema is not supported",
     "not support schema",
+    "circular structure",
+    "converting circular structure",
 )
 _STRUCTURED_MODE_CACHE: dict[str, StructuredModeName] = {}
 _STRUCTURED_MODE_CACHE_LOCK = Lock()
