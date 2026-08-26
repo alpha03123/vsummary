@@ -34,7 +34,7 @@ jobs:
       - name: Build release packages
         shell: pwsh
         run: |
-          ./scripts/build_release.ps1 -Target all -OutputRoot $env:PACK_ROOT -CleanNodeModules -CleanBuildArtifacts
+          ./scripts/build_release.ps1 -Target all -OutputRoot $env:PACK_ROOT -RefreshEnv -ForceRuntime -CleanNodeModules -CleanBuildArtifacts
 
       - name: Upload release assets
         shell: pwsh
