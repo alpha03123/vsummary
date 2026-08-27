@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Check out release tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
@@ -31,7 +31,7 @@ jobs:
       - name: Install conda-pack
         shell: pwsh
         run: |
-          & $env:CONDA_EXE -m pip install --upgrade pip conda-pack
+          & $env:CONDA_EXE run -n base python -m pip install --upgrade pip conda-pack
           Add-Content -Path $env:GITHUB_PATH -Value 'C:\Miniconda\Scripts'
 
       - name: Build release packages
