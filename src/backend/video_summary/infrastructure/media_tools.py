@@ -193,11 +193,11 @@ class FfmpegMediaProcessor:
     def ensure_browser_playable_mp4(self, video_path: Path) -> Path:
         """将索引位于媒体数据之后的 MP4 无损重封装为可快速起播的文件。
 
-        仅处理 MP4 家族容器；已经将 ``moov`` 索引置于 ``mdat`` 前的文件直接
-        返回，不重复读写。重封装成功后原子替换库内媒体副本，避免长期占用双份
-        磁盘空间。
+        仅处理 MP4 家族容器；完整 ``moov`` 索引已经位于 ``mdat`` 前且不是
+        碎片化 MP4 的文件直接返回，不重复读写。重封装成功后原子替换库内媒体
+        副本，避免长期占用双份磁盘空间。
         """
-        if video_path.suffix.lower() not in {".mp4", ".m4v", ".mov"} or _has_front_moov(video_path):
+        if video_path.suffix.lower() not in {".mp4", ".m4v", ".mov"} or _is_browser_playable_mp4(video_path):
             return video_path
 
         temporary_path = video_path.with_name(
@@ -316,10 +316,11 @@ def _raise_ffmpeg_failure(
         raise
 
 
-def _has_front_moov(video_path: Path) -> bool:
-    """判断 ISO BMFF 文件的 ``moov`` 索引是否位于首个 ``mdat`` 前。"""
+def _is_browser_playable_mp4(video_path: Path) -> bool:
+    """判断 MP4 是否有位于媒体数据前的完整索引且不是碎片化容器。"""
     file_size = video_path.stat().st_size
     offset = 0
+    has_front_moov = False
     with video_path.open("rb") as handle:
         while offset + 8 <= file_size:
             handle.seek(offset)
@@ -337,9 +338,11 @@ def _has_front_moov(video_path: Path) -> bool:
                 box_size = file_size - offset
             if box_size < header_size or offset + box_size > file_size:
                 return False
-            if box_type == b"moov":
-                return True
-            if box_type == b"mdat":
+            if box_type == b"moof":
                 return False
+            if box_type == b"moov":
+                has_front_moov = True
+            if box_type == b"mdat":
+                return has_front_moov
             offset += box_size
-    return False
+    return has_front_moov

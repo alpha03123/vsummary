@@ -125,6 +125,24 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
         self.assertEqual("copy", command[command.index("-c") + 1])
         self.assertEqual("+faststart", command[command.index("-movflags") + 1])
 
+    def test_ensure_browser_playable_mp4_remuxes_fragmented_media_with_front_moov(self) -> None:
+        run_calls: list[list[str]] = []
+
+        def fake_run(command: list[str], **kwargs: Any) -> SimpleNamespace:
+            del kwargs
+            run_calls.append(command)
+            Path(command[-1]).write_bytes(_mp4(b"ftyp", b"moov", b"mdat"))
+            return SimpleNamespace(returncode=0, stderr=b"")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            video_path = Path(temp_dir) / "fragmented.mp4"
+            video_path.write_bytes(_mp4(b"ftyp", b"moov", b"moof", b"mdat"))
+
+            with patch("backend.video_summary.infrastructure.media_tools.subprocess.run", fake_run):
+                FfmpegMediaProcessor().ensure_browser_playable_mp4(video_path)
+
+        self.assertEqual(1, len(run_calls))
+
 
 def _mp4(*box_types: bytes) -> bytes:
     return b"".join((8).to_bytes(4, "big") + box_type for box_type in box_types)
