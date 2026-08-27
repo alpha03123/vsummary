@@ -197,7 +197,7 @@ class FfmpegMediaProcessor:
         碎片化 MP4 的文件直接返回，不重复读写。重封装成功后原子替换库内媒体
         副本，避免长期占用双份磁盘空间。
         """
-        if video_path.suffix.lower() not in {".mp4", ".m4v", ".mov"} or _is_browser_playable_mp4(video_path):
+        if not self.needs_browser_playback_optimization(video_path):
             return video_path
 
         temporary_path = video_path.with_name(
@@ -239,6 +239,12 @@ class FfmpegMediaProcessor:
         finally:
             temporary_path.unlink(missing_ok=True)
         return video_path
+
+    def needs_browser_playback_optimization(self, video_path: Path) -> bool:
+        """返回媒体是否需要无损重封装才能被浏览器快速起播。"""
+        if video_path.suffix.lower() not in {".mp4", ".m4v", ".mov"}:
+            return False
+        return _is_browser_playable_mp4(video_path) is False
 
     @staticmethod
     def _has_audio_stream(video_path: Path) -> bool:
@@ -316,8 +322,8 @@ def _raise_ffmpeg_failure(
         raise
 
 
-def _is_browser_playable_mp4(video_path: Path) -> bool:
-    """判断 MP4 是否有位于媒体数据前的完整索引且不是碎片化容器。"""
+def _is_browser_playable_mp4(video_path: Path) -> bool | None:
+    """判断 MP4 是否有位于媒体数据前的完整索引；非 ISO BMFF 返回 ``None``。"""
     file_size = video_path.stat().st_size
     offset = 0
     has_front_moov = False
@@ -331,13 +337,13 @@ def _is_browser_playable_mp4(video_path: Path) -> bool:
             if box_size == 1:
                 extended_size = handle.read(8)
                 if len(extended_size) != 8:
-                    return False
+                    return None
                 box_size = int.from_bytes(extended_size, "big")
                 header_size = 16
             elif box_size == 0:
                 box_size = file_size - offset
             if box_size < header_size or offset + box_size > file_size:
-                return False
+                return None
             if box_type == b"moof":
                 return False
             if box_type == b"moov":
@@ -345,4 +351,4 @@ def _is_browser_playable_mp4(video_path: Path) -> bool:
             if box_type == b"mdat":
                 return has_front_moov
             offset += box_size
-    return has_front_moov
+    return has_front_moov if has_front_moov else None

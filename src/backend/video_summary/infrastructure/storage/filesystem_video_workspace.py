@@ -38,6 +38,7 @@ from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.schemas import TranscriptSegmentPayload
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
 from backend.video_summary.infrastructure.rag.agent_memory.document_schema import SeriesCatalogPayload
+from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import (
@@ -97,6 +98,7 @@ class FileSystemVideoWorkspace:
         self._workspace_dir = root_dir / "workspace"
         self._notes_locks = KeyedLockManager()
         self._content_locks = KeyedLockManager()
+        self._media_processor = FfmpegMediaProcessor()
 
     def get_workspace(self) -> WorkspaceDTO:
         """返回工作区自身的 DTO：id 取根目录名，title 经标题化处理。"""
@@ -1007,15 +1009,21 @@ class FileSystemVideoWorkspace:
             raise ValueError(f"目标目录中已存在同名媒体：{', '.join(conflicting_stems)}")
 
         copied_paths: list[Path] = []
-        for filename, stream in normalized_files:
-            target_path = series_dir / filename
-            if target_path.exists():
-                raise ValueError(f"目标目录中已存在文件：{filename}")
-            if hasattr(stream, "seek"):
-                stream.seek(0)
-            with target_path.open("wb") as handle:
-                shutil.copyfileobj(stream, handle)
-            copied_paths.append(target_path)
+        try:
+            for filename, stream in normalized_files:
+                target_path = series_dir / filename
+                if target_path.exists():
+                    raise ValueError(f"目标目录中已存在文件：{filename}")
+                if hasattr(stream, "seek"):
+                    stream.seek(0)
+                with target_path.open("wb") as handle:
+                    shutil.copyfileobj(stream, handle)
+                copied_paths.append(target_path)
+            self._prepare_imported_media(copied_paths)
+        except Exception:
+            for copied_path in copied_paths:
+                copied_path.unlink(missing_ok=True)
+            raise
         return copied_paths
 
     def _import_media_paths(
@@ -1044,12 +1052,25 @@ class FileSystemVideoWorkspace:
                 else:
                     shutil.copyfile(source_path, target_path)
                 imported_paths.append(target_path)
+            self._prepare_imported_media(imported_paths)
         except OSError as error:
             for imported_path in imported_paths:
-                imported_path.unlink()
+                imported_path.unlink(missing_ok=True)
             action = "创建硬链接" if storage_mode == "hardlink" else "复制媒体"
             raise ValueError(f"{action}失败：{error}") from error
+        except Exception:
+            for imported_path in imported_paths:
+                imported_path.unlink(missing_ok=True)
+            raise
         return imported_paths
+
+    def _prepare_imported_media(self, media_paths: list[Path]) -> None:
+        """在导入事务中无损整理无法快速起播的 MP4，失败则由调用方回滚。"""
+        for media_path in media_paths:
+            try:
+                self._media_processor.ensure_browser_playable_mp4(media_path)
+            except Exception as error:
+                raise ValueError(f"无法优化浏览器播放文件“{media_path.name}”：{error}") from error
 
     def save_linked_series(self, series: LinkedSeries) -> None:
         """把 linked 系列（含其视频列表）原子写为 `linked_series.json`。"""

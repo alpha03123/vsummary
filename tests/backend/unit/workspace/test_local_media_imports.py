@@ -4,6 +4,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
@@ -88,6 +89,21 @@ class LocalMediaImportTests(unittest.TestCase):
                         ("lesson-1.mp3", io.BytesIO(b"audio")),
                     ],
                 )
+
+    def test_import_local_series_prepares_media_for_browser_playback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = FileSystemVideoWorkspace(Path(temp_dir))
+
+            with patch(
+                "backend.video_summary.infrastructure.storage.filesystem_video_workspace.FfmpegMediaProcessor.ensure_browser_playable_mp4"
+            ) as prepare_media:
+                workspace.import_local_series(
+                    title="Browser Playback",
+                    files=[("lesson.mp4", io.BytesIO(b"video"))],
+                )
+
+        prepare_media.assert_called_once()
+        self.assertEqual("lesson.mp4", prepare_media.call_args.args[0].name)
 
     def test_import_local_series_from_paths_creates_hardlinks_and_persists_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

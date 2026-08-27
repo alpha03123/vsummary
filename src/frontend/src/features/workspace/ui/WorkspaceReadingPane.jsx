@@ -120,6 +120,8 @@ export function WorkspaceReadingPane({
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
+  const activeChatSession = chat?.sessions?.find((session) => session.id === chat.activeSessionId) ?? null;
+  const activeChatTitle = truncateChatTitle(activeChatSession?.title);
   const toolHeaderBadge = resolveSeriesOverviewBadge({
     selectedToolId,
     activeSeries,
@@ -181,7 +183,7 @@ export function WorkspaceReadingPane({
                         items={Object.entries(SERIES_TOOL_TILES).map(([toolId, meta]) => ({
                           id: toolId,
                           meta,
-                          hint: "series 级工具",
+                          hint: toolId === "series-chat-management" ? activeChatTitle : "series 级工具",
                         }))}
                         onSelect={onSelectTool}
                       />
@@ -231,7 +233,9 @@ export function WorkspaceReadingPane({
                               id: toolId,
                               meta,
                               disabled: getToolState(tools, toolId)?.available === false,
-                              hint: describeToolState(toolId, getToolState(tools, toolId)),
+                              hint: toolId === "chat-management"
+                                ? activeChatTitle
+                                : describeToolState(toolId, getToolState(tools, toolId)),
                             }))}
                           onSelect={onSelectTool}
                         />
@@ -305,6 +309,15 @@ export function WorkspaceReadingPane({
       </div>
     </section>
   );
+}
+
+function truncateChatTitle(title) {
+  const normalized = typeof title === "string" ? title.trim() : "";
+  if (!normalized) {
+    return "当前对话";
+  }
+  const characters = Array.from(normalized);
+  return characters.length > 5 ? `${characters.slice(0, 5).join("")}...` : normalized;
 }
 
 function resolveSeriesOverviewBadge({

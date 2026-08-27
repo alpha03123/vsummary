@@ -53,6 +53,7 @@ export function WorkspaceImportModal({
   const initInFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const mediaDragDepthRef = useRef(0);
+  const backdropPointerDownRef = useRef(false);
 
   const isSeriesCreation = mode === "series";
   const isSeriesVideo = mode === "series-video";
@@ -391,10 +392,14 @@ export function WorkspaceImportModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+        onPointerDown={(event) => {
+          backdropPointerDownRef.current = event.button === 0 && event.target === event.currentTarget;
+        }}
         onClick={(event) => {
-          if (event.target === event.currentTarget) {
+          if (backdropPointerDownRef.current && event.target === event.currentTarget) {
             handleClose();
           }
+          backdropPointerDownRef.current = false;
         }}
       >
         <motion.div
