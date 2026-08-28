@@ -96,6 +96,8 @@ rerank_enabled = false
 video_generation_concurrency = 5
 # 单个视频分片摘要阶段允许并发的 LLM 请求数量。
 summary_chunk_concurrency = 3
+# 是否为 AI 概括的每个章节生成视频截图。
+chapter_screenshots_enabled = true
 
 # 联网搜索设置。
 [web_search]

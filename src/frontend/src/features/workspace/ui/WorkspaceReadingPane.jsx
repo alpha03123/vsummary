@@ -105,6 +105,7 @@ export function WorkspaceReadingPane({
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
+  onRequestAiNote,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -294,6 +295,7 @@ export function WorkspaceReadingPane({
                       notes={notes}
                       notesLoading={notesLoading}
                       savingNote={savingNote}
+                      onRequestAiNote={onRequestAiNote}
                       onCreateNote={onCreateNote}
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}

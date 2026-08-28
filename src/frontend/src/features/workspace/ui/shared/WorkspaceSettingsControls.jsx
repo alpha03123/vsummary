@@ -99,7 +99,7 @@ export function WorkspaceSettingRow({ title, description, children, contentClass
   );
 }
 
-export function WorkspaceToggleSwitch({ checked, disabled = false, onChange }) {
+export function WorkspaceToggleSwitch({ checked, disabled = false, onChange, ariaLabel }) {
   return (
     <button
       type="button"
@@ -108,6 +108,7 @@ export function WorkspaceToggleSwitch({ checked, disabled = false, onChange }) {
         checked ? "bg-accent" : "bg-stone-300 dark:bg-stone-600"
       }`}
       onClick={onChange}
+      aria-label={ariaLabel}
       aria-pressed={checked}
     >
       <span

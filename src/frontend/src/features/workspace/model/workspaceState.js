@@ -28,6 +28,7 @@ export const defaultUiSettings = {
   reasoningEffort: "none",
   talkCustomPrompt: "",
   videoGenerationConcurrency: 1,
+  chapterScreenshotsEnabled: true,
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
 };
@@ -787,6 +788,8 @@ export function normalizeUiSettings(value) {
         && record.videoGenerationConcurrency > 0
         ? record.videoGenerationConcurrency
         : 1,
+    chapterScreenshotsEnabled:
+      typeof record.chapterScreenshotsEnabled === "boolean" ? record.chapterScreenshotsEnabled : true,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),
   };

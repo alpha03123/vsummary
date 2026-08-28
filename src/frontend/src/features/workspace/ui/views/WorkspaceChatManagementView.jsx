@@ -7,18 +7,18 @@ export function WorkspaceChatManagementView({ chat }) {
 
   return (
     <div className="flex h-full w-full flex-col gap-8 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between mb-2 border-b border-stone-200/80 pb-6 dark:border-stone-800">
-        <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-4 border-b border-stone-200/80 pb-6 dark:border-stone-800">
+        <div className="min-w-[min(12rem,100%)] flex-1">
           <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 flex items-center gap-2">
             <MessageSquare size={20} className="text-accent" />
             对话与历史管理
           </h2>
         </div>
-        <div className="flex gap-3">
+        <div className="ml-auto flex max-w-full flex-wrap justify-end gap-3">
           <button
             type="button"
             onClick={startNewChat}
-            className="inline-flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/15 shadow-sm"
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/15 shadow-sm"
           >
             <Plus size={16} />
             新建话题
@@ -26,7 +26,7 @@ export function WorkspaceChatManagementView({ chat }) {
           <button
             type="button"
             onClick={clearChat}
-            className="btn-danger-ghost inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm"
+            className="btn-danger-ghost inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold shadow-sm"
           >
             <Trash2 size={16} />
             清空当前对话
@@ -44,7 +44,10 @@ export function WorkspaceChatManagementView({ chat }) {
             <p className="text-stone-600 dark:text-stone-400 font-medium">暂无历史对话记录</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(16rem, 100%), 1fr))" }}
+          >
             {sessions.map((session) => (
               <button
                 key={session.id}

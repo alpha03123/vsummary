@@ -240,21 +240,6 @@ export function WorkspaceSettingsPanel({
                 </div>
 
                 <WorkspaceSettingRow
-                  title="回复长度"
-                  description="控制回答详略"
-                >
-                  <WorkspaceSegmentedControl
-                    value={ui.answerDetailLevel}
-                    options={[
-                      { id: "short", label: "短" },
-                      { id: "medium", label: "中" },
-                      { id: "long", label: "长" },
-                    ]}
-                    onChange={(nextValue) => onChangeSetting("answerDetailLevel", nextValue)}
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
                   title="语音识别供应商"
                   description={
                     !fasterWhisperAvailable && currentAsrProvider === "faster_whisper"
@@ -590,6 +575,17 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
+                  title="生成章节截图"
+                  description="为 AI 概括的每个章节截取视频画面并嵌入总结。关闭后不再生成或保留章节图片。"
+                >
+                  <WorkspaceToggleSwitch
+                    checked={ui.chapterScreenshotsEnabled}
+                    ariaLabel="生成章节截图"
+                    onChange={() => onChangeSetting("chapterScreenshotsEnabled", !ui.chapterScreenshotsEnabled)}
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
                   title="AI 视频内容增强(不建议开启)"
                   description="利用大模型理解上下文后纠正转写文本，让总结结果更加精确。关闭可提高处理速度但会降低准确率。"
                 >
@@ -607,6 +603,21 @@ export function WorkspaceSettingsPanel({
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">对话管理</h3>
                   <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制对话流程以及功能</p>
                 </div>
+
+                <WorkspaceSettingRow
+                  title="回复长度"
+                  description="控制回答详略"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.answerDetailLevel}
+                    options={[
+                      { id: "short", label: "短" },
+                      { id: "medium", label: "中" },
+                      { id: "long", label: "长" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("answerDetailLevel", nextValue)}
+                  />
+                </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
                   title="用户提示词"

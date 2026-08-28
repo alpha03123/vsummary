@@ -84,6 +84,7 @@ class GenerateVideoSummary:
         subtitle_provider: SubtitleTranscriptSource | None = None,
         manual_transcript_provider: ManualTranscriptSource | None = None,
         frame_extractor: FrameExtractor | None = None,
+        chapter_screenshots_enabled: bool = True,
     ) -> None:
         """注入媒体处理、转写、（可选）转写增强、总结与制品落盘端口。
 
@@ -103,6 +104,7 @@ class GenerateVideoSummary:
         self._subtitle_provider = subtitle_provider
         self._manual_transcript_provider = manual_transcript_provider
         self._frame_extractor = frame_extractor
+        self._chapter_screenshots_enabled = chapter_screenshots_enabled
 
     async def run(
         self,
@@ -382,14 +384,15 @@ class GenerateVideoSummary:
             except Exception as error:
                 raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         _raise_if_cancelled(progress_reporter, cancellation)
-        summary_document = await _attach_chapter_screenshots(
-            summary_document,
-            video=video,
-            staging_dir=staging_dir,
-            frame_extractor=self._frame_extractor,
-            progress_reporter=progress_reporter,
-            cancellation=cancellation,
-        )
+        if self._chapter_screenshots_enabled:
+            summary_document = await _attach_chapter_screenshots(
+                summary_document,
+                video=video,
+                staging_dir=staging_dir,
+                frame_extractor=self._frame_extractor,
+                progress_reporter=progress_reporter,
+                cancellation=cancellation,
+            )
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
         await asyncio.to_thread(

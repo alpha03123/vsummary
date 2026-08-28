@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { LoaderCircle, PencilLine, Trash2, Plus, ChevronLeft, Calendar } from "lucide-react";
+import { LoaderCircle, PencilLine, Trash2, Plus, ChevronLeft, Calendar, Sparkles } from "lucide-react";
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
+
+const CREATE_AI_NOTE_PROMPT = "请为这期视频创建一份完整的结构化笔记。基于视频概况、转写和可用上下文，提炼核心主题、关键结论、重要细节与行动要点；使用清晰的 Markdown，并调用保存笔记功能保存为当前视频的 Agent 笔记。";
 
 export function WorkspaceNotesView({
   notes,
   notesLoading,
   savingNote,
+  onRequestAiNote,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -226,17 +229,27 @@ export function WorkspaceNotesView({
   // ========== 列表视图 (默认) ==========
   return (
     <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-left-4 duration-300">
-      <div className="flex items-center justify-between px-2">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4 px-2">
+        <div className="min-w-[7rem] flex-1">
           <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">全部笔记</h2>
           <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
         </div>
-        <button 
-          onClick={() => setViewState("create")} 
-          className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white"
-        >
-          <Plus size={16} /> 记笔记
-        </button>
+        <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onRequestAiNote(CREATE_AI_NOTE_PROMPT)}
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 dark:border-accent/30 dark:bg-accent/15 dark:text-accent dark:hover:bg-accent dark:hover:text-white"
+          >
+            <Sparkles size={16} /> AI 笔记
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewState("create")}
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white"
+          >
+            <Plus size={16} /> 记笔记
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">

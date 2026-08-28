@@ -240,6 +240,7 @@ export function WorkspacePage({ page }) {
         onGenerateSeriesMindmap={actions.generateSeriesMindmap}
         onGenerateKnowledgeCards={actions.generateKnowledgeCards}
         onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
+        onRequestAiNote={chat.submit}
         onCreateNote={actions.createNote}
         onUpdateNote={actions.updateNote}
         onDeleteNote={actions.deleteNote}

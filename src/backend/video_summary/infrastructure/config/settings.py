@@ -134,6 +134,7 @@ DEFAULT_AGENT_RETRIEVAL_MAX_HITS = 5
 DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED = True
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
+DEFAULT_CHAPTER_SCREENSHOTS_ENABLED = True
 DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
 DEFAULT_WEB_SEARCH_MODE = "native"
 DEFAULT_WEB_SEARCH_CONTEXT_SIZE = "medium"
@@ -302,15 +303,17 @@ class AgentRetrievalSettings:
 
 @dataclass(frozen=True)
 class GenerationConcurrencySettings:
-    """生成阶段的并发上限配置。
+    """生成阶段的并发上限与章节截图配置。
 
     Attributes:
         video_generation_concurrency: 单视频级并发上限（系列批量时也会遵守）。
         summary_chunk_concurrency: 单视频分片总结阶段的并发上限。
+        chapter_screenshots_enabled: 是否为概括章节生成视频截图。
     """
 
     video_generation_concurrency: int
     summary_chunk_concurrency: int
+    chapter_screenshots_enabled: bool
 
 
 @dataclass(frozen=True)
@@ -560,6 +563,9 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             generation_payload.get("summary_chunk_concurrency"),
             default=DEFAULT_SUMMARY_CHUNK_CONCURRENCY,
             field_name="generation.summary_chunk_concurrency",
+        ),
+        chapter_screenshots_enabled=bool(
+            generation_payload.get("chapter_screenshots_enabled", DEFAULT_CHAPTER_SCREENSHOTS_ENABLED)
         ),
     )
     web_search_payload = payload.get("web_search", {})
@@ -836,6 +842,17 @@ def replace_video_generation_concurrency(settings: AppSettings, video_generation
     )
 
 
+def replace_chapter_screenshots_enabled(settings: AppSettings, chapter_screenshots_enabled: bool) -> AppSettings:
+    """派生替换章节截图生成开关的 `AppSettings`。"""
+    return replace(
+        settings,
+        generation=replace(
+            settings.generation,
+            chapter_screenshots_enabled=bool(chapter_screenshots_enabled),
+        ),
+    )
+
+
 def replace_web_search_enabled(settings: AppSettings, web_search_enabled: bool) -> AppSettings:
     """派生替换 Web 搜索启用开关的 `AppSettings`。"""
     return replace(
@@ -1033,6 +1050,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[generation]",
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
+        f"chapter_screenshots_enabled = {_toml_bool(settings.generation.chapter_screenshots_enabled)}",
         "",
         "[web_search]",
         f"enabled = {_toml_bool(settings.web_search.enabled)}",

@@ -44,6 +44,7 @@ from backend.video_summary.infrastructure.config.settings import (
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
     replace_chaoxing_import_settings,
+    replace_chapter_screenshots_enabled,
     replace_video_generation_concurrency,
     replace_web_search_enabled,
     replace_workspace_ui_settings,
@@ -97,6 +98,7 @@ class WorkspaceSettings:
         reasoning_effort: 推理深度。
         talk_custom_prompt: Agent 自定义问答提示词。
         video_generation_concurrency: 单视频级并发上限。
+        chapter_screenshots_enabled: 是否为概括章节生成视频截图。
         web_search_enabled: 是否启用 Web 搜索。
         chaoxing_request_delay_seconds: 超星导入普通请求最小间隔。
         chaoxing_init_course_delay_seconds: 超星课程初始化额外等待。
@@ -121,6 +123,7 @@ class WorkspaceSettings:
     reasoning_effort: str
     talk_custom_prompt: str
     video_generation_concurrency: int
+    chapter_screenshots_enabled: bool
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float
     chaoxing_init_course_delay_seconds: float
@@ -154,6 +157,7 @@ class SettingsServicePort(Protocol):
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        chapter_screenshots_enabled: bool = True,
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -285,6 +289,7 @@ class SettingsService:
             reasoning_effort=settings.agent_context.reasoning_effort,
             talk_custom_prompt=settings.agent_context.talk_custom_prompt,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
+            chapter_screenshots_enabled=settings.generation.chapter_screenshots_enabled,
             web_search_enabled=settings.web_search.enabled,
             chaoxing_request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
             chaoxing_init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
@@ -307,6 +312,7 @@ class SettingsService:
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
+        chapter_screenshots_enabled: bool = True,
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -335,6 +341,7 @@ class SettingsService:
             answer_detail_level: 答案详细程度。
             reasoning_effort: 推理深度。
             video_generation_concurrency: 单视频级并发上限。
+            chapter_screenshots_enabled: 是否为概括章节生成视频截图。
             web_search_enabled: 是否启用 Web 搜索。
             talk_custom_prompt: Agent 自定义问答提示词。
             chaoxing_request_delay_seconds: 超星导入普通请求最小间隔。
@@ -426,6 +433,7 @@ class SettingsService:
             next_settings = replace_agent_context_reasoning_effort(next_settings, reasoning_effort)
             next_settings = replace_agent_context_talk_custom_prompt(next_settings, talk_custom_prompt)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
+            next_settings = replace_chapter_screenshots_enabled(next_settings, chapter_screenshots_enabled)
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             next_settings = replace_chaoxing_import_settings(
                 next_settings,
@@ -473,6 +481,7 @@ class SettingsService:
             reasoning_effort=next_settings.agent_context.reasoning_effort,
             talk_custom_prompt=next_settings.agent_context.talk_custom_prompt,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
+            chapter_screenshots_enabled=next_settings.generation.chapter_screenshots_enabled,
             web_search_enabled=next_settings.web_search.enabled,
             chaoxing_request_delay_seconds=next_settings.external_import.chaoxing.request_delay_seconds,
             chaoxing_init_course_delay_seconds=next_settings.external_import.chaoxing.init_course_delay_seconds,

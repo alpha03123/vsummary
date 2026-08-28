@@ -3,8 +3,8 @@ import { ArrowLeft, ChevronDown, Download } from "lucide-react";
 
 export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [], badge = null }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="min-w-0">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-[min(11rem,100%)] flex-1">
         <p className="mb-1 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Tool Page</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <h1 className="text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{meta?.label}</h1>
@@ -16,12 +16,12 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
         </div>
         <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{meta?.description}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="ml-auto flex max-w-full shrink-0 flex-wrap justify-end gap-2">
         {exportActions.length ? <WorkspaceExportMenu exportActions={exportActions} /> : null}
         <button
           type="button"
           onClick={onBack}
-          className="workspace-elevated-panel inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold text-stone-700 transition-all hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:text-stone-900 dark:text-stone-200 dark:hover:border-white/16 dark:hover:bg-neutral-800 dark:hover:text-stone-100"
+          className="workspace-elevated-panel inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold text-stone-700 transition-all hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:text-stone-900 dark:text-stone-200 dark:hover:border-white/16 dark:hover:bg-neutral-800 dark:hover:text-stone-100"
         >
           <ArrowLeft size={16} />
           {backLabel}
@@ -37,7 +37,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
   const enabledActions = exportActions.filter((action) => action.enabled);
   const disabledReason = exportActions.find((action) => !action.enabled)?.disabledReason ?? "当前内容不可导出";
   const disabled = enabledActions.length === 0;
-  const className = "workspace-elevated-panel inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all";
+  const className = "workspace-elevated-panel inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold transition-all";
 
   useEffect(() => {
     if (!open) {
@@ -68,7 +68,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
   }
 
   return (
-    <div ref={menuRef} className="relative">
+    <div ref={menuRef} className="relative shrink-0">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

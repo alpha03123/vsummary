@@ -137,6 +137,7 @@ class WorkspaceSettingsResponse(BaseModel):
     reasoning_effort: str = "none"
     talk_custom_prompt: str = ""
     video_generation_concurrency: int
+    chapter_screenshots_enabled: bool
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3
@@ -167,6 +168,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     reasoning_effort: str = "none"
     talk_custom_prompt: str = ""
     video_generation_concurrency: int
+    chapter_screenshots_enabled: bool = True
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3

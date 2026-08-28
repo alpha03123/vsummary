@@ -97,6 +97,7 @@ def build_video_summary_application(
         subtitle_provider=SubtitleTranscriptProvider(),
         manual_transcript_provider=ManualSrtTranscriptProvider(),
         frame_extractor=media_processor,
+        chapter_screenshots_enabled=settings.generation.chapter_screenshots_enabled,
     )
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 
