@@ -788,7 +788,7 @@ function Build-DeltaPackage {
     $payloadRoot = Join-Path $deltaRoot "payload"
     Remove-PathIfExists -Path $deltaRoot
     Ensure-Directory -Path $payloadRoot
-    Expand-ArchiveWith7Zip -ArchivePath $PreviousArchive -DestinationRoot $previousRoot -SevenZipExe $SevenZipExe
+    Expand-ArchiveWith7Zip -ArchivePath $PreviousArchive -DestinationRoot $previousRoot -SevenZipExe $SevenZipExe | Out-Null
 
     $oldFiles = Get-RelativeFileMap -Root $previousRoot
     $newFiles = Get-RelativeFileMap -Root $Variant.PackageRoot
@@ -834,7 +834,7 @@ function Build-DeltaPackage {
     $changes | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $payloadRoot "changes.json") -Encoding UTF8
 
     $archivePath = Join-Path $OutputRootPath ("vsummary-delta-{0}-{1}-to-{2}.zip" -f $Variant.Kind, $PreviousVersion, $Script:ReleaseVersion)
-    Compress-Directory -SourceRoot $payloadRoot -ArchivePath $archivePath -SevenZipExe $SevenZipExe
+    Compress-Directory -SourceRoot $payloadRoot -ArchivePath $archivePath -SevenZipExe $SevenZipExe | Out-Null
     return @{
         Kind = $Variant.Kind
         Archive = $archivePath
@@ -965,49 +965,54 @@ function Write-ReleaseManifest {
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
 }
 
-$CondaExe = Get-CondaExe
-$CondaPackExe = Require-Command -Name "conda-pack"
-$SevenZipExe = Require-Command -Name "7z"
-$Script:ReleaseVersion = Resolve-ReleaseVersion
+if ($MyInvocation.InvocationName -ne ".") {
+    $CondaExe = Get-CondaExe
+    $CondaPackExe = Require-Command -Name "conda-pack"
+    $SevenZipExe = Require-Command -Name "7z"
+    $Script:ReleaseVersion = Resolve-ReleaseVersion
 
-Ensure-Directory -Path $OutputRootPath
+    Ensure-Directory -Path $OutputRootPath
 
-try {
-    Ensure-FrontendDist
+    try {
+        Ensure-FrontendDist
 
-    $appPackage = Build-AppPackage -SevenZipExe $SevenZipExe
-    $variants = @(Resolve-Targets)
+        $appPackage = Build-AppPackage -SevenZipExe $SevenZipExe
+        $variants = @(Resolve-Targets)
 
-    foreach ($variant in $variants) {
-        Ensure-RuntimeRoot -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
-
-        if (-not $SkipFullPackage) {
-            Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe
-        }
-    }
-
-    $deltas = @()
-    if (-not $SkipFullPackage) {
-        $previousArchives = @{ cpu = $PreviousCpuFullArchive; gpu = $PreviousGpuFullArchive }
         foreach ($variant in $variants) {
-            $deltas += Build-DeltaPackage -Variant $variant -PreviousArchive $previousArchives[$variant.Kind] -PreviousVersion $PreviousVersion -SevenZipExe $SevenZipExe
-        }
-    }
+            Ensure-RuntimeRoot -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
 
-    Write-ReleaseManifest -AppArchive $appPackage.Archive -Variants $variants -Deltas $deltas
-}
-finally {
-    if (-not $KeepFrontendDist) {
-        Remove-PathIfExists -Path $FrontendDistDir
+            if (-not $SkipFullPackage) {
+                Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe
+            }
+        }
+
+        $deltas = @()
+        if (-not $SkipFullPackage) {
+            $previousArchives = @{ cpu = $PreviousCpuFullArchive; gpu = $PreviousGpuFullArchive }
+            foreach ($variant in $variants) {
+                $delta = Build-DeltaPackage -Variant $variant -PreviousArchive $previousArchives[$variant.Kind] -PreviousVersion $PreviousVersion -SevenZipExe $SevenZipExe
+                if ($null -ne $delta) {
+                    $deltas += $delta
+                }
+            }
+        }
+
+        Write-ReleaseManifest -AppArchive $appPackage.Archive -Variants $variants -Deltas $deltas
     }
-    if ($CleanNodeModules) {
-        Remove-PathIfExists -Path $FrontendNodeModulesDir
-    }
-    if ($CleanBuildArtifacts) {
-        Remove-PathIfExists -Path $BuildRootPath
-    }
-    else {
-        Remove-PathIfExists -Path (Join-Path $BuildRootPath "app")
-        Remove-PathIfExists -Path (Join-Path $BuildRootPath "full")
+    finally {
+        if (-not $KeepFrontendDist) {
+            Remove-PathIfExists -Path $FrontendDistDir
+        }
+        if ($CleanNodeModules) {
+            Remove-PathIfExists -Path $FrontendNodeModulesDir
+        }
+        if ($CleanBuildArtifacts) {
+            Remove-PathIfExists -Path $BuildRootPath
+        }
+        else {
+            Remove-PathIfExists -Path (Join-Path $BuildRootPath "app")
+            Remove-PathIfExists -Path (Join-Path $BuildRootPath "full")
+        }
     }
 }
