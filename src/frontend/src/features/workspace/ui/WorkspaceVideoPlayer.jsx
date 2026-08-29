@@ -1,10 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Captions } from "lucide-react";
 
 import { formatRange } from "../../../shared/lib/time";
 
-export function WorkspaceVideoPlayer({ videoSource, playerSeekRequest, videoSourceType = "video" }) {
+export function WorkspaceVideoPlayer({
+  videoSource,
+  playerSeekRequest,
+  videoSourceType = "video",
+  onTimeUpdate,
+  resumeSeconds = null,
+  onPlaybackEnded,
+  onOpenOverviewAtTime,
+}) {
   const videoRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const isAudioSource = videoSourceType === "audio";
+
+  useEffect(() => {
+    setIsPlaying(false);
+  }, [videoSource]);
 
   useEffect(() => {
     if (isAudioSource || !playerSeekRequest || !videoRef.current) {
@@ -36,6 +51,35 @@ export function WorkspaceVideoPlayer({ videoSource, playerSeekRequest, videoSour
     };
   }, [isAudioSource, playerSeekRequest, videoSource]);
 
+  useEffect(() => {
+    if (isAudioSource || !Number.isFinite(resumeSeconds) || resumeSeconds <= 0 || !videoRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    const resume = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : null;
+      video.currentTime = duration == null
+        ? resumeSeconds
+        : Math.min(resumeSeconds, Math.max(0, duration - 0.1));
+    };
+
+    if (video.readyState >= 1) {
+      resume();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", resume, { once: true });
+    return () => video.removeEventListener("loadedmetadata", resume);
+  }, [isAudioSource, resumeSeconds, videoSource]);
+
+  function openCurrentTranscript() {
+    const seconds = videoRef.current?.currentTime;
+    if (Number.isFinite(seconds)) {
+      onOpenOverviewAtTime?.(seconds);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="workspace-muted-panel rounded-3xl border p-4">
@@ -61,11 +105,44 @@ export function WorkspaceVideoPlayer({ videoSource, playerSeekRequest, videoSour
         </div>
       ) : (
         <div className="workspace-elevated-panel overflow-hidden rounded-3xl border bg-black shadow-sm">
-          <video key={videoSource} ref={videoRef} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
+          <video
+            key={videoSource}
+            ref={videoRef}
+            className="h-full w-full max-h-[72vh] bg-black"
+            controls
+            preload="metadata"
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => {
+              setIsPlaying(false);
+              onPlaybackEnded?.();
+            }}
+            onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
+          >
             <source src={videoSource} />
           </video>
         </div>
       )}
+      <AnimatePresence initial={false}>
+        {isPlaying && typeof onOpenOverviewAtTime === "function" ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="flex justify-center"
+          >
+            <button
+              type="button"
+              onClick={openCurrentTranscript}
+              className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm font-semibold text-accent shadow-sm transition-colors hover:border-accent/50 hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:bg-accent/15 dark:hover:bg-accent/20"
+            >
+              <Captions size={17} aria-hidden="true" />
+              查看当前转写
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

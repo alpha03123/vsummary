@@ -4,6 +4,7 @@ import { isSaveableOpenaiBaseUrl, toProviderTestErrorMessage, createWorkspaceSet
 import {
   cancelRagModelDownload,
   cancelFasterWhisperModelDownload,
+  discoverProviderModels,
   downloadFasterWhisperModel,
   downloadRagModel,
   loadFasterWhisperModels,
@@ -17,6 +18,7 @@ import {
 vi.mock("@src/features/workspace/model/workspaceApi", () => ({
   cancelRagModelDownload: vi.fn(),
   cancelFasterWhisperModelDownload: vi.fn(),
+  discoverProviderModels: vi.fn(),
   downloadFasterWhisperModel: vi.fn(),
   downloadRagModel: vi.fn(),
   loadFasterWhisperModels: vi.fn(),
@@ -363,6 +365,60 @@ describe("createWorkspaceSettingsActions downloads", () => {
 });
 
 describe("createWorkspaceSettingsActions provider settings", () => {
+  it("probes models with the current provider draft without saving it", async () => {
+    discoverProviderModels.mockResolvedValue(["gpt-5.4-mini", "gpt-5.4"]);
+    const actions = [];
+    const controller = createWorkspaceSettingsActions({
+      state: {
+        ui: {
+          llmProvider: "openai",
+          openaiBaseUrl: "https://api.example.com",
+          openaiModel: "gpt-5.4",
+          openaiApiKey: "sk-test",
+          hfEndpoint: "https://hf-mirror.com",
+        },
+      },
+      dispatch: (action) => actions.push(action),
+    });
+
+    await expect(controller.onDiscoverProviderModels()).resolves.toEqual(["gpt-5.4-mini", "gpt-5.4"]);
+    expect(discoverProviderModels).toHaveBeenCalledWith(expect.objectContaining({
+      llmProvider: "openai",
+      openaiBaseUrl: "https://api.example.com",
+      openaiModel: "gpt-5.4",
+    }));
+    expect(updateProviderSettings).not.toHaveBeenCalled();
+    expect(actions).toEqual([]);
+  });
+
+  it("saves a model selected from the detected-model list", async () => {
+    updateProviderSettings.mockResolvedValue({
+      llmProvider: "openai",
+      openaiBaseUrl: "https://api.example.com",
+      openaiModel: "gpt-5.4-mini",
+      hfEndpoint: "https://hf-mirror.com",
+      openaiApiKey: "",
+    });
+    const controller = createWorkspaceSettingsActions({
+      state: {
+        ui: {
+          llmProvider: "openai",
+          openaiBaseUrl: "https://api.example.com",
+          openaiModel: "gpt-5.4",
+          openaiApiKey: "",
+          hfEndpoint: "https://hf-mirror.com",
+        },
+      },
+      dispatch: vi.fn(),
+    });
+
+    await controller.onSelectProviderModel("gpt-5.4-mini");
+
+    expect(updateProviderSettings).toHaveBeenCalledWith(expect.objectContaining({
+      openaiModel: "gpt-5.4-mini",
+    }));
+  });
+
   it("does not request local ASR models after saving Aliyun settings", async () => {
     updateWorkspaceSettings.mockResolvedValue({
       asrProvider: "aliyun_bailian",

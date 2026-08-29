@@ -69,6 +69,7 @@ export function WorkspaceReadingPane({
   tools,
   chat,
   summary,
+  playbackTime,
   mindmap,
   knowledgeCards,
   knowledgeCardsGenerating,
@@ -248,6 +249,7 @@ export function WorkspaceReadingPane({
                       ui={ui}
                       tools={tools}
                       summary={summary}
+                      playbackTime={playbackTime}
                       selectedVideo={selectedVideo}
                       selectedChapterId={selectedChapterId}
                       citationFocus={citationFocus}

@@ -149,6 +149,17 @@ export function useWorkspaceController() {
     });
   }
 
+  function onOpenOverviewAtTime(seconds) {
+    if (!Number.isFinite(seconds)) {
+      return;
+    }
+    dispatch({
+      type: "overview_opened_at_time",
+      seconds,
+      requestId: `${Date.now()}-${seconds}`,
+    });
+  }
+
   function onToggleChatDrawer() {
     dispatch({ type: "chat_drawer_toggled" });
   }
@@ -249,6 +260,8 @@ export function useWorkspaceController() {
     onChangeProviderUsageRange: settingsActions.onChangeProviderUsageRange,
     onChangeSetting: settingsActions.onChangeSetting,
     onSaveProviderSettings: settingsActions.onSaveProviderSettings,
+    onSelectProviderModel: settingsActions.onSelectProviderModel,
+    onDiscoverProviderModels: settingsActions.onDiscoverProviderModels,
     onSaveApiKey: settingsActions.onSaveApiKey,
     onSaveAsrSettings: settingsActions.onSaveAsrSettings,
     onRevealAsrApiKey: settingsActions.onRevealAsrApiKey,
@@ -261,6 +274,7 @@ export function useWorkspaceController() {
     onResetSettings: settingsActions.onResetSettings,
     onClearError,
     onSeekToTime,
+    onOpenOverviewAtTime,
     onToggleChatDrawer,
     onOpenChatDrawer,
     onCloseChatDrawer,

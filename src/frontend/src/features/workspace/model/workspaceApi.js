@@ -167,6 +167,31 @@ export async function testProviderSettings(settings) {
   }
 }
 
+export async function discoverProviderModels(settings) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+  try {
+    const payload = await fetchJson("/api/provider-settings/models", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        llm_provider: settings.llmProvider,
+        openai_base_url: settings.openaiBaseUrl,
+        openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
+      }),
+    });
+    if (!Array.isArray(payload.models)) {
+      throw new Error("模型探测响应无效");
+    }
+    return payload.models.filter((model) => typeof model === "string" && model.trim());
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export async function testAsrSettings(settings) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 10000);

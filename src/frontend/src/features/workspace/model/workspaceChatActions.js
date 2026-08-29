@@ -18,6 +18,14 @@ export function createWorkspaceChatActions({
       return;
     }
 
+    if (state.selectedContextType === "series") {
+      const series = state.library?.series?.find((item) => item.id === state.selectedSeriesId);
+      if (series && (!Array.isArray(series.videos) || series.videos.length === 0)) {
+        dispatch({ type: "load_failed", message: "此系列没有视频" });
+        return;
+      }
+    }
+
     const sessionId = state.chatScopeKey;
     if (!sessionId) {
       throw new Error("当前未处于 series 或 video 上下文，无法发起 AI 对话。");

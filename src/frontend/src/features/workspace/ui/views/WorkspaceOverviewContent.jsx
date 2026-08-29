@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertTriangle, Captions, ChevronUp, Minus, Plus, Sparkles, X } from "lucide-react";
 
 import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
@@ -7,12 +8,15 @@ import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
 export function WorkspaceOverviewContent({
   ui,
   summary,
+  playbackTime = null,
   selectedChapterId = null,
   citationFocus = null,
   onSeek,
   sectionHeadingLevel = 2,
 }) {
   const [previewImage, setPreviewImage] = useState(null);
+  const [expandedTranscriptChapters, setExpandedTranscriptChapters] = useState(() => new Set());
+  const transcriptListRefs = useRef(new Map());
   const canSeek = typeof onSeek === "function";
   const SectionHeading = `h${sectionHeadingLevel}`;
   const ChapterHeading = `h${Math.min(sectionHeadingLevel + 1, 6)}`;
@@ -20,21 +24,56 @@ export function WorkspaceOverviewContent({
     () => resolveCitationTarget(summary, citationFocus),
     [summary, citationFocus],
   );
+  const playbackTarget = useMemo(
+    () => findPlaybackTarget(summary, playbackTime),
+    [summary, playbackTime],
+  );
+  const hasPlaybackTime = Number.isFinite(playbackTime);
+  const activeChapterId = hasPlaybackTime
+    ? playbackTarget?.chapterId ?? null
+    : citationTarget?.chapterId ?? selectedChapterId;
+  const registerTranscriptList = useCallback((chapterId, list) => {
+    if (list) {
+      transcriptListRefs.current.set(chapterId, list);
+      return;
+    }
+    transcriptListRefs.current.delete(chapterId);
+  }, []);
 
   useEffect(() => {
     if (!citationTarget) {
       return;
     }
-    const transcriptDetails = document.getElementById(`overview-transcript-${citationTarget.chapterId}`);
-    if (transcriptDetails) {
-      transcriptDetails.open = true;
+    setExpandedTranscriptChapters((current) => {
+      if (current.has(citationTarget.chapterId)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(citationTarget.chapterId);
+      return next;
+    });
+  }, [citationTarget]);
+
+  useEffect(() => {
+    if (!citationTarget || !expandedTranscriptChapters.has(citationTarget.chapterId)) {
+      return;
     }
-    const target = document.getElementById(citationTarget.segmentId ?? citationTarget.chapterId);
+
     const frameId = window.requestAnimationFrame(() => {
-      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      const transcriptDetails = document.getElementById(`overview-transcript-${citationTarget.chapterId}`);
+      transcriptDetails?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      const transcriptList = transcriptListRefs.current.get(citationTarget.chapterId);
+      if (Number.isInteger(citationTarget.segmentIndex) && transcriptList) {
+        transcriptList.scrollToIndex(citationTarget.segmentIndex);
+        return;
+      }
+      document.getElementById(citationTarget.segmentId ?? citationTarget.chapterId)?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "center",
+      });
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [citationTarget]);
+  }, [citationTarget, expandedTranscriptChapters]);
 
   if (!summary) {
     return null;
@@ -84,8 +123,8 @@ export function WorkspaceOverviewContent({
             key={chapter.id}
             id={chapter.id}
             className={`workspace-elevated-panel flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ${
-              chapter.id === (citationTarget?.chapterId ?? selectedChapterId)
-                ? "border-accent shadow-md ring-2 ring-accent/10"
+              chapter.id === activeChapterId && !hasPlaybackTime
+                  ? "border-accent shadow-md ring-2 ring-accent/10"
                 : "border-stone-200/70 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
             }`}
           >
@@ -136,8 +175,27 @@ export function WorkspaceOverviewContent({
             </div>
 
             {chapter.transcript_segments.length ? (
-              <details id={`overview-transcript-${chapter.id}`} className="group mt-1 rounded-2xl border border-stone-200/80 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-950/60">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3">
+              <details
+                id={`overview-transcript-${chapter.id}`}
+                open={expandedTranscriptChapters.has(chapter.id)}
+                className={`group mt-1 rounded-2xl border border-stone-200/80 bg-stone-50/80 transition-all dark:border-stone-800 dark:bg-stone-950/60 ${
+                  hasPlaybackTime && playbackTarget?.chapterId === chapter.id && !expandedTranscriptChapters.has(chapter.id)
+                    ? "border-2 border-accent bg-accent/10 shadow-md ring-2 ring-accent/30 dark:bg-accent/15"
+                    : ""
+                }`}
+              >
+                <summary
+                  className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setExpandedTranscriptChapters((current) => {
+                      const next = new Set(current);
+                      if (next.has(chapter.id)) next.delete(chapter.id);
+                      else next.add(chapter.id);
+                      return next;
+                    });
+                  }}
+                >
                   <div className="flex items-center gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-accent shadow-sm dark:bg-stone-900">
                       <Captions size={16} />
@@ -152,54 +210,33 @@ export function WorkspaceOverviewContent({
                   </span>
                 </summary>
 
-                <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
-                  <div className="flex flex-col gap-3">
-                    {chapter.transcript_segments.map((segment, segmentIndex) => (
-                      <button
-                        key={`${chapter.id}-${segment.start_seconds}-${segment.end_seconds}`}
-                        id={`overview-transcript-segment-${chapter.id}-${segmentIndex}`}
-                        type="button"
-                        disabled={!canSeek}
-                        onClick={() => onSeek?.({
-                          seconds: segment.start_seconds,
-                          endSeconds: segment.end_seconds,
-                          chapterTitle: chapter.title,
-                        })}
-                        className={`block w-full scroll-mt-6 rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors dark:bg-neutral-900 ${
-                          citationTarget?.segmentId === `overview-transcript-segment-${chapter.id}-${segmentIndex}`
-                            ? "ring-2 ring-accent/30"
-                            : ""
-                        } ${
-                          canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"
-                        }`}
-                      >
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
-                          {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
-                        </p>
-                        <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 flex justify-center border-t border-stone-200/80 pt-3 dark:border-stone-800">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        const transcriptDetails = event.currentTarget.closest("details");
-                        if (!transcriptDetails) {
-                          return;
+                {expandedTranscriptChapters.has(chapter.id) ? (
+                  <WorkspaceTranscriptList
+                    chapterId={chapter.id}
+                    chapterTitle={chapter.title}
+                    segments={chapter.transcript_segments}
+                    canSeek={canSeek}
+                    highlightedSegmentIndex={
+                      hasPlaybackTime && playbackTarget?.chapterId === chapter.id
+                        ? playbackTarget.segmentIndex
+                        : !hasPlaybackTime && citationTarget?.chapterId === chapter.id
+                          ? citationTarget.segmentIndex
+                          : null
+                    }
+                    onSeek={onSeek}
+                    onRegister={registerTranscriptList}
+                    onCollapse={() => {
+                      setExpandedTranscriptChapters((current) => {
+                        if (!current.has(chapter.id)) {
+                          return current;
                         }
-                        transcriptDetails.open = false;
-                        transcriptDetails.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                      }}
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-accent/40 dark:hover:bg-accent/10"
-                      aria-label="收起本章原文"
-                      title="收起本章原文"
-                    >
-                      <ChevronUp size={18} />
-                    </button>
-                  </div>
-                </div>
+                        const next = new Set(current);
+                        next.delete(chapter.id);
+                        return next;
+                      });
+                    }}
+                  />
+                ) : null}
               </details>
             ) : null}
           </article>
@@ -208,6 +245,120 @@ export function WorkspaceOverviewContent({
       {previewImage ? <ScreenshotLightbox image={previewImage} onClose={() => setPreviewImage(null)} /> : null}
     </>
   );
+}
+
+function WorkspaceTranscriptList({
+  chapterId,
+  chapterTitle,
+  segments,
+  canSeek,
+  highlightedSegmentIndex,
+  onSeek,
+  onRegister,
+  onCollapse,
+}) {
+  const scrollRef = useRef(null);
+  const virtualizer = useVirtualizer({
+    count: segments.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 84,
+    overscan: 8,
+    initialRect: { width: 0, height: 480 },
+    getItemKey: (index) => `${segments[index].start_seconds}-${segments[index].end_seconds}`,
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+  const visibleRows = virtualRows.length > 0
+    ? virtualRows
+    : Array.from({ length: Math.min(segments.length, 10) }, (_, index) => ({
+      index,
+      key: `initial-${index}`,
+      start: index * 84,
+    }));
+  const totalSize = Math.max(virtualizer.getTotalSize(), segments.length * 84);
+
+  useEffect(() => {
+    onRegister(chapterId, {
+      scrollToIndex(index) {
+        virtualizer.scrollToIndex(index, { align: "center" });
+      },
+    });
+    return () => onRegister(chapterId, null);
+  }, [chapterId, onRegister, virtualizer]);
+
+  return (
+    <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
+      <div ref={scrollRef} className="max-h-[min(60vh,42rem)] overflow-y-auto overscroll-contain pr-1">
+        <div className="relative w-full" style={{ height: `${totalSize}px` }}>
+          {visibleRows.map((virtualRow) => {
+            const segment = segments[virtualRow.index];
+            const isHighlighted = highlightedSegmentIndex === virtualRow.index;
+            return (
+              <div
+                key={virtualRow.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                className="absolute left-0 top-0 w-full pb-3"
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
+              >
+                <button
+                  id={`overview-transcript-segment-${chapterId}-${virtualRow.index}`}
+                  type="button"
+                  disabled={!canSeek}
+                  onClick={() => onSeek?.({
+                    seconds: segment.start_seconds,
+                    endSeconds: segment.end_seconds,
+                    chapterTitle,
+                  })}
+                  className={`block w-full scroll-mt-6 rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors dark:bg-neutral-900 ${
+                    isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
+                  } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
+                    {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-center border-t border-stone-200/80 pt-3 dark:border-stone-800">
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-accent/40 dark:hover:bg-accent/10"
+          aria-label="收起本章原文"
+          title="收起本章原文"
+        >
+          <ChevronUp size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function findPlaybackTarget(summary, playbackTime) {
+  if (!summary || !Number.isFinite(playbackTime)) {
+    return null;
+  }
+  const chapters = Array.isArray(summary.chapters) ? summary.chapters : [];
+  for (const chapter of chapters) {
+    if (playbackTime < chapter.start_seconds || playbackTime > chapter.end_seconds) {
+      continue;
+    }
+    const segments = Array.isArray(chapter.transcript_segments) ? chapter.transcript_segments : [];
+    const segmentIndex = segments.findIndex(
+      (segment) => playbackTime >= segment.start_seconds && playbackTime <= segment.end_seconds,
+    );
+    return {
+      chapterId: chapter.id,
+      segmentId: segmentIndex >= 0 ? `overview-transcript-segment-${chapter.id}-${segmentIndex}` : null,
+      segmentIndex: segmentIndex >= 0 ? segmentIndex : null,
+    };
+  }
+  return null;
 }
 
 const MIN_SCALE = 0.25;
@@ -400,6 +551,7 @@ function resolveCitationTarget(summary, citationFocus) {
   return {
     chapterId: chapter.id,
     segmentId: segmentIndex >= 0 ? `overview-transcript-segment-${chapter.id}-${segmentIndex}` : null,
+    segmentIndex: segmentIndex >= 0 ? segmentIndex : null,
   };
 }
 

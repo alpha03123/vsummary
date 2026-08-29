@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@src/features/workspace/ui/WorkspaceToolbar", () => ({
@@ -7,7 +7,9 @@ vi.mock("@src/features/workspace/ui/WorkspaceToolbar", () => ({
   ),
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceLibraryPanel", () => ({
-  WorkspaceLibraryPanel: () => <div>library</div>,
+  WorkspaceLibraryPanel: ({ onRequestBulkDelete }) => (
+    <button onClick={() => onRequestBulkDelete?.(["v1", "v2"])}>delete-selected</button>
+  ),
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceSeriesGrid", () => ({
   WorkspaceSeriesGrid: () => <div>series-grid</div>,
@@ -41,7 +43,16 @@ vi.mock("@src/features/workspace/ui/WorkspaceReadingPane", () => ({
   ),
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceVideoPlayer", () => ({
-  WorkspaceVideoPlayer: ({ videoSource }) => <div data-testid="video-player" data-source={videoSource}>player</div>,
+  WorkspaceVideoPlayer: ({ videoSource, onOpenOverviewAtTime }) => (
+    <button
+      data-testid="video-player"
+      data-source={videoSource}
+      data-on-open-overview-at-time={Boolean(onOpenOverviewAtTime)}
+      onClick={() => onOpenOverviewAtTime?.(42.5)}
+    >
+      player
+    </button>
+  ),
 }));
 vi.mock("@src/features/workspace/ui/ChatDrawer", () => ({
   ChatDrawer: ({ isOpen }) => <div data-testid="chat-drawer" data-open={String(isOpen)}>drawer</div>,
@@ -50,7 +61,9 @@ vi.mock("@src/features/workspace/ui/WorkspaceImportModal", () => ({
   WorkspaceImportModal: () => null,
 }));
 vi.mock("@src/features/workspace/ui/shared/WorkspaceConfirmDialog", () => ({
-  WorkspaceConfirmDialog: () => null,
+  WorkspaceConfirmDialog: ({ open, title, onConfirm }) => (
+    open ? <button onClick={onConfirm}>{title}</button> : null
+  ),
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceLibraryHomePane", () => ({
   WorkspaceLibraryHomePane: () => null,
@@ -115,7 +128,7 @@ function makePage(overrides = {}) {
       progress: null, snapshot: null, showOverlay: false, videoDownloadProgress: null, downloadingVideoKey: null,
       ...overrides.generation,
     },
-    actions: new Proxy({}, { get: () => vi.fn() }),
+    actions: new Proxy({}, { get: (target, property) => target[property] ?? vi.fn() }),
   };
 }
 
@@ -131,6 +144,21 @@ describe("WorkspacePage new layout", () => {
     render(<WorkspacePage page={makePage()} />);
     const pane = screen.getByTestId("reading-pane");
     expect(pane.getAttribute("data-on-seek")).toBe("true");
+  });
+
+  it("opens the current transcript from the video player when the overview is available", () => {
+    const openOverviewAtTime = vi.fn();
+    const page = makePage({
+      shell: { tools: { overview: { generated: true } } },
+    });
+    page.actions.openOverviewAtTime = openOverviewAtTime;
+
+    render(<WorkspacePage page={page} />);
+    const player = screen.getByTestId("video-player");
+    expect(player.getAttribute("data-on-open-overview-at-time")).toBe("true");
+
+    fireEvent.click(player);
+    expect(openOverviewAtTime).toHaveBeenCalledWith(42.5);
   });
 
   it("forwards transcript generation actions to WorkspaceReadingPane", () => {
@@ -172,5 +200,17 @@ describe("WorkspacePage new layout", () => {
     render(<WorkspacePage page={page} />);
     const drawer = screen.getByTestId("chat-drawer");
     expect(drawer.getAttribute("data-open")).toBe("true");
+  });
+
+  it("confirms and forwards selected video IDs for bulk deletion", async () => {
+    const deleteVideos = vi.fn().mockResolvedValue({ deleted: ["v1", "v2"], failed: [] });
+    const page = makePage();
+    page.actions.deleteVideos = deleteVideos;
+    render(<WorkspacePage page={page} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "delete-selected" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除 2 个视频？" }));
+
+    await waitFor(() => expect(deleteVideos).toHaveBeenCalledWith(["v1", "v2"]));
   });
 });

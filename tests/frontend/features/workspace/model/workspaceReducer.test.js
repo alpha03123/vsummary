@@ -447,6 +447,29 @@ describe("workspaceReducer chat drawer", () => {
     expect(afterVideo.playerSeekRequest).toBeNull();
     expect(afterVideo.chatDrawerOpen).toBe(true);
   });
+
+  it("keeps loaded video content when selecting the current video again", () => {
+    const current = {
+      ...createInitialWorkspaceState(),
+      selectedContextType: "video",
+      selectedSeriesId: "series-1",
+      selectedVideoId: "video-1",
+      selectedToolId: "overview",
+      tools: { overview: { generated: true } },
+      summary: { title: "已加载概况", chapters: [] },
+      summaryLoading: false,
+    };
+
+    const next = workspaceReducer(current, {
+      type: "video_selected",
+      seriesId: "series-1",
+      videoId: "video-1",
+    });
+
+    expect(next).toBe(current);
+    expect(next.tools).toBe(current.tools);
+    expect(next.summary).toBe(current.summary);
+  });
 });
 
 describe("workspaceReducer video download cancellation", () => {

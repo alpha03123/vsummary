@@ -11,7 +11,6 @@ import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
 import { WorkspaceRenameDialog } from "./shared/WorkspaceRenameDialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { blurVariant } from "../../../lib/animations";
 import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import {
@@ -74,6 +73,8 @@ export function WorkspacePage({ page }) {
   const [deletePending, setDeletePending] = useState(false);
   const [pendingRename, setPendingRename] = useState(null);
   const [renamePending, setRenamePending] = useState(false);
+  const [playbackTime, setPlaybackTime] = useState(null);
+  const playbackPositionsRef = useRef(new Map());
   const containerRef = useRef(null);
   const settingsModalRef = useRef(null);
   const usageModalRef = useRef(null);
@@ -111,6 +112,14 @@ export function WorkspacePage({ page }) {
   useEffect(() => {
     persistWorkspaceLayout(layout);
   }, [layout]);
+
+  useEffect(() => {
+    setPlaybackTime(null);
+  }, [selectedVideo?.id, previewUrl]);
+
+  const selectedVideoKey = activeSeries && selectedVideo
+    ? `${activeSeries.id}/${selectedVideo.id}`
+    : null;
 
   function beginResize(type, startEvent) {
     startEvent.preventDefault();
@@ -180,6 +189,19 @@ export function WorkspacePage({ page }) {
           videoSource={tools?.preview?.previewUrl ?? previewUrl}
           playerSeekRequest={playerSeekRequest}
           videoSourceType={selectedVideo?.sourceType}
+          resumeSeconds={selectedVideoKey ? playbackPositionsRef.current.get(selectedVideoKey) ?? null : null}
+          onTimeUpdate={(seconds) => {
+            setPlaybackTime(seconds);
+            if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
+              playbackPositionsRef.current.set(selectedVideoKey, seconds);
+            }
+          }}
+          onPlaybackEnded={() => {
+            if (selectedVideoKey) {
+              playbackPositionsRef.current.delete(selectedVideoKey);
+            }
+          }}
+          onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
         />
       );
     }
@@ -203,6 +225,7 @@ export function WorkspacePage({ page }) {
         library={library}
         chat={chat}
         summary={summary}
+        playbackTime={playbackTime}
         mindmap={mindmap}
         seriesMindmap={seriesMindmap}
         seriesMindmapAvailable={seriesMindmapAvailable}
@@ -338,6 +361,18 @@ export function WorkspacePage({ page }) {
                   description: `将删除“${selectedVideo.title}”及其相关产物。该操作不可撤销。`,
                 });
               }}
+              onRequestBulkDelete={(videoIds) => {
+                const targets = Array.isArray(videoIds) ? [...new Set(videoIds)] : [];
+                if (targets.length === 0) {
+                  return;
+                }
+                setPendingDelete({
+                  kind: "videos",
+                  videoIds: targets,
+                  title: `删除 ${targets.length} 个视频？`,
+                  description: "将删除所选视频及其相关产物。该操作不可撤销。",
+                });
+              }}
               onRequestRenameCurrentVideo={() => {
                 if (selectedVideo) {
                   setPendingRename({ kind: "video", title: selectedVideo.title, entityLabel: "视频名称" });
@@ -449,14 +484,9 @@ export function WorkspacePage({ page }) {
               >
                 <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
               </div>
-              <motion.section
-                key={`${selectedContextType}:${selectedVideo?.id ?? "series"}:${state.selectedToolId}:pane`}
-                variants={blurVariant}
-                initial="initial" animate="animate" exit="exit"
-                className="min-w-[320px] flex-1 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all"
-              >
+              <section className="min-w-[320px] flex-1 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90">
                 {renderReadingPane()}
-              </motion.section>
+              </section>
             </>
           )}
 
@@ -510,6 +540,8 @@ export function WorkspacePage({ page }) {
                   modelDownloadError={generation.modelDownloadError}
                   onChangeSetting={actions.changeSetting}
                   onSaveProviderSettings={actions.saveProviderSettings}
+                  onSelectProviderModel={actions.selectProviderModel}
+                  onDiscoverProviderModels={actions.discoverProviderModels}
                   onSaveApiKey={actions.saveApiKey}
                   onSaveAsrSettings={actions.saveAsrSettings}
                   onRevealAsrApiKey={actions.revealAsrApiKey}
@@ -625,6 +657,8 @@ export function WorkspacePage({ page }) {
               await actions.deleteSeries?.();
             } else if (pendingDelete.kind === "video") {
               await actions.deleteCurrentVideo?.();
+            } else if (pendingDelete.kind === "videos") {
+              await actions.deleteVideos?.(pendingDelete.videoIds);
             }
             setPendingDelete(null);
           } finally {

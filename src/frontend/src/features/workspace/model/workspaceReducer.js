@@ -561,6 +561,13 @@ export function workspaceReducer(state, action) {
         contextUsageLoading: false,
       };
     case "video_selected": {
+      if (
+        state.selectedContextType === "video" &&
+        state.selectedSeriesId === action.seriesId &&
+        state.selectedVideoId === action.videoId
+      ) {
+        return state;
+      }
       const chatBaseScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
       const chatSessionScope = resolveChatSessionsForScope(
         state.chatSessionIdsByScope,
@@ -612,6 +619,16 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         citationFocus: action.focus,
+      };
+    case "overview_opened_at_time":
+      return {
+        ...state,
+        selectedToolId: "overview",
+        citationFocus: {
+          seconds: action.seconds,
+          requestId: action.requestId,
+        },
+        error: "",
       };
     case "series_context_selected": {
       const chatBaseScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");

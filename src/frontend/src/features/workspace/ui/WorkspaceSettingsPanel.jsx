@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { popScaleVariant, blurVariant } from "../../../lib/animations";
-import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download } from "lucide-react";
+import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download, Check } from "lucide-react";
 import {
   WorkspaceProviderSelect,
   WorkspaceSegmentedControl,
@@ -29,6 +29,8 @@ export function WorkspaceSettingsPanel({
   onChangeSetting,
   onOpenUsagePage,
   onSaveProviderSettings,
+  onSelectProviderModel,
+  onDiscoverProviderModels,
   onSaveApiKey,
   onSaveAsrSettings,
   onRevealAsrApiKey,
@@ -51,6 +53,8 @@ export function WorkspaceSettingsPanel({
   const [asrApiKeyRevealLoading, setAsrApiKeyRevealLoading] = useState(false);
   const [providerTest, setProviderTest] = useState({ status: "idle", message: "" });
   const [asrTest, setAsrTest] = useState({ status: "idle", message: "" });
+  const [detectedProviderModels, setDetectedProviderModels] = useState([]);
+  const [providerModelDiscovery, setProviderModelDiscovery] = useState("idle");
   const isOllamaProvider = ui.llmProvider === "ollama";
   const hasApiKey = ui.hasOpenaiApiKey;
   const draftApiKey = ui.openaiApiKey.trim();
@@ -81,12 +85,33 @@ export function WorkspaceSettingsPanel({
     downloadingRagModelKey === "reranker"
   );
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
+  const providerModelOptions = [...new Set([...detectedProviderModels, ui.openaiModel].filter(Boolean))]
+    .map((model) => ({ id: model, label: model }));
+  const isProviderModelSelectActive = providerModelDiscovery === "ready";
   const saveProviderSettingsOnEnter = (event) => {
     if (event.key !== "Enter" || typeof onSaveProviderSettings !== "function") {
       return;
     }
     event.preventDefault();
     onSaveProviderSettings();
+  };
+  const handleProviderModelDiscovery = async () => {
+    if (isProviderModelSelectActive) {
+      setProviderModelDiscovery("idle");
+      setDetectedProviderModels([]);
+      return;
+    }
+    if (typeof onDiscoverProviderModels !== "function") {
+      return;
+    }
+    setProviderModelDiscovery("loading");
+    try {
+      const models = await onDiscoverProviderModels();
+      setDetectedProviderModels(models);
+      setProviderModelDiscovery("ready");
+    } catch {
+      setProviderModelDiscovery("idle");
+    }
   };
   const providerOptions = [
     { id: "openai", label: "openai", group: "官方", description: "OpenAI 官方 API；大多数中转站也兼容" },
@@ -740,16 +765,51 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="模型名称"
-                  description="调用的大语言模型标识码，如 `gpt-4o`、`deepseek-chat`、`qwen-max`。"
+                  description="可探测当前接口可用模型并选择，或切换回手动填写模型标识。"
                 >
-                  <WorkspaceTextInput
-                    value={ui.openaiModel}
-                    onChange={(nextValue) => onChangeSetting("openaiModel", nextValue)}
-                    onBlur={onSaveProviderSettings}
-                    onKeyDown={saveProviderSettingsOnEnter}
-                    placeholder="gpt-5.4"
-                    className="w-full sm:w-[240px]"
-                  />
+                  <div className="flex w-full flex-col gap-2 sm:w-[340px] sm:flex-row sm:items-center">
+                    {isProviderModelSelectActive ? (
+                      <WorkspaceProviderSelect
+                        value={ui.openaiModel}
+                        options={providerModelOptions}
+                        onChange={(nextValue) => {
+                          if (typeof onSelectProviderModel === "function") {
+                            onSelectProviderModel(nextValue);
+                            return;
+                          }
+                          onChangeSetting("openaiModel", nextValue);
+                        }}
+                        className="w-full min-w-0 flex-1"
+                        hideGroupLabels
+                        ariaLabel="模型名称"
+                      />
+                    ) : (
+                      <WorkspaceTextInput
+                        value={ui.openaiModel}
+                        onChange={(nextValue) => onChangeSetting("openaiModel", nextValue)}
+                        onBlur={onSaveProviderSettings}
+                        onKeyDown={saveProviderSettingsOnEnter}
+                        placeholder="gpt-5.4"
+                        className="w-full min-w-0 flex-1"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleProviderModelDiscovery}
+                      disabled={providerModelDiscovery === "loading" || typeof onDiscoverProviderModels !== "function"}
+                      aria-label={isProviderModelSelectActive ? "改为手动填写模型" : "探测模型"}
+                      title={isProviderModelSelectActive ? "改为手动填写模型" : "探测模型"}
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 text-xs font-bold text-stone-700 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
+                    >
+                      {providerModelDiscovery === "loading" ? (
+                        <LoaderCircle size={15} className="animate-spin" />
+                      ) : isProviderModelSelectActive ? (
+                        <Check size={16} aria-hidden="true" />
+                      ) : (
+                        "探测模型"
+                      )}
+                    </button>
+                  </div>
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow

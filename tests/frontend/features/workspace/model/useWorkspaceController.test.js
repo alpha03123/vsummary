@@ -65,6 +65,27 @@ describe("useWorkspaceController.onSeekToTime", () => {
   });
 });
 
+describe("useWorkspaceController.onOpenOverviewAtTime", () => {
+  it("opens the overview with a citation focus at the current playback time", () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    act(() => result.current.onOpenOverviewAtTime(42.5));
+
+    expect(result.current.state.selectedToolId).toBe("overview");
+    expect(result.current.citationFocus).toMatchObject({ seconds: 42.5 });
+    expect(result.current.citationFocus.requestId).toMatch(/^\d+-42\.5$/);
+  });
+
+  it("does not change the selected tool for a non-finite time", () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    act(() => result.current.onOpenOverviewAtTime(NaN));
+
+    expect(result.current.state.selectedToolId).toBe("studio");
+    expect(result.current.citationFocus).toBeNull();
+  });
+});
+
 describe("useWorkspaceController chat-drawer actions", () => {
   it("onToggleChatDrawer flips chatDrawerOpen", () => {
     const { result } = renderHook(() => useWorkspaceController());

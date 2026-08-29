@@ -1,6 +1,7 @@
 import {
   cancelRagModelDownload,
   cancelFasterWhisperModelDownload,
+  discoverProviderModels,
   downloadFasterWhisperModel,
   downloadRagModel,
   loadAsrApiKey,
@@ -236,6 +237,47 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         type: "load_failed",
         message: error instanceof Error ? error.message : "设置保存失败",
       });
+    }
+  }
+
+  async function onSelectProviderModel(openaiModel) {
+    const nextUi = normalizeUiSettings({
+      ...state.ui,
+      openaiModel,
+    });
+    dispatch({ type: "workspace_setting_edited", key: "openaiModel", value: nextUi.openaiModel });
+    try {
+      const savedProviderSettings = await updateProviderSettings(nextUi);
+      dispatch({
+        type: "workspace_settings_loaded",
+        settings: {
+          ...nextUi,
+          ...savedProviderSettings,
+          openaiApiKey: "",
+        },
+      });
+    } catch (error) {
+      dispatch({
+        type: "load_failed",
+        message: error instanceof Error ? error.message : "模型设置保存失败",
+      });
+    }
+  }
+
+  async function onDiscoverProviderModels() {
+    const nextUi = normalizeUiSettings(state.ui);
+    try {
+      const models = await discoverProviderModels(nextUi);
+      if (!models.length) {
+        throw new Error("未探测到可用模型");
+      }
+      return models;
+    } catch (error) {
+      const message = error instanceof DOMException && error.name === "AbortError"
+        ? "模型探测超时"
+        : error instanceof Error ? error.message : "模型探测失败";
+      dispatch({ type: "load_failed", message });
+      throw new Error(message);
     }
   }
 
@@ -550,6 +592,8 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onChangeSetting,
     onChangeProviderUsageRange,
     onSaveProviderSettings,
+    onSelectProviderModel,
+    onDiscoverProviderModels,
     onSaveApiKey,
     onSaveAsrSettings,
     onRevealAsrApiKey,

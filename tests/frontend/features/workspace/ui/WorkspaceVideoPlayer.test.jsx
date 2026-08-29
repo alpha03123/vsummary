@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceVideoPlayer } from "@src/features/workspace/ui/WorkspaceVideoPlayer";
@@ -100,5 +100,44 @@ describe("WorkspaceVideoPlayer", () => {
     } finally {
       playSpy.mockRestore();
     }
+  });
+
+  it("reports playback progress from the native video element", () => {
+    const onTimeUpdate = vi.fn();
+    const { container } = render(
+      <WorkspaceVideoPlayer
+        videoSource="/api/videos/s1/v1/preview"
+        onTimeUpdate={onTimeUpdate}
+      />,
+    );
+    const video = container.querySelector("video");
+    Object.defineProperty(video, "currentTime", { value: 600, configurable: true });
+
+    fireEvent.timeUpdate(video);
+
+    expect(onTimeUpdate).toHaveBeenCalledWith(600);
+  });
+
+  it("shows the current transcript action only while the video is playing", async () => {
+    const onOpenOverviewAtTime = vi.fn();
+    const { container } = render(
+      <WorkspaceVideoPlayer
+        videoSource="/api/videos/s1/v1/preview"
+        onOpenOverviewAtTime={onOpenOverviewAtTime}
+      />,
+    );
+    const video = container.querySelector("video");
+    Object.defineProperty(video, "currentTime", { value: 42.5, configurable: true });
+
+    expect(screen.queryByRole("button", { name: "查看当前转写" })).not.toBeInTheDocument();
+
+    fireEvent.play(video);
+    fireEvent.click(await screen.findByRole("button", { name: "查看当前转写" }));
+    expect(onOpenOverviewAtTime).toHaveBeenCalledWith(42.5);
+
+    fireEvent.pause(video);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "查看当前转写" })).not.toBeInTheDocument();
+    });
   });
 });

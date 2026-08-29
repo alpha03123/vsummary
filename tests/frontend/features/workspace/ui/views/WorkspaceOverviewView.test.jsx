@@ -45,6 +45,27 @@ function renderView(overrides = {}) {
 }
 
 describe("WorkspaceOverviewView chapter + transcript clicks", () => {
+  it("highlights the current chapter while its transcript is collapsed", () => {
+    renderView({ playbackTime: 20 });
+
+    const chapter = screen.getByText("第一章 入门").closest("article");
+    const transcriptToggle = screen.getByText("查看本章原文").closest("details");
+    expect(chapter).not.toHaveClass("ring-2", "ring-accent/10");
+    expect(transcriptToggle).toHaveClass("ring-2", "ring-accent/30");
+    expect(screen.queryByRole("button", { name: /段落一/ })).toBeNull();
+  });
+
+  it("highlights the current transcript segment after the chapter is expanded", () => {
+    renderView({ playbackTime: 13 });
+
+    fireEvent.click(screen.getByText("查看本章原文"));
+
+    const chapter = screen.getByText("第一章 入门").closest("article");
+    expect(chapter).not.toHaveClass("ring-2", "ring-accent/10");
+    expect(screen.getByRole("button", { name: /段落二/ })).toHaveClass("border-2", "border-accent");
+    expect(screen.getByRole("button", { name: /段落一/ })).not.toHaveClass("border-2", "border-accent");
+  });
+
   it("does not crash when onSeek is omitted", () => {
     render(
       <WorkspaceOverviewView
@@ -79,6 +100,25 @@ describe("WorkspaceOverviewView chapter + transcript clicks", () => {
       endSeconds: 10,
       chapterTitle: "第一章 入门",
     });
+  });
+
+  it("renders only the visible transcript rows for a large chapter", () => {
+    const largeSummary = {
+      ...summary,
+      chapters: [{
+        ...summary.chapters[0],
+        transcript_segments: Array.from({ length: 1800 }, (_, index) => ({
+          start_seconds: index * 10,
+          end_seconds: index * 10 + 10,
+          text: `模拟段落 ${index + 1}`,
+        })),
+      }],
+    };
+
+    renderView({ summary: largeSummary });
+    fireEvent.click(screen.getByText("查看本章原文"));
+
+    expect(screen.getAllByRole("button", { name: /模拟段落/ })).toHaveLength(10);
   });
 
   it("clicking on summary or key_points does NOT call onSeek", () => {
