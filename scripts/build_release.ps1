@@ -688,8 +688,6 @@ print(f"{kind} dependency contract ok")
 }
 
 function Build-AppPackage {
-    param([string]$SevenZipExe)
-
     $appRoot = Join-Path $BuildRootPath "app\vsummary-app"
     Remove-PathIfExists -Path $appRoot
     Ensure-Directory -Path $appRoot
@@ -700,12 +698,7 @@ function Build-AppPackage {
     Set-Content -LiteralPath (Join-Path $appRoot "VERSION") -Value $Script:ReleaseVersion -Encoding ASCII
     Write-AppFilesManifest -AppRoot $appRoot
 
-    $archivePath = Join-Path $OutputRootPath "vsummary-app-$Script:ReleaseVersion.zip"
-    Compress-Directory -SourceRoot $appRoot -ArchivePath $archivePath -SevenZipExe $SevenZipExe
-    return @{
-        Root = $appRoot
-        Archive = $archivePath
-    }
+    return $appRoot
 }
 
 function Write-AppFilesManifest {
@@ -851,6 +844,7 @@ function Build-DeltaPackage {
     $added = @()
     $modified = @()
     $deleted = @()
+    $fileHashes = [ordered]@{}
 
     foreach ($relative in $newFiles.Keys) {
         if ((Test-DeltaProtectedPath -Path $relative) -or (Test-GeneratedRuntimePath -Path $relative)) {
@@ -872,6 +866,7 @@ function Build-DeltaPackage {
         }
         Ensure-Directory -Path (Split-Path -Parent $target)
         Copy-Item -LiteralPath $newFiles[$relative] -Destination $target -Force
+        $fileHashes[$relative] = Get-FileSha256 -Path $newFiles[$relative]
     }
 
     foreach ($relative in $oldFiles.Keys) {
@@ -888,6 +883,7 @@ function Build-DeltaPackage {
         added = @($added | Sort-Object)
         modified = @($modified | Sort-Object)
         deleted = @($deleted | Sort-Object)
+        files = $fileHashes
     }
     $changes | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $payloadRoot "changes.json") -Encoding UTF8
 
@@ -936,6 +932,10 @@ function Write-UpdaterConfig {
     }
     $payload = [ordered]@{
         manifest_url = $manifestUrl
+        download_mirrors = @(
+            "https://ghfast.top/",
+            "https://gh-proxy.com/"
+        )
     }
     $configPath = Join-Path $PackageRoot "updater\config.json"
     Ensure-Directory -Path (Split-Path -Parent $configPath)
@@ -956,15 +956,11 @@ function New-AssetManifestEntry {
         sha256 = Get-FileSha256 -Path $item.FullName
         size = $item.Length
     }
-    if ($Role -eq "app") {
-        $entry.version = $Script:ReleaseVersion
-    }
     return $entry
 }
 
 function Write-ReleaseManifest {
     param(
-        [string]$AppArchive,
         [hashtable[]]$Variants,
         [hashtable[]]$Deltas
     )
@@ -1014,7 +1010,7 @@ function Write-ReleaseManifest {
     $manifest = [ordered]@{
         schema_version = 1
         version = $Script:ReleaseVersion
-        app = New-AssetManifestEntry -ArchivePath $AppArchive -Role "app"
+        app = [ordered]@{ version = $Script:ReleaseVersion }
         runtime = $runtime
         full = $full
         deltas = $deltaIndex
@@ -1034,7 +1030,7 @@ if ($MyInvocation.InvocationName -ne ".") {
     try {
         Ensure-FrontendDist
 
-        $appPackage = Build-AppPackage -SevenZipExe $SevenZipExe
+        $appRoot = Build-AppPackage
         $variants = @(Resolve-Targets)
 
         $previousArchives = @{ cpu = $PreviousCpuFullArchive; gpu = $PreviousGpuFullArchive }
@@ -1047,7 +1043,7 @@ if ($MyInvocation.InvocationName -ne ".") {
             }
 
             if (-not $SkipFullPackage) {
-                Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe `
+                Build-FullPackage -Variant $variant -AppRoot $appRoot -SevenZipExe $SevenZipExe `
                     -PreviousFullArchive $previousArchives[$variant.Kind] `
                     -ReuseRuntime:$reuseRuntimeByKind[$variant.Kind]
             }
@@ -1063,7 +1059,7 @@ if ($MyInvocation.InvocationName -ne ".") {
             }
         }
 
-        Write-ReleaseManifest -AppArchive $appPackage.Archive -Variants $variants -Deltas $deltas
+        Write-ReleaseManifest -Variants $variants -Deltas $deltas
     }
     finally {
         if (-not $KeepFrontendDist) {

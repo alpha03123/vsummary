@@ -138,17 +138,10 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
             self.assertEqual(cache_dir, str(root_dir / "data" / "models" / "fastembed"))
 
-    def test_build_release_manifest_describes_app_full_and_delta_assets(self) -> None:
+    def test_build_release_manifest_describes_full_and_delta_assets(self) -> None:
         manifest = build_release_manifest(
             version="v0.3.1",
             assets=[
-                ReleaseArtifact(
-                    name="vsummary-app-v0.3.1.7z",
-                    role="app",
-                    url="https://example.test/vsummary-app-v0.3.1.7z",
-                    sha256="a" * 64,
-                    size=123,
-                ),
                 ReleaseArtifact(
                     name="vsummary-full-cpu-v0.3.1.7z",
                     role="full",
@@ -172,7 +165,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
         self.assertEqual(manifest["version"], "v0.3.1")
         self.assertEqual(manifest["app"]["version"], "v0.3.1")
-        self.assertEqual(manifest["app"]["sha256"], "a" * 64)
         self.assertEqual(manifest["runtime"], {})
         self.assertEqual(manifest["full"]["cpu"]["sha256"], "c" * 64)
         self.assertEqual(manifest["deltas"]["cpu"]["v0.3.0"]["to"], "v0.3.1")

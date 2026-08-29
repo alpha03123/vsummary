@@ -4,13 +4,12 @@ import argparse
 import hashlib
 import json
 import shutil
-import subprocess
 import sys
 import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import Any
 
 
@@ -19,8 +18,8 @@ CONFIG_PATH = Path("updater") / "config.json"
 DOWNLOADS_DIR = Path("updater") / "downloads"
 STAGING_DIR = Path("updater") / "staging"
 APP_FILES_PATH = Path("updater") / "app-files.json"
-PENDING_DELTA_SCRIPT_PATH = Path("updater") / "apply-pending-delta.bat"
-PENDING_INSTALLED_PATH = Path("updater") / "installed.pending.json"
+TRANSACTION_DIR = Path("updater") / "transaction"
+TRANSACTION_PATH = TRANSACTION_DIR / "transaction.json"
 PROTECTED_FILES = {
     ".env",
     "config/settings.toml",
@@ -28,6 +27,11 @@ PROTECTED_FILES = {
     "updater/installed.json",
 }
 PROTECTED_PREFIXES = ("workspace/", "videos/", "data/")
+DEFAULT_GITHUB_MIRRORS = (
+    "https://ghfast.top/",
+    "https://gh-proxy.com/",
+)
+GITHUB_HOSTS = {"github.com", "api.github.com", "raw.githubusercontent.com", "objects.githubusercontent.com"}
 
 
 @dataclass(frozen=True)
@@ -36,18 +40,12 @@ class UpdateResult:
     app_updated: bool = False
     runtime_updated: bool = False
     requires_full_package: bool = False
-    pending_delta: bool = False
     messages: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class RuntimeCompatibility:
-    compatible: bool
-    failures: list[str] = field(default_factory=list)
 
 
 def run_update(root: Path, manifest_url: str | None = None, variant: str | None = None) -> UpdateResult:
     root = root.resolve()
+    _recover_incomplete_transaction(root)
     installed = _read_json(root / INSTALLED_PATH, default={})
     config = _read_json(root / CONFIG_PATH, default={})
     selected_variant = variant or installed.get("variant") or config.get("variant")
@@ -60,68 +58,51 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
     if not resolved_manifest_url:
         raise RuntimeError("Manifest URL is not configured. Pass --manifest or set updater/config.json.")
 
-    manifest = _read_json_from_location(resolved_manifest_url)
+    mirrors = _resolve_download_mirrors(config)
+    manifest = _read_json_from_location(resolved_manifest_url, mirrors=mirrors)
     messages: list[str] = []
     app_updated = False
     runtime_updated = False
 
     app = manifest.get("app") or {}
-    app_needs_update = app.get("version") and app.get("version") != installed.get("app_version")
-    runtime = ((manifest.get("runtime") or {}).get(selected_variant)) or {}
+    target_version = str(app.get("version") or manifest.get("version") or "")
+    app_needs_update = target_version and target_version != installed.get("app_version")
     if app_needs_update:
         delta_chain = _find_delta_chain(
             manifest.get("deltas"),
             variant=selected_variant,
             current_version=str(installed.get("app_version") or ""),
-            target_version=str(app.get("version") or ""),
+            target_version=target_version,
         )
         if delta_chain:
             if any(bool(delta.get("runtime")) for delta in delta_chain):
-                _prepare_pending_delta_update(root, delta_chain, installed, selected_variant)
-                messages.append("Runtime delta is ready and will be applied after this updater exits.")
-                return UpdateResult(changed=False, pending_delta=True, messages=messages)
-            for delta in delta_chain:
-                from_version = str(delta.get("from") or "")
-                to_version = str(delta.get("to") or "")
-                messages.append(f"Applying delta: {from_version} -> {to_version}")
-                delta_archive = _download_asset(root, delta)
-                runtime_changed = _apply_delta_update(root, delta_archive, installed, from_version, to_version)
-                installed["app_version"] = to_version
-                installed["app_files"] = _read_app_files(root)
-                installed["variant"] = selected_variant
-                _write_json(root / INSTALLED_PATH, installed)
-                app_updated = True
-                runtime_updated = runtime_updated or runtime_changed
+                full = ((manifest.get("full") or {}).get(selected_variant)) or {}
+                full_url = full.get("url") or "the latest full package"
+                messages.append(f"Runtime changed. Download and reinstall the full package: {full_url}")
+                return UpdateResult(changed=False, requires_full_package=True, messages=messages)
+            prepared_deltas = _prepare_delta_chain(root, delta_chain, mirrors)
+            _apply_delta_transaction(root, prepared_deltas, installed, selected_variant)
+            installed["app_version"] = target_version
+            installed["app_files"] = _read_app_files(root)
+            installed["variant"] = selected_variant
+            _write_json(root / INSTALLED_PATH, installed)
+            _commit_transaction(root)
+            app_updated = True
             messages.append("Delta update complete.")
-            messages.append("Runtime was updated by delta." if runtime_updated else "Runtime was retained.")
+            messages.append("Runtime was retained.")
             return UpdateResult(
                 changed=True,
                 app_updated=True,
-                runtime_updated=runtime_updated,
+                runtime_updated=False,
                 messages=messages,
             )
-        compatibility = _check_runtime_requirements(root, runtime)
-        if compatibility is not None and not compatibility.compatible:
-            full = ((manifest.get("full") or {}).get(selected_variant)) or {}
-            full_url = full.get("url") or "the latest full package"
-            details = ""
-            if compatibility.failures:
-                details = " Missing or incompatible: " + "; ".join(compatibility.failures) + "."
-            messages.append(
-                f"Current runtime does not satisfy the app requirements.{details} "
-                f"Download and reinstall the full package: {full_url}"
-            )
-            return UpdateResult(changed=False, requires_full_package=True, messages=messages)
-        if compatibility is not None:
-            messages.append("Current runtime satisfies the new app requirements.")
-
-    if app_needs_update:
-        messages.append(f"Updating app: {installed.get('app_version', 'unknown')} -> {app['version']}")
-        app_archive = _download_asset(root, app)
-        _apply_app_update(root, app_archive, installed)
-        installed["app_version"] = app["version"]
-        installed["app_files"] = _read_app_files(root)
-        app_updated = True
+        full = ((manifest.get("full") or {}).get(selected_variant)) or {}
+        full_url = full.get("url") or "the latest full package"
+        messages.append(
+            f"No applicable delta is available for {installed.get('app_version', 'unknown')} -> {target_version}. "
+            f"Download and reinstall the full package: {full_url}"
+        )
+        return UpdateResult(changed=False, requires_full_package=True, messages=messages)
     else:
         messages.append("App is already up to date.")
 
@@ -159,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         print(message)
     if result.requires_full_package:
         return 2
-    return 3 if result.pending_delta else 0
+    return 0
 
 
 def _read_json(path: Path, *, default: Any) -> Any:
@@ -170,81 +151,26 @@ def _read_json(path: Path, *, default: Any) -> Any:
 
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
 
 
-def _read_json_from_location(location: str) -> dict[str, Any]:
+def _read_json_from_location(location: str, *, mirrors: tuple[str, ...] = ()) -> dict[str, Any]:
     parsed = urllib.parse.urlparse(location)
     if parsed.scheme in ("http", "https", "file"):
-        with urllib.request.urlopen(location) as response:
-            return json.loads(response.read().decode("utf-8-sig"))
+        errors: list[str] = []
+        for candidate in _candidate_locations(location, mirrors):
+            try:
+                with urllib.request.urlopen(candidate, timeout=20) as response:
+                    return json.loads(response.read().decode("utf-8-sig"))
+            except Exception as error:
+                errors.append(f"{candidate}: {error}")
+        raise RuntimeError("Unable to download update manifest: " + "; ".join(errors))
     return json.loads(Path(location).read_text(encoding="utf-8-sig"))
 
 
-def _check_runtime_requirements(root: Path, runtime: dict[str, Any]) -> RuntimeCompatibility | None:
-    requirements = runtime.get("requirements")
-    if not isinstance(requirements, dict):
-        return None
-
-    python_spec = requirements.get("python")
-    package_specs = requirements.get("packages")
-    if not isinstance(python_spec, str) or not isinstance(package_specs, list):
-        return RuntimeCompatibility(False, ["invalid runtime requirements manifest"])
-
-    runtime_python = root / "runtime" / "python.exe"
-    if not runtime_python.is_file():
-        return RuntimeCompatibility(False, ["runtime/python.exe is missing"])
-
-    check_script = """
-import json
-import sys
-from importlib.metadata import PackageNotFoundError, version
-from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
-
-payload = json.loads(sys.argv[1])
-failures = []
-if not SpecifierSet(payload[\"python\"]).contains(".".join(map(str, sys.version_info[:3])), prereleases=True):
-    failures.append(f\"python {sys.version.split()[0]} does not satisfy {payload['python']}\")
-for raw_requirement in payload[\"packages\"]:
-    requirement = Requirement(raw_requirement)
-    try:
-        installed = version(requirement.name)
-    except PackageNotFoundError:
-        failures.append(f\"{requirement.name} is missing\")
-        continue
-    if requirement.specifier and installed not in requirement.specifier:
-        failures.append(f\"{requirement.name} {installed} does not satisfy {requirement.specifier}\")
-print(json.dumps({\"compatible\": not failures, \"failures\": failures}))
-"""
-    payload = json.dumps({"python": python_spec, "packages": [str(item) for item in package_specs]})
-    try:
-        completed = subprocess.run(
-            [str(runtime_python), "-c", check_script, payload],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-    except OSError as error:
-        return RuntimeCompatibility(False, [f"cannot start runtime check: {error}"])
-    except subprocess.TimeoutExpired:
-        return RuntimeCompatibility(False, ["runtime requirement check timed out"])
-    if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
-        return RuntimeCompatibility(False, [f"runtime requirement check failed: {detail}"])
-    try:
-        result = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return RuntimeCompatibility(False, ["runtime requirement check returned invalid JSON"])
-    failures = result.get("failures", []) if isinstance(result, dict) else []
-    return RuntimeCompatibility(
-        bool(result.get("compatible")) if isinstance(result, dict) else False,
-        [str(item) for item in failures if str(item).strip()],
-    )
-
-
-def _download_asset(root: Path, asset: dict[str, Any]) -> Path:
+def _download_asset(root: Path, asset: dict[str, Any], *, mirrors: tuple[str, ...] = ()) -> Path:
     url = str(asset.get("url") or "")
     if not url:
         raise RuntimeError("Asset URL is missing.")
@@ -259,12 +185,23 @@ def _download_asset(root: Path, asset: dict[str, Any]) -> Path:
         return target
 
     parsed = urllib.parse.urlparse(url)
-    if parsed.scheme in ("http", "https", "file"):
-        with urllib.request.urlopen(url) as response, target.open("wb") as output:
-            shutil.copyfileobj(response, output)
-    else:
+    if parsed.scheme not in ("http", "https", "file"):
         shutil.copy2(Path(url), target)
+        return _validate_download(target, expected_sha, file_name)
 
+    errors: list[str] = []
+    for candidate in _candidate_locations(url, mirrors):
+        try:
+            with urllib.request.urlopen(candidate, timeout=60) as response, target.open("wb") as output:
+                shutil.copyfileobj(response, output)
+            return _validate_download(target, expected_sha, file_name)
+        except Exception as error:
+            target.unlink(missing_ok=True)
+            errors.append(f"{candidate}: {error}")
+    raise RuntimeError(f"Unable to download {file_name}: " + "; ".join(errors))
+
+
+def _validate_download(target: Path, expected_sha: str, file_name: str) -> Path:
     actual_sha = _sha256(target)
     if expected_sha and actual_sha != expected_sha:
         target.unlink(missing_ok=True)
@@ -272,102 +209,130 @@ def _download_asset(root: Path, asset: dict[str, Any]) -> Path:
     return target
 
 
-def _apply_app_update(root: Path, archive_path: Path, installed: dict[str, Any]) -> None:
-    staging = root / STAGING_DIR / "app"
-    _reset_dir(staging)
-    _extract_zip(archive_path, staging)
-    new_files = _read_app_files(staging)
-    if not new_files:
-        new_files = _list_files(staging)
-
-    old_files = [str(item).replace("\\", "/") for item in installed.get("app_files", [])]
-    for relative_path in old_files:
-        if relative_path not in new_files:
-            _remove_app_file(root, relative_path)
-
-    _copy_tree_contents(staging, root)
-    _write_json(root / APP_FILES_PATH, {"files": new_files})
-    shutil.rmtree(staging, ignore_errors=True)
-
-
-def _apply_delta_update(
-    root: Path,
-    archive_path: Path,
-    installed: dict[str, Any],
-    expected_from: str,
-    expected_to: str,
-) -> bool:
-    staging = root / STAGING_DIR / "delta"
-    _reset_dir(staging)
-    _extract_zip(archive_path, staging)
-    changes = _read_delta_changes(staging, expected_from, expected_to)
-
-    runtime_changed = False
-    for raw_path in changes.get("deleted", []):
-        relative_path = _validate_delta_path(raw_path)
-        runtime_changed = runtime_changed or relative_path.startswith("runtime/")
-        _remove_app_file(root, relative_path)
-
-    for item in staging.rglob("*"):
-        if not item.is_file() or item.name == "changes.json":
+def _resolve_download_mirrors(config: Any) -> tuple[str, ...]:
+    configured = config.get("download_mirrors") if isinstance(config, dict) else None
+    candidates = configured if isinstance(configured, list) else DEFAULT_GITHUB_MIRRORS
+    mirrors: list[str] = []
+    for value in candidates:
+        prefix = str(value).strip()
+        parsed = urllib.parse.urlparse(prefix)
+        if parsed.scheme != "https" or not parsed.netloc:
             continue
-        relative_path = item.relative_to(staging).as_posix()
-        _validate_delta_path(relative_path)
-        if _is_protected_path(relative_path):
-            continue
-        runtime_changed = runtime_changed or relative_path.startswith("runtime/")
-        target = root / relative_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item, target)
-
-    shutil.rmtree(staging, ignore_errors=True)
-    return runtime_changed
+        normalized = prefix.rstrip("/") + "/"
+        if normalized not in mirrors:
+            mirrors.append(normalized)
+    return tuple(mirrors)
 
 
-def _prepare_pending_delta_update(
+def _candidate_locations(location: str, mirrors: tuple[str, ...]) -> tuple[str, ...]:
+    parsed = urllib.parse.urlparse(location)
+    if parsed.scheme != "https" or parsed.hostname not in GITHUB_HOSTS:
+        return (location,)
+    return tuple(prefix + location for prefix in mirrors) + (location,)
+
+
+def _prepare_delta_chain(
     root: Path,
     delta_chain: list[dict[str, Any]],
-    installed: dict[str, Any],
-    variant: str,
-) -> None:
-    pending_root = root / STAGING_DIR / "pending-delta"
-    _reset_dir(pending_root)
-    commands: list[str] = []
-    app_files = installed.get("app_files", [])
-    target_version = str(installed.get("app_version") or "")
-
+    mirrors: tuple[str, ...],
+) -> list[tuple[Path, dict[str, Any]]]:
+    staging = root / STAGING_DIR / "delta"
+    _reset_dir(staging)
+    prepared: list[tuple[Path, dict[str, Any]]] = []
     for index, delta in enumerate(delta_chain):
         from_version = str(delta.get("from") or "")
         to_version = str(delta.get("to") or "")
-        archive = _download_asset(root, delta)
-        stage = pending_root / str(index)
-        _extract_zip(archive, stage)
+        stage = staging / str(index)
+        _extract_zip(_download_asset(root, delta, mirrors=mirrors), stage)
         changes = _read_delta_changes(stage, from_version, to_version)
-        payload_paths = [
-            _validate_delta_path(path)
-            for path in [*changes.get("added", []), *changes.get("modified", [])]
-        ]
-        for relative_path in payload_paths:
-            source = stage / relative_path
-            if not source.is_file():
-                raise RuntimeError(f"Delta payload is missing declared file: {relative_path}")
-            if _is_protected_path(relative_path):
-                continue
-            commands.extend(_render_copy_commands(index, relative_path))
-        for raw_path in changes.get("deleted", []):
-            relative_path = _validate_delta_path(raw_path)
-            if not _is_protected_path(relative_path):
-                commands.append(_render_delete_command(relative_path))
-        staged_app_files = _read_json(stage / APP_FILES_PATH, default=None)
-        if isinstance(staged_app_files, dict) and isinstance(staged_app_files.get("files"), list):
-            app_files = [str(path).replace("\\", "/") for path in staged_app_files["files"]]
-        target_version = to_version
+        _validate_delta_payload(stage, changes)
+        prepared.append((stage, changes))
+    return prepared
 
-    next_installed = dict(installed)
-    next_installed.update({"variant": variant, "app_version": target_version, "app_files": app_files})
-    _write_json(root / PENDING_INSTALLED_PATH, next_installed)
-    script = _render_pending_delta_script(commands)
-    (root / PENDING_DELTA_SCRIPT_PATH).write_text(script, encoding="ascii")
+
+def _apply_delta_transaction(
+    root: Path,
+    prepared_deltas: list[tuple[Path, dict[str, Any]]],
+    installed: dict[str, Any],
+    variant: str,
+) -> None:
+    transaction_dir = root / TRANSACTION_DIR
+    _reset_dir(transaction_dir)
+    transaction = {
+        "state": "applying",
+        "installed": installed,
+        "variant": variant,
+        "backups": [],
+        "created": [],
+    }
+    _write_json(root / TRANSACTION_PATH, transaction)
+    try:
+        for stage, changes in prepared_deltas:
+            for raw_path in changes.get("deleted", []):
+                relative_path = _validate_delta_path(raw_path)
+                _backup_for_mutation(root, transaction, relative_path)
+                _remove_file(root, relative_path)
+            for relative_path in [*changes["added"], *changes["modified"]]:
+                normalized_path = _validate_delta_path(relative_path)
+                _backup_for_mutation(root, transaction, normalized_path)
+                target = root / normalized_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(stage / normalized_path, target)
+    except Exception:
+        _rollback_transaction(root)
+        raise
+
+
+def _backup_for_mutation(root: Path, transaction: dict[str, Any], relative_path: str) -> None:
+    target = root / relative_path
+    backups = set(transaction["backups"])
+    created = set(transaction["created"])
+    if relative_path in backups or relative_path in created:
+        return
+    if target.is_file():
+        backup = root / TRANSACTION_DIR / "backup" / relative_path
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target, backup)
+        transaction["backups"].append(relative_path)
+    else:
+        transaction["created"].append(relative_path)
+    _write_json(root / TRANSACTION_PATH, transaction)
+
+
+def _commit_transaction(root: Path) -> None:
+    transaction = _read_json(root / TRANSACTION_PATH, default={})
+    if isinstance(transaction, dict):
+        transaction["state"] = "committed"
+        _write_json(root / TRANSACTION_PATH, transaction)
+    shutil.rmtree(root / TRANSACTION_DIR, ignore_errors=True)
+
+
+def _recover_incomplete_transaction(root: Path) -> None:
+    transaction = _read_json(root / TRANSACTION_PATH, default=None)
+    if not isinstance(transaction, dict):
+        return
+    if transaction.get("state") != "committed":
+        _rollback_transaction(root)
+    else:
+        shutil.rmtree(root / TRANSACTION_DIR, ignore_errors=True)
+
+
+def _rollback_transaction(root: Path) -> None:
+    transaction = _read_json(root / TRANSACTION_PATH, default={})
+    if not isinstance(transaction, dict):
+        return
+    for relative_path in reversed([str(path) for path in transaction.get("created", [])]):
+        _remove_file(root, relative_path)
+    for relative_path in reversed([str(path) for path in transaction.get("backups", [])]):
+        backup = root / TRANSACTION_DIR / "backup" / relative_path
+        if backup.is_file():
+            target = root / relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, target)
+    original_installed = transaction.get("installed")
+    if isinstance(original_installed, dict):
+        _write_json(root / INSTALLED_PATH, original_installed)
+    shutil.rmtree(root / TRANSACTION_DIR, ignore_errors=True)
 
 
 def _read_delta_changes(stage: Path, expected_from: str, expected_to: str) -> dict[str, Any]:
@@ -383,45 +348,34 @@ def _read_delta_changes(stage: Path, expected_from: str, expected_to: str) -> di
     return changes
 
 
-def _render_copy_commands(stage_index: int, relative_path: str) -> list[str]:
-    windows_path = relative_path.replace("/", "\\")
-    parent = str(PureWindowsPath(windows_path).parent)
-    commands: list[str] = []
-    if parent != ".":
-        commands.append(f'if not exist "%ROOT%\\{parent}" mkdir "%ROOT%\\{parent}"')
-    commands.append(
-        f'copy /y "%ROOT%\\updater\\staging\\pending-delta\\{stage_index}\\{windows_path}" '
-        f'"%ROOT%\\{windows_path}" >nul || goto :failure'
-    )
-    return commands
-
-
-def _render_delete_command(relative_path: str) -> str:
-    return f'del /f /q "%ROOT%\\{relative_path.replace("/", chr(92))}" >nul 2>nul'
-
-
 def _is_protected_path(relative_path: str) -> bool:
     return relative_path in PROTECTED_FILES or any(relative_path.startswith(prefix) for prefix in PROTECTED_PREFIXES)
 
 
-def _render_pending_delta_script(commands: list[str]) -> str:
-    return "\r\n".join(
-        [
-            "@echo off",
-            "setlocal EnableExtensions",
-            'set "ROOT=%~dp0.."',
-            'for %%I in ("%ROOT%") do set "ROOT=%%~fI"',
-            *commands,
-            'move /y "%ROOT%\\updater\\installed.pending.json" "%ROOT%\\updater\\installed.json" >nul || goto :failure',
-            'rmdir /s /q "%ROOT%\\updater\\staging\\pending-delta"',
-            'del /f /q "%~f0" >nul 2>nul',
-            "exit /b 0",
-            ":failure",
-            "echo Failed to apply the runtime delta. Download the latest full package.",
-            "exit /b 1",
-            "",
-        ]
-    )
+def _validate_delta_payload(stage: Path, changes: dict[str, Any]) -> None:
+    added = [_validate_delta_path(path) for path in changes.get("added", [])]
+    modified = [_validate_delta_path(path) for path in changes.get("modified", [])]
+    deleted = [_validate_delta_path(path) for path in changes.get("deleted", [])]
+    if any(_is_protected_path(path) for path in [*added, *modified, *deleted]):
+        raise RuntimeError("Delta package attempts to modify protected user data.")
+    files = changes.get("files")
+    if not isinstance(files, dict):
+        raise RuntimeError("Delta package is missing file hashes.")
+    expected_paths = set([*added, *modified])
+    if set(files) != expected_paths:
+        raise RuntimeError("Delta file hash list does not match changed files.")
+    for relative_path in expected_paths:
+        source = stage / relative_path
+        expected_hash = str(files.get(relative_path) or "").lower()
+        if not source.is_file() or len(expected_hash) != 64 or _sha256(source) != expected_hash:
+            raise RuntimeError(f"Delta payload checksum failed: {relative_path}")
+
+
+def _remove_file(root: Path, relative_path: str) -> None:
+    target = root / relative_path
+    if target.is_file():
+        target.unlink()
+        _remove_empty_parents(target.parent, root)
 
 
 def _extract_zip(archive_path: Path, destination: Path) -> None:
@@ -477,16 +431,6 @@ def _find_delta_chain(
     return None
 
 
-def _copy_tree_contents(source: Path, destination: Path) -> None:
-    for item in source.iterdir():
-        target = destination / item.name
-        if item.is_dir():
-            shutil.copytree(item, target, dirs_exist_ok=True)
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, target)
-
-
 def _remove_app_file(root: Path, relative_path: str) -> None:
     normalized = relative_path.replace("\\", "/")
     if normalized in PROTECTED_FILES or normalized.startswith(PROTECTED_PREFIXES):
@@ -513,14 +457,6 @@ def _read_app_files(root: Path) -> list[str]:
     payload = _read_json(root / APP_FILES_PATH, default={})
     files = payload.get("files", []) if isinstance(payload, dict) else []
     return [str(item).replace("\\", "/") for item in files]
-
-
-def _list_files(root: Path) -> list[str]:
-    return sorted(
-        path.relative_to(root).as_posix()
-        for path in root.rglob("*")
-        if path.is_file()
-    )
 
 
 def _reset_dir(path: Path) -> None:

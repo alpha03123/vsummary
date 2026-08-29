@@ -8,7 +8,6 @@ Describe "Build-DeltaPackage" {
         $previousRoot = Join-Path $fixtureRoot "previous"
         $currentRoot = Join-Path $fixtureRoot "current"
         $previousArchive = Join-Path $fixtureRoot "previous.7z"
-        $appArchive = Join-Path $fixtureRoot "vsummary-app-v2.zip"
         $fullArchive = Join-Path $fixtureRoot "vsummary-full-cpu-v2.7z"
         $originalBuildRoot = $BuildRootPath
         $originalOutputRoot = $OutputRootPath
@@ -36,7 +35,6 @@ Describe "Build-DeltaPackage" {
             Set-Content -LiteralPath (Join-Path $previousRoot "runtime\Library\changed.dll") -Value "old-runtime" -NoNewline
             Set-Content -LiteralPath (Join-Path $currentRoot "runtime\Library\changed.dll") -Value "new-runtime" -NoNewline
             & "C:\Program Files\7-Zip\7z.exe" a -t7z $previousArchive (Join-Path $previousRoot "*") | Out-Null
-            Set-Content -LiteralPath $appArchive -Value "app" -NoNewline
             Set-Content -LiteralPath $fullArchive -Value "full" -NoNewline
 
             $BuildRootPath = Join-Path $fixtureRoot "_build"
@@ -67,7 +65,7 @@ Describe "Build-DeltaPackage" {
             Copy-RuntimeFromFullPackage -FullArchive $previousArchive -DestinationRoot (Join-Path $fixtureRoot "reused-runtime") -SevenZipExe "C:\Program Files\7-Zip\7z.exe"
             (Get-Content -LiteralPath (Join-Path $fixtureRoot "reused-runtime\Lib\sample.pyc") -Raw) | Should Be "old-bytecode"
 
-            Write-ReleaseManifest -AppArchive $appArchive -Variants @($variant) -Deltas @($result[0])
+            Write-ReleaseManifest -Variants @($variant) -Deltas @($result[0])
             $manifest = Get-Content -LiteralPath $Script:ManifestPath -Raw | ConvertFrom-Json
             $manifest.deltas.cpu.v1.to | Should Be "v2"
         }

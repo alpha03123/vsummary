@@ -24,7 +24,7 @@ class ReleaseLayout:
 @dataclass(frozen=True)
 class ReleaseArtifact:
     name: str
-    role: Literal["app", "full", "delta"]
+    role: Literal["full", "delta"]
     url: str
     sha256: str
     size: int
@@ -53,7 +53,7 @@ def build_release_manifest(*, version: str, assets: list[ReleaseArtifact]) -> di
     manifest: dict[str, object] = {
         "schema_version": 1,
         "version": version,
-        "app": {},
+        "app": {"version": version},
         "runtime": {},
         "full": {},
         "deltas": {},
@@ -68,9 +68,6 @@ def build_release_manifest(*, version: str, assets: list[ReleaseArtifact]) -> di
             "sha256": asset.sha256,
             "size": asset.size,
         }
-        if asset.role == "app":
-            manifest["app"] = {"version": version, **payload}
-            continue
         if not asset.variant:
             raise ValueError(f"{asset.role} artifact requires variant: {asset.name}")
         if asset.role == "full":
