@@ -163,6 +163,99 @@ class UpdaterTests(unittest.TestCase):
             installed = json.loads(installed_path.read_text(encoding="utf-8"))
             self.assertEqual(installed["app_version"], "v2")
 
+    def test_applies_multiple_adjacent_deltas_to_reach_target_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "src").mkdir()
+            (root / "src" / "old.py").write_text("old", encoding="utf-8")
+            installed_path = root / "updater" / "installed.json"
+            installed_path.parent.mkdir()
+            installed_path.write_text(
+                json.dumps({"variant": "cpu", "app_version": "v1", "app_files": ["src/old.py"]}),
+                encoding="utf-8",
+            )
+
+            delta_one = root / "release" / "v1-to-v2.zip"
+            _write_zip(
+                delta_one,
+                {
+                    "src/old.py": "new",
+                    "changes.json": json.dumps({"from": "v1", "to": "v2", "modified": ["src/old.py"]}),
+                },
+            )
+            delta_two = root / "release" / "v2-to-v3.zip"
+            _write_zip(
+                delta_two,
+                {
+                    "src/new.py": "latest",
+                    "changes.json": json.dumps({"from": "v2", "to": "v3", "added": ["src/new.py"]}),
+                },
+            )
+            manifest = {
+                "version": "v3",
+                "app": {"version": "v3"},
+                "runtime": {"cpu": {}},
+                "deltas": {
+                    "cpu": {
+                        "v1": {"from": "v1", "to": "v2", **_asset(delta_one)},
+                        "v2": {"from": "v2", "to": "v3", **_asset(delta_two)},
+                    }
+                },
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = run_update(root=root, manifest_url=str(manifest_path), variant="cpu")
+
+            self.assertTrue(result.changed)
+            self.assertTrue(result.app_updated)
+            self.assertFalse(result.runtime_updated)
+            self.assertEqual((root / "src" / "old.py").read_text(encoding="utf-8"), "new")
+            self.assertEqual((root / "src" / "new.py").read_text(encoding="utf-8"), "latest")
+            installed = json.loads(installed_path.read_text(encoding="utf-8"))
+            self.assertEqual(installed["app_version"], "v3")
+
+    def test_runtime_delta_is_staged_for_update_batch_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "runtime").mkdir()
+            (root / "runtime" / "python.exe").write_text("old", encoding="utf-8")
+            installed_path = root / "updater" / "installed.json"
+            installed_path.parent.mkdir()
+            installed_path.write_text(json.dumps({"variant": "cpu", "app_version": "v1"}), encoding="utf-8")
+            delta = root / "release" / "v1-to-v2-runtime.zip"
+            _write_zip(
+                delta,
+                {
+                    "runtime/python.exe": "new",
+                    "changes.json": json.dumps(
+                        {"from": "v1", "to": "v2", "modified": ["runtime/python.exe"]}
+                    ),
+                },
+            )
+            manifest = {
+                "version": "v2",
+                "app": {"version": "v2"},
+                "runtime": {"cpu": {}},
+                "deltas": {
+                    "cpu": {
+                        "v1": {"from": "v1", "to": "v2", "runtime": True, **_asset(delta)},
+                    }
+                },
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = run_update(root=root, manifest_url=str(manifest_path), variant="cpu")
+
+            self.assertFalse(result.changed)
+            self.assertTrue(result.pending_delta)
+            self.assertEqual((root / "runtime" / "python.exe").read_text(encoding="utf-8"), "old")
+            script = (root / "updater" / "apply-pending-delta.bat").read_text(encoding="ascii")
+            self.assertIn("runtime\\python.exe", script)
+            pending = json.loads((root / "updater" / "installed.pending.json").read_text(encoding="utf-8"))
+            self.assertEqual(pending["app_version"], "v2")
+
     def test_reads_bom_prefixed_packaging_json_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

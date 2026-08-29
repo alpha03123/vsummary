@@ -138,7 +138,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
             self.assertEqual(cache_dir, str(root_dir / "data" / "models" / "fastembed"))
 
-    def test_build_release_manifest_describes_app_and_full_assets(self) -> None:
+    def test_build_release_manifest_describes_app_full_and_delta_assets(self) -> None:
         manifest = build_release_manifest(
             version="v0.3.1",
             assets=[
@@ -157,6 +157,16 @@ class ReleasePackagingSpecTests(unittest.TestCase):
                     sha256="c" * 64,
                     size=789,
                 ),
+                ReleaseArtifact(
+                    name="vsummary-delta-cpu-v0.3.0-to-v0.3.1.zip",
+                    role="delta",
+                    variant="cpu",
+                    from_version="v0.3.0",
+                    to_version="v0.3.1",
+                    url="https://example.test/vsummary-delta-cpu-v0.3.0-to-v0.3.1.zip",
+                    sha256="d" * 64,
+                    size=456,
+                ),
             ],
         )
 
@@ -165,6 +175,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertEqual(manifest["app"]["sha256"], "a" * 64)
         self.assertEqual(manifest["runtime"], {})
         self.assertEqual(manifest["full"]["cpu"]["sha256"], "c" * 64)
+        self.assertEqual(manifest["deltas"]["cpu"]["v0.3.0"]["to"], "v0.3.1")
 
 
 if __name__ == "__main__":

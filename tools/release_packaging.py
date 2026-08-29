@@ -24,11 +24,13 @@ class ReleaseLayout:
 @dataclass(frozen=True)
 class ReleaseArtifact:
     name: str
-    role: Literal["app", "full"]
+    role: Literal["app", "full", "delta"]
     url: str
     sha256: str
     size: int
     variant: str | None = None
+    from_version: str | None = None
+    to_version: str | None = None
 
 
 PACKAGE_VARIANTS: dict[str, PackageVariant] = {
@@ -54,8 +56,10 @@ def build_release_manifest(*, version: str, assets: list[ReleaseArtifact]) -> di
         "app": {},
         "runtime": {},
         "full": {},
+        "deltas": {},
     }
     full_assets: dict[str, object] = {}
+    delta_assets: dict[str, dict[str, object]] = {}
 
     for asset in assets:
         payload = {
@@ -72,9 +76,19 @@ def build_release_manifest(*, version: str, assets: list[ReleaseArtifact]) -> di
         if asset.role == "full":
             full_assets[asset.variant] = payload
             continue
+        if asset.role == "delta":
+            if not asset.from_version or not asset.to_version:
+                raise ValueError(f"delta artifact requires from_version and to_version: {asset.name}")
+            delta_assets.setdefault(asset.variant, {})[asset.from_version] = {
+                **payload,
+                "from": asset.from_version,
+                "to": asset.to_version,
+            }
+            continue
         raise ValueError(f"unsupported artifact role: {asset.role}")
 
     manifest["full"] = full_assets
+    manifest["deltas"] = delta_assets
     return manifest
 
 

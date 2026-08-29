@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
@@ -19,13 +19,15 @@ CONFIG_PATH = Path("updater") / "config.json"
 DOWNLOADS_DIR = Path("updater") / "downloads"
 STAGING_DIR = Path("updater") / "staging"
 APP_FILES_PATH = Path("updater") / "app-files.json"
+PENDING_DELTA_SCRIPT_PATH = Path("updater") / "apply-pending-delta.bat"
+PENDING_INSTALLED_PATH = Path("updater") / "installed.pending.json"
 PROTECTED_FILES = {
     ".env",
     "config/settings.toml",
     "updater/config.json",
     "updater/installed.json",
 }
-PROTECTED_PREFIXES = ("workspace/", "videos/", "data/", "runtime/")
+PROTECTED_PREFIXES = ("workspace/", "videos/", "data/")
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,7 @@ class UpdateResult:
     app_updated: bool = False
     runtime_updated: bool = False
     requires_full_package: bool = False
+    pending_delta: bool = False
     messages: list[str] = field(default_factory=list)
 
 
@@ -66,6 +69,37 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
     app_needs_update = app.get("version") and app.get("version") != installed.get("app_version")
     runtime = ((manifest.get("runtime") or {}).get(selected_variant)) or {}
     if app_needs_update:
+        delta_chain = _find_delta_chain(
+            manifest.get("deltas"),
+            variant=selected_variant,
+            current_version=str(installed.get("app_version") or ""),
+            target_version=str(app.get("version") or ""),
+        )
+        if delta_chain:
+            if any(bool(delta.get("runtime")) for delta in delta_chain):
+                _prepare_pending_delta_update(root, delta_chain, installed, selected_variant)
+                messages.append("Runtime delta is ready and will be applied after this updater exits.")
+                return UpdateResult(changed=False, pending_delta=True, messages=messages)
+            for delta in delta_chain:
+                from_version = str(delta.get("from") or "")
+                to_version = str(delta.get("to") or "")
+                messages.append(f"Applying delta: {from_version} -> {to_version}")
+                delta_archive = _download_asset(root, delta)
+                runtime_changed = _apply_delta_update(root, delta_archive, installed, from_version, to_version)
+                installed["app_version"] = to_version
+                installed["app_files"] = _read_app_files(root)
+                installed["variant"] = selected_variant
+                _write_json(root / INSTALLED_PATH, installed)
+                app_updated = True
+                runtime_updated = runtime_updated or runtime_changed
+            messages.append("Delta update complete.")
+            messages.append("Runtime was updated by delta." if runtime_updated else "Runtime was retained.")
+            return UpdateResult(
+                changed=True,
+                app_updated=True,
+                runtime_updated=runtime_updated,
+                messages=messages,
+            )
         compatibility = _check_runtime_requirements(root, runtime)
         if compatibility is not None and not compatibility.compatible:
             full = ((manifest.get("full") or {}).get(selected_variant)) or {}
@@ -123,7 +157,9 @@ def main(argv: list[str] | None = None) -> int:
 
     for message in result.messages:
         print(message)
-    return 2 if result.requires_full_package else 0
+    if result.requires_full_package:
+        return 2
+    return 3 if result.pending_delta else 0
 
 
 def _read_json(path: Path, *, default: Any) -> Any:
@@ -254,6 +290,140 @@ def _apply_app_update(root: Path, archive_path: Path, installed: dict[str, Any])
     shutil.rmtree(staging, ignore_errors=True)
 
 
+def _apply_delta_update(
+    root: Path,
+    archive_path: Path,
+    installed: dict[str, Any],
+    expected_from: str,
+    expected_to: str,
+) -> bool:
+    staging = root / STAGING_DIR / "delta"
+    _reset_dir(staging)
+    _extract_zip(archive_path, staging)
+    changes = _read_delta_changes(staging, expected_from, expected_to)
+
+    runtime_changed = False
+    for raw_path in changes.get("deleted", []):
+        relative_path = _validate_delta_path(raw_path)
+        runtime_changed = runtime_changed or relative_path.startswith("runtime/")
+        _remove_app_file(root, relative_path)
+
+    for item in staging.rglob("*"):
+        if not item.is_file() or item.name == "changes.json":
+            continue
+        relative_path = item.relative_to(staging).as_posix()
+        _validate_delta_path(relative_path)
+        if _is_protected_path(relative_path):
+            continue
+        runtime_changed = runtime_changed or relative_path.startswith("runtime/")
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, target)
+
+    shutil.rmtree(staging, ignore_errors=True)
+    return runtime_changed
+
+
+def _prepare_pending_delta_update(
+    root: Path,
+    delta_chain: list[dict[str, Any]],
+    installed: dict[str, Any],
+    variant: str,
+) -> None:
+    pending_root = root / STAGING_DIR / "pending-delta"
+    _reset_dir(pending_root)
+    commands: list[str] = []
+    app_files = installed.get("app_files", [])
+    target_version = str(installed.get("app_version") or "")
+
+    for index, delta in enumerate(delta_chain):
+        from_version = str(delta.get("from") or "")
+        to_version = str(delta.get("to") or "")
+        archive = _download_asset(root, delta)
+        stage = pending_root / str(index)
+        _extract_zip(archive, stage)
+        changes = _read_delta_changes(stage, from_version, to_version)
+        payload_paths = [
+            _validate_delta_path(path)
+            for path in [*changes.get("added", []), *changes.get("modified", [])]
+        ]
+        for relative_path in payload_paths:
+            source = stage / relative_path
+            if not source.is_file():
+                raise RuntimeError(f"Delta payload is missing declared file: {relative_path}")
+            if _is_protected_path(relative_path):
+                continue
+            commands.extend(_render_copy_commands(index, relative_path))
+        for raw_path in changes.get("deleted", []):
+            relative_path = _validate_delta_path(raw_path)
+            if not _is_protected_path(relative_path):
+                commands.append(_render_delete_command(relative_path))
+        staged_app_files = _read_json(stage / APP_FILES_PATH, default=None)
+        if isinstance(staged_app_files, dict) and isinstance(staged_app_files.get("files"), list):
+            app_files = [str(path).replace("\\", "/") for path in staged_app_files["files"]]
+        target_version = to_version
+
+    next_installed = dict(installed)
+    next_installed.update({"variant": variant, "app_version": target_version, "app_files": app_files})
+    _write_json(root / PENDING_INSTALLED_PATH, next_installed)
+    script = _render_pending_delta_script(commands)
+    (root / PENDING_DELTA_SCRIPT_PATH).write_text(script, encoding="ascii")
+
+
+def _read_delta_changes(stage: Path, expected_from: str, expected_to: str) -> dict[str, Any]:
+    changes = _read_json(stage / "changes.json", default=None)
+    if not isinstance(changes, dict):
+        raise RuntimeError("Delta package is missing changes.json.")
+    if changes.get("from") != expected_from or changes.get("to") != expected_to:
+        raise RuntimeError(
+            "Delta base/target mismatch: "
+            f"expected {expected_from} -> {expected_to}, "
+            f"got {changes.get('from')} -> {changes.get('to')}"
+        )
+    return changes
+
+
+def _render_copy_commands(stage_index: int, relative_path: str) -> list[str]:
+    windows_path = relative_path.replace("/", "\\")
+    parent = str(PureWindowsPath(windows_path).parent)
+    commands: list[str] = []
+    if parent != ".":
+        commands.append(f'if not exist "%ROOT%\\{parent}" mkdir "%ROOT%\\{parent}"')
+    commands.append(
+        f'copy /y "%ROOT%\\updater\\staging\\pending-delta\\{stage_index}\\{windows_path}" '
+        f'"%ROOT%\\{windows_path}" >nul || goto :failure'
+    )
+    return commands
+
+
+def _render_delete_command(relative_path: str) -> str:
+    return f'del /f /q "%ROOT%\\{relative_path.replace("/", chr(92))}" >nul 2>nul'
+
+
+def _is_protected_path(relative_path: str) -> bool:
+    return relative_path in PROTECTED_FILES or any(relative_path.startswith(prefix) for prefix in PROTECTED_PREFIXES)
+
+
+def _render_pending_delta_script(commands: list[str]) -> str:
+    return "\r\n".join(
+        [
+            "@echo off",
+            "setlocal EnableExtensions",
+            'set "ROOT=%~dp0.."',
+            'for %%I in ("%ROOT%") do set "ROOT=%%~fI"',
+            *commands,
+            'move /y "%ROOT%\\updater\\installed.pending.json" "%ROOT%\\updater\\installed.json" >nul || goto :failure',
+            'rmdir /s /q "%ROOT%\\updater\\staging\\pending-delta"',
+            'del /f /q "%~f0" >nul 2>nul',
+            "exit /b 0",
+            ":failure",
+            "echo Failed to apply the runtime delta. Download the latest full package.",
+            "exit /b 1",
+            "",
+        ]
+    )
+
+
 def _extract_zip(archive_path: Path, destination: Path) -> None:
     with zipfile.ZipFile(archive_path) as archive:
         for member in archive.infolist():
@@ -261,6 +431,50 @@ def _extract_zip(archive_path: Path, destination: Path) -> None:
             if not _is_within(target, destination.resolve()):
                 raise RuntimeError(f"Unsafe archive member path: {member.filename}")
             archive.extract(member, destination)
+
+
+def _validate_delta_path(value: Any) -> str:
+    relative_path = str(value).replace("\\", "/")
+    if not relative_path or relative_path.startswith("/") or relative_path == "changes.json":
+        raise RuntimeError(f"Invalid delta path: {value}")
+    candidate = Path(relative_path)
+    if any(part in ("", ".", "..") for part in candidate.parts):
+        raise RuntimeError(f"Invalid delta path: {value}")
+    return relative_path
+
+
+def _find_delta_chain(
+    deltas: Any,
+    *,
+    variant: str,
+    current_version: str,
+    target_version: str,
+) -> list[dict[str, Any]] | None:
+    if not current_version or not target_version or current_version == target_version:
+        return None
+    variant_deltas = deltas.get(variant) if isinstance(deltas, dict) else None
+    if not isinstance(variant_deltas, dict):
+        return None
+
+    chain: list[dict[str, Any]] = []
+    version = current_version
+    seen: set[str] = set()
+    for _ in range(100):
+        if version == target_version:
+            return chain
+        if version in seen:
+            return None
+        seen.add(version)
+        raw_delta = variant_deltas.get(version)
+        if not isinstance(raw_delta, dict):
+            return None
+        from_version = str(raw_delta.get("from") or version)
+        to_version = str(raw_delta.get("to") or "")
+        if from_version != version or not to_version:
+            return None
+        chain.append(raw_delta)
+        version = to_version
+    return None
 
 
 def _copy_tree_contents(source: Path, destination: Path) -> None:

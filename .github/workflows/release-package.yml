@@ -34,10 +34,40 @@ jobs:
           & $env:CONDA_EXE run -n base python -m pip install --upgrade pip conda-pack
           Add-Content -Path $env:GITHUB_PATH -Value 'C:\Miniconda\Scripts'
 
+      - name: Download previous release packages
+        shell: pwsh
+        run: |
+          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          $previous = @($releases |
+            Where-Object { -not $_.draft -and -not $_.prerelease -and $_.tag_name -ne $env:RELEASE_TAG } |
+            Sort-Object published_at -Descending |
+            Select-Object -First 1)
+          if (-not $previous) {
+            Write-Host 'No previous release found; skipping delta generation.'
+            exit 0
+          }
+          $previousDir = Join-Path $env:RUNNER_TEMP 'vsummary-previous-release'
+          New-Item -ItemType Directory -Path $previousDir -Force | Out-Null
+          gh release download $previous.tag_name --repo $env:GITHUB_REPOSITORY --pattern 'vsummary-full-*.7z' --pattern 'vsummary-manifest.json' --dir $previousDir --clobber
+          Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_VERSION=$($previous.tag_name)"
+          Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_MANIFEST=$previousDir\vsummary-manifest.json"
+          Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_CPU_FULL=$previousDir\vsummary-full-cpu-$($previous.tag_name).7z"
+          Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_GPU_FULL=$previousDir\vsummary-full-gpu-$($previous.tag_name).7z"
+
       - name: Build release packages
         shell: pwsh
         run: |
-          ./scripts/build_release.ps1 -Target all -OutputRoot $env:PACK_ROOT -RefreshEnv -ForceRuntime -CleanNodeModules -CleanBuildArtifacts
+          $arguments = @('-Target', 'all', '-OutputRoot', $env:PACK_ROOT, '-RefreshEnv', '-ForceRuntime', '-CleanNodeModules', '-CleanBuildArtifacts')
+          if ($env:PREVIOUS_VERSION) {
+            $arguments += @('-PreviousVersion', $env:PREVIOUS_VERSION, '-PreviousManifestPath', $env:PREVIOUS_MANIFEST)
+            if (Test-Path -LiteralPath $env:PREVIOUS_CPU_FULL) {
+              $arguments += @('-PreviousCpuFullArchive', $env:PREVIOUS_CPU_FULL)
+            }
+            if (Test-Path -LiteralPath $env:PREVIOUS_GPU_FULL) {
+              $arguments += @('-PreviousGpuFullArchive', $env:PREVIOUS_GPU_FULL)
+            }
+          }
+          & ./scripts/build_release.ps1 @arguments
 
       - name: Upload release assets
         shell: pwsh
@@ -50,7 +80,7 @@ jobs:
           )
           $assets = @(
             Get-ChildItem -LiteralPath $env:PACK_ROOT -Recurse -File |
-              Where-Object { $_.Name -in $expectedNames }
+              Where-Object { $_.Name -in $expectedNames -or $_.Name -like 'vsummary-delta-*.zip' }
           )
           $missing = $expectedNames | Where-Object { $_ -notin $assets.Name }
           if ($missing) {

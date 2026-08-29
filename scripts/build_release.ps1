@@ -9,6 +9,10 @@ param(
     [switch]$ForceRuntime,
     [switch]$RefreshEnv,
     [switch]$SkipFullPackage,
+    [string]$PreviousVersion = "",
+    [string]$PreviousManifestPath = "",
+    [string]$PreviousCpuFullArchive = "",
+    [string]$PreviousGpuFullArchive = "",
     [switch]$KeepFrontendDist,
     [switch]$CleanNodeModules,
     [switch]$CleanBuildArtifacts
@@ -284,6 +288,23 @@ function Get-AssetUrl {
     }
 
     return $ReleaseBaseUrl.TrimEnd("/") + "/" + $FileName
+}
+
+function Get-VersionedAssetUrl {
+    param(
+        [string]$FileName,
+        [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ReleaseBaseUrl)) {
+        return $FileName
+    }
+    $latestSuffix = "/releases/latest/download"
+    $base = $ReleaseBaseUrl.TrimEnd("/")
+    if ($base.EndsWith($latestSuffix)) {
+        return $base.Substring(0, $base.Length - $latestSuffix.Length) + "/releases/download/" + $Version + "/" + $FileName
+    }
+    return $base + "/" + $FileName
 }
 
 function Compress-Directory {
@@ -723,6 +744,107 @@ function Build-FullPackage {
     Compress-Directory -SourceRoot $Variant.PackageRoot -ArchivePath $Variant.FullArchive -SevenZipExe $SevenZipExe
 }
 
+function Test-DeltaProtectedPath {
+    param([string]$Path)
+
+    $normalized = $Path.Replace("\\", "/")
+    if ($normalized -in @(".env", "config/settings.toml", "updater/config.json", "updater/installed.json")) {
+        return $true
+    }
+    return $normalized.StartsWith("workspace/") -or
+        $normalized.StartsWith("videos/") -or
+        $normalized.StartsWith("data/")
+}
+
+function Get-RelativeFileMap {
+    param([string]$Root)
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path
+    $map = @{}
+    foreach ($file in Get-ChildItem -LiteralPath $Root -Recurse -File -Force) {
+        $relative = $file.FullName.Substring($resolvedRoot.Length + 1).Replace("\\", "/")
+        $map[$relative] = $file.FullName
+    }
+    return $map
+}
+
+function Build-DeltaPackage {
+    param(
+        [hashtable]$Variant,
+        [string]$PreviousArchive,
+        [string]$PreviousVersion,
+        [string]$SevenZipExe
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PreviousArchive) -or [string]::IsNullOrWhiteSpace($PreviousVersion)) {
+        return $null
+    }
+    if (-not (Test-Path -LiteralPath $PreviousArchive -PathType Leaf)) {
+        throw "Previous full package not found: $PreviousArchive"
+    }
+
+    $deltaRoot = Join-Path $BuildRootPath ("delta\" + $Variant.Kind)
+    $previousRoot = Join-Path $deltaRoot "previous"
+    $payloadRoot = Join-Path $deltaRoot "payload"
+    Remove-PathIfExists -Path $deltaRoot
+    Ensure-Directory -Path $payloadRoot
+    Expand-ArchiveWith7Zip -ArchivePath $PreviousArchive -DestinationRoot $previousRoot -SevenZipExe $SevenZipExe
+
+    $oldFiles = Get-RelativeFileMap -Root $previousRoot
+    $newFiles = Get-RelativeFileMap -Root $Variant.PackageRoot
+    $added = @()
+    $modified = @()
+    $deleted = @()
+
+    foreach ($relative in $newFiles.Keys) {
+        if (Test-DeltaProtectedPath -Path $relative) {
+            continue
+        }
+        $target = Join-Path $payloadRoot $relative
+        if (-not $oldFiles.ContainsKey($relative)) {
+            $added += $relative
+        }
+        else {
+            $oldHash = (Get-FileHash -LiteralPath $oldFiles[$relative] -Algorithm SHA256).Hash
+            $newHash = (Get-FileHash -LiteralPath $newFiles[$relative] -Algorithm SHA256).Hash
+            if ($oldHash -ne $newHash) {
+                $modified += $relative
+            }
+            else {
+                continue
+            }
+        }
+        Ensure-Directory -Path (Split-Path -Parent $target)
+        Copy-Item -LiteralPath $newFiles[$relative] -Destination $target -Force
+    }
+
+    foreach ($relative in $oldFiles.Keys) {
+        if (-not $newFiles.ContainsKey($relative) -and -not (Test-DeltaProtectedPath -Path $relative)) {
+            $deleted += $relative
+        }
+    }
+
+    $changes = [ordered]@{
+        from = $PreviousVersion
+        to = $Script:ReleaseVersion
+        added = @($added | Sort-Object)
+        modified = @($modified | Sort-Object)
+        deleted = @($deleted | Sort-Object)
+    }
+    $changes | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $payloadRoot "changes.json") -Encoding UTF8
+
+    $archivePath = Join-Path $OutputRootPath ("vsummary-delta-{0}-{1}-to-{2}.zip" -f $Variant.Kind, $PreviousVersion, $Script:ReleaseVersion)
+    Compress-Directory -SourceRoot $payloadRoot -ArchivePath $archivePath -SevenZipExe $SevenZipExe
+    return @{
+        Kind = $Variant.Kind
+        Archive = $archivePath
+        From = $PreviousVersion
+        To = $Script:ReleaseVersion
+        Changes = $changes
+        RuntimeChanged = @($added + $modified + $deleted | Where-Object { $_.StartsWith("runtime/") }).Count -gt 0
+    }
+}
+
 function Write-InstalledState {
     param(
         [string]$PackageRoot,
@@ -785,11 +907,30 @@ function New-AssetManifestEntry {
 function Write-ReleaseManifest {
     param(
         [string]$AppArchive,
-        [hashtable[]]$Variants
+        [hashtable[]]$Variants,
+        [hashtable[]]$Deltas
     )
 
     $runtime = [ordered]@{}
     $full = [ordered]@{}
+    $deltaIndex = [ordered]@{ cpu = [ordered]@{}; gpu = [ordered]@{} }
+
+    if (-not [string]::IsNullOrWhiteSpace($PreviousManifestPath) -and (Test-Path -LiteralPath $PreviousManifestPath -PathType Leaf)) {
+        $previousManifest = Get-Content -LiteralPath $PreviousManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable
+        if ($previousManifest.deltas) {
+            foreach ($kind in @("cpu", "gpu")) {
+                if ($previousManifest.deltas[$kind]) {
+                    $deltaIndex[$kind] = $previousManifest.deltas[$kind]
+                    foreach ($fromVersion in @($deltaIndex[$kind].Keys)) {
+                        $previousDelta = $deltaIndex[$kind][$fromVersion]
+                        if ($previousDelta -is [hashtable] -and $previousDelta.name -and $previousDelta.to) {
+                            $previousDelta.url = Get-VersionedAssetUrl -FileName $previousDelta.name -Version $previousDelta.to
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     foreach ($variant in $Variants) {
         $runtime[$variant.Kind] = [ordered]@{ requirements = Get-RuntimeRequirements -Variant $variant }
@@ -802,12 +943,23 @@ function Write-ReleaseManifest {
         }
     }
 
+    foreach ($delta in $Deltas) {
+        if ($null -eq $delta) { continue }
+        $entry = New-AssetManifestEntry -ArchivePath $delta.Archive -Role "delta"
+        $entry.from = $delta.From
+        $entry.to = $delta.To
+        $entry.runtime = $delta.RuntimeChanged
+        $entry.url = Get-VersionedAssetUrl -FileName $entry.name -Version $delta.To
+        $deltaIndex[$delta.Kind][$delta.From] = $entry
+    }
+
     $manifest = [ordered]@{
         schema_version = 1
         version = $Script:ReleaseVersion
         app = New-AssetManifestEntry -ArchivePath $AppArchive -Role "app"
         runtime = $runtime
         full = $full
+        deltas = $deltaIndex
     }
 
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ManifestPath -Encoding UTF8
@@ -834,7 +986,15 @@ try {
         }
     }
 
-    Write-ReleaseManifest -AppArchive $appPackage.Archive -Variants $variants
+    $deltas = @()
+    if (-not $SkipFullPackage) {
+        $previousArchives = @{ cpu = $PreviousCpuFullArchive; gpu = $PreviousGpuFullArchive }
+        foreach ($variant in $variants) {
+            $deltas += Build-DeltaPackage -Variant $variant -PreviousArchive $previousArchives[$variant.Kind] -PreviousVersion $PreviousVersion -SevenZipExe $SevenZipExe
+        }
+    }
+
+    Write-ReleaseManifest -AppArchive $appPackage.Archive -Variants $variants -Deltas $deltas
 }
 finally {
     if (-not $KeepFrontendDist) {
