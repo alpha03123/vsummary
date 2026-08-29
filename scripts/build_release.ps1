@@ -219,48 +219,55 @@ function Resolve-ReleaseVersion {
     return "dev-$($commit.Trim())"
 }
 
-function Get-ContentSignature {
-    param([string[]]$RelativePaths)
+function Get-RuntimeRequirements {
+    param([hashtable]$Variant)
 
-    $stream = [System.IO.MemoryStream]::new()
-    try {
-        foreach ($relativePath in $RelativePaths) {
-            $normalized = $relativePath.Replace("\", "/")
-            $path = Join-Path $RepoRoot $relativePath
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-                throw "Signature input not found: $relativePath"
+    $packages = @()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    function Add-RequirementFile {
+        param([string]$RelativePath)
+
+        $path = Join-Path $RepoRoot $relativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Runtime requirement file not found: $relativePath"
+        }
+        $normalizedPath = (Resolve-Path -LiteralPath $path).Path
+        if (-not $seen.Add($normalizedPath)) {
+            return
+        }
+        foreach ($line in Get-Content -LiteralPath $path -Encoding UTF8) {
+            $value = $line.Trim()
+            if (-not $value -or $value.StartsWith("#")) {
+                continue
             }
-
-            $nameBytes = [System.Text.Encoding]::UTF8.GetBytes($normalized)
-            $stream.Write($nameBytes, 0, $nameBytes.Length)
-            $stream.WriteByte(0)
-            $contentBytes = [System.IO.File]::ReadAllBytes($path)
-            $stream.Write($contentBytes, 0, $contentBytes.Length)
-            $stream.WriteByte(0)
+            if ($value.StartsWith("-r ")) {
+                $included = $value.Substring(3).Trim()
+                if (-not $included) {
+                    throw "Invalid requirements include in $relativePath"
+                }
+                $parentPath = Split-Path -Parent $relativePath
+                $includedPath = if ([string]::IsNullOrWhiteSpace($parentPath)) {
+                    $included
+                }
+                else {
+                    Join-Path $parentPath $included
+                }
+                Add-RequirementFile -RelativePath $includedPath
+                continue
+            }
+            $packages += $value
         }
-
-        $sha = [System.Security.Cryptography.SHA256]::Create()
-        try {
-            $hash = $sha.ComputeHash($stream.ToArray())
-        }
-        finally {
-            $sha.Dispose()
-        }
-        return -join ($hash | ForEach-Object { $_.ToString("x2") })
     }
-    finally {
-        $stream.Dispose()
+
+    foreach ($relativePath in $Variant.RequirementFiles) {
+        Add-RequirementFile -RelativePath $relativePath
     }
-}
 
-function Get-RuntimeId {
-    param(
-        [string]$Kind,
-        [string[]]$DependencyFiles
-    )
-
-    $signature = Get-ContentSignature -RelativePaths $DependencyFiles
-    return "runtime-$Kind-$($signature.Substring(0, 12))"
+    return [ordered]@{
+        python = $Variant.PythonRequirement
+        packages = @($packages | Select-Object -Unique)
+    }
 }
 
 function Get-FileSha256 {
@@ -325,17 +332,14 @@ function Invoke-External {
 }
 
 function Get-VariantTable {
-    $cpuRuntimeId = Get-RuntimeId -Kind "cpu" -DependencyFiles @("scripts\package\environment.cpu.yml")
-    $gpuRuntimeId = Get-RuntimeId -Kind "gpu" -DependencyFiles @("scripts\package\environment.gpu.yml")
-
     return @{
         cpu = @{
             Kind = "cpu"
             EnvName = $CpuEnvName
             EnvFile = Join-Path $PackageConfigDir "environment.cpu.yml"
-            EnvRelativePath = "scripts\package\environment.cpu.yml"
+            RequirementFiles = @("requirements.txt", "requirements.cpu.txt")
+            PythonRequirement = ">=3.11,<3.12"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.cpu.toml"
-            RuntimeId = $cpuRuntimeId
             PackageRoot = Join-Path $BuildRootPath "full\cpu\vsummary-cpu"
             BuildRoot = Join-Path $BuildRootPath "runtime\cpu"
             RuntimeRoot = Join-Path $BuildRootPath "runtime\cpu\runtime"
@@ -345,9 +349,9 @@ function Get-VariantTable {
             Kind = "gpu"
             EnvName = $GpuEnvName
             EnvFile = Join-Path $PackageConfigDir "environment.gpu.yml"
-            EnvRelativePath = "scripts\package\environment.gpu.yml"
+            RequirementFiles = @("requirements.txt", "requirements.gpu.txt")
+            PythonRequirement = ">=3.11,<3.12"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.gpu.toml"
-            RuntimeId = $gpuRuntimeId
             PackageRoot = Join-Path $BuildRootPath "full\gpu\vsummary-gpu"
             BuildRoot = Join-Path $BuildRootPath "runtime\gpu"
             RuntimeRoot = Join-Path $BuildRootPath "runtime\gpu\runtime"
@@ -668,21 +672,21 @@ function Ensure-RuntimeRoot {
     )
 
     if ((Test-Path -LiteralPath (Join-Path $Variant.RuntimeRoot "python.exe") -PathType Leaf) -and -not $ForceRuntime) {
-        Write-Host "Reusing runtime root $($Variant.RuntimeId)"
+        Write-Host "Reusing $($Variant.Kind) runtime root"
         return
     }
 
     $envExists = Test-CondaEnvironmentExists -CondaExe $CondaExe -EnvName $Variant.EnvName
     if ($RefreshEnv -or -not $envExists) {
-        Write-Host "Preparing environment $($Variant.EnvName) for $($Variant.RuntimeId)"
+        Write-Host "Preparing environment $($Variant.EnvName)"
         Ensure-CondaEnvironment -CondaExe $CondaExe -Variant $Variant
         Repair-GpuProviderWheel -CondaExe $CondaExe -Variant $Variant
     }
     else {
-        Write-Host "Using existing environment $($Variant.EnvName) for $($Variant.RuntimeId)"
+        Write-Host "Using existing environment $($Variant.EnvName)"
     }
 
-    Write-Host "Packing runtime $($Variant.RuntimeId)"
+    Write-Host "Packing $($Variant.Kind) runtime"
     Pack-CondaEnvironment -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe -Variant $Variant
 }
 
@@ -703,7 +707,7 @@ function Build-FullPackage {
     Ensure-Directory -Path (Join-Path $Variant.PackageRoot "data")
 
     Copy-Item -LiteralPath $Variant.SettingsTemplate -Destination (Join-Path $Variant.PackageRoot "config\settings.toml") -Force
-    Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "RUNTIME") -Value $Variant.RuntimeId -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "RUNTIME") -Value $Variant.Kind -Encoding ASCII
     Write-InstalledState -PackageRoot $Variant.PackageRoot -Variant $Variant
     Write-UpdaterConfig -PackageRoot $Variant.PackageRoot
     $packageRuntimeRoot = Join-Path $Variant.PackageRoot "runtime"
@@ -734,7 +738,6 @@ function Write-InstalledState {
     $payload = [ordered]@{
         variant = $Variant.Kind
         app_version = $Script:ReleaseVersion
-        runtime_id = $Variant.RuntimeId
         app_files = $appFiles
     }
     $installedPath = Join-Path $PackageRoot "updater\installed.json"
@@ -763,8 +766,7 @@ function New-AssetManifestEntry {
     param(
         [string]$ArchivePath,
         [string]$Role,
-        [string]$Variant = "",
-        [string]$RuntimeId = ""
+        [string]$Variant = ""
     )
 
     $item = Get-Item -LiteralPath $ArchivePath
@@ -776,9 +778,6 @@ function New-AssetManifestEntry {
     }
     if ($Role -eq "app") {
         $entry.version = $Script:ReleaseVersion
-    }
-    if ($Role -eq "runtime") {
-        $entry.id = $RuntimeId
     }
     return $entry
 }
@@ -793,9 +792,7 @@ function Write-ReleaseManifest {
     $full = [ordered]@{}
 
     foreach ($variant in $Variants) {
-        $runtime[$variant.Kind] = [ordered]@{
-            id = $variant.RuntimeId
-        }
+        $runtime[$variant.Kind] = [ordered]@{ requirements = Get-RuntimeRequirements -Variant $variant }
 
         if (Test-Path -LiteralPath $variant.FullArchive -PathType Leaf) {
             $full[$variant.Kind] = New-AssetManifestEntry `

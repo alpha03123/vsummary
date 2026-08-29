@@ -6,8 +6,9 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
-from updater.update import run_update
+from updater.update import RuntimeCompatibility, run_update
 
 
 class UpdaterTests(unittest.TestCase):
@@ -17,14 +18,14 @@ class UpdaterTests(unittest.TestCase):
             manifest = {
                 "version": "v1",
                 "app": {"version": "v1", "url": "unused", "sha256": "0" * 64, "size": 0},
-                "runtime": {"cpu": {"id": "runtime-cpu-a"}},
+                "runtime": {"cpu": {}},
             }
             manifest_path = root / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             installed_path = root / "updater" / "installed.json"
             installed_path.parent.mkdir()
             installed_path.write_text(
-                json.dumps({"variant": "cpu", "app_version": "v1", "runtime_id": "runtime-cpu-a"}),
+                json.dumps({"variant": "cpu", "app_version": "v1"}),
                 encoding="utf-8",
             )
             marker = root / "src" / "marker.txt"
@@ -53,7 +54,6 @@ class UpdaterTests(unittest.TestCase):
                     {
                         "variant": "cpu",
                         "app_version": "v1",
-                        "runtime_id": "runtime-cpu-a",
                         "app_files": ["src/old.py"],
                     }
                 ),
@@ -85,7 +85,7 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual(installed["app_version"], "v2")
             self.assertEqual(installed["app_files"], ["src/new.py", "config/settings.toml.example"])
 
-    def test_runtime_change_reports_full_package_required_without_downloading_runtime(self) -> None:
+    def test_incompatible_runtime_reports_full_package_required_without_downloading_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             runtime = root / "runtime"
@@ -100,7 +100,6 @@ class UpdaterTests(unittest.TestCase):
                     {
                         "variant": "cpu",
                         "app_version": "v1",
-                        "runtime_id": "runtime-cpu-a",
                         "app_files": ["src/old.py"],
                     }
                 ),
@@ -119,20 +118,50 @@ class UpdaterTests(unittest.TestCase):
                 root,
                 app_version="v2",
                 app_zip=app_zip,
-                runtime_id="runtime-cpu-b",
                 full_url="https://example.test/vsummary-full-cpu-v1.7z",
+                requirements={"python": ">=3.11,<3.12", "packages": ["fastapi>=0.115,<1"]},
             )
 
-            result = run_update(root=root, manifest_url=str(manifest_path), variant="cpu")
+            with patch("updater.update._check_runtime_requirements", return_value=RuntimeCompatibility(False, ["fastapi is missing"])):
+                result = run_update(root=root, manifest_url=str(manifest_path), variant="cpu")
 
             self.assertFalse(result.changed)
+            self.assertTrue(result.requires_full_package)
             self.assertEqual((root / "runtime" / "python.exe").read_text(encoding="utf-8"), "old")
             self.assertEqual((root / "src" / "old.py").read_text(encoding="utf-8"), "old")
             self.assertFalse((root / "src" / "new.py").exists())
-            self.assertIn("Runtime changed", "\n".join(result.messages))
+            self.assertIn("does not satisfy", "\n".join(result.messages))
             installed = json.loads(installed_path.read_text(encoding="utf-8"))
             self.assertEqual(installed["app_version"], "v1")
-            self.assertEqual(installed["runtime_id"], "runtime-cpu-a")
+
+    def test_updates_app_when_current_runtime_satisfies_manifest_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "src").mkdir()
+            (root / "src" / "old.py").write_text("old", encoding="utf-8")
+            installed_path = root / "updater" / "installed.json"
+            installed_path.parent.mkdir()
+            installed_path.write_text(
+                json.dumps({"variant": "cpu", "app_version": "v1", "app_files": ["src/old.py"]}),
+                encoding="utf-8",
+            )
+            app_zip = root / "release" / "vsummary-app-v2.zip"
+            _write_zip(app_zip, {"src/new.py": "new", "updater/app-files.json": json.dumps({"files": ["src/new.py"]})})
+            manifest_path = _write_manifest(
+                root,
+                app_version="v2",
+                app_zip=app_zip,
+                requirements={"python": ">=3.11,<3.12", "packages": ["fastapi>=0.115,<1"]},
+            )
+
+            with patch("updater.update._check_runtime_requirements", return_value=RuntimeCompatibility(True)):
+                result = run_update(root=root, manifest_url=str(manifest_path), variant="cpu")
+
+            self.assertTrue(result.changed)
+            self.assertEqual((root / "src" / "new.py").read_text(encoding="utf-8"), "new")
+            self.assertIn("Current runtime satisfies", "\n".join(result.messages))
+            installed = json.loads(installed_path.read_text(encoding="utf-8"))
+            self.assertEqual(installed["app_version"], "v2")
 
     def test_reads_bom_prefixed_packaging_json_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -140,14 +169,14 @@ class UpdaterTests(unittest.TestCase):
             manifest = {
                 "version": "v1",
                 "app": {"version": "v1", "url": "unused", "sha256": "0" * 64, "size": 0},
-                "runtime": {"gpu": {"id": "runtime-gpu-a"}},
+                "runtime": {"gpu": {}},
             }
             manifest_path = root / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8-sig")
             installed_path = root / "updater" / "installed.json"
             installed_path.parent.mkdir()
             installed_path.write_text(
-                json.dumps({"variant": "gpu", "app_version": "v1", "runtime_id": "runtime-gpu-a"}),
+                json.dumps({"variant": "gpu", "app_version": "v1"}),
                 encoding="utf-8-sig",
             )
 
@@ -159,18 +188,18 @@ class UpdaterTests(unittest.TestCase):
     def test_infers_variant_from_bom_prefixed_runtime_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            (root / "RUNTIME").write_text("runtime-gpu-a", encoding="utf-8-sig")
+            (root / "RUNTIME").write_text("gpu", encoding="utf-8-sig")
             config_path = root / "updater" / "config.json"
             config_path.parent.mkdir()
             installed_path = root / "updater" / "installed.json"
             installed_path.write_text(
-                json.dumps({"app_version": "v1", "runtime_id": "runtime-gpu-a"}),
+                json.dumps({"app_version": "v1"}),
                 encoding="utf-8",
             )
             manifest = {
                 "version": "v1",
                 "app": {"version": "v1", "url": "unused", "sha256": "0" * 64, "size": 0},
-                "runtime": {"gpu": {"id": "runtime-gpu-a"}},
+                "runtime": {"gpu": {}},
             }
             manifest_path = root / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -179,7 +208,7 @@ class UpdaterTests(unittest.TestCase):
             result = run_update(root=root)
 
             self.assertFalse(result.changed)
-            self.assertIn("Runtime is already up to date.", result.messages)
+            self.assertIn("Runtime was retained.", result.messages)
 
 
 def _write_manifest(
@@ -187,14 +216,14 @@ def _write_manifest(
     *,
     app_version: str = "v1",
     app_zip: Path | None = None,
-    runtime_id: str = "runtime-cpu-a",
     full_url: str = "unused",
+    requirements: dict[str, object] | None = None,
 ) -> Path:
     app_asset = _asset(app_zip) if app_zip else {"url": "unused", "sha256": "0" * 64, "size": 0}
     manifest = {
         "version": app_version,
         "app": {"version": app_version, **app_asset},
-        "runtime": {"cpu": {"id": runtime_id}},
+        "runtime": {"cpu": {**({"requirements": requirements} if requirements else {})}},
         "full": {"cpu": {"url": full_url}},
     }
     manifest_path = root / "manifest.json"

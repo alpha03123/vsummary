@@ -15,7 +15,6 @@ from tools.release_packaging import (
     ReleaseArtifact,
     build_release_manifest,
     build_release_layout,
-    build_runtime_id,
     render_start_bat,
 )
 
@@ -139,36 +138,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
 
             self.assertEqual(cache_dir, str(root_dir / "data" / "models" / "fastembed"))
 
-    def test_build_runtime_id_is_stable_and_changes_with_dependency_content(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root_dir = Path(temp_dir)
-            env_file = root_dir / "scripts" / "package" / "environment.cpu.yml"
-            env_file.parent.mkdir(parents=True)
-            env_file.write_text("name: vsummary-pack-cpu\n- fastapi\n", encoding="utf-8")
-
-            first_id = build_runtime_id(
-                kind="cpu",
-                repo_root=root_dir,
-                dependency_files=(Path("scripts/package/environment.cpu.yml"),),
-            )
-            second_id = build_runtime_id(
-                kind="cpu",
-                repo_root=root_dir,
-                dependency_files=(Path("scripts/package/environment.cpu.yml"),),
-            )
-
-            env_file.write_text("name: vsummary-pack-cpu\n- fastapi\n- lancedb\n", encoding="utf-8")
-            changed_id = build_runtime_id(
-                kind="cpu",
-                repo_root=root_dir,
-                dependency_files=(Path("scripts/package/environment.cpu.yml"),),
-            )
-
-        self.assertEqual(first_id, second_id)
-        self.assertTrue(first_id.startswith("runtime-cpu-"))
-        self.assertNotEqual(first_id, changed_id)
-
-    def test_build_release_manifest_describes_app_runtime_and_full_assets(self) -> None:
+    def test_build_release_manifest_describes_app_and_full_assets(self) -> None:
         manifest = build_release_manifest(
             version="v0.3.1",
             assets=[
@@ -178,15 +148,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
                     url="https://example.test/vsummary-app-v0.3.1.7z",
                     sha256="a" * 64,
                     size=123,
-                ),
-                ReleaseArtifact(
-                    name="runtime-cpu-deadbeef",
-                    role="runtime",
-                    variant="cpu",
-                    runtime_id="runtime-cpu-deadbeef",
-                    url="",
-                    sha256="",
-                    size=0,
                 ),
                 ReleaseArtifact(
                     name="vsummary-full-cpu-v0.3.1.7z",
@@ -202,7 +163,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertEqual(manifest["version"], "v0.3.1")
         self.assertEqual(manifest["app"]["version"], "v0.3.1")
         self.assertEqual(manifest["app"]["sha256"], "a" * 64)
-        self.assertEqual(manifest["runtime"]["cpu"]["id"], "runtime-cpu-deadbeef")
+        self.assertEqual(manifest["runtime"], {})
         self.assertEqual(manifest["full"]["cpu"]["sha256"], "c" * 64)
 
 

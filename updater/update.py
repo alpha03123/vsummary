@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -32,7 +33,14 @@ class UpdateResult:
     changed: bool
     app_updated: bool = False
     runtime_updated: bool = False
+    requires_full_package: bool = False
     messages: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RuntimeCompatibility:
+    compatible: bool
+    failures: list[str] = field(default_factory=list)
 
 
 def run_update(root: Path, manifest_url: str | None = None, variant: str | None = None) -> UpdateResult:
@@ -54,19 +62,26 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
     app_updated = False
     runtime_updated = False
 
-    runtime = ((manifest.get("runtime") or {}).get(selected_variant)) or {}
-    if runtime.get("id") and runtime.get("id") != installed.get("runtime_id"):
-        full = ((manifest.get("full") or {}).get(selected_variant)) or {}
-        full_url = full.get("url") or "the latest full package"
-        messages.append(
-            "Runtime changed "
-            f"({installed.get('runtime_id', 'unknown')} -> {runtime['id']}). "
-            f"Download and reinstall the full package: {full_url}"
-        )
-        return UpdateResult(changed=False, messages=messages)
-
     app = manifest.get("app") or {}
-    if app.get("version") and app.get("version") != installed.get("app_version"):
+    app_needs_update = app.get("version") and app.get("version") != installed.get("app_version")
+    runtime = ((manifest.get("runtime") or {}).get(selected_variant)) or {}
+    if app_needs_update:
+        compatibility = _check_runtime_requirements(root, runtime)
+        if compatibility is not None and not compatibility.compatible:
+            full = ((manifest.get("full") or {}).get(selected_variant)) or {}
+            full_url = full.get("url") or "the latest full package"
+            details = ""
+            if compatibility.failures:
+                details = " Missing or incompatible: " + "; ".join(compatibility.failures) + "."
+            messages.append(
+                f"Current runtime does not satisfy the app requirements.{details} "
+                f"Download and reinstall the full package: {full_url}"
+            )
+            return UpdateResult(changed=False, requires_full_package=True, messages=messages)
+        if compatibility is not None:
+            messages.append("Current runtime satisfies the new app requirements.")
+
+    if app_needs_update:
         messages.append(f"Updating app: {installed.get('app_version', 'unknown')} -> {app['version']}")
         app_archive = _download_asset(root, app)
         _apply_app_update(root, app_archive, installed)
@@ -76,7 +91,7 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
     else:
         messages.append("App is already up to date.")
 
-    messages.append("Runtime is already up to date.")
+    messages.append("Runtime was retained.")
 
     installed["variant"] = selected_variant
     if app_updated or runtime_updated:
@@ -108,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for message in result.messages:
         print(message)
-    return 0
+    return 2 if result.requires_full_package else 0
 
 
 def _read_json(path: Path, *, default: Any) -> Any:
@@ -128,6 +143,69 @@ def _read_json_from_location(location: str) -> dict[str, Any]:
         with urllib.request.urlopen(location) as response:
             return json.loads(response.read().decode("utf-8-sig"))
     return json.loads(Path(location).read_text(encoding="utf-8-sig"))
+
+
+def _check_runtime_requirements(root: Path, runtime: dict[str, Any]) -> RuntimeCompatibility | None:
+    requirements = runtime.get("requirements")
+    if not isinstance(requirements, dict):
+        return None
+
+    python_spec = requirements.get("python")
+    package_specs = requirements.get("packages")
+    if not isinstance(python_spec, str) or not isinstance(package_specs, list):
+        return RuntimeCompatibility(False, ["invalid runtime requirements manifest"])
+
+    runtime_python = root / "runtime" / "python.exe"
+    if not runtime_python.is_file():
+        return RuntimeCompatibility(False, ["runtime/python.exe is missing"])
+
+    check_script = """
+import json
+import sys
+from importlib.metadata import PackageNotFoundError, version
+from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
+
+payload = json.loads(sys.argv[1])
+failures = []
+if not SpecifierSet(payload[\"python\"]).contains(".".join(map(str, sys.version_info[:3])), prereleases=True):
+    failures.append(f\"python {sys.version.split()[0]} does not satisfy {payload['python']}\")
+for raw_requirement in payload[\"packages\"]:
+    requirement = Requirement(raw_requirement)
+    try:
+        installed = version(requirement.name)
+    except PackageNotFoundError:
+        failures.append(f\"{requirement.name} is missing\")
+        continue
+    if requirement.specifier and installed not in requirement.specifier:
+        failures.append(f\"{requirement.name} {installed} does not satisfy {requirement.specifier}\")
+print(json.dumps({\"compatible\": not failures, \"failures\": failures}))
+"""
+    payload = json.dumps({"python": python_spec, "packages": [str(item) for item in package_specs]})
+    try:
+        completed = subprocess.run(
+            [str(runtime_python), "-c", check_script, payload],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except OSError as error:
+        return RuntimeCompatibility(False, [f"cannot start runtime check: {error}"])
+    except subprocess.TimeoutExpired:
+        return RuntimeCompatibility(False, ["runtime requirement check timed out"])
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "unknown error"
+        return RuntimeCompatibility(False, [f"runtime requirement check failed: {detail}"])
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return RuntimeCompatibility(False, ["runtime requirement check returned invalid JSON"])
+    failures = result.get("failures", []) if isinstance(result, dict) else []
+    return RuntimeCompatibility(
+        bool(result.get("compatible")) if isinstance(result, dict) else False,
+        [str(item) for item in failures if str(item).strip()],
+    )
 
 
 def _download_asset(root: Path, asset: dict[str, Any]) -> Path:
@@ -246,12 +324,12 @@ def _sha256(path: Path) -> str:
 
 
 def _infer_variant(root: Path) -> str:
-    runtime_id_path = root / "RUNTIME"
-    if runtime_id_path.is_file():
-        runtime_id = runtime_id_path.read_text(encoding="utf-8-sig").strip()
-        if runtime_id.startswith("runtime-cpu-"):
+    runtime_path = root / "RUNTIME"
+    if runtime_path.is_file():
+        runtime = runtime_path.read_text(encoding="utf-8-sig").strip()
+        if runtime == "cpu":
             return "cpu"
-        if runtime_id.startswith("runtime-gpu-"):
+        if runtime == "gpu":
             return "gpu"
     return ""
 
