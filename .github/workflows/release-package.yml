@@ -57,14 +57,22 @@ jobs:
       - name: Build release packages
         shell: pwsh
         run: |
-          $arguments = @('-Target', 'all', '-OutputRoot', $env:PACK_ROOT, '-RefreshEnv', '-ForceRuntime', '-CleanNodeModules', '-CleanBuildArtifacts')
+          $arguments = @{
+            Target = 'all'
+            OutputRoot = $env:PACK_ROOT
+            RefreshEnv = $true
+            ForceRuntime = $true
+            CleanNodeModules = $true
+            CleanBuildArtifacts = $true
+          }
           if ($env:PREVIOUS_VERSION) {
-            $arguments += @('-PreviousVersion', $env:PREVIOUS_VERSION, '-PreviousManifestPath', $env:PREVIOUS_MANIFEST)
+            $arguments.PreviousVersion = $env:PREVIOUS_VERSION
+            $arguments.PreviousManifestPath = $env:PREVIOUS_MANIFEST
             if (Test-Path -LiteralPath $env:PREVIOUS_CPU_FULL) {
-              $arguments += @('-PreviousCpuFullArchive', $env:PREVIOUS_CPU_FULL)
+              $arguments.PreviousCpuFullArchive = $env:PREVIOUS_CPU_FULL
             }
             if (Test-Path -LiteralPath $env:PREVIOUS_GPU_FULL) {
-              $arguments += @('-PreviousGpuFullArchive', $env:PREVIOUS_GPU_FULL)
+              $arguments.PreviousGpuFullArchive = $env:PREVIOUS_GPU_FULL
             }
           }
           & ./scripts/build_release.ps1 @arguments
