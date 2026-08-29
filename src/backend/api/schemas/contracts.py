@@ -287,6 +287,20 @@ class UpdateProviderSettingsRequest(BaseModel):
     hf_endpoint: str | None = None
 
 
+class DiscoverProviderModelsRequest(BaseModel):
+    """探测模型供应商当前可用模型的请求体。"""
+
+    llm_provider: str
+    openai_base_url: str
+    openai_api_key: str | None = None
+
+
+class ProviderModelsResponse(BaseModel):
+    """模型供应商探测到的模型标识列表。"""
+
+    models: list[str]
+
+
 class TestProviderSettingsResponse(BaseModel):
     """Provider 连通性测试的响应模型。
 

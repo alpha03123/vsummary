@@ -53,6 +53,7 @@ from backend.video_summary.infrastructure.config.settings import (
 )
 from backend.video_summary.infrastructure.runtime_capabilities import detect_runtime_capabilities
 from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm.base_url import resolve_openai_model_list_base_url
 
 
 class SettingsValidationError(ValueError):
@@ -214,6 +215,16 @@ class SettingsServicePort(Protocol):
         hf_endpoint: str | None,
     ) -> str:
         """用给定 provider 配置走一次 LiteLLM 连接测试，返回回执文本。"""
+        ...
+
+    def list_provider_models(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_api_key: str | None,
+    ) -> list[str]:
+        """通过 LiteLLM 探测当前供应商可用的模型标识。"""
         ...
 
 
@@ -648,6 +659,46 @@ class SettingsService:
             raise
         return response or "ok"
 
+    def list_provider_models(
+        self,
+        *,
+        llm_provider: str,
+        openai_base_url: str,
+        openai_api_key: str | None,
+    ) -> list[str]:
+        """通过 LiteLLM 的 provider endpoint 探测模型列表，不持久化配置。"""
+        provider_settings = self._validate_provider_settings(
+            llm_provider=llm_provider,
+            openai_base_url=openai_base_url,
+            openai_model="model-discovery",
+            openai_api_key=openai_api_key,
+            hf_endpoint=None,
+        )
+        try:
+            from litellm import get_valid_models
+            from litellm.types.router import LiteLLM_Params
+        except ImportError as error:
+            raise RuntimeError("缺少 litellm 依赖，无法探测模型。") from error
+
+        models = get_valid_models(
+            check_provider_endpoint=True,
+            custom_llm_provider=provider_settings.llm_provider,
+            litellm_params=LiteLLM_Params(
+                model="model-discovery",
+                custom_llm_provider=provider_settings.llm_provider,
+                api_base=_provider_model_list_api_base(
+                    provider_settings.llm_provider,
+                    provider_settings.openai_base_url,
+                ) or None,
+                api_key=self._resolve_openai_api_key(openai_api_key),
+                timeout=15,
+            ),
+        )
+        unique_models = sorted({model.strip() for model in models if isinstance(model, str) and model.strip()})
+        if not unique_models:
+            raise RuntimeError("未探测到可用模型，请检查接口地址、API Key 和供应商协议。")
+        return unique_models
+
     def _save_provider_settings(
         self,
         *,
@@ -737,6 +788,13 @@ class SettingsService:
         if asr_api_key is None:
             return load_env_settings(self._root_dir).dashscope_api_key
         return asr_api_key.strip()
+
+
+def _provider_model_list_api_base(provider: str, base_url: str) -> str:
+    """返回 LiteLLM provider 模型发现所需的 API base。"""
+    if provider in {"openai", "litellm_proxy"}:
+        return resolve_openai_model_list_base_url(base_url)
+    return base_url
 
 
 def _mask_api_key(api_key: str) -> str:

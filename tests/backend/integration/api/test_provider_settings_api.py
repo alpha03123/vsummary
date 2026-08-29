@@ -58,6 +58,26 @@ class ProviderSettingsApiTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "APIConnectionError: Connection refused")
         self.assertNotIn("理解问题", response.json()["detail"])
 
+    def test_provider_models_returns_models_without_persisting_provider_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = FakeSettingsService()
+            container = FakeContainer(Path(temp_dir), settings_service=service)
+            client = TestClient(create_app(container))
+
+            response = client.post(
+                "/api/provider-settings/models",
+                json={
+                    "llm_provider": "openai",
+                    "openai_base_url": "http://127.0.0.1:8317",
+                    "openai_api_key": "sk-test",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"models": ["gpt-5.4", "gpt-5.4-mini"]})
+        self.assertEqual(container.invalidate_agent_graph_service_calls, 0)
+        self.assertEqual(container.invalidate_agent_workspace_indexes_calls, 0)
+
 
 class FakeContainer:
     def __init__(self, root_dir: Path, *, settings_service=None) -> None:
@@ -75,6 +95,10 @@ class FakeContainer:
 
 
 class FakeSettingsService:
+    def list_provider_models(self, **kwargs) -> list[str]:
+        self.last_model_discovery_request = kwargs
+        return ["gpt-5.4", "gpt-5.4-mini"]
+
     def update_provider_settings(self, **kwargs) -> ProviderSettings:
         return ProviderSettings(
             llm_provider=kwargs["llm_provider"],

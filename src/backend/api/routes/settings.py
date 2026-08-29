@@ -15,8 +15,10 @@ from fastapi.responses import StreamingResponse
 from backend.api.di.container import ApiContainerDep
 from backend.api.schemas.contracts import (
     AsrApiKeyResponse,
+    DiscoverProviderModelsRequest,
     FasterWhisperModelResponse,
     ProviderApiKeyResponse,
+    ProviderModelsResponse,
     ProviderSettingsResponse,
     ProviderUsageCategoryResponse,
     ProviderUsageProviderResponse,
@@ -378,6 +380,27 @@ def test_provider_settings(
         raise HTTPException(status_code=503, detail=str(error)) from error
 
     return TestProviderSettingsResponse(ok=True, message=f"模型连接成功：{response}")
+
+
+@router.post("/api/provider-settings/models", response_model=ProviderModelsResponse)
+def discover_provider_models(
+    request: DiscoverProviderModelsRequest,
+    container: ApiContainerDep,
+) -> ProviderModelsResponse:
+    """通过 LiteLLM 探测当前供应商配置可访问的模型，不持久化请求中的配置。"""
+    try:
+        models = container.settings_service.list_provider_models(
+            llm_provider=request.llm_provider,
+            openai_base_url=request.openai_base_url,
+            openai_api_key=request.openai_api_key,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return ProviderModelsResponse(models=models)
 
 
 @router.get("/api/asr/{provider}/models", response_model=list[FasterWhisperModelResponse])

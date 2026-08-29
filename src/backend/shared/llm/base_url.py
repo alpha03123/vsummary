@@ -56,6 +56,23 @@ def resolve_openai_compatible_api_base_url(value: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
+def resolve_openai_model_list_base_url(value: str) -> str:
+    """解析 LiteLLM OpenAI 模型列表调用所需的服务根地址。
+
+    LiteLLM 的 OpenAI ``get_models`` 会自行追加 ``/v1/models``，因此与补全
+    调用不同，此处必须去掉已归一化的版本号，避免形成 ``/v1/v1/models``。
+    """
+    resolved = resolve_openai_compatible_api_base_url(value)
+    parsed = urlparse(resolved)
+    if not parsed.scheme or not parsed.netloc:
+        return resolved
+
+    path = parsed.path.rstrip("/")
+    if re.search(r"/v\d+$", path):
+        path = re.sub(r"/v\d+$", "", path)
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
 def resolve_provider_api_base_url(provider: str, value: str) -> str:
     """按 provider 解析 LiteLLM 所需的 api_base。"""
     normalized_provider = provider.strip().lower()

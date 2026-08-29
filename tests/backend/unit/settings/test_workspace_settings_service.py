@@ -432,6 +432,34 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                         hf_endpoint=None,
                     )
 
+    def test_list_provider_models_uses_litellm_provider_endpoint_without_writing_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("OPENAI_API_KEY=saved-key\n", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+            service = SettingsService(
+                config_path=config_path,
+                root_dir=root_dir,
+                faster_whisper_model_manager=FakeFasterWhisperModelManager(),
+            )
+
+            with patch(
+                "litellm.get_valid_models",
+                return_value=["gpt-5.4-mini", "gpt-5.4", "gpt-5.4"],
+            ) as get_valid_models:
+                models = service.list_provider_models(
+                    llm_provider="openai",
+                    openai_base_url="https://api.example.com/v1",
+                    openai_api_key=None,
+                )
+            rendered_env = (root_dir / ".env").read_text(encoding="utf-8")
+
+        self.assertEqual(models, ["gpt-5.4", "gpt-5.4-mini"])
+        self.assertIn("OPENAI_API_KEY=saved-key", rendered_env)
+        self.assertEqual(get_valid_models.call_args.kwargs["litellm_params"].api_base, "https://api.example.com")
+
     def test_asr_settings_test_uses_dashscope_upload_certificate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
