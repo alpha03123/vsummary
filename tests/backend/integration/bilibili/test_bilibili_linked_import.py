@@ -250,12 +250,30 @@ class FileSystemLinkedSeriesTests(unittest.TestCase):
                     ],
                 )
             )
+            workspace.save_series_catalog(
+                PLAYGROUND_SERIES_ID,
+                {
+                    "series_id": PLAYGROUND_SERIES_ID,
+                    "series_title": "Playground",
+                    "videos": [
+                        {
+                            "video_id": "BV1xx411c7mD",
+                            "title": "测试视频",
+                            "one_sentence_summary": "测试摘要",
+                            "chapter_titles": [],
+                            "processed": False,
+                        }
+                    ],
+                    "updated_at": "2026-08-28T00:00:00Z",
+                },
+            )
 
             self.assertTrue(workspace.delete_video(PLAYGROUND_SERIES_ID, "BV1xx411c7mD"))
 
             linked_series = workspace.get_linked_series(PLAYGROUND_SERIES_ID)
             self.assertIsNotNone(linked_series)
             self.assertEqual(linked_series.videos, [])
+            self.assertEqual(workspace.get_series_catalog(PLAYGROUND_SERIES_ID)["videos"], [])
 
 
 class ResolveBilibiliVideoTests(unittest.TestCase):

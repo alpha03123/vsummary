@@ -59,6 +59,7 @@ from backend.video_summary.library.models import (
     WorkspaceDTO as WorkspaceDTO,
     WorkspaceToolDTO as WorkspaceToolDTO,
 )
+from backend.video_summary.library.usecases.series_synopsis_generation import build_series_catalog_payload
 
 
 _UNTRANSCRIBABLE_STATUS = "untranscribable"
@@ -1269,7 +1270,17 @@ class FileSystemVideoWorkspace:
                 )
                 removed = True
 
+        if removed:
+            self._refresh_series_catalog_after_video_delete(series_id)
         return removed
+
+    def _refresh_series_catalog_after_video_delete(self, series_id: str) -> None:
+        """让系列目录与删除后的实时视频列表保持一致。"""
+        catalog_path = self._workspace_dir / series_id / SERIES_CATALOG_FILE
+        if any(series.id == series_id for series in self.list_series()):
+            self.save_series_catalog(series_id, build_series_catalog_payload(self, series_id))
+        elif catalog_path.exists():
+            catalog_path.unlink()
 
     def _series_exists(self, series_id: str) -> bool:
         """判断系列是否存在于 `videos/` 或 `workspace/` 任一目录。"""

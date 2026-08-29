@@ -10,6 +10,7 @@ from __future__ import annotations
 
 NODE_ALIASES: dict[str, str] = {
     "route_scope": "选择链路",
+    "prepare_series_context": "准备系列上下文",
     "build_video_context": "读取视频上下文",
     "plan_and_execute_video_actions": "规划并执行",
     "understand_query": "理解问题",

@@ -237,6 +237,17 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertTrue(retriever.search_calls)
         self.assertEqual(query_processor.calls, 1)
 
+    def test_empty_series_fails_before_query_understanding_or_retrieval(self) -> None:
+        graph = build_agent_graph(
+            series_query_processor=ExplodingSeriesQueryProcessor(),
+            retrieval_service=ExplodingSeriesRetriever(),
+            series_answer_synthesizer=FakeSeriesAnswerSynthesizer(),
+            workspace=EmptySeriesContextWorkspace(),
+        )
+
+        with self.assertRaisesRegex(ValueError, "此系列没有视频"):
+            graph.invoke(series_graph_input("这个系列讲了什么"))
+
     def test_series_retrieval_uses_subqueries_and_diversifies_by_video(self) -> None:
         retriever = QueryAwareSeriesRetriever()
         graph = build_agent_graph(
@@ -1485,6 +1496,18 @@ class FakeSeriesContextWorkspace:
             ],
         )
 
+
+class EmptySeriesContextWorkspace:
+    def __init__(self) -> None:
+        self._series = LibrarySeriesDTO(id="series-1", title="Empty Series", videos=[])
+
+    def list_series(self):
+        return [self._series]
+
+    def get_series_catalog(self, series_id: str):
+        del series_id
+        return {"series_id": "series-1", "series_title": "Empty Series", "videos": []}
+
 class FakeSeriesQueryProcessor:
     def __init__(self) -> None:
         self.calls = 0
@@ -1663,14 +1686,37 @@ class FakeCatalogWorkspace:
         }
 
     def list_series(self):
-        return [FakeSeries("series-1", "Series 1")]
+        return [
+            FakeSeries(
+                "series-1",
+                "Series 1",
+                [
+                    LibraryVideoCardDTO(
+                        id=f"video-{index}",
+                        title=f"Video {index}",
+                        source_name=f"video-{index}.mp4",
+                        processed=True,
+                        status="ready",
+                    )
+                    for index in range(1, 6)
+                ],
+            )
+        ]
+
+    def get_video_summary(self, series_id: str, video_id: str):
+        del series_id, video_id
+        return None
+
+    def get_video_transcript(self, series_id: str, video_id: str):
+        del series_id, video_id
+        return None
 
 
 class FakeSeries:
-    def __init__(self, series_id: str, title: str) -> None:
+    def __init__(self, series_id: str, title: str, videos=None) -> None:
         self.id = series_id
         self.title = title
-        self.videos = []
+        self.videos = list(videos or [])
 
 
 class FakeSessionStore:

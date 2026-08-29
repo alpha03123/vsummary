@@ -213,6 +213,10 @@ def build_prepare_series_context_node(
     """预检 series 全文上下文，只有超预算时才进入查询理解与 RAG。"""
     def prepare_series_context(state: AgentGraphState) -> AgentGraphState:
         series_id = str(state.get("series_id", "")).strip()
+        if workspace is not None:
+            series = next((item for item in workspace.list_series() if item.id == series_id), None)
+            if series is None or not series.videos:
+                raise ValueError("此系列没有视频")
         catalog = _load_series_catalog(workspace=workspace, series_id=series_id)
         direct_query_understanding = {
             "normalized_query": state["user_message"],
