@@ -53,6 +53,10 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_MANIFEST=$previousDir\vsummary-manifest.json"
           Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_CPU_FULL=$previousDir\vsummary-full-cpu-$($previous.tag_name).7z"
           Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_GPU_FULL=$previousDir\vsummary-full-gpu-$($previous.tag_name).7z"
+          git diff --quiet $previous.tag_name $env:RELEASE_TAG -- requirements.txt requirements.cpu.txt requirements.gpu.txt scripts/package/environment.cpu.yml scripts/package/environment.gpu.yml
+          if ($LASTEXITCODE -eq 0) {
+            Add-Content -Path $env:GITHUB_ENV -Value 'REUSE_PREVIOUS_RUNTIME=1'
+          }
 
       - name: Build release packages
         shell: pwsh
@@ -73,6 +77,9 @@ jobs:
             }
             if (Test-Path -LiteralPath $env:PREVIOUS_GPU_FULL) {
               $arguments.PreviousGpuFullArchive = $env:PREVIOUS_GPU_FULL
+            }
+            if ($env:REUSE_PREVIOUS_RUNTIME -eq '1') {
+              $arguments.ReusePreviousRuntime = $true
             }
           }
           & ./scripts/build_release.ps1 @arguments

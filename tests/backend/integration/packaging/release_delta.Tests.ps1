@@ -18,10 +18,23 @@ Describe "Build-DeltaPackage" {
         try {
             New-Item -ItemType Directory -Path (Join-Path $previousRoot "src") -Force | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $currentRoot "src") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $previousRoot "config") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $currentRoot "config") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $previousRoot "runtime\Lib") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $currentRoot "runtime\Lib") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $previousRoot "runtime\Library") -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $currentRoot "runtime\Library") -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $previousRoot "src\changed.txt") -Value "old" -NoNewline
             Set-Content -LiteralPath (Join-Path $previousRoot "src\deleted.txt") -Value "deleted" -NoNewline
             Set-Content -LiteralPath (Join-Path $currentRoot "src\changed.txt") -Value "new" -NoNewline
             Set-Content -LiteralPath (Join-Path $currentRoot "src\added.txt") -Value "added" -NoNewline
+            Set-Content -LiteralPath (Join-Path $previousRoot "config\settings.toml") -Value "user-setting" -NoNewline
+            Set-Content -LiteralPath (Join-Path $currentRoot "config\settings.toml") -Value "package-setting" -NoNewline
+            Set-Content -LiteralPath (Join-Path $previousRoot "runtime\Lib\sample.pyc") -Value "old-bytecode" -NoNewline
+            Set-Content -LiteralPath (Join-Path $currentRoot "runtime\Lib\sample.pyc") -Value "new-bytecode" -NoNewline
+            Set-Content -LiteralPath (Join-Path $previousRoot "runtime\python.exe") -Value "old-python" -NoNewline
+            Set-Content -LiteralPath (Join-Path $previousRoot "runtime\Library\changed.dll") -Value "old-runtime" -NoNewline
+            Set-Content -LiteralPath (Join-Path $currentRoot "runtime\Library\changed.dll") -Value "new-runtime" -NoNewline
             & "C:\Program Files\7-Zip\7z.exe" a -t7z $previousArchive (Join-Path $previousRoot "*") | Out-Null
             Set-Content -LiteralPath $appArchive -Value "app" -NoNewline
             Set-Content -LiteralPath $fullArchive -Value "full" -NoNewline
@@ -45,6 +58,14 @@ Describe "Build-DeltaPackage" {
             $result[0].From | Should Be "v1"
             $result[0].To | Should Be "v2"
             (Test-Path -LiteralPath $result[0].Archive) | Should Be $true
+            ($result[0].Changes.modified -contains "src/changed.txt") | Should Be $true
+            ($result[0].Changes.modified -contains "runtime/Library/changed.dll") | Should Be $true
+            ($result[0].Changes.modified -contains "runtime/Lib/sample.pyc") | Should Be $false
+            ($result[0].Changes.modified -contains "config/settings.toml") | Should Be $false
+            $result[0].RuntimeChanged | Should Be $true
+
+            Copy-RuntimeFromFullPackage -FullArchive $previousArchive -DestinationRoot (Join-Path $fixtureRoot "reused-runtime") -SevenZipExe "C:\Program Files\7-Zip\7z.exe"
+            (Get-Content -LiteralPath (Join-Path $fixtureRoot "reused-runtime\Lib\sample.pyc") -Raw) | Should Be "old-bytecode"
 
             Write-ReleaseManifest -AppArchive $appArchive -Variants @($variant) -Deltas @($result[0])
             $manifest = Get-Content -LiteralPath $Script:ManifestPath -Raw | ConvertFrom-Json

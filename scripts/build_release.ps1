@@ -13,6 +13,7 @@ param(
     [string]$PreviousManifestPath = "",
     [string]$PreviousCpuFullArchive = "",
     [string]$PreviousGpuFullArchive = "",
+    [switch]$ReusePreviousRuntime,
     [switch]$KeepFrontendDist,
     [switch]$CleanNodeModules,
     [switch]$CleanBuildArtifacts
@@ -508,6 +509,45 @@ function Pack-CondaEnvironment {
     Invoke-External -FilePath $CondaPackExe -Arguments @("-n", $Variant.EnvName, "-o", $archivePath, "--format", "zip", "--force", "--ignore-missing-files")
     Invoke-External -FilePath $SevenZipExe -Arguments @("x", $archivePath, "-o$runtimeRoot", "-y")
     Invoke-CondaUnpack -RuntimeRoot $runtimeRoot
+    Remove-PythonBytecode -RuntimeRoot $runtimeRoot
+}
+
+function Remove-PythonBytecode {
+    param([string]$RuntimeRoot)
+
+    $bytecode = @(
+        Get-ChildItem -LiteralPath $RuntimeRoot -Recurse -File -Force |
+            Where-Object { $_.Extension -in @(".pyc", ".pyo") }
+    )
+    foreach ($file in $bytecode) {
+        Remove-Item -LiteralPath $file.FullName -Force
+    }
+    Write-Host "Removed $($bytecode.Count) generated Python bytecode files"
+}
+
+function Copy-RuntimeFromFullPackage {
+    param(
+        [string]$FullArchive,
+        [string]$DestinationRoot,
+        [string]$SevenZipExe
+    )
+
+    if (-not (Test-Path -LiteralPath $FullArchive -PathType Leaf)) {
+        throw "Previous full package not found: $FullArchive"
+    }
+    $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("vsummary-previous-runtime-" + [guid]::NewGuid().ToString("N"))
+    try {
+        Expand-ArchiveWith7Zip -ArchivePath $FullArchive -DestinationRoot $temporaryRoot -SevenZipExe $SevenZipExe | Out-Null
+        $sourceRuntime = Join-Path $temporaryRoot "runtime"
+        if (-not (Test-Path -LiteralPath (Join-Path $sourceRuntime "python.exe") -PathType Leaf)) {
+            throw "Previous full package does not contain runtime/python.exe: $FullArchive"
+        }
+        Remove-PathIfExists -Path $DestinationRoot
+        Copy-DirectoryContents -Source $sourceRuntime -Destination $DestinationRoot
+    }
+    finally {
+        Remove-PathIfExists -Path $temporaryRoot
+    }
 }
 
 function Invoke-CondaUnpack {
@@ -715,7 +755,9 @@ function Build-FullPackage {
     param(
         [hashtable]$Variant,
         [string]$AppRoot,
-        [string]$SevenZipExe
+        [string]$SevenZipExe,
+        [string]$PreviousFullArchive = "",
+        [switch]$ReuseRuntime
     )
 
     Write-Host "Building full package $($Variant.Kind)"
@@ -732,8 +774,14 @@ function Build-FullPackage {
     Write-InstalledState -PackageRoot $Variant.PackageRoot -Variant $Variant
     Write-UpdaterConfig -PackageRoot $Variant.PackageRoot
     $packageRuntimeRoot = Join-Path $Variant.PackageRoot "runtime"
-    Remove-PathIfExists -Path $packageRuntimeRoot
-    Copy-DirectoryContents -Source $Variant.RuntimeRoot -Destination $packageRuntimeRoot
+    if ($ReuseRuntime) {
+        Write-Host "Reusing $($Variant.Kind) runtime from previous full package"
+        Copy-RuntimeFromFullPackage -FullArchive $PreviousFullArchive -DestinationRoot $packageRuntimeRoot -SevenZipExe $SevenZipExe
+    }
+    else {
+        Remove-PathIfExists -Path $packageRuntimeRoot
+        Copy-DirectoryContents -Source $Variant.RuntimeRoot -Destination $packageRuntimeRoot
+    }
 
     Write-Host "Checking packaged dependency contract"
     Test-PackagedDependencyContract -PackageRoot $Variant.PackageRoot -Kind $Variant.Kind
@@ -747,7 +795,7 @@ function Build-FullPackage {
 function Test-DeltaProtectedPath {
     param([string]$Path)
 
-    $normalized = $Path.Replace("\\", "/")
+    $normalized = $Path.Replace("\", "/")
     if ($normalized -in @(".env", "config/settings.toml", "updater/config.json", "updater/installed.json")) {
         return $true
     }
@@ -756,13 +804,21 @@ function Test-DeltaProtectedPath {
         $normalized.StartsWith("data/")
 }
 
+function Test-GeneratedRuntimePath {
+    param([string]$Path)
+
+    $normalized = $Path.Replace("\", "/")
+    return $normalized.StartsWith("runtime/") -and
+        ($normalized.EndsWith(".pyc") -or $normalized.EndsWith(".pyo"))
+}
+
 function Get-RelativeFileMap {
     param([string]$Root)
 
     $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path
     $map = @{}
     foreach ($file in Get-ChildItem -LiteralPath $Root -Recurse -File -Force) {
-        $relative = $file.FullName.Substring($resolvedRoot.Length + 1).Replace("\\", "/")
+        $relative = $file.FullName.Substring($resolvedRoot.Length + 1).Replace("\", "/")
         $map[$relative] = $file.FullName
     }
     return $map
@@ -797,7 +853,7 @@ function Build-DeltaPackage {
     $deleted = @()
 
     foreach ($relative in $newFiles.Keys) {
-        if (Test-DeltaProtectedPath -Path $relative) {
+        if ((Test-DeltaProtectedPath -Path $relative) -or (Test-GeneratedRuntimePath -Path $relative)) {
             continue
         }
         $target = Join-Path $payloadRoot $relative
@@ -819,7 +875,9 @@ function Build-DeltaPackage {
     }
 
     foreach ($relative in $oldFiles.Keys) {
-        if (-not $newFiles.ContainsKey($relative) -and -not (Test-DeltaProtectedPath -Path $relative)) {
+        if (-not $newFiles.ContainsKey($relative) -and
+            -not (Test-DeltaProtectedPath -Path $relative) -and
+            -not (Test-GeneratedRuntimePath -Path $relative)) {
             $deleted += $relative
         }
     }
@@ -979,17 +1037,24 @@ if ($MyInvocation.InvocationName -ne ".") {
         $appPackage = Build-AppPackage -SevenZipExe $SevenZipExe
         $variants = @(Resolve-Targets)
 
+        $previousArchives = @{ cpu = $PreviousCpuFullArchive; gpu = $PreviousGpuFullArchive }
+        $reuseRuntimeByKind = @{}
         foreach ($variant in $variants) {
-            Ensure-RuntimeRoot -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
+            $reuseRuntime = $ReusePreviousRuntime -and (Test-Path -LiteralPath $previousArchives[$variant.Kind] -PathType Leaf)
+            $reuseRuntimeByKind[$variant.Kind] = $reuseRuntime
+            if (-not $reuseRuntime) {
+                Ensure-RuntimeRoot -Variant $variant -CondaExe $CondaExe -CondaPackExe $CondaPackExe -SevenZipExe $SevenZipExe
+            }
 
             if (-not $SkipFullPackage) {
-                Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe
+                Build-FullPackage -Variant $variant -AppRoot $appPackage.Root -SevenZipExe $SevenZipExe `
+                    -PreviousFullArchive $previousArchives[$variant.Kind] `
+                    -ReuseRuntime:$reuseRuntimeByKind[$variant.Kind]
             }
         }
 
         $deltas = @()
         if (-not $SkipFullPackage) {
-            $previousArchives = @{ cpu = $PreviousCpuFullArchive; gpu = $PreviousGpuFullArchive }
             foreach ($variant in $variants) {
                 $delta = Build-DeltaPackage -Variant $variant -PreviousArchive $previousArchives[$variant.Kind] -PreviousVersion $PreviousVersion -SevenZipExe $SevenZipExe
                 if ($null -ne $delta) {
