@@ -6,6 +6,8 @@ import {
   PanelLeftOpen,
   BarChart3
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { loadApplicationUpdateStatus } from "../model/workspaceApi";
 
 export function WorkspaceToolbar({
   activeSeries,
@@ -19,6 +21,26 @@ export function WorkspaceToolbar({
   chatDrawerEnabled = true,
   onOpenUsagePage,
 }) {
+  const [versionStatus, setVersionStatus] = useState({ version: "Source", state: "source" });
+
+  useEffect(() => {
+    let cancelled = false;
+    loadApplicationUpdateStatus()
+      .then((status) => {
+        if (cancelled) {
+          return;
+        }
+        setVersionStatus({
+          version: status.installationKind === "source" ? "Source" : status.currentVersion,
+          state: status.updateAvailable ? "available" : status.installationKind === "source" ? "source" : "current",
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <header className="workspace-toolbar-surface flex justify-between items-center px-6 py-4 border-b border-stone-200/80 dark:border-stone-800 sticky top-0 z-20 shrink-0">
       <div className="flex items-center gap-4">
@@ -42,8 +64,11 @@ export function WorkspaceToolbar({
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400">
-          Settings
+        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${versionStatus.state === "available"
+          ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+          : "border-stone-200/80 bg-stone-50 text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+          }`}>
+          {versionStatus.version}
         </span>
         {chatDrawerEnabled ? (
           <button

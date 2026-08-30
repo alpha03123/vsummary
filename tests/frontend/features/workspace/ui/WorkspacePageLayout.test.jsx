@@ -43,12 +43,16 @@ vi.mock("@src/features/workspace/ui/WorkspaceReadingPane", () => ({
   ),
 }));
 vi.mock("@src/features/workspace/ui/WorkspaceVideoPlayer", () => ({
-  WorkspaceVideoPlayer: ({ videoSource, onOpenOverviewAtTime }) => (
+  WorkspaceVideoPlayer: ({ videoSource, resumeSeconds, onTimeUpdate, onOpenOverviewAtTime }) => (
     <button
       data-testid="video-player"
       data-source={videoSource}
+      data-resume-seconds={resumeSeconds ?? ""}
       data-on-open-overview-at-time={Boolean(onOpenOverviewAtTime)}
-      onClick={() => onOpenOverviewAtTime?.(42.5)}
+      onClick={() => {
+        onTimeUpdate?.(12);
+        onOpenOverviewAtTime?.(42.5);
+      }}
     >
       player
     </button>
@@ -159,6 +163,27 @@ describe("WorkspacePage new layout", () => {
 
     fireEvent.click(player);
     expect(openOverviewAtTime).toHaveBeenCalledWith(42.5);
+  });
+
+  it("records playback without repeatedly passing it back as a resume position", async () => {
+    const { rerender } = render(<WorkspacePage page={makePage()} />);
+    const player = screen.getByTestId("video-player");
+
+    fireEvent.click(player);
+    expect(player.getAttribute("data-resume-seconds")).toBe("");
+
+    const secondVideoPage = makePage({
+      shell: {
+        selectedVideo: { id: "v2", title: "第二讲", sourceType: "video" },
+        previewUrl: "/api/videos/s1/v2/preview",
+      },
+    });
+    rerender(<WorkspacePage page={secondVideoPage} />);
+
+    rerender(<WorkspacePage page={makePage()} />);
+    await waitFor(() => {
+      expect(screen.getByTestId("video-player").getAttribute("data-resume-seconds")).toBe("12");
+    });
   });
 
   it("forwards transcript generation actions to WorkspaceReadingPane", () => {

@@ -54,6 +54,7 @@ from backend.video_summary.library.markdown_exports import render_knowledge_card
 from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
+from backend.video_summary.library.subtitle_exports import render_webvtt
 from backend.video_summary.generation.renderers import render_markdown
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
@@ -187,6 +188,20 @@ def get_video_transcript_markdown(series_id: str, video_id: str, container: ApiC
             for segment in transcript.segments
         ],
     })}
+
+
+@router.get("/api/videos/{series_id}/{video_id}/subtitles.vtt")
+def get_video_subtitles_webvtt(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    """将当前工作区转写作为浏览器可加载的 WebVTT 字幕轨道返回。"""
+    _ensure_video_exists(container, series_id, video_id)
+    transcript = container.get_video_transcript.run(series_id, video_id)
+    if transcript is None or not transcript.segments:
+        raise HTTPException(status_code=404, detail=f"subtitles not found for video '{series_id}/{video_id}'")
+    return Response(
+        content=render_webvtt(transcript.segments),
+        media_type="text/vtt; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.put("/api/videos/{series_id}/{video_id}/transcript")

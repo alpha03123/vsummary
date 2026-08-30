@@ -647,6 +647,12 @@ class FileSystemVideoWorkspace:
         knowledge_cards_exists = (video.output_dir / "knowledge_cards.json").exists()
         mindmap_exists = (video.output_dir / "mindmap.json").exists()
         preview_url = f"/api/videos/{series_id}/{video_id}/preview"
+        transcript = self.get_video_transcript(series_id, video_id)
+        subtitle_url = (
+            f"/api/videos/{series_id}/{video_id}/subtitles.vtt"
+            if transcript is not None and transcript.segments
+            else None
+        )
         preview_title = "音频预览" if video.source_type == "audio" else "视频预览"
         return VideoWorkspaceToolsDTO(
             series_id=series_id,
@@ -686,6 +692,7 @@ class FileSystemVideoWorkspace:
                 generated=True,
                 status="ready",
                 preview_url=preview_url,
+                subtitle_url=subtitle_url,
             ),
             ai_todo="当前已支持 AI 切换概况、知识卡片、笔记和媒体预览，并可定位时间点或整理笔记。",
         )

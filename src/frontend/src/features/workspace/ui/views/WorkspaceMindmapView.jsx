@@ -18,6 +18,7 @@ export function WorkspaceMindmapView({
   seriesId,
   videoId,
   mindmapGenerationProgress,
+  theme,
 }) {
   const hasMindmap = Boolean(mindmap);
 
@@ -215,7 +216,7 @@ export function WorkspaceMindmapView({
         </div>
       </div>
       <div className="h-full w-full">
-        <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} />
+        <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} theme={theme} />
       </div>
     </div>
   );

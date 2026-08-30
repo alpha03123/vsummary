@@ -257,6 +257,8 @@ export function useWorkspaceController() {
     onCloseSettingsPanel: settingsActions.onCloseSettingsPanel,
     onOpenUsagePage: settingsActions.onOpenUsagePage,
     onCloseUsagePage: settingsActions.onCloseUsagePage,
+    onCheckApplicationUpdate: settingsActions.onCheckApplicationUpdate,
+    onScheduleApplicationUpdate: settingsActions.onScheduleApplicationUpdate,
     onChangeProviderUsageRange: settingsActions.onChangeProviderUsageRange,
     onChangeSetting: settingsActions.onChangeSetting,
     onSaveProviderSettings: settingsActions.onSaveProviderSettings,

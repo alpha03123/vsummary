@@ -4,6 +4,7 @@ import {
   discoverProviderModels,
   downloadFasterWhisperModel,
   downloadRagModel,
+  loadApplicationUpdateStatus,
   loadAsrApiKey,
   loadFasterWhisperModels,
   loadOpenaiApiKey,
@@ -14,6 +15,7 @@ import {
   testProviderSettings,
   updateProviderSettings,
   updateWorkspaceSettings,
+  scheduleApplicationUpdate,
 } from "./workspaceApi";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
@@ -66,6 +68,14 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
 
   function onCloseUsagePage() {
     dispatch({ type: "usage_page_closed" });
+  }
+
+  async function onCheckApplicationUpdate() {
+    return loadApplicationUpdateStatus();
+  }
+
+  async function onScheduleApplicationUpdate() {
+    return scheduleApplicationUpdate();
   }
 
   function onChangeProviderUsageRange(range) {
@@ -589,6 +599,8 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onCloseSettingsPanel,
     onOpenUsagePage,
     onCloseUsagePage,
+    onCheckApplicationUpdate,
+    onScheduleApplicationUpdate,
     onChangeSetting,
     onChangeProviderUsageRange,
     onSaveProviderSettings,

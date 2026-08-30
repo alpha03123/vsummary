@@ -144,6 +144,27 @@ class WorkspaceSettingsResponse(BaseModel):
     runtime_capabilities: RuntimeCapabilitiesResponse
 
 
+class ApplicationUpdateStatusResponse(BaseModel):
+    """当前安装与远端发布版本的比较结果。"""
+
+    installation_kind: str
+    current_version: str
+    variant: str | None = None
+    update_available: bool
+    can_apply: bool
+    requires_full_package: bool
+    latest_version: str | None = None
+    full_package_url: str | None = None
+    message: str = ""
+
+
+class ApplicationUpdateScheduleResponse(BaseModel):
+    """已接受的 Pack 更新重启计划。"""
+
+    target_version: str
+    restart_after_seconds: int
+
+
 class UpdateWorkspaceSettingsRequest(BaseModel):
     """更新工作区全局设置的请求体。
 

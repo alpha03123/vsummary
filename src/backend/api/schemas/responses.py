@@ -164,6 +164,7 @@ class WorkspaceToolResponse(BaseModel):
     generated: bool
     status: str
     preview_url: str | None = None
+    subtitle_url: str | None = None
 
     @classmethod
     def from_model(cls, tool: WorkspaceToolDTO) -> "WorkspaceToolResponse":
@@ -182,6 +183,7 @@ class WorkspaceToolResponse(BaseModel):
             generated=tool.generated,
             status=tool.status,
             preview_url=tool.preview_url,
+            subtitle_url=tool.subtitle_url,
         )
 
 

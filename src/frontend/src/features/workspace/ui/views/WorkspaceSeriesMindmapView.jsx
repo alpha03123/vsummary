@@ -17,6 +17,7 @@ export function WorkspaceSeriesMindmapView({
   onFocusNode,
   onGenerateSeriesMindmap,
   mindmapGenerationProgress,
+  theme,
 }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [maxDepth, setMaxDepth] = useState(null);
@@ -208,7 +209,7 @@ export function WorkspaceSeriesMindmapView({
         </div>
       </div>
       <div className="h-full w-full">
-        <MindmapCanvas root={seriesMindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} />
+        <MindmapCanvas root={seriesMindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} theme={theme} />
       </div>
     </div>
   );

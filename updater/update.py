@@ -10,6 +10,7 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
 
 
@@ -41,6 +42,91 @@ class UpdateResult:
     runtime_updated: bool = False
     requires_full_package: bool = False
     messages: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class UpdateCheckResult:
+    """已安装 Pack 与远端发布 manifest 的比较结果。"""
+
+    current_version: str
+    target_version: str
+    variant: str
+    update_available: bool
+    can_apply: bool
+    requires_full_package: bool
+    full_package_url: str | None
+    messages: list[str] = field(default_factory=list)
+
+
+def check_for_update(root: Path, manifest_url: str | None = None, variant: str | None = None) -> UpdateCheckResult:
+    """检查 Pack 更新，不下载或修改任何安装文件。"""
+    root = root.resolve()
+    installed = _read_json(root / INSTALLED_PATH, default={})
+    config = _read_json(root / CONFIG_PATH, default={})
+    selected_variant = variant or installed.get("variant") or config.get("variant") or _infer_variant(root)
+    if selected_variant not in {"cpu", "gpu"}:
+        raise RuntimeError("Cannot determine package variant. Pass --variant cpu or --variant gpu.")
+
+    resolved_manifest_url = manifest_url or config.get("manifest_url")
+    if not resolved_manifest_url:
+        raise RuntimeError("Manifest URL is not configured. Pass --manifest or set updater/config.json.")
+
+    current_version = str(installed.get("app_version") or _read_version_file(root) or "")
+    if not current_version:
+        raise RuntimeError("Installed package version is missing.")
+
+    manifest = _read_json_from_location(
+        str(resolved_manifest_url),
+        mirrors=_resolve_download_mirrors(config),
+    )
+    target_version = str((manifest.get("app") or {}).get("version") or manifest.get("version") or "")
+    if not target_version:
+        raise RuntimeError("Update manifest does not contain an app version.")
+
+    version_order = _compare_release_versions(current_version, target_version)
+    if version_order >= 0:
+        return UpdateCheckResult(
+            current_version=current_version,
+            target_version=target_version,
+            variant=selected_variant,
+            update_available=False,
+            can_apply=False,
+            requires_full_package=False,
+            full_package_url=None,
+            messages=["Already on the latest available version."],
+        )
+
+    full = ((manifest.get("full") or {}).get(selected_variant)) or {}
+    full_package_url = str(full.get("url") or "") or None
+    delta_chain = _find_delta_chain(
+        manifest.get("deltas"),
+        variant=selected_variant,
+        current_version=current_version,
+        target_version=target_version,
+    )
+    if delta_chain and not any(bool(delta.get("runtime")) for delta in delta_chain):
+        return UpdateCheckResult(
+            current_version=current_version,
+            target_version=target_version,
+            variant=selected_variant,
+            update_available=True,
+            can_apply=True,
+            requires_full_package=False,
+            full_package_url=full_package_url,
+            messages=["A compatible delta update is available."],
+        )
+
+    reason = "Runtime changed; download and reinstall the full package." if delta_chain else "No compatible delta update is available."
+    return UpdateCheckResult(
+        current_version=current_version,
+        target_version=target_version,
+        variant=selected_variant,
+        update_available=True,
+        can_apply=False,
+        requires_full_package=True,
+        full_package_url=full_package_url,
+        messages=[reason],
+    )
 
 
 def run_update(root: Path, manifest_url: str | None = None, variant: str | None = None) -> UpdateResult:
@@ -147,6 +233,25 @@ def _read_json(path: Path, *, default: Any) -> Any:
     if not path.is_file():
         return default
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def _read_version_file(root: Path) -> str:
+    path = root / "VERSION"
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8-sig").strip()
+
+
+def _compare_release_versions(current: str, target: str) -> int:
+    """比较 `v0.x.x` 发布版本，拒绝非发布版本与潜在降级。"""
+    pattern = re.compile(r"^v(?P<major>0|[1-9][0-9]*)\.(?P<minor>0|[1-9][0-9]*)\.(?P<patch>0|[1-9][0-9]*)$")
+    current_match = pattern.fullmatch(current)
+    target_match = pattern.fullmatch(target)
+    if current_match is None or target_match is None:
+        raise RuntimeError("Pack update requires v0.x.x release versions.")
+    current_parts = tuple(int(current_match.group(name)) for name in ("major", "minor", "patch"))
+    target_parts = tuple(int(target_match.group(name)) for name in ("major", "minor", "patch"))
+    return (current_parts > target_parts) - (current_parts < target_parts)
 
 
 def _write_json(path: Path, data: Any) -> None:

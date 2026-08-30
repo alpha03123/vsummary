@@ -57,6 +57,7 @@ function asTool(value, label) {
     generated: Boolean(record.generated),
     status: asString(record.status, `${label}.status`),
     previewUrl: typeof record.preview_url === "string" ? record.preview_url : null,
+    subtitleUrl: typeof record.subtitle_url === "string" ? record.subtitle_url : null,
   };
 }
 

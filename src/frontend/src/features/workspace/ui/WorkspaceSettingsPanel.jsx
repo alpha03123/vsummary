@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { popScaleVariant, blurVariant } from "../../../lib/animations";
-import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download, Check } from "lucide-react";
+import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download, Check, RefreshCw } from "lucide-react";
 import {
   WorkspaceProviderSelect,
   WorkspaceSegmentedControl,
@@ -41,6 +41,8 @@ export function WorkspaceSettingsPanel({
   onCancelFasterWhisperModelDownload,
   onDownloadRagModel,
   onCancelRagModelDownload,
+  onCheckApplicationUpdate,
+  onScheduleApplicationUpdate,
   onResetSettings,
   onClose,
 }) {
@@ -55,6 +57,9 @@ export function WorkspaceSettingsPanel({
   const [asrTest, setAsrTest] = useState({ status: "idle", message: "" });
   const [detectedProviderModels, setDetectedProviderModels] = useState([]);
   const [providerModelDiscovery, setProviderModelDiscovery] = useState("idle");
+  const [applicationUpdate, setApplicationUpdate] = useState({ status: "checking", detail: "正在检查应用版本...", data: null });
+  const [showUpdateConfirm, setShowUpdateConfirm] = useState(false);
+  const [restartCountdown, setRestartCountdown] = useState(null);
   const isOllamaProvider = ui.llmProvider === "ollama";
   const hasApiKey = ui.hasOpenaiApiKey;
   const draftApiKey = ui.openaiApiKey.trim();
@@ -133,6 +138,52 @@ export function WorkspaceSettingsPanel({
     { id: "lm_studio", label: "lm_studio", group: "本地", description: "本地运行，LM Studio 内置服务器" },
   ];
 
+  const checkApplicationUpdate = async () => {
+    if (typeof onCheckApplicationUpdate !== "function") {
+      return;
+    }
+    setApplicationUpdate((current) => ({ ...current, status: "checking", detail: "正在检查应用版本..." }));
+    try {
+      const data = await onCheckApplicationUpdate();
+      setApplicationUpdate({ status: data.installationKind === "source" ? "source" : data.updateAvailable ? "available" : "current", detail: data.message, data });
+    } catch (error) {
+      setApplicationUpdate({ status: "failed", detail: error instanceof Error ? error.message : "检查更新失败", data: null });
+    }
+  };
+
+  useEffect(() => {
+    void checkApplicationUpdate();
+  }, []);
+
+  useEffect(() => {
+    if (!Number.isInteger(restartCountdown) || restartCountdown <= 0) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setRestartCountdown((seconds) => seconds - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [restartCountdown]);
+
+  const confirmApplicationUpdate = async () => {
+    if (typeof onScheduleApplicationUpdate !== "function") {
+      return;
+    }
+    setApplicationUpdate((current) => ({ ...current, status: "applying", detail: "正在安排更新与重启..." }));
+    try {
+      const result = await onScheduleApplicationUpdate();
+      setShowUpdateConfirm(false);
+      setRestartCountdown(result.restartAfterSeconds);
+      setApplicationUpdate((current) => ({
+        ...current,
+        status: "completed",
+        detail: `已更新至 ${result.targetVersion}，即将重启应用。`,
+        data: { ...current.data, latestVersion: result.targetVersion },
+      }));
+    } catch (error) {
+      setShowUpdateConfirm(false);
+      setApplicationUpdate((current) => ({ ...current, status: "failed", detail: error instanceof Error ? error.message : "更新安排失败" }));
+    }
+  };
+
   const tabs = [
     { id: "general", label: "常规与显示", icon: Settings2 },
     { id: "ai", label: "AI 总结能力", icon: Cpu },
@@ -140,6 +191,7 @@ export function WorkspaceSettingsPanel({
     { id: "keys", label: "模型供应商", icon: Key },
     { id: "external-import", label: "外部导入", icon: Globe },
     { id: "network", label: "下载管理 ", icon: Download },
+    { id: "update", label: "应用更新", icon: RefreshCw },
   ];
   return (
     <motion.section
@@ -1094,6 +1146,57 @@ export function WorkspaceSettingsPanel({
               </>
             )}
 
+            {activeTab === "update" && (
+              <>
+                <div className="mb-2">
+                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">应用更新</h3>
+                  <p className="mt-2 text-[13px] text-stone-600 dark:text-stone-400">Pack 安装包使用已验证的增量更新与事务回滚机制。</p>
+                </div>
+                <WorkspaceSettingRow title="当前版本" description={applicationUpdate.detail}>
+                  <span className={`inline-flex rounded-lg border px-3 py-2 text-sm font-bold ${applicationUpdate.status === "available" ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300" : applicationUpdate.status === "completed" ? "border-success/30 bg-success/10 text-success" : "border-stone-200 bg-stone-100 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"}`}>
+                    {applicationUpdate.data?.currentVersion ?? "v.Source"}
+                    {applicationUpdate.status !== "source" && applicationUpdate.data?.variant ? ` · Pack ${applicationUpdate.data.variant.toUpperCase()}` : ""}
+                  </span>
+                </WorkspaceSettingRow>
+
+                {applicationUpdate.status === "source" ? null : (
+                  <WorkspaceSettingRow title="检查更新" description={applicationUpdate.data?.latestVersion ? `最新版本：${applicationUpdate.data.latestVersion}` : "检查最新发布版本。"}>
+                    <button
+                      type="button"
+                      onClick={() => void checkApplicationUpdate()}
+                      disabled={applicationUpdate.status === "checking" || applicationUpdate.status === "applying" || applicationUpdate.status === "completed"}
+                      className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-bold text-stone-700 transition-colors hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200"
+                    >
+                      {applicationUpdate.status === "checking" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                      检查更新
+                    </button>
+                  </WorkspaceSettingRow>
+                )}
+
+                {applicationUpdate.status === "available" && applicationUpdate.data?.canApply ? (
+                  <WorkspaceSettingRow title={`发现 ${applicationUpdate.data.latestVersion}`} description="可用增量更新已通过版本链校验。">
+                    <button type="button" onClick={() => setShowUpdateConfirm(true)} className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600">
+                      <Download size={16} /> 更新
+                    </button>
+                  </WorkspaceSettingRow>
+                ) : null}
+
+                {applicationUpdate.status === "available" && applicationUpdate.data?.requiresFullPackage ? (
+                  <WorkspaceSettingRow title="需要完整安装包" description={applicationUpdate.detail}>
+                    {applicationUpdate.data.fullPackageUrl ? (
+                      <a href={applicationUpdate.data.fullPackageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600"><Download size={16} /> 下载完整包</a>
+                    ) : null}
+                  </WorkspaceSettingRow>
+                ) : null}
+
+                {applicationUpdate.status === "completed" ? (
+                  <WorkspaceSettingRow title="更新完毕" description={restartCountdown != null && restartCountdown > 0 ? `${restartCountdown}s 后将自动重启应用。` : "正在重启应用..."}>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-4 py-2.5 text-sm font-bold text-success"><Check size={16} /> 已安排重启</span>
+                  </WorkspaceSettingRow>
+                ) : null}
+              </>
+            )}
+
             {activeTab === "external-import" && (
               <>
                 <div className="mb-2">
@@ -1171,6 +1274,21 @@ export function WorkspaceSettingsPanel({
                 >
                   确认恢复
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showUpdateConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[100] flex items-center justify-center bg-white/60 p-6 backdrop-blur-sm dark:bg-black/60">
+            <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="w-full max-w-[360px] rounded-[1.5rem] border border-stone-200 bg-white p-7 text-center shadow-[0_20px_40px_rgba(0,0,0,0.15)] dark:border-stone-700/60 dark:bg-neutral-900">
+              <h3 className="mb-2 text-xl font-bold text-stone-900 dark:text-white">确认更新？</h3>
+              <p className="mb-6 text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">请确保没有正在处理的任务再更新。更新会在 10 秒倒计时结束后自动重启应用。</p>
+              <div className="flex w-full justify-center gap-3">
+                <button type="button" onClick={() => setShowUpdateConfirm(false)} className="flex-1 rounded-xl bg-stone-100 py-2.5 text-[13px] font-bold text-stone-600 transition-colors hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700">取消</button>
+                <button type="button" onClick={() => void confirmApplicationUpdate()} className="flex-1 rounded-xl bg-amber-500 py-2.5 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-amber-600">确认更新</button>
               </div>
             </motion.div>
           </motion.div>

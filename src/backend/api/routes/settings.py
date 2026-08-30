@@ -13,7 +13,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
+from backend.api.application_update import ApplicationUpdateError, get_update_status, schedule_update
 from backend.api.schemas.contracts import (
+    ApplicationUpdateScheduleResponse,
+    ApplicationUpdateStatusResponse,
     AsrApiKeyResponse,
     DiscoverProviderModelsRequest,
     FasterWhisperModelResponse,
@@ -42,6 +45,41 @@ from backend.video_summary.infrastructure.runtime_capabilities import detect_run
 router = APIRouter()
 _ASR_DOWNLOAD_LOCK = Lock()
 _ACTIVE_ASR_DOWNLOADS: set[str] = set()
+
+
+@router.get("/api/application-update", response_model=ApplicationUpdateStatusResponse)
+def get_application_update(container: ApiContainerDep) -> ApplicationUpdateStatusResponse:
+    """返回 Pack 更新状态；源码版不会发起网络请求。"""
+    try:
+        return ApplicationUpdateStatusResponse(**get_update_status(container.root_dir))
+    except ApplicationUpdateError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@router.post("/api/application-update/apply", response_model=ApplicationUpdateScheduleResponse)
+def apply_application_update(container: ApiContainerDep) -> ApplicationUpdateScheduleResponse:
+    """在确认可用 delta 且没有活动任务时安排更新并重启。"""
+    try:
+        status = get_update_status(container.root_dir)
+        if status["installation_kind"] != "pack":
+            raise ApplicationUpdateError("源码版不支持自动更新。")
+        if not status["update_available"]:
+            raise ApplicationUpdateError("当前已经是最新版本。")
+        if not status["can_apply"]:
+            raise ApplicationUpdateError(
+                str(status["message"]) or "当前更新需要下载完整安装包。"
+            )
+        delay = schedule_update(
+            root=container.root_dir,
+            variant=str(status["variant"]),
+            container=container,
+        )
+    except ApplicationUpdateError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return ApplicationUpdateScheduleResponse(
+        target_version=str(status["latest_version"]),
+        restart_after_seconds=delay,
+    )
 
 
 @router.get("/api/settings", response_model=WorkspaceSettingsResponse)

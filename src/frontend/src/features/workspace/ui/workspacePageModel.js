@@ -128,6 +128,8 @@ export function buildWorkspacePageModel(controller) {
       closeSettingsPanel: controller.onCloseSettingsPanel,
       openUsagePage: controller.onOpenUsagePage,
       closeUsagePage: controller.onCloseUsagePage,
+      checkApplicationUpdate: controller.onCheckApplicationUpdate,
+      scheduleApplicationUpdate: controller.onScheduleApplicationUpdate,
       changeProviderUsageRange: controller.onChangeProviderUsageRange,
       changeSetting: controller.onChangeSetting,
       saveProviderSettings: controller.onSaveProviderSettings,

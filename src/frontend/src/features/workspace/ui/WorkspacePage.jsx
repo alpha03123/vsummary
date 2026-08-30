@@ -74,6 +74,7 @@ export function WorkspacePage({ page }) {
   const [pendingRename, setPendingRename] = useState(null);
   const [renamePending, setRenamePending] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(null);
+  const [resumePosition, setResumePosition] = useState({ videoKey: null, seconds: null });
   const playbackPositionsRef = useRef(new Map());
   const containerRef = useRef(null);
   const settingsModalRef = useRef(null);
@@ -113,13 +114,17 @@ export function WorkspacePage({ page }) {
     persistWorkspaceLayout(layout);
   }, [layout]);
 
-  useEffect(() => {
-    setPlaybackTime(null);
-  }, [selectedVideo?.id, previewUrl]);
-
   const selectedVideoKey = activeSeries && selectedVideo
     ? `${activeSeries.id}/${selectedVideo.id}`
     : null;
+
+  useEffect(() => {
+    setPlaybackTime(null);
+    setResumePosition({
+      videoKey: selectedVideoKey,
+      seconds: selectedVideoKey ? playbackPositionsRef.current.get(selectedVideoKey) ?? null : null,
+    });
+  }, [selectedVideoKey]);
 
   function beginResize(type, startEvent) {
     startEvent.preventDefault();
@@ -187,9 +192,10 @@ export function WorkspacePage({ page }) {
       return (
         <WorkspaceVideoPlayer
           videoSource={tools?.preview?.previewUrl ?? previewUrl}
+          subtitleSource={tools?.preview?.subtitleUrl ?? null}
           playerSeekRequest={playerSeekRequest}
           videoSourceType={selectedVideo?.sourceType}
-          resumeSeconds={selectedVideoKey ? playbackPositionsRef.current.get(selectedVideoKey) ?? null : null}
+          resumeSeconds={resumePosition.videoKey === selectedVideoKey ? resumePosition.seconds : null}
           onTimeUpdate={(seconds) => {
             setPlaybackTime(seconds);
             if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
@@ -552,6 +558,8 @@ export function WorkspacePage({ page }) {
                   onCancelFasterWhisperModelDownload={actions.cancelFasterWhisperModelDownload}
                   onDownloadRagModel={actions.downloadRagModel}
                   onCancelRagModelDownload={actions.cancelRagModelDownload}
+                  onCheckApplicationUpdate={actions.checkApplicationUpdate}
+                  onScheduleApplicationUpdate={actions.scheduleApplicationUpdate}
                   onResetSettings={actions.resetSettings}
                   onOpenUsagePage={() => {
                     actions.closeSettingsPanel();

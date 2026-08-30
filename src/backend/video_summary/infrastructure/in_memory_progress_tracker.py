@@ -170,6 +170,11 @@ class InMemoryProgressTracker:
         with self._lock:
             return task_id in self._cancelled_tasks
 
+    def has_active_tasks(self) -> bool:
+        """返回是否仍有执行中或正在取消的任务。"""
+        with self._lock:
+            return any(snapshot.status in {"running", "cancelling"} for snapshot in self._snapshots.values())
+
     _TERMINAL_STATES = frozenset({"cancelled", "completed", "failed"})
     _BLOCKED_WRITES: dict[str, frozenset[str]] = {
         "cancelling": frozenset({"completed", "running"}),

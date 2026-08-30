@@ -3,7 +3,7 @@ import { Markmap } from "markmap-view";
 import { Toolbar } from "markmap-toolbar";
 import * as d3 from "d3";
 
-export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }) {
+export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef, theme }) {
   const svgRef = useRef(null);
   const mmRef = useRef(null);
   const toolbarRef = useRef(null);
@@ -27,7 +27,9 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }
 
     const toolbar = Toolbar.create(mm);
     toolbar.setBrand?.(false);
-    configureToolbar(toolbar.el);
+    const toolbarItems = Toolbar.defaultItems?.filter((item) => item !== "dark");
+    toolbar.setItems?.(toolbarItems);
+    configureToolbar(toolbar.el, resolveDarkTheme(theme));
     svgRef.current.parentElement?.appendChild(toolbar.el);
     toolbarRef.current = toolbar.el;
 
@@ -82,12 +84,17 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef }
   useEffect(() => {
     const svg = mmRef.current?.svg?.node();
     if (!svg || !root) return;
-    if (document.documentElement.classList.contains("dark")) {
+    const isDark = resolveDarkTheme(theme);
+    if (isDark) {
       svg.classList.add("markmap-dark");
     } else {
       svg.classList.remove("markmap-dark");
     }
-  }, [root]);
+    applyMindmapTheme(svg, isDark);
+    if (toolbarRef.current) {
+      applyToolbarTheme(toolbarRef.current, isDark);
+    }
+  }, [root, theme]);
 
   useEffect(() => {
     if (!svgRef.current || !selectedNodeId) return;
@@ -133,7 +140,7 @@ function convertToMarkmapNode(node) {
   };
 }
 
-function configureToolbar(toolbarEl) {
+function configureToolbar(toolbarEl, isDark) {
   Object.assign(toolbarEl.style, {
     position: "absolute",
     bottom: "20px",
@@ -145,11 +152,9 @@ function configureToolbar(toolbarEl) {
     width: "auto",
     padding: "6px",
     borderRadius: "16px",
-    border: "1px solid rgba(214, 211, 209, 0.72)",
-    background: "rgba(255, 255, 255, 0.86)",
-    boxShadow: "0 18px 44px rgba(15, 23, 42, 0.12)",
     backdropFilter: "blur(12px)",
   });
+  applyToolbarTheme(toolbarEl, isDark);
   toolbarEl.querySelectorAll(".mm-toolbar-item").forEach((item) => {
     Object.assign(item.style, {
       display: "inline-flex",
@@ -159,11 +164,37 @@ function configureToolbar(toolbarEl) {
       height: "32px",
       margin: "0",
       borderRadius: "12px",
-      color: "rgb(87, 83, 78)",
       transition: "background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease",
     });
+    item.style.setProperty("--toolbar-item-color", isDark ? "rgb(212, 212, 216)" : "rgb(87, 83, 78)");
+    item.style.color = "var(--toolbar-item-color)";
     item.addEventListener("mouseenter", handleToolbarItemEnter);
     item.addEventListener("mouseleave", handleToolbarItemLeave);
+  });
+}
+
+function resolveDarkTheme(theme) {
+  return theme === "dark" || (theme == null && document.documentElement.classList.contains("dark"));
+}
+
+function applyMindmapTheme(svg, isDark) {
+  if (!svg.style?.setProperty) return;
+  svg.style.setProperty("--markmap-text-color", isDark ? "#f4f4f5" : "#18181b");
+  svg.style.setProperty("--markmap-code-color", isDark ? "#e4e4e7" : "#3f3f46");
+  svg.style.setProperty("--markmap-code-bg", isDark ? "#27272a" : "#f4f4f5");
+  svg.style.setProperty("--markmap-circle-open-bg", isDark ? "#52525b" : "#fff");
+}
+
+function applyToolbarTheme(toolbarEl, isDark) {
+  if (!toolbarEl?.style) return;
+  Object.assign(toolbarEl.style, {
+    border: isDark ? "1px solid rgba(63, 63, 70, 0.9)" : "1px solid rgba(214, 211, 209, 0.72)",
+    background: isDark ? "rgba(24, 24, 27, 0.95)" : "rgba(255, 255, 255, 0.86)",
+    boxShadow: isDark ? "0 18px 44px rgba(0, 0, 0, 0.36)" : "0 18px 44px rgba(15, 23, 42, 0.12)",
+  });
+  toolbarEl.querySelectorAll(".mm-toolbar-item").forEach((item) => {
+    item.style.setProperty("--toolbar-item-color", isDark ? "rgb(212, 212, 216)" : "rgb(87, 83, 78)");
+    item.style.color = "var(--toolbar-item-color)";
   });
 }
 
@@ -179,7 +210,7 @@ function handleToolbarItemEnter(event) {
 function handleToolbarItemLeave(event) {
   Object.assign(event.currentTarget.style, {
     background: "",
-    color: "rgb(87, 83, 78)",
+    color: "var(--toolbar-item-color)",
     boxShadow: "",
     transform: "",
   });

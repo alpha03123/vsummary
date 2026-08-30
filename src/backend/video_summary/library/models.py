@@ -362,6 +362,7 @@ class WorkspaceToolDTO:
         generated: 是否已生成对应制品。
         status: 处理状态文本（"idle"/"running"/"ready"/"failed"）。
         preview_url: 预览图/文件 URL；没有则 `None`。
+        subtitle_url: 当前转写对应的 WebVTT 字幕 URL；没有可用转写时为 `None`。
     """
 
     id: str
@@ -370,6 +371,7 @@ class WorkspaceToolDTO:
     generated: bool
     status: str
     preview_url: str | None = None
+    subtitle_url: str | None = None
 
 
 @dataclass(frozen=True)

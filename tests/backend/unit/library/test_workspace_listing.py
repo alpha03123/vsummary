@@ -176,6 +176,22 @@ class EditableContentTests(unittest.TestCase):
             self.assertFalse((output_dir / "mindmap.json").exists())
             self.assertFalse((output_dir / "knowledge_cards.json").exists())
 
+    def test_workspace_tools_exposes_subtitle_url_only_for_a_nonempty_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = self._seed_video(root)
+
+            tools = workspace.get_video_workspace_tools("series-1", "video-1")
+
+            self.assertEqual(tools.preview.subtitle_url, "/api/videos/series-1/video-1/subtitles.vtt")
+
+            transcript_path = root / "workspace" / "series-1" / "video-1" / "transcript.cleaned.json"
+            transcript_path.write_text(json.dumps({"segments": []}), encoding="utf-8")
+
+            tools_without_subtitles = workspace.get_video_workspace_tools("series-1", "video-1")
+
+            self.assertIsNone(tools_without_subtitles.preview.subtitle_url)
+
     def test_rejects_invalid_summary_markdown_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -6,6 +6,7 @@ import { formatRange } from "../../../shared/lib/time";
 
 export function WorkspaceVideoPlayer({
   videoSource,
+  subtitleSource = null,
   playerSeekRequest,
   videoSourceType = "video",
   onTimeUpdate,
@@ -14,12 +15,26 @@ export function WorkspaceVideoPlayer({
   onOpenOverviewAtTime,
 }) {
   const videoRef = useRef(null);
+  const subtitleTrackRef = useRef(null);
+  const resumedVideoSourceRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(Boolean(subtitleSource));
   const isAudioSource = videoSourceType === "audio";
 
   useEffect(() => {
     setIsPlaying(false);
   }, [videoSource]);
+
+  useEffect(() => {
+    setSubtitlesEnabled(Boolean(subtitleSource));
+  }, [subtitleSource, videoSource]);
+
+  useEffect(() => {
+    const track = subtitleTrackRef.current?.track;
+    if (track) {
+      track.mode = subtitlesEnabled ? "showing" : "hidden";
+    }
+  }, [subtitlesEnabled, subtitleSource]);
 
   useEffect(() => {
     if (isAudioSource || !playerSeekRequest || !videoRef.current) {
@@ -55,6 +70,10 @@ export function WorkspaceVideoPlayer({
     if (isAudioSource || !Number.isFinite(resumeSeconds) || resumeSeconds <= 0 || !videoRef.current) {
       return;
     }
+    if (resumedVideoSourceRef.current === videoSource) {
+      return;
+    }
+    resumedVideoSourceRef.current = videoSource;
 
     const video = videoRef.current;
     const resume = () => {
@@ -120,9 +139,32 @@ export function WorkspaceVideoPlayer({
             onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
           >
             <source src={videoSource} />
+            {subtitleSource ? (
+              <track
+                ref={subtitleTrackRef}
+                kind="subtitles"
+                src={subtitleSource}
+                srcLang="zh-CN"
+                label="中文字幕"
+                default={subtitlesEnabled}
+              />
+            ) : null}
           </video>
         </div>
       )}
+      {!isAudioSource && subtitleSource ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            aria-pressed={subtitlesEnabled}
+            onClick={() => setSubtitlesEnabled((current) => !current)}
+            className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:border-accent/50 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200"
+          >
+            <Captions size={17} aria-hidden="true" />
+            {subtitlesEnabled ? "隐藏字幕" : "显示字幕"}
+          </button>
+        </div>
+      ) : null}
       <AnimatePresence initial={false}>
         {isPlaying && typeof onOpenOverviewAtTime === "function" ? (
           <motion.div

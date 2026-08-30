@@ -22,6 +22,29 @@ export async function checkBackendHealth() {
   return response.json();
 }
 
+export async function loadApplicationUpdateStatus() {
+  const payload = await fetchJson("/api/application-update");
+  return {
+    installationKind: payload.installation_kind,
+    currentVersion: payload.current_version,
+    variant: payload.variant,
+    updateAvailable: Boolean(payload.update_available),
+    canApply: Boolean(payload.can_apply),
+    requiresFullPackage: Boolean(payload.requires_full_package),
+    latestVersion: payload.latest_version,
+    fullPackageUrl: payload.full_package_url,
+    message: typeof payload.message === "string" ? payload.message : "",
+  };
+}
+
+export async function scheduleApplicationUpdate() {
+  const payload = await fetchJson("/api/application-update/apply", { method: "POST" });
+  return {
+    targetVersion: payload.target_version,
+    restartAfterSeconds: payload.restart_after_seconds,
+  };
+}
+
 export async function loadWorkspaceSettings() {
   const payload = await fetchJson("/api/settings");
   return toWorkspaceSettings(payload);

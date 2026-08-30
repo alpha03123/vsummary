@@ -122,6 +122,7 @@ export function WorkspaceReadingPane({
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
+  const previewSubtitleSource = tools?.preview?.subtitleUrl ?? null;
   const activeChatSession = chat?.sessions?.find((session) => session.id === chat.activeSessionId) ?? null;
   const activeChatTitle = truncateChatTitle(activeChatSession?.title);
   const toolHeaderBadge = resolveSeriesOverviewBadge({
@@ -203,6 +204,7 @@ export function WorkspaceReadingPane({
                       onFocusNode={onFocusNode}
                       onGenerateSeriesMindmap={onGenerateSeriesMindmap}
                       mindmapGenerationProgress={mindmapGenerationProgress}
+                      theme={ui?.theme}
                     />
                   ) : null}
                   {selectedToolId === "series-overview" ? (
@@ -276,6 +278,7 @@ export function WorkspaceReadingPane({
                       seriesId={activeSeries?.id}
                       videoId={selectedVideo?.id}
                       mindmapGenerationProgress={mindmapGenerationProgress}
+                      theme={ui?.theme}
                     />
                   ) : null}
                   {selectedToolId === "knowledge-cards" ? (
@@ -304,7 +307,7 @@ export function WorkspaceReadingPane({
                     />
                   ) : null}
                   {selectedToolId === "preview" ? (
-                    <WorkspacePreviewView previewSource={previewSource} previewSeekRequest={playerSeekRequest} />
+                    <WorkspacePreviewView previewSource={previewSource} previewSubtitleSource={previewSubtitleSource} previewSeekRequest={playerSeekRequest} />
                   ) : null}
               </Suspense>
             </div>

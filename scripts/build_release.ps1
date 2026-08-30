@@ -152,7 +152,8 @@ function Copy-UpdaterEntrypoints {
     $entrypoints = @(
         "update.bat",
         "updater\__init__.py",
-        "updater\update.py"
+        "updater\update.py",
+        "updater\apply_and_restart.py"
     )
     foreach ($entrypoint in $entrypoints) {
         $source = Join-Path $RepoRoot $entrypoint

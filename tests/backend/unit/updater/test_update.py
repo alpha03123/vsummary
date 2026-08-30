@@ -8,10 +8,47 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from updater.update import _candidate_locations, _recover_incomplete_transaction, run_update
+from updater.update import _candidate_locations, _recover_incomplete_transaction, check_for_update, run_update
 
 
 class UpdaterTests(unittest.TestCase):
+    def test_check_finds_compatible_delta_without_changing_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "runtime").mkdir()
+            (root / "runtime" / "python.exe").write_text("runtime", encoding="utf-8")
+            (root / "VERSION").write_text("v0.0.1", encoding="utf-8")
+            updater_dir = root / "updater"
+            updater_dir.mkdir()
+            (updater_dir / "installed.json").write_text(
+                json.dumps({"variant": "cpu", "app_version": "v0.0.1"}),
+                encoding="utf-8",
+            )
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(
+                json.dumps({
+                    "version": "v0.0.2",
+                    "app": {"version": "v0.0.2"},
+                    "deltas": {"cpu": {"v0.0.1": {"from": "v0.0.1", "to": "v0.0.2"}}},
+                }),
+                encoding="utf-8",
+            )
+            (updater_dir / "config.json").write_text(
+                json.dumps({"manifest_url": str(manifest_path)}),
+                encoding="utf-8",
+            )
+
+            result = check_for_update(root)
+
+            self.assertTrue(result.update_available)
+            self.assertTrue(result.can_apply)
+            self.assertFalse(result.requires_full_package)
+            self.assertEqual(result.current_version, "v0.0.1")
+            self.assertEqual(result.target_version, "v0.0.2")
+            self.assertEqual(
+                json.loads((updater_dir / "installed.json").read_text(encoding="utf-8"))["app_version"],
+                "v0.0.1",
+            )
     def test_same_manifest_versions_do_not_download_or_modify_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
