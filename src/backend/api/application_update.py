@@ -10,7 +10,7 @@ from threading import Lock, Thread
 import time
 
 
-RESTART_DELAY_SECONDS = 10
+RESTART_DELAY_SECONDS = 3
 _schedule_lock = Lock()
 _restart_scheduled = False
 
@@ -63,22 +63,31 @@ def schedule_update(*, root: Path, variant: str, container: object) -> int:
         launcher_path = root / "updater" / "apply_and_restart.py"
         if not launcher_path.is_file():
             raise ApplicationUpdateError("Pack 更新启动器缺失，请下载完整安装包。")
+        log_path = root / "updater" / "update.log"
         try:
-            subprocess.Popen(
-                [
-                    sys.executable,
-                    str(launcher_path),
-                    "--root",
-                    str(root),
-                    "--wait-for-pid",
-                    str(os.getpid()),
-                    "--variant",
-                    variant,
-                ],
-                cwd=root,
-                close_fds=True,
-            )
-        except OSError as error:
+            prepare_update = _load_pack_update_preparer(root)
+            prepare_update(root, variant=variant)
+            with log_path.open("a", encoding="utf-8") as log_file:
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        str(launcher_path),
+                        "--root",
+                        str(root),
+                        "--wait-for-pid",
+                        str(os.getpid()),
+                        "--variant",
+                        variant,
+                        "--prepared",
+                    ],
+                    cwd=root,
+                    close_fds=True,
+                    creationflags=_background_process_flags(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                )
+        except Exception as error:
             raise ApplicationUpdateError(f"无法启动更新器：{error}") from error
         _restart_scheduled = True
     Thread(target=_exit_after_delay, daemon=True).start()
@@ -97,6 +106,15 @@ def _is_pack_installation(root: Path) -> bool:
     )
 
 
+def _background_process_flags() -> int:
+    """让更新器脱离后端控制台，避免关闭终端时一并中断。"""
+    return (
+        getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        | getattr(subprocess, "DETACHED_PROCESS", 0)
+        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+
+
 def _load_pack_updater(root: Path):
     root_text = str(root)
     if root_text not in sys.path:
@@ -104,6 +122,15 @@ def _load_pack_updater(root: Path):
     from updater.update import check_for_update
 
     return check_for_update
+
+
+def _load_pack_update_preparer(root: Path):
+    root_text = str(root)
+    if root_text not in sys.path:
+        sys.path.insert(0, root_text)
+    from updater.update import prepare_update
+
+    return prepare_update
 
 
 def _has_active_tasks(container: object) -> bool:

@@ -8,7 +8,14 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from updater.update import _candidate_locations, _recover_incomplete_transaction, check_for_update, run_update
+from updater.update import (
+    _candidate_locations,
+    _recover_incomplete_transaction,
+    apply_prepared_update,
+    check_for_update,
+    prepare_update,
+    run_update,
+)
 
 
 class UpdaterTests(unittest.TestCase):
@@ -158,6 +165,46 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual((root / "src" / "new.py").read_text(encoding="utf-8"), "latest")
             installed = json.loads(installed_path.read_text(encoding="utf-8"))
             self.assertEqual(installed["app_version"], "v3")
+
+    def test_prepares_delta_without_mutation_then_applies_afterward(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "src" / "value.py"
+            target.parent.mkdir()
+            target.write_text("before", encoding="utf-8")
+            installed_path = root / "updater" / "installed.json"
+            installed_path.parent.mkdir()
+            installed_path.write_text(json.dumps({"variant": "cpu", "app_version": "v0.1.0"}), encoding="utf-8")
+            delta = root / "release" / "v0.1.0-to-v0.2.0.zip"
+            _write_zip(
+                delta,
+                {
+                    "src/value.py": "after",
+                    "changes.json": json.dumps(_changes("v0.1.0", "v0.2.0", {"src/value.py": "after"})),
+                },
+            )
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(
+                json.dumps({
+                    "version": "v0.2.0",
+                    "app": {"version": "v0.2.0"},
+                    "deltas": {"cpu": {"v0.1.0": {"from": "v0.1.0", "to": "v0.2.0", **_asset(delta)}}},
+                }),
+                encoding="utf-8",
+            )
+            (root / "updater" / "config.json").write_text(json.dumps({"manifest_url": str(manifest_path)}), encoding="utf-8")
+
+            prepared = prepare_update(root=root)
+
+            self.assertEqual(prepared.target_version, "v0.2.0")
+            self.assertEqual(target.read_text(encoding="utf-8"), "before")
+            self.assertTrue((root / "updater" / "staging" / "prepared-update.json").is_file())
+
+            result = apply_prepared_update(root)
+
+            self.assertTrue(result.changed)
+            self.assertEqual(target.read_text(encoding="utf-8"), "after")
+            self.assertEqual(json.loads(installed_path.read_text(encoding="utf-8"))["app_version"], "v0.2.0")
 
     def test_runtime_delta_requires_full_package(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

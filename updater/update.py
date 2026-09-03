@@ -18,6 +18,7 @@ INSTALLED_PATH = Path("updater") / "installed.json"
 CONFIG_PATH = Path("updater") / "config.json"
 DOWNLOADS_DIR = Path("updater") / "downloads"
 STAGING_DIR = Path("updater") / "staging"
+PREPARED_UPDATE_PATH = STAGING_DIR / "prepared-update.json"
 APP_FILES_PATH = Path("updater") / "app-files.json"
 TRANSACTION_DIR = Path("updater") / "transaction"
 TRANSACTION_PATH = TRANSACTION_DIR / "transaction.json"
@@ -56,6 +57,12 @@ class UpdateCheckResult:
     requires_full_package: bool
     full_package_url: str | None
     messages: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PreparedUpdate:
+    target_version: str
+    variant: str
 
 
 def check_for_update(root: Path, manifest_url: str | None = None, variant: str | None = None) -> UpdateCheckResult:
@@ -207,6 +214,89 @@ def run_update(root: Path, manifest_url: str | None = None, variant: str | None 
         runtime_updated=runtime_updated,
         messages=messages,
     )
+
+
+def prepare_update(root: Path, manifest_url: str | None = None, variant: str | None = None) -> PreparedUpdate:
+    """下载并校验 delta，但不修改正在运行的应用文件。"""
+    root = root.resolve()
+    _recover_incomplete_transaction(root)
+    installed = _read_json(root / INSTALLED_PATH, default={})
+    config = _read_json(root / CONFIG_PATH, default={})
+    selected_variant = variant or installed.get("variant") or config.get("variant") or _infer_variant(root)
+    if selected_variant not in {"cpu", "gpu"}:
+        raise RuntimeError("Cannot determine package variant. Pass --variant cpu or --variant gpu.")
+
+    resolved_manifest_url = manifest_url or config.get("manifest_url")
+    if not resolved_manifest_url:
+        raise RuntimeError("Manifest URL is not configured. Pass --manifest or set updater/config.json.")
+
+    manifest = _read_json_from_location(str(resolved_manifest_url), mirrors=_resolve_download_mirrors(config))
+    target_version = str((manifest.get("app") or {}).get("version") or manifest.get("version") or "")
+    current_version = str(installed.get("app_version") or _read_version_file(root) or "")
+    if not target_version or not current_version:
+        raise RuntimeError("Update version metadata is missing.")
+    if _compare_release_versions(current_version, target_version) >= 0:
+        raise RuntimeError("Already on the latest available version.")
+
+    delta_chain = _find_delta_chain(
+        manifest.get("deltas"),
+        variant=selected_variant,
+        current_version=current_version,
+        target_version=target_version,
+    )
+    if not delta_chain:
+        raise RuntimeError("No compatible delta update is available.")
+    if any(bool(delta.get("runtime")) for delta in delta_chain):
+        raise RuntimeError("Runtime changed; download and reinstall the full package.")
+
+    prepared_deltas = _prepare_delta_chain(root, delta_chain, _resolve_download_mirrors(config))
+    stages = []
+    for stage, changes in prepared_deltas:
+        stages.append({
+            "path": str(stage.relative_to(root)).replace("\\", "/"),
+            "from": changes["from"],
+            "to": changes["to"],
+        })
+    _write_json(root / PREPARED_UPDATE_PATH, {
+        "current_version": current_version,
+        "target_version": target_version,
+        "variant": selected_variant,
+        "stages": stages,
+    })
+    return PreparedUpdate(target_version=target_version, variant=selected_variant)
+
+
+def apply_prepared_update(root: Path) -> UpdateResult:
+    """应用已经下载并校验过的 delta，供旧进程退出后的更新器调用。"""
+    root = root.resolve()
+    plan = _read_json(root / PREPARED_UPDATE_PATH, default=None)
+    if not isinstance(plan, dict):
+        raise RuntimeError("Prepared update is missing.")
+    installed = _read_json(root / INSTALLED_PATH, default={})
+    current_version = str(installed.get("app_version") or "")
+    if current_version != plan.get("current_version"):
+        raise RuntimeError("Prepared update no longer matches the installed version.")
+
+    prepared_deltas = []
+    for stage_info in plan.get("stages", []):
+        if not isinstance(stage_info, dict):
+            raise RuntimeError("Prepared update contains an invalid stage.")
+        stage = root / str(stage_info.get("path") or "")
+        changes = _read_delta_changes(stage, str(stage_info.get("from") or ""), str(stage_info.get("to") or ""))
+        _validate_delta_payload(stage, changes)
+        prepared_deltas.append((stage, changes))
+    if not prepared_deltas:
+        raise RuntimeError("Prepared update contains no delta files.")
+
+    variant = str(plan.get("variant") or "")
+    _apply_delta_transaction(root, prepared_deltas, installed, variant)
+    installed["app_version"] = str(plan["target_version"])
+    installed["app_files"] = _read_app_files(root)
+    installed["variant"] = variant
+    _write_json(root / INSTALLED_PATH, installed)
+    _commit_transaction(root)
+    shutil.rmtree(root / STAGING_DIR, ignore_errors=True)
+    return UpdateResult(changed=True, app_updated=True, messages=["Delta update complete.", "Runtime was retained."])
 
 
 def main(argv: list[str] | None = None) -> int:

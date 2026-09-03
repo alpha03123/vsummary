@@ -20,6 +20,7 @@ export function WorkspaceToolbar({
   chatDrawerOpen,
   chatDrawerEnabled = true,
   onOpenUsagePage,
+  onOpenUpdate,
 }) {
   const [versionStatus, setVersionStatus] = useState({ version: "Source", state: "source" });
 
@@ -64,12 +65,21 @@ export function WorkspaceToolbar({
       </div>
 
       <div className="flex items-center gap-3">
-        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${versionStatus.state === "available"
-          ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
-          : "border-stone-200/80 bg-stone-50 text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
-          }`}>
-          {versionStatus.version}
-        </span>
+        {versionStatus.state === "available" ? (
+          <button
+            type="button"
+            onClick={onOpenUpdate}
+            title="发现新版本，打开更新页面"
+            aria-label={`发现新版本，当前 ${versionStatus.version}，打开更新页面`}
+            className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:border-accent/40 dark:bg-accent/15 dark:hover:bg-accent/20"
+          >
+            {versionStatus.version}
+          </button>
+        ) : (
+          <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400">
+            {versionStatus.version}
+          </span>
+        )}
         {chatDrawerEnabled ? (
           <button
             type="button"

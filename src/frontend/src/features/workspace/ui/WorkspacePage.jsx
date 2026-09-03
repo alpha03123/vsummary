@@ -438,6 +438,7 @@ export function WorkspacePage({ page }) {
           onEnterLibraryHome={actions.enterLibraryHome}
           onToggleSettingsPanel={actions.toggleSettingsPanel}
           onOpenUsagePage={actions.openUsagePage}
+          onOpenUpdate={() => actions.openSettingsPanel("update")}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onToggleChatDrawer={chat.toggleDrawer}

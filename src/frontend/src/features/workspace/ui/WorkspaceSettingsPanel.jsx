@@ -167,19 +167,18 @@ export function WorkspaceSettingsPanel({
     if (typeof onScheduleApplicationUpdate !== "function") {
       return;
     }
-    setApplicationUpdate((current) => ({ ...current, status: "applying", detail: "正在安排更新与重启..." }));
+    setShowUpdateConfirm(false);
+    setApplicationUpdate((current) => ({ ...current, status: "applying", detail: "正在准备更新文件..." }));
     try {
       const result = await onScheduleApplicationUpdate();
-      setShowUpdateConfirm(false);
       setRestartCountdown(result.restartAfterSeconds);
       setApplicationUpdate((current) => ({
         ...current,
         status: "completed",
-        detail: `已更新至 ${result.targetVersion}，即将重启应用。`,
+        detail: `更新文件已准备，${result.restartAfterSeconds}s 后重启应用。`,
         data: { ...current.data, latestVersion: result.targetVersion },
       }));
     } catch (error) {
-      setShowUpdateConfirm(false);
       setApplicationUpdate((current) => ({ ...current, status: "failed", detail: error instanceof Error ? error.message : "更新安排失败" }));
     }
   };
@@ -1150,12 +1149,12 @@ export function WorkspaceSettingsPanel({
               <>
                 <div className="mb-2">
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">应用更新</h3>
-                  <p className="mt-2 text-[13px] text-stone-600 dark:text-stone-400">Pack 安装包使用已验证的增量更新与事务回滚机制。</p>
+                  <p className="mt-2 text-[13px] text-stone-600 dark:text-stone-400">安装版支持增量更新与事务回滚。</p>
                 </div>
-                <WorkspaceSettingRow title="当前版本" description={applicationUpdate.detail}>
-                  <span className={`inline-flex rounded-lg border px-3 py-2 text-sm font-bold ${applicationUpdate.status === "available" ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300" : applicationUpdate.status === "completed" ? "border-success/30 bg-success/10 text-success" : "border-stone-200 bg-stone-100 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"}`}>
+                <WorkspaceSettingRow title="当前版本" description={applicationUpdate.status === "available" ? "可通过增量更新" : applicationUpdate.detail}>
+                  <span className={`inline-flex rounded-lg border px-3 py-2 text-sm font-bold ${applicationUpdate.status === "available" ? "border-accent/30 bg-accent/10 text-accent dark:border-accent/40 dark:bg-accent/15" : applicationUpdate.status === "completed" ? "border-success/30 bg-success/10 text-success" : "border-stone-200 bg-stone-100 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"}`}>
                     {applicationUpdate.data?.currentVersion ?? "v.Source"}
-                    {applicationUpdate.status !== "source" && applicationUpdate.data?.variant ? ` · Pack ${applicationUpdate.data.variant.toUpperCase()}` : ""}
+                    {applicationUpdate.status !== "source" && applicationUpdate.data?.variant ? ` · ${applicationUpdate.data.variant.toUpperCase()}` : ""}
                   </span>
                 </WorkspaceSettingRow>
 
@@ -1174,8 +1173,8 @@ export function WorkspaceSettingsPanel({
                 )}
 
                 {applicationUpdate.status === "available" && applicationUpdate.data?.canApply ? (
-                  <WorkspaceSettingRow title={`发现 ${applicationUpdate.data.latestVersion}`} description="可用增量更新已通过版本链校验。">
-                    <button type="button" onClick={() => setShowUpdateConfirm(true)} className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600">
+                  <WorkspaceSettingRow title={`发现 ${applicationUpdate.data.latestVersion}`} description="可通过增量更新。">
+                    <button type="button" onClick={() => setShowUpdateConfirm(true)} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-accent/90">
                       <Download size={16} /> 更新
                     </button>
                   </WorkspaceSettingRow>
@@ -1184,13 +1183,21 @@ export function WorkspaceSettingsPanel({
                 {applicationUpdate.status === "available" && applicationUpdate.data?.requiresFullPackage ? (
                   <WorkspaceSettingRow title="需要完整安装包" description={applicationUpdate.detail}>
                     {applicationUpdate.data.fullPackageUrl ? (
-                      <a href={applicationUpdate.data.fullPackageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600"><Download size={16} /> 下载完整包</a>
+                      <a href={applicationUpdate.data.fullPackageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-accent/90"><Download size={16} /> 下载完整包</a>
                     ) : null}
                   </WorkspaceSettingRow>
                 ) : null}
 
+                {applicationUpdate.status === "applying" ? (
+                  <WorkspaceSettingRow title="正在准备更新" description="正在下载并校验更新文件，完成后会自动开始重启倒计时。">
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm font-bold text-accent dark:border-accent/40 dark:bg-accent/15">
+                      <LoaderCircle size={16} className="animate-spin" /> 正在准备
+                    </span>
+                  </WorkspaceSettingRow>
+                ) : null}
+
                 {applicationUpdate.status === "completed" ? (
-                  <WorkspaceSettingRow title="更新完毕" description={restartCountdown != null && restartCountdown > 0 ? `${restartCountdown}s 后将自动重启应用。` : "正在重启应用..."}>
+                  <WorkspaceSettingRow title="更新准备完成" description={restartCountdown != null && restartCountdown > 0 ? `${restartCountdown}s 后自动重启应用。` : "正在重启应用..."}>
                     <span className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-4 py-2.5 text-sm font-bold text-success"><Check size={16} /> 已安排重启</span>
                   </WorkspaceSettingRow>
                 ) : null}
@@ -1285,10 +1292,10 @@ export function WorkspaceSettingsPanel({
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[100] flex items-center justify-center bg-white/60 p-6 backdrop-blur-sm dark:bg-black/60">
             <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }} className="w-full max-w-[360px] rounded-[1.5rem] border border-stone-200 bg-white p-7 text-center shadow-[0_20px_40px_rgba(0,0,0,0.15)] dark:border-stone-700/60 dark:bg-neutral-900">
               <h3 className="mb-2 text-xl font-bold text-stone-900 dark:text-white">确认更新？</h3>
-              <p className="mb-6 text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">请确保没有正在处理的任务再更新。更新会在 10 秒倒计时结束后自动重启应用。</p>
+              <p className="mb-6 text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">请确保没有正在处理的任务再更新。系统会先准备更新文件，完成后开始短倒计时并自动重启。</p>
               <div className="flex w-full justify-center gap-3">
                 <button type="button" onClick={() => setShowUpdateConfirm(false)} className="flex-1 rounded-xl bg-stone-100 py-2.5 text-[13px] font-bold text-stone-600 transition-colors hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700">取消</button>
-                <button type="button" onClick={() => void confirmApplicationUpdate()} className="flex-1 rounded-xl bg-amber-500 py-2.5 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-amber-600">确认更新</button>
+                <button type="button" onClick={() => void confirmApplicationUpdate()} className="flex-1 rounded-xl bg-accent py-2.5 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-accent/90">确认更新</button>
               </div>
             </motion.div>
           </motion.div>
