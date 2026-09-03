@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Captions } from "lucide-react";
-
 import { formatRange } from "../../../../shared/lib/time";
+import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "../WorkspaceNativeSubtitleSettings";
+import { WorkspaceSubtitleDisplay } from "../WorkspaceSubtitleDisplay";
 
 export function WorkspacePreviewView({ previewSource, previewSubtitleSource = null, previewSeekRequest }) {
   const previewVideoRef = useRef(null);
   const subtitleTrackRef = useRef(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(Boolean(previewSubtitleSource));
+  const [subtitleStyle, setSubtitleStyle] = useState(DEFAULT_SUBTITLE_STYLE);
+  const updateSubtitleStyle = (next) => setSubtitleStyle((current) => ({ ...current, ...next }));
 
   useEffect(() => {
     setSubtitlesEnabled(Boolean(previewSubtitleSource));
@@ -15,10 +17,9 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
   useEffect(() => {
     const track = subtitleTrackRef.current?.track;
     if (track) {
-      track.mode = subtitlesEnabled ? "showing" : "hidden";
+      track.mode = "hidden";
     }
   }, [previewSubtitleSource, subtitlesEnabled]);
-
   useEffect(() => {
     if (!previewSeekRequest || !previewVideoRef.current) {
       return;
@@ -49,9 +50,19 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
   }, [previewSeekRequest, previewSource]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="workspace-muted-panel rounded-3xl border p-4">
-        <p className="mb-2 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Media Preview</p>
+    <div className="flex flex-col">
+      <div className="workspace-muted-panel relative rounded-3xl border p-4">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Media Preview</p>
+          {previewSubtitleSource ? (
+            <WorkspaceNativeSubtitleSettings
+              subtitlesEnabled={subtitlesEnabled}
+              onSubtitlesEnabledChange={setSubtitlesEnabled}
+              style={subtitleStyle}
+              onStyleChange={setSubtitleStyle}
+            />
+          ) : null}
+        </div>
         {previewSeekRequest ? (
           <div className="mt-3 rounded-2xl border border-info/20 bg-info-subtle px-4 py-3 text-sm text-stone-800 dark:text-stone-100">
             <p className="font-semibold">
@@ -67,34 +78,34 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
           </div>
         ) : null}
       </div>
-      <div className="workspace-elevated-panel overflow-hidden rounded-3xl border bg-black shadow-sm">
-        <video key={previewSource} ref={previewVideoRef} className="h-full w-full max-h-[72vh] bg-black" controls preload="metadata">
+      <div className="workspace-elevated-panel relative overflow-hidden rounded-3xl border bg-black shadow-sm">
+        <video
+          key={previewSource}
+          ref={previewVideoRef}
+          className="h-full w-full max-h-[72vh] bg-black"
+          controls
+          controlsList="nodownload noplaybackrate noremoteplayback"
+          disablePictureInPicture
+          preload="metadata"
+        >
           <source src={previewSource} />
           {previewSubtitleSource ? (
             <track
               ref={subtitleTrackRef}
-              kind="subtitles"
+              kind="metadata"
               src={previewSubtitleSource}
               srcLang="zh-CN"
               label="中文字幕"
-              default={subtitlesEnabled}
             />
           ) : null}
         </video>
+        <WorkspaceSubtitleDisplay
+          subtitleTrackRef={subtitleTrackRef}
+          subtitleSource={previewSubtitleSource}
+          enabled={subtitlesEnabled}
+          style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
+        />
       </div>
-      {previewSubtitleSource ? (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            aria-pressed={subtitlesEnabled}
-            onClick={() => setSubtitlesEnabled((current) => !current)}
-            className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:border-accent/50 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200"
-          >
-            <Captions size={17} aria-hidden="true" />
-            {subtitlesEnabled ? "隐藏字幕" : "显示字幕"}
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }

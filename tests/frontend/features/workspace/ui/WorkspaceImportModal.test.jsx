@@ -4,29 +4,53 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspaceImportModal } from "@src/features/workspace/ui/WorkspaceImportModal";
 
 describe("WorkspaceImportModal", () => {
-  it("uploads files dropped onto the local media zone", async () => {
-    const onUploadLocalSeries = vi.fn().mockResolvedValue({ title: "课程", videos: [{}] });
+  it("defaults to a soft link for media outside the workspace disk", async () => {
+    const onSelectLocalMedia = vi.fn().mockResolvedValue({
+      sourcePaths: ["\\\\nas\\videos\\lesson.mp4"],
+      hardlinkAvailable: false,
+    });
+    const onImportLocalSeries = vi.fn().mockResolvedValue({ title: "课程", videos: [{}] });
     render(
       <WorkspaceImportModal
         onClose={vi.fn()}
-        onUploadLocalSeries={onUploadLocalSeries}
-        onUploadSeriesVideos={vi.fn()}
-        onUploadLocalPlaygroundVideos={vi.fn()}
+        onSelectLocalMedia={onSelectLocalMedia}
+        onImportLocalSeries={onImportLocalSeries}
       />,
     );
 
     fireEvent.change(screen.getByPlaceholderText("例如：Agent Frameworks"), {
       target: { value: "课程" },
     });
-    const dropZone = screen.getByRole("button", { name: /未选择文件/ });
-    const file = new File(["video"], "lesson.mp4", { type: "video/mp4" });
-    fireEvent.drop(dropZone, {
-      dataTransfer: { files: [file], types: ["Files"] },
-    });
+    fireEvent.click(screen.getByRole("button", { name: /未选择文件/ }));
 
-    expect(screen.getByText("lesson.mp4")).toBeInTheDocument();
+    await screen.findByText("lesson.mp4");
     fireEvent.click(screen.getByRole("button", { name: "导入" }));
 
-    expect(onUploadLocalSeries).toHaveBeenCalledWith("课程", [file]);
+    expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["\\\\nas\\videos\\lesson.mp4"], "external_reference");
+  });
+
+  it("defaults to a hard link for media on the workspace disk", async () => {
+    const onSelectLocalMedia = vi.fn().mockResolvedValue({
+      sourcePaths: ["C:\\videos\\lesson.mp4"],
+      hardlinkAvailable: true,
+    });
+    const onImportLocalSeries = vi.fn().mockResolvedValue({ title: "课程", videos: [{}] });
+    render(
+      <WorkspaceImportModal
+        onClose={vi.fn()}
+        onSelectLocalMedia={onSelectLocalMedia}
+        onImportLocalSeries={onImportLocalSeries}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("例如：Agent Frameworks"), {
+      target: { value: "课程" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /未选择文件/ }));
+
+    await screen.findByText("lesson.mp4");
+    fireEvent.click(screen.getByRole("button", { name: "导入" }));
+
+    expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["C:\\videos\\lesson.mp4"], "hardlink");
   });
 });

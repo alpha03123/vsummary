@@ -14,6 +14,7 @@ import asyncio
 from dataclasses import dataclass, field
 import logging
 from threading import Lock
+from typing import Callable
 
 from anyio import CapacityLimiter
 
@@ -427,7 +428,11 @@ class GenerateSeriesSummaryFromLibrary:
         """实际执行系列级批量生成：调度 worker、收集结果、归类取消/完成。"""
         try:
             series = self._get_series(series_id)
-            pending_videos = [video for video in series.videos if not video.processed]
+            pending_videos = [
+                video
+                for video in series.videos
+                if not video.processed and video.status != "source_missing"
+            ]
             reporter = self._progress_tracker.create_reporter(task_id)
 
             if not pending_videos:
@@ -443,6 +448,7 @@ class GenerateSeriesSummaryFromLibrary:
             cancelled_video_ids: set[str] = set()
             skipped_video_ids: set[str] = set()
             skipped_video_errors: dict[str, dict[str, str]] = {}
+            active_video_progress: dict[str, float] = {}
             cancellation_requested = asyncio.Event()
             results_lock = asyncio.Lock()
             queue: asyncio.Queue[tuple[int, object]] = asyncio.Queue()
@@ -464,6 +470,29 @@ class GenerateSeriesSummaryFromLibrary:
                     )
                     reporter.update("batch", progress, counts)
 
+            def report_video_progress(
+                index: int,
+                video: object,
+                stage: str,
+                progress: float | None,
+                detail: str | None,
+            ) -> None:
+                """按当前视频进度折算系列总进度，并推送到系列 SSE。"""
+                previous_progress = active_video_progress.get(video.id, 0.0)
+                video_progress = previous_progress if progress is None else max(0.0, min(100.0, progress))
+                active_video_progress[video.id] = video_progress
+                finished_count = len(completed_video_ids) + len(cancelled_video_ids) + len(skipped_video_ids)
+                aggregate_progress = (
+                    finished_count + sum(active_video_progress.values()) / 100.0
+                ) / len(pending_videos) * 100.0
+                reporter.update(
+                    stage,
+                    aggregate_progress,
+                    f"已完成 {finished_count}/{len(pending_videos)}，正在处理 {index}/{len(pending_videos)}：{video.title} · {detail or '正在处理'}",
+                )
+
+            reporter.update("batch", 0.0, f"已完成 0/{len(pending_videos)}，正在准备批量处理")
+
             async def worker() -> None:
                 """单 worker：从队列取视频并复用 `GenerateVideoSummaryFromLibrary` 跑生成。"""
                 while (
@@ -471,14 +500,22 @@ class GenerateSeriesSummaryFromLibrary:
                     and not cancellation_requested.is_set()
                 ):
                     try:
-                        _, video = queue.get_nowait()
+                        index, video = queue.get_nowait()
                     except asyncio.QueueEmpty:
                         return
 
+                    report_video_progress(index, video, "batch", 0.0, "正在开始处理")
                     child_reporter = _SeriesVideoProgressReporter(
                         base_reporter=reporter,
                         video_reporter=self._progress_tracker.create_reporter(f"{series_id}/{video.id}"),
                         cancellation_requested=cancellation_requested,
+                        on_progress=lambda stage, progress, detail: report_video_progress(
+                            index,
+                            video,
+                            stage,
+                            progress,
+                            detail,
+                        ),
                     )
                     try:
                         result = await self._generator.run(
@@ -490,14 +527,17 @@ class GenerateSeriesSummaryFromLibrary:
                         )
                         if result is None:
                             async with results_lock:
+                                active_video_progress.pop(video.id, None)
                                 cancelled_video_ids.add(video.id)
                             await update_series_progress()
                             continue
                         async with results_lock:
+                            active_video_progress.pop(video.id, None)
                             completed_video_ids.add(video.id)
                         await update_series_progress()
                     except Exception as error:
                         async with results_lock:
+                            active_video_progress.pop(video.id, None)
                             skipped_video_ids.add(video.id)
                             skipped_video_errors[video.id] = {
                                 "video_id": str(video.id),
@@ -591,15 +631,18 @@ class _SeriesVideoProgressReporter:
         base_reporter: ProgressReporter,
         video_reporter: ProgressReporter,
         cancellation_requested: asyncio.Event,
+        on_progress: Callable[[str, float | None, str | None], None],
     ) -> None:
         """注入系列级 reporter、单视频 reporter 与共享的取消事件。"""
         self._base_reporter = base_reporter
         self._video_reporter = video_reporter
         self._cancellation_requested = cancellation_requested
+        self._on_progress = on_progress
 
     def update(self, stage: str, progress: float | None = None, detail: str | None = None) -> None:
-        """把进度更新转发给单视频 reporter。"""
+        """把进度更新转发给单视频和系列级 reporter。"""
         self._video_reporter.update(stage, progress, detail)
+        self._on_progress(stage, progress, detail)
 
     def completed(self, detail: str | None = None) -> None:
         """单视频完成事件转发给单视频 reporter。"""

@@ -67,11 +67,12 @@ _UNTRANSCRIBABLE_STATUS = "untranscribable"
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 MEDIA_SUFFIXES = VIDEO_SUFFIXES | AUDIO_SUFFIXES
-STORAGE_MODES = {"copy", "hardlink"}
+STORAGE_MODES = {"copy", "hardlink", "external_reference"}
 
 LINKED_SERIES_META_FILE = "linked_series.json"
 SERIES_META_FILE = "series_meta.json"
 VIDEO_META_FILE = "video_meta.json"
+EXTERNAL_SOURCE_FILE = "source.json"
 SERIES_CATALOG_FILE = "series_catalog.json"
 
 
@@ -140,21 +141,31 @@ class FileSystemVideoWorkspace:
                 if not ws_dir.is_dir():
                     continue
                 linked_meta_path = ws_dir / LINKED_SERIES_META_FILE
-                if not linked_meta_path.exists():
+                if linked_meta_path.exists():
+                    payload = json.loads(linked_meta_path.read_text(encoding="utf-8"))
+                    series_id = ws_dir.name
+                    local_series[series_id] = LibrarySeriesDTO(
+                        id=series_id,
+                        title=str(payload.get("title", _to_title(series_id))).strip() or _to_title(series_id),
+                        videos=self._list_videos_for_linked_series(
+                            series_id=series_id,
+                            linked_meta=payload,
+                            local_video_dir=self._videos_dir / series_id,
+                        ),
+                        is_linked=series_id != PLAYGROUND_SERIES_ID,
+                        is_agent_managed=bool(payload.get("is_agent_managed", False)),
+                        source_url=str(payload.get("source_url", "")),
+                    )
                     continue
-                payload = json.loads(linked_meta_path.read_text(encoding="utf-8"))
+                series_meta_path = ws_dir / SERIES_META_FILE
+                if not series_meta_path.is_file() or ws_dir.name in local_series:
+                    continue
+                payload = json.loads(series_meta_path.read_text(encoding="utf-8"))
                 series_id = ws_dir.name
                 local_series[series_id] = LibrarySeriesDTO(
                     id=series_id,
                     title=str(payload.get("title", _to_title(series_id))).strip() or _to_title(series_id),
-                    videos=self._list_videos_for_linked_series(
-                        series_id=series_id,
-                        linked_meta=payload,
-                        local_video_dir=self._videos_dir / series_id,
-                    ),
-                    is_linked=series_id != PLAYGROUND_SERIES_ID,
-                    is_agent_managed=bool(payload.get("is_agent_managed", False)),
-                    source_url=str(payload.get("source_url", "")),
+                    videos=self._list_external_video_cards(series_id),
                 )
 
         if PLAYGROUND_SERIES_ID not in local_series:
@@ -186,27 +197,24 @@ class FileSystemVideoWorkspace:
             ValueError: 同一系列下出现重复的媒体 stem。
         """
         series_dir = self._videos_dir / series_id
-        if not series_dir.exists() or not series_dir.is_dir():
-            return None
-
-        matches = [path for path in sorted(series_dir.iterdir()) if _is_media_file(path) and path.stem == video_id]
-        if not matches:
-            return None
-        if len(matches) > 1:
-            raise ValueError(f"Series '{series_id}' contains duplicate media stem '{video_id}'")
-
-        video_path = matches[0]
-        output_dir = self._workspace_dir / series_id / video_id
-        return VideoSourceDTO(
-            series_id=series_id,
-            video_id=video_id,
-            title=self._read_video_title(series_id, video_id) or video_path.stem,
-            source_name=video_path.name,
-            source_type=_source_type_for_path(video_path),
-            source_path=video_path,
-            output_dir=output_dir,
-            processed=(output_dir / "summary.json").exists(),
-        )
+        if series_dir.exists() and series_dir.is_dir():
+            matches = [path for path in sorted(series_dir.iterdir()) if _is_media_file(path) and path.stem == video_id]
+            if len(matches) > 1:
+                raise ValueError(f"Series '{series_id}' contains duplicate media stem '{video_id}'")
+            if matches:
+                video_path = matches[0]
+                output_dir = self._workspace_dir / series_id / video_id
+                return VideoSourceDTO(
+                    series_id=series_id,
+                    video_id=video_id,
+                    title=self._read_video_title(series_id, video_id) or video_path.stem,
+                    source_name=video_path.name,
+                    source_type=_source_type_for_path(video_path),
+                    source_path=video_path,
+                    output_dir=output_dir,
+                    processed=(output_dir / "summary.json").exists(),
+                )
+        return self._get_external_video_source(series_id, video_id)
 
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
         """读取视频总结 JSON 并把对应章节的转写片段附加到 chapters 上。
@@ -643,6 +651,7 @@ class FileSystemVideoWorkspace:
         if video is None:
             return None
 
+        source_available = video.source_path.is_file()
         summary_exists = (video.output_dir / "summary.json").exists()
         knowledge_cards_exists = (video.output_dir / "knowledge_cards.json").exists()
         mindmap_exists = (video.output_dir / "mindmap.json").exists()
@@ -660,88 +669,50 @@ class FileSystemVideoWorkspace:
             overview=WorkspaceToolDTO(
                 id="overview",
                 title="AI概况",
-                available=True,
+                available=source_available,
                 generated=summary_exists,
-                status="ready" if summary_exists else "pending",
+                status="source_missing" if not source_available else ("ready" if summary_exists else "pending"),
             ),
             knowledge_cards=WorkspaceToolDTO(
                 id="knowledge-cards",
                 title="知识卡片",
-                available=summary_exists,
+                available=source_available and summary_exists,
                 generated=knowledge_cards_exists,
-                status="ready" if knowledge_cards_exists else ("available" if summary_exists else "blocked"),
+                status=(
+                    "source_missing"
+                    if not source_available
+                    else ("ready" if knowledge_cards_exists else ("available" if summary_exists else "blocked"))
+                ),
             ),
             mindmap=WorkspaceToolDTO(
                 id="mindmap",
                 title="思维导图",
-                available=summary_exists,
+                available=source_available and summary_exists,
                 generated=mindmap_exists,
-                status="ready" if mindmap_exists else ("available" if summary_exists else "blocked"),
+                status=(
+                    "source_missing"
+                    if not source_available
+                    else ("ready" if mindmap_exists else ("available" if summary_exists else "blocked"))
+                ),
             ),
             notes=WorkspaceToolDTO(
                 id="notes",
                 title="笔记",
-                available=True,
+                available=source_available,
                 generated=True,
-                status="ready",
+                status="source_missing" if not source_available else "ready",
             ),
             preview=WorkspaceToolDTO(
                 id="preview",
                 title=preview_title,
-                available=True,
-                generated=True,
-                status="ready",
-                preview_url=preview_url,
+                available=source_available,
+                generated=source_available,
+                status="ready" if source_available else "source_missing",
+                preview_url=preview_url if source_available else None,
                 subtitle_url=subtitle_url,
             ),
             ai_todo="当前已支持 AI 切换概况、知识卡片、笔记和媒体预览，并可定位时间点或整理笔记。",
         )
-
-    def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
-        """在 `videos/<series_id>/` 下创建新系列目录并把所有媒体复制进去。
-
-        关键步骤：
-            1. 规范化 `title` 得到 `series_id`；命中 `PLAYGROUND_SERIES_ID` 时
-               抛错，提示走"添加 Playground 媒体"入口；
-            2. 若目标系列目录或 `linked_series.json` 已存在则抛错；
-            3. `mkdir(parents=True, exist_ok=False)` 创建目录后写入
-               `series_meta.json` 并复制媒体流；
-            4. 任意步骤失败时回滚：删除新建目录与残留元数据文件并重抛异常。
-
-        Args:
-            title: 用户填写的系列标题（用于生成 `series_id` 与 `series_meta`）。
-            files: `[(filename, file_like), ...]` 形式的待复制媒体。
-
-        Returns:
-            创建成功的 `LibrarySeriesDTO`。
-
-        Raises:
-            ValueError: 标题为空/不合法、命名空间冲突或媒体重复。
-        """
-        series_id = _normalize_series_id(title)
-        if series_id == PLAYGROUND_SERIES_ID:
-            raise ValueError("Playground 请使用单独的“添加 Playground 媒体”入口。")
-        series_dir = self._videos_dir / series_id
-        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
-        if series_dir.exists() or linked_meta_path.exists():
-            raise ValueError(f"系列已存在：{series_id}")
-
-        try:
-            series_dir.mkdir(parents=True, exist_ok=False)
-            self._write_series_meta(series_id, title.strip(), storage_mode="copy")
-            self._copy_video_streams(series_dir=series_dir, files=files)
-            return LibrarySeriesDTO(
-                id=series_id,
-                title=title.strip(),
-                videos=self._list_videos_for_series(series_dir),
-            )
-        except Exception:
-            if series_dir.exists():
-                shutil.rmtree(series_dir)
-            meta_path = self._workspace_dir / series_id / SERIES_META_FILE
-            if meta_path.exists():
-                meta_path.unlink()
-            raise
 
     def import_local_series_from_paths(
         self,
@@ -756,22 +727,27 @@ class FileSystemVideoWorkspace:
         if series_id == PLAYGROUND_SERIES_ID:
             raise ValueError("Playground 请使用单独的“添加 Playground 媒体”入口。")
         series_dir = self._videos_dir / series_id
-        linked_meta_path = self._workspace_dir / series_id / LINKED_SERIES_META_FILE
-        if series_dir.exists() or linked_meta_path.exists():
+        workspace_dir = self._workspace_dir / series_id
+        linked_meta_path = workspace_dir / LINKED_SERIES_META_FILE
+        if series_dir.exists() or workspace_dir.exists() or linked_meta_path.exists():
             raise ValueError(f"系列已存在：{series_id}")
 
         try:
             series_dir.mkdir(parents=True, exist_ok=False)
             self._write_series_meta(series_id, title.strip(), storage_mode=normalized_mode)
-            self._import_media_paths(
-                series_dir=series_dir,
-                source_paths=source_paths,
-                storage_mode=normalized_mode,
-            )
+            if normalized_mode == "external_reference":
+                shutil.rmtree(series_dir)
+                self._import_external_media_paths(series_id=series_id, source_paths=source_paths)
+            else:
+                self._import_media_paths(
+                    series_dir=series_dir,
+                    source_paths=source_paths,
+                    storage_mode=normalized_mode,
+                )
             return LibrarySeriesDTO(
                 id=series_id,
                 title=title.strip(),
-                videos=self._list_videos_for_series(series_dir),
+                videos=self._list_videos_for_series(series_dir) if series_dir.exists() else self._list_external_video_cards(series_id),
             )
         except Exception:
             if series_dir.exists():
@@ -780,20 +756,6 @@ class FileSystemVideoWorkspace:
             if meta_path.exists():
                 meta_path.unlink()
             raise
-
-    def import_local_playground_videos(self, *, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
-        """把媒体导入到 Playground 系列（无独立 series_id 标题，不检查去重）。
-
-        Args:
-            files: `[(filename, file_like), ...]` 形式的待复制媒体。
-
-        Returns:
-            新增到 Playground 系列下的视频卡片列表。
-        """
-        series_dir = self._videos_dir / PLAYGROUND_SERIES_ID
-        series_dir.mkdir(parents=True, exist_ok=True)
-        imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
-        return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
 
     def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
         """从本机路径复制媒体到 Playground；Playground 固定使用复制模式。"""
@@ -806,30 +768,6 @@ class FileSystemVideoWorkspace:
         )
         return [self._build_local_video_card(PLAYGROUND_SERIES_ID, path) for path in imported_paths]
 
-    def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
-        """把媒体追加到既有本地系列；Playground 系列则转交 playground 入口。
-
-        Args:
-            series_id: 目标系列 ID。
-            files: `[(filename, file_like), ...]` 形式的待复制媒体。
-
-        Returns:
-            新增的视频卡片列表。
-
-        Raises:
-            ValueError: 系列不存在或导入文件名与现有媒体冲突。
-        """
-        if series_id == PLAYGROUND_SERIES_ID:
-            return self.import_local_playground_videos(files=files)
-        if not self._series_exists(series_id):
-            raise ValueError(f"系列不存在：{series_id}")
-        if self._read_series_storage_mode(series_id) == "hardlink":
-            raise ValueError("该系列使用硬链接，请通过本机路径选择器添加媒体。")
-        series_dir = self._videos_dir / series_id
-        series_dir.mkdir(parents=True, exist_ok=True)
-        imported_paths = self._copy_video_streams(series_dir=series_dir, files=files)
-        return [self._build_local_video_card(series_id, path) for path in imported_paths]
-
     def import_local_series_videos_from_paths(
         self,
         *,
@@ -841,12 +779,15 @@ class FileSystemVideoWorkspace:
             return self.import_local_playground_videos_from_paths(source_paths=source_paths)
         if not self._series_exists(series_id):
             raise ValueError(f"系列不存在：{series_id}")
+        storage_mode = self._read_series_storage_mode(series_id)
+        if storage_mode == "external_reference":
+            return self._import_external_media_paths(series_id=series_id, source_paths=source_paths)
         series_dir = self._videos_dir / series_id
         series_dir.mkdir(parents=True, exist_ok=True)
         imported_paths = self._import_media_paths(
             series_dir=series_dir,
             source_paths=source_paths,
-            storage_mode=self._read_series_storage_mode(series_id),
+            storage_mode=storage_mode,
         )
         return [self._build_local_video_card(series_id, path) for path in imported_paths]
 
@@ -860,7 +801,12 @@ class FileSystemVideoWorkspace:
                 f"Series '{series_dir.name}' contains duplicate media stems: {', '.join(duplicate_stems)}"
             )
 
-        return [self._build_local_video_card(series_dir.name, video_path) for video_path in videos]
+        cards = [self._build_local_video_card(series_dir.name, video_path) for video_path in videos]
+        external_cards = self._list_external_video_cards(series_dir.name)
+        duplicate_ids = sorted({card.id for card in cards}.intersection(card.id for card in external_cards))
+        if duplicate_ids:
+            raise ValueError(f"Series '{series_dir.name}' contains duplicate media IDs: {', '.join(duplicate_ids)}")
+        return cards + external_cards
 
     def _list_videos_for_linked_series(
         self,
@@ -960,6 +906,68 @@ class FileSystemVideoWorkspace:
             core_problem=self._read_core_problem(series_id, video_path.stem),
         )
 
+    def _list_external_video_cards(self, series_id: str) -> list[LibraryVideoCardDTO]:
+        series_workspace_dir = self._workspace_dir / series_id
+        if not series_workspace_dir.is_dir():
+            return []
+        cards: list[LibraryVideoCardDTO] = []
+        for output_dir in sorted(series_workspace_dir.iterdir()):
+            if not output_dir.is_dir() or not (output_dir / EXTERNAL_SOURCE_FILE).is_file():
+                continue
+            source = self._get_external_video_source(series_id, output_dir.name)
+            if source is None:
+                continue
+            cards.append(
+                LibraryVideoCardDTO(
+                    id=source.video_id,
+                    title=source.title,
+                    source_name=source.source_name,
+                    source_type=source.source_type,
+                    processed=source.processed,
+                    status=(
+                        "source_missing"
+                        if not source.source_path.is_file()
+                        else self._read_video_processing_status(source.output_dir / "summary.json")
+                    ),
+                    core_problem=self._read_core_problem(series_id, source.video_id),
+                )
+            )
+        return cards
+
+    def relink_external_video(self, *, series_id: str, video_id: str, source_path: Path) -> None:
+        """将已丢失的外部媒体引用指向用户重新选择的文件。"""
+        source_meta_path = self._workspace_dir / series_id / video_id / EXTERNAL_SOURCE_FILE
+        if not source_meta_path.is_file():
+            raise ValueError("当前视频不是外部媒体引用，无法重新链接。")
+        normalized_source_path = _normalize_media_paths([source_path])[0]
+        atomic_write_text(
+            source_meta_path,
+            json.dumps({"source_path": str(normalized_source_path)}, ensure_ascii=False, indent=2),
+        )
+
+    def _get_external_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
+        output_dir = self._workspace_dir / series_id / video_id
+        source_meta_path = output_dir / EXTERNAL_SOURCE_FILE
+        if not source_meta_path.is_file():
+            return None
+        payload = json.loads(source_meta_path.read_text(encoding="utf-8"))
+        source_path_value = payload.get("source_path")
+        if not isinstance(source_path_value, str) or not source_path_value:
+            raise ValueError(f"外部媒体引用格式错误：{series_id}/{video_id}")
+        source_path = Path(source_path_value)
+        if not source_path.is_absolute() or not _is_media_suffix(source_path.suffix):
+            raise ValueError(f"外部媒体引用格式错误：{series_id}/{video_id}")
+        return VideoSourceDTO(
+            series_id=series_id,
+            video_id=video_id,
+            title=self._read_video_title(series_id, video_id) or source_path.stem,
+            source_name=source_path.name,
+            source_type=_source_type_for_path(source_path),
+            source_path=source_path,
+            output_dir=output_dir,
+            processed=(output_dir / "summary.json").exists(),
+        )
+
     def _read_core_problem(self, series_id: str, video_id: str) -> str:
         """从本地 summary.json 提取 core_problem 字段。
 
@@ -990,49 +998,6 @@ class FileSystemVideoWorkspace:
         except (OSError, ValueError):
             return "ready"
         return _UNTRANSCRIBABLE_STATUS if payload.get("transcription_status") == _UNTRANSCRIBABLE_STATUS else "ready"
-
-    def _copy_video_streams(self, *, series_dir: Path, files: list[tuple[str, object]]) -> list[Path]:
-        """把 `[(filename, stream), ...]` 复制到目标系列目录中。
-
-        校验与处理：
-            - 文件名 / 扩展名校验在 `_normalize_import_files` 内完成；
-            - 同批次内 stem 重复 / 与既有媒体冲突立即抛错；
-            - 复制前 `stream.seek(0)`，保证 `shutil.copyfileobj` 从头开始读。
-
-        Args:
-            series_dir: 目标系列目录。
-            files: 规范化前的 `[(filename, stream), ...]`。
-
-        Returns:
-            成功写入的 `Path` 列表（按入参顺序）。
-        """
-        normalized_files = _normalize_import_files(files)
-        existing_stems = {path.stem for path in series_dir.iterdir() if _is_media_file(path)} if series_dir.exists() else set()
-        incoming_stems = [Path(filename).stem for filename, _ in normalized_files]
-        duplicate_stems = sorted({stem for stem in incoming_stems if incoming_stems.count(stem) > 1})
-        if duplicate_stems:
-            raise ValueError(f"导入文件存在重复媒体名：{', '.join(duplicate_stems)}")
-        conflicting_stems = sorted(existing_stems.intersection(incoming_stems))
-        if conflicting_stems:
-            raise ValueError(f"目标目录中已存在同名媒体：{', '.join(conflicting_stems)}")
-
-        copied_paths: list[Path] = []
-        try:
-            for filename, stream in normalized_files:
-                target_path = series_dir / filename
-                if target_path.exists():
-                    raise ValueError(f"目标目录中已存在文件：{filename}")
-                if hasattr(stream, "seek"):
-                    stream.seek(0)
-                with target_path.open("wb") as handle:
-                    shutil.copyfileobj(stream, handle)
-                copied_paths.append(target_path)
-            self._prepare_imported_media(copied_paths)
-        except Exception:
-            for copied_path in copied_paths:
-                copied_path.unlink(missing_ok=True)
-            raise
-        return copied_paths
 
     def _import_media_paths(
         self,
@@ -1071,6 +1036,36 @@ class FileSystemVideoWorkspace:
                 imported_path.unlink(missing_ok=True)
             raise
         return imported_paths
+
+    def _import_external_media_paths(self, *, series_id: str, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
+        """保存外部媒体路径，不复制或修改原始文件。"""
+        normalized_paths = _normalize_media_paths(source_paths)
+        local_dir = self._videos_dir / series_id
+        existing_ids = {path.stem for path in local_dir.iterdir() if _is_media_file(path)} if local_dir.is_dir() else set()
+        existing_ids.update(card.id for card in self._list_external_video_cards(series_id))
+        incoming_ids = [path.stem for path in normalized_paths]
+        duplicate_ids = sorted({video_id for video_id in incoming_ids if incoming_ids.count(video_id) > 1})
+        if duplicate_ids:
+            raise ValueError(f"导入文件存在重复媒体名：{', '.join(duplicate_ids)}")
+        conflicting_ids = sorted(existing_ids.intersection(incoming_ids))
+        if conflicting_ids:
+            raise ValueError(f"目标系列中已存在同名媒体：{', '.join(conflicting_ids)}")
+
+        created_dirs: list[Path] = []
+        try:
+            for source_path in normalized_paths:
+                output_dir = self._get_video_output_dir(series_id, source_path.stem)
+                output_dir.mkdir(parents=True, exist_ok=False)
+                atomic_write_text(
+                    output_dir / EXTERNAL_SOURCE_FILE,
+                    json.dumps({"source_path": str(source_path)}, ensure_ascii=False, indent=2),
+                )
+                created_dirs.append(output_dir)
+        except Exception:
+            for output_dir in created_dirs:
+                shutil.rmtree(output_dir, ignore_errors=True)
+            raise
+        return [self._get_external_video_source(series_id, path.stem) for path in normalized_paths]
 
     def _prepare_imported_media(self, media_paths: list[Path]) -> None:
         """在导入事务中无损整理无法快速起播的 MP4，失败则由调用方回滚。"""
@@ -1457,31 +1452,6 @@ def _normalize_series_id(value: str) -> str:
     return normalized
 
 
-def _normalize_import_files(files: list[tuple[str, object]]) -> list[tuple[str, object]]:
-    """对导入文件做最少一项目 / 文件名 / 扩展名校验。
-
-    Args:
-        files: `[(filename, stream), ...]`，`stream` 一般为 FastAPI `UploadFile`。
-
-    Returns:
-        过滤后的 `[(filename, stream), ...]`，`filename` 仅保留 `Path.name`。
-
-    Raises:
-        ValueError: 列表为空、文件名缺失或扩展名不在 `MEDIA_SUFFIXES` 中。
-    """
-    if not files:
-        raise ValueError("至少选择一个媒体文件。")
-    normalized: list[tuple[str, object]] = []
-    for filename, stream in files:
-        path = Path(filename or "")
-        if not path.name:
-            raise ValueError("存在缺少文件名的导入项。")
-        if not _is_media_suffix(path.suffix):
-            raise ValueError(f"不支持的媒体格式：{path.name}")
-        normalized.append((path.name, stream))
-    return normalized
-
-
 def _normalize_media_paths(source_paths: list[Path]) -> list[Path]:
     """校验本机媒体路径，确保它们可直接被复制或创建硬链接。"""
     if not source_paths:
@@ -1513,7 +1483,7 @@ def _validate_media_names(series_dir: Path, filenames: list[str]) -> None:
 def _require_storage_mode(value: object) -> str:
     """校验本地系列的媒体存储方式。"""
     if not isinstance(value, str) or value not in STORAGE_MODES:
-        raise ValueError("storage_mode 必须是 copy 或 hardlink。")
+        raise ValueError("storage_mode 必须是 copy、hardlink 或 external_reference。")
     return value
 
 

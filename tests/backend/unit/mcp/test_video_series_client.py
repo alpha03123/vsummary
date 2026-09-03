@@ -127,14 +127,13 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, result["failed_count"])
         self.assertEqual(["BV1", "BV2"], [item["video_id"] for item in result["items"]])
 
-    async def test_import_local_series_uploads_file_paths_to_existing_import_api(self) -> None:
+    async def test_import_local_series_sends_file_paths_to_path_import_api(self) -> None:
         seen_request: dict[str, str] = {}
 
         async def handler(request: httpx.Request) -> httpx.Response:
-            body = request.read().decode("utf-8", errors="replace")
             seen_request["path"] = request.url.path
             seen_request["content_type"] = request.headers["content-type"]
-            seen_request["body"] = body
+            seen_request["body"] = request.read().decode("utf-8", errors="replace")
             return httpx.Response(
                 200,
                 json={
@@ -154,16 +153,16 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
 
             result = await client.import_local_series(title="Audio Course", file_paths=[str(media_path)])
 
-        self.assertEqual("/api/import/local/series", seen_request["path"])
-        self.assertIn("multipart/form-data", seen_request["content_type"])
-        self.assertIn('name="series_title"', seen_request["body"])
+        self.assertEqual("/api/import/local/series/from-paths", seen_request["path"])
+        self.assertIn("application/json", seen_request["content_type"])
         self.assertIn("Audio Course", seen_request["body"])
-        self.assertIn('filename="lesson-1.mp3"', seen_request["body"])
+        self.assertIn('"storage_mode": "copy"', seen_request["body"])
+        self.assertIn("lesson-1.mp3", seen_request["body"])
         self.assertEqual("audio-course", result["series_id"])
         self.assertEqual("Audio Course", result["title"])
         self.assertEqual([{"id": "lesson-1", "title": "lesson-1", "source_type": "audio"}], result["videos"])
 
-    async def test_add_local_series_videos_uploads_file_paths_to_existing_series_import_api(self) -> None:
+    async def test_add_local_series_videos_sends_file_paths_to_path_import_api(self) -> None:
         seen_request: dict[str, str] = {}
 
         async def handler(request: httpx.Request) -> httpx.Response:
@@ -183,9 +182,9 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
 
             result = await client.add_local_series_videos(series_id="agent/a", file_paths=[str(media_path)])
 
-        self.assertEqual("/api/import/local/series/agent%2Fa", seen_request["path"])
-        self.assertIn("multipart/form-data", seen_request["content_type"])
-        self.assertIn('filename="clip.mp4"', seen_request["body"])
+        self.assertEqual("/api/import/local/series/agent%2Fa/from-paths", seen_request["path"])
+        self.assertIn("application/json", seen_request["content_type"])
+        self.assertIn("clip.mp4", seen_request["body"])
         self.assertEqual("agent/a", result["series_id"])
         self.assertEqual(1, result["added_count"])
         self.assertEqual([{"id": "clip", "title": "clip", "source_type": "video"}], result["videos"])

@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from io import BytesIO
 import logging
 import json
@@ -16,7 +15,7 @@ from threading import Lock
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
@@ -316,6 +315,7 @@ def export_video_source(series_id: str, video_id: str, container: ApiContainerDe
         HTTPException(404): 视频不存在。
     """
     source = _ensure_video_exists(container, series_id, video_id)
+    _ensure_source_media_available(source)
     media_type, _ = mimetypes.guess_type(source.source_path.name)
     return FileResponse(
         source.source_path,
@@ -729,6 +729,7 @@ def preview_video(series_id: str, video_id: str, container: ApiContainerDep) -> 
     source = container.get_video_source.run(series_id, video_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    _ensure_source_media_available(source)
     return FileResponse(source.source_path)
 
 
@@ -759,6 +760,7 @@ async def generate_video_summary(
         HTTPException(409): ASR 模型未就绪、生成被取消或 scope 忙碌。
         HTTPException(503): 生成过程发生运行时错误。
     """
+    _ensure_source_media_available(_ensure_video_exists(container, series_id, video_id))
     try:
         video_summary = await container.generate_video_summary.run(
             series_id,
@@ -1303,6 +1305,27 @@ def select_local_media(container: ApiContainerDep) -> dict[str, object]:
         raise HTTPException(status_code=503, detail=f"无法打开本机文件选择框：{error}") from error
 
 
+@router.post("/api/videos/{series_id}/{video_id}/relink")
+def relink_external_video(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, bool]:
+    """打开旧目录并将失效的外部媒体引用重新绑定到用户选定的文件。"""
+    source = _ensure_video_exists(container, series_id, video_id)
+    selected_paths = select_local_media_paths(
+        initial_directory=source.source_path.parent,
+        allow_multiple=False,
+    )
+    if not selected_paths:
+        return {"relinked": False}
+    try:
+        container.linked_series_workspace.relink_external_video(
+            series_id=series_id,
+            video_id=video_id,
+            source_path=Path(selected_paths[0]),
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"relinked": True}
+
+
 @router.post("/api/import/local/series/from-paths", response_model=SeriesResponse)
 def import_local_series_from_paths(
     request: LocalMediaSeriesPathImportRequest,
@@ -1351,105 +1374,6 @@ def import_local_series_videos_from_paths(
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    return [VideoCardResponse.from_model(video) for video in videos]
-
-
-@router.post("/api/import/local/series", response_model=SeriesResponse)
-async def import_local_series(
-    series_title: str = Form(...),
-    files: list[UploadFile] = File(...),
-    container: ApiContainerDep = None,
-) -> SeriesResponse:
-    """POST /api/import/local/series — 上传本地视频文件并创建新系列。
-
-    将上传的一组视频文件导入为新的系列；接收 multipart/form-data。
-
-    Args:
-        series_title: 系列标题（Form 字段）。
-        files: 上传的视频文件列表。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        SeriesResponse，含新创建的系列信息。
-
-    Raises:
-        HTTPException(400): 输入参数或文件无效。
-    """
-    try:
-        series = container.import_local_series.run(
-            title=series_title,
-            files=[(file.filename or "", file.file) for file in files],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    finally:
-        await asyncio.gather(*(file.close() for file in files), return_exceptions=True)
-
-    return SeriesResponse.from_model(series)
-
-
-@router.post("/api/import/local/playground", response_model=list[VideoCardResponse])
-async def import_local_playground_videos(
-    files: list[UploadFile] = File(...),
-    container: ApiContainerDep = None,
-) -> list[VideoCardResponse]:
-    """POST /api/import/local/playground — 上传本地视频到沙盒演练系列。
-
-    无需指定系列，视频直接导入到内置的 playground 系列；接收 multipart/form-data。
-
-    Args:
-        files: 上传的视频文件列表。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        导入后的 VideoCardResponse 列表。
-
-    Raises:
-        HTTPException(400): 输入参数或文件无效。
-    """
-    try:
-        videos = container.import_local_playground_videos.run(
-            files=[(file.filename or "", file.file) for file in files],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    finally:
-        await asyncio.gather(*(file.close() for file in files), return_exceptions=True)
-
-    return [VideoCardResponse.from_model(video) for video in videos]
-
-
-@router.post("/api/import/local/series/{series_id}", response_model=list[VideoCardResponse])
-async def import_local_series_videos(
-    series_id: str,
-    files: list[UploadFile] = File(...),
-    container: ApiContainerDep = None,
-) -> list[VideoCardResponse]:
-    """POST /api/import/local/series/{series_id} — 上传本地视频追加到已有系列。
-
-    接收 multipart/form-data，将视频文件追加到指定系列的末尾。
-
-    Args:
-        series_id: 目标系列 ID。
-        files: 上传的视频文件列表。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        导入后的 VideoCardResponse 列表。
-
-    Raises:
-        HTTPException(400): 输入参数或文件无效。
-    """
-    try:
-        videos = container.import_local_series_videos.run(
-            series_id=series_id,
-            files=[(file.filename or "", file.file) for file in files],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    finally:
-        await asyncio.gather(*(file.close() for file in files), return_exceptions=True)
-
     return [VideoCardResponse.from_model(video) for video in videos]
 
 
@@ -1650,6 +1574,12 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     return source
+
+
+def _ensure_source_media_available(source) -> None:
+    """将断开的外部媒体引用转换为可读的 HTTP 错误。"""
+    if not source.source_path.is_file():
+        raise HTTPException(status_code=503, detail=f"source media unavailable: {source.source_path}")
 
 
 def _html_response(html: str, filename: str) -> Response:

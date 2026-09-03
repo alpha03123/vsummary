@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
+import { useOutsidePointerUp } from "../../../../shared/lib/useOutsidePointerUp";
 
 export function WorkspaceProviderSelect({
   value,
@@ -9,6 +10,7 @@ export function WorkspaceProviderSelect({
   disabled = false,
   hideGroupLabels = false,
   ariaLabel,
+  optionLayout = "vertical",
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -23,13 +25,35 @@ export function WorkspaceProviderSelect({
     groupMap[g].push(opt);
   }
 
-  useEffect(() => {
-    function onOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onOutside);
-    return () => document.removeEventListener("mousedown", onOutside);
-  }, []);
+  useOutsidePointerUp(open, [ref], () => setOpen(false));
+
+  function renderOption(option, horizontal = false) {
+    const active = option.id === value;
+    return (
+      <button
+        key={option.id}
+        type="button"
+        disabled={option.disabled}
+        title={option.disabled ? option.disabledReason || option.label : undefined}
+        onClick={() => { onChange(option.id); setOpen(false); }}
+        className={horizontal
+          ? `flex min-w-0 flex-col items-center justify-center rounded-lg px-3 py-2.5 text-center transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-stone-800/60 ${active ? "bg-accent/5 text-accent dark:bg-accent/10" : "text-stone-900 dark:text-stone-100"}`
+          : `flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-stone-800/60 ${active ? "bg-accent/5 dark:bg-accent/10" : ""}`}
+      >
+        <span className={horizontal ? "contents" : "min-w-0 flex-1"}>
+          <span className={`block text-sm font-semibold ${active ? "text-accent" : "text-stone-900 dark:text-stone-100"}`}>
+            {option.label}
+          </span>
+          {option.description && (
+            <span className={`mt-0.5 block text-xs leading-snug text-stone-500 dark:text-stone-500 ${horizontal ? "text-center" : ""}`}>
+              {option.description}
+            </span>
+          )}
+        </span>
+        {active && !horizontal ? <Check size={14} className="mt-0.5 shrink-0 text-accent" /> : null}
+      </button>
+    );
+  }
 
   return (
     <div ref={ref} className={`relative ${className}`}>
@@ -46,7 +70,11 @@ export function WorkspaceProviderSelect({
 
       {open && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900">
-          {groups.map((group, gi) => (
+          {optionLayout === "horizontal" ? (
+            <div className="grid grid-cols-3 gap-1 p-1.5">
+              {options.map((option) => renderOption(option, true))}
+            </div>
+          ) : groups.map((group, gi) => (
             <div key={group}>
               {gi > 0 && <div className="mx-3 border-t border-stone-100 dark:border-stone-800" />}
               {!hideGroupLabels ? (
@@ -54,29 +82,7 @@ export function WorkspaceProviderSelect({
                   {group}
                 </div>
               ) : null}
-              {groupMap[group].map((option) => {
-                const active = option.id === value;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => { onChange(option.id); setOpen(false); }}
-                    className={`flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/60 ${active ? "bg-accent/5 dark:bg-accent/10" : ""}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-sm font-semibold ${active ? "text-accent" : "text-stone-900 dark:text-stone-100"}`}>
-                        {option.label}
-                      </div>
-                      {option.description && (
-                        <div className="mt-0.5 text-xs leading-snug text-stone-500 dark:text-stone-500">
-                          {option.description}
-                        </div>
-                      )}
-                    </div>
-                    {active && <Check size={14} className="mt-0.5 shrink-0 text-accent" />}
-                  </button>
-                );
-              })}
+              {groupMap[group].map((option) => renderOption(option))}
             </div>
           ))}
         </div>

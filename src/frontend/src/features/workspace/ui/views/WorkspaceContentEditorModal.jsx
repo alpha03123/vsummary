@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Captions, FileText, LoaderCircle, Save, X } from "lucide-react";
 
 export function WorkspaceContentEditorModal({
@@ -15,6 +15,7 @@ export function WorkspaceContentEditorModal({
   const [loadingTranscript, setLoadingTranscript] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const backdropPointerDownRef = useRef(false);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -87,9 +88,17 @@ export function WorkspaceContentEditorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !saving) onClose();
-    }}>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+      role="presentation"
+      onPointerDown={(event) => {
+        backdropPointerDownRef.current = event.button === 0 && event.target === event.currentTarget;
+      }}
+      onPointerUp={(event) => {
+        if (backdropPointerDownRef.current && event.target === event.currentTarget && !saving) onClose();
+        backdropPointerDownRef.current = false;
+      }}
+    >
       <section className="workspace-panel flex h-[min(640px,calc(100vh-2rem))] w-full max-w-2xl flex-col rounded-lg border shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="content-editor-title">
         <header className="flex items-center justify-between gap-4 border-b border-stone-200 px-5 py-4 dark:border-stone-800">
           <h2 id="content-editor-title" className="text-lg font-bold text-stone-900 dark:text-stone-100">编辑视频内容</h2>

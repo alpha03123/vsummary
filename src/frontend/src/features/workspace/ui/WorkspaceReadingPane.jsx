@@ -70,6 +70,8 @@ export function WorkspaceReadingPane({
   chat,
   summary,
   playbackTime,
+  followOverviewPlayback,
+  onFollowOverviewPlaybackChange,
   mindmap,
   knowledgeCards,
   knowledgeCardsGenerating,
@@ -131,6 +133,7 @@ export function WorkspaceReadingPane({
     seriesOverviewSummariesByVideoId,
     seriesOverviewLoading,
   });
+  const sourceMissing = selectedVideo?.status === "source_missing";
 
   return (
     <section className="relative flex h-full w-full flex-col bg-transparent">
@@ -236,8 +239,10 @@ export function WorkspaceReadingPane({
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,
-                              disabled: getToolState(tools, toolId)?.available === false,
-                              hint: toolId === "chat-management"
+                              disabled: sourceMissing || getToolState(tools, toolId)?.available === false,
+                              hint: sourceMissing
+                                ? "链接媒体后可用"
+                                : toolId === "chat-management"
                                 ? activeChatTitle
                                 : describeToolState(toolId, getToolState(tools, toolId)),
                             }))}
@@ -252,6 +257,8 @@ export function WorkspaceReadingPane({
                       tools={tools}
                       summary={summary}
                       playbackTime={playbackTime}
+                      followOverviewPlayback={followOverviewPlayback}
+                      onFollowOverviewPlaybackChange={onFollowOverviewPlaybackChange}
                       selectedVideo={selectedVideo}
                       selectedChapterId={selectedChapterId}
                       citationFocus={citationFocus}

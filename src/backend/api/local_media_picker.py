@@ -13,7 +13,11 @@ _FILE_TYPES = [
 ]
 
 
-def select_local_media_paths() -> list[str]:
+def select_local_media_paths(
+    *,
+    initial_directory: Path | None = None,
+    allow_multiple: bool = True,
+) -> list[str]:
     """打开系统文件选择框，返回用户确认的绝对媒体路径。"""
     try:
         import tkinter as tk
@@ -26,12 +30,16 @@ def select_local_media_paths() -> list[str]:
         root.withdraw()
         root.attributes("-topmost", True)
         try:
-            selected_paths = filedialog.askopenfilenames(
-                title="选择媒体文件",
+            picker = filedialog.askopenfilenames if allow_multiple else filedialog.askopenfilename
+            selected_paths = picker(
+                title="选择媒体文件" if allow_multiple else "重新链接媒体文件",
                 filetypes=_FILE_TYPES,
                 parent=root,
+                **({"initialdir": str(initial_directory)} if initial_directory is not None else {}),
             )
         finally:
             root.destroy()
 
+    if isinstance(selected_paths, str):
+        selected_paths = [selected_paths] if selected_paths else []
     return [str(Path(path).resolve()) for path in selected_paths]

@@ -174,7 +174,7 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         reporter = tracker.reporters["series/series-1"]
         self.assertEqual(reporter.completed_calls, ["系列处理完成，已结束 3 / 3，完成 2，取消 1，跳过 0"])
 
-    async def test_series_batch_keeps_child_stage_progress_on_video_task(self) -> None:
+    async def test_series_batch_reports_child_stage_progress_to_series_task(self) -> None:
         tracker = FakeProgressTracker()
         workspace = FakeWorkspace(
             series=[
@@ -198,7 +198,14 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("probe", stage_names)
         self.assertIn("transcribe", stage_names)
         series_reporter = tracker.reporters["series/series-1"]
-        self.assertFalse(any(detail and "正在处理 1/1：Video 1" in detail for _, _, detail in series_reporter.updates))
+        self.assertIn(
+            ("probe", 5.0, "已完成 0/1，正在处理 1/1：Video 1 · 正在分析视频信息"),
+            series_reporter.updates,
+        )
+        self.assertIn(
+            ("transcribe", 60.0, "已完成 0/1，正在处理 1/1：Video 1 · Whisper 正在转写音频"),
+            series_reporter.updates,
+        )
 
     async def test_series_batch_reuses_single_video_concurrency_limit(self) -> None:
         tracker = FakeProgressTracker()
@@ -621,7 +628,8 @@ class FakeReporter:
 
 
 class CancelledGenerator:
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None, manual_transcript=None, use_saved_manual_transcript: bool = True) -> None:
+        del series_id, video_id, progress_reporter, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         raise GenerateCancelledError("生成已取消")
 
 
@@ -630,7 +638,8 @@ class BatchAwareGenerator:
         self._outcomes = outcomes
         self.calls: list[tuple[str, str]] = []
 
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None, manual_transcript=None, use_saved_manual_transcript: bool = True) -> None:
+        del progress_reporter, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         key = (series_id, video_id)
         self.calls.append(key)
         outcome = self._outcomes.get(key, "completed")
@@ -639,7 +648,17 @@ class BatchAwareGenerator:
 
 
 class StageReportingGenerator:
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
+    async def run(
+        self,
+        *,
+        series_id: str,
+        video_id: str,
+        progress_reporter=None,
+        transcript_enhancement_enabled: bool | None = None,
+        manual_transcript=None,
+        use_saved_manual_transcript: bool = True,
+    ) -> None:
+        del series_id, video_id, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         progress_reporter.update("probe", 5.0, "正在分析视频信息")
         progress_reporter.update("transcribe", 60.0, "Whisper 正在转写音频")
 
@@ -655,8 +674,8 @@ class BlockingGenerator:
         self.release = asyncio.Event()
         self._release_next: asyncio.Queue[None] = asyncio.Queue()
 
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
-        del progress_reporter, transcript_enhancement_enabled
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None, manual_transcript=None, use_saved_manual_transcript: bool = True) -> None:
+        del progress_reporter, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         self.calls.append((series_id, video_id))
         self.active += 1
         self.max_active = max(self.max_active, self.active)
@@ -689,8 +708,8 @@ class ProgressCheckingGenerator:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
 
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
-        del series_id, video_id, transcript_enhancement_enabled
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None, manual_transcript=None, use_saved_manual_transcript: bool = True) -> None:
+        del series_id, video_id, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         self.started.set()
         await self.release.wait()
         progress_reporter.raise_if_cancelled()
@@ -706,8 +725,8 @@ class OutOfOrderCompletionGenerator:
             "video-3": 0.01,
         }
 
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
-        del series_id, progress_reporter, transcript_enhancement_enabled
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None, manual_transcript=None, use_saved_manual_transcript: bool = True) -> None:
+        del series_id, progress_reporter, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
@@ -723,8 +742,8 @@ class CoordinatedOutcomeGenerator:
         self.started_two = asyncio.Event()
         self._waiting: dict[str, asyncio.Event] = {}
 
-    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None) -> None:
-        del series_id, progress_reporter, transcript_enhancement_enabled
+    async def run(self, *, series_id: str, video_id: str, progress_reporter=None, transcript_enhancement_enabled: bool | None = None, manual_transcript=None, use_saved_manual_transcript: bool = True) -> None:
+        del series_id, progress_reporter, transcript_enhancement_enabled, manual_transcript, use_saved_manual_transcript
         self.calls.append(video_id)
         if len(self.calls) >= 2:
             self.started_two.set()

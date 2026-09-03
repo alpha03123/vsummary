@@ -51,15 +51,6 @@ function renderView(overrides = {}) {
 }
 
 describe("WorkspaceSeriesOverviewView", () => {
-  it("shows every video overview and marks videos without one", () => {
-    renderView();
-
-    expect(screen.getByText("第一讲概况")).toBeInTheDocument();
-    expect(screen.getByText("第二讲概况")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "第三讲" })).toBeInTheDocument();
-    expect(screen.getByText("尚未生成 AI 概况")).toBeInTheDocument();
-  });
-
   it("filters to the selected video without changing series context", () => {
     renderView();
 

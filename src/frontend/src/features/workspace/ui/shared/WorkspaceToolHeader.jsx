@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, Download } from "lucide-react";
+import { useOutsidePointerUp } from "../../../../shared/lib/useOutsidePointerUp";
 
 export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [], badge = null }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="relative flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-[min(11rem,100%)] flex-1">
         <p className="mb-1 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Tool Page</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -27,6 +28,7 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
           {backLabel}
         </button>
       </div>
+      <div id="workspace-tool-header-actions" className="absolute bottom-0 right-0 flex min-h-10 items-center justify-end" />
     </div>
   );
 }
@@ -39,18 +41,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
   const disabled = enabledActions.length === 0;
   const className = "workspace-elevated-panel inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold transition-all";
 
-  useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    function handlePointerDown(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setOpen(false);
-      }
-    }
-    window.addEventListener("pointerdown", handlePointerDown);
-    return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [open]);
+  useOutsidePointerUp(open, [menuRef], () => setOpen(false));
 
   if (disabled) {
     return (

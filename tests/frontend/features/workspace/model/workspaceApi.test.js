@@ -3,15 +3,14 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   loadAgentSessionRecovery,
   loadProviderUsage,
+  relinkExternalVideo,
   loadSeriesMindmap,
   generateVideoMindmap,
-  uploadLocalSeries,
 } from "@src/features/workspace/model/workspaceApi";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
 describe("loadAgentSessionRecovery", () => {
   test("restores assistant citations with recovered messages", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
@@ -75,7 +74,6 @@ describe("loadAgentSessionRecovery", () => {
     ]);
   });
 });
-
 describe("loadSeriesMindmap", () => {
   test("returns null when the series mindmap has not been generated", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
@@ -172,22 +170,13 @@ describe("generateVideoMindmap", () => {
   });
 });
 
-describe("uploadLocalSeries", () => {
-  test("sends dropped files through the multipart upload endpoint", async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ id: "series-1", title: "课程", videos: [] }),
-    }));
+describe("relinkExternalVideo", () => {
+  test("opens the backend relink flow for the selected video", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ relinked: true }) }));
     vi.stubGlobal("fetch", fetchMock);
-    const file = new File(["video"], "lesson.mp4", { type: "video/mp4" });
 
-    await uploadLocalSeries("课程", [file]);
+    await expect(relinkExternalVideo("series 1", "video/1")).resolves.toEqual({ relinked: true });
 
-    const [, request] = fetchMock.mock.calls[0];
-    expect(fetchMock).toHaveBeenCalledWith("/api/import/local/series", expect.objectContaining({ method: "POST" }));
-    expect(request.body).toBeInstanceOf(FormData);
-    expect(request.body.get("series_title")).toBe("课程");
-    expect(request.body.getAll("files")).toHaveLength(1);
-    expect(request.body.get("files").name).toBe("lesson.mp4");
+    expect(fetchMock).toHaveBeenCalledWith("/api/videos/series%201/video%2F1/relink", { method: "POST" });
   });
 });

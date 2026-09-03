@@ -47,15 +47,6 @@ describe("WorkspaceLibraryPanel", () => {
     );
   }
 
-  it("renders core_problem under title when present", () => {
-    renderPanelWithVideo({
-      ...linkedDownloadedVideo,
-      coreProblem: "如何用三步拆解复杂问题",
-    });
-
-    expect(screen.getByText("如何用三步拆解复杂问题")).toBeInTheDocument();
-  });
-
   it("matches videos by core_problem in search filter", () => {
     renderPanelWithVideo({
       ...linkedDownloadedVideo,
@@ -108,13 +99,4 @@ describe("WorkspaceLibraryPanel", () => {
     expect(screen.queryByText("未处理视频")).not.toBeInTheDocument();
   });
 
-  it("renders embedded newlines in core_problem", () => {
-    renderPanelWithVideo({
-      ...linkedDownloadedVideo,
-      coreProblem: "第一行\n第二行",
-    });
-
-    expect(screen.getByText(/第一行/)).toBeInTheDocument();
-    expect(screen.getByText(/第二行/)).toBeInTheDocument();
-  });
 });

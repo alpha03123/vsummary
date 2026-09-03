@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 export function WorkspaceRenameDialog({ open, entityLabel, initialTitle, pending = false, onConfirm, onCancel }) {
   const [title, setTitle] = useState(initialTitle ?? "");
   const inputRef = useRef(null);
+  const backdropPointerDownRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -22,8 +23,12 @@ export function WorkspaceRenameDialog({ open, entityLabel, initialTitle, pending
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-        onClick={(event) => {
-          if (event.target === event.currentTarget && !pending) onCancel?.();
+        onPointerDown={(event) => {
+          backdropPointerDownRef.current = event.button === 0 && event.target === event.currentTarget;
+        }}
+        onPointerUp={(event) => {
+          if (backdropPointerDownRef.current && event.target === event.currentTarget && !pending) onCancel?.();
+          backdropPointerDownRef.current = false;
         }}
       >
         <motion.form

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, Search, Copy, Link2 } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { WorkspaceExpandableSelect } from "./shared/WorkspaceExpandableSelect";
 
 export function WorkspaceImportModal({
   mode = "series",
@@ -18,20 +19,16 @@ export function WorkspaceImportModal({
   onImportChaoxingCourse,
   onSelectLocalMedia,
   onImportLocalSeries,
-  onUploadLocalSeries,
   onImportSeriesVideos,
-  onUploadSeriesVideos,
   onImportLocalPlaygroundVideos,
-  onUploadLocalPlaygroundVideos,
 }) {
   const [sourceType, setSourceType] = useState("local");
   const [externalProvider, setExternalProvider] = useState("bilibili");
   const [url, setUrl] = useState("");
   const [seriesTitle, setSeriesTitle] = useState("");
   const [sourcePaths, setSourcePaths] = useState([]);
-  const [droppedFiles, setDroppedFiles] = useState([]);
-  const [isDraggingMedia, setIsDraggingMedia] = useState(false);
-  const [storageMode, setStorageMode] = useState("copy");
+  const [storageMode, setStorageMode] = useState("hardlink");
+  const [storageModeCustomized, setStorageModeCustomized] = useState(false);
   const [hardlinkAvailable, setHardlinkAvailable] = useState(true);
   const [status, setStatus] = useState("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -52,7 +49,6 @@ export function WorkspaceImportModal({
   const initAbortControllerRef = useRef(null);
   const initInFlightRef = useRef(false);
   const mountedRef = useRef(true);
-  const mediaDragDepthRef = useRef(0);
   const backdropPointerDownRef = useRef(false);
 
   const isSeriesCreation = mode === "series";
@@ -78,11 +74,6 @@ export function WorkspaceImportModal({
     });
   }, [chaoxingCourses, normalizedChaoxingCourseSearch]);
   const selectedFileSummary = useMemo(() => {
-    if (droppedFiles.length) {
-      return droppedFiles.length === 1
-        ? droppedFiles[0].name
-        : `已拖入 ${droppedFiles.length} 个文件`;
-    }
     if (!sourcePaths.length) {
       return "未选择文件";
     }
@@ -90,9 +81,32 @@ export function WorkspaceImportModal({
       return sourcePaths[0].split(/[\\/]/).pop() || sourcePaths[0];
     }
     return `已选择 ${sourcePaths.length} 个文件`;
-  }, [droppedFiles, sourcePaths]);
+  }, [sourcePaths]);
 
-  const hasLocalMedia = sourcePaths.length > 0 || droppedFiles.length > 0;
+  const hasLocalMedia = sourcePaths.length > 0;
+  const hardlinkUnavailable = hasLocalMedia && !hardlinkAvailable;
+  const storageOptions = [
+    {
+      id: "hardlink",
+      label: "硬链接",
+      description: "建立文件之间的引用，仅可用于同物理磁盘",
+      disabled: status === "loading" || status === "selecting" || hardlinkUnavailable,
+      disabledReason: hardlinkUnavailable ? "所选文件与工作区不在同一磁盘分区。" : undefined,
+    },
+    {
+      id: "external_reference",
+      label: "软链接",
+      description: "记录文件路径，如果文件位置改变需要重复链接",
+      disabled: status === "loading" || status === "selecting",
+    },
+    {
+      id: "copy",
+      label: "复制",
+      description: "复制一份副本到本地文件夹，最消耗空间",
+      disabled: status === "loading" || status === "selecting",
+    },
+  ];
+  const selectedStorageDescription = storageOptions.find((option) => option.id === storageMode)?.description;
 
   useEffect(() => {
     loadChaoxingStatusRef.current = onLoadChaoxingStatus;
@@ -258,10 +272,13 @@ export function WorkspaceImportModal({
       const selection = await onSelectLocalMedia();
       if (mountedRef.current) {
         setSourcePaths(selection.sourcePaths);
-        setDroppedFiles([]);
         setHardlinkAvailable(selection.hardlinkAvailable);
-        if (!selection.hardlinkAvailable && storageMode === "hardlink") {
-          setStorageMode("copy");
+        if (selection.sourcePaths.length) {
+          if (!selection.hardlinkAvailable && storageMode === "hardlink") {
+            setStorageMode("external_reference");
+          } else if (!storageModeCustomized) {
+            setStorageMode(selection.hardlinkAvailable ? "hardlink" : "external_reference");
+          }
         }
         setStatus("idle");
       }
@@ -273,51 +290,9 @@ export function WorkspaceImportModal({
     }
   }
 
-  function setDroppedMediaFiles(files) {
-    if (!files.length) {
-      return;
-    }
-    setDroppedFiles(files);
-    setSourcePaths([]);
-    setHardlinkAvailable(false);
-    setStorageMode("copy");
-    setErrorMsg("");
-    setStatus("idle");
-  }
-
-  function handleMediaDragEnter(event) {
-    if (!hasFileTransfer(event)) {
-      return;
-    }
-    event.preventDefault();
-    mediaDragDepthRef.current += 1;
-    setIsDraggingMedia(true);
-  }
-
-  function handleMediaDragOver(event) {
-    if (hasFileTransfer(event)) {
-      event.preventDefault();
-    }
-  }
-
-  function handleMediaDragLeave(event) {
-    if (!hasFileTransfer(event)) {
-      return;
-    }
-    mediaDragDepthRef.current = Math.max(0, mediaDragDepthRef.current - 1);
-    if (mediaDragDepthRef.current === 0) {
-      setIsDraggingMedia(false);
-    }
-  }
-
-  function handleMediaDrop(event) {
-    if (!hasFileTransfer(event)) {
-      return;
-    }
-    event.preventDefault();
-    mediaDragDepthRef.current = 0;
-    setIsDraggingMedia(false);
-    setDroppedMediaFiles(Array.from(event.dataTransfer.files ?? []));
+  function handleStorageModeChange(nextStorageMode) {
+    setStorageMode(nextStorageMode);
+    setStorageModeCustomized(true);
   }
 
   async function handleSubmit() {
@@ -355,13 +330,7 @@ export function WorkspaceImportModal({
           setStatus("idle");
           return;
         }
-        result = droppedFiles.length
-          ? isSeriesCreation
-            ? await onUploadLocalSeries(seriesTitle.trim(), droppedFiles)
-            : isSeriesVideo
-              ? await onUploadSeriesVideos(targetSeriesId, droppedFiles)
-              : await onUploadLocalPlaygroundVideos(droppedFiles)
-          : isSeriesCreation
+        result = isSeriesCreation
             ? await onImportLocalSeries(seriesTitle.trim(), sourcePaths, storageMode)
             : isSeriesVideo
               ? await onImportSeriesVideos(targetSeriesId, sourcePaths)
@@ -369,7 +338,7 @@ export function WorkspaceImportModal({
       }
       setPreview({
         title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : result.title ?? "Playground"),
-        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? (sourceType === "external" ? 1 : droppedFiles.length || sourcePaths.length),
+        videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? (sourceType === "external" ? 1 : sourcePaths.length),
       });
       setStatus("success");
     } catch (error) {
@@ -628,39 +597,15 @@ export function WorkspaceImportModal({
                 />
                 <div className="mt-4">
                   <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">媒体存储方式</p>
-                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="媒体存储方式">
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={storageMode === "copy"}
-                      onClick={() => setStorageMode("copy")}
-                      disabled={status === "loading" || status === "selecting"}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${storageMode === "copy"
-                          ? "border-accent bg-accent/10 text-accent"
-                          : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-200"
-                        }`}
-                    >
-                      <Copy size={16} />
-                      复制到工作区
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={storageMode === "hardlink"}
-                      onClick={() => setStorageMode("hardlink")}
-                      disabled={status === "loading" || status === "selecting" || (hasLocalMedia && !hardlinkAvailable)}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${storageMode === "hardlink"
-                          ? "border-accent bg-accent/10 text-accent"
-                          : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-200"
-                        }`}
-                    >
-                      <Link2 size={16} />
-                      创建硬链接(节约空间)
-                    </button>
-                  </div>
+                  <WorkspaceExpandableSelect
+                    value={storageMode}
+                    options={storageOptions}
+                    onChange={handleStorageModeChange}
+                    ariaLabel="媒体存储方式"
+                  />
                   {hasLocalMedia && !hardlinkAvailable ? (
-                    <p className="mt-2 text-xs font-medium text-danger">
-                      {droppedFiles.length ? "拖入方式导入的文件无法创建硬链接，如需硬链接请点击导入" : "所选文件与工作区不在同一磁盘分区。"}
+                    <p className="mt-2 text-xs font-medium text-warning">
+                      所选文件与工作区不在同一磁盘分区，已默认选择软链接。
                     </p>
                   ) : null}
                 </div>
@@ -676,25 +621,14 @@ export function WorkspaceImportModal({
                   type="button"
                   onClick={handleSelectLocalMedia}
                   disabled={status === "loading" || status === "selecting"}
-                  onDragEnter={handleMediaDragEnter}
-                  onDragOver={handleMediaDragOver}
-                  onDragLeave={handleMediaDragLeave}
-                  onDrop={handleMediaDrop}
-                  className={`flex w-full flex-col gap-2 rounded-2xl border border-dashed px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-neutral-900 ${isDraggingMedia
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-stone-300 bg-stone-50 hover:border-accent hover:bg-accent/5 dark:border-stone-700"
-                  }`}
+                  className="flex w-full flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-left transition hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900"
                 >
                   <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
                     <Film size={16} />
                     {selectedFileSummary}
                   </div>
                   <p className="text-xs text-stone-600 dark:text-zinc-400">
-                    {isDraggingMedia
-                      ? "松开即可导入文件"
-                      : isSeriesCreation && storageMode === "hardlink"
-                        ? "支持多选；拖入文件会自动改为复制导入。"
-                        : "点击选择或拖入多个媒体文件。"}
+                    {isSeriesCreation ? selectedStorageDescription : "点击后可选择多个媒体文件。"}
                   </p>
                 </button>
               </div>
@@ -790,15 +724,10 @@ export function WorkspaceImportModal({
     </AnimatePresence>
   );
 }
-
 function toChaoxingInitErrorMessage(error) {
   const message = error instanceof Error ? error.message : "超星初始化失败";
   if (message.includes("超星初始化已中断")) {
     return "超星初始化已中断";
   }
   return message;
-}
-
-function hasFileTransfer(event) {
-  return Array.from(event.dataTransfer?.types ?? []).includes("Files");
 }

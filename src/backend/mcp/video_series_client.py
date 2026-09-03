@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 import re
@@ -110,14 +109,11 @@ class VideoSeriesBackendClient:
         if not title.strip():
             raise ValueError("title must not be blank")
         media_paths = _resolve_local_media_paths(file_paths)
-        with ExitStack() as stack:
-            files = [("files", (path.name, stack.enter_context(path.open("rb")))) for path in media_paths]
-            series = await self._request_json(
-                "POST",
-                "/api/import/local/series",
-                data={"series_title": title},
-                files=files,
-            )
+        series = await self._request_json(
+            "POST",
+            "/api/import/local/series/from-paths",
+            json={"series_title": title, "source_paths": [str(path) for path in media_paths], "storage_mode": "copy"},
+        )
         return {
             "series_id": series["id"],
             "title": series["title"],
@@ -127,13 +123,11 @@ class VideoSeriesBackendClient:
     async def add_local_series_videos(self, series_id: str, file_paths: list[str]) -> dict[str, Any]:
         self._require_series_id(series_id)
         media_paths = _resolve_local_media_paths(file_paths)
-        with ExitStack() as stack:
-            files = [("files", (path.name, stack.enter_context(path.open("rb")))) for path in media_paths]
-            videos = await self._request_json(
-                "POST",
-                f"/api/import/local/series/{self._path_segment(series_id)}",
-                files=files,
-            )
+        videos = await self._request_json(
+            "POST",
+            f"/api/import/local/series/{self._path_segment(series_id)}/from-paths",
+            json={"source_paths": [str(path) for path in media_paths]},
+        )
         return {
             "series_id": series_id,
             "added_count": len(videos),

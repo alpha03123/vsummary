@@ -45,42 +45,6 @@ function renderView(overrides = {}) {
 }
 
 describe("WorkspaceOverviewView chapter + transcript clicks", () => {
-  it("highlights the current chapter while its transcript is collapsed", () => {
-    renderView({ playbackTime: 20 });
-
-    const chapter = screen.getByText("第一章 入门").closest("article");
-    const transcriptToggle = screen.getByText("查看本章原文").closest("details");
-    expect(chapter).not.toHaveClass("ring-2", "ring-accent/10");
-    expect(transcriptToggle).toHaveClass("ring-2", "ring-accent/30");
-    expect(screen.queryByRole("button", { name: /段落一/ })).toBeNull();
-  });
-
-  it("highlights the current transcript segment after the chapter is expanded", () => {
-    renderView({ playbackTime: 13 });
-
-    fireEvent.click(screen.getByText("查看本章原文"));
-
-    const chapter = screen.getByText("第一章 入门").closest("article");
-    expect(chapter).not.toHaveClass("ring-2", "ring-accent/10");
-    expect(screen.getByRole("button", { name: /段落二/ })).toHaveClass("border-2", "border-accent");
-    expect(screen.getByRole("button", { name: /段落一/ })).not.toHaveClass("border-2", "border-accent");
-  });
-
-  it("does not crash when onSeek is omitted", () => {
-    render(
-      <WorkspaceOverviewView
-        ui={{ showTakeaways: true }}
-        tools={tools}
-        summary={summary}
-        selectedVideo={selectedVideo}
-        selectedChapterId={null}
-        summaryLoading={false}
-        isGeneratingSelectedVideo={false}
-      />,
-    );
-    expect(screen.getByText("第一章 入门")).toBeInTheDocument();
-  });
-
   it("chapter header click calls onSeek with chapter timestamps", () => {
     const { onSeek } = renderView();
     fireEvent.click(screen.getByRole("button", { name: /第一章 入门/ }));

@@ -187,9 +187,6 @@ class VideoImportStore(Protocol):
     通过 `series_id` 是否为空来区分目标。
     """
 
-    def import_local_series(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
-        """把一组本地视频导入为一个新系列。"""
-
     def import_local_series_from_paths(
         self,
         *,
@@ -199,14 +196,8 @@ class VideoImportStore(Protocol):
     ) -> LibrarySeriesDTO:
         """从本机路径新建系列；媒体以指定存储方式写入工作区。"""
 
-    def import_local_playground_videos(self, *, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
-        """把本地视频导入到沙盒演练系列（无需选择系列）。"""
-
     def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
         """从本机路径把媒体复制到沙盒演练系列。"""
-
-    def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
-        """把本地视频追加到既有系列。"""
 
     def import_local_series_videos_from_paths(
         self,

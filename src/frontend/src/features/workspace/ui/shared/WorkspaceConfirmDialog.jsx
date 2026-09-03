@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -12,6 +13,7 @@ export function WorkspaceConfirmDialog({
   onConfirm,
   onCancel,
 }) {
+  const backdropPointerDownRef = useRef(false);
   if (!open) {
     return null;
   }
@@ -23,10 +25,12 @@ export function WorkspaceConfirmDialog({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
-        onClick={(event) => {
-          if (event.target === event.currentTarget && !pending) {
-            onCancel?.();
-          }
+        onPointerDown={(event) => {
+          backdropPointerDownRef.current = event.button === 0 && event.target === event.currentTarget;
+        }}
+        onPointerUp={(event) => {
+          if (backdropPointerDownRef.current && event.target === event.currentTarget && !pending) onCancel?.();
+          backdropPointerDownRef.current = false;
         }}
       >
         <motion.div

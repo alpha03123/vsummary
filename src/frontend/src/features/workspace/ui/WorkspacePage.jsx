@@ -74,6 +74,7 @@ export function WorkspacePage({ page }) {
   const [pendingRename, setPendingRename] = useState(null);
   const [renamePending, setRenamePending] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(null);
+  const [followOverviewPlayback, setFollowOverviewPlayback] = useState(false);
   const [resumePosition, setResumePosition] = useState({ videoKey: null, seconds: null });
   const playbackPositionsRef = useRef(new Map());
   const containerRef = useRef(null);
@@ -120,6 +121,7 @@ export function WorkspacePage({ page }) {
 
   useEffect(() => {
     setPlaybackTime(null);
+    setFollowOverviewPlayback(false);
     setResumePosition({
       videoKey: selectedVideoKey,
       seconds: selectedVideoKey ? playbackPositionsRef.current.get(selectedVideoKey) ?? null : null,
@@ -189,6 +191,18 @@ export function WorkspacePage({ page }) {
 
   function renderVideoPlayerPane() {
     if (selectedVideo) {
+      if (selectedVideo.status === "source_missing") {
+        return (
+          <div className="flex h-full items-center justify-center p-8">
+            <WorkspaceStateBlock
+              eyebrow="Media Preview"
+              title="媒体链接已丢失"
+              description="请在左侧点击“链接媒体”，文件选择框会打开原始文件所在目录。"
+              dashed
+            />
+          </div>
+        );
+      }
       return (
         <WorkspaceVideoPlayer
           videoSource={tools?.preview?.previewUrl ?? previewUrl}
@@ -208,6 +222,8 @@ export function WorkspacePage({ page }) {
             }
           }}
           onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
+          followOverviewPlayback={followOverviewPlayback}
+          onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
         />
       );
     }
@@ -232,6 +248,8 @@ export function WorkspacePage({ page }) {
         chat={chat}
         summary={summary}
         playbackTime={playbackTime}
+        followOverviewPlayback={followOverviewPlayback}
+        onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
         mindmap={mindmap}
         seriesMindmap={seriesMindmap}
         seriesMindmapAvailable={seriesMindmapAvailable}
@@ -327,6 +345,7 @@ export function WorkspacePage({ page }) {
               onSelectSeriesContext={actions.selectSeriesContext}
               onSelectVideo={actions.selectVideo}
               onGenerateVideo={actions.generateVideo}
+              onRelinkVideo={actions.relinkVideo}
               onGenerateSeries={actions.generateSeries}
               onCancelGeneration={actions.cancelGeneration}
               onDownloadVideo={actions.downloadVideo}
@@ -633,13 +652,10 @@ export function WorkspacePage({ page }) {
           onCancelChaoxingImport={actions.cancelChaoxingImport}
           onLoadChaoxingCourses={actions.loadChaoxingCourses}
           onImportChaoxingCourse={actions.importChaoxingCourse}
-          onSelectLocalMedia={actions.selectLocalMedia}
-          onImportLocalSeries={async (seriesTitle, sourcePaths, storageMode) => actions.importLocalSeries(seriesTitle, sourcePaths, storageMode)}
-          onUploadLocalSeries={async (seriesTitle, files) => actions.uploadLocalSeries(seriesTitle, files)}
-          onImportSeriesVideos={async (seriesId, sourcePaths) => actions.importSeriesVideos(seriesId, sourcePaths)}
-          onUploadSeriesVideos={async (seriesId, files) => actions.uploadSeriesVideos(seriesId, files)}
-          onImportLocalPlaygroundVideos={async (sourcePaths) => actions.importLocalPlaygroundVideos(sourcePaths)}
-          onUploadLocalPlaygroundVideos={async (files) => actions.uploadLocalPlaygroundVideos(files)}
+           onSelectLocalMedia={actions.selectLocalMedia}
+           onImportLocalSeries={async (seriesTitle, sourcePaths, storageMode) => actions.importLocalSeries(seriesTitle, sourcePaths, storageMode)}
+           onImportSeriesVideos={async (seriesId, sourcePaths) => actions.importSeriesVideos(seriesId, sourcePaths)}
+           onImportLocalPlaygroundVideos={async (sourcePaths) => actions.importLocalPlaygroundVideos(sourcePaths)}
         />
       )}
 

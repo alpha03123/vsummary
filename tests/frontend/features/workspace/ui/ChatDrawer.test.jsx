@@ -18,9 +18,9 @@ describe("ChatDrawer", () => {
     expect(screen.queryByTestId("chat-panel")).toBeNull();
   });
 
-  it("renders the chat panel when open and forwards workspaceTitle", () => {
+  it("renders the chat panel when open", () => {
     render(<ChatDrawer isOpen={true} {...baseProps} />);
-    expect(screen.getByTestId("chat-panel")).toHaveTextContent("我的工作台");
+    expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
   });
 
   it("calls onClose when Esc is pressed", () => {

@@ -755,9 +755,13 @@ class ImportAndMutationRefreshPolicyTests(unittest.TestCase):
         refresher = FakeIndexRefresher()
         workspace = FakeImportWorkspace()
 
-        ImportLocalSeries(workspace).run(title="Series", files=[("a.mp4", object())])
-        ImportLocalPlaygroundVideos(workspace).run(files=[("b.mp4", object())])
-        ImportLocalSeriesVideos(workspace).run(series_id="series-1", files=[("c.mp4", object())])
+        ImportLocalSeries(workspace).run_from_paths(
+            title="Series",
+            source_paths=[Path("a.mp4")],
+            storage_mode="copy",
+        )
+        ImportLocalPlaygroundVideos(workspace).run_from_paths(source_paths=[Path("b.mp4")])
+        ImportLocalSeriesVideos(workspace).run_from_paths(series_id="series-1", source_paths=[Path("c.mp4")])
 
         self.assertEqual(refresher.refresh_calls, 0)
 
@@ -961,7 +965,17 @@ class CompletedGenerator:
         video_id: str,
         progress_reporter=None,
         transcript_enhancement_enabled: bool | None = None,
+        manual_transcript=None,
+        use_saved_manual_transcript: bool = True,
     ) -> None:
+        del (
+            series_id,
+            video_id,
+            progress_reporter,
+            transcript_enhancement_enabled,
+            manual_transcript,
+            use_saved_manual_transcript,
+        )
         return None
 
 
@@ -1020,16 +1034,16 @@ class FakeGenerationActivityChecker:
 
 
 class FakeImportWorkspace:
-    def import_local_series(self, *, title: str, files: list[tuple[str, object]]):
-        del files
+    def import_local_series_from_paths(self, *, title: str, source_paths: list[Path], storage_mode: str):
+        del source_paths, storage_mode
         return LibrarySeriesDTO(id="series-1", title=title, videos=[])
 
-    def import_local_playground_videos(self, *, files: list[tuple[str, object]]):
-        del files
+    def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]):
+        del source_paths
         return []
 
-    def import_local_series_videos(self, *, series_id: str, files: list[tuple[str, object]]):
-        del series_id, files
+    def import_local_series_videos_from_paths(self, *, series_id: str, source_paths: list[Path]):
+        del series_id, source_paths
         return []
 
 

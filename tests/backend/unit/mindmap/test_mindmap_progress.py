@@ -32,7 +32,8 @@ class StubProgressReporter:
 
 
 class FakeMindmapGenerator:
-    async def generate(self, *, title, duration_seconds, summary_data, transcript_text=""):
+    async def generate(self, *, title, duration_seconds, summary_data, transcript_text="", max_depth=None):
+        del duration_seconds, summary_data, transcript_text, max_depth
         return {"id": "root", "title": title, "children": []}
 
 
@@ -66,21 +67,6 @@ class GenerateMindmapProgressTests(unittest.TestCase):
         stages = [u["stage"] for u in reporter.updates]
         self.assertIn("generate", stages)
         self.assertIn("save", stages)
-        self.assertTrue(reporter._completed_called)
-
-    def test_calls_completed_on_success(self):
-        reporter = StubProgressReporter()
-        use_case = GenerateMindmap(
-            generator=FakeMindmapGenerator(),
-            artifact_store=FakeGenerationArtifactStore(),
-        )
-        asyncio.run(
-            use_case.run(
-                title="Test", duration_seconds=300.0,
-                summary_data={"chapters": []}, output_dir=Path("/tmp/test"),
-                progress_reporter=reporter,
-            )
-        )
         self.assertTrue(reporter._completed_called)
 
     def test_propagates_generator_error_without_calling_failed(self):

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ListFilter, Search } from "lucide-react";
+import { useOutsidePointerUp } from "../../../../shared/lib/useOutsidePointerUp";
 
 const SEARCHABLE_THRESHOLD = 8;
 const ALL_OPTION_LABEL = "全部视频 AI 概况";
@@ -57,16 +58,7 @@ function ScopePicker({ videos, value, onChange, searchable }) {
     }
   }, [open, searchable]);
 
-  useEffect(() => {
-    if (!open) return;
-    function handlePointerDown(event) {
-      if (!containerRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [open]);
+  useOutsidePointerUp(open, [containerRef], () => setOpen(false));
 
   function commit(option) {
     onChange(option.id);

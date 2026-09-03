@@ -64,6 +64,9 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef, 
       }
     });
     svg.on("click", (event) => {
+      if (event.target instanceof SVGCircleElement) {
+        return;
+      }
       const target = event.target.closest(".markmap-node");
       if (!target) return;
       event.preventDefault();

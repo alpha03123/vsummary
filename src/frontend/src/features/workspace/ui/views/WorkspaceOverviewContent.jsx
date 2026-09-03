@@ -9,6 +9,8 @@ export function WorkspaceOverviewContent({
   ui,
   summary,
   playbackTime = null,
+  followOverviewPlayback = false,
+  onFollowOverviewPlaybackChange,
   selectedChapterId = null,
   citationFocus = null,
   onSeek,
@@ -74,6 +76,30 @@ export function WorkspaceOverviewContent({
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [citationTarget, expandedTranscriptChapters]);
+
+  useEffect(() => {
+    if (!followOverviewPlayback || !playbackTarget || !Number.isInteger(playbackTarget.segmentIndex)) {
+      return undefined;
+    }
+
+    setExpandedTranscriptChapters((current) => {
+      if (current.has(playbackTarget.chapterId)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(playbackTarget.chapterId);
+      return next;
+    });
+
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById(`overview-transcript-${playbackTarget.chapterId}`)?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "center",
+      });
+      transcriptListRefs.current.get(playbackTarget.chapterId)?.scrollToIndex(playbackTarget.segmentIndex);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [followOverviewPlayback, playbackTarget, expandedTranscriptChapters]);
 
   if (!summary) {
     return null;
@@ -225,6 +251,7 @@ export function WorkspaceOverviewContent({
                     }
                     onSeek={onSeek}
                     onRegister={registerTranscriptList}
+                    onManualScroll={() => onFollowOverviewPlaybackChange?.(false)}
                     onCollapse={() => {
                       setExpandedTranscriptChapters((current) => {
                         if (!current.has(chapter.id)) {
@@ -255,6 +282,7 @@ function WorkspaceTranscriptList({
   highlightedSegmentIndex,
   onSeek,
   onRegister,
+  onManualScroll,
   onCollapse,
 }) {
   const scrollRef = useRef(null);
@@ -287,7 +315,7 @@ function WorkspaceTranscriptList({
 
   return (
     <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
-      <div ref={scrollRef} className="max-h-[min(60vh,42rem)] overflow-y-auto overscroll-contain pr-1">
+      <div ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll} className="max-h-[min(60vh,42rem)] overflow-y-auto overscroll-contain pr-1">
         <div className="relative w-full" style={{ height: `${totalSize}px` }}>
           {visibleRows.map((virtualRow) => {
             const segment = segments[virtualRow.index];

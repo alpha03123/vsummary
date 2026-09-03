@@ -15,11 +15,6 @@ const baseProps = {
 };
 
 describe("WorkspaceToolbar chat button", () => {
-  it("renders a chat toggle button", () => {
-    render(<WorkspaceToolbar {...baseProps} />);
-    expect(screen.getByRole("button", { name: "打开分析助手" })).toBeInTheDocument();
-  });
-
   it("calls onToggleChatDrawer when the chat button is clicked", () => {
     const onToggleChatDrawer = vi.fn();
     render(<WorkspaceToolbar {...baseProps} onToggleChatDrawer={onToggleChatDrawer} />);

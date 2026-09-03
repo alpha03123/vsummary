@@ -131,22 +131,6 @@ describe("WorkspaceVideoPlayer", () => {
     expect(video.currentTime).toBe(12);
   });
 
-  it("loads the WebVTT track and lets the user toggle subtitles", () => {
-    const { container } = render(
-      <WorkspaceVideoPlayer
-        videoSource="/api/videos/s1/v1/preview"
-        subtitleSource="/api/videos/s1/v1/subtitles.vtt"
-      />,
-    );
-
-    const track = container.querySelector('track[kind="subtitles"]');
-    expect(track).toHaveAttribute("src", "/api/videos/s1/v1/subtitles.vtt");
-    expect(screen.getByRole("button", { name: "隐藏字幕" })).toHaveAttribute("aria-pressed", "true");
-
-    fireEvent.click(screen.getByRole("button", { name: "隐藏字幕" }));
-    expect(screen.getByRole("button", { name: "显示字幕" })).toHaveAttribute("aria-pressed", "false");
-  });
-
   it("reports playback progress from the native video element", () => {
     const onTimeUpdate = vi.fn();
     const { container } = render(

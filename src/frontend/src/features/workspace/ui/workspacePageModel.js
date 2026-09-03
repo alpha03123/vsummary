@@ -19,7 +19,7 @@ export function buildWorkspacePageModel(controller) {
         error: null,
       }
     : null;
-  const generationSnapshot = seriesQueueSnapshot ?? controller.currentGenerationTask?.snapshot ?? null;
+  const generationSnapshot = controller.currentGenerationTask?.snapshot ?? seriesQueueSnapshot;
   const showGenerationOverlay = isGenerationSnapshotActive(generationSnapshot);
   return {
     shell: {
@@ -107,6 +107,7 @@ export function buildWorkspacePageModel(controller) {
       selectTool: controller.onSelectTool,
       focusNode: controller.onFocusNode,
       generateVideo: controller.onGenerateVideo,
+      relinkVideo: controller.onRelinkVideo,
       uploadSrt: controller.onUploadSrt,
       restoreAutomaticTranscript: controller.onRestoreAutomaticTranscript,
       generateSeries: controller.onGenerateSeries,

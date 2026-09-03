@@ -1,5 +1,40 @@
 import { describe, expect, it, vi } from "vitest";
 
+describe("workspaceContentActions media links", () => {
+  it("refreshes a broken media link without showing a global error", async () => {
+    vi.resetModules();
+    const generateVideoSummary = vi.fn(() => Promise.reject(new Error("503 source media unavailable: D:\\ABC\\lesson.mp4")));
+    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({ series: [] }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      generateVideoSummary,
+      loadWorkspaceLibrary,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: "video-a",
+        ui: { transcriptEnhancementEnabled: true },
+      },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    await actions.onGenerateVideo();
+
+    expect(loadWorkspaceLibrary).toHaveBeenCalledOnce();
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "load_failed" }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "generation_status_loaded",
+      snapshot: expect.objectContaining({ error: null }),
+    }));
+  });
+});
+
 describe("workspaceContentActions series cancellation", () => {
   it("keeps the series queue cancelling until backend cancellation finishes", async () => {
     vi.resetModules();
@@ -405,15 +440,13 @@ function createWorkspaceApiMock() {
     importLocalPlaygroundVideos: vi.fn(),
     importLocalSeries: vi.fn(),
     importLocalSeriesVideos: vi.fn(),
-    uploadLocalPlaygroundVideos: vi.fn(),
-    uploadLocalSeries: vi.fn(),
-    uploadLocalSeriesVideos: vi.fn(),
     initChaoxing: vi.fn(),
     loadChaoxingCourses: vi.fn(),
     loadChaoxingStatus: vi.fn(),
     loadWorkspaceLibrary: vi.fn(),
     resolveBilibiliSeries: vi.fn(),
     resolveBilibiliVideo: vi.fn(),
+    relinkExternalVideo: vi.fn(),
     startVideoDownload: vi.fn(),
     subscribeChaoxingImportProgress: vi.fn(),
     subscribeVideoDownloadProgress: vi.fn(),

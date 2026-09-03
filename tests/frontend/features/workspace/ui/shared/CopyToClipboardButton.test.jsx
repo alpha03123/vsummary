@@ -18,11 +18,6 @@ describe("CopyToClipboardButton", () => {
     vi.useRealTimers();
   });
 
-  it("renders the default copy action", () => {
-    render(<CopyToClipboardButton text="abc" />);
-    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
-  });
-
   it("aria-label 反映当前状态", async () => {
     render(<CopyToClipboardButton text="abc" />);
     expect(screen.getByRole("button").getAttribute("aria-label")).toBe("复制");

@@ -11,6 +11,8 @@ export function WorkspaceOverviewView({
   tools,
   summary,
   playbackTime,
+  followOverviewPlayback,
+  onFollowOverviewPlaybackChange,
   selectedVideo,
   selectedChapterId,
   citationFocus,
@@ -107,6 +109,8 @@ export function WorkspaceOverviewView({
         ui={ui}
         summary={summary}
         playbackTime={playbackTime}
+        followOverviewPlayback={followOverviewPlayback}
+        onFollowOverviewPlaybackChange={onFollowOverviewPlaybackChange}
         selectedChapterId={selectedChapterId}
         citationFocus={citationFocus}
         onSeek={onSeek}

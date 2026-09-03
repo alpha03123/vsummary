@@ -21,9 +21,6 @@ import {
   importLocalPlaygroundVideos,
   importLocalSeries,
   importLocalSeriesVideos,
-  uploadLocalPlaygroundVideos,
-  uploadLocalSeries,
-  uploadLocalSeriesVideos,
   loadWorkspaceLibrary,
   loadVideoSummary,
   loadVideoSummaryMarkdown,
@@ -33,6 +30,7 @@ import {
   loadChaoxingStatus,
   resolveBilibiliSeries,
   resolveBilibiliVideo,
+  relinkExternalVideo,
   selectLocalMedia,
   subscribeChaoxingImportProgress,
   startVideoDownload,
@@ -58,7 +56,7 @@ function createSeriesRunId(seriesId) {
 
 export function getPendingVideosForSeriesGeneration(library, seriesId) {
   const series = library?.series?.find((item) => item.id === seriesId);
-  return series?.videos?.filter((video) => !video.processed) ?? [];
+  return series?.videos?.filter((video) => !video.processed && video.status !== "source_missing") ?? [];
 }
 
 function isLinkedVideo(video) {
@@ -70,6 +68,10 @@ function isGenerationCancelledError(error) {
     return false;
   }
   return error.message.includes("generation cancelled");
+}
+
+function isSourceMediaUnavailableError(error) {
+  return error instanceof Error && error.message.startsWith("503 source media unavailable:");
 }
 
 function isDownloadCancelledError(error) {
@@ -215,6 +217,19 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         library,
       });
     } catch (error) {
+      if (isSourceMediaUnavailableError(error)) {
+        await reloadWorkspaceLibrary();
+        dispatch({
+          type: "generation_status_loaded",
+          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          mode: "video",
+          seriesId,
+          videoId,
+          snapshot: { status: "failed", stage: "failed", progress: null, detail: null, error: null },
+          subscriptionActive: false,
+        });
+        return;
+      }
       if (isGenerationCancelledError(error)) {
         dispatch({
           type: "generation_cancelled",
@@ -688,6 +703,20 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onRelinkVideo() {
+    if (!state.selectedSeriesId || !state.selectedVideoId) {
+      return;
+    }
+    try {
+      const result = await relinkExternalVideo(state.selectedSeriesId, state.selectedVideoId);
+      if (result.relinked) {
+        await reloadWorkspaceLibrary();
+      }
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "重新链接媒体失败" });
+    }
+  }
+
   async function onImportLocalSeries(seriesTitle, sourcePaths, storageMode) {
     try {
       const rawSeries = await importLocalSeries(seriesTitle, sourcePaths, storageMode);
@@ -719,6 +748,19 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         library,
       });
     } catch (error) {
+      if (isSourceMediaUnavailableError(error)) {
+        await reloadWorkspaceLibrary();
+        dispatch({
+          type: "generation_status_loaded",
+          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          mode: "video",
+          seriesId,
+          videoId,
+          snapshot: { status: "failed", stage: "failed", progress: null, detail: null, error: null },
+          subscriptionActive: false,
+        });
+        return;
+      }
       if (isGenerationCancelledError(error)) {
         dispatch({
           type: "generation_cancelled",
@@ -760,17 +802,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       restoreAutomaticTranscriptAndGenerateVideoSummary,
       "改用自动转写并重新生成失败",
     );
-  }
-
-  async function onUploadLocalSeries(seriesTitle, files) {
-    try {
-      const rawSeries = await uploadLocalSeries(seriesTitle, files);
-      await reloadWorkspaceLibrary();
-      return rawSeries;
-    } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "上传本地系列失败" });
-      throw error;
-    }
   }
 
   async function onResolveLinkedSeries(url) {
@@ -936,17 +967,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onUploadLocalPlaygroundVideos(files) {
-    try {
-      const rawVideos = await uploadLocalPlaygroundVideos(files);
-      await reloadWorkspaceLibrary();
-      return rawVideos;
-    } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "上传 Playground 媒体失败" });
-      throw error;
-    }
-  }
-
   async function onImportSeriesVideos(seriesId, sourcePaths) {
     try {
       const rawVideos = await importLocalSeriesVideos(seriesId, sourcePaths);
@@ -954,17 +974,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return rawVideos;
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "向系列导入媒体失败" });
-      throw error;
-    }
-  }
-
-  async function onUploadSeriesVideos(seriesId, files) {
-    try {
-      const rawVideos = await uploadLocalSeriesVideos(seriesId, files);
-      await reloadWorkspaceLibrary();
-      return rawVideos;
-    } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "上传系列媒体失败" });
       throw error;
     }
   }
@@ -1080,6 +1089,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onUpdateTranscript,
     onResolveLinkedSeries,
     onSelectLocalMedia,
+    onRelinkVideo,
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
     onInitBilibiliCookie,
@@ -1090,11 +1100,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onLoadChaoxingCourses,
     onImportChaoxingCourse,
     onImportLocalSeries,
-    onUploadLocalSeries,
     onImportLocalPlaygroundVideos,
-    onUploadLocalPlaygroundVideos,
     onImportSeriesVideos,
-    onUploadSeriesVideos,
     onDeleteSeries,
     onRenameSeries,
     onDeleteCurrentVideo,

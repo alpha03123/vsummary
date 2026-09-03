@@ -103,6 +103,38 @@ describe("buildWorkspacePageModel generation overlay", () => {
     expect(buildWorkspacePageModel(createController("failed")).generation.showOverlay).toBe(false);
     expect(buildWorkspacePageModel(createController("cancelled")).generation.showOverlay).toBe(false);
   });
+
+  it("uses the live series snapshot instead of the completed-video counter", () => {
+    const controller = {
+      ...createController(null),
+      selectedContextType: "series",
+      state: {
+        ...createController(null).state,
+        selectedSeriesId: "series-a",
+      },
+      currentGenerationTask: {
+        snapshot: {
+          status: "running",
+          stage: "transcribe",
+          progress: 37.5,
+          detail: "已完成 0/8，正在处理 1/8：Video 1 · 正在转写音频",
+          elapsedSeconds: 12,
+        },
+      },
+      seriesGenerationQueue: {
+        seriesId: "series-a",
+        status: "running",
+        completed: 0,
+        total: 8,
+      },
+    };
+
+    const generation = buildWorkspacePageModel(controller).generation;
+
+    expect(generation.progress).toBe(37.5);
+    expect(generation.snapshot.stage).toBe("transcribe");
+    expect(generation.snapshot.elapsedSeconds).toBe(12);
+  });
 });
 
 describe("buildWorkspacePageModel series mindmap", () => {

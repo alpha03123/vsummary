@@ -98,6 +98,9 @@ export function describeToolState(toolId, toolState) {
   if (!toolState) {
     return "读取中";
   }
+  if (toolState.status === "source_missing") {
+    return "链接媒体后可用";
+  }
   if (toolId === "preview") {
     return "随时可查看";
   }

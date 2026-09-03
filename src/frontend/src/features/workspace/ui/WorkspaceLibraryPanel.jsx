@@ -22,10 +22,22 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildVideoKey } from "../model/workspaceControllerUtils";
+import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
 
 function VideoBadge({ video }) {
+  if (video.status === "source_missing") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/70"
+        title="原始媒体文件当前不可访问，请重新链接媒体。"
+      >
+        <Link2 size={12} />
+        链接丢失
+      </span>
+    );
+  }
   if (video.isLinked || video.status === "linked") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
@@ -49,7 +61,7 @@ function VideoBadge({ video }) {
         title="没有可供转写使用的信息"
       >
         <AlertTriangle size={12} />
-        异常
+        无可转写信息
       </span>
     );
   }
@@ -74,6 +86,7 @@ export function getVideoGenerationButtonState({
   isGeneratingSelectedVideo,
   modelNeedsDownload,
   processed,
+  sourceMissing = false,
 }) {
   if (isGeneratingSeries) {
     return {
@@ -87,6 +100,13 @@ export function getVideoGenerationButtonState({
       disabled: false,
       label: "取消当前视频生成",
       tone: "danger",
+    };
+  }
+  if (sourceMissing) {
+    return {
+      disabled: false,
+      label: "链接媒体",
+      tone: "primary",
     };
   }
   if (modelNeedsDownload) {
@@ -128,6 +148,7 @@ function PanelFooter({
   ragModels,
   downloadProgress,
   onGenerateVideo,
+  onRelinkVideo,
   onGenerateSeries,
   onCancelGeneration,
   onDownloadVideo,
@@ -145,18 +166,7 @@ function PanelFooter({
   const [footerOverflowOpen, setFooterOverflowOpen] = useState(false);
   const footerOverflowRef = useRef(null);
 
-  useEffect(() => {
-    if (!footerOverflowOpen) {
-      return;
-    }
-    const handler = (event) => {
-      if (footerOverflowRef.current && !footerOverflowRef.current.contains(event.target)) {
-        setFooterOverflowOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [footerOverflowOpen]);
+  useOutsidePointerUp(footerOverflowOpen, [footerOverflowRef], () => setFooterOverflowOpen(false));
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -350,6 +360,7 @@ function PanelFooter({
     isGeneratingSelectedVideo,
     modelNeedsDownload,
     processed: selectedVideo.processed,
+    sourceMissing: selectedVideo.status === "source_missing",
   });
   const deleteButton = getDeleteButtonState({
     isGeneratingSeries,
@@ -423,7 +434,9 @@ function PanelFooter({
             ? onCancelGeneration
             : modelNeedsDownload
               ? onOpenSettings
-              : onGenerateVideo
+              : selectedVideo.status === "source_missing"
+                ? onRelinkVideo
+                : onGenerateVideo
         }
         disabled={videoGenerationButton.disabled}
       >
@@ -439,7 +452,7 @@ function PanelFooter({
           </>
         ) : (
           <>
-            <Sparkles size={16} strokeWidth={2.5} />
+            {selectedVideo.status === "source_missing" ? <Link2 size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
             {videoGenerationButton.label}
           </>
         )}
@@ -487,16 +500,7 @@ export function WorkspaceLibraryPanel({
   const [selectedVideoIds, setSelectedVideoIds] = useState([]);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef(null);
-  useEffect(() => {
-    if (!overflowOpen) return;
-    const handler = (e) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target)) {
-        setOverflowOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [overflowOpen]);
+  useOutsidePointerUp(overflowOpen, [overflowRef], () => setOverflowOpen(false));
   useEffect(() => {
     const existingIds = new Set(videos.map((video) => video.id));
     setSelectedVideoIds((current) => current.filter((videoId) => existingIds.has(videoId)));

@@ -23,19 +23,6 @@ class ImportLocalSeries:
         """通过 `VideoImportStore` 端口注入具体实现，便于替换。"""
         self._workspace = workspace
 
-    def run(self, *, title: str, files: list[tuple[str, object]]) -> LibrarySeriesDTO:
-        """执行导入并返回新建系列的 DTO。
-
-        Args:
-            title: 新系列的展示标题。
-            files: 待导入的本地文件条目列表，每项为 `(文件名, 文件对象)` 元组
-                （文件对象的具体形态由实现侧决定，例如路径或可读流）。
-
-        Returns:
-            包含新系列 ID、标题与视频卡片列表的 `LibrarySeriesDTO`。
-        """
-        return self._workspace.import_local_series(title=title, files=files)
-
     def run_from_paths(
         self,
         *,
@@ -62,17 +49,6 @@ class ImportLocalPlaygroundVideos:
         """通过 `VideoImportStore` 端口注入具体实现，便于替换。"""
         self._workspace = workspace
 
-    def run(self, *, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
-        """执行导入并返回沙盒系列下的视频卡片列表。
-
-        Args:
-            files: 待导入的本地文件条目列表，每项为 `(文件名, 文件对象)` 元组。
-
-        Returns:
-            新加入沙盒系列的视频卡片 DTO 列表。
-        """
-        return self._workspace.import_local_playground_videos(files=files)
-
     def run_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
         """从本机绝对路径向沙盒追加媒体。"""
         return self._workspace.import_local_playground_videos_from_paths(source_paths=source_paths)
@@ -88,18 +64,6 @@ class ImportLocalSeriesVideos:
     def __init__(self, workspace: VideoImportStore) -> None:
         """通过 `VideoImportStore` 端口注入具体实现，便于替换。"""
         self._workspace = workspace
-
-    def run(self, *, series_id: str, files: list[tuple[str, object]]) -> list[LibraryVideoCardDTO]:
-        """执行追加并返回新增的视频卡片列表。
-
-        Args:
-            series_id: 既有系列唯一 ID。
-            files: 待追加的本地文件条目列表，每项为 `(文件名, 文件对象)` 元组。
-
-        Returns:
-            追加完成后新加入的视频卡片 DTO 列表。
-        """
-        return self._workspace.import_local_series_videos(series_id=series_id, files=files)
 
     def run_from_paths(self, *, series_id: str, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
         """从本机绝对路径向系列追加媒体。"""

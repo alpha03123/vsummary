@@ -919,6 +919,12 @@ export async function selectLocalMedia() {
   };
 }
 
+export async function relinkExternalVideo(seriesId, videoId) {
+  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/relink`, {
+    method: "POST",
+  });
+}
+
 export async function importLocalSeries(seriesTitle, sourcePaths, storageMode) {
   return fetchJson("/api/import/local/series/from-paths", {
     method: "POST",
@@ -928,16 +934,6 @@ export async function importLocalSeries(seriesTitle, sourcePaths, storageMode) {
       source_paths: sourcePaths,
       storage_mode: storageMode,
     }),
-  });
-}
-
-export async function uploadLocalSeries(seriesTitle, files) {
-  const formData = new FormData();
-  formData.append("series_title", seriesTitle);
-  appendMediaFiles(formData, files);
-  return fetchJson("/api/import/local/series", {
-    method: "POST",
-    body: formData,
   });
 }
 
@@ -1035,15 +1031,6 @@ export async function importLocalPlaygroundVideos(sourcePaths) {
   });
 }
 
-export async function uploadLocalPlaygroundVideos(files) {
-  const formData = new FormData();
-  appendMediaFiles(formData, files);
-  return fetchJson("/api/import/local/playground", {
-    method: "POST",
-    body: formData,
-  });
-}
-
 export async function importLocalSeriesVideos(seriesId, sourcePaths) {
   return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}/from-paths`, {
     method: "POST",
@@ -1052,20 +1039,6 @@ export async function importLocalSeriesVideos(seriesId, sourcePaths) {
   });
 }
 
-export async function uploadLocalSeriesVideos(seriesId, files) {
-  const formData = new FormData();
-  appendMediaFiles(formData, files);
-  return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}`, {
-    method: "POST",
-    body: formData,
-  });
-}
-
-function appendMediaFiles(formData, files) {
-  for (const file of files) {
-    formData.append("files", file, file.name);
-  }
-}
 
 export async function deleteSeries(seriesId) {
   return fetchJson(`/api/series/${encodeURIComponent(seriesId)}`, {

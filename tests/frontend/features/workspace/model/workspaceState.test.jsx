@@ -446,6 +446,7 @@ describe("workspaceContentActions series generation", () => {
             { id: "video-1", processed: true },
             { id: "video-2", processed: false },
             { id: "video-3", processed: false, status: "linked", isLinked: true },
+            { id: "video-4", processed: false, status: "source_missing" },
           ],
         },
       ],
