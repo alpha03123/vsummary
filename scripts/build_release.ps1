@@ -636,7 +636,7 @@ def forbid(names):
 
 forbid(legacy_forbidden)
 if kind == "cpu":
-    require({"faster-whisper", "opencc-python-reimplemented", "dashscope", "fastembed", "onnxruntime", "pandas", "yt-dlp", "chaoxing-downloader"})
+    require({"faster-whisper", "opencc-python-reimplemented", "dashscope", "fastembed", "onnxruntime", "pandas", "yt-dlp", "drissionpage", "chaoxing-downloader"})
     forbid({"fastembed-gpu", "onnxruntime-gpu"})
 elif kind == "gpu":
     require({
@@ -653,6 +653,7 @@ elif kind == "gpu":
         "nvidia-cufft-cu12",
         "nvidia-curand-cu12",
         "yt-dlp",
+        "drissionpage",
         "chaoxing-downloader",
     })
     forbid({"fastembed"})

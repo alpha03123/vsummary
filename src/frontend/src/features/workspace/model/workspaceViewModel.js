@@ -41,8 +41,8 @@ function asVideoCard(value, label) {
     status: asString(record.status, `${label}.status`),
     coreProblem: asOptionalString(record.core_problem),
     isLinked: Boolean(record.is_linked),
-    bilibiliBvid: typeof record.bilibili_bvid === "string" ? record.bilibili_bvid : "",
-    bilibiliPage: typeof record.bilibili_page === "number" ? record.bilibili_page : 0,
+    sourceId: typeof record.source_id === "string" ? record.source_id : "",
+    itemIndex: typeof record.item_index === "number" ? record.item_index : 0,
     sourceUrl: typeof record.source_url === "string" ? record.source_url : "",
     provider: typeof record.provider === "string" ? record.provider : "",
   };

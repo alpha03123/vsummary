@@ -25,6 +25,8 @@ from backend.video_summary.library.usecases.imports import (
 )
 from backend.video_summary.library.usecases.linked_videos import (
     CreateAgentLinkedSeries,
+    ResolveLinkedSeries,
+    ResolveLinkedVideo,
     ResolveBilibiliSeries,
     ResolveBilibiliVideo,
     StartLinkedVideoDownload,
@@ -72,6 +74,8 @@ __all__ = [
     "ListVideoLibrary",
     "ResolveBilibiliSeries",
     "ResolveBilibiliVideo",
+    "ResolveLinkedSeries",
+    "ResolveLinkedVideo",
     "RefreshSeriesKnowledgeMemory",
     "StartLinkedVideoDownload",
     "UpdateVideoNote",

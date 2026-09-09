@@ -10,7 +10,7 @@ export function WorkspaceImportModal({
   onClose,
   onResolveSeries,
   onResolveVideo,
-  onInitBilibiliCookie,
+  onInitExternalCookie,
   onLoadChaoxingStatus,
   onInitChaoxing,
   onCancelChaoxingInit,
@@ -38,8 +38,8 @@ export function WorkspaceImportModal({
   const [chaoxingCourseSearch, setChaoxingCourseSearch] = useState("");
   const [selectedChaoxingCourseKey, setSelectedChaoxingCourseKey] = useState("");
   const [chaoxingLoading, setChaoxingLoading] = useState(false);
-  const [bilibiliCookieLoading, setBilibiliCookieLoading] = useState(false);
-  const [bilibiliCookieConfigured, setBilibiliCookieConfigured] = useState(false);
+  const [externalCookieLoading, setExternalCookieLoading] = useState(false);
+  const [externalCookieConfigured, setExternalCookieConfigured] = useState(false);
   const [chaoxingImportProgress, setChaoxingImportProgress] = useState(null);
   const loadChaoxingStatusRef = useRef(onLoadChaoxingStatus);
   const loadChaoxingCoursesRef = useRef(onLoadChaoxingCourses);
@@ -131,6 +131,10 @@ export function WorkspaceImportModal({
   }, [sourceType, externalProvider]);
 
   useEffect(() => {
+    setExternalCookieConfigured(false);
+  }, [externalProvider]);
+
+  useEffect(() => {
     if (sourceType !== "external" || externalProvider !== "chaoxing" || !chaoxingEnabledForMode) {
       return;
     }
@@ -214,29 +218,29 @@ export function WorkspaceImportModal({
     }
   }
 
-  async function handleInitBilibiliCookie() {
-    if (!onInitBilibiliCookie) {
+  async function handleInitExternalCookie() {
+    if (!onInitExternalCookie) {
       return;
     }
     setStatus("loading");
     setErrorMsg("");
-    setBilibiliCookieLoading(true);
+    setExternalCookieLoading(true);
     try {
-      const result = await onInitBilibiliCookie();
+      const result = await onInitExternalCookie(externalProvider);
       if (!mountedRef.current) {
         return;
       }
-      setBilibiliCookieConfigured(result.configured === true);
+      setExternalCookieConfigured(result.configured === true);
       setStatus("idle");
     } catch (error) {
       if (!mountedRef.current) {
         return;
       }
       setStatus("error");
-      setErrorMsg(error instanceof Error ? error.message : "获取 Bilibili Cookie 失败");
+      setErrorMsg(error instanceof Error ? error.message : "获取平台 Cookie 失败");
     } finally {
       if (mountedRef.current) {
-        setBilibiliCookieLoading(false);
+        setExternalCookieLoading(false);
       }
     }
   }
@@ -322,8 +326,8 @@ export function WorkspaceImportModal({
             return;
           }
           result = isSeriesCreation
-            ? await onResolveSeries(trimmed)
-            : await onResolveVideo(trimmed, isSeriesVideo ? targetSeriesId : null);
+            ? await onResolveSeries(externalProvider, trimmed)
+            : await onResolveVideo(externalProvider, trimmed, isSeriesVideo ? targetSeriesId : null);
         }
       } else {
         if (!hasLocalMedia) {
@@ -440,6 +444,26 @@ export function WorkspaceImportModal({
                     </button>
                     <button
                       type="button"
+                      onClick={() => setExternalProvider("youtube")}
+                      className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "youtube"
+                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
+                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        }`}
+                    >
+                      YouTube
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExternalProvider("douyin")}
+                      className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "douyin"
+                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
+                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        }`}
+                    >
+                      抖音
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setExternalProvider("chaoxing")}
                       className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "chaoxing"
                           ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
@@ -450,34 +474,40 @@ export function WorkspaceImportModal({
                     </button>
                   </div>
                 </div>
-                {externalProvider === "bilibili" ? (
+                {externalProvider !== "chaoxing" ? (
                   <>
                     <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
-                      {isSeriesCreation ? "Bilibili 系列 / 多 P URL" : "Bilibili 视频 URL"}
+                      {isSeriesCreation
+                        ? `${externalProvider === "youtube" ? "YouTube 播放列表" : externalProvider === "douyin" ? "抖音合集" : "Bilibili 系列 / 多 P"} URL`
+                        : `${externalProvider === "youtube" ? "YouTube" : externalProvider === "douyin" ? "抖音" : "Bilibili"} 视频 URL`}
                     </label>
                     <input
                       type="url"
                       value={url}
                       onChange={(event) => setUrl(event.target.value)}
-                      placeholder={isSeriesCreation ? "https://www.bilibili.com/video/BV... 或合集链接" : "https://www.bilibili.com/video/BV..."}
+                      placeholder={externalProvider === "youtube"
+                        ? (isSeriesCreation ? "https://www.youtube.com/playlist?..." : "https://www.youtube.com/watch?v=...")
+                        : externalProvider === "douyin"
+                          ? "https://www.douyin.com/video/..."
+                          : (isSeriesCreation ? "https://www.bilibili.com/video/BV... 或合集链接" : "https://www.bilibili.com/video/BV...")}
                       disabled={status === "loading" || status === "selecting"}
                       className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
                       autoFocus
                     />
                     <p className="mt-2 text-[11px] text-stone-500 dark:text-zinc-500">
-                      遇到风控时请先获取 Cookie，再重新解析。
+                      遇到登录限制或风控时请先获取 Cookie，再重新解析。
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
-                        onClick={handleInitBilibiliCookie}
-                        disabled={bilibiliCookieLoading || status === "loading"}
+                        onClick={handleInitExternalCookie}
+                        disabled={externalCookieLoading || status === "loading"}
                         className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-2 text-xs font-bold text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {bilibiliCookieLoading ? <Loader2 size={14} className="animate-spin" /> : null}
-                        {bilibiliCookieLoading ? "等待登录..." : "获取 Bilibili Cookie"}
+                        {externalCookieLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                        {externalCookieLoading ? "等待登录..." : "获取 Cookie"}
                       </button>
-                      {bilibiliCookieConfigured ? (
+                      {externalCookieConfigured ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 size={14} />
                           Cookie 已写入

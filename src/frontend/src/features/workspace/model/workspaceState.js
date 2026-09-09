@@ -27,6 +27,7 @@ export const defaultUiSettings = {
   answerDetailLevel: "medium",
   reasoningEffort: "none",
   talkCustomPrompt: "",
+  noteLength: "short",
   videoGenerationConcurrency: 1,
   chapterScreenshotsEnabled: true,
   chaoxingRequestDelaySeconds: 0.2,
@@ -531,6 +532,8 @@ export function createInitialWorkspaceState() {
     mindmapGenerationProgress: null,
     downloadingVideoKey: null,
     videoDownloadProgress: null,
+    videoDownloadError: null,
+    videoDownloadErrorKey: null,
     downloadingModelId: null,
     modelDownloadsById: {},
     modelDownloadStatus: null,
@@ -782,6 +785,7 @@ export function normalizeUiSettings(value) {
         ? record.reasoningEffort
         : "none",
     talkCustomPrompt: typeof record.talkCustomPrompt === "string" ? record.talkCustomPrompt : "",
+    noteLength: record.noteLength === "long" ? "long" : "short",
     videoGenerationConcurrency:
       typeof record.videoGenerationConcurrency === "number"
         && Number.isInteger(record.videoGenerationConcurrency)

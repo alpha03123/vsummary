@@ -102,8 +102,8 @@ class ChaoxingApiTests(unittest.TestCase):
 
 def _build_container():
     video = LinkedVideo(
-        bvid="chaoxing-video-1",
-        page=1,
+        source_id="chaoxing-video-1",
+        item_index=1,
         title="第一讲",
         cover_url="",
         duration_seconds=123,

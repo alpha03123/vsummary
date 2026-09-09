@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from backend.api.http.app import create_app
 from backend.bilibili.ytdlp_bilibili import BILIBILI_COOKIE_REQUIRED_MESSAGE
+from backend.external.ytdlp import ExternalVideoResolutionError
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 
@@ -112,7 +113,7 @@ class LinkedApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "linked")
         self.assertTrue(payload["is_linked"])
-        self.assertEqual(payload["bilibili_bvid"], "BV1xx411c7mD")
+        self.assertEqual(payload["source_id"], "BV1xx411c7mD")
 
     def test_init_bilibili_cookie_returns_configured_status(self) -> None:
         container = _build_container()
@@ -123,6 +124,67 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"configured": True})
         self.assertTrue(container.bilibili_cookie_initializer.called)
+
+    def test_resolve_youtube_video_uses_generic_provider_route(self) -> None:
+        container = _build_container()
+
+        async def resolve_video(*, provider, url, target_series_id):
+            self.assertEqual(provider, "youtube")
+            self.assertEqual(url, "https://www.youtube.com/watch?v=video_1")
+            self.assertIsNone(target_series_id)
+            return LibraryVideoCardDTO(
+                id="video_1",
+                title="YouTube 视频",
+                source_name="video_1.mp4",
+                processed=False,
+                status="linked",
+                is_linked=True,
+                source_id="video_1",
+                item_index=1,
+                source_url=url,
+                provider="youtube",
+            )
+
+        container.resolve_linked_video = SimpleNamespace(run=resolve_video)
+        client = TestClient(create_app(container))
+
+        response = client.post(
+            "/api/linked/youtube/resolve/video",
+            json={"url": "https://www.youtube.com/watch?v=video_1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider"], "youtube")
+        self.assertEqual(response.json()["source_id"], "video_1")
+
+    def test_init_douyin_cookie_uses_provider_initializer(self) -> None:
+        container = _build_container()
+        initializer = _FakeBilibiliCookieInitializer()
+        container.external_cookie_initializers = {"douyin": initializer}
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/linked/douyin/cookie/init")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"configured": True})
+        self.assertTrue(initializer.called)
+
+    def test_douyin_cookie_requirement_returns_actionable_conflict(self) -> None:
+        container = _build_container()
+
+        async def resolve_video(*, provider, url, target_series_id):
+            del provider, url, target_series_id
+            raise ExternalVideoResolutionError("cookie_required", "test detail")
+
+        container.resolve_linked_video = SimpleNamespace(run=resolve_video)
+        client = TestClient(create_app(container))
+
+        response = client.post(
+            "/api/linked/douyin/resolve/video",
+            json={"url": "https://www.douyin.com/video/7673754688373689615"},
+        )
+
+        self.assertEqual(response.status_code, 409)
 
     def test_bilibili_anti_spider_error_returns_cookie_message(self) -> None:
         async def resolve_series(url):
@@ -173,8 +235,8 @@ class LinkedApiTests(unittest.TestCase):
                     processed=False,
                     status="linked",
                     is_linked=True,
-                    bilibili_bvid="BV1xx411c7mD",
-                    bilibili_page=1,
+                    source_id="BV1xx411c7mD",
+                    item_index=1,
                     source_url="https://www.bilibili.com/video/BV1xx411c7mD",
                 ),
                 LibraryVideoCardDTO(
@@ -212,8 +274,8 @@ class LinkedApiTests(unittest.TestCase):
                     processed=False,
                     status="linked",
                     is_linked=True,
-                    bilibili_bvid="BV1xx411c7mD",
-                    bilibili_page=1,
+                    source_id="BV1xx411c7mD",
+                    item_index=1,
                     source_url="https://www.bilibili.com/video/BV1xx411c7mD",
                 ),
             ],
@@ -315,8 +377,8 @@ def _build_container(
         processed=False,
         status="linked",
         is_linked=True,
-        bilibili_bvid="BV1xx411c7mD",
-        bilibili_page=1,
+        source_id="BV1xx411c7mD",
+        item_index=1,
         source_url="https://www.bilibili.com/video/BV1xx411c7mD",
     )
     resolved_videos = videos or [video]

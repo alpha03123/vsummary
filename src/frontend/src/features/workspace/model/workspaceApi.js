@@ -72,6 +72,7 @@ function toWorkspaceSettings(payload) {
     answerDetailLevel: payload.answer_detail_level,
     reasoningEffort: payload.reasoning_effort,
     talkCustomPrompt: payload.talk_custom_prompt,
+    noteLength: payload.note_length,
     videoGenerationConcurrency: payload.video_generation_concurrency,
     chapterScreenshotsEnabled: payload.chapter_screenshots_enabled,
     chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
@@ -133,6 +134,7 @@ export async function updateWorkspaceSettings(settings) {
       answer_detail_level: settings.answerDetailLevel,
       reasoning_effort: settings.reasoningEffort,
       talk_custom_prompt: settings.talkCustomPrompt,
+      note_length: settings.noteLength,
       video_generation_concurrency: settings.videoGenerationConcurrency,
       chapter_screenshots_enabled: settings.chapterScreenshotsEnabled,
       chaoxing_request_delay_seconds: settings.chaoxingRequestDelaySeconds,
@@ -961,6 +963,30 @@ export async function initBilibiliCookie(options = {}) {
   return {
     configured: payload.configured === true,
   };
+}
+
+export async function resolveLinkedSeries(provider, url) {
+  return fetchJson(`/api/linked/${encodeURIComponent(provider)}/resolve/series`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
+
+export async function resolveLinkedVideo(provider, url, targetSeriesId = null) {
+  return fetchJson(`/api/linked/${encodeURIComponent(provider)}/resolve/video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, target_series_id: targetSeriesId }),
+  });
+}
+
+export async function initExternalCookie(provider, options = {}) {
+  const payload = await fetchJson(`/api/linked/${encodeURIComponent(provider)}/cookie/init`, {
+    method: "POST",
+    signal: options.signal,
+  });
+  return { configured: payload.configured === true };
 }
 export async function loadChaoxingStatus() {
   const payload = await fetchJson("/api/linked/chaoxing/status");

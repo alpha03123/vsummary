@@ -44,8 +44,8 @@ class LocalMediaImportTests(unittest.TestCase):
                     source_url="",
                     videos=[
                         LinkedVideo(
-                            bvid="BV1example",
-                            page=1,
+                            source_id="BV1example",
+                            item_index=1,
                             title="Original Linked Video",
                             cover_url="",
                             duration_seconds=0,

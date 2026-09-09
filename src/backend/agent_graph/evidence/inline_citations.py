@@ -6,8 +6,8 @@
 - `extract_inline_source_numbers`：上面那个函数的"只取编号"便捷封装；
 - `filter_inline_citation_markers`：按白名单只保留合法的 citation 编号。
 
-设计原则：引用编号必须与上游 `evidence_items` 顺序对齐；遇到模型"幻觉"
-出来的未知编号必须抛错，而不是静默丢弃。
+设计原则：引用编号必须与上游 `evidence_items` 顺序对齐；模型生成未知编号时
+移除该标记，避免无效引用中断已经完成的回答或工具调用。
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ def resolve_inline_citations(
        这类内部 ID 标记整段删除，避免泄露内部命名；
     2. 用 `INLINE_NUMBER_PATTERN` 扫描 `[N]`，按出现顺序累计到
        `used_source_numbers` 与 `used_evidence_ids`；
-    3. 收集"出现但 evidence_items 中不存在"的编号 —— 任何未知编号都
-       会触发 `ValueError`，防止模型幻觉引用导致证据链断裂。
+    3. 出现但 `evidence_items` 中不存在的编号会从正文移除，不加入引用
+       元数据。模型不能保证完全遵守引用格式时，回答正文仍应可交付。
 
     Args:
         answer_text: 模型流式输出的回答正文。
@@ -78,14 +78,11 @@ def resolve_inline_citations(
         解析后的 `InlineCitationResolution`，含去标记正文、引用编号、
         对应 evidence_id。
 
-    Raises:
-        ValueError: 模型输出了未在 `evidence_items` 中出现的引用编号。
     """
     citation_map = _build_citation_map(evidence_items)
     used_numbers: list[int] = []
     used_ids: list[str] = []
     used_citation_ids: list[str] = []
-    unknown_numbers: list[str] = []
     cleaned_parts: list[str] = []
     last_index = 0
     answer_text = EVIDENCE_ID_MARKER_PATTERN.sub("", answer_text)
@@ -95,8 +92,6 @@ def resolve_inline_citations(
         source_number = int(citation_id.split(".", 1)[0])
         evidence_id = citation_map.get(citation_id)
         if evidence_id is None:
-            unknown_numbers.append(citation_id)
-            cleaned_parts.append(match.group(0))
             last_index = match.end()
             continue
         if source_number not in used_numbers:
@@ -107,9 +102,6 @@ def resolve_inline_citations(
             used_citation_ids.append(citation_id)
         cleaned_parts.append(f"[{citation_id}]")
         last_index = match.end()
-    if unknown_numbers:
-        joined_numbers = ", ".join(str(item) for item in dict.fromkeys(unknown_numbers))
-        raise ValueError(f"模型输出了未知引用编号: {joined_numbers}")
     cleaned_parts.append(answer_text[last_index:])
     return InlineCitationResolution(
         answer_text="".join(cleaned_parts),

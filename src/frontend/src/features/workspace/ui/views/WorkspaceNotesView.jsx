@@ -4,8 +4,6 @@ import { LoaderCircle, PencilLine, Trash2, Plus, ChevronLeft, Calendar, Sparkles
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
 
-const CREATE_AI_NOTE_PROMPT = "请为这期视频创建一份完整的结构化笔记。基于视频概况、转写和可用上下文，提炼核心主题、关键结论、重要细节与行动要点；使用清晰的 Markdown，并调用保存笔记功能保存为当前视频的 Agent 笔记。";
-
 export function WorkspaceNotesView({
   notes,
   notesLoading,
@@ -237,7 +235,7 @@ export function WorkspaceNotesView({
         <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
           <button
             type="button"
-            onClick={() => onRequestAiNote(CREATE_AI_NOTE_PROMPT)}
+            onClick={onRequestAiNote}
             className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 dark:border-accent/30 dark:bg-accent/15 dark:text-accent dark:hover:bg-accent dark:hover:text-white"
           >
             <Sparkles size={16} /> AI 笔记

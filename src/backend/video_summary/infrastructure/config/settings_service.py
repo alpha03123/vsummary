@@ -25,6 +25,7 @@ from backend.video_summary.infrastructure.config.settings import (
     VALID_WORKSPACE_LAYOUT_MODES,
     VALID_TRANSCRIPTION_MODES,
     VALID_ANSWER_DETAIL_LEVELS,
+    VALID_NOTE_LENGTHS,
     VALID_LLM_PROVIDERS,
     VALID_REASONING_EFFORTS,
     WorkspaceUiSettings,
@@ -39,6 +40,7 @@ from backend.video_summary.infrastructure.config.settings import (
     replace_agent_context_answer_detail_level,
     replace_agent_context_reasoning_effort,
     replace_agent_context_talk_custom_prompt,
+    replace_agent_context_note_length,
     replace_faster_whisper_model_size,
     replace_whisper_cpp_model,
     replace_faster_whisper_transcription_mode,
@@ -123,6 +125,7 @@ class WorkspaceSettings:
     answer_detail_level: str
     reasoning_effort: str
     talk_custom_prompt: str
+    note_length: str
     video_generation_concurrency: int
     chapter_screenshots_enabled: bool
     web_search_enabled: bool
@@ -164,6 +167,7 @@ class SettingsServicePort(Protocol):
         asr_base_url: str = "https://dashscope.aliyuncs.com",
         asr_api_key: str | None = None,
         talk_custom_prompt: str = "",
+        note_length: str = "long",
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
@@ -299,6 +303,7 @@ class SettingsService:
             answer_detail_level=settings.agent_context.answer_detail_level,
             reasoning_effort=settings.agent_context.reasoning_effort,
             talk_custom_prompt=settings.agent_context.talk_custom_prompt,
+            note_length=settings.agent_context.note_length,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             chapter_screenshots_enabled=settings.generation.chapter_screenshots_enabled,
             web_search_enabled=settings.web_search.enabled,
@@ -329,6 +334,7 @@ class SettingsService:
         asr_base_url: str = "https://dashscope.aliyuncs.com",
         asr_api_key: str | None = None,
         talk_custom_prompt: str = "",
+        note_length: str = "long",
         chaoxing_request_delay_seconds: float = 0.2,
         chaoxing_init_course_delay_seconds: float = 0.3,
     ) -> WorkspaceSettings:
@@ -396,6 +402,8 @@ class SettingsService:
             raise SettingsValidationError("answer_detail_level 必须是 short、medium 或 long。")
         if reasoning_effort not in VALID_REASONING_EFFORTS:
             raise SettingsValidationError("reasoning_effort 必须是 none、low、medium 或 high。")
+        if note_length not in VALID_NOTE_LENGTHS:
+            raise SettingsValidationError("note_length 必须是 short 或 long。")
         if rag_max_hits <= 0:
             raise SettingsValidationError("rag_max_hits 必须是正整数。")
         if video_generation_concurrency <= 0:
@@ -443,6 +451,7 @@ class SettingsService:
             next_settings = replace_agent_context_answer_detail_level(next_settings, answer_detail_level)
             next_settings = replace_agent_context_reasoning_effort(next_settings, reasoning_effort)
             next_settings = replace_agent_context_talk_custom_prompt(next_settings, talk_custom_prompt)
+            next_settings = replace_agent_context_note_length(next_settings, note_length)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
             next_settings = replace_chapter_screenshots_enabled(next_settings, chapter_screenshots_enabled)
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
@@ -491,6 +500,7 @@ class SettingsService:
             answer_detail_level=next_settings.agent_context.answer_detail_level,
             reasoning_effort=next_settings.agent_context.reasoning_effort,
             talk_custom_prompt=next_settings.agent_context.talk_custom_prompt,
+            note_length=next_settings.agent_context.note_length,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             chapter_screenshots_enabled=next_settings.generation.chapter_screenshots_enabled,
             web_search_enabled=next_settings.web_search.enabled,

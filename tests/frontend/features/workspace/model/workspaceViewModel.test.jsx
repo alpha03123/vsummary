@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { toWorkspaceLibrary } from "@src/features/workspace/model/workspaceViewModel";
 
 describe("toWorkspaceLibrary", () => {
-  it("maps linked bilibili fields to workspace video cards", () => {
+  it("maps linked external source fields to workspace video cards", () => {
     const library = toWorkspaceLibrary({
       workspace: { id: "ws", title: "Workspace" },
       series: [
@@ -20,8 +20,8 @@ describe("toWorkspaceLibrary", () => {
               processed: false,
               status: "linked",
               is_linked: true,
-              bilibili_bvid: "BV1xx411c7mD",
-              bilibili_page: 1,
+              source_id: "BV1xx411c7mD",
+              item_index: 1,
               source_url: "https://www.bilibili.com/video/BV1xx411c7mD",
             },
           ],
@@ -33,8 +33,8 @@ describe("toWorkspaceLibrary", () => {
     expect(library.series[0].videos[0]).toMatchObject({
       id: "BV1xx411c7mD",
       isLinked: true,
-      bilibiliBvid: "BV1xx411c7mD",
-      bilibiliPage: 1,
+      sourceId: "BV1xx411c7mD",
+      itemIndex: 1,
       sourceUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
     });
   });

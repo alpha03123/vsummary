@@ -81,7 +81,10 @@ class LazyAgentRuntimeProvider:
                     answer_detail_level=app_settings.agent_context.answer_detail_level,
                     talk_custom_prompt=app_settings.agent_context.talk_custom_prompt,
                 )
-                video_action_planner = VideoActionPlanner(gateway=planner_gateway)
+                video_action_planner = VideoActionPlanner(
+                    gateway=planner_gateway,
+                    note_length=app_settings.agent_context.note_length,
+                )
                 tool_executor = RegistryAgentToolExecutor(
                     registry={
                         ToolName.OPEN_NOTES: execute_open_notes,

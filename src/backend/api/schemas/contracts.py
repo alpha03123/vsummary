@@ -136,6 +136,7 @@ class WorkspaceSettingsResponse(BaseModel):
     answer_detail_level: str = "medium"
     reasoning_effort: str = "none"
     talk_custom_prompt: str = ""
+    note_length: str = "long"
     video_generation_concurrency: int
     chapter_screenshots_enabled: bool
     web_search_enabled: bool
@@ -188,6 +189,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     answer_detail_level: str = "medium"
     reasoning_effort: str = "none"
     talk_custom_prompt: str = ""
+    note_length: str = "long"
     video_generation_concurrency: int
     chapter_screenshots_enabled: bool = True
     web_search_enabled: bool

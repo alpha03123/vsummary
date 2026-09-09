@@ -17,6 +17,14 @@ from backend.bilibili import (
     YtDlpBilibiliResolver,
 )
 from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
+from backend.external import (
+    BackgroundYtDlpDownloadStarter,
+    DrissionCookieInitializer,
+    YtDlpLinkedVideoDownloadStarter,
+    YtDlpPlatform,
+    YtDlpPlatformDownloader,
+    YtDlpPlatformResolver,
+)
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
@@ -63,6 +71,8 @@ from backend.video_summary.library.usecases import (
     ListVideoLibrary,
     ResolveBilibiliSeries,
     ResolveBilibiliVideo,
+    ResolveLinkedSeries,
+    ResolveLinkedVideo,
     StartLinkedVideoDownload,
     CreateVideoNote,
     DeleteVideoNote,
@@ -109,7 +119,10 @@ class ApiContainer:
     create_agent_series: CreateAgentLinkedSeries
     resolve_bilibili_series: ResolveBilibiliSeries
     resolve_bilibili_video: ResolveBilibiliVideo
+    resolve_linked_series: ResolveLinkedSeries
+    resolve_linked_video: ResolveLinkedVideo
     bilibili_cookie_initializer: DrissionBilibiliCookieInitializer
+    external_cookie_initializers: dict[str, DrissionCookieInitializer]
     start_linked_video_download: StartLinkedVideoDownload
     generation_progress_tracker: InMemoryProgressTracker
     mindmap_progress_tracker: InMemoryProgressTracker
@@ -219,11 +232,51 @@ def build_api_container(
     )
     bilibili_resolver = YtDlpBilibiliResolver()
     bilibili_cookie_initializer = DrissionBilibiliCookieInitializer(root_dir=root_dir)
+    youtube_platform = YtDlpPlatform(
+        provider="youtube",
+        display_name="YouTube",
+        cookie_domain="youtube.com",
+        login_url="https://accounts.google.com/ServiceLogin?service=youtube",
+        cookie_env="YOUTUBE_COOKIE",
+        browser_port=9224,
+        login_cookie_names=("SID", "SAPISID", "LOGIN_INFO"),
+        format_selector="bv*+ba/best",
+    )
+    douyin_platform = YtDlpPlatform(
+        provider="douyin",
+        display_name="抖音",
+        cookie_domain="douyin.com",
+        login_url="https://www.douyin.com/",
+        cookie_env="DOUYIN_COOKIE",
+        browser_port=9225,
+        login_cookie_names=("s_v_web_id", "sessionid", "sessionid_ss"),
+        format_selector="bv*+ba/best",
+    )
+    external_platforms = (youtube_platform, douyin_platform)
+    external_resolvers = {
+        "bilibili": bilibili_resolver,
+        **{platform.provider: YtDlpPlatformResolver(platform) for platform in external_platforms},
+    }
+    external_cookie_initializers = {
+        platform.provider: DrissionCookieInitializer(root_dir=root_dir, platform=platform)
+        for platform in external_platforms
+    }
     bilibili_download_starter = BackgroundBilibiliDownloadStarter(
         root_dir=root_dir,
         downloader=BilibiliDownloader(),
         progress_tracker=video_download_progress_tracker,
     )
+    external_download_starters = {
+        platform.provider: YtDlpLinkedVideoDownloadStarter(
+            platform,
+            BackgroundYtDlpDownloadStarter(
+                root_dir=root_dir,
+                downloader=YtDlpPlatformDownloader(platform),
+                progress_tracker=video_download_progress_tracker,
+            ),
+        )
+        for platform in external_platforms
+    }
     chaoxing_client = ChaoxingDownloaderClient(
         state_dir=root_dir / "data" / "chaoxing",
         request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
@@ -238,6 +291,7 @@ def build_api_container(
                 client=chaoxing_client,
                 progress_tracker=video_download_progress_tracker,
             ),
+            **external_download_starters,
         }
     )
     return ApiContainer(
@@ -276,7 +330,10 @@ def build_api_container(
         create_agent_series=CreateAgentLinkedSeries(workspace, workspace_index_invalidator),
         resolve_bilibili_series=ResolveBilibiliSeries(workspace, bilibili_resolver, workspace_index_invalidator),
         resolve_bilibili_video=ResolveBilibiliVideo(workspace, bilibili_resolver, workspace_index_invalidator),
+        resolve_linked_series=ResolveLinkedSeries(workspace, external_resolvers, workspace_index_invalidator),
+        resolve_linked_video=ResolveLinkedVideo(workspace, external_resolvers, workspace_index_invalidator),
         bilibili_cookie_initializer=bilibili_cookie_initializer,
+        external_cookie_initializers=external_cookie_initializers,
         start_linked_video_download=StartLinkedVideoDownload(workspace, linked_download_starter),
         generation_progress_tracker=progress_tracker,
         mindmap_progress_tracker=mindmap_progress_tracker,

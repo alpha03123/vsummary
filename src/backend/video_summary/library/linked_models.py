@@ -13,12 +13,12 @@ from dataclasses import dataclass, field
 class LinkedVideo:
     """外部链接视频的不可变值对象。
 
-    表示一个分P级别的 Bilibili 视频项；同一 `bvid` 下的不同分P
-    共享 BV 号，但 `page` 与 `video_id` 派生规则区分。
+    表示一个外部平台的视频项。`source_id` 是平台内稳定标识，
+    `item_index` 只用于一个源内存在多个可下载项的情形（例如 Bilibili 分 P）。
 
     Attributes:
-        bvid: Bilibili 视频 BV 号，作为同一稿件跨分P 的业务主键。
-        page: 分P 序号（从 1 开始）。
+        source_id: 平台内稳定视频标识。
+        item_index: 同一 source_id 下的条目序号，从 1 开始。
         title: 视频标题。
         cover_url: 封面图 URL。
         duration_seconds: 视频时长（秒）。
@@ -27,8 +27,8 @@ class LinkedVideo:
         download_key: 已生成下载任务的 key；尚未触发下载时为空字符串。
     """
 
-    bvid: str
-    page: int
+    source_id: str
+    item_index: int
     title: str
     cover_url: str
     duration_seconds: int
@@ -40,9 +40,10 @@ class LinkedVideo:
     def video_id(self) -> str:
         """返回在库内统一的 video_id。
 
-        分P 1 直接使用 `bvid`；其他分P 在尾部追加 `_p<page>` 以保证唯一性。
+        首项直接使用 `source_id`；后续项在尾部追加 `_p<item_index>`，
+        保持既有 Bilibili 分 P 文件名不变。
         """
-        return self.bvid if self.page == 1 else f"{self.bvid}_p{self.page}"
+        return self.source_id if self.item_index == 1 else f"{self.source_id}_p{self.item_index}"
 
 
 @dataclass(frozen=True)

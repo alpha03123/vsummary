@@ -19,6 +19,8 @@ from backend.api.schemas.responses import (
     LinkedVideoDownloadResponse,
     ResolveBilibiliSeriesRequest,
     ResolveBilibiliVideoRequest,
+    ResolveLinkedSeriesRequest,
+    ResolveLinkedVideoRequest,
     SeriesResponse,
     VideoCardResponse,
 )
@@ -28,6 +30,7 @@ from backend.bilibili.ytdlp_bilibili import (
     BilibiliCookieInitError,
     build_video_download_task_id,
 )
+from backend.external.ytdlp import ExternalVideoResolutionError
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
@@ -307,6 +310,57 @@ async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container
     return VideoCardResponse.from_model(video)
 
 
+@router.post("/api/linked/{provider}/cookie/init", response_model=BilibiliCookieStatusResponse)
+async def init_external_cookie(provider: str, container: ApiContainerDep) -> BilibiliCookieStatusResponse:
+    """打开指定平台登录页，将该平台 Cookie 保存到独立配置项。"""
+    initializer = container.external_cookie_initializers.get(provider.lower())
+    if initializer is None:
+        raise HTTPException(status_code=404, detail=f"unsupported external provider '{provider}'")
+    try:
+        configured = await asyncio.to_thread(initializer.init)
+    except Exception as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return BilibiliCookieStatusResponse(configured=configured)
+
+
+@router.post("/api/linked/{provider}/resolve/series", response_model=SeriesResponse)
+async def resolve_linked_series(
+    provider: str,
+    request: ResolveLinkedSeriesRequest,
+    container: ApiContainerDep,
+) -> SeriesResponse:
+    """解析指定 yt-dlp 平台的系列或播放列表。"""
+    try:
+        series = await container.resolve_linked_series.run(provider=provider, url=request.url)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        raise _linked_resolution_http_error(provider, error) from error
+    return SeriesResponse.from_model(series)
+
+
+@router.post("/api/linked/{provider}/resolve/video", response_model=VideoCardResponse)
+async def resolve_linked_video(
+    provider: str,
+    request: ResolveLinkedVideoRequest,
+    container: ApiContainerDep,
+) -> VideoCardResponse:
+    """解析指定 yt-dlp 平台的单视频并写入目标系列。"""
+    try:
+        video = await container.resolve_linked_video.run(
+            provider=provider,
+            url=request.url,
+            target_series_id=request.target_series_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        raise _linked_resolution_http_error(provider, error) from error
+    return VideoCardResponse.from_model(video)
+
+
 def _is_bilibili_cookie_required_error(error: RuntimeError) -> bool:
     message = str(error)
     return (
@@ -314,6 +368,16 @@ def _is_bilibili_cookie_required_error(error: RuntimeError) -> bool:
         or "HTTP Error 412" in message
         or "Precondition Failed" in message
     )
+
+
+def _linked_resolution_http_error(provider: str, error: Exception) -> HTTPException:
+    message = str(error)
+    if isinstance(error, ExternalVideoResolutionError):
+        status_code = {"cookie_required": 409, "invalid_url": 422, "failed": 502}.get(error.kind, 502)
+        return HTTPException(status_code=status_code, detail=message)
+    if provider.lower() == "bilibili" and _is_bilibili_cookie_required_error(error):
+        return HTTPException(status_code=409, detail=BILIBILI_COOKIE_REQUIRED_MESSAGE)
+    return HTTPException(status_code=502, detail=message)
 
 
 @router.post("/api/videos/{series_id}/{video_id}/download", response_model=LinkedVideoDownloadResponse)

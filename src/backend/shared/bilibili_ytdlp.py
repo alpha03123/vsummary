@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
+
+from backend.shared.ytdlp import parse_cookie_pairs, write_cookies_file
 
 BILIBILI_USER_AGENT = "Mozilla/5.0"
 BILIBILI_COOKIE_ENV = "BILIBILI_COOKIE"
@@ -54,28 +55,4 @@ def resolve_yt_dlp_proxy() -> str | None:
 
 def write_bilibili_cookies_file(cookie: str) -> Path | None:
     """把 Cookie header 写成 yt-dlp 支持的 Netscape cookie 文件。"""
-    if not cookie.strip():
-        return None
-    cookie_pairs = parse_cookie_pairs(cookie)
-    if not cookie_pairs:
-        return None
-    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".cookies.txt")
-    with handle:
-        handle.write("# Netscape HTTP Cookie File\n")
-        for name, value in cookie_pairs:
-            handle.write(f".bilibili.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}\n")
-    return Path(handle.name)
-
-
-def parse_cookie_pairs(cookie: str) -> list[tuple[str, str]]:
-    """解析 HTTP Cookie header，保留有名称的键值对。"""
-    pairs: list[tuple[str, str]] = []
-    for part in cookie.split(";"):
-        if "=" not in part:
-            continue
-        name, value = part.split("=", 1)
-        normalized_name = name.strip()
-        normalized_value = value.strip()
-        if normalized_name:
-            pairs.append((normalized_name, normalized_value))
-    return pairs
+    return write_cookies_file(cookie, "bilibili.com")

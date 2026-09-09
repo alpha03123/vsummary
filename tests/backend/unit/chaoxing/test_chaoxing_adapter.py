@@ -375,8 +375,8 @@ class ChaoxingLinkedVideoDownloadStarterTests(unittest.TestCase):
                 run_in_background=False,
             )
             video = LinkedVideo(
-                bvid="chaoxing-video-1",
-                page=1,
+                source_id="chaoxing-video-1",
+                item_index=1,
                 title="第一讲",
                 cover_url="",
                 duration_seconds=0,
@@ -403,8 +403,8 @@ class ChaoxingLinkedVideoDownloadStarterTests(unittest.TestCase):
                 run_in_background=False,
             )
             video = LinkedVideo(
-                bvid="chaoxing-video-1",
-                page=1,
+                source_id="chaoxing-video-1",
+                item_index=1,
                 title="第一讲",
                 cover_url="",
                 duration_seconds=0,

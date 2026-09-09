@@ -80,11 +80,11 @@ class VideoSeriesBackendClient:
         items = []
         for video in videos:
             url = video.get("url", "")
-            self._validate_video_url(url)
+            provider = self._provider_for_video_url(url)
             try:
                 resolved = await self._request_json(
                     "POST",
-                    "/api/linked/bilibili/resolve/video",
+                    f"/api/linked/{provider}/resolve/video",
                     json={"url": url, "target_series_id": series_id},
                 )
             except BackendApiError as error:
@@ -377,6 +377,19 @@ class VideoSeriesBackendClient:
         parsed = urlparse(url.strip())
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.path:
             raise ValueError(f"video url is not a supported absolute URL: {url}")
+
+    def _provider_for_video_url(self, url: object) -> str:
+        self._validate_video_url(url)
+        hostname = (urlparse(str(url).strip()).hostname or "").lower()
+        providers = {
+            "bilibili": ("bilibili.com", "b23.tv"),
+            "youtube": ("youtube.com", "youtu.be"),
+            "douyin": ("douyin.com",),
+        }
+        for provider, domains in providers.items():
+            if any(hostname == domain or hostname.endswith(f".{domain}") for domain in domains):
+                return provider
+        raise ValueError(f"video url provider is not supported: {url}")
 
     def _path_segment(self, value: str) -> str:
         return quote(value, safe="")

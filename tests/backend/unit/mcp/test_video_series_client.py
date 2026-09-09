@@ -127,6 +127,29 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, result["failed_count"])
         self.assertEqual(["BV1", "BV2"], [item["video_id"] for item in result["items"]])
 
+    async def test_add_series_videos_routes_youtube_and_douyin_urls_by_hostname(self) -> None:
+        seen_paths: list[str] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            seen_paths.append(request.url.path)
+            return httpx.Response(200, json={"id": "video", "title": "Resolved"})
+
+        client = VideoSeriesBackendClient(transport=httpx.MockTransport(handler))
+
+        result = await client.add_series_videos(
+            series_id="agent-external",
+            videos=[
+                {"url": "https://www.youtube.com/watch?v=video"},
+                {"url": "https://www.douyin.com/video/751234567890"},
+            ],
+        )
+
+        self.assertEqual(
+            ["/api/linked/youtube/resolve/video", "/api/linked/douyin/resolve/video"],
+            seen_paths,
+        )
+        self.assertEqual(2, result["added_count"])
+
     async def test_import_local_series_sends_file_paths_to_path_import_api(self) -> None:
         seen_request: dict[str, str] = {}
 

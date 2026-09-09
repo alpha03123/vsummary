@@ -106,9 +106,9 @@ describe("useWorkspaceController chat-drawer actions", () => {
 });
 
 describe("useWorkspaceController external import actions", () => {
-  it("exposes Bilibili cookie initialization to the page model", () => {
+  it("exposes external platform cookie initialization to the page model", () => {
     const { result } = renderHook(() => useWorkspaceController());
 
-    expect(typeof result.current.onInitBilibiliCookie).toBe("function");
+    expect(typeof result.current.onInitExternalCookie).toBe("function");
   });
 });

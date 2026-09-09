@@ -302,8 +302,8 @@ def _to_video_card_dto(video: LinkedVideo) -> LibraryVideoCardDTO:
         processed=False,
         status="linked",
         is_linked=True,
-        bilibili_bvid=video.bvid,
-        bilibili_page=video.page,
+        source_id=video.source_id,
+        item_index=video.item_index,
         source_url=video.source_url,
         provider=video.provider,
     )

@@ -473,6 +473,27 @@ describe("workspaceReducer chat drawer", () => {
 });
 
 describe("workspaceReducer video download cancellation", () => {
+  it("retains a download failure for the video that triggered it", () => {
+    const state = {
+      downloadingVideoKey: "series-a/linked-1",
+      videoDownloadProgress: 42,
+      library: {
+        series: [{ id: "series-a", videos: [{ id: "linked-1", isLinked: true, status: "downloading" }] }],
+      },
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "video_download_failed",
+      seriesId: "series-a",
+      videoId: "linked-1",
+      error: "download failed",
+    });
+
+    expect(nextState.videoDownloadError).toBe("download failed");
+    expect(nextState.videoDownloadErrorKey).toBe("series-a/linked-1");
+    expect(nextState.library.series[0].videos[0].status).toBe("linked");
+  });
+
   it("restores linked video cards when cancelling an active download", () => {
     const state = {
       downloadingVideoKey: "series-a/linked-1",

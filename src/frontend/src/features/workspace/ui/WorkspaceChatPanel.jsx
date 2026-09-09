@@ -50,6 +50,8 @@ export function WorkspaceChatPanel({
   contextUsageLoading = false,
   ragModels = [],
   knowledgeMemorySnapshot = null,
+  draft = "",
+  onDraftChange,
   onSelectChatSession,
   onOpenSeekReference,
   onOpenCitationReference,
@@ -57,7 +59,9 @@ export function WorkspaceChatPanel({
   onSubmitChat,
   onCancelChat,
 }) {
-  const [draft, setDraft] = useState("");
+  const [fallbackDraft, setFallbackDraft] = useState("");
+  const currentDraft = onDraftChange ? draft : fallbackDraft;
+  const updateDraft = onDraftChange ?? setFallbackDraft;
   const chatHistoryRef = useRef(null);
   const bottomAlignedSessionRef = useRef(null);
   const visibleSessionRef = useRef(null);
@@ -109,12 +113,12 @@ export function WorkspaceChatPanel({
   }, [activeSessionId, chatMessages.length]);
 
   function handleSubmit() {
-    const trimmed = draft.trim();
+    const trimmed = currentDraft.trim();
     if (!trimmed || interactionDisabled) {
       return;
     }
     onSubmitChat(trimmed);
-    setDraft("");
+    updateDraft("");
   }
 
   function jumpToConversationTurn(messageId) {
@@ -224,7 +228,7 @@ export function WorkspaceChatPanel({
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setDraft(prompt.desc)}
+                    onClick={() => updateDraft(prompt.desc)}
                     disabled={seriesRagLocked || seriesIndexingLocked}
                     className="group flex flex-col items-start gap-2 rounded-2xl border border-stone-200/80 bg-white/60 p-4 text-left transition-all hover:border-accent/40 hover:bg-accent/5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/5 dark:bg-white/5 dark:hover:border-accent/30 dark:hover:bg-accent/10"
                   >
@@ -313,8 +317,8 @@ export function WorkspaceChatPanel({
                     : "向 AI 助手提问或下达指令..."
             }
             className="w-full bg-transparent resize-none py-5 pl-6 pr-16 text-[15px] text-stone-800 dark:text-stone-100 outline-none leading-relaxed h-[100px] placeholder:text-stone-400 dark:placeholder:text-stone-500"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            value={currentDraft}
+            onChange={(event) => updateDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -327,7 +331,7 @@ export function WorkspaceChatPanel({
             <button
               type="button"
               onClick={chatPending ? onCancelChat : handleSubmit}
-              disabled={chatPending ? false : interactionDisabled || !draft.trim()}
+              disabled={chatPending ? false : interactionDisabled || !currentDraft.trim()}
               aria-label={chatPending ? "中断对话" : "发送消息"}
               title={chatPending ? "中断对话" : "发送消息"}
               className="flex items-center justify-center w-10 h-10 rounded-[14px] bg-stone-900 dark:bg-white text-white dark:text-black hover:bg-accent hover:text-white dark:hover:bg-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group-focus-within:bg-accent group-focus-within:text-white"

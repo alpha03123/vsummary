@@ -908,8 +908,8 @@ def _to_linked_video(video, *, chapter_title: str) -> LinkedVideo:
         raise RuntimeError("chaoxing video missing video_key")
     title = _text(getattr(video, "title", "")) or _text(getattr(video, "filename", "")) or video_key
     return LinkedVideo(
-        bvid=f"chaoxing-{_safe_key(video_key)}",
-        page=1,
+        source_id=f"chaoxing-{_safe_key(video_key)}",
+        item_index=1,
         title=f"{chapter_title} - {title}" if chapter_title and chapter_title not in title else title,
         cover_url="",
         duration_seconds=_positive_int(getattr(video, "duration", 0)),

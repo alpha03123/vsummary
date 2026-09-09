@@ -75,6 +75,8 @@ export function WorkspacePage({ page }) {
   const [renamePending, setRenamePending] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(null);
   const [followOverviewPlayback, setFollowOverviewPlayback] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatDraftReady, setChatDraftReady] = useState(false);
   const [resumePosition, setResumePosition] = useState({ videoKey: null, seconds: null });
   const playbackPositionsRef = useRef(new Map());
   const containerRef = useRef(null);
@@ -103,6 +105,13 @@ export function WorkspacePage({ page }) {
     contextUsageLoading: chat.contextUsageLoading,
     ragModels: generation.ragModels,
     knowledgeMemorySnapshot: state.knowledgeMemorySnapshot,
+    draft: chatDraft,
+    onDraftChange: (nextDraft) => {
+      setChatDraft(nextDraft);
+      if (nextDraft !== "帮我生成一份笔记") {
+        setChatDraftReady(false);
+      }
+    },
     onSelectChatSession: chat.selectChatSession,
     onOpenSeekReference: chat.openSeekReference,
     onOpenCitationReference: chat.openCitationReference,
@@ -287,7 +296,10 @@ export function WorkspacePage({ page }) {
         onGenerateSeriesMindmap={actions.generateSeriesMindmap}
         onGenerateKnowledgeCards={actions.generateKnowledgeCards}
         onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
-        onRequestAiNote={chat.submit}
+        onRequestAiNote={() => {
+          setChatDraft("帮我生成一份笔记");
+          setChatDraftReady(!isChatCenterMode && !chat.drawerOpen);
+        }}
         onCreateNote={actions.createNote}
         onUpdateNote={actions.updateNote}
         onDeleteNote={actions.deleteNote}
@@ -404,6 +416,8 @@ export function WorkspacePage({ page }) {
                 }
               }}
               downloadProgress={generation.videoDownloadProgress}
+              downloadError={generation.videoDownloadError}
+              downloadErrorKey={generation.videoDownloadErrorKey}
               currentAsrModel={currentAsrModel}
               ragModels={generation.ragModels}
               onOpenSettings={() => actions.openSettingsPanel("ai")}
@@ -413,6 +427,17 @@ export function WorkspacePage({ page }) {
               library={library}
               onOpenSeries={actions.selectSeries}
               onAddSeries={() => setImportModalState({ mode: "series" })}
+              onRequestBulkDelete={(seriesIds) => {
+                if (seriesIds.length === 0) {
+                  return;
+                }
+                setPendingDelete({
+                  kind: "series-batch",
+                  seriesIds,
+                  title: `删除 ${seriesIds.length} 个系列？`,
+                  description: "将删除所选系列、其中的全部视频及产物。该操作不可撤销。",
+                });
+              }}
               compact
             />
           )}
@@ -441,8 +466,12 @@ export function WorkspacePage({ page }) {
           onOpenUpdate={() => actions.openSettingsPanel("update")}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onToggleChatDrawer={chat.toggleDrawer}
+          onToggleChatDrawer={() => {
+            setChatDraftReady(false);
+            chat.toggleDrawer();
+          }}
           chatDrawerOpen={chat.drawerOpen}
+          chatDraftReady={!isChatCenterMode && chatDraftReady && !chat.drawerOpen}
           chatDrawerEnabled={!isChatCenterMode}
         />
 
@@ -640,13 +669,13 @@ export function WorkspacePage({ page }) {
           targetSeriesId={importModalState.targetSeriesId ?? null}
           targetSeriesTitle={importModalState.targetSeriesTitle ?? ""}
           onClose={() => setImportModalState(null)}
-          onResolveSeries={async (url) => actions.resolveLinkedSeries(url)}
-          onResolveVideo={async (url, targetSeriesId) => (
+          onResolveSeries={async (provider, url) => actions.resolveLinkedSeries(provider, url)}
+          onResolveVideo={async (provider, url, targetSeriesId) => (
             targetSeriesId
-              ? actions.resolveSeriesVideo(url, targetSeriesId)
-              : actions.resolvePlaygroundVideo(url)
+              ? actions.resolveSeriesVideo(provider, url, targetSeriesId)
+              : actions.resolvePlaygroundVideo(provider, url)
           )}
-          onInitBilibiliCookie={actions.initBilibiliCookie}
+          onInitExternalCookie={actions.initExternalCookie}
           onLoadChaoxingStatus={actions.loadChaoxingStatus}
           onInitChaoxing={actions.initChaoxing}
           onCancelChaoxingInit={actions.cancelChaoxingInit}
@@ -684,6 +713,8 @@ export function WorkspacePage({ page }) {
               await actions.deleteCurrentVideo?.();
             } else if (pendingDelete.kind === "videos") {
               await actions.deleteVideos?.(pendingDelete.videoIds);
+            } else if (pendingDelete.kind === "series-batch") {
+              await actions.deleteSeriesByIds?.(pendingDelete.seriesIds);
             }
             setPendingDelete(null);
           } finally {

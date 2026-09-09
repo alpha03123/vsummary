@@ -35,8 +35,8 @@ class CreateAgentLinkedSeriesTests(unittest.TestCase):
                 is_agent_managed=True,
                 videos=[
                     LinkedVideo(
-                        bvid="BVexisting",
-                        page=1,
+                        source_id="BVexisting",
+                        item_index=1,
                         title="Existing",
                         cover_url="",
                         duration_seconds=0,

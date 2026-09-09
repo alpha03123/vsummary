@@ -45,8 +45,8 @@ class VideoCardResponse(BaseModel):
     status: str
     core_problem: str = ""
     is_linked: bool = False
-    bilibili_bvid: str = ""
-    bilibili_page: int = 0
+    source_id: str = ""
+    item_index: int = 0
     source_url: str = ""
     provider: str = ""
 
@@ -69,8 +69,8 @@ class VideoCardResponse(BaseModel):
             status=video.status,
             core_problem=video.core_problem,
             is_linked=video.is_linked,
-            bilibili_bvid=video.bilibili_bvid,
-            bilibili_page=video.bilibili_page,
+            source_id=video.source_id,
+            item_index=video.item_index,
             source_url=video.source_url,
             provider=video.provider,
         )
@@ -435,6 +435,19 @@ class ResolveBilibiliVideoRequest(BaseModel):
 
     target_series_id 指定将视频添加到哪个系列；若为 None 则自动创建新系列。
     """
+
+    url: str
+    target_series_id: str | None = None
+
+
+class ResolveLinkedSeriesRequest(BaseModel):
+    """解析指定外部平台系列 URL 的请求体。"""
+
+    url: str
+
+
+class ResolveLinkedVideoRequest(BaseModel):
+    """解析指定外部平台单视频 URL 的请求体。"""
 
     url: str
     target_series_id: str | None = None

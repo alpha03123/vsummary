@@ -878,7 +878,8 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertEqual(result["tool_results"][0]["payload"]["selected_tool"], "notes")
 
     def test_video_action_planner_uses_tool_schema_contracts(self) -> None:
-        planner = VideoActionPlanner(gateway=FakeVideoActionGateway())
+        gateway = FakeVideoActionGateway()
+        planner = VideoActionPlanner(gateway=gateway)
 
         plan = planner.run(
             user_message="帮我记一下 RAG 检索流程",
@@ -898,6 +899,8 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertIsInstance(plan.tool_calls[0], SaveNoteCall)
         self.assertEqual(plan.tool_calls[0].note_title, "RAG 检索流程")
         self.assertEqual(plan.tool_calls[0].note_content, "先读取视频概况，再按问题检索转写片段。")
+        self.assertIn(SAVE_NOTE_TOOL.description, gateway.messages[0].content)
+        self.assertIn("`note_content`：支持 Markdown 的笔记正文", gateway.messages[0].content)
 
     def test_video_action_planner_payload_schema_avoids_openai_unsupported_one_of(self) -> None:
         schema = VideoActionPlannerPayload.model_json_schema()
@@ -910,10 +913,11 @@ class SeriesScopeContractTests(unittest.TestCase):
         )
 
     def test_save_note_contract_prefers_markdown_content_without_fixed_template(self) -> None:
-        self.assertIn("Markdown", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
-        self.assertIn("按内容复杂度", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
+        self.assertNotIn("save_note 的标题", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
+        self.assertIn("Markdown", SAVE_NOTE_TOOL.description)
+        self.assertIn("核心主题、关键结论、重要细节和行动要点", SAVE_NOTE_TOOL.description)
         self.assertIn("支持 Markdown 的笔记正文", SAVE_NOTE_TOOL.arguments["note_content"])
-        self.assertNotIn("视频核心", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
+        self.assertNotIn("视频核心", SAVE_NOTE_TOOL.description)
 
     def test_stream_with_context_streams_deferred_series_answer_from_gateway(self) -> None:
         synthesizer = FakeDeferredSeriesAnswerSynthesizer()
@@ -960,12 +964,16 @@ class SeriesScopeContractTests(unittest.TestCase):
         persisted_messages = session_store.last_append["messages"]
         self.assertEqual(persisted_messages[-1].content, "**结论：**真实流式回答。[1]")
 
-    def test_inline_citation_parser_rejects_unknown_source_number(self) -> None:
-        with self.assertRaisesRegex(ValueError, "未知引用编号"):
-            extract_inline_source_numbers(
-                "这个结论来自不存在的证据。[99]",
-                [{"evidence_id": "e1"}],
-            )
+    def test_inline_citation_parser_drops_unknown_source_number(self) -> None:
+        resolution = resolve_inline_citations(
+            "这个结论来自不存在的证据。[99]，这里有有效证据。[1]",
+            [{"evidence_id": "e1"}],
+        )
+
+        self.assertEqual(resolution.answer_text, "这个结论来自不存在的证据。，这里有有效证据。[1]")
+        self.assertEqual(resolution.used_source_numbers, [1])
+        self.assertEqual(resolution.used_evidence_ids, ["e1"])
+        self.assertEqual(resolution.used_citation_ids, ["1"])
 
     def test_inline_citation_parser_ignores_markdown_link_labels(self) -> None:
         numbers = extract_inline_source_numbers(
@@ -1008,37 +1016,41 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertEqual(resolution.used_evidence_ids, ["local-2"])
         self.assertEqual(resolution.used_citation_ids, ["2.1"])
 
-    def test_inline_citation_resolution_rejects_unknown_transcript_segment_anchor(self) -> None:
-        with self.assertRaisesRegex(ValueError, "未知引用编号"):
-            resolve_inline_citations(
-                "这里引用的是不存在的字幕片段。[2.99]",
-                [
-                    {"evidence_id": "local-1", "source_number": 1},
-                    {
-                        "evidence_id": "local-2",
-                        "source_number": 2,
-                        "segments": [
-                            {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
-                        ],
-                    },
-                ],
-            )
+    def test_inline_citation_resolution_drops_unknown_transcript_segment_anchor(self) -> None:
+        resolution = resolve_inline_citations(
+            "这里引用的是不存在的字幕片段。[2.99]",
+            [
+                {"evidence_id": "local-1", "source_number": 1},
+                {
+                    "evidence_id": "local-2",
+                    "source_number": 2,
+                    "segments": [
+                        {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
+                    ],
+                },
+            ],
+        )
 
-    def test_inline_citation_resolution_rejects_broad_transcript_citation_when_segments_exist(self) -> None:
-        with self.assertRaisesRegex(ValueError, "未知引用编号"):
-            resolve_inline_citations(
-                "这里引用的是过宽的字幕来源。[2]",
-                [
-                    {"evidence_id": "local-1", "source_number": 1},
-                    {
-                        "evidence_id": "local-2",
-                        "source_number": 2,
-                        "segments": [
-                            {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
-                        ],
-                    },
-                ],
-            )
+        self.assertEqual(resolution.answer_text, "这里引用的是不存在的字幕片段。")
+        self.assertEqual(resolution.used_citation_ids, [])
+
+    def test_inline_citation_resolution_drops_broad_transcript_citation_when_segments_exist(self) -> None:
+        resolution = resolve_inline_citations(
+            "这里引用的是过宽的字幕来源。[2]",
+            [
+                {"evidence_id": "local-1", "source_number": 1},
+                {
+                    "evidence_id": "local-2",
+                    "source_number": 2,
+                    "segments": [
+                        {"anchor_id": "2.1", "start_seconds": 12.0, "end_seconds": 18.0, "text": "精确片段"},
+                    ],
+                },
+            ],
+        )
+
+        self.assertEqual(resolution.answer_text, "这里引用的是过宽的字幕来源。")
+        self.assertEqual(resolution.used_citation_ids, [])
 
     def test_citation_builder_uses_source_number_as_citation_id(self) -> None:
         turn = AgentGraphTurnBuilder().build(
@@ -1407,6 +1419,7 @@ class FakeVideoActionGateway:
         self.response_model = response_model
         self.assert_response_model()
         return VideoActionPlannerPayload(
+            requested_artifact="note",
             tool_calls=[
                 {
                     "tool_name": "save_note",

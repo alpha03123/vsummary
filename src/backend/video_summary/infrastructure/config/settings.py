@@ -36,6 +36,7 @@ VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
 VALID_WEB_SEARCH_MODES = {"native"}
 VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
 VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
+VALID_NOTE_LENGTHS = {"short", "long"}
 VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 VALID_LLM_PROVIDERS = {
     "ai21",
@@ -119,6 +120,7 @@ DEFAULT_AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 DEFAULT_AGENT_ANSWER_DETAIL_LEVEL = "medium"
 DEFAULT_AGENT_REASONING_EFFORT = "none"
 DEFAULT_AGENT_TALK_CUSTOM_PROMPT = ""
+DEFAULT_AGENT_NOTE_LENGTH = "long"
 DEFAULT_AGENT_RESERVED_OUTPUT_TOKENS = 20_000
 DEFAULT_AGENT_WARNING_THRESHOLD_RATIO = 0.60
 DEFAULT_AGENT_COMPACT_THRESHOLD_RATIO = 0.80
@@ -270,6 +272,7 @@ class AgentContextSettings:
     answer_detail_level: str
     reasoning_effort: str
     talk_custom_prompt: str
+    note_length: str
     reserved_output_tokens: int
     warning_threshold_ratio: float
     compact_threshold_ratio: float
@@ -492,6 +495,12 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         talk_custom_prompt=_normalize_string(
             agent_context_payload.get("talk_custom_prompt"),
             default=DEFAULT_AGENT_TALK_CUSTOM_PROMPT,
+        ),
+        note_length=_normalize_choice(
+            agent_context_payload.get("note_length"),
+            default=DEFAULT_AGENT_NOTE_LENGTH,
+            allowed=VALID_NOTE_LENGTHS,
+            field_name="agent_context.note_length",
         ),
         reserved_output_tokens=_normalize_positive_int(
             agent_context_advanced_payload.get("reserved_output_tokens"),
@@ -853,6 +862,16 @@ def replace_chapter_screenshots_enabled(settings: AppSettings, chapter_screensho
     )
 
 
+def replace_agent_context_note_length(settings: AppSettings, note_length: str) -> AppSettings:
+    normalized_note_length = _normalize_choice(
+        note_length,
+        default=DEFAULT_AGENT_NOTE_LENGTH,
+        allowed=VALID_NOTE_LENGTHS,
+        field_name="agent_context.note_length",
+    )
+    return replace(settings, agent_context=replace(settings.agent_context, note_length=normalized_note_length))
+
+
 def replace_web_search_enabled(settings: AppSettings, web_search_enabled: bool) -> AppSettings:
     """派生替换 Web 搜索启用开关的 `AppSettings`。"""
     return replace(
@@ -1028,6 +1047,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'answer_detail_level = "{settings.agent_context.answer_detail_level}"',
         f'reasoning_effort = "{settings.agent_context.reasoning_effort}"',
         f"talk_custom_prompt = {_toml_string(settings.agent_context.talk_custom_prompt)}",
+        f'note_length = "{settings.agent_context.note_length}"',
         "",
         "[agent_context.advanced]",
         f"reserved_output_tokens = {settings.agent_context.reserved_output_tokens}",

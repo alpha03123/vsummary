@@ -136,6 +136,15 @@ export function getDeleteButtonState({ isGeneratingSeries, isGeneratingSelectedV
   };
 }
 
+export function getSourceViewLabel(provider) {
+  const labels = {
+    bilibili: "在 Bilibili 中查看",
+    douyin: "在抖音中查看",
+    youtube: "在 YouTube 中查看",
+  };
+  return labels[provider] ?? "查看原媒体";
+}
+
 function PanelFooter({
   selectedContextType,
   selectedVideo,
@@ -147,6 +156,8 @@ function PanelFooter({
   currentAsrModel,
   ragModels,
   downloadProgress,
+  downloadError,
+  downloadErrorKey,
   onGenerateVideo,
   onRelinkVideo,
   onGenerateSeries,
@@ -163,6 +174,9 @@ function PanelFooter({
   const embeddingNeedsDownload = embeddingModel != null && !embeddingModel.downloaded;
   const selectedVideoIsDownloading =
     activeSeries?.id && selectedVideo?.id && downloadingVideoKey === buildVideoKey(activeSeries.id, selectedVideo.id);
+  const sourceViewLabel = getSourceViewLabel(selectedVideo?.provider);
+  const hasSelectedVideoDownloadError =
+    activeSeries?.id && selectedVideo?.id && downloadErrorKey === buildVideoKey(activeSeries.id, selectedVideo.id);
   const [footerOverflowOpen, setFooterOverflowOpen] = useState(false);
   const footerOverflowRef = useRef(null);
 
@@ -318,10 +332,10 @@ function PanelFooter({
                       rel="noopener noreferrer"
                       onClick={() => setFooterOverflowOpen(false)}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
-                      title="在 Bilibili 中查看"
+                      title={sourceViewLabel}
                     >
                       <ExternalLink size={14} />
-                      在 Bilibili 中查看
+                      {sourceViewLabel}
                     </a>
                   ) : null}
                   <button
@@ -351,6 +365,9 @@ function PanelFooter({
           {selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
           {selectedVideoIsDownloading ? "取消下载" : "下载视频"}
         </button>
+        {hasSelectedVideoDownloadError && downloadError ? (
+          <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{downloadError}</p>
+        ) : null}
       </div>
     );
   }
@@ -393,10 +410,10 @@ function PanelFooter({
                     rel="noopener noreferrer"
                     onClick={() => setFooterOverflowOpen(false)}
                     className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
-                    title="在 Bilibili 中查看"
+                    title={sourceViewLabel}
                   >
                     <ExternalLink size={14} />
-                    在 Bilibili 中查看
+                    {sourceViewLabel}
                   </a>
                 ) : null}
                 <button
@@ -490,6 +507,8 @@ export function WorkspaceLibraryPanel({
   activeWorkSummary = "",
   bulkDeleteResult = null,
   downloadProgress,
+  downloadError,
+  downloadErrorKey,
   onOpenSettings,
 }) {
   const videos = activeSeries?.videos ?? [];
@@ -854,6 +873,8 @@ export function WorkspaceLibraryPanel({
         currentAsrModel={currentAsrModel}
         ragModels={ragModels}
         downloadProgress={downloadProgress}
+        downloadError={downloadError}
+        downloadErrorKey={downloadErrorKey}
         onGenerateVideo={onGenerateVideo}
         onGenerateSeries={onGenerateSeries}
         onCancelGeneration={onCancelGeneration}

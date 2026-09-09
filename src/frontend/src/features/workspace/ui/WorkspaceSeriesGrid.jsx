@@ -1,16 +1,74 @@
-import { useMemo, useState } from "react";
-import { ArrowRight, FolderKanban, PlayCircle, Sparkles, LayoutGrid, CheckCircle2, Link2, Search, X } from "lucide-react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, FolderKanban, PlayCircle, Sparkles, LayoutGrid, CheckCircle2, Link2, Search, X, Square, CheckSquare, CheckCheck, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { staggerContainer, blurVariant } from "../../../lib/animations";
 
 function getProcessedCount(series) {
   return series.videos.filter((video) => video.processed).length;
 }
 
-export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compact = false }) {
+function SeriesSelectionToolbar({ selectedCount, onSelectAll, onClear, onDelete }) {
+  return (
+    <AnimatePresence>
+      {selectedCount > 0 ? (
+        <motion.div
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 16, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 400, damping: 28 }}
+          className="sticky bottom-0 z-20 mx-3 mb-3"
+        >
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-stone-200/80 bg-white/95 px-4 py-2.5 shadow-lg backdrop-blur-sm dark:border-stone-700 dark:bg-neutral-900/95">
+            <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">已选 {selectedCount} 项</span>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={onSelectAll} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800">
+                <CheckCheck size={14} /> 全选
+              </button>
+              <button type="button" onClick={onClear} className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800">取消</button>
+              <button type="button" onClick={onDelete} className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50">
+                <Trash2 size={14} /> 删除
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function SeriesSelectionButton({ seriesItem, selected, onToggle }) {
+  return (
+    <span
+      role="checkbox"
+      tabIndex={0}
+      aria-checked={selected}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle(seriesItem.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          onToggle(seriesItem.id);
+        }
+      }}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${selected
+        ? "bg-accent/10 text-accent"
+        : "text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:text-stone-500 dark:hover:bg-stone-700 dark:hover:text-stone-300"
+      }`}
+      aria-label={selected ? `取消选择 ${seriesItem.title}` : `选择 ${seriesItem.title}`}
+    >
+      {selected ? <CheckSquare size={17} /> : <Square size={17} />}
+    </span>
+  );
+}
+
+export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequestBulkDelete, compact = false }) {
   const allSeries = library?.series ?? [];
   const sourceSeries = allSeries.filter((item) => item.id !== "__playground__");
   const [searchText, setSearchText] = useState("");
+  const [selectedSeriesIds, setSelectedSeriesIds] = useState([]);
   const normalizedSearch = searchText.trim().toLowerCase();
   const series = useMemo(() => {
     if (!normalizedSearch) {
@@ -24,6 +82,18 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
       return haystacks.some((value) => value.includes(normalizedSearch));
     });
   }, [normalizedSearch, sourceSeries]);
+  useEffect(() => {
+    const availableIds = new Set(sourceSeries.map((item) => item.id));
+    setSelectedSeriesIds((current) => current.filter((seriesId) => availableIds.has(seriesId)));
+  }, [sourceSeries]);
+  const selectedSeriesSet = useMemo(() => new Set(selectedSeriesIds), [selectedSeriesIds]);
+  const toggleSeriesSelection = (seriesId) => {
+    setSelectedSeriesIds((current) => current.includes(seriesId)
+      ? current.filter((id) => id !== seriesId)
+      : [...current, seriesId]);
+  };
+  const selectVisibleSeries = () => setSelectedSeriesIds(series.map((item) => item.id));
+  const requestBulkDelete = () => onRequestBulkDelete?.(selectedSeriesIds);
 
   if (!sourceSeries.length) {
     return (
@@ -115,16 +185,20 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
                   variants={blurVariant}
                   whileHover="hover"
                   whileTap="tap"
-                  className="workspace-panel group flex flex-col rounded-[1.5rem] border p-5 text-left hover:border-stone-300 dark:hover:border-white/10 hover:bg-white dark:hover:bg-neutral-800/80 hover:shadow-md transition-all cursor-pointer relative overflow-hidden"
+                  aria-label={`打开系列 ${seriesItem.title}`}
+                  className="workspace-panel group flex flex-col rounded-[1.5rem] border p-5 text-left hover:border-stone-300 dark:hover:border-white/10 hover:bg-white dark:hover:bg-neutral-800/80 hover:shadow-md transition-all cursor-pointer relative overflow-hidden focus:outline-none focus:ring-4 focus:ring-accent/20"
                   onClick={() => onOpenSeries(seriesItem.id)}
                 >
                   <div className="mb-4 flex items-start justify-between gap-3 relative z-10">
                     <span className="inline-flex items-center rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 px-3 py-1 text-[11px] font-bold tracking-wide text-stone-600 dark:text-zinc-400 shadow-sm">
                       {seriesItem.videos.length} videos
                     </span>
-                    <span className="motion-arrow-shift flex h-8 w-8 items-center justify-center rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-500 transition-colors group-hover:bg-accent group-hover:border-accent group-hover:text-white shadow-sm">
-                      <ArrowRight size={15} strokeWidth={2.5} />
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <SeriesSelectionButton seriesItem={seriesItem} selected={selectedSeriesSet.has(seriesItem.id)} onToggle={toggleSeriesSelection} />
+                      <span className="motion-arrow-shift flex h-8 w-8 items-center justify-center rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-500 transition-colors group-hover:bg-accent group-hover:border-accent group-hover:text-white shadow-sm">
+                        <ArrowRight size={15} strokeWidth={2.5} />
+                      </span>
+                    </div>
                   </div>
                   <strong className="text-lg font-extrabold tracking-tight leading-tight text-stone-900 dark:text-stone-100 relative z-10 group-hover:text-accent transition-colors">{seriesItem.title}</strong>
                   <p className="mt-1 truncate font-mono text-[11px] font-medium text-stone-600 dark:text-zinc-500 relative z-10">videos/{seriesItem.id}/</p>
@@ -149,6 +223,12 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
             </div>
           )}
         </div>
+        <SeriesSelectionToolbar
+          selectedCount={selectedSeriesIds.length}
+          onSelectAll={selectVisibleSeries}
+          onClear={() => setSelectedSeriesIds([])}
+          onDelete={requestBulkDelete}
+        />
       </section>
     );
   }
@@ -231,6 +311,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
               variants={blurVariant}
               whileHover="hover"
               whileTap="tap"
+              aria-label={`打开系列 ${seriesItem.title}`}
               className="text-left group flex flex-col p-7 rounded-[2rem] workspace-panel border hover:border-accent/30 hover:bg-white dark:hover:bg-neutral-800/80 hover:shadow-lg transition-all outline-none focus:ring-4 focus:ring-accent/20 cursor-pointer"
               onClick={() => onOpenSeries(seriesItem.id)}
             >
@@ -239,9 +320,12 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-400 text-[11px] font-bold tracking-wide shadow-sm">
                   {seriesItem.videos.length} videos
                 </span>
-                <span className="motion-arrow-shift w-9 h-9 rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 flex items-center justify-center text-stone-600 dark:text-zinc-500 group-hover:bg-accent group-hover:border-accent group-hover:text-white transition-colors shadow-sm">
-                  <ArrowRight size={16} strokeWidth={2.5} />
-                </span>
+                <div className="flex items-center gap-2">
+                  <SeriesSelectionButton seriesItem={seriesItem} selected={selectedSeriesSet.has(seriesItem.id)} onToggle={toggleSeriesSelection} />
+                  <span className="motion-arrow-shift w-9 h-9 rounded-full bg-stone-50 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 flex items-center justify-center text-stone-600 dark:text-zinc-500 group-hover:bg-accent group-hover:border-accent group-hover:text-white transition-colors shadow-sm">
+                    <ArrowRight size={16} strokeWidth={2.5} />
+                  </span>
+                </div>
               </div>
 
               {/* Card Body */}
@@ -274,6 +358,12 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, compac
           没有匹配的系列。
         </div>
       )}
+      <SeriesSelectionToolbar
+        selectedCount={selectedSeriesIds.length}
+        onSelectAll={selectVisibleSeries}
+        onClear={() => setSelectedSeriesIds([])}
+        onDelete={requestBulkDelete}
+      />
     </section>
   );
 }

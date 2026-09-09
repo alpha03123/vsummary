@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import re
+from urllib.parse import parse_qs, urlsplit
 
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries
@@ -38,6 +39,73 @@ class StartLinkedVideoDownloadResult:
     """
 
     task_id: str
+
+
+@dataclass(frozen=True)
+class ExternalUrlInfo:
+    """已完成基础校验的外部视频 URL。"""
+
+    url: str
+
+
+class ResolveLinkedSeries:
+    """按 provider 解析外部系列并保存为链接型系列。"""
+
+    def __init__(self, workspace: LinkedSeriesStore, resolvers: dict[str, object], invalidator: WorkspaceIndexInvalidator) -> None:
+        self._workspace = workspace
+        self._resolvers = resolvers
+        self._invalidator = invalidator
+
+    async def run(self, *, provider: str, url: str) -> LibrarySeriesDTO:
+        resolver = _provider_resolver(self._resolvers, provider)
+        linked_series = await resolver.resolve_series(ExternalUrlInfo(url=_normalize_external_url(url, provider)))
+        self._workspace.save_linked_series(linked_series)
+        self._invalidator.invalidate()
+        return _to_series_dto(linked_series)
+
+
+class ResolveLinkedVideo:
+    """按 provider 解析单视频并追加到目标链接型系列。"""
+
+    def __init__(self, workspace: LinkedSeriesResolverWorkspace, resolvers: dict[str, object], invalidator: WorkspaceIndexInvalidator) -> None:
+        self._workspace = workspace
+        self._resolvers = resolvers
+        self._invalidator = invalidator
+
+    async def run(
+        self,
+        *,
+        provider: str,
+        url: str,
+        target_series_id: str | None = None,
+    ) -> LibraryVideoCardDTO:
+        resolver = _provider_resolver(self._resolvers, provider)
+        video = await resolver.resolve_single_video(ExternalUrlInfo(url=_normalize_external_url(url, provider)))
+        resolved_target_series_id = target_series_id or PLAYGROUND_SERIES_ID
+        series = next((item for item in self._workspace.list_series() if item.id == resolved_target_series_id), None)
+        if series is None:
+            raise LookupError(f"series not found '{resolved_target_series_id}'")
+        existing = self._workspace.get_linked_series(resolved_target_series_id) or LinkedSeries(
+            series_id=resolved_target_series_id,
+            title=series.title,
+            cover_url="",
+            source_url="",
+            is_agent_managed=series.is_agent_managed,
+            videos=[],
+        )
+        if not any(item.video_id == video.video_id for item in existing.videos):
+            self._workspace.save_linked_series(
+                LinkedSeries(
+                    series_id=existing.series_id,
+                    title=existing.title,
+                    cover_url=existing.cover_url,
+                    source_url=existing.source_url,
+                    is_agent_managed=existing.is_agent_managed,
+                    videos=[*existing.videos, video],
+                )
+            )
+            self._invalidator.invalidate()
+        return _to_video_card_dto(video)
 
 
 class CreateAgentLinkedSeries:
@@ -263,8 +331,8 @@ def _to_video_card_dto(video) -> LibraryVideoCardDTO:
         processed=False,
         status="linked",
         is_linked=True,
-        bilibili_bvid=video.bvid,
-        bilibili_page=video.page,
+        source_id=video.source_id,
+        item_index=video.item_index,
         source_url=video.source_url,
         provider=video.provider,
     )
@@ -273,3 +341,38 @@ def _to_video_card_dto(video) -> LibraryVideoCardDTO:
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug or "series"
+
+
+_PROVIDER_HOSTS = {
+    "bilibili": ("bilibili.com", "b23.tv"),
+    "youtube": ("youtube.com", "youtu.be"),
+    "douyin": ("douyin.com",),
+}
+
+
+def _provider_resolver(resolvers: dict[str, object], provider: str):
+    normalized_provider = provider.strip().lower()
+    resolver = resolvers.get(normalized_provider)
+    if resolver is None:
+        raise ValueError(f"不支持的外部平台：{provider}")
+    return resolver
+
+
+def _normalize_external_url(url: str, provider: str) -> str:
+    normalized = url.strip()
+    if not normalized:
+        raise ValueError("URL 不能为空。")
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
+        normalized = f"https://{normalized.lstrip('/')}"
+    parsed = urlsplit(normalized)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not hostname:
+        raise ValueError("请输入有效的 HTTP(S) 视频 URL。")
+    allowed_hosts = _PROVIDER_HOSTS[provider.strip().lower()]
+    if not any(hostname == host or hostname.endswith(f".{host}") for host in allowed_hosts):
+        raise ValueError(f"URL 不属于 {provider}。")
+    if provider.strip().lower() == "douyin" and parsed.path.rstrip("/") == "/jingxuan":
+        modal_id = parse_qs(parsed.query).get("modal_id", [""])[0]
+        if modal_id.isdigit():
+            return f"https://www.douyin.com/video/{modal_id}"
+    return normalized

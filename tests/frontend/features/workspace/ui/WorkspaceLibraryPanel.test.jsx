@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { WorkspaceLibraryPanel } from "@src/features/workspace/ui/WorkspaceLibraryPanel";
+import { getSourceViewLabel, WorkspaceLibraryPanel } from "@src/features/workspace/ui/WorkspaceLibraryPanel";
 
 const linkedDownloadedVideo = {
   id: "BV1xx411c7mD",
@@ -14,6 +14,15 @@ const linkedDownloadedVideo = {
 };
 
 describe("WorkspaceLibraryPanel", () => {
+  it.each([
+    ["bilibili", "在 Bilibili 中查看"],
+    ["douyin", "在抖音中查看"],
+    ["youtube", "在 YouTube 中查看"],
+    ["", "查看原媒体"],
+  ])("uses the provider-specific source label for %s", (provider, expected) => {
+    expect(getSourceViewLabel(provider)).toBe(expected);
+  });
+
   function renderPanelWithVideo(video) {
     return render(
       <WorkspaceLibraryPanel

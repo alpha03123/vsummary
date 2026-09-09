@@ -13,7 +13,7 @@ MCP_SERVER_NAME = "vsummary-video-series"
 MCP_HTTP_PATH = "/mcp"
 MCP_INSTRUCTIONS = (
     "Use this server to operate VSummary video-series workflows. "
-    "Create a series, add Bilibili URLs or local media file paths, process the series, poll status, "
+    "Create a series, add Bilibili, YouTube, Douyin URLs or local media file paths, process the series, poll status, "
     "then export Markdown text. Large exports are exposed as vsummary://exports resources. "
     "Do not call raw VSummary HTTP APIs when MCP tools are available."
 )

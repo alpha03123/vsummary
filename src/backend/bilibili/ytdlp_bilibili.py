@@ -121,7 +121,7 @@ class YtDlpBilibiliResolver:
                 single = _linked_video_from_payload(payload, fallback_url=url_info.url)
                 entries = [
                     {
-                        "id": single.bvid,
+                        "id": single.source_id,
                         "title": single.title,
                         "duration": single.duration_seconds,
                         "thumbnail": single.cover_url,
@@ -577,7 +577,12 @@ class BackgroundBilibiliDownloadStarter:
         Returns:
             下载任务 ID。
         """
-        return self.start(series_id=series_id, video_id=video.video_id, bvid=video.bvid, page=video.page)
+        return self.start(
+            series_id=series_id,
+            video_id=video.video_id,
+            bvid=video.source_id,
+            page=video.item_index,
+        )
 
 
 class BilibiliLinkedVideoDownloadStarter:
@@ -765,8 +770,8 @@ def _linked_video_from_payload(payload: dict[str, object], *, fallback_url: str)
     if page > 1 and "?" not in source_url:
         source_url = f"{source_url}?p={page}"
     return LinkedVideo(
-        bvid=bvid,
-        page=page,
+        source_id=bvid,
+        item_index=page,
         title=_as_text(payload.get("title")) or bvid,
         cover_url=_as_text(payload.get("thumbnail")),
         duration_seconds=_as_int(payload.get("duration")),

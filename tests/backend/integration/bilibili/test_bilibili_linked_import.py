@@ -203,8 +203,8 @@ class FileSystemLinkedSeriesTests(unittest.TestCase):
                     source_url="https://example.test/series",
                     videos=[
                         LinkedVideo(
-                            bvid="BV1xx411c7mD",
-                            page=1,
+                            source_id="BV1xx411c7mD",
+                            item_index=1,
                             title="第一讲",
                             cover_url="",
                             duration_seconds=123,
@@ -240,8 +240,8 @@ class FileSystemLinkedSeriesTests(unittest.TestCase):
                     source_url="",
                     videos=[
                         LinkedVideo(
-                            bvid="BV1xx411c7mD",
-                            page=1,
+                            source_id="BV1xx411c7mD",
+                            item_index=1,
                             title="第一讲",
                             cover_url="",
                             duration_seconds=123,
@@ -282,8 +282,8 @@ class ResolveBilibiliVideoTests(unittest.TestCase):
             workspace = FileSystemVideoWorkspace(Path(tmp))
             resolver = _FakeResolver(
                 LinkedVideo(
-                    bvid="BV1xx411c7mD",
-                    page=1,
+                    source_id="BV1xx411c7mD",
+                    item_index=1,
                     title="第一讲",
                     cover_url="",
                     duration_seconds=123,
@@ -306,8 +306,8 @@ class ResolveBilibiliVideoTests(unittest.TestCase):
             workspace = FileSystemVideoWorkspace(Path(tmp))
             resolver = _FakeResolver(
                 LinkedVideo(
-                    bvid="BV1xx411c7mD",
-                    page=1,
+                    source_id="BV1xx411c7mD",
+                    item_index=1,
                     title="第一讲",
                     cover_url="",
                     duration_seconds=123,

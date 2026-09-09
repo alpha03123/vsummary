@@ -651,6 +651,20 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
+                  title="笔记长度"
+                  description="控制 AI 笔记的展开程度。"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.noteLength}
+                    options={[
+                      { id: "short", label: "短" },
+                      { id: "long", label: "长" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("noteLength", nextValue)}
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
                   title="生成章节截图"
                   description="为 AI 概括的每个章节截取视频画面并嵌入总结。关闭后不再生成或保留章节图片。"
                 >
@@ -661,15 +675,6 @@ export function WorkspaceSettingsPanel({
                   />
                 </WorkspaceSettingRow>
 
-                <WorkspaceSettingRow
-                  title="AI 视频内容增强(不建议开启)"
-                  description="利用大模型理解上下文后纠正转写文本，让总结结果更加精确。关闭可提高处理速度但会降低准确率。"
-                >
-                  <WorkspaceToggleSwitch
-                    checked={ui.transcriptEnhancementEnabled}
-                    onChange={() => onChangeSetting("transcriptEnhancementEnabled", !ui.transcriptEnhancementEnabled)}
-                  />
-                </WorkspaceSettingRow>
               </>
             )}
 

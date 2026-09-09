@@ -69,8 +69,8 @@ class LibraryVideoCardDTO:
         core_problem: 视频总结中的核心问题摘要，空字符串表示未生成或无内容。
         source_type: 源类型，"video" 表示本地视频文件。
         is_linked: 是否来自外部链接（未实际下载到本地）。
-        bilibili_bvid: Bilibili BV 号；非 B 站来源时为空字符串。
-        bilibili_page: Bilibili 分P 序号；非分P 视频为 0。
+        source_id: 外部平台内的稳定视频标识；本地视频时为空字符串。
+        item_index: 同一来源内的条目序号；本地视频时为 0。
         source_url: 外部入口链接；本地视频时为空字符串。
         provider: 外部站点标识；本地视频时为空字符串。
     """
@@ -83,8 +83,8 @@ class LibraryVideoCardDTO:
     core_problem: str = ""
     source_type: str = "video"
     is_linked: bool = False
-    bilibili_bvid: str = ""
-    bilibili_page: int = 0
+    source_id: str = ""
+    item_index: int = 0
     source_url: str = ""
     provider: str = ""
 

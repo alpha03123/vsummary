@@ -847,7 +847,11 @@ def _build_structured_request_modes(
         ),
         (
             STRUCTURED_MODE_JSON_OBJECT,
-            _build_json_mode_messages(messages=messages, validation_error=validation_error),
+            _build_json_mode_messages(
+                messages=messages,
+                response_model=response_model,
+                validation_error=validation_error,
+            ),
             {"type": "json_object"},
         ),
         (
@@ -873,26 +877,33 @@ def _build_structured_request_modes(
 def _build_json_mode_messages(
     *,
     messages: Sequence[dict[str, Any]],
+    response_model: type[BaseModel],
     validation_error: str | None,
 ) -> list[dict[str, Any]]:
     """为 json_object 模式构造消息列表。
 
-    在原始消息前插入一条角色为 ``user`` 的指令，要求 LLM 只输出 JSON
-    对象且不附加 Markdown/代码块/额外文本；若为校验失败后的重试，则在末尾
-    追加一条校验错误提示消息。
+    在原始消息前插入一条角色为 ``user`` 的指令，要求 LLM 按目标 Pydantic
+    Schema 输出单一 JSON 对象。``json_object`` 只保证响应是 JSON，不会把
+    Schema 发送给部分提供商；因此必须显式注入 Schema，避免缺失必填字段。
+    若为校验失败后的重试，则在末尾追加一条校验错误提示消息。
 
     Args:
         messages: 原始对话消息。
+        response_model: 目标 Pydantic 模型，用于注入 JSON Schema。
         validation_error: 上一轮的校验错误（重试时使用）；若为 ``None`` 则
             不追加错误提示。
 
     Returns:
         处理后的消息列表，可直接传入 completion 调用。
     """
+    schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)
     structured_messages = [
         {
             "role": "user",
-            "content": "这是 JSON mode 请求。只输出一个 JSON 对象，不要输出 Markdown、解释、代码块或额外文本。",
+            "content": (
+                "这是 JSON mode 请求。只输出一个 JSON 对象，不要输出 Markdown、解释、代码块或额外文本。\n"
+                f"JSON 对象必须匹配 {response_model.__name__} 的 JSON Schema：\n{schema}"
+            ),
         },
         *_dump_messages(messages),
     ]

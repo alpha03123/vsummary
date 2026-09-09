@@ -22,6 +22,7 @@ from backend.agent.schemas.tool_calls import (
     VideoSeekCall,
 )
 from backend.agent_graph.prompts import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
+from backend.video_summary.tools.catalog import get_tool_definition
 
 
 class PlannedVideoToolCall(BaseModel):
@@ -63,22 +64,36 @@ class VideoActionPlannerPayload(BaseModel):
     """LLM 结构化输出：`VideoActionPlanner` 的一次完整规划结果。
 
     Attributes:
+        requested_artifact: 用户本轮语义上要求持久化的制品类型。
         tool_calls: 模型决定执行的多条工具调用（最多 2 条，会在下游裁剪）。
         action_summary: 对本次规划的简短文字说明（供回答引用）。
     """
 
+    requested_artifact: Literal["none", "note"]
     tool_calls: list[PlannedVideoToolCall] = Field(default_factory=list)
     action_summary: str = ""
+
+    @model_validator(mode="after")
+    def validate_artifact_fulfillment(self) -> VideoActionPlannerPayload:
+        """保证模型声明需要笔记时，计划中包含唯一的保存动作。"""
+        save_note_count = sum(call.tool_name == "save_note" for call in self.tool_calls)
+        if self.requested_artifact == "note" and save_note_count != 1:
+            raise ValueError("请求生成笔记时，必须且只能调用一次 save_note。")
+        if self.requested_artifact == "none" and save_note_count:
+            raise ValueError("未请求持久化笔记时不能调用 save_note。")
+        return self
 
 
 class VideoActionPlan(BaseModel):
     """经过校验与裁剪后的最终 video scope 动作计划。
 
     Attributes:
+        requested_artifact: 用户本轮语义上要求持久化的制品类型。
         tool_calls: 校验通过的工具调用列表（最多 2 条）。
         action_summary: 规划的文字说明，已 `strip`。
     """
 
+    requested_artifact: Literal["none", "note"]
     tool_calls: list[ToolCall] = Field(default_factory=list)
     action_summary: str = ""
 
@@ -105,9 +120,10 @@ class VideoActionPlanner:
         - 可选 `debug_trace` 入参会把"输入 + LLM 输出"完整落盘，便于排障。
     """
 
-    def __init__(self, *, gateway) -> None:
+    def __init__(self, *, gateway, note_length: str = "long") -> None:
         """注入 LLM 结构化输出网关（实现 `ChatGateway.create_structured_completion`）。"""
         self._gateway = gateway
+        self._note_length = note_length
 
     def run(
         self,
@@ -133,6 +149,7 @@ class VideoActionPlanner:
             user_message=user_message,
             retrieval_results=retrieval_results,
             memory_messages=memory_messages or [],
+            note_length=self._note_length,
         )
         payload = self._gateway.create_structured_completion(
             messages,
@@ -147,6 +164,7 @@ class VideoActionPlanner:
                     "retrieval_results": _render_evidence(retrieval_results),
                 },
                 "output": {
+                    "requested_artifact": plan.requested_artifact,
                     "tool_calls": [call.model_dump(mode="json") for call in plan.tool_calls],
                     "action_summary": plan.action_summary,
                 },
@@ -171,6 +189,7 @@ def _coerce_plan(payload: VideoActionPlannerPayload) -> VideoActionPlan:
             raise ValueError(f"video action 不允许工具: {call.tool_name.value}")
         calls.append(call)
     return VideoActionPlan(
+        requested_artifact=payload.requested_artifact,
         tool_calls=calls[:2],
         action_summary=payload.action_summary.strip(),
     )
@@ -205,12 +224,13 @@ def _build_messages(
     user_message: str,
     retrieval_results: list[dict[str, object]],
     memory_messages: list[dict[str, object]],
+    note_length: str,
 ) -> list[AgentChatMessage]:
     """构造送往 LLM 的 system + user 双轮消息。
 
     Args:
         user_message: 用户原始提问。
-        retrieval_results: 检索证据列表（会经过 `_render_evidence` 截断）。
+        retrieval_results: 检索证据列表；由上游根据上下文预算决定全文或 RAG 结果。
         memory_messages: 会话记忆消息列表。
 
     Returns:
@@ -219,7 +239,7 @@ def _build_messages(
     return [
         AgentChatMessage(
             role="system",
-            content=VIDEO_ACTION_PLANNER_SYSTEM_PROMPT,
+            content=f"{VIDEO_ACTION_PLANNER_SYSTEM_PROMPT}\n可用工具说明：\n{_render_tool_instructions(note_length)}",
         ),
         AgentChatMessage(
             role="user",
@@ -244,14 +264,57 @@ def _build_tool_schema_specs() -> list[dict[str, object]]:
     ]
 
 
+def _render_tool_instructions(note_length: str) -> str:
+    """将当前规划器允许的工具定义渲染为模型可读的调用说明。"""
+    lines: list[str] = []
+    for tool_name in VIDEO_ACTION_TOOL_MODELS:
+        tool = get_tool_definition(tool_name)
+        description = tool.description
+        if tool.name.value == "save_note":
+            description = f"{description}{_note_length_instruction(note_length)}"
+        lines.append(f"- `{tool.name.value}`（{tool.title}）：{description}")
+        if tool.arguments:
+            arguments = "；".join(f"`{name}`：{description}" for name, description in tool.arguments.items())
+            lines.append(f"  参数：{arguments}")
+    return "\n".join(lines)
+
+
+def _note_length_instruction(note_length: str) -> str:
+    if note_length == "long":
+        return (
+            "笔记长度设为长：你在写一份可独立学习、复习和回查的视频学习笔记，不是在写一段扩写版摘要。"
+            "完整阅读提供的概况与转写后，先在内部按视频推进顺序建立内容地图：识别每个实质主题、概念、论证、"
+            "区分、机制、例子、问题、回应、建议与结论；最终笔记必须覆盖这些内容单元，不能只挑开头的核心框架。"
+            "忽略片头片尾、订阅引导、重复寒暄与不承载主题信息的闲谈；其余有学习价值的内容都应在某个章节得到实质展开。"
+            "笔记应先给出视频讨论的核心问题、主线与内容地图，再依视频自身的论证结构组织多个主题章节，而不是套固定模板。"
+            "每个主题章节要说明：它在讨论什么，视频给出的具体观点、机制或区分是什么，为什么成立或在什么条件下成立，"
+            "它与前后主题如何相连，以及它对理解、判断或行动有什么意义。不要把一个要点只改写成一句结论。"
+            "对反复出现的核心概念，首次出现时写清中文名、原文术语（若有）、定义、构成要素和在本视频中的作用；"
+            "在文末汇总真正重要的术语表。对真实存在的对照、分类、流程、判断条件或角色关系，用表格、分步清单或对照小节帮助复习。"
+            "保留视频中的重要例子、比喻、问题及其回答，并解释它们用于说明哪个观点；若视频按章节或问题逐步推进，应让笔记保留这条推进线。"
+            "把视频明确陈述、说话者观点与基于视频的合理推断区分开。研究、统计、来源、引语、书名、案例和时间点只在视频证据明确提供时写入，并注明其来自节目或说话者。"
+            "视频没有公式或明确可形式化的变量关系时，不要为了笔记完整性添加公式；视频直接给出公式时可忠实保留，"
+            "视频明确说明变量、方向或关系时可整理为公式，但必须标注为“根据视频关系整理”，且不得补造系数、权重、阈值、变量或研究结论。"
+            "没有证据就不要补写学术理论、人物案例、书目、时间锚点或资源推荐。"
+            "行动建议必须来自视频的明确建议，或被明确标为基于本视频的可迁移实践；写清适用情境、操作步骤与边界，避免空泛鼓励。"
+            "相同信息只放在一个最合适的主章节，后续用简短关联代替重复；篇幅由完整覆盖与必要解释自然决定，不设置字数上限，不为拉长篇幅重复、泛化或杜撰内容。"
+            "最终使用层次清晰的 Markdown。用二级、三级标题表达知识结构，结尾给出可用于复习或讨论的关键问题；"
+            "保存前检查每个实质内容单元是否已有归属，确保读者不看原视频也能理解全貌、关键细节与各观点之间的关系。"
+        )
+    return "笔记长度设为短：以紧凑结构提炼最重要的信息，避免展开重复背景或边缘细节。"
+
+
 def _render_evidence(retrieval_results: list[dict[str, object]]) -> list[dict[str, object]]:
-    """把检索证据投影为 LLM 友好的精简字典列表（`text` 截断到 2000 字）。
+    """把检索证据投影为 LLM 可消费的字典列表。
+
+    上游已根据上下文预算决定提供完整转写或 RAG 结果；动作规划器必须保留
+    该决定，不得二次截断证据文本。
 
     Args:
         retrieval_results: 原始检索 hit 字典列表，非字典项会被静默跳过。
 
     Returns:
-        含 `index` / `source_type` / `title` / 时间戳 / 截断后 `text` 等字段的字典列表。
+        含 `index` / `source_type` / `title` / 时间戳 / 证据文本等字段的字典列表。
     """
     rendered: list[dict[str, object]] = []
     for index, item in enumerate(retrieval_results, start=1):
@@ -267,7 +330,7 @@ def _render_evidence(retrieval_results: list[dict[str, object]]) -> list[dict[st
                 "start_seconds": item.get("start_seconds"),
                 "end_seconds": item.get("end_seconds"),
                 "chapter_title": item.get("chapter_title"),
-                "text": text[:2000],
+                "text": text,
             }
         )
     return rendered

@@ -818,7 +818,7 @@ class FileSystemVideoWorkspace:
         """把 `linked_series.json` 中的视频逐条解析为卡片，本地已下载则合并。
 
         关键规则：
-            - `bvid` + `page=1` 组成 `video_id`，多 page 时拼接 `_p<page>`；
+            - `source_id` + `item_index=1` 组成 `video_id`，后续条目拼接 `_p<item_index>`；
             - 若 `videos/<series_id>/<video_id>.<ext>` 已存在，本地副本覆盖
               元数据中的标题/封面/状态；
             - 元数据中存在的条目而本地没有的，按"linked 但未下载"展示。
@@ -845,9 +845,9 @@ class FileSystemVideoWorkspace:
         for item in videos:
             if not isinstance(item, dict):
                 raise ValueError("linked_series.json 格式错误：video 必须是对象。")
-            bvid = _require_text(item.get("bvid"), "linked_video.bvid")
-            page = _as_positive_int(item.get("page"), 1)
-            video_id = bvid if page == 1 else f"{bvid}_p{page}"
+            source_id = _linked_source_id(item)
+            item_index = _as_positive_int(item.get("item_index", item.get("page")), 1)
+            video_id = source_id if item_index == 1 else f"{source_id}_p{item_index}"
             consumed_video_ids.add(video_id)
             local_file = local_paths_by_stem.get(video_id)
             if local_file is not None:
@@ -863,8 +863,8 @@ class FileSystemVideoWorkspace:
                         status=self._read_video_processing_status(summary_path),
                         core_problem=self._read_core_problem(series_id, video_id),
                         is_linked=False,
-                        bilibili_bvid=bvid,
-                        bilibili_page=page,
+                        source_id=source_id,
+                        item_index=item_index,
                         source_url=str(item.get("source_url", "")),
                         provider=str(item.get("provider", "bilibili")).strip() or "bilibili",
                     )
@@ -880,8 +880,8 @@ class FileSystemVideoWorkspace:
                     status="linked",
                     core_problem="",
                     is_linked=True,
-                    bilibili_bvid=bvid,
-                    bilibili_page=page,
+                    source_id=source_id,
+                    item_index=item_index,
                     source_url=str(item.get("source_url", "")),
                     provider=str(item.get("provider", "bilibili")).strip() or "bilibili",
                 )
@@ -1084,8 +1084,8 @@ class FileSystemVideoWorkspace:
             "is_agent_managed": series.is_agent_managed,
             "videos": [
                 {
-                    "bvid": video.bvid,
-                    "page": video.page,
+                    "source_id": video.source_id,
+                    "item_index": video.item_index,
                     "title": video.title,
                     "cover_url": video.cover_url,
                     "duration_seconds": video.duration_seconds,
@@ -1128,9 +1128,9 @@ class FileSystemVideoWorkspace:
             is_agent_managed=bool(payload.get("is_agent_managed", False)),
             videos=[
                 LinkedVideo(
-                    bvid=_require_text(item.get("bvid"), "linked_video.bvid"),
-                    page=_as_positive_int(item.get("page"), 1),
-                    title=str(item.get("title", "")).strip() or _require_text(item.get("bvid"), "linked_video.bvid"),
+                    source_id=_linked_source_id(item),
+                    item_index=_as_positive_int(item.get("item_index", item.get("page")), 1),
+                    title=str(item.get("title", "")).strip() or _linked_source_id(item),
                     cover_url=str(item.get("cover_url", "")),
                     duration_seconds=_as_positive_int(item.get("duration_seconds"), 0),
                     source_url=str(item.get("source_url", "")),
@@ -1218,11 +1218,11 @@ class FileSystemVideoWorkspace:
             for item in videos:
                 if not isinstance(item, dict):
                     continue
-                bvid = item.get("bvid")
-                page = item.get("page", 1)
-                if not isinstance(bvid, str) or not bvid.strip():
+                source_id = _linked_source_id_or_none(item)
+                if source_id is None:
                     continue
-                item_video_id = bvid if _as_positive_int(page, 1) == 1 else f"{bvid}_p{_as_positive_int(page, 1)}"
+                item_index = _as_positive_int(item.get("item_index", item.get("page")), 1)
+                item_video_id = source_id if item_index == 1 else f"{source_id}_p{item_index}"
                 if item_video_id == video_id:
                     item["title"] = normalized
                     atomic_write_text(linked_meta_path, json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1805,6 +1805,17 @@ def _require_text(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} 不能为空。")
     return value.strip()
+
+
+def _linked_source_id(item: dict[str, object]) -> str:
+    """读取当前链接元数据的 source_id，并迁移既有 Bilibili bvid 字段。"""
+    value = item.get("source_id", item.get("bvid"))
+    return _require_text(value, "linked_video.source_id")
+
+
+def _linked_source_id_or_none(item: dict[str, object]) -> str | None:
+    value = item.get("source_id", item.get("bvid"))
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _as_positive_int(value: object, default: int) -> int:

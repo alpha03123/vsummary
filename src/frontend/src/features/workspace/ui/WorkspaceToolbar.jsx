@@ -18,6 +18,7 @@ export function WorkspaceToolbar({
   onToggleSidebar,
   onToggleChatDrawer,
   chatDrawerOpen,
+  chatDraftReady = false,
   chatDrawerEnabled = true,
   onOpenUsagePage,
   onOpenUpdate,
@@ -86,7 +87,9 @@ export function WorkspaceToolbar({
             className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
               chatDrawerOpen
                 ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm"
-                : "text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"
+                : chatDraftReady
+                  ? "animate-pulse border-2 border-accent bg-accent/10 text-accent ring-4 ring-accent/20"
+                  : "text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"
             }`}
             onClick={onToggleChatDrawer}
             title="打开分析助手"

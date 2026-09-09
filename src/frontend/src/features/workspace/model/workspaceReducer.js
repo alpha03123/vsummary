@@ -1389,6 +1389,8 @@ export function workspaceReducer(state, action) {
         ...state,
         downloadingVideoKey: buildVideoKey(action.seriesId, action.videoId),
         videoDownloadProgress: null,
+        videoDownloadError: null,
+        videoDownloadErrorKey: null,
         library: updateVideoCardInLibrary(
           state.library,
           action.seriesId,
@@ -1413,6 +1415,8 @@ export function workspaceReducer(state, action) {
         ...state,
         downloadingVideoKey: null,
         videoDownloadProgress: null,
+        videoDownloadError: null,
+        videoDownloadErrorKey: null,
         library: action.library,
       };
     case "video_download_cancel_requested":
@@ -1421,6 +1425,8 @@ export function workspaceReducer(state, action) {
         ...state,
         downloadingVideoKey: null,
         videoDownloadProgress: null,
+        videoDownloadError: action.error ?? null,
+        videoDownloadErrorKey: buildVideoKey(action.seriesId, action.videoId),
         library: updateVideoCardInLibrary(
           state.library,
           action.seriesId,

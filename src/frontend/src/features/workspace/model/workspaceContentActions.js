@@ -16,7 +16,7 @@ import {
   generateSeriesSummaries,
   generateVideoSummary,
   restoreAutomaticTranscriptAndGenerateVideoSummary,
-  initBilibiliCookie,
+  initExternalCookie,
   importChaoxingCourse,
   importLocalPlaygroundVideos,
   importLocalSeries,
@@ -28,8 +28,8 @@ import {
   initChaoxing,
   loadChaoxingCourses,
   loadChaoxingStatus,
-  resolveBilibiliSeries,
-  resolveBilibiliVideo,
+  resolveLinkedSeries,
+  resolveLinkedVideo,
   relinkExternalVideo,
   selectLocalMedia,
   subscribeChaoxingImportProgress,
@@ -449,8 +449,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         }
         if (snapshot.status === "failed" || snapshot.status === "cancelled") {
           cleanup();
-          dispatch({ type: "video_download_failed", seriesId, videoId });
-          reject(new Error(snapshot.error || snapshot.detail || "视频下载失败"));
+          const message = snapshot.error || snapshot.detail || "视频下载失败";
+          dispatch({ type: "video_download_failed", seriesId, videoId, error: message });
+          reject(new Error(message));
         }
       });
     });
@@ -804,31 +805,31 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     );
   }
 
-  async function onResolveLinkedSeries(url) {
+  async function onResolveLinkedSeries(provider, url) {
     try {
-      const rawSeries = await resolveBilibiliSeries(url);
+      const rawSeries = await resolveLinkedSeries(provider, url);
       await reloadWorkspaceLibrary();
       return rawSeries;
     } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析 Bilibili 系列失败" });
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析外部系列失败" });
       throw error;
     }
   }
 
-  async function onResolvePlaygroundVideo(url) {
+  async function onResolvePlaygroundVideo(provider, url) {
     try {
-      const rawVideo = await resolveBilibiliVideo(url);
+      const rawVideo = await resolveLinkedVideo(provider, url);
       await reloadWorkspaceLibrary();
       return rawVideo;
     } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析 Bilibili 视频失败" });
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "解析外部视频失败" });
       throw error;
     }
   }
 
-  async function onResolveSeriesVideo(url, seriesId) {
+  async function onResolveSeriesVideo(provider, url, seriesId) {
     try {
-      const rawVideo = await resolveBilibiliVideo(url, seriesId);
+      const rawVideo = await resolveLinkedVideo(provider, url, seriesId);
       await reloadWorkspaceLibrary();
       return rawVideo;
     } catch (error) {
@@ -837,14 +838,14 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onInitBilibiliCookie(options = {}) {
+  async function onInitExternalCookie(provider, options = {}) {
     try {
-      return await initBilibiliCookie(options);
+      return await initExternalCookie(provider, options);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw error;
       }
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "获取 Bilibili Cookie 失败" });
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "获取平台 Cookie 失败" });
       throw error;
     }
   }
@@ -951,8 +952,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const library = await reloadWorkspaceLibrary();
       dispatch({ type: "video_download_completed", seriesId, videoId, library });
     } catch (error) {
-      dispatch({ type: "video_download_failed", seriesId, videoId });
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "视频下载失败" });
+      const message = error instanceof Error ? error.message : "视频下载失败";
+      dispatch({ type: "video_download_failed", seriesId, videoId, error: message });
+      dispatch({ type: "load_failed", message });
     }
   }
 
@@ -990,6 +992,30 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "删除系列失败" });
     }
+  }
+
+  async function onDeleteSeriesByIds(seriesIds) {
+    const targets = Array.isArray(seriesIds) ? Array.from(new Set(seriesIds)) : [];
+    if (targets.length === 0) {
+      return { deleted: [], failed: [] };
+    }
+    const seriesById = new Map((state.library?.series ?? []).map((series) => [series.id, series]));
+    const deleted = [];
+    const failed = [];
+    for (const seriesId of targets) {
+      try {
+        await deleteSeries(seriesId);
+        deleted.push(seriesId);
+      } catch (error) {
+        failed.push({
+          seriesId,
+          title: seriesById.get(seriesId)?.title ?? seriesId,
+          error: errorMessage(error, "删除失败"),
+        });
+      }
+    }
+    await reloadWorkspaceLibrary();
+    return { deleted, failed };
   }
 
   async function onDeleteCurrentVideo() {
@@ -1092,7 +1118,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onRelinkVideo,
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
-    onInitBilibiliCookie,
+    onInitExternalCookie,
     onLoadChaoxingStatus,
     onInitChaoxing,
     onCancelChaoxingInit,
@@ -1103,6 +1129,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onImportLocalPlaygroundVideos,
     onImportSeriesVideos,
     onDeleteSeries,
+    onDeleteSeriesByIds,
     onRenameSeries,
     onDeleteCurrentVideo,
     onRenameCurrentVideo,
