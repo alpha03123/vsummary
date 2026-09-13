@@ -191,7 +191,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
                 >
                   <div className="mb-4 flex items-start justify-between gap-3 relative z-10">
                     <span className="inline-flex items-center rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 px-3 py-1 text-[11px] font-bold tracking-wide text-stone-600 dark:text-zinc-400 shadow-sm">
-                      {seriesItem.videos.length} videos
+                      {seriesItem.kind === "bilibili_inbox" ? "B站导入" : `${seriesItem.videos.length} videos`}
                     </span>
                     <div className="flex items-center gap-1">
                       <SeriesSelectionButton seriesItem={seriesItem} selected={selectedSeriesSet.has(seriesItem.id)} onToggle={toggleSeriesSelection} />
@@ -318,7 +318,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
               {/* Card Header */}
               <div className="flex justify-between items-start w-full mb-5">
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-400 text-[11px] font-bold tracking-wide shadow-sm">
-                  {seriesItem.videos.length} videos
+                  {seriesItem.kind === "bilibili_inbox" ? "B站导入" : `${seriesItem.videos.length} videos`}
                 </span>
                 <div className="flex items-center gap-2">
                   <SeriesSelectionButton seriesItem={seriesItem} selected={selectedSeriesSet.has(seriesItem.id)} onToggle={toggleSeriesSelection} />

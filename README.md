@@ -78,6 +78,14 @@ AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 
 
 - [安装、硬件与 ASR 配置](docs/installation.md)：Windows NVIDIA、Windows AMD、macOS 的环境、模型与启动方式。
 
+## 浏览器插件
+
+VSummary 提供 Chrome 浏览器插件。观看 Bilibili 视频时，可以直接在浏览器侧边栏中查看 AI 概况、章节、思维导图、知识卡片和笔记，并围绕当前视频提问。
+
+Windows 整合包解压后，插件位于 `extensions/bilibili-sidepanel`。启动 VSummary 后，在 Chrome 的扩展程序页面选择“加载已解压的扩展程序”，然后选择这个文件夹即可。
+
+- [浏览器插件安装与使用教程](docs/browser-extension.md)
+
 ## 数据目录
 
 - `videos/`：原始视频文件

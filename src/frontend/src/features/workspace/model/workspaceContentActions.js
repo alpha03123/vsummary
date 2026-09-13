@@ -15,6 +15,7 @@ import {
   generateVideoMindmap,
   generateSeriesSummaries,
   generateVideoSummary,
+  processAgentVideo,
   restoreAutomaticTranscriptAndGenerateVideoSummary,
   initExternalCookie,
   importChaoxingCourse,
@@ -264,6 +265,39 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         },
         subscriptionActive: false,
       });
+    }
+  }
+
+  async function onProcessLinkedVideo() {
+    if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
+      return;
+    }
+    if (!selectedVideo.isLinked && selectedVideo.status !== "linked") {
+      await onGenerateVideo();
+      return;
+    }
+
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    try {
+      await processAgentVideo(seriesId, videoId);
+      dispatch({
+        type: "generation_status_loaded",
+        taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        mode: "video",
+        seriesId,
+        videoId,
+        snapshot: {
+          status: "queued",
+          stage: "queued",
+          progress: 0,
+          detail: "任务已进入队列，等待开始处理",
+          error: null,
+        },
+        subscriptionActive: true,
+      });
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "提交视频处理失败" });
     }
   }
 
@@ -1100,6 +1134,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onGenerateKnowledgeCards,
     onClearKnowledgeCardsFeedback,
     onGenerateVideo,
+    onProcessLinkedVideo,
     onUploadSrt,
     onRestoreAutomaticTranscript,
     onGenerateMindmap,

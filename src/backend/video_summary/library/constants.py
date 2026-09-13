@@ -12,3 +12,6 @@ PLAYGROUND_SERIES_ID = "__playground__"
 从而让所有需要 `series_id` 维度的接口（生成、检索、聊天）仍然可用。
 """
 
+BILIBILI_INBOX_SERIES_ID = "bilibili"
+"""浏览器扩展导入 Bilibili 视频的固定系列 ID。"""
+

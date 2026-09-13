@@ -33,6 +33,7 @@ class LinkedApiTests(unittest.TestCase):
                 "is_linked": True,
                 "is_agent_managed": True,
                 "source_url": "",
+                "kind": "standard",
             },
         )
         self.assertEqual(container.create_agent_series.calls, ["Transformer 入门"])
@@ -62,7 +63,7 @@ class LinkedApiTests(unittest.TestCase):
         )
 
     def test_process_agent_series_accepts_multiple_selected_videos(self) -> None:
-        client = TestClient(create_app(_build_container(videos=[
+        container = _build_container(videos=[
             LibraryVideoCardDTO(
                 id="video-1",
                 title="视频 1",
@@ -77,13 +78,39 @@ class LinkedApiTests(unittest.TestCase):
                 processed=False,
                 status="pending",
             ),
-        ])))
+        ])
+        client = TestClient(create_app(container))
 
         response = client.post("/api/agent/series/series-1/process", json={"video_ids": ["video-1", "video-2"]})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["scope"], "videos")
         self.assertEqual(response.json()["video_ids"], ["video-1", "video-2"])
+        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-1").stage, "queued")
+        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-2").detail, "任务已进入队列，等待开始处理")
+
+    def test_cancelled_selected_video_does_not_restart_from_agent_queue(self) -> None:
+        container = _build_container()
+        reporter = container.generation_progress_tracker.create_reporter("series-1/BV1xx411c7mD")
+        container.generation_progress_tracker.request_cancel("series-1/BV1xx411c7mD")
+
+        from backend.api.routes.linked import _run_agent_selected_video_generation
+
+        asyncio.run(
+            _run_agent_selected_video_generation(
+                container=container,
+                series_id="series-1",
+                video_ids=["BV1xx411c7mD"],
+                transcript_enhancement_enabled=None,
+                progress_reporters={"BV1xx411c7mD": reporter},
+            )
+        )
+
+        self.assertEqual(container.download_calls, [])
+        self.assertEqual(
+            container.generation_progress_tracker.get_snapshot("series-1/BV1xx411c7mD").status,
+            "cancelled",
+        )
 
     def test_process_agent_series_downloads_linked_videos_before_generation(self) -> None:
         container = _build_container()
@@ -254,8 +281,8 @@ class LinkedApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["cancelled_video_ids"], ["local-video", "BV1xx411c7mD"])
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series/series-1").status, "cancelling")
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/local-video").status, "cancelling")
+        self.assertEqual(container.generation_progress_tracker.get_snapshot("series/series-1").status, "cancelled")
+        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/local-video").status, "cancelled")
         self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/BV1xx411c7mD").status, "idle")
         self.assertEqual(
             container.video_download_progress_tracker.get_snapshot("download/series-1/BV1xx411c7mD").status,
@@ -497,8 +524,8 @@ class _FakeGenerateSeriesSummaries:
 
 
 class _FakeGenerateVideoSummary:
-    async def run(self, series_id: str, video_id: str, *, transcript_enhancement_enabled=None):
-        del series_id, video_id, transcript_enhancement_enabled
+    async def run(self, series_id: str, video_id: str, *, transcript_enhancement_enabled=None, progress_reporter=None):
+        del series_id, video_id, transcript_enhancement_enabled, progress_reporter
         await asyncio.sleep(0)
 
 

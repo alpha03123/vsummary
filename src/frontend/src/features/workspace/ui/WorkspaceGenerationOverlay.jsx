@@ -3,7 +3,9 @@ import { motion } from "framer-motion";
 import { WorkspaceMetricCard } from "./shared/WorkspaceMetricCard";
 
 const GENERATION_STAGE_ITEMS = [
+  { id: "queued", label: "等待处理" },
   { id: "batch", label: "批量处理" },
+  { id: "download", label: "下载视频" },
   { id: "probe", label: "分析视频" },
   { id: "extract_audio", label: "MP4 转音频" },
   { id: "transcribe", label: "语音转写" },

@@ -87,6 +87,7 @@ class SeriesResponse(BaseModel):
     is_linked: bool
     is_agent_managed: bool = False
     source_url: str
+    kind: str = "standard"
 
     @classmethod
     def from_model(cls, series: LibrarySeriesDTO) -> "SeriesResponse":
@@ -105,6 +106,7 @@ class SeriesResponse(BaseModel):
             is_linked=series.is_linked,
             is_agent_managed=series.is_agent_managed,
             source_url=series.source_url,
+            kind=series.kind,
         )
 
 class WorkspaceResponse(BaseModel):

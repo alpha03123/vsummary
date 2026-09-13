@@ -37,6 +37,7 @@ tmp/
 /workspace/
 /data/
 .worktrees/
+.workbuddy/
 
 # Local planning artifacts
 docs/superpowers/

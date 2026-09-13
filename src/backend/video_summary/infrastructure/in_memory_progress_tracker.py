@@ -165,6 +165,11 @@ class InMemoryProgressTracker:
                 updated_at=now,
             )
 
+    def cancel(self, task_id: str, detail: str | None = None) -> None:
+        """把任务立即收敛到取消终态，并保留取消标记阻止后续写回。"""
+        self.request_cancel(task_id)
+        TaskProgressReporter(self, task_id).cancelled(detail)
+
     def is_cancel_requested(self, task_id: str) -> bool:
         """判断指定任务是否已被请求取消（与具体快照状态解耦）。"""
         with self._lock:

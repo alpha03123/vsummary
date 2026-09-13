@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Database, LoaderCircle, X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
-import { WorkspaceReadingPane } from "./WorkspaceReadingPane";
+import { WorkspaceVideoScopePane } from "./WorkspaceVideoScopePane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
@@ -250,65 +250,15 @@ export function WorkspacePage({ page }) {
 
   function renderReadingPane() {
     return (
-      <WorkspaceReadingPane
-        ui={ui}
-        tools={tools}
-        library={library}
-        chat={chat}
-        summary={summary}
+      <WorkspaceVideoScopePane
+        page={page}
         playbackTime={playbackTime}
         followOverviewPlayback={followOverviewPlayback}
         onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
-        mindmap={mindmap}
-        seriesMindmap={seriesMindmap}
-        seriesMindmapAvailable={seriesMindmapAvailable}
-        seriesMindmapLoading={generation.seriesMindmapLoading}
-        seriesOverviewSummariesByVideoId={seriesOverviewSummariesByVideoId}
-        seriesOverviewLoading={generation.seriesOverviewLoading}
-        generatingSeriesMindmap={generation.generatingSeriesMindmap}
-        mindmapGenerationProgress={generation.mindmapGenerationProgress}
-        knowledgeCards={knowledgeCards}
-        knowledgeCardsGenerating={knowledgeCardsGenerating}
-        knowledgeCardsFeedback={knowledgeCardsFeedback}
-        notes={notes}
-        activeSeries={activeSeries}
-        selectedVideo={selectedVideo}
-        selectedContextType={selectedContextType}
-        selectedNode={selectedNode}
-        previewUrl={previewUrl}
-        playerSeekRequest={playerSeekRequest}
-        citationFocus={citationFocus}
-        onSeek={shell.player.seekToTime}
-        selectedToolId={state.selectedToolId}
-        selectedChapterId={state.selectedChapterId}
-        toolsLoading={state.toolsLoading}
-        summaryLoading={state.summaryLoading}
-        mindmapLoading={state.mindmapLoading}
-        knowledgeCardsLoading={generation.knowledgeCardsLoading}
-        notesLoading={generation.notesLoading}
-        savingNote={generation.savingNote}
-        isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
-        isGeneratingSelectedVideo={generation.isGeneratingSummary}
-        onSelectTool={actions.selectTool}
-        onSelectVideo={actions.selectVideo}
-        onFocusNode={actions.focusNode}
-        onGenerateMindmap={actions.generateMindmap}
-        onGenerateSeriesMindmap={actions.generateSeriesMindmap}
-        onGenerateKnowledgeCards={actions.generateKnowledgeCards}
-        onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
         onRequestAiNote={() => {
           setChatDraft("帮我生成一份笔记");
           setChatDraftReady(!isChatCenterMode && !chat.drawerOpen);
         }}
-        onCreateNote={actions.createNote}
-        onUpdateNote={actions.updateNote}
-        onDeleteNote={actions.deleteNote}
-        onLoadTranscriptMarkdown={actions.loadTranscriptMarkdown}
-        onLoadSummaryMarkdown={actions.loadSummaryMarkdown}
-        onUpdateSummary={actions.updateSummary}
-        onUpdateTranscript={actions.updateTranscript}
-        onUploadSrt={actions.uploadSrt}
-        onRestoreAutomaticTranscript={actions.restoreAutomaticTranscript}
       />
     );
   }
@@ -324,7 +274,7 @@ export function WorkspacePage({ page }) {
           </h1>
           <p className="text-stone-600">
             {waitingForBackend
-              ? "正在等待后端服务响应，连接成功后会自动进入工作区。"
+              ? "正在等待后端服务响应，请稍等...."
               : "正在扫描 `videos/` 目录并构建当前工作区。"}
           </p>
         </div>

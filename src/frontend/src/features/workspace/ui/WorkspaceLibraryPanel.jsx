@@ -513,6 +513,7 @@ export function WorkspaceLibraryPanel({
 }) {
   const videos = activeSeries?.videos ?? [];
   const isPlayground = activeSeries?.id === "__playground__";
+  const isBilibiliInbox = activeSeries?.kind === "bilibili_inbox";
   const isLinkedSeries = Boolean(activeSeries?.isLinked);
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -567,7 +568,7 @@ export function WorkspaceLibraryPanel({
         <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-[10px] font-bold text-stone-600 dark:text-zinc-400 tracking-wider uppercase mb-1">
-              {isPlayground ? "Playground" : isLinkedSeries ? "Linked Series" : "Sources"}
+              {isPlayground ? "Playground" : isBilibiliInbox ? "B站导入" : isLinkedSeries ? "Linked Series" : "Sources"}
             </p>
             <h2 className="text-lg font-bold text-stone-800 dark:text-stone-100 leading-tight">{activeSeries?.title ?? "未选择 series"}</h2>
           </div>

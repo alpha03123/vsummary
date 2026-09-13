@@ -31,6 +31,8 @@ from backend.bilibili.ytdlp_bilibili import (
     build_video_download_task_id,
 )
 from backend.external.ytdlp import ExternalVideoResolutionError
+from backend.video_summary.generation.ports import ProgressReporter
+from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
@@ -66,14 +68,23 @@ async def process_agent_series(
         _find_series(container, series_id)
         run_id = payload.run_id or str(uuid4())
         if video_ids:
+            progress_reporters: dict[str, ProgressReporter] = {}
             for video_id in video_ids:
                 _find_video(container, series_id, video_id)
+                reporter = container.generation_progress_tracker.create_reporter(f"{series_id}/{video_id}")
+                reporter.update(
+                    "queued",
+                    0.0,
+                    "任务已进入队列，等待开始处理",
+                )
+                progress_reporters[video_id] = reporter
             asyncio.create_task(
                 _run_agent_selected_video_generation(
                     container=container,
                     series_id=series_id,
                     video_ids=video_ids,
                     transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
+                    progress_reporters=progress_reporters,
                 )
             )
             return {
@@ -175,24 +186,41 @@ async def _run_agent_selected_video_generation(
     series_id: str,
     video_ids: list[str],
     transcript_enhancement_enabled: bool | None,
+    progress_reporters: dict[str, ProgressReporter],
 ) -> None:
-    try:
-        for video_id in video_ids:
-            await _download_agent_linked_videos(
+    for video_id in video_ids:
+        reporter = progress_reporters[video_id]
+        try:
+            if reporter.is_cancel_requested():
+                reporter.cancelled("任务已取消")
+                continue
+            downloaded = await _download_agent_linked_videos(
                 container=container,
                 series_id=series_id,
                 video_ids=[video_id],
-                task_id=f"{series_id}/{video_id}",
+                progress_reporter=reporter,
             )
+            if not downloaded or reporter.is_cancel_requested():
+                reporter.cancelled("任务已取消")
+                continue
             await container.generate_video_summary.run(
                 series_id,
                 video_id,
                 transcript_enhancement_enabled=transcript_enhancement_enabled,
+                progress_reporter=reporter,
             )
-    except Exception as error:
-        for video_id in video_ids:
-            container.generation_progress_tracker.create_reporter(f"{series_id}/{video_id}").failed(str(error))
-        LOGGER.exception("Background agent selected video generation failed: series_id=%s video_ids=%s", series_id, video_ids)
+        except GenerateCancelledError:
+            reporter.cancelled("任务已取消")
+        except Exception as error:
+            if reporter.is_cancel_requested():
+                reporter.cancelled("任务已取消")
+                continue
+            reporter.failed(str(error))
+            LOGGER.exception(
+                "Background agent selected video generation failed: series_id=%s video_id=%s",
+                series_id,
+                video_id,
+            )
 
 
 async def _download_agent_linked_videos(
@@ -201,20 +229,25 @@ async def _download_agent_linked_videos(
     series_id: str,
     video_ids: list[str],
     task_id: str | None = None,
-) -> None:
+    progress_reporter: ProgressReporter | None = None,
+) -> bool:
+    reporter = progress_reporter
+    if reporter is None and task_id is not None:
+        reporter = container.generation_progress_tracker.create_reporter(task_id)
+
+    if reporter is not None and reporter.is_cancel_requested():
+        reporter.cancelled("任务已取消")
+        return False
+
     videos = _find_agent_download_targets(container, series_id, video_ids)
     if not videos:
-        return
-
-    reporter = None
-    if task_id is not None:
-        reporter = container.generation_progress_tracker.create_reporter(task_id)
+        return True
 
     total = len(videos)
     for index, video in enumerate(videos, start=1):
         if reporter is not None and reporter.is_cancel_requested():
             reporter.cancelled("任务已取消")
-            return
+            return False
         if reporter is not None:
             reporter.update(
                 "download",
@@ -222,7 +255,16 @@ async def _download_agent_linked_videos(
                 f"正在下载未缓存视频 {index}/{total}: {video.title}",
             )
         try:
-            await _download_agent_linked_video(container=container, series_id=series_id, video_id=video.id)
+            await _download_agent_linked_video(
+                container=container,
+                series_id=series_id,
+                video_id=video.id,
+                progress_reporter=reporter,
+            )
+        except GenerateCancelledError:
+            if reporter is not None:
+                reporter.cancelled("任务已取消")
+            return False
         except Exception as error:
             if reporter is not None:
                 reporter.failed(str(error))
@@ -230,12 +272,22 @@ async def _download_agent_linked_videos(
 
     if reporter is not None:
         reporter.update("download", 100.0, "未缓存视频已下载完成")
+    return True
 
 
-async def _download_agent_linked_video(*, container, series_id: str, video_id: str) -> None:
+async def _download_agent_linked_video(
+    *,
+    container,
+    series_id: str,
+    video_id: str,
+    progress_reporter: ProgressReporter | None = None,
+) -> None:
     result = container.start_linked_video_download.run(series_id=series_id, video_id=video_id)
     task_id = result.task_id
     while True:
+        if progress_reporter is not None and progress_reporter.is_cancel_requested():
+            container.video_download_progress_tracker.request_cancel(task_id)
+            raise GenerateCancelledError("任务已取消")
         snapshot = container.video_download_progress_tracker.get_snapshot(task_id)
         if snapshot.status == "completed":
             return

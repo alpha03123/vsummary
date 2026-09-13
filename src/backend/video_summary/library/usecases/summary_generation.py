@@ -172,6 +172,20 @@ class GenerateVideoSummaryFromLibrary:
         )
         return await asyncio.shield(task)
 
+    async def cancel(self, series_id: str, video_id: str) -> bool:
+        """立即取消指定视频的活跃生成协程。
+
+        进度 tracker 的取消标记只能让协作式阶段在下一次检查时退出；这里同时
+        取消承载流水线的 asyncio task，避免 UI 已请求取消但任务仍继续推进。
+        """
+        task_id = f"{series_id}/{video_id}"
+        async with self._active_tasks_lock:
+            task = self._active_tasks.get(task_id)
+            if task is None or task.done():
+                return False
+            task.cancel()
+            return True
+
     def begin_series_generation(self, series_id: str) -> None:
         """声明一个系列即将进入批量生成，用于互斥检查。
 
@@ -283,6 +297,9 @@ class GenerateVideoSummaryFromLibrary:
         except LookupError:
             return None
         except GenerateCancelledError:
+            reporter.cancelled("AI 概况生成已取消")
+            return None
+        except asyncio.CancelledError:
             reporter.cancelled("AI 概况生成已取消")
             return None
         except RuntimeError as error:

@@ -547,6 +547,13 @@ export function WorkspaceSettingsPanel({
                             <WorkspaceTextInput
                               value={asrApiKeyDisplayValue}
                               onChange={(nextValue) => onChangeSetting("asrApiKey", nextValue)}
+                              onBlur={() => onSaveAsrSettings?.()}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  onSaveAsrSettings?.();
+                                }
+                              }}
                               placeholder={ui.hasAsrApiKey ? "已保存" : "填写 DASHSCOPE_API_KEY"}
                               className="w-full"
                               type={showAsrApiKeyValue ? "text" : "password"}
@@ -821,7 +828,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="模型名称"
-                  description="可探测当前接口可用模型并选择，或切换回手动填写模型标识。"
+                  description="可探测当前可用模型并选择，或手动填写模型ID。"
                 >
                   <div className="flex w-full flex-col gap-2 sm:w-[340px] sm:flex-row sm:items-center">
                     {isProviderModelSelectActive ? (

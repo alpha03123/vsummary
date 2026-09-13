@@ -99,6 +99,7 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         cpu = PACKAGE_VARIANTS["cpu"]
         rendered = (self.repo_root / cpu.settings_template).read_text(encoding="utf-8")
 
+        self.assertIn('provider = "aliyun_bailian"', rendered)
         self.assertIn('embedding_provider = "fastembed"', rendered)
         self.assertIn('embedding_model = "BAAI/bge-small-zh-v1.5"', rendered)
 
@@ -127,6 +128,12 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("HUGGINGFACE_HUB_CACHE", script)
         self.assertIn("-m backend.api.http.server", script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
+
+    def test_release_builder_copies_browser_extensions(self) -> None:
+        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('Join-Path $RepoRoot "extensions"', script)
+        self.assertIn('Join-Path $appRoot "extensions"', script)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

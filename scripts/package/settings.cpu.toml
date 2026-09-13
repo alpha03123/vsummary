@@ -1,5 +1,5 @@
 [asr]
-provider = "faster_whisper"
+provider = "aliyun_bailian"
 language = "auto"
 transcript_enhancement_enabled = false
 

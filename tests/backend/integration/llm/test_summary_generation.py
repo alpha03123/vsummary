@@ -60,6 +60,23 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(use_case.is_video_generation_active("series-1", "video-1"))
         self.assertFalse(use_case.is_series_generation_active("series-1"))
 
+    async def test_cancel_stops_active_generator_task_immediately(self) -> None:
+        tracker = FakeProgressTracker()
+        workspace = FakeWorkspace()
+        generator = BlockingGenerator()
+        use_case = GenerateVideoSummaryFromLibrary(workspace, generator, tracker)
+
+        task = asyncio.create_task(use_case.run("series-1", "video-1"))
+        await asyncio.wait_for(generator.started.wait(), timeout=1.0)
+
+        self.assertTrue(await use_case.cancel("series-1", "video-1"))
+        self.assertIsNone(await asyncio.wait_for(task, timeout=1.0))
+        self.assertFalse(use_case.is_video_generation_active("series-1", "video-1"))
+        self.assertEqual(
+            tracker.reporters["series-1/video-1"].cancelled_calls,
+            ["AI 概况生成已取消"],
+        )
+
     async def test_two_different_videos_can_run_concurrently_when_video_generation_concurrency_is_two(self) -> None:
         tracker = FakeProgressTracker()
         workspace = FakeWorkspace(

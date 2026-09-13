@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "VSummary B站总结",
+  "version": "0.1.1",
+  "minimum_chrome_version": "116",
+  "description": "在 Bilibili 视频页将当前视频交给本机 VSummary 处理。",
+  "permissions": ["sidePanel", "tabs", "storage", "webNavigation"],
+  "host_permissions": [
+    "https://www.bilibili.com/video/BV*",
+    "https://bilibili.com/video/BV*",
+    "http://127.0.0.1:4173/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "logo.svg",
+    "32": "logo.svg",
+    "48": "logo.svg",
+    "128": "logo.svg"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.bilibili.com/video/BV*",
+        "https://bilibili.com/video/BV*"
+      ],
+      "js": ["content-seek-core.js", "content-seek.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "VSummary B站总结",
+    "default_icon": {
+      "16": "logo.svg",
+      "32": "logo.svg"
+    }
+  }
+}

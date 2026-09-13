@@ -696,6 +696,7 @@ function Build-AppPackage {
 
     Copy-AppFiles -DestinationRoot $appRoot
     Copy-DirectoryIfExists -Source $FrontendDistDir -Destination (Join-Path $appRoot "src\frontend\dist")
+    Copy-DirectoryIfExists -Source (Join-Path $RepoRoot "extensions") -Destination (Join-Path $appRoot "extensions")
     Set-Content -LiteralPath (Join-Path $appRoot "start.bat") -Value (Render-StartScript) -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $appRoot "VERSION") -Value $Script:ReleaseVersion -Encoding ASCII
     Write-AppFilesManifest -AppRoot $appRoot

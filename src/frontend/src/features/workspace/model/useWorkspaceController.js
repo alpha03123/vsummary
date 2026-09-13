@@ -237,6 +237,7 @@ export function useWorkspaceController() {
     onOpenCitationReference: chatActions.onOpenCitationReference,
     onClearChat: chatActions.onClearChat,
     onGenerateVideo: contentActions.onGenerateVideo,
+    onProcessLinkedVideo: contentActions.onProcessLinkedVideo,
     onUploadSrt: contentActions.onUploadSrt,
     onRestoreAutomaticTranscript: contentActions.onRestoreAutomaticTranscript,
     onGenerateMindmap: contentActions.onGenerateMindmap,

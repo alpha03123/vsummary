@@ -9,7 +9,7 @@ from pathlib import Path
 
 from backend.bilibili.ytdlp_bilibili import YtDlpBilibiliResolver
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.library.constants import BILIBILI_INBOX_SERIES_ID, PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
 from backend.video_summary.library.usecases.linked_videos import ResolveBilibiliVideo
@@ -192,6 +192,17 @@ class YtDlpBilibiliResolverTests(unittest.TestCase):
 
 
 class FileSystemLinkedSeriesTests(unittest.TestCase):
+    def test_list_series_includes_empty_bilibili_inbox(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = FileSystemVideoWorkspace(Path(tmp))
+
+            inbox = _find_series(workspace.list_series(), BILIBILI_INBOX_SERIES_ID)
+
+            self.assertEqual(inbox.title, "B站导入")
+            self.assertTrue(inbox.is_linked)
+            self.assertEqual(inbox.kind, "bilibili_inbox")
+            self.assertEqual(inbox.videos, [])
+
     def test_list_series_reports_linked_video_until_downloaded_file_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = FileSystemVideoWorkspace(Path(tmp))
@@ -277,6 +288,32 @@ class FileSystemLinkedSeriesTests(unittest.TestCase):
 
 
 class ResolveBilibiliVideoTests(unittest.TestCase):
+    def test_resolve_video_uses_bilibili_inbox_as_target_series(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = FileSystemVideoWorkspace(Path(tmp))
+            resolver = _FakeResolver(
+                LinkedVideo(
+                    source_id="BV1xx411c7mD",
+                    item_index=1,
+                    title="第一讲",
+                    cover_url="",
+                    duration_seconds=123,
+                    source_url="https://www.bilibili.com/video/BV1xx411c7mD",
+                )
+            )
+            usecase = ResolveBilibiliVideo(workspace, resolver, _NoopInvalidator())
+
+            result = asyncio.run(
+                usecase.run(
+                    url="https://www.bilibili.com/video/BV1xx411c7mD",
+                    target_series_id=BILIBILI_INBOX_SERIES_ID,
+                )
+            )
+
+            self.assertEqual(result.id, "BV1xx411c7mD")
+            inbox = _find_series(workspace.list_series(), BILIBILI_INBOX_SERIES_ID)
+            self.assertEqual([video.id for video in inbox.videos], ["BV1xx411c7mD"])
+
     def test_resolve_video_adds_unique_linked_video_to_playground(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace = FileSystemVideoWorkspace(Path(tmp))

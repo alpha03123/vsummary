@@ -267,6 +267,7 @@ export function toWorkspaceLibrary(payload) {
         id: asString(recordItem.id, `library.series[${index}].id`),
         title: asString(recordItem.title, `library.series[${index}].title`),
         isLinked: Boolean(recordItem.is_linked),
+        kind: typeof recordItem.kind === "string" && recordItem.kind.trim() ? recordItem.kind : "standard",
         sourceUrl: typeof recordItem.source_url === "string" ? recordItem.source_url : "",
         videos: recordVideos.map((video, videoIndex) =>
           asVideoCard(video, `library.series[${index}].videos[${videoIndex}]`),

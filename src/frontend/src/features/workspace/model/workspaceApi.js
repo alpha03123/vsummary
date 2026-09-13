@@ -442,6 +442,16 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
   );
 }
 
+export async function processAgentVideo(seriesId, videoId) {
+  return fetchJson(`/api/agent/series/${encodeURIComponent(seriesId)}/process`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ video_ids: [videoId] }),
+  });
+}
+
 export async function cancelVideoSummary(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate/cancel`, {
     method: "POST",

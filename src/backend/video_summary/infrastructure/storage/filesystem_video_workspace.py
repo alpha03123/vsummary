@@ -39,7 +39,7 @@ from backend.video_summary.generation.schemas import TranscriptSegmentPayload
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
 from backend.video_summary.infrastructure.rag.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
-from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.library.constants import BILIBILI_INBOX_SERIES_ID, PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import (
     ChapterCardDTO as ChapterCardDTO,
@@ -134,6 +134,7 @@ class FileSystemVideoWorkspace:
                     id=series_dir.name,
                     title=series_title,
                     videos=self._list_videos_for_series(series_dir),
+                    kind="bilibili_inbox" if series_dir.name == BILIBILI_INBOX_SERIES_ID else "standard",
                 )
 
         if self._workspace_dir.exists():
@@ -155,6 +156,7 @@ class FileSystemVideoWorkspace:
                         is_linked=series_id != PLAYGROUND_SERIES_ID,
                         is_agent_managed=bool(payload.get("is_agent_managed", False)),
                         source_url=str(payload.get("source_url", "")),
+                        kind="bilibili_inbox" if series_id == BILIBILI_INBOX_SERIES_ID else "standard",
                     )
                     continue
                 series_meta_path = ws_dir / SERIES_META_FILE
@@ -175,6 +177,15 @@ class FileSystemVideoWorkspace:
                 videos=[],
                 is_linked=False,
                 source_url="",
+            )
+        if BILIBILI_INBOX_SERIES_ID not in local_series:
+            local_series[BILIBILI_INBOX_SERIES_ID] = LibrarySeriesDTO(
+                id=BILIBILI_INBOX_SERIES_ID,
+                title="B站导入",
+                videos=[],
+                is_linked=True,
+                source_url="",
+                kind="bilibili_inbox",
             )
 
         return list(local_series.values())

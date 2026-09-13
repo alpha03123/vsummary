@@ -74,6 +74,11 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, dispatch }) {
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       clearGenerationSubscription(taskKey);
     }
+    if (snapshot.status === "completed") {
+      loadWorkspaceLibrary()
+        .then((library) => dispatch({ type: "workspace_loaded", library }))
+        .catch(() => {});
+    }
     if (snapshot.status === "failed" && snapshot.error) {
       dispatch({ type: "load_failed", message: snapshot.error });
     }
@@ -397,11 +402,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
       return;
     }
     if (state.selectedContextType === "video" && state.selectedSeriesId && state.selectedVideoId) {
-      const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-      if (isLinkedVideo(selectedVideo)) {
-        return;
-      }
-
       let cancelled = false;
       loadVideoGenerationStatus(state.selectedSeriesId, state.selectedVideoId)
         .then(({ snapshot }) => {

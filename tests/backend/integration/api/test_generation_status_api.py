@@ -136,6 +136,25 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"], "generation cancelled")
 
+    def test_video_cancel_immediately_sets_terminal_status_and_interrupts_active_generation(self) -> None:
+        tracker = InMemoryProgressTracker()
+        container = _build_container(tracker)
+        cancelled: list[tuple[str, str]] = []
+
+        async def cancel(series_id: str, video_id: str) -> bool:
+            cancelled.append((series_id, video_id))
+            return True
+
+        container.generate_video_summary = SimpleNamespace(cancel=cancel)
+        client = TestClient(create_app(container))
+
+        response = client.post("/api/videos/series-1/video-1/generate/cancel")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "cancelled", "task_id": "series-1/video-1"})
+        self.assertEqual(cancelled, [("series-1", "video-1")])
+        self.assertEqual(tracker.get_snapshot("series-1/video-1").status, "cancelled")
+
     def test_sse_progress_stream_emits_current_snapshot_immediately(self) -> None:
         tracker = InMemoryProgressTracker()
         reporter = tracker.create_reporter("series-1/video-1")
@@ -152,7 +171,9 @@ class GenerationStatusApiTests(unittest.TestCase):
 
 
 def _build_container(tracker: InMemoryProgressTracker):
-    source_runner = SimpleNamespace(run=lambda series_id, video_id: object())
+    source_runner = SimpleNamespace(
+        run=lambda series_id, video_id: SimpleNamespace(source_path=Path(__file__))
+    )
     library = SimpleNamespace(
         series=[
             LibrarySeriesDTO(

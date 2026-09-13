@@ -43,6 +43,19 @@ class GenerationProgressTrackerTests(unittest.TestCase):
         self.assertEqual(snapshot.stage, "cancelling")
         self.assertEqual(snapshot.progress, 40.0)
 
+    def test_cancel_transitions_to_terminal_state_without_reopening_task(self) -> None:
+        tracker = InMemoryProgressTracker()
+        reporter = tracker.create_reporter("series-1/video-1")
+        reporter.update("summarize", 88.0, "正在生成 AI 概况")
+
+        tracker.cancel("series-1/video-1", "任务已取消")
+        reporter.completed("AI 概况已生成")
+
+        snapshot = tracker.get_snapshot("series-1/video-1")
+        self.assertEqual(snapshot.status, "cancelled")
+        self.assertEqual(snapshot.detail, "任务已取消")
+        self.assertTrue(tracker.is_cancel_requested("series-1/video-1"))
+
     def test_create_reporter_advances_sequence_after_idle_snapshot_was_read(self) -> None:
         tracker = InMemoryProgressTracker()
 

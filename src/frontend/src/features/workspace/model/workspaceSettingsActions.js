@@ -312,7 +312,15 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
   async function onTestAsrConnection() {
     const nextUi = normalizeUiSettings(state.ui);
     try {
-      const result = await testAsrSettings(nextUi);
+      const savedSettings = await updateWorkspaceSettings(nextUi);
+      const persistedUi = {
+        ...nextUi,
+        ...savedSettings,
+        asrApiKey: "",
+      };
+      dispatch({ type: "workspace_settings_loaded", settings: persistedUi });
+
+      const result = await testAsrSettings(persistedUi);
       return {
         ok: result.ok === true,
         message: typeof result.message === "string" ? result.message : "ASR 连接正常",

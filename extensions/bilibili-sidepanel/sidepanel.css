@@ -1,0 +1,62 @@
+html,
+body,
+#workspace,
+.unsupported {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+}
+
+#workspace {
+  display: block;
+}
+
+#workspace[hidden] {
+  display: none;
+}
+
+html,
+body {
+  overflow: hidden;
+}
+
+.unsupported {
+  box-sizing: border-box;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 36px 28px;
+  color: #1f2328;
+  background: #f4f7fb;
+  text-align: center;
+}
+
+.unsupported[hidden] {
+  display: none;
+}
+
+.unsupported__eyebrow {
+  margin: 0;
+  color: #606773;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.unsupported h1,
+.unsupported p {
+  margin: 0;
+}
+
+.unsupported h1 {
+  font-size: 22px;
+}
+
+.unsupported > p:last-child {
+  max-width: 270px;
+  color: #69717d;
+  font-size: 14px;
+  line-height: 1.6;
+}

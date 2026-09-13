@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from io import BytesIO
 import logging
 import json
@@ -867,7 +868,7 @@ async def restore_automatic_transcript_and_generate_video_summary(
 
 
 @router.post("/api/videos/{series_id}/{video_id}/generate/cancel")
-def cancel_video_summary_generation(
+async def cancel_video_summary_generation(
     series_id: str,
     video_id: str,
     container: ApiContainerDep,
@@ -882,8 +883,18 @@ def cancel_video_summary_generation(
     Returns:
         {"status": "cancelled", "task_id": ...}
     """
-    container.generation_progress_tracker.request_cancel(_build_task_id(series_id, video_id))
-    return {"status": "cancelled", "task_id": _build_task_id(series_id, video_id)}
+    task_id = _build_task_id(series_id, video_id)
+    container.generation_progress_tracker.request_cancel(task_id)
+    container.video_download_progress_tracker.request_cancel(build_video_download_task_id(series_id, video_id))
+
+    cancel_generation = getattr(container.generate_video_summary, "cancel", None)
+    if callable(cancel_generation):
+        await cancel_generation(series_id, video_id)
+
+    finalize_cancel = getattr(container.generation_progress_tracker, "cancel", None)
+    if callable(finalize_cancel):
+        finalize_cancel(task_id, "任务已取消")
+    return {"status": "cancelled", "task_id": task_id}
 
 
 @router.post("/api/series/{series_id}/generate")
@@ -937,7 +948,7 @@ async def generate_series_summaries(
 
 
 @router.post("/api/series/{series_id}/generate/cancel")
-def cancel_series_summaries_generation(
+async def cancel_series_summaries_generation(
     series_id: str,
     container: ApiContainerDep,
     request: CancelSeriesSummariesRequest | None = None,
@@ -972,7 +983,6 @@ def cancel_series_summaries_generation(
             "active_run_id": active_run_id,
             "cancelled_video_ids": [],
         }
-    container.generation_progress_tracker.request_cancel(series_task_id)
     pending_videos = _get_pending_series_videos(container, series_id)
     active_video_ids = container.generate_series_summaries.get_active_video_ids(series_id)
     linked_video_ids = {video.id for video in pending_videos if video.is_linked or video.status == "linked"}
@@ -989,11 +999,20 @@ def cancel_series_summaries_generation(
         cancelled_video_ids,
     )
     for video_id in active_video_ids:
-        container.generation_progress_tracker.request_cancel(_build_task_id(series_id, video_id))
+        task_id = _build_task_id(series_id, video_id)
+        container.generation_progress_tracker.request_cancel(task_id)
+        cancel_generation = getattr(container.generate_video_summary, "cancel", None)
+        if callable(cancel_generation):
+            await cancel_generation(series_id, video_id)
+        finalize_cancel = getattr(container.generation_progress_tracker, "cancel", None)
+        if callable(finalize_cancel):
+            finalize_cancel(task_id, "任务已取消")
     for video_id in linked_video_ids:
         container.video_download_progress_tracker.request_cancel(build_video_download_task_id(series_id, video_id))
-    if not active_video_ids:
-        container.generation_progress_tracker.create_reporter(series_task_id).cancelled("任务已取消")
+    container.generation_progress_tracker.request_cancel(series_task_id)
+    finalize_series_cancel = getattr(container.generation_progress_tracker, "cancel", None)
+    if callable(finalize_series_cancel):
+        finalize_series_cancel(series_task_id, "任务已取消")
     return {
         "status": "cancelled",
         "task_id": series_task_id,

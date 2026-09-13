@@ -1,6 +1,64 @@
 import { describe, expect, it, vi } from "vitest";
 
 describe("workspaceContentActions media links", () => {
+  it("uses the agent processing route for a linked video", async () => {
+    vi.resetModules();
+    const processAgentVideo = vi.fn(() => Promise.resolve({ status: "scheduled" }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      processAgentVideo,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "bilibili",
+        selectedVideoId: "BV1example",
+      },
+      dispatch,
+      selectedVideo: { id: "BV1example", isLinked: true, status: "linked" },
+    });
+
+    await actions.onProcessLinkedVideo();
+
+    expect(processAgentVideo).toHaveBeenCalledWith("bilibili", "BV1example");
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "generation_status_loaded",
+      snapshot: expect.objectContaining({ status: "queued", stage: "queued" }),
+    }));
+  });
+
+  it("retries a downloaded pending video through the normal generation route", async () => {
+    vi.resetModules();
+    const generateVideoSummary = vi.fn(() => Promise.resolve({ title: "已生成", chapters: [] }));
+    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({ series: [] }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      generateVideoSummary,
+      loadWorkspaceLibrary,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "bilibili",
+        selectedVideoId: "BV1example",
+        ui: { transcriptEnhancementEnabled: true },
+      },
+      dispatch: vi.fn(),
+      selectedVideo: { id: "BV1example", isLinked: false, status: "pending" },
+    });
+
+    await actions.onProcessLinkedVideo();
+
+    expect(generateVideoSummary).toHaveBeenCalledWith("bilibili", "BV1example", {
+      transcriptEnhancementEnabled: true,
+    });
+  });
+
   it("refreshes a broken media link without showing a global error", async () => {
     vi.resetModules();
     const generateVideoSummary = vi.fn(() => Promise.reject(new Error("503 source media unavailable: D:\\ABC\\lesson.mp4")));
@@ -436,6 +494,7 @@ function createWorkspaceApiMock() {
     generateVideoKnowledgeCards: vi.fn(),
     generateVideoMindmap: vi.fn(),
     generateVideoSummary: vi.fn(),
+    processAgentVideo: vi.fn(),
     importChaoxingCourse: vi.fn(),
     importLocalPlaygroundVideos: vi.fn(),
     importLocalSeries: vi.fn(),

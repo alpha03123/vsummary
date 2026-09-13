@@ -43,6 +43,7 @@ class LibrarySeriesDTO:
         is_linked: 是否为外部链接型系列（区别于本地导入）。
         is_agent_managed: 是否由 agent/MCP 自动化流程创建并管理。
         source_url: 外部入口链接；本地系列时为空字符串。
+        kind: 系列来源类型；默认值为 "standard"。
     """
 
     id: str
@@ -51,6 +52,7 @@ class LibrarySeriesDTO:
     is_linked: bool = False
     is_agent_managed: bool = False
     source_url: str = ""
+    kind: str = "standard"
 
 
 @dataclass(frozen=True)

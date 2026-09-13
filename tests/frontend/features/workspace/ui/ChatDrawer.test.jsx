@@ -43,4 +43,10 @@ describe("ChatDrawer", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("uses the full panel width without a resize control when embedded", () => {
+    render(<ChatDrawer isOpen={true} fullWidth {...baseProps} />);
+
+    expect(screen.queryByRole("separator", { name: "调整分析助手宽度" })).toBeNull();
+  });
 });
