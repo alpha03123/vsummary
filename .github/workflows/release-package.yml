@@ -37,7 +37,21 @@ jobs:
       - name: Download previous release packages
         shell: pwsh
         run: |
-          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          $releaseResponse = $null
+          foreach ($attempt in 1..3) {
+            $releaseResponse = gh api --method GET "repos/$env:GITHUB_REPOSITORY/releases" -f per_page=100
+            if ($LASTEXITCODE -eq 0) {
+              break
+            }
+            if ($attempt -eq 3) {
+              throw 'Unable to list GitHub releases after 3 attempts.'
+            }
+            Start-Sleep -Seconds (5 * $attempt)
+          }
+          $releases = @($releaseResponse | ConvertFrom-Json)
+          if ($releases.Count -eq 0 -or @($releases | Where-Object { -not $_.tag_name }).Count -gt 0) {
+            throw 'GitHub releases response has an unexpected structure.'
+          }
           $previous = @($releases |
             Where-Object { -not $_.draft -and -not $_.prerelease -and $_.tag_name -ne $env:RELEASE_TAG } |
             Sort-Object published_at -Descending |
@@ -53,8 +67,11 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_MANIFEST=$previousDir\vsummary-manifest.json"
           Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_CPU_FULL=$previousDir\vsummary-full-cpu-$($previous.tag_name).7z"
           Add-Content -Path $env:GITHUB_ENV -Value "PREVIOUS_GPU_FULL=$previousDir\vsummary-full-gpu-$($previous.tag_name).7z"
-          git diff --quiet $previous.tag_name $env:RELEASE_TAG -- requirements.txt requirements.cpu.txt requirements.gpu.txt scripts/package/environment.cpu.yml scripts/package/environment.gpu.yml
-          if ($LASTEXITCODE -eq 0) {
+          $dependencyChanges = @(git diff --name-only $previous.tag_name $env:RELEASE_TAG -- requirements.txt requirements.cpu.txt requirements.gpu.txt scripts/package/environment.cpu.yml scripts/package/environment.gpu.yml)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to compare dependencies between $($previous.tag_name) and $env:RELEASE_TAG."
+          }
+          if ($dependencyChanges.Count -eq 0) {
             Add-Content -Path $env:GITHUB_ENV -Value 'REUSE_PREVIOUS_RUNTIME=1'
           }
 
