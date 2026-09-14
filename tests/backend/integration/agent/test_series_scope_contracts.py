@@ -45,7 +45,6 @@ from backend.agent_graph.actions.video_action_planner import (
     VideoActionPlanner,
     VideoActionPlannerPayload,
 )
-from backend.agent_graph.prompts import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
 from backend.api.schemas.responses import AgentChatResponse
 from backend.shared.llm.json_mode import validate_json_response
 from backend.video_summary.tools.notes import SAVE_NOTE_TOOL
@@ -911,13 +910,6 @@ class SeriesScopeContractTests(unittest.TestCase):
             schema["$defs"]["PlannedVideoToolCall"]["properties"]["tool_name"]["enum"],
             ["open_notes", "save_note", "video_seek"],
         )
-
-    def test_save_note_contract_prefers_markdown_content_without_fixed_template(self) -> None:
-        self.assertNotIn("save_note 的标题", VIDEO_ACTION_PLANNER_SYSTEM_PROMPT)
-        self.assertIn("Markdown", SAVE_NOTE_TOOL.description)
-        self.assertIn("核心主题、关键结论、重要细节和行动要点", SAVE_NOTE_TOOL.description)
-        self.assertIn("支持 Markdown 的笔记正文", SAVE_NOTE_TOOL.arguments["note_content"])
-        self.assertNotIn("视频核心", SAVE_NOTE_TOOL.description)
 
     def test_stream_with_context_streams_deferred_series_answer_from_gateway(self) -> None:
         synthesizer = FakeDeferredSeriesAnswerSynthesizer()

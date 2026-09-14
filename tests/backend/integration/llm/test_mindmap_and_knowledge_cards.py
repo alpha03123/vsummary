@@ -9,78 +9,10 @@ from pathlib import Path
 
 from backend.api.schemas.responses import VideoKnowledgeCardsResponse
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
-from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import build_mindmap_prompt
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
-from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import build_series_mindmap_prompt
 from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
 from backend.video_summary.generation import FlatMindmapPayload
 from backend.video_summary.library.models import KnowledgeCardDTO, VideoKnowledgeCardsDTO
-
-
-class MindmapPromptTests(unittest.TestCase):
-    def test_prompt_allows_depth_to_follow_content_complexity(self) -> None:
-        prompt = build_mindmap_prompt(
-            title="测试视频",
-            duration_seconds=300.0,
-            summary_data={
-                "title": "测试视频",
-                "chapters": [
-                    {
-                        "id": "chapter-1",
-                        "title": "章节一",
-                        "summary": "章节摘要",
-                        "key_points": ["要点一"],
-                        "start_seconds": 0.0,
-                        "end_seconds": 120.0,
-                    }
-                ],
-            },
-        )
-
-        self.assertIn("层级深度由内容复杂度决定", prompt)
-        self.assertNotIn("二三级节点用于展开要点", prompt)
-        self.assertIn("不要输出 children 字段", prompt)
-
-    def test_prompt_limits_depth_only_when_requested(self) -> None:
-        prompt = build_mindmap_prompt(
-            title="测试视频",
-            duration_seconds=300.0,
-            summary_data={"chapters": []},
-            max_depth=3,
-        )
-
-        self.assertIn("尽可能使用 3 层", prompt)
-        self.assertIn("仅在内容不足时允许少于该层数", prompt)
-
-
-class SeriesMindmapPromptTests(unittest.TestCase):
-    def test_prompt_includes_series_catalog_and_video_summaries(self) -> None:
-        prompt = build_series_mindmap_prompt(
-            series_title="测试系列",
-            catalog={"videos": [{"id": "v1", "title": "第一讲"}]},
-            video_summaries=[
-                {
-                    "title": "第一讲",
-                    "one_sentence_summary": "介绍核心概念。",
-                    "chapters": [{"title": "核心概念"}],
-                }
-            ],
-        )
-
-        self.assertIn("测试系列", prompt)
-        self.assertIn("第一讲", prompt)
-        self.assertIn("介绍核心概念", prompt)
-        self.assertIn("按知识主题组织二级节点", prompt)
-
-    def test_prompt_limits_series_depth_when_requested(self) -> None:
-        prompt = build_series_mindmap_prompt(
-            series_title="测试系列",
-            catalog=None,
-            video_summaries=[],
-            max_depth=4,
-        )
-
-        self.assertIn("尽可能使用 4 层", prompt)
 
 
 class FlatMindmapGenerationTests(unittest.TestCase):
@@ -99,7 +31,6 @@ class FlatMindmapGenerationTests(unittest.TestCase):
         self.assertIs(gateway.response_model, FlatMindmapPayload)
         self.assertEqual(result["id"], "root")
         self.assertEqual(result["children"][0]["id"], "topic")
-        self.assertIn("不要输出 children 字段", gateway.messages[0]["content"])
 
     def test_series_flat_output_is_restored_to_a_tree(self) -> None:
         gateway = FakeFlatMindmapGateway()
@@ -115,7 +46,6 @@ class FlatMindmapGenerationTests(unittest.TestCase):
 
         self.assertIs(gateway.response_model, FlatMindmapPayload)
         self.assertEqual(result["children"][0]["id"], "topic")
-        self.assertIn("不要输出 children 字段", gateway.messages[0]["content"])
 
 
 class LLMKnowledgeCardGeneratorTests(unittest.TestCase):

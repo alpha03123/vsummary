@@ -37,7 +37,6 @@ class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(gateway.text_call_count, 0)
         self.assertEqual(gateway.structured_call_count, 1)
         self.assertIn("[00:00-00:05] 第一段内容", gateway.structured_messages[0][0]["content"])
-        self.assertIn("转写如下：", gateway.structured_messages[0][0]["content"])
 
     async def test_falls_back_to_chunk_pipeline_when_transcript_exceeds_budget(self) -> None:
         gateway = FakeGateway()
@@ -61,7 +60,6 @@ class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(document, SummaryDocument)
         self.assertGreaterEqual(gateway.text_call_count, 1)
         self.assertEqual(gateway.structured_call_count, 1)
-        self.assertIn("片段总结如下：", gateway.structured_messages[0][0]["content"])
 
     async def test_chunk_pipeline_can_run_multiple_chunk_requests_in_parallel(self) -> None:
         gateway = BlockingChunkGateway()

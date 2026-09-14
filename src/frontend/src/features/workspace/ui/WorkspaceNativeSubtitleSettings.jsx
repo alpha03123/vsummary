@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { RotateCcw, Settings2 } from "lucide-react";
+import { Palette, RotateCcw, Settings2, Type } from "lucide-react";
 
 import { WorkspaceToggleSwitch } from "./shared/WorkspaceSettingsControls";
 
@@ -25,6 +25,10 @@ export function WorkspaceNativeSubtitleSettings({
   const panelRef = useRef(null);
   const pointerStartedInsideRef = useRef(false);
   const updateStyle = (next) => onStyleChange({ ...style, ...next });
+  const colorControls = [
+    { id: "color", label: "文字颜色", value: style.color, icon: Type },
+    { id: "backgroundColor", label: "背景颜色", value: style.backgroundColor, icon: Palette },
+  ];
 
   useEffect(() => {
     if (!open) {
@@ -89,30 +93,36 @@ export function WorkspaceNativeSubtitleSettings({
         aria-expanded={open}
         title="字幕设置"
         onClick={() => setOpen((current) => !current)}
-        className="workspace-elevated-panel inline-flex h-9 w-9 items-center justify-center rounded-lg border text-stone-600 transition-colors hover:border-accent/50 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:text-stone-300"
+        className="workspace-elevated-panel inline-flex h-9 w-9 items-center justify-center rounded-xl border text-stone-600 transition-colors duration-200 hover:border-accent/50 hover:bg-accent/5 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:text-stone-300 dark:hover:bg-accent/10"
       >
         <Settings2 size={17} aria-hidden="true" />
       </button>
       {open && panelPosition ? createPortal(
         <div
           ref={panelRef}
-          className="workspace-elevated-panel fixed z-[70] w-64 max-w-[calc(100vw-2rem)] rounded-2xl border p-3 text-stone-900 shadow-xl dark:text-stone-100"
+          className="workspace-elevated-panel fixed z-[70] w-80 max-w-[calc(100vw-2rem)] rounded-3xl border p-4 text-stone-900 shadow-2xl motion-fade-scale dark:text-stone-100"
           style={{ left: panelPosition.left, top: panelPosition.top }}
         >
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-bold">字幕设置</p>
+          <div className="mb-4 flex items-center justify-between border-b border-stone-200/80 pb-3 dark:border-stone-800">
+            <div>
+              <p className="text-sm font-bold tracking-tight">字幕外观</p>
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">调整播放时的字幕显示效果</p>
+            </div>
             <button
               type="button"
               onClick={() => onStyleChange(DEFAULT_SUBTITLE_STYLE)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:hover:bg-stone-800"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent dark:text-stone-400 dark:hover:bg-accent/15"
               aria-label="恢复默认字幕样式"
               title="恢复默认字幕样式"
             >
               <RotateCcw size={15} aria-hidden="true" />
             </button>
           </div>
-          <div className="mb-3 flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-700 dark:bg-stone-800/50">
-            <span className="text-sm font-semibold">显示字幕</span>
+          <div className="workspace-muted-panel mb-2 flex items-center justify-between rounded-2xl border px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">显示字幕</p>
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">在播放器中显示当前字幕</p>
+            </div>
             <WorkspaceToggleSwitch
               checked={subtitlesEnabled}
               onChange={() => onSubtitlesEnabledChange(!subtitlesEnabled)}
@@ -120,10 +130,10 @@ export function WorkspaceNativeSubtitleSettings({
             />
           </div>
           {onFollowOverviewPlaybackChange ? (
-            <div className="mb-3 flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-700 dark:bg-stone-800/50">
+            <div className="workspace-muted-panel mb-4 flex items-center justify-between rounded-2xl border px-4 py-3">
               <div>
                 <p className="text-sm font-semibold">概况跟随播放</p>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">当前原文保持在中间</p>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">播放时自动定位当前原文</p>
               </div>
               <WorkspaceToggleSwitch
                 checked={followOverviewPlayback}
@@ -132,22 +142,37 @@ export function WorkspaceNativeSubtitleSettings({
               />
             </div>
           ) : null}
-          <label className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold">
-            字体颜色
-            <input aria-label="字幕字体颜色" type="color" value={style.color} onChange={(event) => updateStyle({ color: event.target.value })} className="h-7 w-12 cursor-pointer rounded-lg border border-stone-300 bg-transparent p-1 dark:border-stone-600" />
-          </label>
-          <label className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold">
-            底色
-            <input aria-label="字幕底色" type="color" value={style.backgroundColor} onChange={(event) => updateStyle({ backgroundColor: event.target.value })} className="h-7 w-12 cursor-pointer rounded-lg border border-stone-300 bg-transparent p-1 dark:border-stone-600" />
-          </label>
-          <label className="mb-2 block text-xs font-semibold">
-            <span className="mb-1 flex justify-between"><span>字体大小</span><span className="text-accent">{style.fontSize}px</span></span>
-            <input aria-label="字幕字体大小" type="range" min="14" max="44" value={style.fontSize} onChange={(event) => updateStyle({ fontSize: Number(event.target.value) })} className="w-full accent-accent" />
-          </label>
-          <label className="block text-xs font-semibold">
-            <span className="mb-1 flex justify-between"><span>字幕位置</span><span className="text-accent">{Math.round(style.position)}%</span></span>
-            <input aria-label="字幕位置" type="range" min="8" max="92" value={style.position} onChange={(event) => updateStyle({ position: Number(event.target.value) })} className="w-full accent-accent" />
-          </label>
+          <section className="mt-4">
+            <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">颜色</p>
+            <div className="grid grid-cols-2 gap-2">
+              {colorControls.map(({ id, label, value, icon: Icon }) => (
+                <label key={id} className="workspace-muted-panel flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors hover:border-accent/40">
+                  <Icon size={15} className="shrink-0 text-stone-500 dark:text-stone-400" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-xs font-semibold">{label}</span>
+                  <span className="relative h-6 w-6 shrink-0 overflow-hidden rounded-md border border-stone-300 shadow-sm dark:border-stone-600" style={{ backgroundColor: value }}>
+                    <input
+                      aria-label={`字幕${label}`}
+                      type="color"
+                      value={value}
+                      onChange={(event) => updateStyle({ [id]: event.target.value })}
+                      className="absolute inset-[-0.5rem] h-10 w-10 cursor-pointer opacity-0"
+                    />
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+          <section className="mt-4 space-y-3">
+            <p className="px-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">排版</p>
+            <label className="workspace-muted-panel block cursor-pointer rounded-2xl border px-4 py-3">
+              <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字体大小</span><span className="text-accent">{style.fontSize}px</span></span>
+              <input aria-label="字幕字体大小" type="range" min="14" max="44" value={style.fontSize} onChange={(event) => updateStyle({ fontSize: Number(event.target.value) })} className="block w-full cursor-pointer accent-accent" />
+            </label>
+            <label className="workspace-muted-panel block cursor-pointer rounded-2xl border px-4 py-3">
+              <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字幕位置</span><span className="text-accent">{Math.round(style.position)}%</span></span>
+              <input aria-label="字幕位置" type="range" min="8" max="92" value={style.position} onChange={(event) => updateStyle({ position: Number(event.target.value) })} className="block w-full cursor-pointer accent-accent" />
+            </label>
+          </section>
         </div>,
         document.body,
       ) : null}
