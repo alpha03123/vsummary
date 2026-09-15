@@ -151,6 +151,7 @@ export function WorkspaceVideoScopeEmbed() {
     chatSessions: page.chat.sessions,
     activeSessionId: page.chat.activeSessionId,
     chatPending: page.chat.pending,
+    summaryLocked: page.shell.selectedVideo?.processed !== true,
     contextUsage: page.chat.contextUsage,
     contextUsageLoading: page.chat.contextUsageLoading,
     ragModels: page.generation.ragModels,

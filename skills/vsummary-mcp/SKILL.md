@@ -1,13 +1,13 @@
 ---
 name: vsummary-mcp
-description: Use when 使用 VSummary 本地 MCP 服务处理视频系列，包括创建 agent 管理的 series、导入 Bilibili、YouTube、抖音 URL 或本地视频/音频文件路径、启动处理、查询进度、导出摘要/字幕/混合 Markdown，以及清理 MCP 创建的 series。
+description: Use when 使用 VSummary 本地 MCP 服务处理视频系列，包括创建 agent 管理的 series、导入 Bilibili、YouTube、抖音 URL 或本地视频/音频文件路径、启动概况或字幕处理、查询进度、导出 Markdown 或 SRT 字幕压缩包，以及清理 MCP 创建的 series。
 ---
 
 # VSummary MCP
 
 ## 概览
 
-`vsummary-video-series` MCP server 是本地 VSummary 后端上的一层薄工具封装。使用时保持链路简单：创建或导入 series，添加 Bilibili、YouTube、抖音 URL 或本地媒体文件路径，启动处理，轮询状态，最后导出 Markdown 文本。
+`vsummary-video-series` MCP server 是本地 VSummary 后端上的一层薄工具封装。使用时保持链路简单：创建或导入 series，添加 Bilibili、YouTube、抖音 URL 或本地媒体文件路径，启动处理，轮询状态，最后导出 Markdown 或 SRT 字幕压缩包。
 
 当用户明确要求测试或使用 MCP 时，不要绕过 MCP 直接调用后端 HTTP API。MCP server 内部会调用后端，所以日志里出现后端 URL 是正常的，但任务动作仍应通过 MCP tools 完成。
 
@@ -16,9 +16,9 @@ description: Use when 使用 VSummary 本地 MCP 服务处理视频系列，包�
 1. 先调用 `get_project_status`，确认后端是否可用，以及当前 library/series 状态。
 2. 处理 Bilibili、YouTube 或抖音 URL 时，调用 `create_series` 创建空的 agent-managed linked series，再调用 `add_series_videos` 把 URL 添加到这个 series。MCP 会依据 URL 域名选择平台。
 3. 处理本地视频/音频时，调用 `import_local_series(title, file_paths=[...])` 从本地文件路径创建新 series，或调用 `add_local_series_videos(series_id, file_paths=[...])` 把本地媒体追加到已有本地 series。
-4. 调用 `process_series` 启动处理。默认把 series 当成组织单位；只有用户明确要求处理部分视频时才传 `video_ids`。
-5. 轮询 `get_series_status`，直到 `overall_status` 变成 `completed`、`failed` 或 `cancelled`。
-6. 调用 `export_series` 导出 Markdown。除非用户指定其他类型，默认使用 `kind="mixed"`。短导出默认内联返回；长导出会返回预览和 `vsummary://exports/...` resource URI。用户明确或变相要求 Markdown 文件时，传 `force_file=true`；用户指定导出路径时传 `output_path`，不要再由 agent 手写返回内容。
+4. 调用 `process_series` 启动处理。默认 `processing_mode="summary"`；只获取字幕或 ASR 转写时传 `processing_mode="transcript"`。默认把 series 当成组织单位；只有用户明确要求处理部分视频时才传 `video_ids`。
+5. 使用同一 `processing_mode` 轮询 `get_series_status`，直到 `overall_status` 变成 `completed`、`failed` 或 `cancelled`。
+6. 调用 `export_series` 导出内容。除非用户指定其他类型，默认使用 `kind="mixed"`；系列 SRT 字幕压缩包使用 `kind="srt"`。短 Markdown 导出默认内联返回；长导出会返回预览和 `vsummary://exports/...` resource URI。用户明确或变相要求 Markdown 文件时，传 `force_file=true`；用户指定导出路径时传 `output_path`，不要再由 agent 手写返回内容。
 7. 只有用户明确要求删除或清理时，才调用 `delete_series`。
 
 ## 工具语义
@@ -28,9 +28,9 @@ description: Use when 使用 VSummary 本地 MCP 服务处理视频系列，包�
 - `add_series_videos(series_id, videos=[{"url": "..."}])`：解析并添加 Bilibili、YouTube 或抖音视频 URL。失败按 URL 单独返回，不要默认认为整个批次都失败。
 - `import_local_series(title, file_paths=["C:/path/video.mp4", ...])`：通过后端上传已有本地视频/音频文件并创建新的本地 series。MCP server 从本机文件系统读取路径，并转发给后端 multipart 导入接口。
 - `add_local_series_videos(series_id, file_paths=["C:/path/audio.mp3", ...])`：通过后端上传已有本地视频/音频文件，并追加到已有本地 series。
-- `process_series(series_id, video_ids=None, run_id=None, transcript_enhancement_enabled=None, wait=false)`：启动处理。默认 `wait=false`，也就是只调度任务并快速返回。
-- `get_series_status(series_id, video_ids=None)`：读取 series 总体进度和每个视频的进度。这是 agent 查询处理进度的主接口。
-- `export_series(series_id, kind="mixed", video_ids=None, force_file=false, output_path=None)`：导出 Markdown。短内容默认返回完整内联 `markdown`；长内容或 `force_file=true` 时写入 MCP 管理的导出存储，并返回 `delivery="resource"`、`preview`、`resource_uri`、`resource_link`、`filename`、`output_path` 等元数据，不在工具结果里塞完整 Markdown。`output_path` 有值时隐式强制文件输出，写到指定路径并返回 `delivery="file"`。
+- `process_series(series_id, video_ids=None, run_id=None, transcript_enhancement_enabled=None, processing_mode="summary", wait=false)`：启动概况或字幕处理。默认 `wait=false`，也就是只调度任务并快速返回。
+- `get_series_status(series_id, video_ids=None, processing_mode="summary")`：按处理模式读取 series 总体进度和每个视频的进度。这是 agent 查询处理进度的主接口。
+- `export_series(series_id, kind="mixed", video_ids=None, force_file=false, output_path=None)`：导出 Markdown；`kind="srt"` 时导出包含逐视频 `.srt` 的 ZIP 文件。短 Markdown 默认返回完整内联 `markdown`；长内容或 `force_file=true` 时写入 MCP 管理的导出存储。
 - `delete_series(series_id)`：通过后端删除 series 及其 workspace 产物。只在用户明确要求时使用。
 
 识别 MCP/agent 创建的 series 时，使用 `is_agent_managed` 字段，不要依赖标题命名规则或 `source_url`。

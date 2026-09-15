@@ -16,7 +16,7 @@ from backend.video_summary.infrastructure.storage.filesystem_generation_artifact
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
-from backend.video_summary.infrastructure.subtitle_transcripts import ManualSrtTranscriptProvider, SubtitleTranscriptProvider
+from backend.video_summary.infrastructure.subtitle_transcripts import CleanedTranscriptProvider, ManualSrtTranscriptProvider, SubtitleTranscriptProvider
 from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
     build_video_summary_runtime,
@@ -96,6 +96,7 @@ def build_video_summary_application(
         artifact_store=artifact_store,
         subtitle_provider=SubtitleTranscriptProvider(),
         manual_transcript_provider=ManualSrtTranscriptProvider(),
+        saved_transcript_provider=CleanedTranscriptProvider(),
         frame_extractor=media_processor,
         chapter_screenshots_enabled=settings.generation.chapter_screenshots_enabled,
     )

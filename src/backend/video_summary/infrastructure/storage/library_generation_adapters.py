@@ -49,6 +49,7 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
         transcript_enhancement_enabled: bool | None = None,
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
+        processing_mode: str = "summary",
     ) -> None:
         """为指定视频触发一次完整的生成工作流。
 
@@ -64,14 +65,15 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
             LookupError: 视频不存在时抛出。
         """
         video = _require_video_source(self._workspace, series_id, video_id)
-        await self._workflow.run(
-            video.source_path,
-            video.output_dir,
-            progress_reporter=progress_reporter,
-            transcript_enhancement_enabled=transcript_enhancement_enabled,
-            manual_transcript=manual_transcript,
-            use_saved_manual_transcript=use_saved_manual_transcript,
-        )
+        arguments = {
+            "progress_reporter": progress_reporter,
+            "transcript_enhancement_enabled": transcript_enhancement_enabled,
+            "manual_transcript": manual_transcript,
+            "use_saved_manual_transcript": use_saved_manual_transcript,
+        }
+        if processing_mode != "summary":
+            arguments["processing_mode"] = processing_mode
+        await self._workflow.run(video.source_path, video.output_dir, **arguments)
 
 
 class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):

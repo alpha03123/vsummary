@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from typing import Literal
+
+ProcessingMode = Literal["summary", "transcript"]
+
 class GenerateVideoSummaryRequest(BaseModel):
     """请求生成单个视频的结构化总结。
 
@@ -15,6 +19,7 @@ class GenerateVideoSummaryRequest(BaseModel):
     """
 
     transcript_enhancement_enabled: bool | None = None
+    processing_mode: ProcessingMode = "summary"
 
 
 class GenerateMindmapRequest(BaseModel):
@@ -31,6 +36,7 @@ class GenerateSeriesSummariesRequest(BaseModel):
 
     transcript_enhancement_enabled: bool | None = None
     run_id: str | None = None
+    processing_mode: ProcessingMode = "summary"
 
 
 class CancelSeriesSummariesRequest(BaseModel):
@@ -51,6 +57,7 @@ class AgentSeriesProcessRequest(BaseModel):
     video_ids: list[str] = Field(default_factory=list)
     run_id: str | None = None
     transcript_enhancement_enabled: bool | None = None
+    processing_mode: ProcessingMode = "summary"
 
 
 class CreateVideoNoteRequest(BaseModel):

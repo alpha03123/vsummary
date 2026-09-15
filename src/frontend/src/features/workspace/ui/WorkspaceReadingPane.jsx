@@ -159,10 +159,6 @@ export function WorkspaceReadingPane({
                   title={activeSeries.title}
                   description="你可以在当前对话栏询问关于整个系列的问题。"
                 >
-                  <WorkspaceExportMenu
-                    buttonLabel="批量导出"
-                    exportActions={buildSeriesExportActions(activeSeries)}
-                  />
                 </WorkspaceHomeHeader>
               ) : (
                 <WorkspaceToolHeader

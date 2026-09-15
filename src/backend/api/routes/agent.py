@@ -55,6 +55,9 @@ def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentCh
         HTTPException(503): Agent 图执行过程中发生异常。
     """
     context_override = _build_agent_context_override(request.session_id, request.context)
+    summary_block_message = _resolve_summary_block_message(context_override, container)
+    if summary_block_message:
+        raise HTTPException(status_code=409, detail=summary_block_message)
     rag_block_message = _resolve_rag_block_message(context_override, container)
     if rag_block_message:
         return _build_rag_block_response(context_override, rag_block_message)
@@ -92,6 +95,10 @@ def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> 
     context_override = _build_agent_context_override(request.session_id, request.context)
 
     def event_iterator():
+        summary_block_message = _resolve_summary_block_message(context_override, container)
+        if summary_block_message:
+            yield encode_sse_event("error", {"message": summary_block_message})
+            return
         rag_block_message = _resolve_rag_block_message(context_override, container)
         if rag_block_message:
             yield from _stream_rag_block_message(rag_block_message)
@@ -283,6 +290,21 @@ def _resolve_rag_block_message(context: AgentContext | None, container) -> str |
         return RAG_MODEL_DOWNLOAD_MESSAGE
     if not rag_model_manager.is_downloaded("embedding"):
         return RAG_EMBEDDING_REQUIRED_MESSAGE
+    return None
+
+
+def _resolve_summary_block_message(context: AgentContext | None, container) -> str | None:
+    """没有 AI 概况时阻止进入对话链路。"""
+    if context is None or not context.series_id:
+        return None
+    if context.scope_type == ScopeType.VIDEO.value:
+        if not context.video_id or container.get_video_summary.run(context.series_id, context.video_id) is None:
+            return "当前视频尚未生成 AI 概况，请先生成概况后再进行对话。"
+        return None
+    library = container.list_video_library.run()
+    series = next((item for item in library.series if item.id == context.series_id), None)
+    if series is None or not any(video.processed for video in series.videos):
+        return "当前系列尚未生成 AI 概况，请先生成至少一个视频概况后再进行对话。"
     return None
 
 

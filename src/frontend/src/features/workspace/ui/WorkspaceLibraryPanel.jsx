@@ -18,6 +18,8 @@ import {
   MoreHorizontal,
   CheckCheck,
   Pencil,
+  FileArchive,
+  Captions,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +27,25 @@ import { buildVideoKey } from "../model/workspaceControllerUtils";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
+
+function ProcessingModeSwitch({ mode, onChange, disabled = false }) {
+  return (
+    <div className="mb-3 grid grid-cols-2 rounded-xl bg-stone-100 p-1 dark:bg-stone-800/80" role="group" aria-label="处理模式">
+      {[["summary", "概括模式"], ["transcript", "字幕模式"]].map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange?.(value)}
+          aria-pressed={mode === value}
+          className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${mode === value ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100" : "text-stone-500 dark:text-stone-400"}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function VideoBadge({ video }) {
   if (video.status === "source_missing") {
@@ -73,6 +94,14 @@ function VideoBadge({ video }) {
       </span>
     );
   }
+  if (video.hasTranscript) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-neutral-900 text-stone-700 dark:text-neutral-200 border border-stone-200 dark:border-white/10">
+        <Captions size={12} />
+        已有字幕
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border border-transparent">
       <CircleDashed size={12} />
@@ -86,6 +115,8 @@ export function getVideoGenerationButtonState({
   isGeneratingSelectedVideo,
   modelNeedsDownload,
   processed,
+  hasTranscript = false,
+  processingMode = "summary",
   sourceMissing = false,
 }) {
   if (isGeneratingSeries) {
@@ -98,7 +129,7 @@ export function getVideoGenerationButtonState({
   if (isGeneratingSelectedVideo) {
     return {
       disabled: false,
-      label: "取消当前视频生成",
+      label: processingMode === "transcript" ? "取消字幕获取" : "取消当前视频生成",
       tone: "danger",
     };
   }
@@ -118,7 +149,9 @@ export function getVideoGenerationButtonState({
   }
   return {
     disabled: false,
-    label: processed ? "重新生成 AI 概况" : "生成 AI 概况",
+    label: processingMode === "transcript"
+      ? (hasTranscript ? "重新获取字幕" : "获取字幕文件")
+      : (processed ? "重新生成 AI 概况" : "生成 AI 概况"),
     tone: "primary",
   };
 }
@@ -159,6 +192,7 @@ function PanelFooter({
   downloadError,
   downloadErrorKey,
   onGenerateVideo,
+  onProcessLinkedVideo,
   onRelinkVideo,
   onGenerateSeries,
   onCancelGeneration,
@@ -167,6 +201,8 @@ function PanelFooter({
   onRequestRenameCurrentVideo,
   onRequestDeleteCurrentVideo,
   onOpenSettings,
+  processingMode,
+  onChangeProcessingMode,
 }) {
   const isPlayground = activeSeries?.id === "__playground__";
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
@@ -215,10 +251,11 @@ function PanelFooter({
             : `你可以在当前对话栏询问关于整个系列的问题 ： ${activeSeries?.title}。`}
         </p>
         <div className="mt-3">
+          <ProcessingModeSwitch mode={processingMode} onChange={onChangeProcessingMode} disabled={isGeneratingSeries} />
           {queueIsActive ? (
             <div className="mb-3 rounded-2xl border border-accent/20 bg-accent/8 px-3 py-2 text-xs text-stone-600 dark:text-stone-300">
               <div className="flex items-center justify-between gap-2 font-semibold text-accent">
-                <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : "正在处理全部视频"}</span>
+                <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : processingMode === "transcript" ? "正在获取全部字幕" : "正在处理全部视频"}</span>
                 <span>{queueLabel}</span>
               </div>
             </div>
@@ -249,7 +286,7 @@ function PanelFooter({
             ) : (
               <>
                 <Sparkles size={16} strokeWidth={2.5} />
-                处理全部系列视频
+                {processingMode === "transcript" ? "获取全部视频字幕" : "处理全部系列视频"}
               </>
             )}
           </button>
@@ -308,6 +345,7 @@ function PanelFooter({
   if (selectedVideo.isLinked || selectedVideo.status === "linked") {
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+        <ProcessingModeSwitch mode={processingMode} onChange={onChangeProcessingMode} disabled={isGeneratingSelectedVideo || selectedVideoIsDownloading} />
         <div className="mb-3">
           <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
           <div className="flex items-center gap-1">
@@ -356,14 +394,16 @@ function PanelFooter({
         </div>
         <button
           type="button"
-          className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${selectedVideoIsDownloading
+          className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${selectedVideoIsDownloading || isGeneratingSelectedVideo
               ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
               : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
             }`}
-          onClick={() => onDownloadVideo?.(selectedVideo)}
+          onClick={processingMode === "transcript"
+            ? (isGeneratingSelectedVideo ? onCancelGeneration : onProcessLinkedVideo)
+            : () => onDownloadVideo?.(selectedVideo)}
         >
-          {selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
-          {selectedVideoIsDownloading ? "取消下载" : "下载视频"}
+          {isGeneratingSelectedVideo || selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : processingMode === "transcript" ? <Captions size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
+          {isGeneratingSelectedVideo ? "取消字幕获取" : selectedVideoIsDownloading ? "取消下载" : processingMode === "transcript" ? "获取字幕文件" : "下载视频"}
         </button>
         {hasSelectedVideoDownloadError && downloadError ? (
           <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{downloadError}</p>
@@ -377,6 +417,8 @@ function PanelFooter({
     isGeneratingSelectedVideo,
     modelNeedsDownload,
     processed: selectedVideo.processed,
+    hasTranscript: selectedVideo.hasTranscript,
+    processingMode,
     sourceMissing: selectedVideo.status === "source_missing",
   });
   const deleteButton = getDeleteButtonState({
@@ -386,6 +428,7 @@ function PanelFooter({
 
   return (
     <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+      <ProcessingModeSwitch mode={processingMode} onChange={onChangeProcessingMode} disabled={isGeneratingSelectedVideo || isGeneratingSeries} />
       <div className="mb-3">
         <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
         <div className="flex items-center gap-1">
@@ -474,7 +517,9 @@ function PanelFooter({
           </>
         )}
       </button>
-      <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">概况、知识卡与导图可在工具页单独重新生成</p>
+      <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+        {processingMode === "transcript" ? "优先读取字幕，没有字幕时使用语音转写" : "已有字幕时将直接复用并生成概况"}
+      </p>
     </div>
   );
 }
@@ -492,6 +537,7 @@ export function WorkspaceLibraryPanel({
   onSelectSeriesContext,
   onSelectVideo,
   onGenerateVideo,
+  onProcessLinkedVideo,
   onGenerateSeries,
   onCancelGeneration,
   onDownloadVideo,
@@ -510,6 +556,8 @@ export function WorkspaceLibraryPanel({
   downloadError,
   downloadErrorKey,
   onOpenSettings,
+  processingMode = "summary",
+  onChangeProcessingMode,
 }) {
   const videos = activeSeries?.videos ?? [];
   const isPlayground = activeSeries?.id === "__playground__";
@@ -519,6 +567,8 @@ export function WorkspaceLibraryPanel({
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedVideoIds, setSelectedVideoIds] = useState([]);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [seriesExportOpen, setSeriesExportOpen] = useState(false);
+  const [seriesExportScope, setSeriesExportScope] = useState("all");
   const overflowRef = useRef(null);
   useOutsidePointerUp(overflowOpen, [overflowRef], () => setOverflowOpen(false));
   useEffect(() => {
@@ -526,14 +576,15 @@ export function WorkspaceLibraryPanel({
     setSelectedVideoIds((current) => current.filter((videoId) => existingIds.has(videoId)));
   }, [videos]);
   const normalizedFilter = filterText.trim().toLowerCase();
-  const generatedCount = useMemo(() => videos.filter((v) => v.processed).length, [videos]);
-  const pendingCount = useMemo(() => videos.filter((v) => !v.processed).length, [videos]);
+  const isVideoCompleteForMode = (video) => processingMode === "transcript" ? video.hasTranscript : video.processed;
+  const generatedCount = useMemo(() => videos.filter(isVideoCompleteForMode).length, [processingMode, videos]);
+  const pendingCount = useMemo(() => videos.filter((video) => !isVideoCompleteForMode(video)).length, [processingMode, videos]);
   const filteredVideos = useMemo(() => {
     return videos.filter((video) => {
-      if (statusFilter === "generated" && !video.processed) {
+      if (statusFilter === "generated" && !isVideoCompleteForMode(video)) {
         return false;
       }
-      if (statusFilter === "pending" && video.processed) {
+      if (statusFilter === "pending" && isVideoCompleteForMode(video)) {
         return false;
       }
       if (!normalizedFilter) {
@@ -544,7 +595,7 @@ export function WorkspaceLibraryPanel({
         .map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(normalizedFilter));
     });
-  }, [normalizedFilter, statusFilter, videos]);
+  }, [normalizedFilter, processingMode, statusFilter, videos]);
   const selectedVideoSet = useMemo(() => new Set(selectedVideoIds), [selectedVideoIds]);
   const selectedCount = selectedVideoIds.length;
   const toggleVideoSelection = (videoId) => {
@@ -616,6 +667,18 @@ export function WorkspaceLibraryPanel({
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      setSeriesExportScope("all");
+                      setSeriesExportOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                  >
+                    <FileArchive size={14} />
+                    批量导出
+                  </button>
+                  <button
+                    type="button"
                     disabled={seriesDeleteButton.disabled}
                     onClick={() => {
                       setOverflowOpen(false);
@@ -669,8 +732,8 @@ export function WorkspaceLibraryPanel({
             <div className="flex rounded-xl bg-stone-100 p-1 dark:bg-stone-800/80" role="group" aria-label="视频状态筛选">
               {[
                 ["all", "全部", videos.length],
-                ["generated", "已生成", generatedCount],
-                ["pending", "未处理", pendingCount],
+                ["generated", processingMode === "transcript" ? "已获取" : "已生成", generatedCount],
+                ["pending", processingMode === "transcript" ? "未获取" : "未处理", pendingCount],
               ].map(([value, label, count]) => (
                 <button
                   key={value}
@@ -877,6 +940,7 @@ export function WorkspaceLibraryPanel({
         downloadError={downloadError}
         downloadErrorKey={downloadErrorKey}
         onGenerateVideo={onGenerateVideo}
+        onProcessLinkedVideo={onProcessLinkedVideo}
         onGenerateSeries={onGenerateSeries}
         onCancelGeneration={onCancelGeneration}
         onDownloadVideo={onDownloadVideo}
@@ -884,7 +948,58 @@ export function WorkspaceLibraryPanel({
         onRequestRenameCurrentVideo={onRequestRenameCurrentVideo}
         onRequestDeleteCurrentVideo={onRequestDeleteCurrentVideo}
         onOpenSettings={onOpenSettings}
+        processingMode={processingMode}
+        onChangeProcessingMode={onChangeProcessingMode}
       />
+      {seriesExportOpen ? (
+        <SeriesExportPanel
+          seriesId={activeSeries?.id}
+          selectedVideoIds={selectedVideoIds}
+          scope={seriesExportScope}
+          onScopeChange={setSeriesExportScope}
+          onClose={() => setSeriesExportOpen(false)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function SeriesExportPanel({ seriesId, selectedVideoIds, scope, onScopeChange, onClose }) {
+  const selectedAvailable = selectedVideoIds.length > 0;
+  const query = scope === "selected" && selectedAvailable
+    ? `?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`
+    : "";
+  const actions = [
+    ["mixed", "AI 概况混合包"],
+    ["knowledge-cards", "知识卡片"],
+    ["mindmaps", "思维导图"],
+    ["srt", "SRT 字幕压缩包"],
+  ];
+  return (
+    <div className="absolute inset-0 z-40 flex bg-stone-950/20 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="批量导出">
+      <div className="mt-auto w-full rounded-t-[1.75rem] border-t border-stone-200 bg-white p-5 shadow-2xl dark:border-stone-700 dark:bg-neutral-900">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">批量导出</h3>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">选择范围和导出内容</p>
+          </div>
+          <button type="button" onClick={onClose} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800" aria-label="关闭批量导出">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="mb-4 grid grid-cols-2 rounded-xl bg-stone-100 p-1 dark:bg-stone-800/80">
+          <button type="button" onClick={() => onScopeChange("all")} className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${scope === "all" ? "bg-white shadow-sm dark:bg-stone-700" : "text-stone-500"}`}>全部视频</button>
+          <button type="button" disabled={!selectedAvailable} onClick={() => onScopeChange("selected")} className={`rounded-lg px-2 py-1.5 text-xs font-semibold disabled:opacity-40 ${scope === "selected" ? "bg-white shadow-sm dark:bg-stone-700" : "text-stone-500"}`}>已选 {selectedVideoIds.length} 项</button>
+        </div>
+        <div className="space-y-2">
+          {actions.map(([kind, label]) => (
+            <a key={kind} href={`/api/series/${encodeURIComponent(seriesId)}/exports/${kind}.zip${query}`} download onClick={onClose} className="flex items-center justify-between rounded-xl border border-stone-200 px-3 py-2.5 text-xs font-semibold text-stone-700 transition-colors hover:border-accent/40 hover:text-accent dark:border-stone-700 dark:text-stone-200">
+              {label}
+              <FileArchive size={14} />
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

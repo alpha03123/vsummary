@@ -34,6 +34,21 @@ export const defaultUiSettings = {
   chaoxingInitCourseDelaySeconds: 0.3,
 };
 
+const PROCESSING_MODE_STORAGE_KEY = "vsummary.processing-mode";
+
+function loadProcessingMode() {
+  if (typeof window === "undefined") {
+    return "summary";
+  }
+  return window.localStorage.getItem(PROCESSING_MODE_STORAGE_KEY) === "transcript" ? "transcript" : "summary";
+}
+
+export function persistProcessingMode(mode) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(PROCESSING_MODE_STORAGE_KEY, mode);
+  }
+}
+
 const validLlmProviders = new Set([
   "ai21",
   "ai21_chat",
@@ -524,6 +539,7 @@ export function createInitialWorkspaceState() {
     generatingVideoKey: null,
     generatingSeriesId: null,
     generationMode: null,
+    processingMode: loadProcessingMode(),
     generatingMindmapKey: null,
     seriesGenerationQueue: null,
     generationTasksByKey: {},

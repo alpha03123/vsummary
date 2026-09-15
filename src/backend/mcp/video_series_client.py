@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import httpx
 
 
-SERIES_EXPORT_KINDS = {"summary", "transcript", "mixed", "knowledge-cards", "notes"}
+SERIES_EXPORT_KINDS = {"summary", "transcript", "mixed", "knowledge-cards", "notes", "srt"}
 PROCESS_POLL_INTERVAL_SECONDS = 1.0
 PROCESS_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 EXPORT_INLINE_LIMIT_CHARS = 3000
@@ -140,9 +140,12 @@ class VideoSeriesBackendClient:
         video_ids: list[str] | None = None,
         run_id: str | None = None,
         transcript_enhancement_enabled: bool | None = None,
+        processing_mode: str = "summary",
         wait: bool = False,
     ) -> dict[str, Any]:
         self._require_series_id(series_id)
+        if processing_mode not in {"summary", "transcript"}:
+            raise ValueError(f"unsupported processing mode: {processing_mode}")
         normalized_video_ids = _normalized_ids(video_ids or [])
         if wait:
             return await self._process_series_waiting(
@@ -150,6 +153,7 @@ class VideoSeriesBackendClient:
                 video_ids=normalized_video_ids,
                 run_id=run_id,
                 transcript_enhancement_enabled=transcript_enhancement_enabled,
+                processing_mode=processing_mode,
             )
         return await self._request_json(
             "POST",
@@ -158,11 +162,14 @@ class VideoSeriesBackendClient:
                 "video_ids": normalized_video_ids,
                 "run_id": run_id,
                 "transcript_enhancement_enabled": transcript_enhancement_enabled,
+                "processing_mode": processing_mode,
             },
         )
 
-    async def get_series_status(self, series_id: str, video_ids: list[str] | None = None) -> dict[str, Any]:
+    async def get_series_status(self, series_id: str, video_ids: list[str] | None = None, processing_mode: str = "summary") -> dict[str, Any]:
         self._require_series_id(series_id)
+        if processing_mode not in {"summary", "transcript"}:
+            raise ValueError(f"unsupported processing mode: {processing_mode}")
         series = await self._get_series(series_id)
         selected_ids = set(_normalized_ids(video_ids or []))
         videos = [
@@ -182,12 +189,14 @@ class VideoSeriesBackendClient:
                 f"/api/videos/{self._path_segment(series_id)}/{self._path_segment(video_id)}/generate/status",
             )
             video_items.append(_video_status(video, generation))
+        completion_field = "has_transcript" if processing_mode == "transcript" else "processed"
         return {
             "series_id": series["id"],
             "title": series["title"],
             "is_agent_managed": bool(series.get("is_agent_managed")),
-            "overall_status": _overall_status(series_generation, video_items),
-            "completed_count": sum(1 for item in video_items if item["processed"]),
+            "processing_mode": processing_mode,
+            "overall_status": _overall_status(series_generation, video_items, completion_field),
+            "completed_count": sum(1 for item in video_items if item[completion_field]),
             "total_count": len(video_items),
             "series_generation": _snapshot_payload(series_generation),
             "videos": video_items,
@@ -204,6 +213,30 @@ class VideoSeriesBackendClient:
         self._require_series_id(series_id)
         if kind not in SERIES_EXPORT_KINDS:
             raise ValueError(f"unsupported markdown export kind: {kind}")
+        if kind == "srt":
+            normalized_video_ids = _normalized_ids(video_ids or [])
+            query = ""
+            if normalized_video_ids:
+                query = "?video_ids=" + quote(",".join(normalized_video_ids), safe="")
+            archive = await self._request_bytes(
+                "GET",
+                f"/api/series/{self._path_segment(series_id)}/exports/srt.zip{query}",
+            )
+            export = self._write_binary_export(
+                series_id=series_id,
+                kind=kind,
+                content=archive,
+                output_path=output_path,
+            )
+            return {
+                "series_id": series_id,
+                "kind": kind,
+                "delivery": export["delivery"],
+                "filename": export["filename"],
+                "relative_path": export["relative_path"],
+                "output_path": export["output_path"],
+                "size": export["size"],
+            }
         series = await self._get_series(series_id)
         selected_ids = set(_normalized_ids(video_ids or []))
         videos = [
@@ -316,6 +349,7 @@ class VideoSeriesBackendClient:
         video_ids: list[str],
         run_id: str | None,
         transcript_enhancement_enabled: bool | None,
+        processing_mode: str,
     ) -> dict[str, Any]:
         scheduled = await self._request_json(
             "POST",
@@ -324,10 +358,11 @@ class VideoSeriesBackendClient:
                 "video_ids": video_ids,
                 "run_id": run_id,
                 "transcript_enhancement_enabled": transcript_enhancement_enabled,
+                "processing_mode": processing_mode,
             },
         )
         while True:
-            status = await self.get_series_status(series_id, video_ids=video_ids)
+            status = await self.get_series_status(series_id, video_ids=video_ids, processing_mode=processing_mode)
             if status["overall_status"] in PROCESS_TERMINAL_STATUSES:
                 return {
                     "status": status["overall_status"],
@@ -355,6 +390,10 @@ class VideoSeriesBackendClient:
     async def _request_text(self, method: str, path: str, **kwargs: Any) -> str:
         response = await self._request(method, path, **kwargs)
         return response.text
+
+    async def _request_bytes(self, method: str, path: str, **kwargs: Any) -> bytes:
+        response = await self._request(method, path, **kwargs)
+        return response.content
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         async with httpx.AsyncClient(
@@ -438,6 +477,37 @@ class VideoSeriesBackendClient:
             "size": resolved_output_path.stat().st_size,
         }
 
+    def _write_binary_export(
+        self,
+        *,
+        series_id: str,
+        kind: str,
+        content: bytes,
+        output_path: str | None,
+    ) -> dict[str, Any]:
+        if output_path is not None:
+            resolved_output_path = _resolve_requested_output_path(output_path)
+            if resolved_output_path.suffix.lower() != ".zip":
+                raise ValueError("srt export output_path must end with .zip")
+            delivery = "file"
+        else:
+            now = datetime.now()
+            export_dir = self.export_root / now.strftime("%Y-%m-%d")
+            export_dir.mkdir(parents=True, exist_ok=True)
+            resolved_output_path = export_dir / _safe_export_filename(
+                f"{now:%H%M%S-%f}-{series_id}-{kind}.zip"
+            )
+            delivery = "file"
+        resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_output_path.write_bytes(content)
+        return {
+            "delivery": delivery,
+            "filename": resolved_output_path.name,
+            "relative_path": _display_path(resolved_output_path),
+            "output_path": str(resolved_output_path),
+            "size": resolved_output_path.stat().st_size,
+        }
+
 
 def _error_detail(response: httpx.Response) -> str:
     try:
@@ -467,6 +537,7 @@ def _video_status(video: dict[str, Any], generation: dict[str, Any]) -> dict[str
         "title": video.get("title", ""),
         "status": video.get("status", ""),
         "processed": bool(video.get("processed")),
+        "has_transcript": bool(video.get("has_transcript")),
         "is_linked": bool(video.get("is_linked")),
         "generation": _snapshot_payload(generation),
     }
@@ -483,8 +554,8 @@ def _snapshot_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _overall_status(series_generation: dict[str, Any], videos: list[dict[str, Any]]) -> str:
-    if videos and all(video["processed"] for video in videos):
+def _overall_status(series_generation: dict[str, Any], videos: list[dict[str, Any]], completion_field: str = "processed") -> str:
+    if videos and all(video[completion_field] for video in videos):
         return "completed"
     video_statuses = {video["generation"]["status"] for video in videos}
     if video_statuses & {"running", "processing", "downloading", "transcribing", "summarizing"}:

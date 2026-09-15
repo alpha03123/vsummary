@@ -90,6 +90,9 @@ export function WorkspacePage({ page }) {
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const hasRightPane = Boolean(activeSeries);
   const isChatCenterMode = ui.layoutMode === "chat_center";
+  const summaryLocked = selectedContextType === "series"
+    ? !(activeSeries?.videos ?? []).some((video) => video.processed)
+    : selectedContextType === "video" && selectedVideo?.processed !== true;
   const chatPanelProps = {
     workspaceTitle: library?.workspace?.title,
     activeSeries,
@@ -101,6 +104,7 @@ export function WorkspacePage({ page }) {
     chatSessions: chat.sessions,
     activeSessionId: chat.activeSessionId,
     chatPending: chat.pending,
+    summaryLocked,
     contextUsage: chat.contextUsage,
     contextUsageLoading: chat.contextUsageLoading,
     ragModels: generation.ragModels,
@@ -307,6 +311,9 @@ export function WorkspacePage({ page }) {
               onSelectSeriesContext={actions.selectSeriesContext}
               onSelectVideo={actions.selectVideo}
               onGenerateVideo={actions.generateVideo}
+              onProcessLinkedVideo={actions.processLinkedVideo}
+              processingMode={shell.processingMode}
+              onChangeProcessingMode={actions.changeProcessingMode}
               onRelinkVideo={actions.relinkVideo}
               onGenerateSeries={actions.generateSeries}
               onCancelGeneration={actions.cancelGeneration}
@@ -502,7 +509,7 @@ export function WorkspacePage({ page }) {
                 <WorkspaceGenerationOverlay
                   generationProgress={generation.progress}
                   generationSnapshot={generation.snapshot}
-                  title={generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
+                  title={shell.processingMode === "transcript" ? "正在获取字幕" : generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
                   onCancel={actions.cancelGeneration}
                   cancelLabel={generation.isGeneratingSeries ? "取消整个系列" : "取消本次生成"}
                 />

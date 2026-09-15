@@ -762,14 +762,14 @@ async def generate_video_summary(
         HTTPException(503): 生成过程发生运行时错误。
     """
     _ensure_source_media_available(_ensure_video_exists(container, series_id, video_id))
+    processing_mode = "summary" if request is None else request.processing_mode
+    arguments = {
+        "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
+    }
+    if processing_mode != "summary":
+        arguments["processing_mode"] = processing_mode
     try:
-        video_summary = await container.generate_video_summary.run(
-            series_id,
-            video_id,
-            transcript_enhancement_enabled=(
-                None if request is None else request.transcript_enhancement_enabled
-            ),
-        )
+        video_summary = await container.generate_video_summary.run(series_id, video_id, **arguments)
     except AsrModelNotReadyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except GenerateCancelledError as error:
@@ -785,6 +785,8 @@ async def generate_video_summary(
         if snapshot.status == "cancelled":
             raise HTTPException(status_code=409, detail="generation cancelled")
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    if processing_mode == "transcript":
+        return {"series_id": series_id, "video_id": video_id, "status": "transcript_ready"}
     return video_summary.summary
 
 
@@ -921,12 +923,15 @@ async def generate_series_summaries(
         HTTPException(409): 重复触发或 scope 忙碌。
         HTTPException(503): 生成过程发生运行时错误。
     """
+    processing_mode = "summary" if request is None else request.processing_mode
+    arguments = {
+        "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
+        "run_id": None if request is None else request.run_id,
+    }
+    if processing_mode != "summary":
+        arguments["processing_mode"] = processing_mode
     try:
-        result = await container.generate_series_summaries.run(
-            series_id,
-            transcript_enhancement_enabled=(None if request is None else request.transcript_enhancement_enabled),
-            run_id=(None if request is None else request.run_id),
-        )
+        result = await container.generate_series_summaries.run(series_id, **arguments)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -1204,10 +1209,20 @@ def export_series_mindmap(series_id: str, format: str = "md", container: ApiCont
 
 
 @router.get("/api/series/{series_id}/exports/{export_kind}.zip")
-def export_series_archive(series_id: str, export_kind: str, container: ApiContainerDep) -> Response:
+def export_series_archive(
+    series_id: str,
+    export_kind: str,
+    container: ApiContainerDep,
+    video_ids: str = "",
+) -> Response:
     """GET /api/series/{series_id}/exports/{kind}.zip — 批量导出系列制品压缩包。"""
     try:
-        archive = container.export_series_archive.run(series_id, export_kind)
+        selected_video_ids = list(dict.fromkeys(item.strip() for item in video_ids.split(",") if item.strip()))
+        archive = (
+            container.export_series_archive.run(series_id, export_kind, selected_video_ids)
+            if selected_video_ids
+            else container.export_series_archive.run(series_id, export_kind)
+        )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except LookupError as error:

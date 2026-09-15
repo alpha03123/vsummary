@@ -55,9 +55,11 @@ function createSeriesRunId(seriesId) {
   return `${seriesId}:${nextSeriesRunSequence}`;
 }
 
-export function getPendingVideosForSeriesGeneration(library, seriesId) {
+export function getPendingVideosForSeriesGeneration(library, seriesId, processingMode = "summary") {
   const series = library?.series?.find((item) => item.id === seriesId);
-  return series?.videos?.filter((video) => !video.processed && video.status !== "source_missing") ?? [];
+  return series?.videos?.filter((video) => (
+    processingMode === "transcript" ? !video.hasTranscript : !video.processed
+  ) && video.status !== "source_missing") ?? [];
 }
 
 function isLinkedVideo(video) {
@@ -201,12 +203,14 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
     const seriesId = state.selectedSeriesId;
     const videoId = state.selectedVideoId;
+    const processingMode = state.processingMode;
     const videoKey = buildVideoKey(seriesId, videoId);
     dispatch({ type: "generation_started", videoKey, seriesId, videoId });
 
     try {
       const summaryResult = await generateVideoSummary(seriesId, videoId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
+        processingMode,
       });
       const library = await reloadWorkspaceLibrary();
       dispatch({
@@ -214,7 +218,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
         seriesId,
         videoId,
-        summary: summaryResult,
+        summary: processingMode === "summary" ? summaryResult : null,
+        processingMode,
         library,
       });
     } catch (error) {
@@ -279,8 +284,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
     const seriesId = state.selectedSeriesId;
     const videoId = state.selectedVideoId;
+    const processingMode = state.processingMode;
     try {
-      await processAgentVideo(seriesId, videoId);
+      await processAgentVideo(seriesId, videoId, { processingMode });
       dispatch({
         type: "generation_status_loaded",
         taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
@@ -307,7 +313,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
 
     const seriesId = state.selectedSeriesId;
-    const pendingVideos = getPendingVideosForSeriesGeneration(state.library, seriesId);
+    const processingMode = state.processingMode;
+    const pendingVideos = getPendingVideosForSeriesGeneration(state.library, seriesId, processingMode);
     if (!pendingVideos.length) {
       return;
     }
@@ -367,6 +374,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const seriesResult = await generateSeriesSummaries(seriesId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
         runId,
+        processingMode,
       });
       const skippedVideoErrors = mergeSkippedVideoErrors(
         downloadSkippedVideoErrors,
@@ -546,7 +554,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
   async function cancelSeriesWork({ seriesId, runId }) {
     await cancelSeriesSummaries(seriesId, { runId });
     const linkedVideoIds = new Set(
-      getPendingVideosForSeriesGeneration(state.library, seriesId)
+      getPendingVideosForSeriesGeneration(state.library, seriesId, state.processingMode)
         .filter(isLinkedVideo)
         .map((video) => video.id),
     );
@@ -1131,6 +1139,9 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
   }
 
   return {
+    onChangeProcessingMode(mode) {
+      dispatch({ type: "processing_mode_changed", mode });
+    },
     onGenerateKnowledgeCards,
     onClearKnowledgeCardsFeedback,
     onGenerateVideo,

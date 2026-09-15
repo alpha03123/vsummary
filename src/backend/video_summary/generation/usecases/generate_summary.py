@@ -41,6 +41,7 @@ from backend.video_summary.generation.ports import (
     NoTranscribableAudioError,
     NoVideoFramesError,
     ProgressReporter,
+    SavedTranscriptSource,
     SubtitleTranscriptSource,
     Summarizer,
     TranscriptEnhancer,
@@ -50,6 +51,8 @@ from backend.video_summary.generation.stage_cache import GenerationStageCache
 
 
 LOGGER = logging.getLogger(__name__)
+
+PROCESSING_MODES = {"summary", "transcript"}
 
 
 class GenerateCancelledError(RuntimeError):
@@ -83,6 +86,7 @@ class GenerateVideoSummary:
         artifact_store: GenerationArtifactStore,
         subtitle_provider: SubtitleTranscriptSource | None = None,
         manual_transcript_provider: ManualTranscriptSource | None = None,
+        saved_transcript_provider: SavedTranscriptSource | None = None,
         frame_extractor: FrameExtractor | None = None,
         chapter_screenshots_enabled: bool = True,
     ) -> None:
@@ -103,6 +107,7 @@ class GenerateVideoSummary:
         self._artifact_store = artifact_store
         self._subtitle_provider = subtitle_provider
         self._manual_transcript_provider = manual_transcript_provider
+        self._saved_transcript_provider = saved_transcript_provider
         self._frame_extractor = frame_extractor
         self._chapter_screenshots_enabled = chapter_screenshots_enabled
 
@@ -114,7 +119,8 @@ class GenerateVideoSummary:
         cancellation: GenerationCancellationContext | None = None,
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
-    ) -> SummaryDocument:
+        processing_mode: str = "summary",
+    ) -> SummaryDocument | None:
         """为指定视频生成结构化总结文档。
 
         Args:
@@ -133,6 +139,8 @@ class GenerateVideoSummary:
             RuntimeError: LLM 阶段异常会被包装为带中文提示的 `RuntimeError`。
             LookupError: 底层端口抛出的「无制品」错误。
         """
+        if processing_mode not in PROCESSING_MODES:
+            raise ValueError(f"unsupported processing mode: {processing_mode}")
         resolved_cancellation = cancellation
         cancel_watch_task: asyncio.Task[None] | None = None
         if resolved_cancellation is None and progress_reporter is not None:
@@ -149,6 +157,7 @@ class GenerateVideoSummary:
                 cancellation=resolved_cancellation,
                 manual_transcript=manual_transcript,
                 use_saved_manual_transcript=use_saved_manual_transcript,
+                processing_mode=processing_mode,
             )
         finally:
             if cancel_watch_task is not None:
@@ -165,7 +174,8 @@ class GenerateVideoSummary:
         cancellation: GenerationCancellationContext | None,
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
-    ) -> SummaryDocument:
+        processing_mode: str,
+    ) -> SummaryDocument | None:
         """前置取消检查 → 准备 staging 目录 → 跑核心流水线 → 清理 staging。
 
         任何阶段失败/取消都会通过 `finally` 清理 staging 目录，
@@ -186,6 +196,7 @@ class GenerateVideoSummary:
                     cancellation=cancellation,
                     manual_transcript=manual_transcript,
                     use_saved_manual_transcript=use_saved_manual_transcript,
+                    processing_mode=processing_mode,
                 )
             except FileNotFoundError:
                 if attempt == 0 and not staging_dir.exists():
@@ -204,7 +215,8 @@ class GenerateVideoSummary:
         cancellation: GenerationCancellationContext | None,
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
-    ) -> SummaryDocument:
+        processing_mode: str,
+    ) -> SummaryDocument | None:
         """在 staging 目录下依次跑各生成阶段，全部成功后原子提交到 `output_dir`。
 
         每个阶段都会：
@@ -221,6 +233,15 @@ class GenerateVideoSummary:
                 output_dir,
             )
 
+        saved_transcript = None
+        if (
+            processing_mode == "summary"
+            and resolved_manual_transcript is None
+            and use_saved_manual_transcript
+            and self._saved_transcript_provider is not None
+        ):
+            saved_transcript = await asyncio.to_thread(self._saved_transcript_provider.load, output_dir)
+
         subtitle_transcript = None
         if resolved_manual_transcript is not None:
             transcript = resolved_manual_transcript.transcript
@@ -232,6 +253,16 @@ class GenerateVideoSummary:
             transcript_source_identity = "manual-srt-v1"
             if progress_reporter is not None:
                 progress_reporter.update("load_manual_srt", 20.0, "已读取人工 SRT，跳过字幕探测和语音识别")
+        elif saved_transcript is not None:
+            transcript = saved_transcript
+            video = VideoAsset(
+                source_path=video_path,
+                title=video_path.stem,
+                duration_seconds=max(segment.end_seconds for segment in transcript.segments),
+            )
+            transcript_source_identity = "saved-transcript-v1"
+            if progress_reporter is not None:
+                progress_reporter.update("load_transcript", 80.0, "已读取现有字幕，跳过字幕获取和语音识别")
         elif self._subtitle_provider is not None:
             if progress_reporter is not None:
                 progress_reporter.update("probe_subtitles", 5.0, "正在检查中文字幕")
@@ -246,7 +277,7 @@ class GenerateVideoSummary:
                 raise GenerateCancelledError(str(error) or "生成已取消") from error
             _raise_if_cancelled(progress_reporter, cancellation)
 
-        if resolved_manual_transcript is None and subtitle_transcript is not None:
+        if resolved_manual_transcript is None and saved_transcript is None and subtitle_transcript is not None:
             video = VideoAsset(
                 source_path=video_path,
                 title=video_path.stem,
@@ -256,7 +287,7 @@ class GenerateVideoSummary:
             transcript_source_identity = f"subtitle:{_cache_identity(self._subtitle_provider)}"
             if progress_reporter is not None:
                 progress_reporter.update("extract_subtitles", 20.0, "已读取中文字幕，跳过语音识别")
-        elif resolved_manual_transcript is None:
+        elif resolved_manual_transcript is None and saved_transcript is None:
             audio_path = staging_dir / "audio.wav"
             transcript_stem = staging_dir / "transcript"
             media_identity = _cache_identity(self._media_processor)
@@ -326,7 +357,12 @@ class GenerateVideoSummary:
             if self._transcript_enhancer is not None
             else ""
         )
-        if self._transcript_enhancer is not None and unavailable_reason is None and resolved_manual_transcript is None:
+        if (
+            self._transcript_enhancer is not None
+            and unavailable_reason is None
+            and resolved_manual_transcript is None
+            and saved_transcript is None
+        ):
             if progress_reporter is not None:
                 progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
             _raise_if_cancelled(progress_reporter, cancellation)
@@ -370,6 +406,17 @@ class GenerateVideoSummary:
             output_dir=staging_dir,
         )
         _raise_if_cancelled(progress_reporter, cancellation)
+
+        if processing_mode == "transcript":
+            if unavailable_reason is not None:
+                raise RuntimeError(unavailable_reason)
+            await asyncio.to_thread(
+                _commit_transcript_artifacts,
+                staging_dir,
+                output_dir,
+                remove_manual_source=not use_saved_manual_transcript,
+            )
+            return None
 
         if unavailable_reason is not None:
             summary_document = _build_no_transcribable_audio_summary(video, unavailable_reason)
@@ -678,6 +725,36 @@ def _commit_generation_artifacts(
     if remove_manual_source:
         (output_dir / "transcript.manual.srt").unlink(missing_ok=True)
         (output_dir / "transcript.source.json").unlink(missing_ok=True)
+
+
+def _commit_transcript_artifacts(
+    staging_dir: Path,
+    output_dir: Path,
+    *,
+    remove_manual_source: bool = False,
+) -> None:
+    """提交转写制品，并移除所有依赖旧转写的派生制品。"""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    transcript_artifacts = (
+        "transcript.cleaned.json",
+        "transcript.enhanced.json",
+        "transcript.manual.srt",
+        "transcript.source.json",
+    )
+    for artifact_name in transcript_artifacts:
+        source = staging_dir / artifact_name
+        target = output_dir / artifact_name
+        if source.is_file():
+            source.replace(target)
+        elif artifact_name == "transcript.enhanced.json":
+            target.unlink(missing_ok=True)
+    if remove_manual_source:
+        (output_dir / "transcript.manual.srt").unlink(missing_ok=True)
+        (output_dir / "transcript.source.json").unlink(missing_ok=True)
+    for artifact_name in ("summary.json", "summary.md", "mindmap.json", "knowledge_cards.json"):
+        (output_dir / artifact_name).unlink(missing_ok=True)
+    _remove_tree_if_exists(output_dir / "screenshots")
+    (output_dir.parent / "mindmap.json").unlink(missing_ok=True)
 
 
 def _remove_tree_if_exists(path: Path) -> None:
