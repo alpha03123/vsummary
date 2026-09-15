@@ -271,9 +271,9 @@ export function WorkspacePage({ page }) {
     const waitingForBackend = !state.backendReady;
     return (
       <div className="flex h-screen w-full items-center justify-center bg-transparent">
-        <div className="workspace-panel rounded-3xl p-8 border max-w-md text-center">
-          <p className="text-stone-600 dark:text-zinc-400 text-sm font-bold tracking-widest uppercase mb-2">Preparing Workspace</p>
-          <h1 className="text-2xl font-bold text-stone-900 mb-3">
+        <div className="workspace-panel max-w-md rounded-3xl border p-8 text-center">
+          <p className="mb-2 text-sm font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Preparing Workspace</p>
+          <h1 className="mb-3 text-2xl font-bold text-stone-900">
             {waitingForBackend ? "正在启动服务..." : "正在载入知识工作台"}
           </h1>
           <p className="text-stone-600">

@@ -215,21 +215,23 @@ class VideoSeriesBackendClient:
             raise ValueError(f"unsupported markdown export kind: {kind}")
         if kind == "srt":
             normalized_video_ids = _normalized_ids(video_ids or [])
-            query = ""
-            if normalized_video_ids:
-                query = "?video_ids=" + quote(",".join(normalized_video_ids), safe="")
-            archive = await self._request_bytes(
+            if len(normalized_video_ids) != 1:
+                raise ValueError("srt export requires exactly one video_id")
+            video_id = normalized_video_ids[0]
+            content = await self._request_bytes(
                 "GET",
-                f"/api/series/{self._path_segment(series_id)}/exports/srt.zip{query}",
+                f"/api/videos/{self._path_segment(series_id)}/{self._path_segment(video_id)}/exports/subtitles.srt",
             )
-            export = self._write_binary_export(
+            export = self._write_srt_export(
                 series_id=series_id,
+                video_id=video_id,
                 kind=kind,
-                content=archive,
+                content=content,
                 output_path=output_path,
             )
             return {
                 "series_id": series_id,
+                "video_id": video_id,
                 "kind": kind,
                 "delivery": export["delivery"],
                 "filename": export["filename"],
@@ -477,25 +479,26 @@ class VideoSeriesBackendClient:
             "size": resolved_output_path.stat().st_size,
         }
 
-    def _write_binary_export(
+    def _write_srt_export(
         self,
         *,
         series_id: str,
+        video_id: str,
         kind: str,
         content: bytes,
         output_path: str | None,
     ) -> dict[str, Any]:
         if output_path is not None:
             resolved_output_path = _resolve_requested_output_path(output_path)
-            if resolved_output_path.suffix.lower() != ".zip":
-                raise ValueError("srt export output_path must end with .zip")
+            if resolved_output_path.suffix.lower() != ".srt":
+                raise ValueError("srt export output_path must end with .srt")
             delivery = "file"
         else:
             now = datetime.now()
             export_dir = self.export_root / now.strftime("%Y-%m-%d")
             export_dir.mkdir(parents=True, exist_ok=True)
             resolved_output_path = export_dir / _safe_export_filename(
-                f"{now:%H%M%S-%f}-{series_id}-{kind}.zip"
+                f"{now:%H%M%S-%f}-{series_id}-{video_id}-{kind}.srt"
             )
             delivery = "file"
         resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
