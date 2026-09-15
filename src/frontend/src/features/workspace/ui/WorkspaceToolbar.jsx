@@ -55,12 +55,17 @@ export function WorkspaceToolbar({
           {isSidebarOpen ? <PanelLeftClose size={22} /> : <PanelLeftOpen size={22} />}
         </button>
 
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10">
             <BookOpenText size={20} strokeWidth={2.1} />
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-stone-900 dark:text-stone-100 leading-tight block">{activeSeries ? activeSeries.title : "Workspace"}</h1>
+          <div className="min-w-0">
+            {/* 侧栏展开时它的头部就在左边显示当前系列名，这里再复述一次会让
+                "同一句话"在一屏里出现两次。所以工具栏只在侧栏收起、上下文
+                丢失时兜底显示系列名，其余时候显示应用身份。 */}
+            <h1 className="block truncate text-lg font-bold leading-tight text-stone-900 dark:text-stone-100">
+              {isSidebarOpen || !activeSeries ? "知识工作台" : activeSeries.title}
+            </h1>
           </div>
         </div>
       </div>

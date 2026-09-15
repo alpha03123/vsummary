@@ -217,27 +217,31 @@ export function WorkspacePage({ page }) {
         );
       }
       return (
-        <WorkspaceVideoPlayer
-          videoSource={tools?.preview?.previewUrl ?? previewUrl}
-          subtitleSource={tools?.preview?.subtitleUrl ?? null}
-          playerSeekRequest={playerSeekRequest}
-          videoSourceType={selectedVideo?.sourceType}
-          resumeSeconds={resumePosition.videoKey === selectedVideoKey ? resumePosition.seconds : null}
-          onTimeUpdate={(seconds) => {
-            setPlaybackTime(seconds);
-            if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
-              playbackPositionsRef.current.set(selectedVideoKey, seconds);
-            }
-          }}
-          onPlaybackEnded={() => {
-            if (selectedVideoKey) {
-              playbackPositionsRef.current.delete(selectedVideoKey);
-            }
-          }}
-          onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
-          followOverviewPlayback={followOverviewPlayback}
-          onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
-        />
+        // 与右栏 WorkspaceReadingPane 的 p-6 保持一致，否则媒体卡贴着面板边缘、
+        // 而右侧内容缩进 24px，同一行两栏看起来没有对齐。
+        <div className="flex h-full flex-col overflow-y-auto p-6">
+          <WorkspaceVideoPlayer
+            videoSource={tools?.preview?.previewUrl ?? previewUrl}
+            subtitleSource={tools?.preview?.subtitleUrl ?? null}
+            playerSeekRequest={playerSeekRequest}
+            videoSourceType={selectedVideo?.sourceType}
+            resumeSeconds={resumePosition.videoKey === selectedVideoKey ? resumePosition.seconds : null}
+            onTimeUpdate={(seconds) => {
+              setPlaybackTime(seconds);
+              if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
+                playbackPositionsRef.current.set(selectedVideoKey, seconds);
+              }
+            }}
+            onPlaybackEnded={() => {
+              if (selectedVideoKey) {
+                playbackPositionsRef.current.delete(selectedVideoKey);
+              }
+            }}
+            onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
+            followOverviewPlayback={followOverviewPlayback}
+            onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
+          />
+        </div>
       );
     }
     return (

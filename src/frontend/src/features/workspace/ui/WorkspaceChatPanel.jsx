@@ -158,7 +158,7 @@ export function WorkspaceChatPanel({
   return (
     <div className="h-full w-full flex flex-col bg-transparent">
       {/* Header */}
-      <div className="workspace-toolbar-surface shrink-0 flex items-center justify-between px-6 py-4 border-b border-stone-200/80 dark:border-stone-800">
+      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between px-6 py-4 border-b border-stone-200/80 dark:border-stone-800">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
             <Sparkles size={16} className="text-accent" />
@@ -216,7 +216,7 @@ export function WorkspaceChatPanel({
 
 
       {/* Chat History Area */}
-      <div className={`relative min-h-0 flex-1 transition ${lockedContentClass}`}>
+      <div className={`relative z-0 min-h-0 flex-1 transition ${lockedContentClass}`}>
         <div
           ref={chatHistoryRef}
           className="h-full overflow-auto p-6 pl-14 md:p-8 md:pl-16 flex flex-col gap-6"

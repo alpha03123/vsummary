@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Captions } from "lucide-react";
+import { Captions, Download } from "lucide-react";
 
-import { formatRange } from "../../../shared/lib/time";
 import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "./WorkspaceNativeSubtitleSettings";
 import { WorkspaceSubtitleDisplay } from "./WorkspaceSubtitleDisplay";
+import { WorkspaceMediaPreviewHeader, WorkspaceMediaSeekNotice } from "./shared/WorkspaceMediaPreviewHeader";
 
 export function WorkspaceVideoPlayer({
   videoSource,
@@ -106,11 +106,9 @@ export function WorkspaceVideoPlayer({
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="workspace-muted-panel relative rounded-3xl border p-4">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Media Preview</p>
-          {!isAudioSource && subtitleSource ? (
+    <div className="flex flex-col gap-3">
+      <WorkspaceMediaPreviewHeader
+        subtitleSettings={!isAudioSource && subtitleSource ? (
             <WorkspaceNativeSubtitleSettings
               subtitlesEnabled={subtitlesEnabled}
               onSubtitlesEnabledChange={setSubtitlesEnabled}
@@ -119,33 +117,19 @@ export function WorkspaceVideoPlayer({
               style={subtitleStyle}
               onStyleChange={setSubtitleStyle}
             />
-          ) : null}
-        </div>
-        {playerSeekRequest ? (
-          <div className="mt-3 rounded-2xl border border-info/20 bg-info-subtle px-4 py-3 text-sm text-stone-800 dark:text-stone-100">
-            <p className="font-semibold">
-              已定位到 {formatRange(playerSeekRequest.seconds, playerSeekRequest.endSeconds ?? playerSeekRequest.seconds)}
-              {playerSeekRequest.chapterTitle ? ` · ${playerSeekRequest.chapterTitle}` : ""}
-            </p>
-            {playerSeekRequest.query ? (
-              <p className="mt-1 text-stone-600 dark:text-stone-300">检索问题：{playerSeekRequest.query}</p>
-            ) : null}
-            {playerSeekRequest.matchedText ? (
-              <p className="mt-2 line-clamp-3 text-stone-700 dark:text-stone-200">{playerSeekRequest.matchedText}</p>
-            ) : null}
-          </div>
         ) : null}
-      </div>
+      />
+      <WorkspaceMediaSeekNotice seekRequest={playerSeekRequest} />
       {isAudioSource ? (
         <div className="workspace-elevated-panel rounded-3xl border p-8 text-center text-sm font-semibold text-stone-600 shadow-sm dark:text-zinc-300">
           音频文件暂不支持预览
         </div>
-      ) : (
-        <div className="workspace-elevated-panel relative overflow-hidden rounded-3xl border bg-black shadow-sm">
+      ) : videoSource ? (
+        <div className="workspace-elevated-panel relative aspect-video max-h-[72vh] w-full overflow-hidden rounded-3xl border bg-black shadow-sm">
           <video
             key={videoSource}
             ref={videoRef}
-            className="h-full w-full max-h-[72vh] bg-black"
+            className="h-full w-full bg-black object-contain"
             controls
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
@@ -175,6 +159,18 @@ export function WorkspaceVideoPlayer({
             enabled={subtitlesEnabled}
             style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
           />
+        </div>
+      ) : (
+        // 未下载的媒体没有可播放源：给一个和播放器等大的 16:9 占位，
+        // 说明当前状态并指向左栏的下载入口，而不是留一条没有信息的黑条。
+        <div className="workspace-elevated-panel flex aspect-video max-h-[72vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 px-6 text-center shadow-sm">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-stone-300">
+            <Download size={22} aria-hidden="true" />
+          </span>
+          <p className="text-sm font-semibold text-stone-200">视频尚未下载</p>
+          <p className="max-w-sm text-xs leading-relaxed text-stone-400">
+            在左侧来源列表点击「下载视频」，下载完成后即可在这里预览。
+          </p>
         </div>
       )}
       <AnimatePresence initial={false}>

@@ -19,6 +19,9 @@ import {
   Pencil,
   FileArchive,
   Captions,
+  LayoutGrid,
+  Network,
+  Download,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
@@ -967,6 +970,7 @@ export function WorkspaceLibraryPanel({
         open={seriesExportOpen}
         seriesId={activeSeries?.id}
         selectedVideoIds={selectedVideoIds}
+        videoCount={videos.length}
         scope={seriesExportScope}
         onScopeChange={setSeriesExportScope}
         onClose={() => setSeriesExportOpen(false)}
@@ -975,16 +979,18 @@ export function WorkspaceLibraryPanel({
   );
 }
 
-function SeriesExportPanel({ open, seriesId, selectedVideoIds, scope, onScopeChange, onClose }) {
-  const selectedAvailable = selectedVideoIds.length > 0;
-  const query = scope === "selected" && selectedAvailable
+function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope, onScopeChange, onClose }) {
+  const selectedCount = selectedVideoIds.length;
+  const selectedAvailable = selectedCount > 0;
+  const useSelected = scope === "selected" && selectedAvailable;
+  const query = useSelected
     ? `?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`
     : "";
   const actions = [
-    ["mixed", "AI 概况混合包"],
-    ["knowledge-cards", "知识卡片"],
-    ["mindmaps", "思维导图"],
-    ["srt", "SRT 字幕压缩包"],
+    ["mixed", "AI 概况混合包", "Markdown · 概况、要点与逐字稿", Sparkles],
+    ["knowledge-cards", "知识卡片", "Markdown · 逐条知识卡片", LayoutGrid],
+    ["mindmaps", "思维导图", "Markdown · 章节层级导图", Network],
+    ["srt", "SRT 字幕", "SRT · 标准字幕，可直接导入播放器", Captions],
   ];
   if (typeof document === "undefined") {
     return null;
@@ -993,9 +999,6 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, scope, onScopeCha
     <AnimatePresence>
       {open ? (
         <motion.div
-          role="dialog"
-          aria-modal="true"
-          aria-label="批量导出"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -1004,68 +1007,75 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, scope, onScopeCha
           onClick={onClose}
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="series-export-title"
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 360, damping: 28 }}
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-3xl rounded-[2rem] border border-stone-200 bg-white p-6 shadow-2xl sm:p-8 dark:border-stone-700 dark:bg-neutral-900"
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6 dark:border-stone-700 dark:bg-neutral-900"
           >
-            <div className="mb-7 flex items-start justify-between gap-6">
-              <div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Series export</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">批量导出</h3>
-                <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">选择视频范围，再下载对应的系列内容包。</p>
+                <h3 id="series-export-title" className="mt-1 text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">批量导出</h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">选好范围后，点击内容包即可开始下载。</p>
               </div>
-              <button type="button" onClick={onClose} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-stone-800" aria-label="关闭批量导出">
-                <X size={18} />
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                aria-label="关闭批量导出"
+              >
+                <X size={17} />
               </button>
             </div>
 
-            <section className="mb-7">
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <p className="text-sm font-bold text-stone-800 dark:text-stone-100">导出范围</p>
-                <p className="text-xs text-stone-500 dark:text-stone-400">默认导出整个系列</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => onScopeChange("all")}
-                  className={`rounded-2xl border p-4 text-left transition-colors ${scope === "all" ? "border-accent/45 bg-accent/8 text-accent" : "border-stone-200 bg-white text-stone-700 hover:border-accent/35 hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200"}`}
-                >
-                  <span className="block text-sm font-bold">全部视频</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-stone-500 dark:text-stone-400">包含当前系列下的全部可导出视频。</span>
-                </button>
-                <button
-                  type="button"
+            <section className="mt-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出范围</p>
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <ScopeOption
+                  selected={scope === "all"}
+                  onSelect={() => onScopeChange("all")}
+                  label="全部视频"
+                  hint={videoCount ? `${videoCount} 个` : null}
+                />
+                <ScopeOption
+                  selected={useSelected}
                   disabled={!selectedAvailable}
-                  onClick={() => onScopeChange("selected")}
-                  className={`rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${scope === "selected" ? "border-accent/45 bg-accent/8 text-accent" : "border-stone-200 bg-white text-stone-700 hover:border-accent/35 hover:bg-accent/5 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200"}`}
-                >
-                  <span className="block text-sm font-bold">已选视频 · {selectedVideoIds.length} 项</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-stone-500 dark:text-stone-400">在左侧列表勾选视频后可按选中项导出。</span>
-                </button>
+                  onSelect={() => onScopeChange("selected")}
+                  label="已选视频"
+                  hint={selectedAvailable ? `${selectedCount} 个` : null}
+                />
               </div>
+              {!selectedAvailable ? (
+                <p className="mt-2.5 text-[11px] leading-relaxed text-stone-400 dark:text-stone-500">
+                  想按选中项导出，先在左侧列表勾选视频。
+                </p>
+              ) : null}
             </section>
 
-            <section>
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <p className="text-sm font-bold text-stone-800 dark:text-stone-100">导出内容</p>
-                <p className="text-xs text-stone-500 dark:text-stone-400">选择一种内容包下载</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {actions.map(([kind, label]) => (
+            <section className="mt-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出内容</p>
+              <div className="mt-2.5 flex flex-col gap-2.5">
+                {actions.map(([kind, label, meta, Icon]) => (
                   <a
                     key={kind}
                     href={`/api/series/${encodeURIComponent(seriesId)}/exports/${kind}.zip${query}`}
                     download
                     onClick={onClose}
-                    className="group flex min-h-24 items-center justify-between rounded-2xl border border-stone-200 bg-white p-4 text-stone-700 transition-all hover:-translate-y-0.5 hover:border-accent/45 hover:bg-accent/5 hover:text-accent hover:shadow-md dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:border-accent/45 dark:hover:bg-accent/10"
+                    className="group flex items-center gap-3 rounded-2xl border border-stone-200 bg-white px-3.5 py-2.5 transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-accent/40 dark:hover:bg-accent/10"
                   >
-                    <span className="text-sm font-bold">{label}</span>
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 text-stone-500 transition-colors group-hover:bg-accent/10 group-hover:text-accent dark:bg-stone-800 dark:text-stone-400">
-                      <FileArchive size={18} />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/8 text-accent">
+                      <Icon size={17} />
                     </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-stone-800 dark:text-stone-100">{label}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-stone-500 dark:text-stone-400">{meta}</span>
+                    </span>
+                    <Download size={16} className="shrink-0 text-stone-400 transition-colors group-hover:text-accent dark:text-stone-500" />
                   </a>
                 ))}
               </div>
@@ -1075,5 +1085,36 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, scope, onScopeCha
       ) : null}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+function ScopeOption({ selected, disabled = false, onSelect, label, hint }) {
+  const stateClass = disabled
+    ? "cursor-not-allowed border-dashed border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-neutral-900/60"
+    : selected
+      ? "border-accent/50 bg-accent/8"
+      : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-stone-600 dark:hover:bg-neutral-800/60";
+
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={onSelect}
+      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${stateClass}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selected && !disabled ? "border-accent" : "border-stone-300 dark:border-stone-600"}`}
+      >
+        {selected && !disabled ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
+      </span>
+      <span className={`min-w-0 flex-1 truncate text-[13px] font-semibold ${disabled ? "text-stone-400 dark:text-stone-500" : "text-stone-800 dark:text-stone-100"}`}>
+        {label}
+      </span>
+      {hint ? (
+        <span className="shrink-0 text-[11px] tabular-nums text-stone-400 dark:text-stone-500">{hint}</span>
+      ) : null}
+    </button>
   );
 }
