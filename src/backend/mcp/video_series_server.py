@@ -14,7 +14,7 @@ MCP_HTTP_PATH = "/mcp"
 MCP_INSTRUCTIONS = (
     "Use this server to operate VSummary video-series workflows. "
     "Create a series, add Bilibili, YouTube, Douyin URLs or local media file paths, process the series, poll status, "
-    "then export Markdown text. Large exports are exposed as vsummary://exports resources. "
+    "then export Markdown text or a single video's SRT with kind='srt' and exactly one video_id. Large Markdown exports are exposed as vsummary://exports resources. "
     "Do not call raw VSummary HTTP APIs when MCP tools are available."
 )
 
@@ -46,18 +46,30 @@ class VideoSeriesTools:
         video_ids: list[str] | None = None,
         run_id: str | None = None,
         transcript_enhancement_enabled: bool | None = None,
+        processing_mode: str = "summary",
         wait: bool = False,
     ) -> dict[str, Any]:
-        return await self.client.process_series(
-            series_id=series_id,
-            video_ids=video_ids,
-            run_id=run_id,
-            transcript_enhancement_enabled=transcript_enhancement_enabled,
-            wait=wait,
-        )
+        arguments = {
+            "series_id": series_id,
+            "video_ids": video_ids,
+            "run_id": run_id,
+            "transcript_enhancement_enabled": transcript_enhancement_enabled,
+            "wait": wait,
+        }
+        if processing_mode != "summary":
+            arguments["processing_mode"] = processing_mode
+        return await self.client.process_series(**arguments)
 
-    async def get_series_status(self, series_id: str, video_ids: list[str] | None = None) -> dict[str, Any]:
-        return await self.client.get_series_status(series_id=series_id, video_ids=video_ids)
+    async def get_series_status(
+        self,
+        series_id: str,
+        video_ids: list[str] | None = None,
+        processing_mode: str = "summary",
+    ) -> dict[str, Any]:
+        arguments = {"series_id": series_id, "video_ids": video_ids}
+        if processing_mode != "summary":
+            arguments["processing_mode"] = processing_mode
+        return await self.client.get_series_status(**arguments)
 
     async def export_series(
         self,

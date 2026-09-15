@@ -83,6 +83,13 @@ class ManualTranscriptSource(Protocol):
         """返回当前人工 SRT；不存在时返回 ``None``。"""
 
 
+class SavedTranscriptSource(Protocol):
+    """读取已经提交的标准转写制品。"""
+
+    def load(self, output_dir: Path) -> Transcript | None:
+        """返回当前标准转写；不存在时返回 ``None``。"""
+
+
 class Summarizer(Protocol):
     """LLM 总结端口。"""
 

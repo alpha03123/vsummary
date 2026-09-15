@@ -24,6 +24,7 @@ export function buildWorkspacePageModel(controller) {
   return {
     shell: {
       state: controller.state,
+      processingMode: controller.processingMode,
       ui: controller.ui,
       library: controller.state.library,
       activeSeries: controller.activeSeries,
@@ -107,6 +108,8 @@ export function buildWorkspacePageModel(controller) {
       selectTool: controller.onSelectTool,
       focusNode: controller.onFocusNode,
       generateVideo: controller.onGenerateVideo,
+      processLinkedVideo: controller.onProcessLinkedVideo,
+      changeProcessingMode: controller.onChangeProcessingMode,
       relinkVideo: controller.onRelinkVideo,
       uploadSrt: controller.onUploadSrt,
       restoreAutomaticTranscript: controller.onRestoreAutomaticTranscript,

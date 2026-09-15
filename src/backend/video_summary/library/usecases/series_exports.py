@@ -17,9 +17,10 @@ from backend.video_summary.library.models import (
     VideoTranscriptDTO,
 )
 from backend.video_summary.library.ports import VideoLibraryReader
+from backend.video_summary.library.subtitle_exports import render_srt
 
 
-SERIES_EXPORT_KINDS = {"mixed", "knowledge-cards", "mindmaps"}
+SERIES_EXPORT_KINDS = {"mixed", "knowledge-cards", "mindmaps", "srt"}
 
 
 @dataclass(frozen=True)
@@ -36,12 +37,17 @@ class ExportSeriesArchive:
     def __init__(self, workspace: VideoLibraryReader) -> None:
         self._workspace = workspace
 
-    def run(self, series_id: str, export_kind: str) -> SeriesExportArchive:
+    def run(
+        self,
+        series_id: str,
+        export_kind: str,
+        video_ids: list[str] | None = None,
+    ) -> SeriesExportArchive:
         if export_kind not in SERIES_EXPORT_KINDS:
             raise ValueError(f"unsupported series export kind '{export_kind}'")
 
         series = self._find_series(series_id)
-        entries = self._build_entries(series, export_kind)
+        entries = self._build_entries(series, export_kind, set(video_ids or []))
         if not entries:
             raise LookupError(f"no exportable {export_kind} artifacts found for series '{series_id}'")
 
@@ -56,17 +62,31 @@ class ExportSeriesArchive:
             raise LookupError(f"series not found '{series_id}'")
         return series
 
-    def _build_entries(self, series: LibrarySeriesDTO, export_kind: str) -> list[tuple[str, str]]:
+    def _build_entries(
+        self,
+        series: LibrarySeriesDTO,
+        export_kind: str,
+        selected_ids: set[str],
+    ) -> list[tuple[str, str]]:
         entries: list[tuple[str, str]] = []
         for index, video in enumerate(series.videos, start=1):
+            if selected_ids and video.id not in selected_ids:
+                continue
             rendered = self._render_video_export(series.id, video.id, export_kind)
             if rendered is None:
                 continue
-            filename = f"{index:02d}-{_safe_filename_part(video.id)}-{_entry_suffix(export_kind)}.md"
+            suffix = "srt" if export_kind == "srt" else "md"
+            filename = f"{index:02d}-{_safe_filename_part(video.id)}-{_entry_suffix(export_kind)}.{suffix}"
             entries.append((filename, rendered))
         return entries
 
     def _render_video_export(self, series_id: str, video_id: str, export_kind: str) -> str | None:
+        if export_kind == "srt":
+            transcript = self._workspace.get_video_transcript(series_id, video_id)
+            if transcript is None or not transcript.segments:
+                return None
+            return render_srt(transcript.segments)
+
         if export_kind == "mixed":
             summary = self._workspace.get_video_summary(series_id, video_id)
             transcript = self._workspace.get_video_transcript(series_id, video_id)
@@ -147,6 +167,8 @@ def _render_mindmap_markdown(node: dict[str, object], depth: int = 0) -> str:
 def _entry_suffix(export_kind: str) -> str:
     if export_kind == "mindmaps":
         return "mindmap"
+    if export_kind == "srt":
+        return "subtitles"
     return export_kind
 
 

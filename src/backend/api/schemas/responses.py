@@ -43,6 +43,7 @@ class VideoCardResponse(BaseModel):
     source_type: str
     processed: bool
     status: str
+    has_transcript: bool = False
     core_problem: str = ""
     is_linked: bool = False
     source_id: str = ""
@@ -67,6 +68,7 @@ class VideoCardResponse(BaseModel):
             source_type=video.source_type,
             processed=video.processed,
             status=video.status,
+            has_transcript=video.has_transcript,
             core_problem=video.core_problem,
             is_linked=video.is_linked,
             source_id=video.source_id,

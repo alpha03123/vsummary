@@ -18,6 +18,16 @@ export function createWorkspaceChatActions({
       return;
     }
 
+    const activeSeries = state.library?.series?.find((item) => item.id === state.selectedSeriesId);
+    const selectedVideo = activeSeries?.videos?.find((item) => item.id === state.selectedVideoId);
+    const hasSummary = state.selectedContextType === "series"
+      ? activeSeries?.videos?.some((video) => video.processed)
+      : selectedVideo?.processed === true;
+    if (!hasSummary) {
+      dispatch({ type: "load_failed", message: "当前范围尚未生成 AI 概况，请先生成概况后再进行对话。" });
+      return;
+    }
+
     if (state.selectedContextType === "series") {
       const series = state.library?.series?.find((item) => item.id === state.selectedSeriesId);
       if (series && (!Array.isArray(series.videos) || series.videos.length === 0)) {

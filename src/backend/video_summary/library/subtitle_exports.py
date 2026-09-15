@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from html import escape
 import re
+
+import srt
 
 from backend.video_summary.library.models import TranscriptSegmentDTO
 
@@ -33,6 +36,23 @@ def render_webvtt(segments: list[TranscriptSegmentDTO]) -> str:
             )
             elapsed = cue_end
     return "\n".join(cues) + "\n"
+
+
+def render_srt(segments: list[TranscriptSegmentDTO]) -> str:
+    """将工作区标准转写渲染为 UTF-8 SRT。"""
+    subtitles = [
+        srt.Subtitle(
+            index=index,
+            start=timedelta(seconds=segment.start_seconds),
+            end=timedelta(seconds=segment.end_seconds),
+            content=segment.text.strip(),
+        )
+        for index, segment in enumerate(segments, start=1)
+        if segment.text.strip() and segment.end_seconds > segment.start_seconds
+    ]
+    if not subtitles:
+        raise ValueError("转写中没有可导出的字幕片段。")
+    return srt.compose(subtitles)
 
 
 def _split_visual_cues(text: str) -> list[str]:

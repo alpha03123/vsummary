@@ -22,7 +22,7 @@ from backend.video_summary.generation.usecases.generate_summary import GenerateC
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import LibrarySeriesDTO
-from backend.video_summary.library.models import VideoSummaryDTO
+from backend.video_summary.library.models import VideoSummaryDTO, VideoTranscriptDTO
 from backend.video_summary.library.ports import (
     SeriesKnowledgeMemoryRefresher,
     VideoGenerationProgressTracker,
@@ -92,7 +92,7 @@ class GenerateVideoSummaryFromLibrary:
         self._generator = generator
         self._progress_tracker = progress_tracker
         self._series_memory_refresher = series_memory_refresher
-        self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | None]] = {}
+        self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | VideoTranscriptDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
         self._active_task_keys: set[tuple[str, str]] = set()
         self._active_series_generation_ids: set[str] = set()
@@ -139,7 +139,8 @@ class GenerateVideoSummaryFromLibrary:
         internal_series_generation: bool = False,
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
-    ) -> VideoSummaryDTO | None:
+        processing_mode: str = "summary",
+    ) -> VideoSummaryDTO | VideoTranscriptDTO | None:
         """为指定视频启动一次生成并返回最终总结 DTO。
 
         Args:
@@ -169,6 +170,7 @@ class GenerateVideoSummaryFromLibrary:
             internal_series_generation=internal_series_generation,
             manual_transcript=manual_transcript,
             use_saved_manual_transcript=use_saved_manual_transcript,
+            processing_mode=processing_mode,
         )
         return await asyncio.shield(task)
 
@@ -219,7 +221,8 @@ class GenerateVideoSummaryFromLibrary:
         internal_series_generation: bool,
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
-    ) -> asyncio.Task[VideoSummaryDTO | None]:
+        processing_mode: str,
+    ) -> asyncio.Task[VideoSummaryDTO | VideoTranscriptDTO | None]:
         """获取或创建单视频生成任务，复用已有任务避免重复触发。
 
         Returns:
@@ -248,6 +251,7 @@ class GenerateVideoSummaryFromLibrary:
                     progress_reporter=progress_reporter,
                     manual_transcript=manual_transcript,
                     use_saved_manual_transcript=use_saved_manual_transcript,
+                    processing_mode=processing_mode,
                 )
             )
             self._active_tasks[task_id] = task
@@ -265,7 +269,8 @@ class GenerateVideoSummaryFromLibrary:
         progress_reporter: ProgressReporter | None,
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
-    ) -> VideoSummaryDTO | None:
+        processing_mode: str,
+    ) -> VideoSummaryDTO | VideoTranscriptDTO | None:
         """执行单视频生成的实际步骤：占并发槽 → 调生成器 → 刷新系列记忆 → 回读 DTO。
 
         异常处理：
@@ -279,28 +284,34 @@ class GenerateVideoSummaryFromLibrary:
                 reporter.update("prepare", 0.0, "正在等待当前生成任务完成")
 
             async with self._video_generation_slots:
-                await self._generator.run(
-                    series_id=series_id,
-                    video_id=video_id,
-                    progress_reporter=reporter,
-                    transcript_enhancement_enabled=transcript_enhancement_enabled,
-                    manual_transcript=manual_transcript,
-                    use_saved_manual_transcript=use_saved_manual_transcript,
-                )
-                if self._series_memory_refresher is not None:
+                generator_arguments = {
+                    "series_id": series_id,
+                    "video_id": video_id,
+                    "progress_reporter": reporter,
+                    "transcript_enhancement_enabled": transcript_enhancement_enabled,
+                    "manual_transcript": manual_transcript,
+                    "use_saved_manual_transcript": use_saved_manual_transcript,
+                }
+                if processing_mode != "summary":
+                    generator_arguments["processing_mode"] = processing_mode
+                await self._generator.run(**generator_arguments)
+                if processing_mode == "summary" and self._series_memory_refresher is not None:
                     try:
                         self._series_memory_refresher.refresh(series_id, video_id)
                     except Exception:
                         LOGGER.exception("series knowledge memory refresh failed for %s", series_id)
+            if processing_mode == "transcript":
+                reporter.completed("字幕已获取")
+                return self._workspace.get_video_transcript(series_id, video_id)
             reporter.completed("AI 概况已生成")
             return self._workspace.get_video_summary(series_id, video_id)
         except LookupError:
             return None
         except GenerateCancelledError:
-            reporter.cancelled("AI 概况生成已取消")
+            reporter.cancelled("字幕获取已取消" if processing_mode == "transcript" else "AI 概况生成已取消")
             return None
         except asyncio.CancelledError:
-            reporter.cancelled("AI 概况生成已取消")
+            reporter.cancelled("字幕获取已取消" if processing_mode == "transcript" else "AI 概况生成已取消")
             return None
         except RuntimeError as error:
             reporter.failed(str(error))
@@ -381,6 +392,7 @@ class GenerateSeriesSummaryFromLibrary:
         *,
         transcript_enhancement_enabled: bool | None = None,
         run_id: str | None = None,
+        processing_mode: str = "summary",
     ) -> SeriesGenerationResult:
         """启动一次系列级批量生成并返回最终归类结果。
 
@@ -404,6 +416,7 @@ class GenerateSeriesSummaryFromLibrary:
             series_id=series_id,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
             run_id=run_id,
+            processing_mode=processing_mode,
         )
         return await asyncio.shield(task)
 
@@ -414,6 +427,7 @@ class GenerateSeriesSummaryFromLibrary:
         series_id: str,
         transcript_enhancement_enabled: bool | None,
         run_id: str | None,
+        processing_mode: str,
     ) -> asyncio.Task[SeriesGenerationResult]:
         """获取或创建系列级生成任务；存在未完成任务时拒绝重复触发。"""
         async with self._active_series_tasks_lock:
@@ -427,6 +441,7 @@ class GenerateSeriesSummaryFromLibrary:
                     task_id=task_id,
                     series_id=series_id,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
+                    processing_mode=processing_mode,
                 )
             )
             self._active_series_tasks[task_id] = task
@@ -441,6 +456,7 @@ class GenerateSeriesSummaryFromLibrary:
         task_id: str,
         series_id: str,
         transcript_enhancement_enabled: bool | None,
+        processing_mode: str,
     ) -> SeriesGenerationResult:
         """实际执行系列级批量生成：调度 worker、收集结果、归类取消/完成。"""
         try:
@@ -448,12 +464,17 @@ class GenerateSeriesSummaryFromLibrary:
             pending_videos = [
                 video
                 for video in series.videos
-                if not video.processed and video.status != "source_missing"
+                if (not video.has_transcript if processing_mode == "transcript" else not video.processed)
+                and video.status != "source_missing"
             ]
             reporter = self._progress_tracker.create_reporter(task_id)
 
             if not pending_videos:
-                reporter.completed("该系列下所有视频都已生成概况")
+                reporter.completed(
+                    "该系列下所有视频都已获取字幕"
+                    if processing_mode == "transcript"
+                    else "该系列下所有视频都已生成概况"
+                )
                 return SeriesGenerationResult(
                     series_id=series_id,
                     completed_videos=[],
@@ -541,6 +562,7 @@ class GenerateSeriesSummaryFromLibrary:
                             transcript_enhancement_enabled=transcript_enhancement_enabled,
                             progress_reporter=child_reporter,
                             internal_series_generation=True,
+                            processing_mode=processing_mode,
                         )
                         if result is None:
                             async with results_lock:

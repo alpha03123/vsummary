@@ -90,6 +90,9 @@ export function WorkspacePage({ page }) {
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const hasRightPane = Boolean(activeSeries);
   const isChatCenterMode = ui.layoutMode === "chat_center";
+  const summaryLocked = selectedContextType === "series"
+    ? !(activeSeries?.videos ?? []).some((video) => video.processed)
+    : selectedContextType === "video" && selectedVideo?.processed !== true;
   const chatPanelProps = {
     workspaceTitle: library?.workspace?.title,
     activeSeries,
@@ -101,6 +104,7 @@ export function WorkspacePage({ page }) {
     chatSessions: chat.sessions,
     activeSessionId: chat.activeSessionId,
     chatPending: chat.pending,
+    summaryLocked,
     contextUsage: chat.contextUsage,
     contextUsageLoading: chat.contextUsageLoading,
     ragModels: generation.ragModels,
@@ -213,27 +217,31 @@ export function WorkspacePage({ page }) {
         );
       }
       return (
-        <WorkspaceVideoPlayer
-          videoSource={tools?.preview?.previewUrl ?? previewUrl}
-          subtitleSource={tools?.preview?.subtitleUrl ?? null}
-          playerSeekRequest={playerSeekRequest}
-          videoSourceType={selectedVideo?.sourceType}
-          resumeSeconds={resumePosition.videoKey === selectedVideoKey ? resumePosition.seconds : null}
-          onTimeUpdate={(seconds) => {
-            setPlaybackTime(seconds);
-            if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
-              playbackPositionsRef.current.set(selectedVideoKey, seconds);
-            }
-          }}
-          onPlaybackEnded={() => {
-            if (selectedVideoKey) {
-              playbackPositionsRef.current.delete(selectedVideoKey);
-            }
-          }}
-          onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
-          followOverviewPlayback={followOverviewPlayback}
-          onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
-        />
+        // 与右栏 WorkspaceReadingPane 的 p-6 保持一致，否则媒体卡贴着面板边缘、
+        // 而右侧内容缩进 24px，同一行两栏看起来没有对齐。
+        <div className="flex h-full flex-col overflow-y-auto p-6">
+          <WorkspaceVideoPlayer
+            videoSource={tools?.preview?.previewUrl ?? previewUrl}
+            subtitleSource={tools?.preview?.subtitleUrl ?? null}
+            playerSeekRequest={playerSeekRequest}
+            videoSourceType={selectedVideo?.sourceType}
+            resumeSeconds={resumePosition.videoKey === selectedVideoKey ? resumePosition.seconds : null}
+            onTimeUpdate={(seconds) => {
+              setPlaybackTime(seconds);
+              if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
+                playbackPositionsRef.current.set(selectedVideoKey, seconds);
+              }
+            }}
+            onPlaybackEnded={() => {
+              if (selectedVideoKey) {
+                playbackPositionsRef.current.delete(selectedVideoKey);
+              }
+            }}
+            onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
+            followOverviewPlayback={followOverviewPlayback}
+            onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
+          />
+        </div>
       );
     }
     return (
@@ -267,9 +275,9 @@ export function WorkspacePage({ page }) {
     const waitingForBackend = !state.backendReady;
     return (
       <div className="flex h-screen w-full items-center justify-center bg-transparent">
-        <div className="workspace-panel rounded-3xl p-8 border max-w-md text-center">
-          <p className="text-stone-600 dark:text-zinc-400 text-sm font-bold tracking-widest uppercase mb-2">Preparing Workspace</p>
-          <h1 className="text-2xl font-bold text-stone-900 mb-3">
+        <div className="workspace-panel max-w-md rounded-3xl border p-8 text-center">
+          <p className="mb-2 text-sm font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Preparing Workspace</p>
+          <h1 className="mb-3 text-2xl font-bold text-stone-900">
             {waitingForBackend ? "正在启动服务..." : "正在载入知识工作台"}
           </h1>
           <p className="text-stone-600">
@@ -307,6 +315,9 @@ export function WorkspacePage({ page }) {
               onSelectSeriesContext={actions.selectSeriesContext}
               onSelectVideo={actions.selectVideo}
               onGenerateVideo={actions.generateVideo}
+              onProcessLinkedVideo={actions.processLinkedVideo}
+              processingMode={shell.processingMode}
+              onChangeProcessingMode={actions.changeProcessingMode}
               onRelinkVideo={actions.relinkVideo}
               onGenerateSeries={actions.generateSeries}
               onCancelGeneration={actions.cancelGeneration}
@@ -502,7 +513,7 @@ export function WorkspacePage({ page }) {
                 <WorkspaceGenerationOverlay
                   generationProgress={generation.progress}
                   generationSnapshot={generation.snapshot}
-                  title={generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
+                  title={shell.processingMode === "transcript" ? "正在获取字幕" : generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
                   onCancel={actions.cancelGeneration}
                   cancelLabel={generation.isGeneratingSeries ? "取消整个系列" : "取消本次生成"}
                 />

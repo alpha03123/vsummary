@@ -426,8 +426,7 @@ export async function deleteVideoNote(seriesId, videoId, noteId) {
 }
 
 export async function generateVideoSummary(seriesId, videoId, options = {}) {
-  return toWorkspaceSummary(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate`, {
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -437,18 +436,22 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
           typeof options.transcriptEnhancementEnabled === "boolean"
             ? options.transcriptEnhancementEnabled
             : undefined,
+        processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
       }),
-    }),
-  );
+    });
+  return options.processingMode === "transcript" ? payload : toWorkspaceSummary(payload);
 }
 
-export async function processAgentVideo(seriesId, videoId) {
+export async function processAgentVideo(seriesId, videoId, options = {}) {
   return fetchJson(`/api/agent/series/${encodeURIComponent(seriesId)}/process`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ video_ids: [videoId] }),
+    body: JSON.stringify({
+      video_ids: [videoId],
+      processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
+    }),
   });
 }
 
@@ -478,6 +481,7 @@ export async function generateSeriesSummaries(seriesId, options = {}) {
           ? options.transcriptEnhancementEnabled
           : undefined,
       run_id: typeof options.runId === "string" ? options.runId : undefined,
+      processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
     }),
   });
 }

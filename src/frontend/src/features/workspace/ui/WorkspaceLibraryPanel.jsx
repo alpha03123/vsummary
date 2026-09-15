@@ -15,22 +15,67 @@ import {
   Square,
   CheckSquare,
   X,
-  MoreHorizontal,
   CheckCheck,
   Pencil,
+  FileArchive,
+  Captions,
+  LayoutGrid,
+  Network,
+  Download,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildVideoKey } from "../model/workspaceControllerUtils";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
+import { WorkspaceOverflowMenu } from "./shared/WorkspaceOverflowMenu";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
+
+function ProcessingModeMenu({ mode, onChange, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const targetMode = mode === "transcript" ? "summary" : "transcript";
+  const targetLabel = targetMode === "transcript" ? "字幕模式" : "概括模式";
+
+  return (
+    <WorkspaceOverflowMenu
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+      label="切换处理模式"
+      menuClassName="min-w-[148px]"
+    >
+      <ProcessingModeMenuItem
+        mode={targetMode}
+        label={targetLabel}
+        onSelect={() => {
+          onChange?.(targetMode);
+          setOpen(false);
+        }}
+      />
+    </WorkspaceOverflowMenu>
+  );
+}
+
+function ProcessingModeMenuItem({ mode, label, onSelect }) {
+  const Icon = mode === "transcript" ? Captions : Sparkles;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-stone-700 transition-colors hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+    >
+      <Icon size={15} className="text-accent" />
+      {label}
+    </button>
+  );
+}
 
 function VideoBadge({ video }) {
   if (video.status === "source_missing") {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/70"
+        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300"
         title="原始媒体文件当前不可访问，请重新链接媒体。"
       >
         <Link2 size={12} />
@@ -40,7 +85,7 @@ function VideoBadge({ video }) {
   }
   if (video.isLinked || video.status === "linked") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
         <Link2 size={11} />
         未下载
       </span>
@@ -48,7 +93,7 @@ function VideoBadge({ video }) {
   }
   if (video.status === "downloading") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+      <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300">
         <ArrowDown size={11} className="animate-bounce" />
         下载中
       </span>
@@ -57,7 +102,7 @@ function VideoBadge({ video }) {
   if (video.status === "untranscribable") {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/70"
+        className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-800 dark:border-orange-900/70 dark:bg-orange-950/40 dark:text-orange-300"
         title="没有可供转写使用的信息"
       >
         <AlertTriangle size={12} />
@@ -67,9 +112,17 @@ function VideoBadge({ video }) {
   }
   if (video.processed) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-neutral-900 text-stone-700 dark:text-neutral-200 border border-stone-200 dark:border-white/10">
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
         <CheckCircle2 size={12} />
         已生成概况
+      </span>
+    );
+  }
+  if (video.hasTranscript) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:border-violet-900/70 dark:bg-violet-950/40 dark:text-violet-300">
+        <Captions size={12} />
+        已有字幕
       </span>
     );
   }
@@ -86,6 +139,8 @@ export function getVideoGenerationButtonState({
   isGeneratingSelectedVideo,
   modelNeedsDownload,
   processed,
+  hasTranscript = false,
+  processingMode = "summary",
   sourceMissing = false,
 }) {
   if (isGeneratingSeries) {
@@ -98,7 +153,7 @@ export function getVideoGenerationButtonState({
   if (isGeneratingSelectedVideo) {
     return {
       disabled: false,
-      label: "取消当前视频生成",
+      label: processingMode === "transcript" ? "取消字幕获取" : "取消当前视频生成",
       tone: "danger",
     };
   }
@@ -118,7 +173,9 @@ export function getVideoGenerationButtonState({
   }
   return {
     disabled: false,
-    label: processed ? "重新生成 AI 概况" : "生成 AI 概况",
+    label: processingMode === "transcript"
+      ? (hasTranscript ? "重新获取字幕" : "获取字幕文件")
+      : (processed ? "重新生成 AI 概况" : "生成 AI 概况"),
     tone: "primary",
   };
 }
@@ -159,6 +216,7 @@ function PanelFooter({
   downloadError,
   downloadErrorKey,
   onGenerateVideo,
+  onProcessLinkedVideo,
   onRelinkVideo,
   onGenerateSeries,
   onCancelGeneration,
@@ -167,6 +225,8 @@ function PanelFooter({
   onRequestRenameCurrentVideo,
   onRequestDeleteCurrentVideo,
   onOpenSettings,
+  processingMode,
+  onChangeProcessingMode,
 }) {
   const isPlayground = activeSeries?.id === "__playground__";
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
@@ -178,9 +238,6 @@ function PanelFooter({
   const hasSelectedVideoDownloadError =
     activeSeries?.id && selectedVideo?.id && downloadErrorKey === buildVideoKey(activeSeries.id, selectedVideo.id);
   const [footerOverflowOpen, setFooterOverflowOpen] = useState(false);
-  const footerOverflowRef = useRef(null);
-
-  useOutsidePointerUp(footerOverflowOpen, [footerOverflowRef], () => setFooterOverflowOpen(false));
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -218,7 +275,7 @@ function PanelFooter({
           {queueIsActive ? (
             <div className="mb-3 rounded-2xl border border-accent/20 bg-accent/8 px-3 py-2 text-xs text-stone-600 dark:text-stone-300">
               <div className="flex items-center justify-between gap-2 font-semibold text-accent">
-                <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : "正在处理全部视频"}</span>
+                <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : processingMode === "transcript" ? "正在获取全部字幕" : "正在处理全部视频"}</span>
                 <span>{queueLabel}</span>
               </div>
             </div>
@@ -233,26 +290,29 @@ function PanelFooter({
               下载 RAG 向量模型
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
-            className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ${isGeneratingSeries
-              ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
-              : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
-              }`}
-          >
-            {isGeneratingSeries ? (
-              <>
-                <LoaderCircle size={16} className="animate-spin" />
-                取消处理整个系列
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} strokeWidth={2.5} />
-                处理全部系列视频
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
+              className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${isGeneratingSeries
+                ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+                : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
+                }`}
+            >
+              {isGeneratingSeries ? (
+                <>
+                  <LoaderCircle size={16} className="animate-spin" />
+                  取消处理整个系列
+                </>
+              ) : (
+                <>
+                  {processingMode === "transcript" ? <Captions size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
+                  {processingMode === "transcript" ? "获取全部视频字幕" : "处理全部系列视频"}
+                </>
+              )}
+            </button>
+            <ProcessingModeMenu mode={processingMode} onChange={onChangeProcessingMode} disabled={isGeneratingSeries} />
+          </div>
         </div>
       </div>
     );
@@ -308,23 +368,25 @@ function PanelFooter({
   if (selectedVideo.isLinked || selectedVideo.status === "linked") {
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
-        <div className="mb-3">
-          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
-          <div className="flex items-center gap-1">
-            <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
+        <div className="mb-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
+            <div className="flex shrink-0 items-center gap-1">
             <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
-            <div className="relative" ref={footerOverflowRef}>
-              <button
-                type="button"
-                onClick={() => setFooterOverflowOpen(!footerOverflowOpen)}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-                title="更多操作"
-                aria-label="更多操作"
-              >
-                <MoreHorizontal size={16} />
-              </button>
-              {footerOverflowOpen ? (
-                <div className="absolute right-0 top-full z-30 mt-1 min-w-[160px] rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-neutral-900">
+            <WorkspaceOverflowMenu
+              open={footerOverflowOpen}
+              onOpenChange={setFooterOverflowOpen}
+              placement="bottom"
+              menuClassName="min-w-[160px]"
+            >
+                  <ProcessingModeMenuItem
+                    mode={processingMode === "transcript" ? "summary" : "transcript"}
+                    label={processingMode === "transcript" ? "概括模式" : "字幕模式"}
+                    onSelect={() => {
+                      onChangeProcessingMode?.(processingMode === "transcript" ? "summary" : "transcript");
+                      setFooterOverflowOpen(false);
+                    }}
+                  />
                   {selectedVideo.sourceUrl && selectedVideo.provider !== "chaoxing" ? (
                     <a
                       href={selectedVideo.sourceUrl}
@@ -349,21 +411,23 @@ function PanelFooter({
                     <Trash2 size={14} />
                     删除当前视频
                   </button>
-                </div>
-              ) : null}
+            </WorkspaceOverflowMenu>
             </div>
           </div>
+          <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
         </div>
         <button
           type="button"
-          className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${selectedVideoIsDownloading
+          className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${selectedVideoIsDownloading || isGeneratingSelectedVideo
               ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
               : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
             }`}
-          onClick={() => onDownloadVideo?.(selectedVideo)}
+          onClick={processingMode === "transcript"
+            ? (isGeneratingSelectedVideo ? onCancelGeneration : onProcessLinkedVideo)
+            : () => onDownloadVideo?.(selectedVideo)}
         >
-          {selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
-          {selectedVideoIsDownloading ? "取消下载" : "下载视频"}
+          {isGeneratingSelectedVideo || selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : processingMode === "transcript" ? <Captions size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
+          {isGeneratingSelectedVideo ? "取消字幕获取" : selectedVideoIsDownloading ? "取消下载" : processingMode === "transcript" ? "获取字幕文件" : "下载视频"}
         </button>
         {hasSelectedVideoDownloadError && downloadError ? (
           <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{downloadError}</p>
@@ -377,6 +441,8 @@ function PanelFooter({
     isGeneratingSelectedVideo,
     modelNeedsDownload,
     processed: selectedVideo.processed,
+    hasTranscript: selectedVideo.hasTranscript,
+    processingMode,
     sourceMissing: selectedVideo.status === "source_missing",
   });
   const deleteButton = getDeleteButtonState({
@@ -386,23 +452,25 @@ function PanelFooter({
 
   return (
     <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
-      <div className="mb-3">
-        <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">当前视频</p>
-        <div className="flex items-center gap-1">
-          <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
+      <div className="mb-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
+          <div className="flex shrink-0 items-center gap-1">
           <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
-          <div className="relative" ref={footerOverflowRef}>
-            <button
-              type="button"
-              onClick={() => setFooterOverflowOpen(!footerOverflowOpen)}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-              title="更多操作"
-              aria-label="更多操作"
-            >
-              <MoreHorizontal size={16} />
-            </button>
-            {footerOverflowOpen ? (
-              <div className="absolute right-0 top-full z-30 mt-1 min-w-[160px] rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-neutral-900">
+          <WorkspaceOverflowMenu
+            open={footerOverflowOpen}
+            onOpenChange={setFooterOverflowOpen}
+            placement="bottom"
+            menuClassName="min-w-[160px]"
+          >
+                <ProcessingModeMenuItem
+                  mode={processingMode === "transcript" ? "summary" : "transcript"}
+                  label={processingMode === "transcript" ? "概括模式" : "字幕模式"}
+                  onSelect={() => {
+                    onChangeProcessingMode?.(processingMode === "transcript" ? "summary" : "transcript");
+                    setFooterOverflowOpen(false);
+                  }}
+                />
                 {selectedVideo.sourceUrl && selectedVideo.provider !== "chaoxing" ? (
                   <a
                     href={selectedVideo.sourceUrl}
@@ -428,10 +496,10 @@ function PanelFooter({
                   <Trash2 size={14} />
                   {deleteButton.disabled ? deleteButton.label : "删除当前视频"}
                 </button>
-              </div>
-            ) : null}
+          </WorkspaceOverflowMenu>
           </div>
         </div>
+        <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
       </div>
       {modelNeedsDownload ? (
         <div className="mb-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
@@ -474,7 +542,9 @@ function PanelFooter({
           </>
         )}
       </button>
-      <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">概况、知识卡与导图可在工具页单独重新生成</p>
+      <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+        {processingMode === "transcript" ? "仅获取字幕" : "将直接生成概况"}
+      </p>
     </div>
   );
 }
@@ -492,6 +562,7 @@ export function WorkspaceLibraryPanel({
   onSelectSeriesContext,
   onSelectVideo,
   onGenerateVideo,
+  onProcessLinkedVideo,
   onGenerateSeries,
   onCancelGeneration,
   onDownloadVideo,
@@ -510,6 +581,8 @@ export function WorkspaceLibraryPanel({
   downloadError,
   downloadErrorKey,
   onOpenSettings,
+  processingMode = "summary",
+  onChangeProcessingMode,
 }) {
   const videos = activeSeries?.videos ?? [];
   const isPlayground = activeSeries?.id === "__playground__";
@@ -519,21 +592,22 @@ export function WorkspaceLibraryPanel({
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedVideoIds, setSelectedVideoIds] = useState([]);
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowRef = useRef(null);
-  useOutsidePointerUp(overflowOpen, [overflowRef], () => setOverflowOpen(false));
+  const [seriesExportOpen, setSeriesExportOpen] = useState(false);
+  const [seriesExportScope, setSeriesExportScope] = useState("all");
   useEffect(() => {
     const existingIds = new Set(videos.map((video) => video.id));
     setSelectedVideoIds((current) => current.filter((videoId) => existingIds.has(videoId)));
   }, [videos]);
   const normalizedFilter = filterText.trim().toLowerCase();
-  const generatedCount = useMemo(() => videos.filter((v) => v.processed).length, [videos]);
-  const pendingCount = useMemo(() => videos.filter((v) => !v.processed).length, [videos]);
+  const isVideoCompleteForMode = (video) => processingMode === "transcript" ? video.hasTranscript : video.processed;
+  const generatedCount = useMemo(() => videos.filter(isVideoCompleteForMode).length, [processingMode, videos]);
+  const pendingCount = useMemo(() => videos.filter((video) => !isVideoCompleteForMode(video)).length, [processingMode, videos]);
   const filteredVideos = useMemo(() => {
     return videos.filter((video) => {
-      if (statusFilter === "generated" && !video.processed) {
+      if (statusFilter === "generated" && !isVideoCompleteForMode(video)) {
         return false;
       }
-      if (statusFilter === "pending" && video.processed) {
+      if (statusFilter === "pending" && isVideoCompleteForMode(video)) {
         return false;
       }
       if (!normalizedFilter) {
@@ -544,7 +618,7 @@ export function WorkspaceLibraryPanel({
         .map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(normalizedFilter));
     });
-  }, [normalizedFilter, statusFilter, videos]);
+  }, [normalizedFilter, processingMode, statusFilter, videos]);
   const selectedVideoSet = useMemo(() => new Set(selectedVideoIds), [selectedVideoIds]);
   const selectedCount = selectedVideoIds.length;
   const toggleVideoSelection = (videoId) => {
@@ -591,18 +665,12 @@ export function WorkspaceLibraryPanel({
               <ArrowDown size={14} />
               添加视频
             </button>
-            <div className="relative" ref={overflowRef}>
-              <button
-                type="button"
-                onClick={() => setOverflowOpen(!overflowOpen)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-                title="更多操作"
-                aria-label="更多操作"
-              >
-                <MoreHorizontal size={18} />
-              </button>
-              {overflowOpen && (
-                <div className="absolute right-0 top-full mt-1 z-30 min-w-[140px] rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-neutral-900">
+            <WorkspaceOverflowMenu
+              open={overflowOpen}
+              onOpenChange={setOverflowOpen}
+              placement="bottom"
+              menuClassName="min-w-[140px]"
+            >
                   <button
                     type="button"
                     onClick={() => {
@@ -616,6 +684,18 @@ export function WorkspaceLibraryPanel({
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      setSeriesExportScope("all");
+                      setSeriesExportOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                  >
+                    <FileArchive size={14} />
+                    批量导出
+                  </button>
+                  <button
+                    type="button"
                     disabled={seriesDeleteButton.disabled}
                     onClick={() => {
                       setOverflowOpen(false);
@@ -626,9 +706,7 @@ export function WorkspaceLibraryPanel({
                     <Trash2 size={14} />
                     {seriesDeleteButton.disabled ? seriesDeleteButton.label : "删除整个系列"}
                   </button>
-                </div>
-              )}
-            </div>
+            </WorkspaceOverflowMenu>
           </div>
         ) : onAddPlaygroundVideo ? (
           <div className="mb-4">
@@ -669,8 +747,8 @@ export function WorkspaceLibraryPanel({
             <div className="flex rounded-xl bg-stone-100 p-1 dark:bg-stone-800/80" role="group" aria-label="视频状态筛选">
               {[
                 ["all", "全部", videos.length],
-                ["generated", "已生成", generatedCount],
-                ["pending", "未处理", pendingCount],
+                ["generated", processingMode === "transcript" ? "已获取" : "已生成", generatedCount],
+                ["pending", processingMode === "transcript" ? "未获取" : "未处理", pendingCount],
               ].map(([value, label, count]) => (
                 <button
                   key={value}
@@ -877,6 +955,7 @@ export function WorkspaceLibraryPanel({
         downloadError={downloadError}
         downloadErrorKey={downloadErrorKey}
         onGenerateVideo={onGenerateVideo}
+        onProcessLinkedVideo={onProcessLinkedVideo}
         onGenerateSeries={onGenerateSeries}
         onCancelGeneration={onCancelGeneration}
         onDownloadVideo={onDownloadVideo}
@@ -884,7 +963,158 @@ export function WorkspaceLibraryPanel({
         onRequestRenameCurrentVideo={onRequestRenameCurrentVideo}
         onRequestDeleteCurrentVideo={onRequestDeleteCurrentVideo}
         onOpenSettings={onOpenSettings}
+        processingMode={processingMode}
+        onChangeProcessingMode={onChangeProcessingMode}
+      />
+      <SeriesExportPanel
+        open={seriesExportOpen}
+        seriesId={activeSeries?.id}
+        selectedVideoIds={selectedVideoIds}
+        videoCount={videos.length}
+        scope={seriesExportScope}
+        onScopeChange={setSeriesExportScope}
+        onClose={() => setSeriesExportOpen(false)}
       />
     </section>
+  );
+}
+
+function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope, onScopeChange, onClose }) {
+  const selectedCount = selectedVideoIds.length;
+  const selectedAvailable = selectedCount > 0;
+  const useSelected = scope === "selected" && selectedAvailable;
+  const query = useSelected
+    ? `?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`
+    : "";
+  const actions = [
+    ["mixed", "AI 概况混合包", "Markdown · 概况、要点与逐字稿", Sparkles],
+    ["knowledge-cards", "知识卡片", "Markdown · 逐条知识卡片", LayoutGrid],
+    ["mindmaps", "思维导图", "Markdown · 章节层级导图", Network],
+    ["srt", "SRT 字幕", "SRT · 标准字幕，可直接导入播放器", Captions],
+  ];
+  if (typeof document === "undefined") {
+    return null;
+  }
+  return createPortal(
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-stone-950/20 p-4 backdrop-blur-md sm:items-center sm:p-8 dark:bg-black/50"
+          onClick={onClose}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="series-export-title"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 360, damping: 28 }}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6 dark:border-stone-700 dark:bg-neutral-900"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Series export</p>
+                <h3 id="series-export-title" className="mt-1 text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">批量导出</h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">选好范围后，点击内容包即可开始下载。</p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                aria-label="关闭批量导出"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <section className="mt-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出范围</p>
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <ScopeOption
+                  selected={scope === "all"}
+                  onSelect={() => onScopeChange("all")}
+                  label="全部视频"
+                  hint={videoCount ? `${videoCount} 个` : null}
+                />
+                <ScopeOption
+                  selected={useSelected}
+                  disabled={!selectedAvailable}
+                  onSelect={() => onScopeChange("selected")}
+                  label="已选视频"
+                  hint={selectedAvailable ? `${selectedCount} 个` : null}
+                />
+              </div>
+              {!selectedAvailable ? (
+                <p className="mt-2.5 text-[11px] leading-relaxed text-stone-400 dark:text-stone-500">
+                  想按选中项导出，先在左侧列表勾选视频。
+                </p>
+              ) : null}
+            </section>
+
+            <section className="mt-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出内容</p>
+              <div className="mt-2.5 flex flex-col gap-2.5">
+                {actions.map(([kind, label, meta, Icon]) => (
+                  <a
+                    key={kind}
+                    href={`/api/series/${encodeURIComponent(seriesId)}/exports/${kind}.zip${query}`}
+                    download
+                    onClick={onClose}
+                    className="group flex items-center gap-3 rounded-2xl border border-stone-200 bg-white px-3.5 py-2.5 transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-accent/40 dark:hover:bg-accent/10"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/8 text-accent">
+                      <Icon size={17} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-stone-800 dark:text-stone-100">{label}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-stone-500 dark:text-stone-400">{meta}</span>
+                    </span>
+                    <Download size={16} className="shrink-0 text-stone-400 transition-colors group-hover:text-accent dark:text-stone-500" />
+                  </a>
+                ))}
+              </div>
+            </section>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
+function ScopeOption({ selected, disabled = false, onSelect, label, hint }) {
+  const stateClass = disabled
+    ? "cursor-not-allowed border-dashed border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-neutral-900/60"
+    : selected
+      ? "border-accent/50 bg-accent/8"
+      : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-stone-600 dark:hover:bg-neutral-800/60";
+
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={onSelect}
+      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${stateClass}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selected && !disabled ? "border-accent" : "border-stone-300 dark:border-stone-600"}`}
+      >
+        {selected && !disabled ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
+      </span>
+      <span className={`min-w-0 flex-1 truncate text-[13px] font-semibold ${disabled ? "text-stone-400 dark:text-stone-500" : "text-stone-800 dark:text-stone-100"}`}>
+        {label}
+      </span>
+      {hint ? (
+        <span className="shrink-0 text-[11px] tabular-nums text-stone-400 dark:text-stone-500">{hint}</span>
+      ) : null}
+    </button>
   );
 }

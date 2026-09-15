@@ -60,6 +60,28 @@ class ManualSrtTranscriptProvider:
         )
 
 
+class CleanedTranscriptProvider:
+    """读取已经提交的 ``transcript.cleaned.json``。"""
+
+    def load(self, output_dir: Path) -> Transcript | None:
+        path = output_dir / "transcript.cleaned.json"
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        segments = [
+            TranscriptSegment(
+                start_seconds=float(item["start_seconds"]),
+                end_seconds=float(item["end_seconds"]),
+                text=str(item["text"]).strip(),
+            )
+            for item in payload.get("segments", [])
+            if isinstance(item, dict) and str(item.get("text", "")).strip()
+        ]
+        if not segments:
+            raise ValueError(f"标准转写没有有效片段：{path}")
+        return Transcript(language=str(payload.get("language", "")).strip() or "und", segments=segments)
+
+
 class _SilentYtDlpLogger:
     """阻止 listsubtitles 将轨道表直接写入后端 stdout。"""
 

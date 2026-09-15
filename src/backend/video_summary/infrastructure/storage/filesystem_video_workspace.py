@@ -864,6 +864,7 @@ class FileSystemVideoWorkspace:
             if local_file is not None:
                 summary_path = self._workspace_dir / series_id / video_id / "summary.json"
                 has_summary = summary_path.is_file()
+                has_transcript = (self._workspace_dir / series_id / video_id / "transcript.cleaned.json").is_file()
                 cards.append(
                     LibraryVideoCardDTO(
                         id=video_id,
@@ -872,6 +873,7 @@ class FileSystemVideoWorkspace:
                         source_type=_source_type_for_path(local_file),
                         processed=has_summary,
                         status=self._read_video_processing_status(summary_path),
+                        has_transcript=has_transcript,
                         core_problem=self._read_core_problem(series_id, video_id),
                         is_linked=False,
                         source_id=source_id,
@@ -907,6 +909,7 @@ class FileSystemVideoWorkspace:
         """按媒体文件路径构造本地视频卡片，状态由 `summary.json` 的转写标记决定。"""
         summary_path = self._workspace_dir / series_id / video_path.stem / "summary.json"
         has_summary = summary_path.is_file()
+        has_transcript = (self._workspace_dir / series_id / video_path.stem / "transcript.cleaned.json").is_file()
         return LibraryVideoCardDTO(
             id=video_path.stem,
             title=self._read_video_title(series_id, video_path.stem) or video_path.stem,
@@ -914,6 +917,7 @@ class FileSystemVideoWorkspace:
             source_type=_source_type_for_path(video_path),
             processed=has_summary,
             status=self._read_video_processing_status(summary_path),
+            has_transcript=has_transcript,
             core_problem=self._read_core_problem(series_id, video_path.stem),
         )
 
@@ -940,6 +944,7 @@ class FileSystemVideoWorkspace:
                         if not source.source_path.is_file()
                         else self._read_video_processing_status(source.output_dir / "summary.json")
                     ),
+                    has_transcript=(source.output_dir / "transcript.cleaned.json").is_file(),
                     core_problem=self._read_core_problem(series_id, source.video_id),
                 )
             )

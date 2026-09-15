@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { formatRange } from "../../../../shared/lib/time";
 import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "../WorkspaceNativeSubtitleSettings";
 import { WorkspaceSubtitleDisplay } from "../WorkspaceSubtitleDisplay";
+import { WorkspaceMediaPreviewHeader, WorkspaceMediaSeekNotice } from "../shared/WorkspaceMediaPreviewHeader";
 
 export function WorkspacePreviewView({ previewSource, previewSubtitleSource = null, previewSeekRequest }) {
   const previewVideoRef = useRef(null);
@@ -50,34 +50,18 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
   }, [previewSeekRequest, previewSource]);
 
   return (
-    <div className="flex flex-col">
-      <div className="workspace-muted-panel relative rounded-3xl border p-4">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Media Preview</p>
-          {previewSubtitleSource ? (
+    <div className="flex flex-col gap-3">
+      <WorkspaceMediaPreviewHeader
+        subtitleSettings={previewSubtitleSource ? (
             <WorkspaceNativeSubtitleSettings
               subtitlesEnabled={subtitlesEnabled}
               onSubtitlesEnabledChange={setSubtitlesEnabled}
               style={subtitleStyle}
               onStyleChange={setSubtitleStyle}
             />
-          ) : null}
-        </div>
-        {previewSeekRequest ? (
-          <div className="mt-3 rounded-2xl border border-info/20 bg-info-subtle px-4 py-3 text-sm text-stone-800 dark:text-stone-100">
-            <p className="font-semibold">
-              已定位到 {formatRange(previewSeekRequest.seconds, previewSeekRequest.endSeconds ?? previewSeekRequest.seconds)}
-              {previewSeekRequest.chapterTitle ? ` · ${previewSeekRequest.chapterTitle}` : ""}
-            </p>
-            {previewSeekRequest.query ? (
-              <p className="mt-1 text-stone-600 dark:text-stone-300">检索问题：{previewSeekRequest.query}</p>
-            ) : null}
-            {previewSeekRequest.matchedText ? (
-              <p className="mt-2 line-clamp-3 text-stone-700 dark:text-stone-200">{previewSeekRequest.matchedText}</p>
-            ) : null}
-          </div>
         ) : null}
-      </div>
+      />
+      <WorkspaceMediaSeekNotice seekRequest={previewSeekRequest} />
       <div className="workspace-elevated-panel relative overflow-hidden rounded-3xl border bg-black shadow-sm">
         <video
           key={previewSource}

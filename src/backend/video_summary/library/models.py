@@ -82,6 +82,7 @@ class LibraryVideoCardDTO:
     source_name: str
     processed: bool
     status: str
+    has_transcript: bool = False
     core_problem: str = ""
     source_type: str = "video"
     is_linked: bool = False

@@ -5,6 +5,7 @@ import { WorkspaceToolGrid } from "./shared/WorkspaceToolGrid";
 import { WorkspaceExportMenu, WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
 import {
   SERIES_TOOL_TILES,
+  SOURCE_MISSING_STATUS,
   TOOL_TILES,
   describeToolState,
   getToolState,
@@ -126,7 +127,9 @@ export function WorkspaceReadingPane({
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
   const previewSubtitleSource = tools?.preview?.subtitleUrl ?? null;
   const activeChatSession = chat?.sessions?.find((session) => session.id === chat.activeSessionId) ?? null;
-  const activeChatTitle = truncateChatTitle(activeChatSession?.title);
+  // null（而不是"当前对话"）表示还没有会话，这样卡片可以省略描述后缀，
+  // 而不是渲染成"当前会话：当前对话"。
+  const activeChatTitle = activeChatSession ? truncateChatTitle(activeChatSession.title) : null;
   const toolHeaderBadge = resolveSeriesOverviewBadge({
     selectedToolId,
     activeSeries,
@@ -159,10 +162,6 @@ export function WorkspaceReadingPane({
                   title={activeSeries.title}
                   description="你可以在当前对话栏询问关于整个系列的问题。"
                 >
-                  <WorkspaceExportMenu
-                    buttonLabel="批量导出"
-                    exportActions={buildSeriesExportActions(activeSeries)}
-                  />
                 </WorkspaceHomeHeader>
               ) : (
                 <WorkspaceToolHeader
@@ -186,11 +185,11 @@ export function WorkspaceReadingPane({
                   {isSeriesHome ? (
                     <div className="flex flex-col gap-6">
                       <WorkspaceToolGrid
-                        items={Object.entries(SERIES_TOOL_TILES).map(([toolId, meta]) => ({
-                          id: toolId,
-                          meta,
-                          hint: toolId === "series-chat-management" ? activeChatTitle : "series 级工具",
-                        }))}
+                        items={buildSeriesToolItems({
+                          activeChatTitle,
+                          activeSeries,
+                          seriesMindmapAvailable,
+                        })}
                         onSelect={onSelectTool}
                       />
                       <WorkspaceSeriesHomeView activeSeries={activeSeries} />
@@ -239,11 +238,16 @@ export function WorkspaceReadingPane({
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,
+                              // 会话名是"上下文"，不是"状态"，所以放在描述行而不是状态徽标里。
+                              description: toolId === "chat-management" && activeChatTitle
+                                ? `当前会话：${activeChatTitle}`
+                                : undefined,
                               disabled: sourceMissing || getToolState(tools, toolId)?.available === false,
-                              hint: sourceMissing
-                                ? "链接媒体后可用"
-                                : toolId === "chat-management"
-                                ? activeChatTitle
+                              // 对话管理只是导航入口，本身没有可展示的状态，留空而不是伪造一个。
+                              status: toolId === "chat-management"
+                                ? null
+                                : sourceMissing
+                                ? SOURCE_MISSING_STATUS
                                 : describeToolState(toolId, getToolState(tools, toolId)),
                             }))}
                           onSelect={onSelectTool}
@@ -325,13 +329,52 @@ export function WorkspaceReadingPane({
   );
 }
 
+/**
+ * 会话标题由用户/Agent 生成，可能整条只是一个分隔符（例如 "·"），
+ * 之前会被原样渲染成卡片上的状态文字。这里先剥掉首尾装饰性标点，
+ * 再截断；只有确实没有内容时才回退到"当前对话"。
+ */
 function truncateChatTitle(title) {
-  const normalized = typeof title === "string" ? title.trim() : "";
+  const normalized = typeof title === "string"
+    ? title.replace(/^[\s·•∙・\-–—_.,，。、|]+|[\s·•∙・\-–—_.,，。、|]+$/g, "")
+    : "";
   if (!normalized) {
     return "当前对话";
   }
   const characters = Array.from(normalized);
-  return characters.length > 5 ? `${characters.slice(0, 5).join("")}...` : normalized;
+  return characters.length > 12 ? `${characters.slice(0, 12).join("")}…` : normalized;
+}
+
+function buildSeriesToolItems({ activeChatTitle, activeSeries, seriesMindmapAvailable }) {
+  const videos = activeSeries?.videos ?? [];
+  const processedVideoCount = videos.filter((video) => video.processed).length;
+
+  return Object.entries(SERIES_TOOL_TILES).map(([toolId, meta]) => ({
+    id: toolId,
+    meta,
+    description: toolId === "series-chat-management" && activeChatTitle
+      ? `当前会话：${activeChatTitle}`
+      : undefined,
+    status: resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount: videos.length, seriesMindmapAvailable }),
+  }));
+}
+
+function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount, seriesMindmapAvailable }) {
+  if (toolId === "series-overview") {
+    return totalVideoCount === 0
+      ? { label: "暂无视频", tone: "pending" }
+      : processedVideoCount > 0
+        ? { label: `已处理 ${processedVideoCount} / ${totalVideoCount} 视频`, tone: "ready" }
+        : { label: "等待视频处理", tone: "pending" };
+  }
+
+  if (toolId === "series-mindmap") {
+    return seriesMindmapAvailable
+      ? { label: "可生成", tone: "pending" }
+      : { label: "需先生成 AI 概况", tone: "blocked" };
+  }
+
+  return null;
 }
 
 function resolveSeriesOverviewBadge({
@@ -376,6 +419,12 @@ function buildExportActions({ activeSeries, notes, summary, selectedToolId, sele
         enabled: overviewGenerated,
         label: "转写导出",
         disabledReason: "AI 概况生成后才能导出",
+      },
+      {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "subtitles.srt"),
+        enabled: selectedVideo.hasTranscript === true,
+        label: "SRT 字幕导出",
+        disabledReason: "获取字幕后才能导出",
       },
       {
         href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"),
@@ -442,7 +491,7 @@ function buildSeriesExportActions(activeSeries) {
 }
 
 function videoExportUrl(seriesId, videoId, exportName) {
-  if (exportName.endsWith(".zip")) {
+  if (exportName.endsWith(".zip") || exportName.endsWith(".srt")) {
     return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}`;
   }
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;

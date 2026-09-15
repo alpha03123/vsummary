@@ -33,19 +33,19 @@ export const TOOL_TILES = {
     ...SHARED_TOOL_VISUALS,
   },
   overview: {
-    label: "AI概况",
+    label: "AI 概况",
     description: "章节与关键结论",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
   mindmap: {
-    label: "思维导图(beta)",
+    label: "思维导图（Beta）",
     description: "结构化知识图谱",
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },
   "knowledge-cards": {
-    label: "知识卡片(beta)",
+    label: "知识卡片（Beta）",
     description: "原子知识、标签与来源锚点",
     icon: BrainCircuit,
     ...SHARED_TOOL_VISUALS,
@@ -72,14 +72,14 @@ export const SERIES_TOOL_TILES = {
     ...SHARED_TOOL_VISUALS,
   },
   "series-overview": {
-    label: "全局 AI 概览",
+    label: "全局 AI 概况",
     description: "集中查看各视频 AI 概况",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
   "series-mindmap": {
     label: "全局思维导图",
-    description: "结构化展现系列知识脉络 (暂未实现)",
+    description: "结构化展现系列知识脉络",
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },
@@ -94,26 +94,45 @@ const DEFAULT_TOOL_META = {
   arrowShell: "bg-stone-50 text-stone-700 dark:bg-stone-900 dark:text-stone-300",
 };
 
+export const SOURCE_MISSING_STATUS = { label: "需先链接媒体", tone: "blocked" };
+
+/**
+ * Tool status descriptor — `{ label, tone }`.
+ *
+ * These tiles used to render a bare grey string in a fixed slot, but that one
+ * slot carried four unrelated meanings (a chat session name, "loading", "not
+ * generated yet", "generates on click"). Same position, same size, so users
+ * could not build an expectation. The status is now an explicit chip whose
+ * `tone` makes the four cases visually distinct:
+ *
+ *   ready   — nothing to do, the tool already has content
+ *   pending — usable, will generate on click
+ *   blocked — disabled until something else happens
+ *   loading — state not resolved yet
+ *
+ * A missing/unknown state deliberately degrades to `loading` rather than
+ * claiming the tool is ready.
+ */
 export function describeToolState(toolId, toolState) {
   if (!toolState) {
-    return "读取中";
+    return { label: "读取中", tone: "loading" };
   }
   if (toolState.status === "source_missing") {
-    return "链接媒体后可用";
+    return SOURCE_MISSING_STATUS;
   }
   if (toolId === "preview") {
-    return "随时可查看";
+    return { label: "随时可查看", tone: "ready" };
   }
   if (toolId === "notes") {
-    return toolState.generated ? "可记录与整理" : "可立即使用";
+    return { label: toolState.generated ? "可记录与整理" : "可立即使用", tone: "ready" };
   }
   if (toolState.generated) {
-    return "已生成";
+    return { label: "已生成", tone: "ready" };
   }
   if (toolState.available === false) {
-    return "需先生成 AI 概况";
+    return { label: "需先生成 AI 概况", tone: "blocked" };
   }
-  return "点击进入后生成";
+  return { label: "点击进入后生成", tone: "pending" };
 }
 
 export function getToolState(tools, toolId) {

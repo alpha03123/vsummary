@@ -57,6 +57,7 @@ class ConfiguredVideoSummaryWorkflow:
         transcript_enhancement_enabled: bool | None = None,
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
+        processing_mode: str = "summary",
     ) -> None:
         """基于当前配置执行一次视频总结生成。
 
@@ -86,13 +87,16 @@ class ConfiguredVideoSummaryWorkflow:
                 extra={"event": "video_summary_started", "video_path": source_path},
             )
             try:
-                await application.use_case.run(
-                    video_path=source_path,
-                    output_dir=output_dir,
-                    progress_reporter=resolved_progress_reporter,
-                    manual_transcript=manual_transcript,
-                    use_saved_manual_transcript=use_saved_manual_transcript,
-                )
+                arguments = {
+                    "video_path": source_path,
+                    "output_dir": output_dir,
+                    "progress_reporter": resolved_progress_reporter,
+                    "manual_transcript": manual_transcript,
+                    "use_saved_manual_transcript": use_saved_manual_transcript,
+                }
+                if processing_mode != "summary":
+                    arguments["processing_mode"] = processing_mode
+                await application.use_case.run(**arguments)
             except Exception:
                 LOGGER.exception(
                     "video summary failed",

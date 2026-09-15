@@ -174,6 +174,7 @@ export function useWorkspaceController() {
 
   return {
     state,
+    processingMode: state.processingMode,
     currentGenerationTask,
     seriesGenerationQueue: state.seriesGenerationQueue,
     ui: state.ui,
@@ -237,6 +238,7 @@ export function useWorkspaceController() {
     onOpenCitationReference: chatActions.onOpenCitationReference,
     onClearChat: chatActions.onClearChat,
     onGenerateVideo: contentActions.onGenerateVideo,
+    onChangeProcessingMode: contentActions.onChangeProcessingMode,
     onProcessLinkedVideo: contentActions.onProcessLinkedVideo,
     onUploadSrt: contentActions.onUploadSrt,
     onRestoreAutomaticTranscript: contentActions.onRestoreAutomaticTranscript,

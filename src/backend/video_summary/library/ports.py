@@ -274,6 +274,7 @@ class VideoSummaryGenerator(Protocol):
         transcript_enhancement_enabled: bool | None = None,
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
+        processing_mode: str = "summary",
     ) -> None:
         """为指定视频生成总结制品，副作用是落盘到视频制品目录。"""
 

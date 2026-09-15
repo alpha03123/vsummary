@@ -58,6 +58,7 @@ export function WorkspaceChatPanel({
   onOpenSettings,
   onSubmitChat,
   onCancelChat,
+  summaryLocked = false,
 }) {
   const [fallbackDraft, setFallbackDraft] = useState("");
   const currentDraft = onDraftChange ? draft : fallbackDraft;
@@ -74,8 +75,8 @@ export function WorkspaceChatPanel({
   const seriesIndexingLocked =
     selectedContextType === "series" &&
     knowledgeMemorySnapshot?.status === "running";
-  const interactionDisabled = chatPending || seriesRagLocked || seriesIndexingLocked;
-  const lockedContentClass = seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
+  const interactionDisabled = chatPending || summaryLocked || seriesRagLocked || seriesIndexingLocked;
+  const lockedContentClass = summaryLocked || seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
   const conversationTurns = useMemo(
     () => chatMessages
       .filter((message) => message.role === "user" && message.kind == null && typeof message.content === "string" && message.content.trim())
@@ -157,7 +158,7 @@ export function WorkspaceChatPanel({
   return (
     <div className="h-full w-full flex flex-col bg-transparent">
       {/* Header */}
-      <div className="workspace-toolbar-surface shrink-0 flex items-center justify-between px-6 py-4 border-b border-stone-200/80 dark:border-stone-800">
+      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between px-6 py-4 border-b border-stone-200/80 dark:border-stone-800">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
             <Sparkles size={16} className="text-accent" />
@@ -193,6 +194,13 @@ export function WorkspaceChatPanel({
         </div>
       ) : null}
 
+      {summaryLocked ? (
+        <div className="border-b border-red-200/80 bg-red-50/90 px-6 py-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200" role="alert">
+          <div className="font-semibold">尚未生成 AI 概况</div>
+          <p className="mt-1 text-xs leading-5">请先生成当前范围的 AI 概况，再开始对话。</p>
+        </div>
+      ) : null}
+
       {seriesIndexingLocked ? (
         <div className="border-b border-blue-200/80 bg-blue-50/90 px-6 py-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-100">
           <div className="flex items-center gap-2 font-semibold">
@@ -208,7 +216,7 @@ export function WorkspaceChatPanel({
 
 
       {/* Chat History Area */}
-      <div className={`relative min-h-0 flex-1 transition ${lockedContentClass}`}>
+      <div className={`relative z-0 min-h-0 flex-1 transition ${lockedContentClass}`}>
         <div
           ref={chatHistoryRef}
           className="h-full overflow-auto p-6 pl-14 md:p-8 md:pl-16 flex flex-col gap-6"
@@ -229,7 +237,7 @@ export function WorkspaceChatPanel({
                     key={idx}
                     type="button"
                     onClick={() => updateDraft(prompt.desc)}
-                    disabled={seriesRagLocked || seriesIndexingLocked}
+                    disabled={summaryLocked || seriesRagLocked || seriesIndexingLocked}
                     className="group flex flex-col items-start gap-2 rounded-2xl border border-stone-200/80 bg-white/60 p-4 text-left transition-all hover:border-accent/40 hover:bg-accent/5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/5 dark:bg-white/5 dark:hover:border-accent/30 dark:hover:bg-accent/10"
                   >
                     <div className="flex items-center gap-2 text-sm font-bold text-stone-700 dark:text-stone-200 group-hover:text-accent transition-colors">
@@ -310,7 +318,9 @@ export function WorkspaceChatPanel({
         <div className="max-w-4xl mx-auto relative rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
             placeholder={
-              seriesRagLocked
+              summaryLocked
+                ? "请先生成 AI 概况..."
+                : seriesRagLocked
                   ? "请先下载 RAG 向量模型..."
                   : seriesIndexingLocked
                     ? "数据库整理完成后可继续提问..."
@@ -343,7 +353,9 @@ export function WorkspaceChatPanel({
         <div className="flex items-center justify-center gap-2 mt-4 opacity-70">
           <Sparkles size={12} className="text-stone-500 dark:text-stone-500" />
           <p className="text-xs font-medium text-stone-500 dark:text-stone-500">
-            {seriesRagLocked
+            {summaryLocked
+                ? "生成 AI 概况后，这里会恢复对话"
+                : seriesRagLocked
                 ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
                 : seriesIndexingLocked
                   ? "数据库整理完成后，这里会恢复 series 问答"

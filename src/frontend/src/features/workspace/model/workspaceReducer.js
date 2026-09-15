@@ -20,6 +20,7 @@ import {
   markVideoAsReady,
   normalizeUiSettings,
   persistChatSessionIdsByScope,
+  persistProcessingMode,
   removeChatSessionForScope,
   removeScopedValue,
   resolveChatSessionsForScope,
@@ -169,6 +170,12 @@ export { createInitialWorkspaceState };
 
 export function workspaceReducer(state, action) {
   switch (action.type) {
+    case "processing_mode_changed":
+      persistProcessingMode(action.mode);
+      return {
+        ...state,
+        processingMode: action.mode,
+      };
     case "workspace_loaded":
       return createWorkspaceLoadedState(action.library, state);
     case "backend_health_ready":
@@ -1304,10 +1311,11 @@ export function workspaceReducer(state, action) {
           state.selectedContextType === "video" &&
           state.selectedSeriesId === action.seriesId &&
           state.selectedVideoId === action.videoId;
+        const transcriptOnly = action.processingMode === "transcript";
         const nextState = {
           ...state,
           library: action.library ?? markVideoAsReady(state.library, action.seriesId, action.videoId),
-          tools: !isCurrentVideo || state.tools == null
+          tools: transcriptOnly || !isCurrentVideo || state.tools == null
             ? state.tools
             : {
               ...state.tools,
@@ -1345,14 +1353,14 @@ export function workspaceReducer(state, action) {
                 status: "completed",
                 stage: "completed",
                 progress: 100,
-                detail: "AI 概况已生成",
+                detail: transcriptOnly ? "字幕已获取" : "AI 概况已生成",
                 error: null,
               },
               subscriptionActive: false,
             }),
           ),
         };
-        return isCurrentVideo ? createSummaryLoadedState(action.summary, nextState) : nextState;
+        return isCurrentVideo && !transcriptOnly ? createSummaryLoadedState(action.summary, nextState) : nextState;
       }
     case "series_generation_succeeded":
       if (isStaleSeriesRunAction(state, { ...action, mode: "series" })) {

@@ -51,8 +51,8 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
         <motion.div variants={blurVariant} className="flex flex-col gap-3">
 
           <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
-            Welcome to your{" "}
-            <span className="text-stone-600 dark:text-zinc-500">Knowledge Base.</span>
+            Welcome to {" "}
+            <span className="text-stone-600 dark:text-zinc-500">Vsummary</span>
           </h2>
 
         </motion.div>

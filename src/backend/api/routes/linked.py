@@ -85,6 +85,7 @@ async def process_agent_series(
                     video_ids=video_ids,
                     transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
                     progress_reporters=progress_reporters,
+                    processing_mode=payload.processing_mode,
                 )
             )
             return {
@@ -100,6 +101,7 @@ async def process_agent_series(
                 series_id=series_id,
                 run_id=run_id,
                 transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
+                processing_mode=payload.processing_mode,
             )
         )
     except ValueError as error:
@@ -162,6 +164,7 @@ async def _run_agent_series_generation(
     series_id: str,
     run_id: str,
     transcript_enhancement_enabled: bool | None,
+    processing_mode: str = "summary",
 ) -> None:
     try:
         await _download_agent_linked_videos(
@@ -170,11 +173,13 @@ async def _run_agent_series_generation(
             video_ids=[],
             task_id=f"series/{series_id}",
         )
-        await container.generate_series_summaries.run(
-            series_id,
-            transcript_enhancement_enabled=transcript_enhancement_enabled,
-            run_id=run_id,
-        )
+        arguments = {
+            "transcript_enhancement_enabled": transcript_enhancement_enabled,
+            "run_id": run_id,
+        }
+        if processing_mode != "summary":
+            arguments["processing_mode"] = processing_mode
+        await container.generate_series_summaries.run(series_id, **arguments)
     except Exception as error:
         container.generation_progress_tracker.create_reporter(f"series/{series_id}").failed(str(error))
         LOGGER.exception("Background agent series generation failed: series_id=%s run_id=%s", series_id, run_id)
@@ -187,6 +192,7 @@ async def _run_agent_selected_video_generation(
     video_ids: list[str],
     transcript_enhancement_enabled: bool | None,
     progress_reporters: dict[str, ProgressReporter],
+    processing_mode: str = "summary",
 ) -> None:
     for video_id in video_ids:
         reporter = progress_reporters[video_id]
@@ -203,12 +209,13 @@ async def _run_agent_selected_video_generation(
             if not downloaded or reporter.is_cancel_requested():
                 reporter.cancelled("任务已取消")
                 continue
-            await container.generate_video_summary.run(
-                series_id,
-                video_id,
-                transcript_enhancement_enabled=transcript_enhancement_enabled,
-                progress_reporter=reporter,
-            )
+            arguments = {
+                "transcript_enhancement_enabled": transcript_enhancement_enabled,
+                "progress_reporter": reporter,
+            }
+            if processing_mode != "summary":
+                arguments["processing_mode"] = processing_mode
+            await container.generate_video_summary.run(series_id, video_id, **arguments)
         except GenerateCancelledError:
             reporter.cancelled("任务已取消")
         except Exception as error:
