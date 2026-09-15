@@ -374,6 +374,12 @@ function buildExportActions({ activeSeries, notes, summary, selectedToolId, sele
         disabledReason: "AI 概况生成后才能导出",
       },
       {
+        href: videoExportUrl(activeSeries.id, selectedVideo.id, "subtitles.srt"),
+        enabled: selectedVideo.hasTranscript === true,
+        label: "SRT 字幕导出",
+        disabledReason: "获取字幕后才能导出",
+      },
+      {
         href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"),
         enabled: overviewGenerated,
         label: "混合导出",
@@ -438,7 +444,7 @@ function buildSeriesExportActions(activeSeries) {
 }
 
 function videoExportUrl(seriesId, videoId, exportName) {
-  if (exportName.endsWith(".zip")) {
+  if (exportName.endsWith(".zip") || exportName.endsWith(".srt")) {
     return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}`;
   }
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;

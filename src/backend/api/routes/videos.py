@@ -54,7 +54,7 @@ from backend.video_summary.library.markdown_exports import render_knowledge_card
 from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
-from backend.video_summary.library.subtitle_exports import render_webvtt
+from backend.video_summary.library.subtitle_exports import render_srt, render_webvtt
 from backend.video_summary.generation.renderers import render_markdown
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
@@ -348,6 +348,20 @@ def export_video_transcript_markdown(series_id: str, video_id: str, container: A
         raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
     markdown = render_transcript_markdown(json.loads(transcript_path.read_text(encoding="utf-8")))
     return _markdown_response(markdown, _export_filename(video_id, "transcript"))
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/subtitles.srt")
+def export_video_subtitles_srt(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+    """GET /api/videos/{series_id}/{video_id}/exports/subtitles.srt — 导出标准 SRT 字幕。"""
+    _ensure_video_exists(container, series_id, video_id)
+    transcript = container.get_video_transcript.run(series_id, video_id)
+    if transcript is None or not transcript.segments:
+        raise HTTPException(status_code=404, detail=f"subtitles not found for video '{series_id}/{video_id}'")
+    return Response(
+        content=render_srt(transcript.segments),
+        media_type="application/x-subrip; charset=utf-8",
+        headers={"Content-Disposition": _content_disposition_attachment(_export_filename(video_id, "subtitles", ".srt"))},
+    )
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/mixed.md")
@@ -1674,7 +1688,7 @@ def _content_disposition_attachment(filename: str) -> str:
     return f'attachment; filename="{quoted_filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
 
-def _export_filename(video_id: str, export_name: str) -> str:
+def _export_filename(video_id: str, export_name: str, suffix: str = ".md") -> str:
     """构建导出文件的文件名（Markdown 类）。
 
     Args:
@@ -1684,7 +1698,7 @@ def _export_filename(video_id: str, export_name: str) -> str:
     Returns:
         格式为 `{safe_video_id}-{export_name}.md` 的文件名。
     """
-    return f"{_safe_filename_part(video_id)}-{export_name}.md"
+    return f"{_safe_filename_part(video_id)}-{export_name}{suffix}"
 
 
 def _video_export_filename(video_id: str, suffix: str) -> str:
