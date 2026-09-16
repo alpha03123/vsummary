@@ -62,13 +62,19 @@ def build_video_context_node(
         transcript = workspace.get_video_transcript(series_id, video_id)
         summary_item = _build_video_summary_context_item(state, summary)
         transcript_item = _build_full_transcript_context_item(transcript)
+        visual_reader = getattr(workspace, "get_video_visual_evidence", None)
+        visual_item = _build_visual_evidence_context_item(
+            visual_reader(series_id, video_id) if callable(visual_reader) else None
+        )
 
         retrieval_results: list[dict[str, object]] = []
         if summary_item:
             retrieval_results.append(summary_item)
+        if visual_item:
+            retrieval_results.append(visual_item)
         if transcript_item and _fits_context_budget(
             state=state,
-            items=[item for item in [summary_item, transcript_item] if item],
+            items=[item for item in [summary_item, visual_item, transcript_item] if item],
             context_window_tokens=context_window_tokens,
             reserved_output_tokens=reserved_output_tokens,
         ):
@@ -939,6 +945,31 @@ def _build_full_transcript_context_item(transcript) -> dict[str, object] | None:
         "text": text,
         "snippet": text,
         "segments": segments,
+    }
+
+
+def _build_visual_evidence_context_item(visual_evidence) -> dict[str, object] | None:
+    """把逐帧视觉文字证据投影为视频级上下文，不携带图片二进制。"""
+    if visual_evidence is None:
+        return None
+    lines = []
+    for frame in getattr(visual_evidence, "frames", []):
+        text = str(getattr(frame, "text", "")).strip()
+        if text:
+            lines.append(f"[{_format_seconds(getattr(frame, 'timestamp_seconds', 0.0))}] {text}")
+    text = "\n".join(lines).strip()
+    if not text:
+        return None
+    series_id = str(getattr(visual_evidence, "series_id", "")).strip()
+    video_id = str(getattr(visual_evidence, "video_id", "")).strip()
+    return {
+        "series_id": series_id,
+        "video_id": video_id,
+        "source_type": "visual_evidence_full",
+        "source_family": "visual",
+        "doc_id": f"series:{series_id}:video:{video_id}:visual_evidence_full",
+        "text": text,
+        "snippet": text,
     }
 
 

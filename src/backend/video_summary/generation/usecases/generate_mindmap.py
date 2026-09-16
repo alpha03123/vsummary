@@ -36,6 +36,7 @@ class GenerateMindmap:
         summary_data: dict[str, object],
         output_dir: Path,
         transcript_text: str = "",
+        visual_evidence_text: str = "",
         progress_reporter: ProgressReporter | None = None,
         max_depth: int | None = None,
     ) -> dict[str, object]:
@@ -54,13 +55,16 @@ class GenerateMindmap:
         """
         if progress_reporter is not None:
             progress_reporter.update("generate", 10.0, "正在生成思维导图")
-        mindmap = await self._generator.generate(
-            title=title,
-            duration_seconds=duration_seconds,
-            summary_data=summary_data,
-            transcript_text=transcript_text,
-            max_depth=max_depth,
-        )
+        arguments = {
+            "title": title,
+            "duration_seconds": duration_seconds,
+            "summary_data": summary_data,
+            "transcript_text": transcript_text,
+            "max_depth": max_depth,
+        }
+        if visual_evidence_text:
+            arguments["visual_evidence_text"] = visual_evidence_text
+        mindmap = await self._generator.generate(**arguments)
         if progress_reporter is not None:
             progress_reporter.update("save", 80.0, "正在保存思维导图")
         await self._artifact_store.save_mindmap(mindmap=mindmap, output_dir=output_dir)

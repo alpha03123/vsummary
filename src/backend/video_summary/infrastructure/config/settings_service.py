@@ -21,6 +21,7 @@ from backend.video_summary.infrastructure.rag.rag_models import RAG_RERANKER_REQ
 from backend.video_summary.infrastructure.config.settings import (
     EnvSettings,
     VALID_ASR_PROVIDERS,
+    VALID_CHAPTER_VISUAL_MODES,
     VALID_THEMES,
     VALID_WORKSPACE_LAYOUT_MODES,
     VALID_TRANSCRIPTION_MODES,
@@ -28,6 +29,7 @@ from backend.video_summary.infrastructure.config.settings import (
     VALID_NOTE_LENGTHS,
     VALID_LLM_PROVIDERS,
     VALID_REASONING_EFFORTS,
+    MAX_VISUAL_FRAMES_LIMIT,
     WorkspaceUiSettings,
     apply_runtime_env_overrides,
     load_env_settings,
@@ -46,7 +48,7 @@ from backend.video_summary.infrastructure.config.settings import (
     replace_faster_whisper_transcription_mode,
     replace_transcript_enhancement_enabled,
     replace_chaoxing_import_settings,
-    replace_chapter_screenshots_enabled,
+    replace_chapter_visual_settings,
     replace_video_generation_concurrency,
     replace_web_search_enabled,
     replace_workspace_ui_settings,
@@ -101,7 +103,7 @@ class WorkspaceSettings:
         reasoning_effort: 推理深度。
         talk_custom_prompt: Agent 自定义问答提示词。
         video_generation_concurrency: 单视频级并发上限。
-        chapter_screenshots_enabled: 是否为概括章节生成视频截图。
+        chapter_visual_mode: 章节画面策略。
         web_search_enabled: 是否启用 Web 搜索。
         chaoxing_request_delay_seconds: 超星导入普通请求最小间隔。
         chaoxing_init_course_delay_seconds: 超星课程初始化额外等待。
@@ -127,7 +129,8 @@ class WorkspaceSettings:
     talk_custom_prompt: str
     note_length: str
     video_generation_concurrency: int
-    chapter_screenshots_enabled: bool
+    chapter_visual_mode: str
+    max_visual_frames: int
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float
     chaoxing_init_course_delay_seconds: float
@@ -161,7 +164,8 @@ class SettingsServicePort(Protocol):
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
-        chapter_screenshots_enabled: bool = True,
+        chapter_visual_mode: str = "screenshots",
+        max_visual_frames: int = 6,
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -305,7 +309,8 @@ class SettingsService:
             talk_custom_prompt=settings.agent_context.talk_custom_prompt,
             note_length=settings.agent_context.note_length,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
-            chapter_screenshots_enabled=settings.generation.chapter_screenshots_enabled,
+            chapter_visual_mode=settings.generation.chapter_visual_mode,
+            max_visual_frames=settings.generation.max_visual_frames,
             web_search_enabled=settings.web_search.enabled,
             chaoxing_request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
             chaoxing_init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
@@ -328,7 +333,8 @@ class SettingsService:
         reasoning_effort: str,
         video_generation_concurrency: int,
         web_search_enabled: bool,
-        chapter_screenshots_enabled: bool = True,
+        chapter_visual_mode: str = "screenshots",
+        max_visual_frames: int = 6,
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -358,7 +364,7 @@ class SettingsService:
             answer_detail_level: 答案详细程度。
             reasoning_effort: 推理深度。
             video_generation_concurrency: 单视频级并发上限。
-            chapter_screenshots_enabled: 是否为概括章节生成视频截图。
+            chapter_visual_mode: 章节画面策略。
             web_search_enabled: 是否启用 Web 搜索。
             talk_custom_prompt: Agent 自定义问答提示词。
             chaoxing_request_delay_seconds: 超星导入普通请求最小间隔。
@@ -408,6 +414,12 @@ class SettingsService:
             raise SettingsValidationError("rag_max_hits 必须是正整数。")
         if video_generation_concurrency <= 0:
             raise SettingsValidationError("video_generation_concurrency 必须是正整数。")
+        if chapter_visual_mode not in VALID_CHAPTER_VISUAL_MODES:
+            raise SettingsValidationError("chapter_visual_mode 必须是 off、screenshots 或 multimodal。")
+        if not 0 < max_visual_frames <= MAX_VISUAL_FRAMES_LIMIT:
+            raise SettingsValidationError(
+                f"max_visual_frames 必须是 1 到 {MAX_VISUAL_FRAMES_LIMIT} 的整数。"
+            )
         if chaoxing_request_delay_seconds < 0:
             raise SettingsValidationError("chaoxing_request_delay_seconds 必须是大于等于 0 的数字。")
         if chaoxing_init_course_delay_seconds < 0:
@@ -453,7 +465,11 @@ class SettingsService:
             next_settings = replace_agent_context_talk_custom_prompt(next_settings, talk_custom_prompt)
             next_settings = replace_agent_context_note_length(next_settings, note_length)
             next_settings = replace_video_generation_concurrency(next_settings, video_generation_concurrency)
-            next_settings = replace_chapter_screenshots_enabled(next_settings, chapter_screenshots_enabled)
+            next_settings = replace_chapter_visual_settings(
+                next_settings,
+                chapter_visual_mode=chapter_visual_mode,
+                max_visual_frames=max_visual_frames,
+            )
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             next_settings = replace_chaoxing_import_settings(
                 next_settings,
@@ -502,7 +518,8 @@ class SettingsService:
             talk_custom_prompt=next_settings.agent_context.talk_custom_prompt,
             note_length=next_settings.agent_context.note_length,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
-            chapter_screenshots_enabled=next_settings.generation.chapter_screenshots_enabled,
+            chapter_visual_mode=next_settings.generation.chapter_visual_mode,
+            max_visual_frames=next_settings.generation.max_visual_frames,
             web_search_enabled=next_settings.web_search.enabled,
             chaoxing_request_delay_seconds=next_settings.external_import.chaoxing.request_delay_seconds,
             chaoxing_init_course_delay_seconds=next_settings.external_import.chaoxing.init_course_delay_seconds,

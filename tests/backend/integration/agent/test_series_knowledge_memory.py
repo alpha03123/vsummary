@@ -24,6 +24,8 @@ from backend.video_summary.library.models import (
     VideoNotesDTO,
     VideoSummaryDTO,
     VideoTranscriptDTO,
+    VideoVisualEvidenceDTO,
+    VideoVisualEvidenceFrameDTO,
     WorkspaceDTO,
 )
 from backend.video_summary.library.usecases.series_synopsis_generation import (
@@ -325,6 +327,41 @@ class RetrievalIncrementalMutationTests(unittest.TestCase):
             self.assertIn("series:series-1:video:video-1:transcript:0.0-5.0", doc_ids)
             self.assertIn("series:series-1:video:video-2:summary_global", doc_ids)
             self.assertIn("series:series-1:video:video-2:transcript:5.0-10.0", doc_ids)
+
+    def test_full_refresh_indexes_visual_evidence_as_independent_frame(self) -> None:
+        workspace = MutableRetrievalWorkspace()
+        workspace._visual_evidence = {
+            ("series-1", "video-1"): VideoVisualEvidenceDTO(
+                series_id="series-1",
+                video_id="video-1",
+                frames=[
+                    VideoVisualEvidenceFrameDTO(
+                        chapter_id="chapter-1",
+                        timestamp_seconds=3.0,
+                        image_filename="chapter-01.jpg",
+                        text="画面展示网关、检索和生成三层架构。",
+                    )
+                ],
+            )
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = SeriesRetrievalService(workspace=workspace, db_uri=temp_dir)
+            service.refresh_all()
+            response = service.search(
+                scope_type="series",
+                series_id="series-1",
+                video_id="",
+                query="架构",
+                target_source="all",
+                source_tags=[],
+                expand_context=False,
+                context_window_seconds=120,
+                max_hits=20,
+            )
+
+            hit = next(item for item in response["hits"] if item["source_type"] == "visual_frame")
+            self.assertEqual(hit["doc_id"], "series:series-1:video:video-1:visual_frame:chapter-01.jpg")
+            self.assertEqual(hit["start_seconds"], 3.0)
 
     def test_upsert_video_updates_one_video_and_preserves_another_video_hits(self) -> None:
         workspace = MutableRetrievalWorkspace()
@@ -1165,6 +1202,7 @@ class MutableRetrievalWorkspace:
                 segments=[type("Seg", (), {"start_seconds": 0.0, "end_seconds": 4.0, "text": "视频三转写"})()],
             ),
         }
+        self._visual_evidence = {}
 
     def get_workspace(self) -> WorkspaceDTO:
         return self._workspace
@@ -1177,6 +1215,9 @@ class MutableRetrievalWorkspace:
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
         return self._transcripts.get((series_id, video_id))
+
+    def get_video_visual_evidence(self, series_id: str, video_id: str):
+        return self._visual_evidence.get((series_id, video_id))
 
     def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
         del series_id, video_id

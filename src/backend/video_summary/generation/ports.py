@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Protocol
 
 from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, VideoAsset
+from backend.video_summary.generation.schemas import VisualEvidencePayload
+from backend.video_summary.generation.visuals import ExtractedChapterFrame
 
 if TYPE_CHECKING:
     from backend.video_summary.generation.cancellation import GenerationCancellationContext
@@ -102,6 +104,21 @@ class Summarizer(Protocol):
         """基于视频与转写生成结构化总结文档（含 Markdown/结构化字段/思维导图）。"""
 
 
+class VisualSummaryEnricher(Protocol):
+    """用截图、转写与总结草稿生成最终概况及可检索视觉证据。"""
+
+    async def enrich(
+        self,
+        *,
+        video: VideoAsset,
+        transcript: Transcript,
+        draft: SummaryDocument,
+        frames: list[ExtractedChapterFrame],
+        cancellation: "GenerationCancellationContext | None" = None,
+    ) -> tuple[SummaryDocument, VisualEvidencePayload]:
+        """一次多模态调用同时返回最终总结与逐帧视觉证据。"""
+
+
 class TranscriptEnhancer(Protocol):
     """转写增强端口（用 LLM 修正 ASR 噪声）。"""
 
@@ -124,6 +141,7 @@ class MindmapGenerator(Protocol):
         duration_seconds: float,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        visual_evidence_text: str = "",
         max_depth: int | None = None,
     ) -> dict[str, object]:
         """基于总结数据生成思维导图节点/边字典。"""
@@ -173,6 +191,14 @@ class GenerationArtifactStore(Protocol):
 
     async def save_summary_document(self, *, document: SummaryDocument, output_dir: Path) -> None:
         """保存结构化总结文档（Markdown/结构化字段/思维导图）。"""
+
+    async def save_visual_evidence(
+        self,
+        *,
+        evidence: VisualEvidencePayload,
+        output_dir: Path,
+    ) -> None:
+        """保存可检索的逐帧视觉证据。"""
 
     async def save_mindmap(self, *, mindmap: dict[str, object], output_dir: Path) -> None:
         """保存思维导图节点/边数据。"""

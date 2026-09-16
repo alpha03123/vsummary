@@ -7,6 +7,8 @@ import unittest
 
 from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, TranscriptSegment
 from backend.video_summary.generation.ports import NoVideoFramesError
+from backend.video_summary.generation.schemas import VisualEvidencePayload
+from backend.video_summary.generation.schemas import VisualEvidencePayload
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
 from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
@@ -111,6 +113,7 @@ class _ChapterSummarizer:
                         "title": "第一章",
                         "start_seconds": 0.0,
                         "end_seconds": 4.0,
+                        "image_timestamp_seconds": 2.0,
                         "summary": "章节摘要",
                         "key_points": [],
                     }
@@ -129,11 +132,59 @@ class _TwoChapterSummarizer(_ChapterSummarizer):
                 "title": "第二章",
                 "start_seconds": 2.0,
                 "end_seconds": 4.0,
+                "image_timestamp_seconds": 3.0,
                 "summary": "第二章摘要",
                 "key_points": [],
             }
         )
         return document
+
+
+class _VisualEnricher:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def enrich(self, *, video, transcript, draft, frames, cancellation=None):
+        del video, transcript, cancellation
+        self.calls += 1
+        summary_data = dict(draft.summary_data)
+        chapters = [dict(chapter) for chapter in summary_data["chapters"]]
+        chapters[0]["summary"] = "截图增强后的章节摘要"
+        summary_data["chapters"] = chapters
+        return SummaryDocument(markdown="", summary_data=summary_data), VisualEvidencePayload(
+            frames=[
+                {
+                    "chapter_id": frames[0].chapter_id,
+                    "timestamp_seconds": frames[0].timestamp_seconds,
+                    "image_filename": frames[0].image_filename,
+                    "text": "画面中展示了一张系统架构图。",
+                }
+            ]
+        )
+
+
+class _VisualEnricher:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def enrich(self, *, video, transcript, draft, frames, cancellation=None):
+        del video, transcript, cancellation
+        self.calls += 1
+        summary_data = dict(draft.summary_data)
+        chapters = [dict(chapter) for chapter in summary_data["chapters"]]
+        chapters[0]["summary"] = "截图增强后的章节摘要"
+        summary_data["chapters"] = chapters
+        document = SummaryDocument(markdown="", summary_data=summary_data)
+        return document, VisualEvidencePayload(
+            frames=[
+                {
+                    "chapter_id": frames[0].chapter_id,
+                    "timestamp_seconds": frames[0].timestamp_seconds,
+                    "image_filename": frames[0].image_filename,
+                    "text": "画面中展示了一张系统架构图。",
+                }
+            ]
+        )
 
 
 def _manual_input() -> ManualTranscriptInput:
@@ -235,7 +286,33 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("![章节插图](screenshots/chapter-01.jpg)", markdown)
             self.assertEqual(parse_markdown(markdown)["chapters"][0]["summary"], "章节摘要")
 
-    async def test_chapter_screenshot_failure_preserves_summary_and_continues(self) -> None:
+    async def test_multimodal_enrichment_writes_visual_evidence_once(self) -> None:
+        frame_extractor = _FrameExtractor()
+        enricher = _VisualEnricher()
+        use_case = GenerateVideoSummary(
+            media_processor=_UnexpectedMediaProcessor(),
+            transcriber=_UnexpectedTranscriber(),
+            transcript_enhancer=None,
+            summarizer=_ChapterSummarizer(),
+            artifact_store=FileSystemGenerationArtifactStore(),
+            subtitle_provider=_UnexpectedSubtitleProvider(),
+            frame_extractor=frame_extractor,
+            visual_summary_enricher=enricher,
+            multimodal_visual_enabled=True,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            output_dir = root / "output"
+            document = await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
+
+            self.assertEqual(enricher.calls, 1)
+            self.assertEqual(frame_extractor.timestamps, [2.0])
+            self.assertEqual(document.summary_data["chapters"][0]["summary"], "截图增强后的章节摘要")
+            evidence = json.loads((output_dir / "visual.evidence.json").read_text(encoding="utf-8"))
+            self.assertEqual(evidence["frames"][0]["image_filename"], "chapter-01.jpg")
+            self.assertEqual(evidence["frames"][0]["text"], "画面中展示了一张系统架构图。")
+
+    async def test_chapter_screenshot_failure_aborts_generation(self) -> None:
         frame_extractor = _PartiallyFailingFrameExtractor()
         use_case = GenerateVideoSummary(
             media_processor=_UnexpectedMediaProcessor(),
@@ -249,13 +326,11 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             output_dir = root / "output"
-            document = await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
+            with self.assertRaisesRegex(RuntimeError, "第 1 章截图生成失败"):
+                await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
 
-            self.assertEqual(frame_extractor.timestamps, [2.0, 3.0])
-            self.assertNotIn("image_filename", document.summary_data["chapters"][0])
-            self.assertEqual(document.summary_data["chapters"][1]["image_filename"], "chapter-02.jpg")
-            self.assertEqual(document.summary_data["generation_warnings"], ["第 1 章插图未生成，概况已保留。"])
-            self.assertTrue((output_dir / "screenshots" / "chapter-02.jpg").is_file())
+            self.assertEqual(frame_extractor.timestamps, [2.0])
+            self.assertFalse((output_dir / "summary.json").exists())
 
     async def test_audio_only_media_skips_chapter_screenshots_without_warning(self) -> None:
         frame_extractor = _AudioOnlyFrameExtractor()

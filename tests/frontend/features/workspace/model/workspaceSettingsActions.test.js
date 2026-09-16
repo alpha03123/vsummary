@@ -439,6 +439,32 @@ describe("createWorkspaceSettingsActions provider settings", () => {
     expect(loadFasterWhisperModels).not.toHaveBeenCalled();
   });
 
+  it("saves the selected chapter visual mode", async () => {
+    updateWorkspaceSettings.mockResolvedValue({
+      asrProvider: "aliyun_bailian",
+      runtimeCapabilities: null,
+      chapterVisualMode: "off",
+      maxVisualFrames: 6,
+    });
+    const controller = createWorkspaceSettingsActions({
+      state: {
+        ui: {
+          asrProvider: "aliyun_bailian",
+          chapterVisualMode: "multimodal",
+          maxVisualFrames: 6,
+        },
+      },
+      dispatch: vi.fn(),
+    });
+
+    await controller.onChangeSetting("chapterVisualMode", "off");
+
+    expect(updateWorkspaceSettings).toHaveBeenCalledTimes(1);
+    expect(updateWorkspaceSettings).toHaveBeenCalledWith(expect.objectContaining({
+      chapterVisualMode: "off",
+    }));
+  });
+
   it("edits provider text fields locally without saving on every keystroke", async () => {
     const actions = [];
     const controller = createWorkspaceSettingsActions({

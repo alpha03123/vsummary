@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { popScaleVariant, blurVariant } from "../../../lib/animations";
-import { Settings2, Cpu, Globe, Key, FileText, X, LoaderCircle, Download, Check, RefreshCw } from "lucide-react";
+import { Settings2, Cpu, Key, FileText, X, LoaderCircle, Download, Check, RefreshCw } from "lucide-react";
 import {
   WorkspaceProviderSelect,
+  WorkspaceAdvancedSettings,
   WorkspaceSegmentedControl,
   WorkspaceSelect,
   WorkspaceSettingRow,
@@ -188,7 +189,6 @@ export function WorkspaceSettingsPanel({
     { id: "ai", label: "AI 总结能力", icon: Cpu },
     { id: "rag", label: "对话管理", icon: FileText },
     { id: "keys", label: "模型供应商", icon: Key },
-    { id: "external-import", label: "外部导入", icon: Globe },
     { id: "network", label: "下载管理 ", icon: Download },
     { id: "update", label: "应用更新", icon: RefreshCw },
   ];
@@ -632,32 +632,6 @@ export function WorkspaceSettingsPanel({
                 )}
 
                 <WorkspaceSettingRow
-                  title="上下文大小"
-                  description="控制模型单次可用的上下文预算。"
-                >
-                  <WorkspaceTextInput
-                    value={String(ui.windowTokens)}
-                    onChange={(nextValue) => onChangeSetting("windowTokens", Number.parseInt(nextValue, 10) || 1)}
-                    placeholder="1000000"
-                    className="w-full sm:w-[180px]"
-                    type="number"
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
-                  title="视频并行处理数"
-                  description="控制全局最多同时处理多少个视频。"
-                >
-                  <WorkspaceTextInput
-                    value={String(ui.videoGenerationConcurrency)}
-                    onChange={(nextValue) => onChangeSetting("videoGenerationConcurrency", Number.parseInt(nextValue, 10) || 1)}
-                    placeholder="1"
-                    className="w-full sm:w-[180px]"
-                    type="number"
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
                   title="笔记长度"
                   description="控制 AI 笔记的展开程度。"
                 >
@@ -672,15 +646,49 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
-                  title="生成章节截图"
-                  description="为 AI 概括的每个章节截取视频画面并嵌入总结。关闭后不再生成或保留章节图片。"
+                  title="章节画面"
+                  description="选择不生成画面、只生成章节截图，或让模型识别截图并补充可检索的视觉信息。"
                 >
-                  <WorkspaceToggleSwitch
-                    checked={ui.chapterScreenshotsEnabled}
-                    ariaLabel="生成章节截图"
-                    onChange={() => onChangeSetting("chapterScreenshotsEnabled", !ui.chapterScreenshotsEnabled)}
+                  <WorkspaceSegmentedControl
+                    value={ui.chapterVisualMode}
+                    options={[
+                      { id: "off", label: "无" },
+                      { id: "screenshots", label: "生成截图" },
+                      { id: "multimodal", label: "多模态" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("chapterVisualMode", nextValue)}
                   />
                 </WorkspaceSettingRow>
+
+                {ui.chapterVisualMode === "multimodal" && (
+                  <WorkspaceSettingRow
+                    title="单视频图片上限"
+                    description="限制单个视频抽取并发送给模型的章节截图数量。"
+                  >
+                    <WorkspaceTextInput
+                      value={String(ui.maxVisualFrames)}
+                      onChange={(nextValue) => onChangeSetting("maxVisualFrames", Number.parseInt(nextValue, 10) || 1)}
+                      placeholder="6"
+                      className="w-full sm:w-[180px]"
+                      type="number"
+                    />
+                  </WorkspaceSettingRow>
+                )}
+
+                <WorkspaceAdvancedSettings>
+                  <WorkspaceSettingRow
+                    title="视频并行处理数"
+                    description="控制全局最多同时处理多少个视频。"
+                  >
+                    <WorkspaceTextInput
+                      value={String(ui.videoGenerationConcurrency)}
+                      onChange={(nextValue) => onChangeSetting("videoGenerationConcurrency", Number.parseInt(nextValue, 10) || 1)}
+                      placeholder="1"
+                      className="w-full sm:w-[180px]"
+                      type="number"
+                    />
+                  </WorkspaceSettingRow>
+                </WorkspaceAdvancedSettings>
 
               </>
             )}
@@ -708,6 +716,19 @@ export function WorkspaceSettingsPanel({
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
+                  title="上下文大小"
+                  description="控制模型单次可用的上下文预算。"
+                >
+                  <WorkspaceTextInput
+                    value={String(ui.windowTokens)}
+                    onChange={(nextValue) => onChangeSetting("windowTokens", Number.parseInt(nextValue, 10) || 1)}
+                    placeholder="1000000"
+                    className="w-full sm:w-[180px]"
+                    type="number"
+                  />
+                </WorkspaceSettingRow>
+
+                <WorkspaceSettingRow
                   title="用户提示词"
                   description="自定义修改对话输出偏好"
                   contentClassName="2xl:flex-1"
@@ -721,74 +742,47 @@ export function WorkspaceSettingsPanel({
                   />
                 </WorkspaceSettingRow>
 
-                <WorkspaceSettingRow
-                  title="检索硬件引擎"
-                  description="选择向量检索的硬件计算引擎（CPU / GPU / 自动）。"
-                >
-                  <WorkspaceSegmentedControl
-                    value={ui.ragEmbeddingDevice}
-                    options={[
-                      { id: "cpu", label: "CPU" },
-                      {
-                        id: "gpu",
-                        label: "GPU",
-                        disabled: !gpuEmbeddingAvailable,
-                        disabledReason: unavailableReason,
-                      },
-                      { id: "auto", label: "自动" },
-                    ]}
-                    onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
-                  title="开启 RAG 重排序模型"
-                  description={
-                    rerankerNeedsDownload
-                      ? "重排序模型尚未下载，下载前不能开启 reranking。"
-                      : "开启后将对检索到的资料进行二次精细筛选，提高回答准确度（响应时间略增）。"
-                  }
-                >
-                  <div className="flex flex-col items-end gap-2">
-                    <WorkspaceToggleSwitch
-                      checked={effectiveRerankEnabled}
-                      disabled={rerankerNeedsDownload}
-                      onChange={() => {
-                        if (!rerankerNeedsDownload) {
-                          onChangeSetting("ragRerankEnabled", !effectiveRerankEnabled);
-                        }
-                      }}
+                <WorkspaceAdvancedSettings>
+                  <WorkspaceSettingRow
+                    title="检索硬件引擎"
+                    description="选择向量检索的硬件计算引擎（CPU / GPU / 自动）。"
+                  >
+                    <WorkspaceSegmentedControl
+                      value={ui.ragEmbeddingDevice}
+                      options={[
+                        { id: "cpu", label: "CPU" },
+                        { id: "gpu", label: "GPU", disabled: !gpuEmbeddingAvailable, disabledReason: unavailableReason },
+                        { id: "auto", label: "自动" },
+                      ]}
+                      onChange={(nextValue) => onChangeSetting("ragEmbeddingDevice", nextValue)}
                     />
-                    {rerankerNeedsDownload ? (
-                      <button
-                        type="button"
-                        onClick={() => onDownloadRagModel("reranker")}
-                        disabled={isRerankerDownloading}
-                        className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
-                      >
-                        <Download size={14} />
-                        下载重排序模型
-                      </button>
-                    ) : null}
-                  </div>
-                </WorkspaceSettingRow>
+                  </WorkspaceSettingRow>
 
-                <WorkspaceSettingRow
-                  title="RAG 证据数量"
-                  description={
-                    effectiveRerankEnabled
-                      ? `参考资料的引用数量。将从初步检索到的 ${ui.ragMaxHits * 4} 条候选段落中，精选最相关的 ${ui.ragMaxHits} 条作为回答依据。`
-                      : `参考资料的引用数量。当前直接从检索结果中选取 ${ui.ragMaxHits} 条作为回答依据。`
-                  }
-                >
-                  <WorkspaceTextInput
-                    value={String(ui.ragMaxHits)}
-                    onChange={(nextValue) => onChangeSetting("ragMaxHits", Number.parseInt(nextValue, 10) || 1)}
-                    placeholder="5"
-                    className="w-full sm:w-[180px]"
-                    type="number"
-                  />
-                </WorkspaceSettingRow>
+                  <WorkspaceSettingRow
+                    title="开启 RAG 重排序模型"
+                    description={rerankerNeedsDownload ? "重排序模型尚未下载，下载前不能开启 reranking。" : "开启后将对检索到的资料进行二次精细筛选，提高回答准确度（响应时间略增）。"}
+                  >
+                    <div className="flex flex-col items-end gap-2">
+                      <WorkspaceToggleSwitch
+                        checked={effectiveRerankEnabled}
+                        disabled={rerankerNeedsDownload}
+                        onChange={() => !rerankerNeedsDownload && onChangeSetting("ragRerankEnabled", !effectiveRerankEnabled)}
+                      />
+                      {rerankerNeedsDownload ? (
+                        <button type="button" onClick={() => onDownloadRagModel("reranker")} disabled={isRerankerDownloading} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white">
+                          <Download size={14} /> 下载重排序模型
+                        </button>
+                      ) : null}
+                    </div>
+                  </WorkspaceSettingRow>
+
+                  <WorkspaceSettingRow
+                    title="RAG 证据数量"
+                    description={effectiveRerankEnabled ? `参考资料的引用数量。将从初步检索到的 ${ui.ragMaxHits * 4} 条候选段落中，精选最相关的 ${ui.ragMaxHits} 条作为回答依据。` : `参考资料的引用数量。当前直接从检索结果中选取 ${ui.ragMaxHits} 条作为回答依据。`}
+                  >
+                    <WorkspaceTextInput value={String(ui.ragMaxHits)} onChange={(nextValue) => onChangeSetting("ragMaxHits", Number.parseInt(nextValue, 10) || 1)} placeholder="5" className="w-full sm:w-[180px]" type="number" />
+                  </WorkspaceSettingRow>
+                </WorkspaceAdvancedSettings>
               </>
             )}
 
@@ -1216,42 +1210,6 @@ export function WorkspaceSettingsPanel({
               </>
             )}
 
-            {activeTab === "external-import" && (
-              <>
-                <div className="mb-2">
-                  <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">外部API</h3>
-                  <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">
-                    控制外部API的设置。
-                  </p>
-                </div>
-
-                <WorkspaceSettingRow
-                  title="超星请求间隔"
-                  description="正常列举课程、章节、视频时的请求间隔，单位秒。越小获取越快。默认 0.2。"
-                >
-                  <WorkspaceTextInput
-                    type="number"
-                    value={String(ui.chaoxingRequestDelaySeconds)}
-                    onChange={(nextValue) => onChangeSetting("chaoxingRequestDelaySeconds", Number(nextValue))}
-                    placeholder="0.2"
-                    className="w-full sm:w-[180px]"
-                  />
-                </WorkspaceSettingRow>
-
-                <WorkspaceSettingRow
-                  title="超星初始化获取间隔"
-                  description="初始化登录后获取课程的间隔。越小获取越快。默认 0.3。"
-                >
-                  <WorkspaceTextInput
-                    type="number"
-                    value={String(ui.chaoxingInitCourseDelaySeconds)}
-                    onChange={(nextValue) => onChangeSetting("chaoxingInitCourseDelaySeconds", Number(nextValue))}
-                    placeholder="0.3"
-                    className="w-full sm:w-[180px]"
-                  />
-                </WorkspaceSettingRow>
-              </>
-            )}
           </motion.div>
         </div>
       </div>

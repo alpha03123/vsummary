@@ -5,8 +5,11 @@ from .schemas import (
     MindmapNodePayload,
     SummaryChapterPayload,
     SummaryPayload,
+    MultimodalSummaryPayload,
     TranscriptEnhancementPayload,
     TranscriptSegmentPayload,
+    VisualEvidenceFramePayload,
+    VisualEvidencePayload,
 )
 
 __all__ = [
@@ -14,8 +17,11 @@ __all__ = [
     "MindmapNodePayload",
     "SummaryChapterPayload",
     "SummaryPayload",
+    "MultimodalSummaryPayload",
     "TranscriptEnhancementPayload",
     "TranscriptSegmentPayload",
+    "VisualEvidenceFramePayload",
+    "VisualEvidencePayload",
     "build_chunk_prompt",
     "build_document_prompt",
     "build_transcript_document_prompt",

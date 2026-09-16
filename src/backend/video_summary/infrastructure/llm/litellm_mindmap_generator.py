@@ -56,6 +56,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
         duration_seconds: float,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        visual_evidence_text: str = "",
         max_depth: int | None = None,
     ) -> dict[str, object]:
         """生成一次思维导图节点/边字典。
@@ -78,6 +79,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             duration_seconds=duration_seconds,
             summary_data=summary_data,
             transcript_text=transcript_text,
+            visual_evidence_text=visual_evidence_text,
             output_encoding=self._output_encoding,
             max_depth=max_depth,
         )
@@ -99,6 +101,7 @@ def build_mindmap_prompt(
     duration_seconds: float,
     summary_data: dict[str, object],
     transcript_text: str = "",
+    visual_evidence_text: str = "",
     output_encoding: MindmapOutputEncoding = "flat",
     max_depth: int | None = None,
 ) -> str:
@@ -120,6 +123,8 @@ def build_mindmap_prompt(
         summary_json=json.dumps(summary_data, ensure_ascii=False, indent=2),
         transcript_text=truncated,
     )
+    if visual_evidence_text.strip():
+        prompt = f"{prompt}\n画面证据：\n{visual_evidence_text.strip()}\n"
     if max_depth is not None:
         _validate_max_depth(max_depth)
         prompt = (

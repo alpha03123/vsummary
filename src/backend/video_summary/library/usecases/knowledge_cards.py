@@ -58,7 +58,13 @@ class GenerateVideoKnowledgeCards:
         if summary is None:
             return None
 
-        cards = self._generator.run(title=summary.title, summary_data=summary.summary)
+        visual_reader = getattr(self._workspace, "get_video_visual_evidence", None)
+        visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
+        visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
+        arguments = {"title": summary.title, "summary_data": summary.summary}
+        if visual_evidence_text:
+            arguments["visual_evidence_text"] = visual_evidence_text
+        cards = self._generator.run(**arguments)
         self._workspace.save_video_knowledge_cards(
             series_id,
             video_id,

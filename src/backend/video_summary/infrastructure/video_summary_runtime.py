@@ -124,6 +124,11 @@ def build_video_summary_runtime(
         reserved_output_tokens=settings.agent_context.reserved_output_tokens,
         direct_summary_threshold_ratio=settings.agent_context.direct_summary_threshold_ratio,
         summary_chunk_concurrency=settings.generation.summary_chunk_concurrency,
+        max_visual_frames=(
+            settings.generation.max_visual_frames
+            if settings.generation.chapter_visual_mode != "off"
+            else 0
+        ),
     )
     return VideoSummaryRuntime(
         transcriber=transcriber,

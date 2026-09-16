@@ -105,6 +105,28 @@ export function WorkspaceSettingRow({ title, description, children, contentClass
   );
 }
 
+export function WorkspaceAdvancedSettings({ children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section className="rounded-[1.5rem] border border-stone-200/80 bg-white/60 p-2 dark:border-stone-700/70 dark:bg-stone-900/40">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-4 rounded-[1.15rem] px-4 py-3 text-left transition-colors hover:bg-stone-100/80 dark:hover:bg-stone-800/70"
+      >
+        <span>
+          <strong className="block text-sm font-bold text-stone-900 dark:text-stone-100">高级设置</strong>
+          <span className="mt-0.5 block text-xs leading-relaxed text-stone-600 dark:text-stone-400">调整运行资源、检索质量与外部请求行为。</span>
+        </span>
+        <ChevronDown size={18} className={`shrink-0 text-stone-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? <div className="space-y-3 px-1 pb-1 pt-2">{children}</div> : null}
+    </section>
+  );
+}
+
 export function WorkspaceToggleSwitch({ checked, disabled = false, onChange, ariaLabel }) {
   return (
     <button

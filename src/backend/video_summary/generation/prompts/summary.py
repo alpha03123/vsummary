@@ -51,8 +51,9 @@ DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "1. 只输出 JSON，不要输出额外解释。\n"
     "2. 不要编造原文没有提到的内容。\n"
     "3. 章节必须给出 start_seconds 和 end_seconds，单位为秒。\n"
-    "4. 关键结论控制在 5 到 10 条。\n\n"
-    "5. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n\n"
+    "4. 关键结论控制在 5 到 10 条。\n"
+    "5. 每章给出 image_timestamp_seconds：只有图表、代码、界面、实物演示或关键幻灯片等值得截图时填写该章范围内的秒数，否则填 null；整个视频最多选择 $max_visual_frames 张。普通人物出镜、片头片尾、过场和纯口述章节必须填 null。\n"
+    "6. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n\n"
     "JSON 结构：\n"
     "{\n"
     '  "title": "视频标题",\n'
@@ -64,6 +65,7 @@ DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     '      "title": "章节标题",\n'
     '      "start_seconds": 0,\n'
     '      "end_seconds": 120,\n'
+    '      "image_timestamp_seconds": 64.5,\n'
     '      "summary": "章节小结",\n'
     '      "key_points": ["要点1", "要点2"]\n'
     "    }\n"
@@ -91,7 +93,8 @@ TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "2. 不要编造原文没有提到的内容。\n"
     "3. 章节必须按时间顺序组织，并给出 start_seconds 和 end_seconds，单位为秒。\n"
     "4. 关键结论控制在 5 到 10 条。\n"
-    "5. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n\n"
+    "5. 每章给出 image_timestamp_seconds：只有图表、代码、界面、实物演示或关键幻灯片等值得截图时填写该章范围内的秒数，否则填 null；整个视频最多选择 $max_visual_frames 张。普通人物出镜、片头片尾、过场和纯口述章节必须填 null。\n"
+    "6. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n\n"
     "JSON 结构：\n"
     "{\n"
     '  "title": "视频标题",\n'
@@ -103,6 +106,7 @@ TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     '      "title": "章节标题",\n'
     '      "start_seconds": 0,\n'
     '      "end_seconds": 120,\n'
+    '      "image_timestamp_seconds": 64.5,\n'
     '      "summary": "章节小结",\n'
     '      "key_points": ["要点1", "要点2"]\n'
     "    }\n"
@@ -192,6 +196,7 @@ def build_document_prompt(
     video: VideoAsset,
     transcript: Transcript,
     chunk_summaries: list[str],
+    max_visual_frames: int = 0,
 ) -> str:
     """基于「整篇总结」模板构造提示词。
 
@@ -209,10 +214,15 @@ def build_document_prompt(
         video_duration=format_timestamp(video.duration_seconds),
         transcript_language=transcript.language,
         chunk_summaries="\n\n".join(chunk_summaries),
+        max_visual_frames=str(max(0, max_visual_frames)),
     )
 
 
-def build_transcript_document_prompt(video: VideoAsset, transcript: Transcript) -> str:
+def build_transcript_document_prompt(
+    video: VideoAsset,
+    transcript: Transcript,
+    max_visual_frames: int = 0,
+) -> str:
     """基于「转写直接总结」模板构造提示词（跳过片段聚合步骤）。
 
     Args:
@@ -228,6 +238,7 @@ def build_transcript_document_prompt(video: VideoAsset, transcript: Transcript) 
         video_duration=format_timestamp(video.duration_seconds),
         transcript_language=transcript.language,
         transcript_text=segments_to_text(transcript.segments),
+        max_visual_frames=str(max(0, max_visual_frames)),
     )
 
 

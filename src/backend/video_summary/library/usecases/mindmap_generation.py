@@ -54,16 +54,22 @@ class GenerateVideoMindmapFromLibrary:
 
         transcript = self._workspace.get_video_transcript(series_id, video_id)
         transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
+        visual_reader = getattr(self._workspace, "get_video_visual_evidence", None)
+        visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
+        visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
 
         try:
-            await self._generator.run(
-                series_id=series_id,
-                video_id=video_id,
-                summary_data=summary.summary,
-                transcript_text=transcript_text,
-                progress_reporter=progress_reporter,
-                max_depth=max_depth,
-            )
+            arguments = {
+                "series_id": series_id,
+                "video_id": video_id,
+                "summary_data": summary.summary,
+                "transcript_text": transcript_text,
+                "progress_reporter": progress_reporter,
+                "max_depth": max_depth,
+            }
+            if visual_evidence_text:
+                arguments["visual_evidence_text"] = visual_evidence_text
+            await self._generator.run(**arguments)
         except LookupError:
             return None
         return self._workspace.get_video_mindmap(series_id, video_id)

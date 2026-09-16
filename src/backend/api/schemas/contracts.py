@@ -145,7 +145,8 @@ class WorkspaceSettingsResponse(BaseModel):
     talk_custom_prompt: str = ""
     note_length: str = "long"
     video_generation_concurrency: int
-    chapter_screenshots_enabled: bool
+    chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
+    max_visual_frames: int = Field(default=6, ge=1, le=20)
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3
@@ -198,7 +199,8 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     talk_custom_prompt: str = ""
     note_length: str = "long"
     video_generation_concurrency: int
-    chapter_screenshots_enabled: bool = True
+    chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
+    max_visual_frames: int = Field(default=6, ge=1, le=20)
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3

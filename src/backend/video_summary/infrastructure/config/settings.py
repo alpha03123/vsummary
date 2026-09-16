@@ -38,6 +38,7 @@ VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
 VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
 VALID_NOTE_LENGTHS = {"short", "long"}
 VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
+VALID_CHAPTER_VISUAL_MODES = {"off", "screenshots", "multimodal"}
 VALID_LLM_PROVIDERS = {
     "ai21",
     "ai21_chat",
@@ -136,7 +137,9 @@ DEFAULT_AGENT_RETRIEVAL_MAX_HITS = 5
 DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED = True
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
-DEFAULT_CHAPTER_SCREENSHOTS_ENABLED = True
+DEFAULT_CHAPTER_VISUAL_MODE = "screenshots"
+DEFAULT_MAX_VISUAL_FRAMES = 6
+MAX_VISUAL_FRAMES_LIMIT = 20
 DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
 DEFAULT_WEB_SEARCH_MODE = "native"
 DEFAULT_WEB_SEARCH_CONTEXT_SIZE = "medium"
@@ -311,12 +314,13 @@ class GenerationConcurrencySettings:
     Attributes:
         video_generation_concurrency: 单视频级并发上限（系列批量时也会遵守）。
         summary_chunk_concurrency: 单视频分片总结阶段的并发上限。
-        chapter_screenshots_enabled: 是否为概括章节生成视频截图。
+        chapter_visual_mode: 章节画面策略，取值 `off` / `screenshots` / `multimodal`。
     """
 
     video_generation_concurrency: int
     summary_chunk_concurrency: int
-    chapter_screenshots_enabled: bool
+    chapter_visual_mode: str
+    max_visual_frames: int
 
 
 @dataclass(frozen=True)
@@ -573,10 +577,20 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             default=DEFAULT_SUMMARY_CHUNK_CONCURRENCY,
             field_name="generation.summary_chunk_concurrency",
         ),
-        chapter_screenshots_enabled=bool(
-            generation_payload.get("chapter_screenshots_enabled", DEFAULT_CHAPTER_SCREENSHOTS_ENABLED)
+        chapter_visual_mode=_normalize_choice(
+            generation_payload.get("chapter_visual_mode"),
+            default=DEFAULT_CHAPTER_VISUAL_MODE,
+            allowed=VALID_CHAPTER_VISUAL_MODES,
+            field_name="generation.chapter_visual_mode",
+        ),
+        max_visual_frames=_normalize_positive_int(
+            generation_payload.get("max_visual_frames"),
+            default=DEFAULT_MAX_VISUAL_FRAMES,
+            field_name="generation.max_visual_frames",
         ),
     )
+    if generation_settings.max_visual_frames > MAX_VISUAL_FRAMES_LIMIT:
+        raise ValueError(f"generation.max_visual_frames 不能大于 {MAX_VISUAL_FRAMES_LIMIT}。")
     web_search_payload = payload.get("web_search", {})
     web_search_settings = WebSearchSettings(
         enabled=bool(web_search_payload.get("enabled", False)),
@@ -851,13 +865,32 @@ def replace_video_generation_concurrency(settings: AppSettings, video_generation
     )
 
 
-def replace_chapter_screenshots_enabled(settings: AppSettings, chapter_screenshots_enabled: bool) -> AppSettings:
-    """派生替换章节截图生成开关的 `AppSettings`。"""
+def replace_chapter_visual_settings(
+    settings: AppSettings,
+    *,
+    chapter_visual_mode: str,
+    max_visual_frames: int,
+) -> AppSettings:
+    """派生替换章节画面策略与单视频图片上限。"""
+    mode = _normalize_choice(
+        chapter_visual_mode,
+        default=DEFAULT_CHAPTER_VISUAL_MODE,
+        allowed=VALID_CHAPTER_VISUAL_MODES,
+        field_name="generation.chapter_visual_mode",
+    )
+    normalized_limit = _normalize_positive_int(
+        max_visual_frames,
+        default=DEFAULT_MAX_VISUAL_FRAMES,
+        field_name="generation.max_visual_frames",
+    )
+    if normalized_limit > MAX_VISUAL_FRAMES_LIMIT:
+        raise ValueError(f"generation.max_visual_frames 不能大于 {MAX_VISUAL_FRAMES_LIMIT}。")
     return replace(
         settings,
         generation=replace(
             settings.generation,
-            chapter_screenshots_enabled=bool(chapter_screenshots_enabled),
+            chapter_visual_mode=mode,
+            max_visual_frames=normalized_limit,
         ),
     )
 
@@ -1070,7 +1103,8 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[generation]",
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
-        f"chapter_screenshots_enabled = {_toml_bool(settings.generation.chapter_screenshots_enabled)}",
+        f'chapter_visual_mode = "{settings.generation.chapter_visual_mode}"',
+        f"max_visual_frames = {settings.generation.max_visual_frames}",
         "",
         "[web_search]",
         f"enabled = {_toml_bool(settings.web_search.enabled)}",
