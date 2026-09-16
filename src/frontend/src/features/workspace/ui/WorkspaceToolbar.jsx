@@ -44,20 +44,20 @@ export function WorkspaceToolbar({
   }, []);
 
   return (
-    <header className="workspace-toolbar-surface flex justify-between items-center px-6 py-4 border-b border-stone-200/80 dark:border-stone-800 sticky top-0 z-20 shrink-0">
+    <header className="workspace-toolbar-surface flex justify-between items-center px-6 py-2.5 border-b border-stone-200/80 dark:border-stone-800 sticky top-0 z-20 shrink-0">
       <div className="flex items-center gap-4">
         {/* Sidebar Toggle */}
         <button
           onClick={onToggleSidebar}
-          className="flex items-center justify-center w-10 h-10 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition-colors mr-2"
+          className="flex items-center justify-center w-9 h-9 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition-colors mr-2"
           aria-label={isSidebarOpen ? "收起文献库" : "展开文献库"}
         >
-          {isSidebarOpen ? <PanelLeftClose size={22} /> : <PanelLeftOpen size={22} />}
+          {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
         </button>
 
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10">
-            <BookOpenText size={20} strokeWidth={2.1} />
+          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10">
+            <BookOpenText size={17} strokeWidth={2.1} />
           </div>
           <div className="min-w-0">
             {/* 侧栏展开时它的头部就在左边显示当前系列名，这里再复述一次会让

@@ -796,18 +796,24 @@ export function WorkspaceLibraryPanel({
                   : "hover:bg-accent/15 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] cursor-pointer"
                 }`}
             >
-              <div className="flex justify-between items-start w-full gap-2">
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-accent">
-                  <FolderKanban size={12} />
-                  当前系列
+              {/* The card header above already prints `LINKED SERIES` + the full
+                  series title, so this card used to repeat that title verbatim
+                  and then add a sentence explaining what "series scope" means.
+                  Both carried no new information: the title was a copy, and the
+                  explanation only restated what the user reveals by clicking.
+
+                  What survives is the scope statement itself — `整个系列` — which
+                  is the one thing this card is here to distinguish from the
+                  per-video cards below it. The badge keeps it scannable next to
+                  those video rows without re-printing a title that is already on
+                  screen one block above. */}
+              <div className="flex items-center justify-between w-full gap-2">
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  <FolderKanban size={14} className="text-accent" />
+                  整个系列
                 </span>
-              </div>
-              <div className="flex flex-col gap-0.5 mt-1">
-                <strong className="text-base font-semibold line-clamp-2 tracking-[-0.01em] text-stone-900 dark:text-stone-100">
-                  {activeSeries?.title}
-                </strong>
-                <span className="text-xs truncate text-stone-600 dark:text-stone-400">
-                  聚焦整个系列，使用系列级上下文进行分析
+                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-accent">
+                  当前范围
                 </span>
               </div>
             </button>

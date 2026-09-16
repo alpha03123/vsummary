@@ -12,31 +12,6 @@ const WorkspaceMarkdownMessage = lazy(() =>
   })),
 );
 
-function describeCurrentTool(selectedToolId) {
-  if (selectedToolId === "series-home") {
-    return "系列首页";
-  }
-  if (selectedToolId === "series-overview") {
-    return "系列概览";
-  }
-  if (selectedToolId === "series-progress") {
-    return "系列进度";
-  }
-  if (selectedToolId === "overview") {
-    return "AI概况";
-  }
-  if (selectedToolId === "mindmap") {
-    return "思维导图";
-  }
-  if (selectedToolId === "knowledge-cards" || selectedToolId === "cards") {
-    return "知识卡片";
-  }
-  if (selectedToolId === "notes") {
-    return "笔记";
-  }
-  return "工具首页";
-}
-
 export function WorkspaceChatPanel({
   workspaceTitle,
   activeSeries,
@@ -66,18 +41,25 @@ export function WorkspaceChatPanel({
   const currentDraft = onDraftChange ? draft : fallbackDraft;
   const updateDraft = onDraftChange ?? setFallbackDraft;
   const chatHistoryRef = useRef(null);
+  const composerRef = useRef(null);
+  const threadRef = useRef(null);
   const bottomAlignedSessionRef = useRef(null);
   const visibleSessionRef = useRef(null);
-  const scopeLabel = selectedContextType === "series"
-    ? activeSeries?.title ?? "当前系列"
-    : selectedVideo?.title ?? activeSeries?.title ?? workspaceTitle ?? "当前视频";
-  const currentPageLabel = describeCurrentTool(selectedToolId);
   const embeddingModel = ragModels.find((model) => model.key === "embedding") ?? null;
   const seriesRagLocked = selectedContextType === "series" && embeddingModel != null && !embeddingModel.downloaded;
   const seriesIndexingLocked =
     selectedContextType === "series" &&
     knowledgeMemorySnapshot?.status === "running";
   const interactionDisabled = chatPending || summaryLocked || seriesRagLocked || seriesIndexingLocked;
+  // Only surfaced while the composer is blocked — each of these tells the user
+  // what to fix. Null in the normal idle state so the row is not rendered.
+  const composerHint = summaryLocked
+    ? "生成 AI 概况后，这里会恢复对话"
+    : seriesRagLocked
+      ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
+      : seriesIndexingLocked
+        ? "数据库整理完成后，这里会恢复 series 问答"
+        : null;
   const lockedContentClass = summaryLocked || seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
   const conversationTurns = useMemo(
     () => chatMessages
@@ -118,6 +100,25 @@ export function WorkspaceChatPanel({
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [activeSessionId, chatMessages.length]);
+
+  // Grow the composer with its content instead of reserving a fixed block.
+  // A tall fixed height wasted ~48px of chat space whenever the box was empty,
+  // which is the common case. Height is reset to "auto" first so the box can
+  // also shrink back down when the draft is shortened or cleared.
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) {
+      return;
+    }
+    composer.style.height = "auto";
+    const nextHeight = composer.scrollHeight;
+    composer.style.height = `${nextHeight}px`;
+    // Only allow a scrollbar once the box is pinned at its max height, so an
+    // empty or single-line draft never shows a scrollbar track.
+    const maxHeight = parseFloat(window.getComputedStyle(composer).maxHeight);
+    const capped = Number.isFinite(maxHeight) && nextHeight > maxHeight;
+    composer.style.overflowY = capped ? "auto" : "hidden";
+  }, [currentDraft]);
 
   function handleSubmit() {
     const trimmed = currentDraft.trim();
@@ -163,30 +164,52 @@ export function WorkspaceChatPanel({
 
   return (
     <div className="h-full w-full flex flex-col bg-transparent">
-      {/* Header */}
-      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between gap-6 px-6 py-5 border-b border-stone-200/80 dark:border-stone-800">
+      {/* Header. Two lines were deleted here, both for the same reason — they
+          restated information the user can already see elsewhere:
+
+          1. The tool-name badge (`工具首页` / `AI概况` / …). It implied the
+             assistant knows which tool page you are on, but the backend never
+             reads it: `AgentContext.selected_tool` is written by
+             `agent.py::_build_agent_context_override` and then read by nobody,
+             and it appears in no prompt template. So the badge promised a
+             session awareness that does not exist, while the tool page itself
+             already shows the same name in its own header.
+
+          2. The `基于《…》` subtitle. The left rail lists the active series and
+             video with full titles; this line repeated the video title and then
+             truncated it, so the only thing it ever added was a clipped string.
+
+          The identity column is now a single title. */}
+      {/* Padding is symmetric to the composer's, so the inner content sits the
+          same distance from the panel's top edge as the composer sits from its
+          bottom edge. The header is the outer edge of the card, so it needs the
+          *larger* share: this previously ran `pt-3.5 pb-5` (14/20), which put
+          the title 28px from the top while leaving the composer 44px from the
+          bottom — the bottom gap was more than half again the top and the whole
+          panel read as sinking. */}
+      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between gap-6 px-6 pb-4 pt-3 border-b border-stone-200/80 dark:border-stone-800">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="w-10 h-10 shrink-0 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
-            <Sparkles size={17} className="text-accent" />
+          <div className="w-9 h-9 shrink-0 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
+            <Sparkles size={16} className="text-accent" />
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-bold text-stone-800 dark:text-stone-100">分析助手</h3>
-              <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
-                {currentPageLabel}
-              </span>
-            </div>
-            <p className="mt-1.5 text-xs leading-5 text-stone-600 dark:text-stone-400">基于《{scopeLabel}》</p>
+          {/* The budget pill sits above the title rather than beside the
+              switcher: it is passive status, so giving it its own line keeps it
+              out of the control row's way, and it reads as a caption for the
+              whole panel instead of a label for the switcher. The two rows run
+              tight (`gap-0.5`) so the stacked identity block stays close to the
+              height of the control stack opposite it. */}
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
+            <h3 className="min-w-0 truncate text-base font-bold leading-5 text-stone-800 dark:text-stone-100">分析助手</h3>
           </div>
         </div>
-        {/* Right column, top-aligned with the title block: a caption names the
-            control ("对话"), the switcher sits directly under it, and the passive
-            budget pill is demoted to a small line beneath rather than competing
-            with the controls for horizontal space. */}
+        {/* Right column: caption, then the switcher. The budget pill used to
+            share the caption row; it now lives above the title on the left, so
+            this column is just the label plus the control it labels. */}
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {chatSessionOptions.length > 0 ? (
             <>
-              <span className="pr-1 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+              <span className="text-[10px] font-bold uppercase leading-none tracking-widest text-stone-400 dark:text-stone-500">
                 对话管理
               </span>
               {/* Switcher + "new chat" share one bordered shell with an inset
@@ -217,7 +240,6 @@ export function WorkspaceChatPanel({
                   </button>
                 ) : null}
               </div>
-              <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
             </>
           ) : (
             <>
@@ -232,7 +254,6 @@ export function WorkspaceChatPanel({
                   新对话
                 </button>
               ) : null}
-              <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
             </>
           )}
         </div>
@@ -277,14 +298,19 @@ export function WorkspaceChatPanel({
 
 
 
-      {/* Chat History Area */}
+      {/* Chat History Area.
+          The thread sits in a centered column whose width matches the composer
+          (`max-w-4xl`), so the two zones line up. Earlier the scroll container
+          used an asymmetric `pl-14 md:pl-16` to clear the jump rail parked at
+          `left-2`; that produced a 56px left gutter against a 32px right one and
+          the whole thread read as shifted off-centre. The rail is now anchored to
+          this container instead, and vertical space was freed at the top (the
+          header lost a line) to offset the gutter it needs. */}
       <div className={`relative z-0 min-h-0 flex-1 transition ${lockedContentClass}`}>
-        <div
-          ref={chatHistoryRef}
-          className="h-full overflow-auto p-6 pl-14 md:p-8 md:pl-16 flex flex-col gap-6"
-        >
-        {chatMessages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 mt-8">
+        <div ref={chatHistoryRef} className="h-full overflow-auto px-6 py-5 md:px-8">
+          <div ref={threadRef} className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+            {chatMessages.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 mt-8">
             <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-6 border border-accent/20 shadow-sm">
               <Sparkles size={28} className="text-accent" />
             </div>
@@ -316,69 +342,42 @@ export function WorkspaceChatPanel({
           </div>
         ) : null}
 
-        {chatMessages.map((message) => {
-          const isAssistant = message.role === "assistant";
-          const canCopy = message.kind == null && typeof message.content === "string" && message.content.trim();
-          return (
-            <div
-              key={message.id}
-              id={`chat-message-${message.id}`}
-              className={`flex items-start gap-4 max-w-2xl ${isAssistant ? "" : "self-end justify-end"}`}
-            >
-              {isAssistant ? (
+            {chatMessages.map((message) => (
+              <ConversationMessage
+                key={message.id}
+                message={message}
+                renderMessageContent={renderMessageContent}
+              />
+            ))}
+
+            {chatPending && chatMessages.every((message) => message.kind == null) ? (
+              <div className="flex items-start gap-4 max-w-2xl">
                 <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
-                  <Sparkles size={16} className="text-white" />
+                  <LoaderCircle size={16} className="animate-spin text-white" />
                 </div>
-              ) : null}
-              <div className={`flex flex-col gap-2 ${isAssistant ? "" : "items-end"}`}>
-                <div
-                  className={
-                    message.kind === "thought-trace"
-                      || message.kind === "tool-trace"
-                      || message.kind === "seek-reference"
-                      ? "w-full"
-                      : isAssistant
-                        ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
-                        : "px-5 py-3 rounded-[1.5rem] rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm"
-                  }
-                >
-                  {renderMessageContent(message, isAssistant)}
-                </div>
-                <div className={`flex items-center gap-2 text-xs text-stone-500 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
-                  <span>{message.meta}</span>
-                  {canCopy ? (
-                    <CopyToClipboardButton
-                      text={message.content}
-                      iconSize={12}
-                      className="gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-                    />
-                  ) : null}
+                <div className="workspace-elevated-panel p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-600 dark:text-stone-300">
+                  正在分析您的问题...
                 </div>
               </div>
-            </div>
-          );
-        })}
-
-        {chatPending && chatMessages.every((message) => message.kind == null) ? (
-          <div className="flex items-start gap-4 max-w-2xl">
-            <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
-              <LoaderCircle size={16} className="animate-spin text-white" />
-            </div>
-            <div className="workspace-elevated-panel p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-600 dark:text-stone-300">
-              正在分析您的问题...
-            </div>
+            ) : null}
           </div>
-        ) : null}
         </div>
-        <ConversationJumpRail turns={conversationTurns} onJump={jumpToConversationTurn} />
+        <ConversationJumpRail turns={conversationTurns} onJump={jumpToConversationTurn} anchorRef={threadRef} />
       </div>
 
-      {/* Floating Composer Area */}
+      {/* Floating Composer Area.
+          Padding mirrors the header's asymmetry (`pt-3` / `pb-5`): the thread
+          scrolls directly above, so a tight top gap keeps the last message
+          visually attached to the composer, while the larger bottom gap gives
+          the card room to sit inside the panel's rounded corner instead of
+          hugging it. Header and composer now bracket the thread with the same
+          optical rhythm. */}
       <div
-        className={`shrink-0 p-4 md:px-6 md:pb-6 md:pt-2 bg-transparent transition-all ${lockedContentClass}`}
+        className={`shrink-0 p-4 md:px-6 md:pb-5 md:pt-3 bg-transparent transition-all ${lockedContentClass}`}
       >
-        <div className="max-w-4xl mx-auto relative rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
+        <div className="max-w-4xl mx-auto relative flex items-end rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
+            ref={composerRef}
             placeholder={
               summaryLocked
                 ? "请先生成 AI 概况..."
@@ -388,7 +387,11 @@ export function WorkspaceChatPanel({
                     ? "数据库整理完成后可继续提问..."
                     : "向 AI 助手提问或下达指令..."
             }
-            className="w-full bg-transparent resize-none py-5 pl-6 pr-16 text-[15px] text-stone-800 dark:text-stone-100 outline-none leading-relaxed h-[100px] placeholder:text-stone-400 dark:placeholder:text-stone-500"
+            /* `overflow-y-auto` draws a permanent scrollbar track in some
+               browsers even at one line, so the box scrolls only once it is
+               actually capped by `max-h-40`. */
+            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-5 py-3 text-[15px] leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500"
+          rows={1}
             value={currentDraft}
             onChange={(event) => updateDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -399,31 +402,32 @@ export function WorkspaceChatPanel({
             }}
             disabled={interactionDisabled}
           />
-          <div className="absolute right-3 bottom-3">
+          {/* In-flow rather than absolute: `items-end` keeps the button aligned
+              to the last line as the box grows, and it can no longer overlap
+              the text or collide with the composer edge. */}
+          <div className="p-2 pr-2.5">
             <button
               type="button"
               onClick={chatPending ? onCancelChat : handleSubmit}
               disabled={chatPending ? false : interactionDisabled || !currentDraft.trim()}
               aria-label={chatPending ? "中断对话" : "发送消息"}
               title={chatPending ? "中断对话" : "发送消息"}
-              className="flex items-center justify-center w-10 h-10 rounded-[14px] bg-stone-900 dark:bg-white text-white dark:text-black hover:bg-accent hover:text-white dark:hover:bg-accent transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group-focus-within:bg-accent group-focus-within:text-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-stone-900 text-white shadow-sm transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white group-focus-within:bg-accent group-focus-within:text-white"
             >
-              {chatPending ? <Square size={16} fill="currentColor" /> : <ArrowUp size={20} strokeWidth={2.5} />}
+              {chatPending ? <Square size={15} fill="currentColor" /> : <ArrowUp size={18} strokeWidth={2.5} />}
             </button>
           </div>
         </div>
-        <div className="flex items-center justify-center gap-2 mt-4 opacity-70">
-          <Sparkles size={12} className="text-stone-500 dark:text-stone-500" />
-          <p className="text-xs font-medium text-stone-500 dark:text-stone-500">
-            {summaryLocked
-                ? "生成 AI 概况后，这里会恢复对话"
-                : seriesRagLocked
-                ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
-                : seriesIndexingLocked
-                  ? "数据库整理完成后，这里会恢复 series 问答"
-                : "AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作"}
-          </p>
-        </div>
+        {/* The idle hint ("AI 已接入当前工作区上下文…") was removed: it cost a
+            full 28px row of chat height while carrying no actionable info. The
+            locked-state messages stay, because those do explain why the composer
+            is unusable and how to recover. */}
+        {composerHint ? (
+          <div className="mt-3 flex items-center justify-center gap-2 opacity-70">
+            <Sparkles size={12} className="text-stone-500 dark:text-stone-500" />
+            <p className="text-xs font-medium text-stone-500 dark:text-stone-500">{composerHint}</p>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -433,10 +437,83 @@ function AssistantMessageFallback({ content }) {
   return <div className="whitespace-pre-wrap break-words">{content}</div>;
 }
 
-function ConversationJumpRail({ turns, onJump }) {
+// Hoisted out of `WorkspaceChatPanel`: the composer resizes on every keystroke,
+// and rendering the list inline recreated this element 60 times a second. As a
+// module-level function it stays reference-equal between renders, so the thread
+// is cheap to re-render while typing.
+function ConversationMessage({ message, renderMessageContent }) {
+  const isAssistant = message.role === "assistant";
+  const canCopy = message.kind == null && typeof message.content === "string" && message.content.trim();
+
+  return (
+    <div
+      id={`chat-message-${message.id}`}
+      className={`flex items-start gap-4 max-w-2xl ${isAssistant ? "" : "self-end justify-end"}`}
+    >
+      {isAssistant ? (
+        <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
+          <Sparkles size={16} className="text-white" />
+        </div>
+      ) : null}
+      <div className={`flex flex-col gap-2 ${isAssistant ? "" : "items-end"}`}>
+        <div
+          className={
+            message.kind === "thought-trace"
+              || message.kind === "tool-trace"
+              || message.kind === "seek-reference"
+              ? "w-full"
+              : isAssistant
+                ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
+                : "px-5 py-3 rounded-[1.5rem] rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm"
+          }
+        >
+          {renderMessageContent(message, isAssistant)}
+        </div>
+        <div className={`flex items-center gap-2 text-xs text-stone-500 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
+          <span>{message.meta}</span>
+          {canCopy ? (
+            <CopyToClipboardButton
+              text={message.content}
+              iconSize={12}
+              className="gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConversationJumpRail({ turns, onJump, anchorRef }) {
   const [activeTurnId, setActiveTurnId] = useState(null);
+  // Keep the rail just outside the centred thread column instead of pinned to
+  // the panel edge. At wide widths the thread is centred, so a `left-2` rail
+  // drifted far away from the messages it indexes; at narrow widths the thread
+  // fills the panel and the rail clamps back to the gutter.
+  const [railLeft, setRailLeft] = useState(8);
   const activeIndex = turns.findIndex((turn) => turn.id === activeTurnId);
   const activeTurn = activeIndex >= 0 ? turns[activeIndex] : null;
+
+  useEffect(() => {
+    const anchor = anchorRef?.current;
+    if (!anchor || typeof window === "undefined") {
+      return undefined;
+    }
+    function syncRailPosition() {
+      const parent = anchor.offsetParent ?? anchor.parentElement;
+      if (!parent) {
+        return;
+      }
+      const anchorRect = anchor.getBoundingClientRect();
+      const parentRect = parent.getBoundingClientRect();
+      setRailLeft(Math.max(8, Math.round(anchorRect.left - parentRect.left) - 36));
+    }
+    syncRailPosition();
+    const observer = new ResizeObserver(syncRailPosition);
+    observer.observe(anchor);
+    observer.observe(anchor.parentElement ?? anchor);
+    return () => observer.disconnect();
+  }, [anchorRef, turns.length]);
 
   if (!turns.length) {
     return null;
@@ -463,7 +540,8 @@ function ConversationJumpRail({ turns, onJump }) {
       onPointerMove={(event) => activateNearestTurn(event)}
       onClick={(event) => activateNearestTurn(event, true)}
       onMouseLeave={() => setActiveTurnId(null)}
-      className="absolute left-2 top-1/2 z-20 -translate-y-1/2"
+      className="absolute top-1/2 z-20 -translate-y-1/2"
+      style={{ left: `${railLeft}px` }}
     >
       <div className="relative flex flex-col items-start gap-1.5 py-2">
         {turns.map((turn, index) => {

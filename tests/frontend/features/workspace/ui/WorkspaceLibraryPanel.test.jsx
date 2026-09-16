@@ -108,4 +108,46 @@ describe("WorkspaceLibraryPanel", () => {
     expect(screen.queryByText("未处理视频")).not.toBeInTheDocument();
   });
 
+  it("states the series scope once instead of repeating the series title", () => {
+    // The sidebar header already prints the series title. The scope card below
+    // it used to print the same title again plus a sentence explaining series
+    // scope, so the title appeared twice in one column.
+    renderPanelWithVideo(linkedDownloadedVideo);
+
+    expect(screen.getByText("整个系列")).toBeInTheDocument();
+    expect(screen.getAllByText("S1")).toHaveLength(1);
+    expect(screen.queryByText("聚焦整个系列，使用系列级上下文进行分析")).not.toBeInTheDocument();
+  });
+
+  it("keeps the series scope card selectable", () => {
+    const onSelectSeriesContext = vi.fn();
+    render(
+      <WorkspaceLibraryPanel
+        activeSeries={{ id: "s1", title: "S1", videos: [linkedDownloadedVideo] }}
+        selectedContextType="video"
+        selectedVideo={linkedDownloadedVideo}
+        isGeneratingSelectedVideo={false}
+        isGeneratingSeries={false}
+        seriesGenerationQueue={null}
+        currentAsrModel={{ id: "large-v3-turbo", label: "large-v3-turbo", downloaded: true }}
+        ragModels={[]}
+        onEnterLibraryHome={vi.fn()}
+        onSelectSeriesContext={onSelectSeriesContext}
+        onSelectVideo={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onGenerateSeries={vi.fn()}
+        onCancelGeneration={vi.fn()}
+        onDownloadVideo={vi.fn()}
+        onAddPlaygroundVideo={vi.fn()}
+        onAddSeriesVideo={vi.fn()}
+        onRequestBulkDelete={vi.fn()}
+        downloadProgress={null}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /整个系列/ }));
+    expect(onSelectSeriesContext).toHaveBeenCalledTimes(1);
+  });
+
 });

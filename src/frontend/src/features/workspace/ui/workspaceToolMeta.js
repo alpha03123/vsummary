@@ -32,13 +32,13 @@ export const TOOL_TILES = {
     ...SHARED_TOOL_VISUALS,
   },
   mindmap: {
-    label: "思维导图（Beta）",
+    label: "思维导图",
     description: "结构化知识图谱",
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },
   "knowledge-cards": {
-    label: "知识卡片（Beta）",
+    label: "知识卡片",
     description: "原子知识、标签与来源锚点",
     icon: BrainCircuit,
     ...SHARED_TOOL_VISUALS,

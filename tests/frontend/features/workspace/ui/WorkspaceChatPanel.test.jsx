@@ -27,6 +27,63 @@ describe("WorkspaceChatPanel", () => {
   });
 });
 
+describe("WorkspaceChatPanel composer", () => {
+  const composerProps = {
+    workspaceTitle: "我的工作台",
+    activeSeries: { id: "series-1", title: "课程" },
+    selectedVideo: { id: "video-2", title: "第二讲", processed: true },
+    selectedContextType: "video",
+    selectedToolId: "studio",
+    chatMessages: [],
+    onSubmitChat: vi.fn(),
+  };
+
+  it("starts compact and grows with the draft", () => {
+    const onDraftChange = vi.fn();
+    const { rerender } = render(
+      <WorkspaceChatPanel {...composerProps} draft="" onDraftChange={onDraftChange} />,
+    );
+
+    const composer = screen.getByPlaceholderText("向 AI 助手提问或下达指令...");
+    // Fixed 100px used to be reserved even when empty; it is now content-driven.
+    expect(composer.className).toContain("min-h-[44px]");
+    expect(composer.className).toContain("max-h-40");
+    expect(composer.className).not.toContain("h-[100px]");
+    expect(composer).toHaveValue("");
+
+    rerender(
+      <WorkspaceChatPanel
+        {...composerProps}
+        draft={"第一行\n第二行\n第三行"}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("向 AI 助手提问或下达指令...")).toHaveValue(
+      "第一行\n第二行\n第三行",
+    );
+  });
+
+  it("drops the idle hint row but keeps locked-state explanations", () => {
+    const { rerender } = render(<WorkspaceChatPanel {...composerProps} />);
+
+    expect(
+      screen.queryByText("AI 已接入当前工作区上下文，可返回证据卡片与工具联动动作"),
+    ).not.toBeInTheDocument();
+
+    rerender(<WorkspaceChatPanel {...composerProps} summaryLocked />);
+
+    expect(screen.getByText("生成 AI 概况后，这里会恢复对话")).toBeInTheDocument();
+  });
+
+  it("disables the composer and swaps the placeholder while locked", () => {
+    render(<WorkspaceChatPanel {...composerProps} summaryLocked />);
+
+    const composer = screen.getByPlaceholderText("请先生成 AI 概况...");
+    expect(composer).toBeDisabled();
+  });
+});
+
 describe("WorkspaceChatPanel session switcher", () => {
   const baseProps = {
     workspaceTitle: "我的工作台",
