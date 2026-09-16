@@ -23,11 +23,47 @@ describe("workspaceContentActions media links", () => {
 
     await actions.onProcessLinkedVideo();
 
-    expect(processAgentVideo).toHaveBeenCalledWith("bilibili", "BV1example");
+    expect(processAgentVideo).toHaveBeenCalledWith("bilibili", "BV1example", {
+      processingMode: undefined,
+    });
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "generation_status_loaded",
       snapshot: expect.objectContaining({ status: "queued", stage: "queued" }),
     }));
+  });
+
+  it("starts only one request when the same video generation action is invoked twice", async () => {
+    vi.resetModules();
+    let resolveGeneration;
+    const generateVideoSummary = vi.fn(() => new Promise((resolve) => {
+      resolveGeneration = resolve;
+    }));
+    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({ series: [] }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      generateVideoSummary,
+      loadWorkspaceLibrary,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: "video-a",
+        processingMode: "summary",
+        ui: { transcriptEnhancementEnabled: true },
+      },
+      dispatch: vi.fn(),
+      selectedVideo: { id: "video-a", status: "pending" },
+    });
+
+    const first = actions.onGenerateVideo();
+    const second = actions.onGenerateVideo();
+
+    expect(generateVideoSummary).toHaveBeenCalledTimes(1);
+    resolveGeneration({ title: "已生成", chapters: [] });
+    await Promise.all([first, second]);
   });
 
   it("retries a downloaded pending video through the normal generation route", async () => {
@@ -89,6 +125,53 @@ describe("workspaceContentActions media links", () => {
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "generation_status_loaded",
       snapshot: expect.objectContaining({ error: null }),
+    }));
+  });
+});
+
+describe("workspaceContentActions video cancellation", () => {
+  it("moves the task to cancelled as soon as the cancel request succeeds", async () => {
+    vi.resetModules();
+    const cancelVideoSummary = vi.fn(() => Promise.resolve({ status: "cancelled" }));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelVideoSummary,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: {
+        selectedSeriesId: "series-a",
+        selectedVideoId: "video-a",
+        selectedContextType: "video",
+        generationTasksByKey: {
+          "video:series-a/video-a": {
+            taskKey: "video:series-a/video-a",
+            mode: "video",
+            seriesId: "series-a",
+            videoId: "video-a",
+            snapshot: { status: "running", stage: "summarize", progress: 88 },
+          },
+        },
+      },
+      dispatch,
+      selectedVideo: { id: "video-a", status: "pending" },
+    });
+
+    await actions.onCancelGeneration();
+
+    expect(cancelVideoSummary).toHaveBeenCalledWith("series-a", "video-a");
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "video_generation_cancelling",
+      seriesId: "series-a",
+      videoId: "video-a",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      type: "generation_cancelled",
+      taskKey: "video:series-a/video-a",
+      snapshot: expect.objectContaining({ status: "cancelled", stage: "cancelled" }),
     }));
   });
 });

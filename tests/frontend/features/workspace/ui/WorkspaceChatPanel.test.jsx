@@ -25,5 +25,144 @@ describe("WorkspaceChatPanel", () => {
 
     expect(onSubmitChat).toHaveBeenCalledWith("当前视频处理到哪一步了？");
   });
+});
 
+describe("WorkspaceChatPanel session switcher", () => {
+  const baseProps = {
+    workspaceTitle: "我的工作台",
+    activeSeries: { id: "series-1", title: "课程" },
+    selectedVideo: { id: "video-2", title: "第二讲", processed: true },
+    selectedContextType: "video",
+    selectedToolId: "studio",
+    chatMessages: [],
+    onSubmitChat: vi.fn(),
+  };
+
+  it("groups the session switcher and the new-chat action together", () => {
+    const onStartNewChat = vi.fn();
+    render(
+      <WorkspaceChatPanel
+        {...baseProps}
+        chatSessions={[
+          { id: "session-1", title: "当前对话" },
+          { id: "session-2", title: "新对话 2" },
+        ]}
+        activeSessionId="session-1"
+        onSelectChatSession={vi.fn()}
+        onStartNewChat={onStartNewChat}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "新建话题" }));
+
+    expect(onStartNewChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("switches sessions from the dropdown", () => {
+    const onSelectChatSession = vi.fn();
+    render(
+      <WorkspaceChatPanel
+        {...baseProps}
+        chatSessions={[
+          { id: "session-1", title: "当前对话" },
+          { id: "session-2", title: "新对话 2" },
+        ]}
+        activeSessionId="session-1"
+        onSelectChatSession={onSelectChatSession}
+        onStartNewChat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "切换对话" }));
+    fireEvent.click(screen.getByRole("option", { name: "新对话 2" }));
+
+    expect(onSelectChatSession).toHaveBeenCalledWith("session-2");
+  });
+
+  it("opens the session list without the segmented shell clipping it", () => {
+    render(
+      <WorkspaceChatPanel
+        {...baseProps}
+        chatSessions={[
+          { id: "session-1", title: "帮我生成一份笔记" },
+          { id: "session-2", title: "新对话 2" },
+        ]}
+        activeSessionId="session-1"
+        onSelectChatSession={vi.fn()}
+        onStartNewChat={vi.fn()}
+      />,
+    );
+
+    // The shortcut menu must be reachable: an `overflow-hidden` wrapper around
+    // the switcher would clip this absolutely positioned list.
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "切换对话" }));
+
+    const listbox = screen.getByRole("listbox");
+    expect(listbox).toBeInTheDocument();
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(screen.getByRole("option", { name: "帮我生成一份笔记" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(listbox.closest(".overflow-hidden")).toBeNull();
+  });
+
+  it("closes the session list when clicking outside", () => {
+    render(
+      <WorkspaceChatPanel
+        {...baseProps}
+        chatSessions={[
+          { id: "session-1", title: "当前对话" },
+          { id: "session-2", title: "新对话 2" },
+        ]}
+        activeSessionId="session-1"
+        onSelectChatSession={vi.fn()}
+        onStartNewChat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "切换对话" }));
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+
+    // The shared hook only closes when a gesture both starts AND ends outside.
+    fireEvent.pointerDown(document.body);
+    fireEvent.pointerUp(document.body);
+
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("shows the active session title on the trigger", () => {
+    render(
+      <WorkspaceChatPanel
+        {...baseProps}
+        chatSessions={[
+          { id: "session-1", title: "帮我生成一份笔记" },
+          { id: "session-2", title: "新对话 2" },
+        ]}
+        activeSessionId="session-1"
+        onSelectChatSession={vi.fn()}
+        onStartNewChat={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "切换对话" })).toHaveTextContent("帮我生成一份笔记");
+  });
+
+  it("offers a labelled new-chat button when there is no session list yet", () => {
+    const onStartNewChat = vi.fn();
+    render(
+      <WorkspaceChatPanel
+        {...baseProps}
+        chatSessions={[]}
+        activeSessionId={null}
+        onStartNewChat={onStartNewChat}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "新对话" }));
+
+    expect(onStartNewChat).toHaveBeenCalledTimes(1);
+  });
 });

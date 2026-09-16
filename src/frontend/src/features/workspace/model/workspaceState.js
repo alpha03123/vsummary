@@ -31,6 +31,7 @@ export const defaultUiSettings = {
   videoGenerationConcurrency: 1,
   chapterVisualMode: "screenshots",
   maxVisualFrames: 6,
+  autoGenerateArtifacts: ["notes"],
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
 };
@@ -565,6 +566,7 @@ export function createInitialWorkspaceState() {
     knowledgeCardsFeedback: null,
     notesLoading: false,
     savingNote: false,
+    generatingAiNote: false,
     fasterWhisperModels: [],
     fasterWhisperModelsLoading: false,
     ragModels: [],
@@ -731,6 +733,9 @@ export function resetUiSettings() {
 
 export function normalizeUiSettings(value) {
   const record = value && typeof value === "object" ? value : {};
+  const autoGenerateArtifacts = Array.isArray(record.autoGenerateArtifacts)
+    ? [...new Set(record.autoGenerateArtifacts.filter((item) => ["mindmap", "knowledge_cards", "notes"].includes(item)))]
+    : ["notes"];
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
     theme: record.theme === "dark" ? "dark" : "light",
@@ -817,6 +822,7 @@ export function normalizeUiSettings(value) {
       typeof record.maxVisualFrames === "number" && Number.isInteger(record.maxVisualFrames) && record.maxVisualFrames > 0
         ? record.maxVisualFrames
         : 6,
+    autoGenerateArtifacts,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),
   };

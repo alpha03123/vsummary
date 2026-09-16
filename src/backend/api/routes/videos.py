@@ -24,6 +24,7 @@ from backend.api.local_media_picker import select_local_media_paths
 from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
+    GenerateVideoAiNoteRequest,
     GenerateMindmapRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
@@ -629,6 +630,25 @@ def create_video_note(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
+    if note is None:
+        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+    return VideoNoteResponse.from_model(note)
+
+
+@router.post("/api/videos/{series_id}/{video_id}/notes/generate", response_model=VideoNoteResponse)
+def generate_video_ai_note(
+    series_id: str,
+    video_id: str,
+    request: GenerateVideoAiNoteRequest,
+    container: ApiContainerDep,
+) -> VideoNoteResponse:
+    """根据已有转写直接生成并保存一篇 AI 笔记。"""
+    try:
+        note = container.generate_video_ai_note.run(series_id, video_id, template=request.template)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     if note is None:
         raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
     return VideoNoteResponse.from_model(note)

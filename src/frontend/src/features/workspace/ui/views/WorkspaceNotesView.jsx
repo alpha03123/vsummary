@@ -3,12 +3,66 @@ import { LoaderCircle, PencilLine, Trash2, Plus, ChevronLeft, Calendar, Sparkles
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
+import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
+
+const AI_NOTE_TEMPLATE_OPTIONS = [
+  { id: "general", label: "通用" },
+  { id: "short", label: "短笔记" },
+  { id: "long", label: "长笔记" },
+  { id: "minimal", label: "精简" },
+  { id: "detailed", label: "详细" },
+  { id: "tutorial", label: "教程" },
+  { id: "academic", label: "学术" },
+  { id: "xiaohongshu", label: "小红书" },
+  { id: "life_journal", label: "生活向" },
+  { id: "task_oriented", label: "任务导向" },
+  { id: "business", label: "商业风格" },
+  { id: "meeting_minutes", label: "会议纪要" },
+];
+
+function NoteListItem({ note, onOpen }) {
+  const pending = note.pending === true;
+  return (
+    <article
+      onClick={pending ? undefined : () => onOpen(note)}
+      className={`group rounded-2xl border border-stone-200/60 bg-white p-5 transition-all dark:border-stone-800/60 dark:bg-stone-950 ${
+        pending
+          ? "cursor-default"
+          : "cursor-pointer hover:border-accent/40 hover:shadow-md hover:shadow-accent/5 dark:hover:border-accent/40"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+          {note.source === "agent" ? "AGENT" : "✍️ Manual"}
+        </span>
+      </div>
+      <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+        {note.content}
+      </p>
+      <div className="mt-4 flex items-center text-xs font-medium text-stone-500 dark:text-stone-500">
+        {pending ? (
+          <>
+            <LoaderCircle size={12} className="mr-1.5 animate-spin" />
+            正在生成
+          </>
+        ) : (
+          <>
+            <Calendar size={12} className="mr-1.5" />
+            {note.createdAt.replace("T", " ").substring(0, 16)}
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
 
 export function WorkspaceNotesView({
   notes,
   notesLoading,
   savingNote,
-  onRequestAiNote,
+  generatingAiNote,
+  onGenerateAiNote,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -24,6 +78,7 @@ export function WorkspaceNotesView({
   const [isEditing, setIsEditing] = useState(false);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingContent, setEditingContent] = useState("");
+  const [aiTemplate, setAiTemplate] = useState("general");
 
   const selectedNote = notes?.notes?.find((n) => n.id === selectedNoteId);
 
@@ -205,7 +260,7 @@ export function WorkspaceNotesView({
             <>
               <div className="flex items-center gap-3">
                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
-                  {selectedNote.source === "agent" ? "🤖 Agent Note" : "✍️ Manual Note"}
+                  {selectedNote.source === "agent" ? "Agent Note" : "✍️ Manual Note"}
                 </span>
                 <span className="text-xs font-medium text-stone-500 dark:text-stone-500">
                   {selectedNote.createdAt.replace("T", " ").replace("Z", "").substring(0, 16)}
@@ -233,12 +288,23 @@ export function WorkspaceNotesView({
           <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
         </div>
         <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
+          <WorkspaceProviderSelect
+            value={aiTemplate}
+            onChange={setAiTemplate}
+            options={AI_NOTE_TEMPLATE_OPTIONS}
+            disabled={generatingAiNote}
+            ariaLabel="AI 笔记模板"
+            hideGroupLabels
+            className="w-36"
+          />
           <button
             type="button"
-            onClick={onRequestAiNote}
-            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 dark:border-accent/30 dark:bg-accent/15 dark:text-accent dark:hover:bg-accent dark:hover:text-white"
+            onClick={() => onGenerateAiNote(aiTemplate)}
+            disabled={generatingAiNote}
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-accent/30 dark:bg-accent/15 dark:text-accent dark:hover:bg-accent dark:hover:text-white"
           >
-            <Sparkles size={16} /> AI 笔记
+            {generatingAiNote ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {generatingAiNote ? "正在生成" : "AI 笔记"}
           </button>
           <button
             type="button"
@@ -251,34 +317,30 @@ export function WorkspaceNotesView({
       </div>
 
       <div className="flex flex-col gap-3">
-        {(notes?.notes ?? []).length ? (
-          notes.notes.map((note) => (
-            <article 
-              key={note.id} 
-              onClick={() => openDetail(note)}
-              className="group cursor-pointer rounded-2xl border border-stone-200/60 bg-white p-5 transition-all hover:border-accent/40 hover:shadow-md hover:shadow-accent/5 dark:border-stone-800/60 dark:bg-stone-950 dark:hover:border-accent/40"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
-                  {note.source === "agent" ? "🤖 Agent" : "✍️ Manual"}
-                </span>
-              </div>
-              <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-                {note.content}
-              </p>
-              <div className="mt-4 flex items-center text-xs font-medium text-stone-500 dark:text-stone-500">
-                <Calendar size={12} className="mr-1.5" />
-                {note.createdAt.replace("T", " ").substring(0, 16)}
-              </div>
-            </article>
-          ))
+        {generatingAiNote || (notes?.notes ?? []).length ? (
+          <>
+            {generatingAiNote ? (
+              <NoteListItem
+                note={{
+                  id: "pending-ai-note",
+                  title: "正在生成笔记",
+                  content: "正在根据视频转写整理内容，完成后会自动加入列表。",
+                  source: "agent",
+                  pending: true,
+                }}
+                onOpen={openDetail}
+              />
+            ) : null}
+            {(notes?.notes ?? []).map((note) => (
+              <NoteListItem key={note.id} note={note} onOpen={openDetail} />
+            ))}
+          </>
         ) : (
           <div className="mt-4">
             <WorkspaceStateBlock
               eyebrow="Notes"
               title="暂无笔记"
-              description="点击右上角手动记录，或在左侧对话框中让 Agent 为你总结重点。"
+              description="点击右上角生成 AI 笔记，或手动记录重要内容。"
               dashed
             />
           </div>

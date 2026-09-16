@@ -12,6 +12,7 @@ import {
   renameVideoSource,
   generateSeriesMindmap,
   generateVideoKnowledgeCards,
+  generateVideoAiNote,
   generateVideoMindmap,
   generateSeriesSummaries,
   generateVideoSummary,
@@ -24,6 +25,9 @@ import {
   importLocalSeriesVideos,
   loadWorkspaceLibrary,
   loadVideoSummary,
+  loadVideoNotes,
+  loadVideoKnowledgeCards,
+  loadVideoMindmap,
   loadVideoSummaryMarkdown,
   loadVideoTranscriptMarkdown,
   initChaoxing,
@@ -48,6 +52,7 @@ import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection } from "./workspaceState";
 
 const activeSeriesCancellationRef = { current: null };
+const activeVideoGenerationKeys = new Set();
 let nextSeriesRunSequence = 0;
 
 function createSeriesRunId(seriesId) {
@@ -205,6 +210,11 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const videoId = state.selectedVideoId;
     const processingMode = state.processingMode;
     const videoKey = buildVideoKey(seriesId, videoId);
+    const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
+    if (activeVideoGenerationKeys.has(taskKey)) {
+      return;
+    }
+    activeVideoGenerationKeys.add(taskKey);
     dispatch({ type: "generation_started", videoKey, seriesId, videoId });
 
     try {
@@ -213,9 +223,24 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         processingMode,
       });
       const library = await reloadWorkspaceLibrary();
+      if (processingMode === "summary") {
+        const autoArtifacts = state.ui.autoGenerateArtifacts ?? [];
+        if (autoArtifacts.includes("notes")) {
+          const notes = await loadVideoNotes(seriesId, videoId);
+          dispatch({ type: "notes_loaded", notes });
+        }
+        if (autoArtifacts.includes("knowledge_cards")) {
+          const cards = await loadVideoKnowledgeCards(seriesId, videoId);
+          dispatch({ type: "knowledge_cards_loaded", cards });
+        }
+        if (autoArtifacts.includes("mindmap")) {
+          const mindmap = await loadVideoMindmap(seriesId, videoId);
+          dispatch({ type: "mindmap_generation_succeeded", mindmap });
+        }
+      }
       dispatch({
         type: "generation_succeeded",
-        taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        taskKey,
         seriesId,
         videoId,
         summary: processingMode === "summary" ? summaryResult : null,
@@ -227,7 +252,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         await reloadWorkspaceLibrary();
         dispatch({
           type: "generation_status_loaded",
-          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          taskKey,
           mode: "video",
           seriesId,
           videoId,
@@ -239,7 +264,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       if (isGenerationCancelledError(error)) {
         dispatch({
           type: "generation_cancelled",
-          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          taskKey,
           mode: "video",
           seriesId,
           videoId,
@@ -257,7 +282,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       dispatch({ type: "load_failed", message });
       dispatch({
         type: "generation_status_loaded",
-        taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        taskKey,
         mode: "video",
         seriesId,
         videoId,
@@ -270,6 +295,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         },
         subscriptionActive: false,
       });
+    } finally {
+      activeVideoGenerationKeys.delete(taskKey);
     }
   }
 
@@ -540,8 +567,26 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       }
       const currentTask = getGenerationTaskForSelection(state);
       if (currentTask?.mode === "video" && state.selectedSeriesId && state.selectedVideoId) {
-        dispatch({ type: "video_generation_cancelling", seriesId: state.selectedSeriesId, videoId: state.selectedVideoId });
-        await cancelVideoSummary(state.selectedSeriesId, state.selectedVideoId);
+        const seriesId = state.selectedSeriesId;
+        const videoId = state.selectedVideoId;
+        const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
+        dispatch({ type: "video_generation_cancelling", seriesId, videoId });
+        await cancelVideoSummary(seriesId, videoId);
+        dispatch({
+          type: "generation_cancelled",
+          taskKey,
+          mode: "video",
+          seriesId,
+          videoId,
+          snapshot: {
+            ...(currentTask.snapshot ?? {}),
+            status: "cancelled",
+            stage: "cancelled",
+            progress: null,
+            detail: "任务已取消",
+            error: null,
+          },
+        });
       }
     } catch (error) {
       dispatch({
@@ -661,6 +706,29 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       dispatch({
         type: "load_failed",
         message: error instanceof Error ? error.message : "笔记保存失败",
+      });
+    }
+  }
+
+  async function onGenerateAiNote(template = "general") {
+    if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
+      return;
+    }
+
+    dispatch({ type: "ai_note_generation_started" });
+    try {
+      const note = await generateVideoAiNote(state.selectedSeriesId, state.selectedVideoId, template);
+      dispatch({
+        type: "note_created",
+        seriesId: state.selectedSeriesId,
+        videoId: state.selectedVideoId,
+        videoTitle: selectedVideo.title,
+        note,
+      });
+    } catch (error) {
+      dispatch({
+        type: "ai_note_generation_failed",
+        message: error instanceof Error ? error.message : "AI 笔记生成失败",
       });
     }
   }
@@ -1153,6 +1221,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onGenerateSeries,
     onCancelGeneration,
     onCreateNote,
+    onGenerateAiNote,
     onUpdateNote,
     onDeleteNote,
     onLoadTranscriptMarkdown,

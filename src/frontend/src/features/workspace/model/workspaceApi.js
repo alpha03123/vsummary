@@ -76,6 +76,7 @@ function toWorkspaceSettings(payload) {
     videoGenerationConcurrency: payload.video_generation_concurrency,
     chapterVisualMode: payload.chapter_visual_mode,
     maxVisualFrames: payload.max_visual_frames,
+    autoGenerateArtifacts: Array.isArray(payload.auto_generate_artifacts) ? payload.auto_generate_artifacts : ["notes"],
     chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
     chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
     runtimeCapabilities: payload.runtime_capabilities,
@@ -139,6 +140,7 @@ export async function updateWorkspaceSettings(settings) {
       video_generation_concurrency: settings.videoGenerationConcurrency,
       chapter_visual_mode: settings.chapterVisualMode,
       max_visual_frames: settings.maxVisualFrames,
+      auto_generate_artifacts: settings.autoGenerateArtifacts,
       chaoxing_request_delay_seconds: settings.chaoxingRequestDelaySeconds,
       chaoxing_init_course_delay_seconds: settings.chaoxingInitCourseDelaySeconds,
     }),
@@ -402,6 +404,18 @@ export async function createVideoNote(seriesId, videoId, note) {
         content: note.content,
         source: note.source,
       }),
+    }),
+  );
+}
+
+export async function generateVideoAiNote(seriesId, videoId, template) {
+  return toWorkspaceNote(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ template }),
     }),
   );
 }

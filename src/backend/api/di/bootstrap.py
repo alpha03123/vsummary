@@ -36,6 +36,7 @@ from backend.video_summary.infrastructure.storage.library_generation_adapters im
 )
 from backend.video_summary.infrastructure.series_mindmap_workflow import ConfiguredSeriesMindmapWorkflow
 from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
+from backend.video_summary.infrastructure.llm.litellm_note_generator import ConfiguredNoteGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
 from backend.video_summary.infrastructure.config.settings_service import SettingsService, SettingsServicePort
@@ -51,6 +52,8 @@ from backend.video_summary.library.usecases import (
     RenameVideo,
     ExportSeriesArchive,
     GenerateVideoKnowledgeCards,
+    GenerateVideoAiNote,
+    AutoGenerateVideoArtifacts,
     RefreshSeriesKnowledgeMemory,
     GenerateSeriesMindmapFromLibrary,
     GenerateSeriesSummaryFromLibrary,
@@ -96,6 +99,7 @@ class ApiContainer:
     get_video_chapter_cards: GetVideoChapterCards
     get_video_cards: GetVideoKnowledgeCards
     generate_video_cards: GenerateVideoKnowledgeCards
+    generate_video_ai_note: GenerateVideoAiNote
     get_video_notes: GetVideoNotes
     create_video_note: CreateVideoNote
     update_video_note: UpdateVideoNote
@@ -195,6 +199,7 @@ def build_api_container(
         root_dir,
         usage_recorder=usage_store,
     )
+    resolved_note_generator = ConfiguredNoteGenerator(root_dir, usage_recorder=usage_store)
     resolved_series_mindmap_generator = WorkspaceBackedSeriesMindmapGenerator(
         workspace=workspace,
         workflow=ConfiguredSeriesMindmapWorkflow(root_dir, usage_recorder=usage_store),
@@ -218,12 +223,25 @@ def build_api_container(
         workspace=workspace,
         index_refresher=index_refresher,
     )
+    auto_artifacts = AutoGenerateVideoArtifacts(
+        load_enabled_artifacts=lambda: load_settings(config_path, root_dir).generation.auto_generate_artifacts,
+        generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
+            workspace, resolved_mindmap_generator
+        ).run(series_id, video_id),
+        generate_knowledge_cards=lambda series_id, video_id: GenerateVideoKnowledgeCards(
+            workspace, resolved_knowledge_card_generator, index_refresher
+        ).run(series_id, video_id),
+        generate_note=lambda series_id, video_id: GenerateVideoAiNote(
+            workspace, resolved_note_generator, index_refresher
+        ).run(series_id, video_id, template="general"),
+    )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,
         resolved_generator,
         progress_tracker,
         video_generation_concurrency=settings.generation.video_generation_concurrency,
         series_memory_refresher=series_memory_refresher,
+        auto_generate_artifacts=auto_artifacts.run,
     )
     series_generation_use_case = GenerateSeriesSummaryFromLibrary(
         workspace,
@@ -307,6 +325,7 @@ def build_api_container(
         get_video_chapter_cards=GetVideoChapterCards(workspace),
         get_video_cards=GetVideoKnowledgeCards(workspace),
         generate_video_cards=GenerateVideoKnowledgeCards(workspace, resolved_knowledge_card_generator, index_refresher),
+        generate_video_ai_note=GenerateVideoAiNote(workspace, resolved_note_generator, index_refresher),
         get_video_notes=GetVideoNotes(workspace),
         create_video_note=CreateVideoNote(workspace, index_refresher),
         update_video_note=UpdateVideoNote(workspace, index_refresher),

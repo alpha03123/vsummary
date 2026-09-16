@@ -5,9 +5,7 @@ export function WorkspaceVideoScopePane({
   playbackTime = null,
   followOverviewPlayback = false,
   onFollowOverviewPlaybackChange = () => {},
-  onRequestAiNote = () => {},
   onProcessLinkedVideo = null,
-  onOpenChat = null,
   onExternalSeek = null,
 }) {
   const { shell, generation, actions, chat } = page;
@@ -52,13 +50,10 @@ export function WorkspaceVideoScopePane({
       knowledgeCardsLoading={generation.knowledgeCardsLoading}
       notesLoading={generation.notesLoading}
       savingNote={generation.savingNote}
+      generatingAiNote={generation.generatingAiNote}
       isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
       isGeneratingSelectedVideo={generation.isGeneratingSummary}
       onSelectTool={(toolId) => {
-        if (toolId === "chat-management" && onOpenChat) {
-          onOpenChat();
-          return;
-        }
         if (
           toolId === "overview" &&
           onProcessLinkedVideo &&
@@ -84,7 +79,7 @@ export function WorkspaceVideoScopePane({
       onGenerateSeriesMindmap={actions.generateSeriesMindmap}
       onGenerateKnowledgeCards={actions.generateKnowledgeCards}
       onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
-      onRequestAiNote={onRequestAiNote}
+      onGenerateAiNote={actions.generateAiNote}
       onCreateNote={actions.createNote}
       onUpdateNote={actions.updateNote}
       onDeleteNote={actions.deleteNote}

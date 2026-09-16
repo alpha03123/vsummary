@@ -39,6 +39,7 @@ VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
 VALID_NOTE_LENGTHS = {"short", "long"}
 VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 VALID_CHAPTER_VISUAL_MODES = {"off", "screenshots", "multimodal"}
+VALID_AUTO_GENERATE_ARTIFACTS = {"mindmap", "knowledge_cards", "notes"}
 VALID_LLM_PROVIDERS = {
     "ai21",
     "ai21_chat",
@@ -139,6 +140,7 @@ DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
 DEFAULT_CHAPTER_VISUAL_MODE = "screenshots"
 DEFAULT_MAX_VISUAL_FRAMES = 6
+DEFAULT_AUTO_GENERATE_ARTIFACTS = ("notes",)
 MAX_VISUAL_FRAMES_LIMIT = 20
 DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
 DEFAULT_WEB_SEARCH_MODE = "native"
@@ -321,6 +323,7 @@ class GenerationConcurrencySettings:
     summary_chunk_concurrency: int
     chapter_visual_mode: str
     max_visual_frames: int
+    auto_generate_artifacts: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -587,6 +590,9 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             generation_payload.get("max_visual_frames"),
             default=DEFAULT_MAX_VISUAL_FRAMES,
             field_name="generation.max_visual_frames",
+        ),
+        auto_generate_artifacts=_normalize_auto_generate_artifacts(
+            generation_payload.get("auto_generate_artifacts"),
         ),
     )
     if generation_settings.max_visual_frames > MAX_VISUAL_FRAMES_LIMIT:
@@ -895,6 +901,14 @@ def replace_chapter_visual_settings(
     )
 
 
+def replace_auto_generate_artifacts(settings: AppSettings, artifacts: object) -> AppSettings:
+    """派生替换 AI 概况完成后自动生成的制品集合。"""
+    return replace(
+        settings,
+        generation=replace(settings.generation, auto_generate_artifacts=_normalize_auto_generate_artifacts(artifacts)),
+    )
+
+
 def replace_agent_context_note_length(settings: AppSettings, note_length: str) -> AppSettings:
     normalized_note_length = _normalize_choice(
         note_length,
@@ -1105,6 +1119,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
         f'chapter_visual_mode = "{settings.generation.chapter_visual_mode}"',
         f"max_visual_frames = {settings.generation.max_visual_frames}",
+        f"auto_generate_artifacts = {_toml_string_list(settings.generation.auto_generate_artifacts)}",
         "",
         "[web_search]",
         f"enabled = {_toml_bool(settings.web_search.enabled)}",
@@ -1130,6 +1145,22 @@ def _toml_bool(value: bool) -> str:
 def _toml_string(value: str) -> str:
     """把字符串渲染为合法的 TOML 字符串字面量（带引号、转义）。"""
     return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_string_list(values: tuple[str, ...]) -> str:
+    return "[" + ", ".join(_toml_string(value) for value in values) + "]"
+
+
+def _normalize_auto_generate_artifacts(value: object) -> tuple[str, ...]:
+    if value is None:
+        return DEFAULT_AUTO_GENERATE_ARTIFACTS
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError("generation.auto_generate_artifacts 必须是字符串数组。")
+    normalized = tuple(dict.fromkeys(item.strip() for item in value if item.strip()))
+    unsupported = set(normalized) - VALID_AUTO_GENERATE_ARTIFACTS
+    if unsupported:
+        raise ValueError(f"generation.auto_generate_artifacts 含不支持的项：{', '.join(sorted(unsupported))}。")
+    return normalized
 
 
 def _normalize_string(value: object, *, default: str) -> str:

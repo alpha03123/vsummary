@@ -1,38 +1,48 @@
-"""视频 Agent 笔记生成提示词。
-
-本模块集中维护由 ``save_note`` 工具使用的篇幅与写作要求，避免动作规划器
-承担提示词内容维护职责。
-"""
+"""AI 视频笔记提示词与风格预设。"""
 
 from __future__ import annotations
 
 
+NOTE_TEMPLATES: dict[str, dict[str, str]] = {
+    "general": {"label": "通用", "instruction": "结构清晰，兼顾重点、细节和可复习性。"},
+    "short": {"label": "短笔记", "instruction": "只记录最重要的结论、事实和步骤，保持紧凑。"},
+    "long": {"label": "长笔记", "instruction": "完整记录各主题的重要论述、例子和步骤，不遗漏关键内容。"},
+    "minimal": {"label": "精简", "instruction": "只记录最重要的结论、事实和步骤，保持简洁。"},
+    "detailed": {"label": "详细", "instruction": "完整记录各主题的重要论述、例子和步骤，不遗漏关键内容。"},
+    "tutorial": {"label": "教程", "instruction": "按操作顺序整理，突出前提、步骤、关键点、结果和常见边界。"},
+    "academic": {"label": "学术", "instruction": "使用正式、客观的表达，清晰区分概念、论据、方法和结论。"},
+    "task_oriented": {"label": "任务导向", "instruction": "突出目标、待办、决策、负责人或下一步；没有证据时不要虚构。"},
+    "business": {"label": "商业风格", "instruction": "突出问题、判断依据、方案、风险、指标和行动建议。"},
+    "meeting_minutes": {"label": "会议纪要", "instruction": "按议题整理讨论、结论、待办和待确认事项；没有证据时不要补写负责人或截止时间。"},
+    "life_journal": {"label": "生活向", "instruction": "以自然、亲切的方式记录经历、感受和可借鉴的实践，但不添加视频之外的感受。"},
+    "xiaohongshu": {"label": "小红书", "instruction": "使用易读、有吸引力的标题和短段落，可适量使用 emoji；优先保证事实准确，避免夸大。"},
+}
+
+# 供既有 Agent 导入路径使用；直接生成 AI 笔记改用 NOTE_TEMPLATES。
 NOTE_LENGTH_INSTRUCTIONS = {
-    "long": (
-        "笔记长度设为长：你在写一份可独立学习、复习和回查的视频学习笔记，不是在写一段扩写版摘要。"
-        "完整阅读提供的概况与转写后，先在内部按视频推进顺序建立内容地图：识别每个实质主题、概念、论证、"
-        "区分、机制、例子、问题、回应、建议与结论；最终笔记必须覆盖这些内容单元，不能只挑开头的核心框架。"
-        "忽略片头片尾、订阅引导、重复寒暄与不承载主题信息的闲谈；其余有学习价值的内容都应在某个章节得到实质展开。"
-        "笔记应先给出视频讨论的核心问题、主线与内容地图，再依视频自身的论证结构组织多个主题章节，而不是套固定模板。"
-        "每个主题章节要说明：它在讨论什么，视频给出的具体观点、机制或区分是什么，为什么成立或在什么条件下成立，"
-        "它与前后主题如何相连，以及它对理解、判断或行动有什么意义。不要把一个要点只改写成一句结论。"
-        "对反复出现的核心概念，首次出现时写清中文名、原文术语（若有）、定义、构成要素和在本视频中的作用；"
-        "在文末汇总真正重要的术语表。对真实存在的对照、分类、流程、判断条件或角色关系，用表格、分步清单或对照小节帮助复习。"
-        "保留视频中的重要例子、比喻、问题及其回答，并解释它们用于说明哪个观点；若视频按章节或问题逐步推进，应让笔记保留这条推进线。"
-        "把视频明确陈述、说话者观点与基于视频的合理推断区分开。研究、统计、来源、引语、书名、案例和时间点只在视频证据明确提供时写入，并注明其来自节目或说话者。"
-        "视频没有公式或明确可形式化的变量关系时，不要为了笔记完整性添加公式；视频直接给出公式时可忠实保留，"
-        "视频明确说明变量、方向或关系时可整理为公式，但必须标注为“根据视频关系整理”，且不得补造系数、权重、阈值、变量或研究结论。"
-        "没有证据就不要补写学术理论、人物案例、书目、时间锚点或资源推荐。"
-        "行动建议必须来自视频的明确建议，或被明确标为基于本视频的可迁移实践；写清适用情境、操作步骤与边界，避免空泛鼓励。"
-        "相同信息只放在一个最合适的主章节，后续用简短关联代替重复；篇幅由完整覆盖与必要解释自然决定，不设置字数上限，不为拉长篇幅重复、泛化或杜撰内容。"
-        "最终使用层次清晰的 Markdown。用二级、三级标题表达知识结构，结尾给出可用于复习或讨论的关键问题；"
-        "保存前检查每个实质内容单元是否已有归属，确保读者不看原视频也能理解全貌、关键细节与各观点之间的关系。"
-    ),
-    "short": "笔记长度设为短：以紧凑结构提炼最重要的信息，避免展开重复背景或边缘细节。",
+    "long": NOTE_TEMPLATES["long"]["instruction"],
+    "short": NOTE_TEMPLATES["short"]["instruction"],
 }
 
 
-def build_note_length_instruction(note_length: str) -> str:
-    """返回指定篇幅的笔记写作要求。"""
+def build_ai_note_prompt(*, title: str, transcript_text: str, template: str = "general", summary_text: str = "") -> str:
+    """构建直接生成 AI 笔记时使用的简洁提示词。"""
+    resolved_template = NOTE_TEMPLATES.get(template, NOTE_TEMPLATES["general"])
+    summary_section = f"\n已有概况（仅作辅助，仍以转写为准）：\n{summary_text.strip()}\n" if summary_text.strip() else ""
+    return (
+        "你是专业的视频笔记助手。根据视频转写整理一份中文 Markdown 笔记。\n"
+        f"视频标题：{title}\n"
+        f"笔记风格：{resolved_template['label']}。{resolved_template['instruction']}\n\n"
+        "要求：\n"
+        "- 只输出最终 Markdown，不要代码块或说明。\n"
+        "- 删除寒暄、广告、重复和无关内容；保留重要事实、例子、结论和明确建议。\n"
+        "- 用二级、三级标题和必要的列表或表格组织内容；时间点仅在转写明确提供且确有助益时保留。\n"
+        "- 不补造视频没有提到的事实、数据、案例、建议或待办。\n"
+        f"{summary_section}\n视频转写：\n---\n{transcript_text.strip()}\n---"
+    )
 
-    return NOTE_LENGTH_INSTRUCTIONS.get(note_length, NOTE_LENGTH_INSTRUCTIONS["short"])
+
+def build_note_length_instruction(note_length: str) -> str:
+    """兼容 Agent 保存笔记时的简短写作要求。"""
+    template = "long" if note_length == "long" else "short"
+    return NOTE_TEMPLATES[template]["instruction"]

@@ -11,6 +11,10 @@ export function WorkspaceProviderSelect({
   hideGroupLabels = false,
   ariaLabel,
   optionLayout = "vertical",
+  menuClassName = "",
+  align = "start",
+  triggerVariant = "default",
+  leading = null,
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -33,15 +37,17 @@ export function WorkspaceProviderSelect({
       <button
         key={option.id}
         type="button"
+        role="option"
+        aria-selected={active}
         disabled={option.disabled}
         title={option.disabled ? option.disabledReason || option.label : undefined}
         onClick={() => { onChange(option.id); setOpen(false); }}
         className={horizontal
-          ? `flex min-w-0 flex-col items-center justify-center rounded-lg px-3 py-2.5 text-center transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-stone-800/60 ${active ? "bg-accent/5 text-accent dark:bg-accent/10" : "text-stone-900 dark:text-stone-100"}`
-          : `flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-stone-800/60 ${active ? "bg-accent/5 dark:bg-accent/10" : ""}`}
+          ? `flex min-w-0 flex-col items-center justify-center rounded-xl px-3 py-2.5 text-center transition-colors hover:bg-stone-100/80 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-stone-800/70 ${active ? "bg-accent/10 text-accent dark:bg-accent/15" : "text-stone-900 dark:text-stone-100"}`
+          : `group flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-stone-100/80 disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-stone-800/70 ${active ? "bg-accent/10 dark:bg-accent/15" : ""}`}
       >
-        <span className={horizontal ? "contents" : "min-w-0 flex-1"}>
-          <span className={`block text-sm font-semibold ${active ? "text-accent" : "text-stone-900 dark:text-stone-100"}`}>
+        <span className="min-w-0 flex-1">
+          <span className={`block truncate text-sm ${active ? "font-semibold text-accent" : "font-medium text-stone-700 dark:text-stone-200"}`}>
             {option.label}
           </span>
           {option.description && (
@@ -50,7 +56,12 @@ export function WorkspaceProviderSelect({
             </span>
           )}
         </span>
-        {active && !horizontal ? <Check size={14} className="mt-0.5 shrink-0 text-accent" /> : null}
+        <Check
+          size={15}
+          strokeWidth={2.5}
+          aria-hidden="true"
+          className={`shrink-0 text-accent transition-opacity ${active ? "opacity-100" : "opacity-0"}`}
+        />
       </button>
     );
   }
@@ -60,25 +71,46 @@ export function WorkspaceProviderSelect({
       <button
         type="button"
         aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-left text-sm text-stone-900 outline-none transition-colors hover:border-accent/50 focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+        className={
+          triggerVariant === "bare"
+            ? `flex h-full w-full items-center justify-between gap-2 bg-transparent px-3 py-2 text-left text-sm text-stone-900 outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-100 ${open ? "text-accent" : "hover:bg-stone-100/80 dark:hover:bg-stone-800/70"}`
+            : `flex w-full items-center justify-between gap-2 rounded-xl border bg-white px-3.5 py-2 text-left text-sm text-stone-900 outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-900 dark:text-stone-100 ${
+                open
+                  ? "border-accent/40 ring-2 ring-accent/20 dark:border-accent/40"
+                  : "border-stone-200 hover:border-stone-300 dark:border-stone-700 dark:hover:border-stone-600"
+              }`
+        }
       >
-        <span className="truncate font-medium">{selected?.label ?? value}</span>
-        <ChevronDown size={15} className={`shrink-0 text-stone-500 transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          {leading ? <span className="shrink-0 text-stone-400 dark:text-stone-500">{leading}</span> : null}
+          <span className="truncate font-medium">{selected?.label ?? value}</span>
+        </span>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-stone-400 transition-transform duration-200 ${open ? "rotate-180 text-accent" : ""}`}
+        />
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-80 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900">
+        <div
+          role="listbox"
+          className={`absolute top-full z-50 mt-2 min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-stone-200/90 bg-white p-1.5 shadow-[0_8px_28px_-6px_rgba(15,23,42,0.18),0_2px_6px_-2px_rgba(15,23,42,0.08)] motion-fade-scale dark:border-stone-700 dark:bg-neutral-900 dark:shadow-[0_8px_28px_-6px_rgba(0,0,0,0.6)] ${
+            align === "end" ? "right-0" : "left-0"
+          } max-h-80 ${menuClassName}`}
+        >
           {optionLayout === "horizontal" ? (
-            <div className="grid grid-cols-3 gap-1 p-1.5">
+            <div className="grid grid-cols-3 gap-1">
               {options.map((option) => renderOption(option, true))}
             </div>
           ) : groups.map((group, gi) => (
             <div key={group}>
-              {gi > 0 && <div className="mx-3 border-t border-stone-100 dark:border-stone-800" />}
+              {gi > 0 && <div className="mx-1.5 my-1 border-t border-stone-100 dark:border-stone-800" />}
               {!hideGroupLabels ? (
-                <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500">
+                <div className="px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
                   {group}
                 </div>
               ) : null}
@@ -173,6 +205,59 @@ export function WorkspaceSegmentedControl({ value, options, onChange, className 
             onClick={() => onChange(option.id)}
           >
             <span className="block truncate">{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Multi-toggle pill group for settings.
+ *
+ * Rendered as a segmented rail (same surface, padding and radius as
+ * `WorkspaceSegmentedControl`) so it reads as the multi-select sibling of the
+ * single-choice control instead of a row of loose checkboxes. Selection is
+ * carried by the raised white chip + accent text, and the check icon is the
+ * only thing that changes between states — no layout shift on toggle.
+ */
+export function WorkspaceMultiSelect({ values, options, onChange, className = "" }) {
+  const selectedValues = Array.isArray(values) ? values : [];
+
+  function toggle(optionId) {
+    onChange(selectedValues.includes(optionId)
+      ? selectedValues.filter((value) => value !== optionId)
+      : [...selectedValues, optionId]);
+  }
+
+  return (
+    <div
+      className={`flex w-full min-w-0 flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1 dark:bg-stone-800/60 ${className}`}
+      role="group"
+      aria-label="多选项"
+    >
+      {options.map((option) => {
+        const selected = selectedValues.includes(option.id);
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={selected}
+            title={option.label}
+            onClick={() => toggle(option.id)}
+            className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium leading-5 transition-colors sm:text-sm ${
+              selected
+                ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
+                : "text-stone-600 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+            }`}
+          >
+            <Check
+              size={13}
+              strokeWidth={3}
+              aria-hidden="true"
+              className={`shrink-0 transition-opacity ${selected ? "opacity-100 text-accent" : "opacity-0"}`}
+            />
+            <span className="truncate">{option.label}</span>
           </button>
         );
       })}

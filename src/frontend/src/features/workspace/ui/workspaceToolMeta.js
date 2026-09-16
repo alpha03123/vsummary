@@ -6,7 +6,6 @@ import {
   Network,
   PlaySquare,
   StickyNote,
-  MessageSquare,
 } from "lucide-react";
 
 /**
@@ -26,12 +25,6 @@ const SHARED_TOOL_VISUALS = {
 };
 
 export const TOOL_TILES = {
-  "chat-management": {
-    label: "对话管理",
-    description: "用于切换会话记录",
-    icon: MessageSquare,
-    ...SHARED_TOOL_VISUALS,
-  },
   overview: {
     label: "AI 概况",
     description: "章节与关键结论",
@@ -65,12 +58,6 @@ export const TOOL_TILES = {
 };
 
 export const SERIES_TOOL_TILES = {
-  "series-chat-management": {
-    label: "对话管理",
-    description: "用于切换会话记录",
-    icon: MessageSquare,
-    ...SHARED_TOOL_VISUALS,
-  },
   "series-overview": {
     label: "全局 AI 概况",
     description: "集中查看各视频 AI 概况",

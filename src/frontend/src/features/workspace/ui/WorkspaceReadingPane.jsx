@@ -53,12 +53,6 @@ const WorkspaceSeriesOverviewView = lazy(() =>
   })),
 );
 
-const WorkspaceChatManagementView = lazy(() =>
-  import("./views/WorkspaceChatManagementView").then((module) => ({
-    default: module.WorkspaceChatManagementView,
-  })),
-);
-
 const WorkspaceStudioHomeView = lazy(() =>
   import("./views/WorkspaceStudioHomeView").then((module) => ({
     default: module.WorkspaceStudioHomeView,
@@ -92,6 +86,7 @@ export function WorkspaceReadingPane({
   knowledgeCardsLoading,
   notesLoading,
   savingNote,
+  generatingAiNote,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
   seriesMindmap,
@@ -109,7 +104,7 @@ export function WorkspaceReadingPane({
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
-  onRequestAiNote,
+  onGenerateAiNote,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -126,10 +121,6 @@ export function WorkspaceReadingPane({
   const currentToolMeta = resolveToolMeta(selectedToolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
   const previewSubtitleSource = tools?.preview?.subtitleUrl ?? null;
-  const activeChatSession = chat?.sessions?.find((session) => session.id === chat.activeSessionId) ?? null;
-  // null（而不是"当前对话"）表示还没有会话，这样卡片可以省略描述后缀，
-  // 而不是渲染成"当前会话：当前对话"。
-  const activeChatTitle = activeChatSession ? truncateChatTitle(activeChatSession.title) : null;
   const toolHeaderBadge = resolveSeriesOverviewBadge({
     selectedToolId,
     activeSeries,
@@ -185,11 +176,7 @@ export function WorkspaceReadingPane({
                   {isSeriesHome ? (
                     <div className="flex flex-col gap-6">
                       <WorkspaceToolGrid
-                        items={buildSeriesToolItems({
-                          activeChatTitle,
-                          activeSeries,
-                          seriesMindmapAvailable,
-                        })}
+                        items={buildSeriesToolItems({ activeSeries, seriesMindmapAvailable })}
                         onSelect={onSelectTool}
                       />
                       <WorkspaceSeriesHomeView activeSeries={activeSeries} />
@@ -238,15 +225,8 @@ export function WorkspaceReadingPane({
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,
-                              // 会话名是"上下文"，不是"状态"，所以放在描述行而不是状态徽标里。
-                              description: toolId === "chat-management" && activeChatTitle
-                                ? `当前会话：${activeChatTitle}`
-                                : undefined,
                               disabled: sourceMissing || getToolState(tools, toolId)?.available === false,
-                              // 对话管理只是导航入口，本身没有可展示的状态，留空而不是伪造一个。
-                              status: toolId === "chat-management"
-                                ? null
-                                : sourceMissing
+                              status: sourceMissing
                                 ? SOURCE_MISSING_STATUS
                                 : describeToolState(toolId, getToolState(tools, toolId)),
                             }))}
@@ -303,15 +283,13 @@ export function WorkspaceReadingPane({
                       onClearKnowledgeCardsFeedback={onClearKnowledgeCardsFeedback}
                     />
                   ) : null}
-                  {selectedToolId === "chat-management" || selectedToolId === "series-chat-management" ? (
-                    <WorkspaceChatManagementView chat={chat} />
-                  ) : null}
                   {selectedToolId === "notes" ? (
                     <WorkspaceNotesView
                       notes={notes}
                       notesLoading={notesLoading}
                       savingNote={savingNote}
-                      onRequestAiNote={onRequestAiNote}
+                      generatingAiNote={generatingAiNote}
+                      onGenerateAiNote={onGenerateAiNote}
                       onCreateNote={onCreateNote}
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}
@@ -334,27 +312,13 @@ export function WorkspaceReadingPane({
  * 之前会被原样渲染成卡片上的状态文字。这里先剥掉首尾装饰性标点，
  * 再截断；只有确实没有内容时才回退到"当前对话"。
  */
-function truncateChatTitle(title) {
-  const normalized = typeof title === "string"
-    ? title.replace(/^[\s·•∙・\-–—_.,，。、|]+|[\s·•∙・\-–—_.,，。、|]+$/g, "")
-    : "";
-  if (!normalized) {
-    return "当前对话";
-  }
-  const characters = Array.from(normalized);
-  return characters.length > 12 ? `${characters.slice(0, 12).join("")}…` : normalized;
-}
-
-function buildSeriesToolItems({ activeChatTitle, activeSeries, seriesMindmapAvailable }) {
+function buildSeriesToolItems({ activeSeries, seriesMindmapAvailable }) {
   const videos = activeSeries?.videos ?? [];
   const processedVideoCount = videos.filter((video) => video.processed).length;
 
   return Object.entries(SERIES_TOOL_TILES).map(([toolId, meta]) => ({
     id: toolId,
     meta,
-    description: toolId === "series-chat-management" && activeChatTitle
-      ? `当前会话：${activeChatTitle}`
-      : undefined,
     status: resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount: videos.length, seriesMindmapAvailable }),
   }));
 }

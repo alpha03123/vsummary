@@ -6,6 +6,7 @@ import {
   WorkspaceProviderSelect,
   WorkspaceAdvancedSettings,
   WorkspaceSegmentedControl,
+  WorkspaceMultiSelect,
   WorkspaceSelect,
   WorkspaceSettingRow,
   WorkspaceTextInput,
@@ -314,6 +315,22 @@ export function WorkspaceSettingsPanel({
                   <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100">AI 总结能力</h3>
                   <p className="text-[13px] text-stone-600 dark:text-stone-400 mt-2">控制总结流程</p>
                 </div>
+
+                <WorkspaceSettingRow
+                  title="自动生成"
+                  description="AI 概况完成后自动生成所选内容。"
+                  contentClassName="2xl:w-[340px] 2xl:flex-none"
+                >
+                  <WorkspaceMultiSelect
+                    values={ui.autoGenerateArtifacts}
+                    options={[
+                      { id: "mindmap", label: "思维导图" },
+                      { id: "knowledge_cards", label: "知识卡片" },
+                      { id: "notes", label: "笔记" },
+                    ]}
+                    onChange={(nextValues) => onChangeSetting("autoGenerateArtifacts", nextValues)}
+                  />
+                </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
                   title="语音识别供应商"
@@ -630,20 +647,6 @@ export function WorkspaceSettingsPanel({
                     </div>
                   </WorkspaceSettingRow>
                 )}
-
-                <WorkspaceSettingRow
-                  title="笔记长度"
-                  description="控制 AI 笔记的展开程度。"
-                >
-                  <WorkspaceSegmentedControl
-                    value={ui.noteLength}
-                    options={[
-                      { id: "short", label: "短" },
-                      { id: "long", label: "长" },
-                    ]}
-                    onChange={(nextValue) => onChangeSetting("noteLength", nextValue)}
-                  />
-                </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow
                   title="章节画面"

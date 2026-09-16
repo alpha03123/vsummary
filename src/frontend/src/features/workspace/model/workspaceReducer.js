@@ -821,10 +821,23 @@ export function workspaceReducer(state, action) {
         savingNote: true,
         error: "",
       };
+    case "ai_note_generation_started":
+      return {
+        ...state,
+        generatingAiNote: true,
+        error: "",
+      };
+    case "ai_note_generation_failed":
+      return {
+        ...state,
+        generatingAiNote: false,
+        error: action.message,
+      };
     case "note_created":
       return {
         ...state,
         savingNote: false,
+        generatingAiNote: false,
         notes: state.notes == null
           ? {
             seriesId: action.seriesId,

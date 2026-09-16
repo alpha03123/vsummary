@@ -22,6 +22,7 @@ from backend.video_summary.infrastructure.config.settings import (
     EnvSettings,
     VALID_ASR_PROVIDERS,
     VALID_CHAPTER_VISUAL_MODES,
+    VALID_AUTO_GENERATE_ARTIFACTS,
     VALID_THEMES,
     VALID_WORKSPACE_LAYOUT_MODES,
     VALID_TRANSCRIPTION_MODES,
@@ -49,6 +50,7 @@ from backend.video_summary.infrastructure.config.settings import (
     replace_transcript_enhancement_enabled,
     replace_chaoxing_import_settings,
     replace_chapter_visual_settings,
+    replace_auto_generate_artifacts,
     replace_video_generation_concurrency,
     replace_web_search_enabled,
     replace_workspace_ui_settings,
@@ -131,6 +133,7 @@ class WorkspaceSettings:
     video_generation_concurrency: int
     chapter_visual_mode: str
     max_visual_frames: int
+    auto_generate_artifacts: tuple[str, ...]
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float
     chaoxing_init_course_delay_seconds: float
@@ -166,6 +169,7 @@ class SettingsServicePort(Protocol):
         web_search_enabled: bool,
         chapter_visual_mode: str = "screenshots",
         max_visual_frames: int = 6,
+        auto_generate_artifacts: list[str] | tuple[str, ...] = ("notes",),
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -311,6 +315,7 @@ class SettingsService:
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             chapter_visual_mode=settings.generation.chapter_visual_mode,
             max_visual_frames=settings.generation.max_visual_frames,
+            auto_generate_artifacts=settings.generation.auto_generate_artifacts,
             web_search_enabled=settings.web_search.enabled,
             chaoxing_request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
             chaoxing_init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
@@ -335,6 +340,7 @@ class SettingsService:
         web_search_enabled: bool,
         chapter_visual_mode: str = "screenshots",
         max_visual_frames: int = 6,
+        auto_generate_artifacts: list[str] | tuple[str, ...] = ("notes",),
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -420,6 +426,8 @@ class SettingsService:
             raise SettingsValidationError(
                 f"max_visual_frames 必须是 1 到 {MAX_VISUAL_FRAMES_LIMIT} 的整数。"
             )
+        if any(item not in VALID_AUTO_GENERATE_ARTIFACTS for item in auto_generate_artifacts):
+            raise SettingsValidationError("auto_generate_artifacts 含不支持的自动生成项。")
         if chaoxing_request_delay_seconds < 0:
             raise SettingsValidationError("chaoxing_request_delay_seconds 必须是大于等于 0 的数字。")
         if chaoxing_init_course_delay_seconds < 0:
@@ -470,6 +478,7 @@ class SettingsService:
                 chapter_visual_mode=chapter_visual_mode,
                 max_visual_frames=max_visual_frames,
             )
+            next_settings = replace_auto_generate_artifacts(next_settings, list(auto_generate_artifacts))
             next_settings = replace_web_search_enabled(next_settings, web_search_enabled)
             next_settings = replace_chaoxing_import_settings(
                 next_settings,
@@ -520,6 +529,7 @@ class SettingsService:
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             chapter_visual_mode=next_settings.generation.chapter_visual_mode,
             max_visual_frames=next_settings.generation.max_visual_frames,
+            auto_generate_artifacts=next_settings.generation.auto_generate_artifacts,
             web_search_enabled=next_settings.web_search.enabled,
             chaoxing_request_delay_seconds=next_settings.external_import.chaoxing.request_delay_seconds,
             chaoxing_init_course_delay_seconds=next_settings.external_import.chaoxing.init_course_delay_seconds,

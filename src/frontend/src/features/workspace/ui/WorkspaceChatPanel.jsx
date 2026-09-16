@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle } from "lucide-react";
+import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 import { CopyToClipboardButton } from "./shared/CopyToClipboardButton";
+import { WorkspaceProviderSelect } from "./shared/WorkspaceSettingsControls";
 
 const WorkspaceMarkdownMessage = lazy(() =>
   import("./shared/WorkspaceMarkdownMessage").then((module) => ({
@@ -53,6 +54,7 @@ export function WorkspaceChatPanel({
   draft = "",
   onDraftChange,
   onSelectChatSession,
+  onStartNewChat,
   onOpenSeekReference,
   onOpenCitationReference,
   onOpenSettings,
@@ -82,6 +84,10 @@ export function WorkspaceChatPanel({
       .filter((message) => message.role === "user" && message.kind == null && typeof message.content === "string" && message.content.trim())
       .map((message) => ({ id: message.id, prompt: message.content.trim() })),
     [chatMessages],
+  );
+  const chatSessionOptions = useMemo(
+    () => chatSessions.map((session) => ({ id: session.id, label: session.title || "新话题" })),
+    [chatSessions],
   );
   const suggestedPrompts = [
     { title: "总结核心结论", desc: "给我总结一下这个视频的核心结论", icon: Sparkles },
@@ -158,22 +164,78 @@ export function WorkspaceChatPanel({
   return (
     <div className="h-full w-full flex flex-col bg-transparent">
       {/* Header */}
-      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between px-6 py-4 border-b border-stone-200/80 dark:border-stone-800">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
-            <Sparkles size={16} className="text-accent" />
+      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between gap-6 px-6 py-5 border-b border-stone-200/80 dark:border-stone-800">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="w-10 h-10 shrink-0 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
+            <Sparkles size={17} className="text-accent" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-bold text-stone-800 dark:text-stone-100">分析助手</h3>
               <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300">
                 {currentPageLabel}
               </span>
             </div>
-            <p className="text-xs text-stone-600 dark:text-stone-400">基于《{scopeLabel}》</p>
+            <p className="mt-1.5 text-xs leading-5 text-stone-600 dark:text-stone-400">基于《{scopeLabel}》</p>
           </div>
         </div>
-        <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
+        {/* Right column, top-aligned with the title block: a caption names the
+            control ("对话"), the switcher sits directly under it, and the passive
+            budget pill is demoted to a small line beneath rather than competing
+            with the controls for horizontal space. */}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {chatSessionOptions.length > 0 ? (
+            <>
+              <span className="pr-1 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+                对话管理
+              </span>
+              {/* Switcher + "new chat" share one bordered shell with an inset
+                  divider so they read as a single unit. No `overflow-hidden` —
+                  it would clip the switcher's absolutely positioned menu. */}
+              <div className="inline-flex items-stretch rounded-xl border border-stone-200 bg-white transition-colors focus-within:border-accent/40 dark:border-stone-700 dark:bg-stone-900">
+                <WorkspaceProviderSelect
+                  value={activeSessionId}
+                  options={chatSessionOptions}
+                  onChange={onSelectChatSession}
+                  ariaLabel="切换对话"
+                  hideGroupLabels
+                  align="end"
+                  menuClassName="min-w-[14rem]"
+                  className="w-48 rounded-l-xl"
+                  triggerVariant="bare"
+                  leading={<MessagesSquare size={14} />}
+                />
+                {onStartNewChat ? (
+                  <button
+                    type="button"
+                    onClick={onStartNewChat}
+                    className="inline-flex w-10 shrink-0 items-center justify-center rounded-r-xl border-l border-stone-200 text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent dark:border-stone-700 dark:text-stone-400"
+                    title="新建话题"
+                    aria-label="新建话题"
+                  >
+                    <Plus size={16} />
+                  </button>
+                ) : null}
+              </div>
+              <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
+            </>
+          ) : (
+            <>
+              {onStartNewChat ? (
+                <button
+                  type="button"
+                  onClick={onStartNewChat}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 transition-colors hover:border-accent/50 hover:text-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+                  title="新建话题"
+                >
+                  <Plus size={16} />
+                  新对话
+                </button>
+              ) : null}
+              <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
+            </>
+          )}
+        </div>
       </div>
 
       {seriesRagLocked ? (

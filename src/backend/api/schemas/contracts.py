@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 ProcessingMode = Literal["summary", "transcript"]
+AiNoteTemplate = Literal["general", "short", "long", "minimal", "detailed", "tutorial", "academic", "xiaohongshu", "life_journal", "task_oriented", "business", "meeting_minutes"]
 
 class GenerateVideoSummaryRequest(BaseModel):
     """请求生成单个视频的结构化总结。
@@ -69,6 +70,12 @@ class CreateVideoNoteRequest(BaseModel):
     title: str
     content: str
     source: str = "manual"
+
+
+class GenerateVideoAiNoteRequest(BaseModel):
+    """生成 AI 笔记时选用的展示模板。"""
+
+    template: AiNoteTemplate = "general"
 
 
 class UpdateVideoNoteRequest(BaseModel):
@@ -147,6 +154,7 @@ class WorkspaceSettingsResponse(BaseModel):
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_frames: int = Field(default=6, ge=1, le=20)
+    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "notes"]] = Field(default_factory=lambda: ["notes"])
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3
@@ -201,6 +209,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_frames: int = Field(default=6, ge=1, le=20)
+    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "notes"]] = Field(default_factory=lambda: ["notes"])
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3

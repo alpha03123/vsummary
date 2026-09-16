@@ -109,3 +109,31 @@ describe("WorkspaceSettingsPanel provider settings", () => {
     expect(onCancelRagModelDownload).toHaveBeenCalledWith("embedding");
   });
 });
+
+describe("WorkspaceSettingsPanel auto-generate multi-select", () => {
+  it("renders the artifact options as toggle pills with the saved selection marked", () => {
+    renderPanel({ autoGenerateArtifacts: ["notes"] }, { initialTab: "ai" });
+
+    expect(screen.getByRole("button", { name: "笔记" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "思维导图" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "知识卡片" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("adds an artifact to the selection when toggled on", () => {
+    const onChangeSetting = vi.fn();
+    renderPanel({ autoGenerateArtifacts: ["notes"] }, { initialTab: "ai", onChangeSetting });
+
+    fireEvent.click(screen.getByRole("button", { name: "思维导图" }));
+
+    expect(onChangeSetting).toHaveBeenCalledWith("autoGenerateArtifacts", ["notes", "mindmap"]);
+  });
+
+  it("drops an artifact from the selection when toggled off", () => {
+    const onChangeSetting = vi.fn();
+    renderPanel({ autoGenerateArtifacts: ["notes", "mindmap"] }, { initialTab: "ai", onChangeSetting });
+
+    fireEvent.click(screen.getByRole("button", { name: "笔记" }));
+
+    expect(onChangeSetting).toHaveBeenCalledWith("autoGenerateArtifacts", ["mindmap"]);
+  });
+});

@@ -159,6 +159,7 @@ export function WorkspaceVideoScopeEmbed() {
     draft: chatDraft,
     onDraftChange: setChatDraft,
     onSelectChatSession: page.chat.selectChatSession,
+    onStartNewChat: page.chat.startNewChat,
     onOpenSeekReference: (reference) => {
       page.chat.openSeekReference(reference);
       seekBilibiliVideo(reference);

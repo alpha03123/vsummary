@@ -117,6 +117,7 @@ export function WorkspacePage({ page }) {
       }
     },
     onSelectChatSession: chat.selectChatSession,
+    onStartNewChat: chat.startNewChat,
     onOpenSeekReference: chat.openSeekReference,
     onOpenCitationReference: chat.openCitationReference,
     onOpenSettings: () => actions.openSettingsPanel("network"),
@@ -263,10 +264,6 @@ export function WorkspacePage({ page }) {
         playbackTime={playbackTime}
         followOverviewPlayback={followOverviewPlayback}
         onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
-        onRequestAiNote={() => {
-          setChatDraft("帮我生成一份笔记");
-          setChatDraftReady(!isChatCenterMode && !chat.drawerOpen);
-        }}
       />
     );
   }

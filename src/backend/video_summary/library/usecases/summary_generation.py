@@ -77,6 +77,7 @@ class GenerateVideoSummaryFromLibrary:
         progress_tracker: VideoGenerationProgressTracker,
         video_generation_concurrency: int = 1,
         series_memory_refresher: SeriesKnowledgeMemoryRefresher | None = None,
+        auto_generate_artifacts: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> None:
         """注入工作区读取端口、生成器、进度跟踪器、并发上限与可选的系列记忆刷新器。
 
@@ -92,6 +93,7 @@ class GenerateVideoSummaryFromLibrary:
         self._generator = generator
         self._progress_tracker = progress_tracker
         self._series_memory_refresher = series_memory_refresher
+        self._auto_generate_artifacts = auto_generate_artifacts
         self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | VideoTranscriptDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
         self._active_task_keys: set[tuple[str, str]] = set()
@@ -300,6 +302,8 @@ class GenerateVideoSummaryFromLibrary:
                         self._series_memory_refresher.refresh(series_id, video_id)
                     except Exception:
                         LOGGER.exception("series knowledge memory refresh failed for %s", series_id)
+                if processing_mode == "summary" and self._auto_generate_artifacts is not None:
+                    await self._auto_generate_artifacts(series_id, video_id)
             if processing_mode == "transcript":
                 reporter.completed("字幕已获取")
                 return self._workspace.get_video_transcript(series_id, video_id)

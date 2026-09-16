@@ -1,4 +1,6 @@
 from backend.video_summary.library.usecases.knowledge_cards import GenerateVideoKnowledgeCards
+from backend.video_summary.library.usecases.ai_notes import GenerateVideoAiNote
+from backend.video_summary.library.usecases.auto_generate_artifacts import AutoGenerateVideoArtifacts
 from backend.video_summary.library.usecases.library_queries import (
     GetSeriesMindmap,
     GetVideoChapterCards,
@@ -54,6 +56,8 @@ __all__ = [
     "RenameSeries",
     "RenameVideo",
     "GenerateVideoKnowledgeCards",
+    "GenerateVideoAiNote",
+    "AutoGenerateVideoArtifacts",
     "GenerateSeriesMindmapFromLibrary",
     "GenerateVideoMindmapFromLibrary",
     "ExportSeriesArchive",
