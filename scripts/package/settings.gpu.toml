@@ -53,7 +53,8 @@ rerank_enabled = false
 [generation]
 video_generation_concurrency = 1
 summary_chunk_concurrency = 1
-chapter_screenshots_enabled = true
+chapter_visual_mode = "screenshots"
+max_visual_frames = 6
 
 [web_search]
 enabled = false

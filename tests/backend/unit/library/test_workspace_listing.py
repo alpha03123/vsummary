@@ -117,6 +117,36 @@ class EditableContentTests(unittest.TestCase):
         )
         return FileSystemVideoWorkspace(root)
 
+    def test_reads_visual_evidence_only_when_referenced_screenshot_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = self._seed_video(root)
+            output_dir = root / "workspace" / "series-1" / "video-1"
+            screenshot_dir = output_dir / "screenshots"
+            screenshot_dir.mkdir()
+            (screenshot_dir / "chapter-01.jpg").write_bytes(b"jpeg")
+            (output_dir / "visual.evidence.json").write_text(
+                json.dumps(
+                    {
+                        "frames": [
+                            {
+                                "chapter_id": "chapter-1",
+                                "timestamp_seconds": 2.0,
+                                "image_filename": "chapter-01.jpg",
+                                "text": "画面展示服务架构图。",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            evidence = workspace.get_video_visual_evidence("series-1", "video-1")
+
+            self.assertIsNotNone(evidence)
+            self.assertEqual(evidence.frames[0].text, "画面展示服务架构图。")
+
     def test_updating_summary_rewrites_markdown_and_invalidates_derivatives(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -27,6 +27,7 @@ class SummaryChapterPayload(BaseModel):
     end_seconds: float = Field(default=0.0, allow_inf_nan=False)
     summary: str = ""
     key_points: list[str] = Field(default_factory=list)
+    image_timestamp_seconds: float | None = Field(default=None, allow_inf_nan=False)
 
 
 class SummaryPayload(BaseModel):
@@ -45,6 +46,28 @@ class SummaryPayload(BaseModel):
     core_problem: str = ""
     chapters: list[SummaryChapterPayload] = Field(default_factory=list)
     key_takeaways: list[str] = Field(default_factory=list)
+
+
+class VisualEvidenceFramePayload(BaseModel):
+    """一张已抽取视频帧的可检索文字证据。"""
+
+    chapter_id: str = Field(min_length=1)
+    timestamp_seconds: float = Field(allow_inf_nan=False)
+    image_filename: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class VisualEvidencePayload(BaseModel):
+    """一次多模态总结生成的逐帧视觉证据集合。"""
+
+    frames: list[VisualEvidenceFramePayload] = Field(default_factory=list)
+
+
+class MultimodalSummaryPayload(BaseModel):
+    """多模态最终化调用的结构化响应。"""
+
+    summary: SummaryPayload
+    visual_evidence: VisualEvidencePayload
 
 
 class MindmapNodePayload(BaseModel):

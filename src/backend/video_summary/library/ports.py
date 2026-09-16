@@ -26,6 +26,7 @@ from backend.video_summary.library.models import (
     VideoSourceDTO,
     VideoSummaryDTO,
     VideoTranscriptDTO,
+    VideoVisualEvidenceDTO,
     VideoWorkspaceToolsDTO,
     WorkspaceDTO,
 )
@@ -57,6 +58,9 @@ class VideoLibraryReader(Protocol):
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
         """取视频的转写制品；未生成则返回 `None`。"""
+
+    def get_video_visual_evidence(self, series_id: str, video_id: str) -> VideoVisualEvidenceDTO | None:
+        """取视频的逐帧视觉证据；未启用或未生成则返回 `None`。"""
 
     def get_video_mindmap(self, series_id: str, video_id: str) -> VideoMindmapDTO | None:
         """取视频的思维导图制品；未生成则返回 `None`。"""
@@ -289,6 +293,7 @@ class VideoMindmapGenerator(Protocol):
         video_id: str,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        visual_evidence_text: str = "",
         progress_reporter: ProgressReporter | None = None,
         max_depth: int | None = None,
     ) -> None:
@@ -335,7 +340,13 @@ class KnowledgeCardGenerator(Protocol):
     通过 `VideoKnowledgeCardWriter` 落盘——这样可以走「先预览再保存」流程。
     """
 
-    def run(self, *, title: str, summary_data: dict[str, object]) -> list[KnowledgeCardDTO]:
+    def run(
+        self,
+        *,
+        title: str,
+        summary_data: dict[str, object],
+        visual_evidence_text: str = "",
+    ) -> list[KnowledgeCardDTO]:
         """基于总结数据生成知识卡列表；不与文件系统交互。"""
 
 

@@ -141,6 +141,8 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 reasoning_effort="high",
                 video_generation_concurrency=5,
                 web_search_enabled=True,
+                chapter_visual_mode="multimodal",
+                max_visual_frames=8,
             )
 
             self.assertEqual(updated.window_tokens, 222_222)
@@ -151,6 +153,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertEqual(updated.rag_max_hits, 7)
             self.assertFalse(updated.rag_rerank_enabled)
             self.assertTrue(updated.web_search_enabled)
+            self.assertEqual(updated.chapter_visual_mode, "multimodal")
             rendered = config_path.read_text(encoding="utf-8")
             self.assertIn("[agent_context]", rendered)
             self.assertIn("window_tokens = 222222", rendered)
@@ -161,6 +164,8 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertIn("[generation]", rendered)
             self.assertIn("video_generation_concurrency = 5", rendered)
             self.assertIn("summary_chunk_concurrency = 1", rendered)
+            self.assertIn('chapter_visual_mode = "multimodal"', rendered)
+            self.assertIn("max_visual_frames = 8", rendered)
             self.assertIn("[agent_retrieval]", rendered)
             self.assertIn("max_hits = 7", rendered)
             self.assertIn("rerank_enabled = false", rendered)

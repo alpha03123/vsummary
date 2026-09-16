@@ -49,6 +49,7 @@ class LiteLLMCompletionSummarizer(Summarizer):
         reserved_output_tokens: int,
         direct_summary_threshold_ratio: float,
         summary_chunk_concurrency: int = 1,
+        max_visual_frames: int = 0,
     ) -> None:
         """注入 LiteLLM 网关与上下文预算参数。
 
@@ -65,6 +66,7 @@ class LiteLLMCompletionSummarizer(Summarizer):
         self._reserved_output_tokens = reserved_output_tokens
         self._direct_summary_threshold_ratio = direct_summary_threshold_ratio
         self._summary_chunk_concurrency = max(1, summary_chunk_concurrency)
+        self._max_visual_frames = max(0, max_visual_frames)
 
     async def summarize(
         self,
@@ -97,9 +99,10 @@ class LiteLLMCompletionSummarizer(Summarizer):
             context_window_tokens=self._context_window_tokens,
             reserved_output_tokens=self._reserved_output_tokens,
             direct_summary_threshold_ratio=self._direct_summary_threshold_ratio,
+            max_visual_frames=self._max_visual_frames,
         ):
             coro = self._gateway.acomplete_structured(
-                [{"role": "user", "content": build_transcript_document_prompt(video, transcript)}],
+                [{"role": "user", "content": build_transcript_document_prompt(video, transcript, self._max_visual_frames)}],
                 response_model=SummaryPayload,
             )
             payload = await cancellable_await(coro, cancellation) if cancellation else await coro
@@ -110,7 +113,7 @@ class LiteLLMCompletionSummarizer(Summarizer):
         chunks = list(enumerate(chunk_segments(transcript.segments), start=1))
         chunk_summaries = await self._summarize_chunks(video, chunks, cancellation)
         coro = self._gateway.acomplete_structured(
-            [{"role": "user", "content": build_document_prompt(video, transcript, chunk_summaries)}],
+            [{"role": "user", "content": build_document_prompt(video, transcript, chunk_summaries, self._max_visual_frames)}],
             response_model=SummaryPayload,
         )
         payload = await cancellable_await(coro, cancellation) if cancellation else await coro
@@ -163,6 +166,7 @@ def _should_use_direct_summary(
     context_window_tokens: int,
     reserved_output_tokens: int,
     direct_summary_threshold_ratio: float,
+    max_visual_frames: int,
 ) -> bool:
     """判定本次总结是否可以直接在一次 LLM 调用中完成。
 
@@ -182,7 +186,7 @@ def _should_use_direct_summary(
     """
     available_tokens = max(1, context_window_tokens - reserved_output_tokens)
     direct_summary_budget = max(1, int(available_tokens * direct_summary_threshold_ratio))
-    direct_prompt = build_transcript_document_prompt(video, transcript)
+    direct_prompt = build_transcript_document_prompt(video, transcript, max_visual_frames)
     return _estimate_tokens(direct_prompt) <= direct_summary_budget
 
 

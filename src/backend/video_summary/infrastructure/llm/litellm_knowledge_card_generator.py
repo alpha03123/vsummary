@@ -66,7 +66,13 @@ class LiteLLMKnowledgeCardGenerator:
         """
         self._gateway = gateway
 
-    def run(self, *, title: str, summary_data: dict[str, object]) -> list[KnowledgeCardDTO]:
+    def run(
+        self,
+        *,
+        title: str,
+        summary_data: dict[str, object],
+        visual_evidence_text: str = "",
+    ) -> list[KnowledgeCardDTO]:
         """根据总结数据生成一批清洗后的知识卡片。
 
         Args:
@@ -80,7 +86,11 @@ class LiteLLMKnowledgeCardGenerator:
         Raises:
             RuntimeError: LLM 返回无法通过 schema 校验且重试仍失败时抛出。
         """
-        prompt = build_knowledge_card_prompt(title=title, summary_data=summary_data)
+        prompt = build_knowledge_card_prompt(
+            title=title,
+            summary_data=summary_data,
+            visual_evidence_text=visual_evidence_text,
+        )
         payload = self._gateway.complete_structured(
             [{"role": "user", "content": prompt}],
             response_model=KnowledgeCardCollectionPayload,
@@ -125,7 +135,13 @@ class ConfiguredKnowledgeCardGenerator:
         self._cached_signature: tuple[str, str] | None = None
         self._cached_generator: LiteLLMKnowledgeCardGenerator | None = None
 
-    def run(self, *, title: str, summary_data: dict[str, object]) -> list[KnowledgeCardDTO]:
+    def run(
+        self,
+        *,
+        title: str,
+        summary_data: dict[str, object],
+        visual_evidence_text: str = "",
+    ) -> list[KnowledgeCardDTO]:
         """获取（或复用缓存的）知识卡片生成器并运行一次。
 
         Args:
@@ -136,7 +152,11 @@ class ConfiguredKnowledgeCardGenerator:
             与 `LiteLLMKnowledgeCardGenerator.run` 同义的 `KnowledgeCardDTO` 列表。
         """
         generator = self._get_generator()
-        return generator.run(title=title, summary_data=summary_data)
+        return generator.run(
+            title=title,
+            summary_data=summary_data,
+            visual_evidence_text=visual_evidence_text,
+        )
 
     def _get_generator(self) -> LiteLLMKnowledgeCardGenerator:
         """读取配置文件签名并按需重建/复用生成器。
@@ -162,7 +182,12 @@ class ConfiguredKnowledgeCardGenerator:
             return self._cached_generator
 
 
-def build_knowledge_card_prompt(*, title: str, summary_data: dict[str, object]) -> str:
+def build_knowledge_card_prompt(
+    *,
+    title: str,
+    summary_data: dict[str, object],
+    visual_evidence_text: str = "",
+) -> str:
     """渲染知识卡片提示词模板。
 
     Args:
@@ -172,10 +197,13 @@ def build_knowledge_card_prompt(*, title: str, summary_data: dict[str, object]) 
     Returns:
         渲染完成的提示词字符串。
     """
-    return KNOWLEDGE_CARD_PROMPT_TEMPLATE.format(
+    prompt = KNOWLEDGE_CARD_PROMPT_TEMPLATE.format(
         title=title,
         summary_json=json.dumps(summary_data, ensure_ascii=False, indent=2),
     )
+    if visual_evidence_text.strip():
+        prompt = f"{prompt}\n画面证据：\n{visual_evidence_text.strip()}\n"
+    return prompt
 
 
 def _is_valid_card(card: KnowledgeCardPayload) -> bool:

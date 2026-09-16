@@ -15,6 +15,7 @@ from backend.video_summary.generation.usecases.generate_summary import GenerateV
 from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
+from backend.video_summary.infrastructure.llm.litellm_visual_summary_enricher import LiteLLMVisualSummaryEnricher
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.subtitle_transcripts import CleanedTranscriptProvider, ManualSrtTranscriptProvider, SubtitleTranscriptProvider
 from backend.video_summary.infrastructure.video_summary_runtime import (
@@ -98,7 +99,14 @@ def build_video_summary_application(
         manual_transcript_provider=ManualSrtTranscriptProvider(),
         saved_transcript_provider=CleanedTranscriptProvider(),
         frame_extractor=media_processor,
-        chapter_screenshots_enabled=settings.generation.chapter_screenshots_enabled,
+        chapter_screenshots_enabled=settings.generation.chapter_visual_mode != "off",
+        visual_summary_enricher=(
+            LiteLLMVisualSummaryEnricher(runtime.gateway)
+            if settings.generation.chapter_visual_mode == "multimodal"
+            else None
+        ),
+        multimodal_visual_enabled=settings.generation.chapter_visual_mode == "multimodal",
+        max_visual_frames=settings.generation.max_visual_frames,
     )
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 

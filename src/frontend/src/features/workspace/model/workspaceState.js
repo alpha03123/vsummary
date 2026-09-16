@@ -29,7 +29,8 @@ export const defaultUiSettings = {
   talkCustomPrompt: "",
   noteLength: "short",
   videoGenerationConcurrency: 1,
-  chapterScreenshotsEnabled: true,
+  chapterVisualMode: "screenshots",
+  maxVisualFrames: 6,
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
 };
@@ -808,8 +809,14 @@ export function normalizeUiSettings(value) {
         && record.videoGenerationConcurrency > 0
         ? record.videoGenerationConcurrency
         : 1,
-    chapterScreenshotsEnabled:
-      typeof record.chapterScreenshotsEnabled === "boolean" ? record.chapterScreenshotsEnabled : true,
+    chapterVisualMode:
+      ["off", "screenshots", "multimodal"].includes(record.chapterVisualMode)
+        ? record.chapterVisualMode
+        : "screenshots",
+    maxVisualFrames:
+      typeof record.maxVisualFrames === "number" && Number.isInteger(record.maxVisualFrames) && record.maxVisualFrames > 0
+        ? record.maxVisualFrames
+        : 6,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),
   };

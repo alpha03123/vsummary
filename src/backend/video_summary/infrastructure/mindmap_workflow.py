@@ -43,6 +43,7 @@ class ConfiguredMindmapWorkflow:
         output_dir: Path,
         summary_data: dict[str, object],
         transcript_text: str = "",
+        visual_evidence_text: str = "",
         progress_reporter=None,
         max_depth: int | None = None,
     ) -> None:
@@ -65,6 +66,7 @@ class ConfiguredMindmapWorkflow:
             summary_data=summary_data,
             output_dir=output_dir,
             transcript_text=transcript_text,
+            visual_evidence_text=visual_evidence_text,
             progress_reporter=progress_reporter,
             max_depth=max_depth,
         )

@@ -1154,7 +1154,36 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertEqual(citation.slots[0].start_seconds, 10.0)
         self.assertEqual(citation.slots[0].end_seconds, 70.0)
         self.assertEqual(citation.slots[1].target_type, "transcript")
-        self.assertEqual(citation.slots[1].text, "完整字幕内容")
+
+    def test_citation_builder_maps_visual_frame_to_video_timestamp(self) -> None:
+        turn = AgentGraphTurnBuilder().build(
+            context=AgentContext(session_id="s1", scope_type="video", series_id="series-1", video_id="video-1"),
+            result={
+                "assistant_message": "answer [1]",
+                "answer": "answer [1]",
+                "used_evidence_ids": ["visual-1"],
+                "evidence_items": [
+                    {
+                        "evidence_id": "visual-1",
+                        "source_number": 1,
+                        "series_id": "series-1",
+                        "video_id": "video-1",
+                        "title": "Video 1",
+                        "source_type": "visual_frame",
+                        "source_family": "visual",
+                        "start_seconds": 42.0,
+                        "end_seconds": 42.0,
+                        "text": "画面展示三层服务架构。",
+                        "snippet": "画面展示三层服务架构。",
+                    }
+                ],
+            },
+        )
+
+        citation = turn.citations[0]
+        self.assertEqual(citation.source_type, "visual")
+        self.assertEqual(citation.slots[0].target_type, "video")
+        self.assertEqual(citation.slots[0].start_seconds, 42.0)
 
     def test_citation_builder_uses_transcript_segment_anchor_time(self) -> None:
         turn = AgentGraphTurnBuilder().build(

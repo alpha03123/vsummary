@@ -146,6 +146,29 @@ def build_citations_from_graph_result(result: dict[str, object]) -> list[Citatio
             )
             next_id += 1
 
+        if source_type in {"visual_frame", "visual_evidence_full"}:
+            citations.append(
+                CitationReference(
+                    id=citation_id,
+                    label=title,
+                    source_type="visual",
+                    search_scope="visual",
+                    slots=[
+                        CitationSlot(
+                            slot=1,
+                            target_type="video",
+                            video_id=video_id,
+                            video_title=title,
+                            chapter_id=_as_str(item.get("chapter_id")),
+                            start_seconds=_as_float(item.get("start_seconds")),
+                            end_seconds=_as_float(item.get("end_seconds")),
+                            text=_as_str(item.get("snippet")) or _as_str(item.get("text")) or "visual evidence",
+                        )
+                    ],
+                )
+            )
+            next_id += 1
+
     return citations
 
 
@@ -164,6 +187,7 @@ def _with_source_numbers(items: list[object]) -> list[object]:
         if not isinstance(item, dict):
             numbered_items.append(item)
             continue
+
         if isinstance(item.get("source_number"), int):
             numbered_items.append(item)
             continue

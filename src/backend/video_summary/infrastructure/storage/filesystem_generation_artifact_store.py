@@ -14,6 +14,7 @@ from pathlib import Path
 from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, VideoAsset
 from backend.video_summary.generation.ports import GenerationArtifactStore
+from backend.video_summary.generation.schemas import VisualEvidencePayload
 
 
 class FileSystemGenerationArtifactStore(GenerationArtifactStore):
@@ -99,6 +100,15 @@ class FileSystemGenerationArtifactStore(GenerationArtifactStore):
             _write_text(output_dir / "summary.md", document.markdown),
             _write_json(output_dir / "summary.json", document.summary_data),
         )
+
+    async def save_visual_evidence(
+        self,
+        *,
+        evidence: VisualEvidencePayload,
+        output_dir: Path,
+    ) -> None:
+        """保存本次多模态识别产生的逐帧文字证据。"""
+        await _write_json(output_dir / "visual.evidence.json", evidence.model_dump(mode="json"))
 
     async def save_mindmap(self, *, mindmap: dict[str, object], output_dir: Path) -> None:
         """把思维导图 JSON 写入 `mindmap.json`。"""

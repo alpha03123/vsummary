@@ -32,6 +32,21 @@ class FlatMindmapGenerationTests(unittest.TestCase):
         self.assertEqual(result["id"], "root")
         self.assertEqual(result["children"][0]["id"], "topic")
 
+    def test_single_video_prompt_includes_visual_evidence(self) -> None:
+        gateway = FakeFlatMindmapGateway()
+        generator = LiteLLMMindmapGenerator(gateway, output_encoding="flat")
+
+        _run(
+            generator.generate(
+                title="测试视频",
+                duration_seconds=60,
+                summary_data={"chapters": []},
+                visual_evidence_text="画面展示三层服务架构。",
+            )
+        )
+
+        self.assertIn("画面展示三层服务架构", gateway.messages[0]["content"])
+
     def test_series_flat_output_is_restored_to_a_tree(self) -> None:
         gateway = FakeFlatMindmapGateway()
         generator = LiteLLMSeriesMindmapGenerator(gateway, output_encoding="flat")
@@ -89,6 +104,18 @@ class LLMKnowledgeCardGeneratorTests(unittest.TestCase):
         self.assertEqual(cards[0].title, "多 Agent 协作")
         self.assertEqual(cards[0].kind, "concept")
         self.assertEqual(cards[1].kind, "insight")
+
+    def test_generator_includes_visual_evidence(self) -> None:
+        from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import LiteLLMKnowledgeCardGenerator
+
+        gateway = FakeKnowledgeCardGateway()
+        LiteLLMKnowledgeCardGenerator(gateway).run(
+            title="多 Agent 课程",
+            summary_data={"title": "多 Agent 课程", "chapters": [], "key_takeaways": []},
+            visual_evidence_text="画面展示了网关、检索和生成三层架构。",
+        )
+
+        self.assertIn("画面展示了网关、检索和生成三层架构", gateway.messages[0][0]["content"])
 
 
 class KnowledgeCardWorkspaceCompatibilityTests(unittest.TestCase):

@@ -37,7 +37,7 @@ from backend.video_summary.infrastructure.config.settings import (
 from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import build_fastembed_embedding
 from backend.video_summary.library.ports import VideoLibraryReader
 
-INDEX_SCHEMA_VERSION = 5
+INDEX_SCHEMA_VERSION = 6
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
 LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
@@ -58,6 +58,8 @@ COMMON_METADATA_DEFAULTS: dict[str, object] = {
     "note_source": "",
     "card_id": "",
     "card_kind": "",
+    "chapter_id": "",
+    "image_filename": "",
 }
 
 
@@ -697,6 +699,8 @@ def _build_source_family_filters(
                 families.append("notes")
             elif tag == "cards":
                 families.append("cards")
+            elif tag == "visual":
+                families.append("visual")
         if families:
             unique_families = list(dict.fromkeys(families))
             if len(unique_families) == 1:
@@ -712,6 +716,8 @@ def _build_source_family_filters(
         return [MetadataFilter(key="source_family", value="summary")]
     if target_source == "transcript":
         return [MetadataFilter(key="source_family", value="transcript")]
+    if target_source == "visual":
+        return [MetadataFilter(key="source_family", value="visual")]
     return []
 
 
@@ -737,13 +743,15 @@ def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> Se
         transcript = workspace.get_video_transcript(series.id, video.id)
         notes = workspace.get_video_notes(series.id, video.id)
         cards = workspace.get_video_knowledge_cards(series.id, video.id)
+        visual_evidence = _get_visual_evidence(workspace, series.id, video.id)
         summary_hash = _artifact_fingerprint(summary)
         transcript_hash = _artifact_fingerprint(transcript)
         notes_hash = _artifact_fingerprint(notes)
         cards_hash = _artifact_fingerprint(cards)
+        visual_evidence_hash = _artifact_fingerprint(visual_evidence)
         video_parts.append(
             f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:"
-            f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}"
+            f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}:{visual_evidence_hash}"
         )
     return tuple(sorted(video_parts))
 
@@ -811,6 +819,7 @@ def _build_documents_for_video(
         transcript=workspace.get_video_transcript(series_id, video_id),
         notes=workspace.get_video_notes(series_id, video_id),
         knowledge_cards=workspace.get_video_knowledge_cards(series_id, video_id),
+        visual_evidence=_get_visual_evidence(workspace, series_id, video_id),
     )
 
 
@@ -820,6 +829,7 @@ def _build_documents_for_assets(
     transcript,
     notes,
     knowledge_cards,
+    visual_evidence,
 ) -> list[RetrievalDocument]:
     """把四类制品（总结/转写/笔记/知识卡）按"存在则加入"的原则拼成文档列表。"""
     documents: list[RetrievalDocument] = []
@@ -831,6 +841,8 @@ def _build_documents_for_assets(
         documents.extend(_build_notes_documents(notes))
     if knowledge_cards is not None:
         documents.extend(_build_knowledge_card_documents(knowledge_cards))
+    if visual_evidence is not None:
+        documents.extend(_build_visual_evidence_documents(visual_evidence))
     return documents
 
 
@@ -920,6 +932,43 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
             )
         )
     return docs
+
+
+def _build_visual_evidence_documents(visual_evidence) -> list[RetrievalDocument]:
+    """将每张截图的文字解释作为独立的可定位 RAG 证据。"""
+    documents: list[RetrievalDocument] = []
+    for frame in visual_evidence.frames:
+        text = str(frame.text).strip()
+        if not text:
+            continue
+        documents.append(
+            RetrievalDocument(
+                text=text,
+                metadata=_with_common_metadata(
+                    {
+                        "doc_id": (
+                            f"series:{visual_evidence.series_id}:video:{visual_evidence.video_id}:"
+                            f"visual_frame:{frame.image_filename}"
+                        ),
+                        "series_id": visual_evidence.series_id,
+                        "video_id": visual_evidence.video_id,
+                        "source_type": "visual_frame",
+                        "source_family": "visual",
+                        "chapter_id": frame.chapter_id,
+                        "start_seconds": frame.timestamp_seconds,
+                        "end_seconds": frame.timestamp_seconds,
+                        "image_filename": frame.image_filename,
+                    }
+                ),
+            )
+        )
+    return documents
+
+
+def _get_visual_evidence(workspace: VideoLibraryReader, series_id: str, video_id: str):
+    """兼容尚未实现新视觉制品读取端口的历史测试/外部工作区。"""
+    reader = getattr(workspace, "get_video_visual_evidence", None)
+    return reader(series_id, video_id) if callable(reader) else None
 
 
 def _build_transcript_documents(transcript) -> list[RetrievalDocument]:

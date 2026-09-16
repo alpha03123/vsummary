@@ -55,6 +55,8 @@ from backend.video_summary.library.models import (
     VideoSourceDTO as VideoSourceDTO,
     VideoSummaryDTO as VideoSummaryDTO,
     VideoTranscriptDTO as VideoTranscriptDTO,
+    VideoVisualEvidenceDTO as VideoVisualEvidenceDTO,
+    VideoVisualEvidenceFrameDTO as VideoVisualEvidenceFrameDTO,
     VideoWorkspaceToolsDTO as VideoWorkspaceToolsDTO,
     WorkspaceDTO as WorkspaceDTO,
     WorkspaceToolDTO as WorkspaceToolDTO,
@@ -371,6 +373,46 @@ class FileSystemVideoWorkspace:
                 for segment in _normalize_transcript_segments(payload.get("segments"))
             ],
         )
+
+    def get_video_visual_evidence(self, series_id: str, video_id: str) -> VideoVisualEvidenceDTO | None:
+        """读取视觉证据，并拒绝不安全或缺失截图的条目。"""
+        if self.get_video_source(series_id, video_id) is None:
+            return None
+        output_dir = self._workspace_dir / series_id / video_id
+        path = output_dir / "visual.evidence.json"
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw_frames = payload.get("frames") if isinstance(payload, dict) else None
+        if not isinstance(raw_frames, list):
+            raise ValueError("visual.evidence.json 的 frames 必须是数组。")
+        frames: list[VideoVisualEvidenceFrameDTO] = []
+        for item in raw_frames:
+            if not isinstance(item, dict):
+                raise ValueError("visual.evidence.json 含无效帧条目。")
+            chapter_id = str(item.get("chapter_id", "")).strip()
+            filename = item.get("image_filename")
+            text = item.get("text")
+            timestamp = _as_seconds(item.get("timestamp_seconds"))
+            if (
+                not chapter_id
+                or not isinstance(filename, str)
+                or Path(filename).name != filename
+                or not isinstance(text, str)
+                or not text.strip()
+                or timestamp is None
+                or not (output_dir / "screenshots" / filename).is_file()
+            ):
+                raise ValueError("visual.evidence.json 含不安全或不完整的帧条目。")
+            frames.append(
+                VideoVisualEvidenceFrameDTO(
+                    chapter_id=chapter_id,
+                    timestamp_seconds=timestamp,
+                    image_filename=filename,
+                    text=text.strip(),
+                )
+            )
+        return VideoVisualEvidenceDTO(series_id=series_id, video_id=video_id, frames=frames)
 
     def update_video_transcript(
         self,
@@ -1422,7 +1464,7 @@ def _validate_editable_transcript_segment(item: dict[str, object], index: int) -
 
 
 def _invalidate_content_derivatives(output_dir: Path) -> None:
-    for filename in ("mindmap.json", "knowledge_cards.json"):
+    for filename in ("mindmap.json", "knowledge_cards.json", "visual.evidence.json"):
         path = output_dir / filename
         if path.exists():
             path.unlink()

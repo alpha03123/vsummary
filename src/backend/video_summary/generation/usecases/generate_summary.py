@@ -46,8 +46,10 @@ from backend.video_summary.generation.ports import (
     Summarizer,
     TranscriptEnhancer,
     Transcriber,
+    VisualSummaryEnricher,
 )
 from backend.video_summary.generation.stage_cache import GenerationStageCache
+from backend.video_summary.generation.visuals import ExtractedChapterFrame, PlannedChapterFrame
 
 
 LOGGER = logging.getLogger(__name__)
@@ -89,6 +91,9 @@ class GenerateVideoSummary:
         saved_transcript_provider: SavedTranscriptSource | None = None,
         frame_extractor: FrameExtractor | None = None,
         chapter_screenshots_enabled: bool = True,
+        visual_summary_enricher: VisualSummaryEnricher | None = None,
+        multimodal_visual_enabled: bool = False,
+        max_visual_frames: int = 6,
     ) -> None:
         """注入媒体处理、转写、（可选）转写增强、总结与制品落盘端口。
 
@@ -110,6 +115,13 @@ class GenerateVideoSummary:
         self._saved_transcript_provider = saved_transcript_provider
         self._frame_extractor = frame_extractor
         self._chapter_screenshots_enabled = chapter_screenshots_enabled
+        self._visual_summary_enricher = visual_summary_enricher
+        self._multimodal_visual_enabled = multimodal_visual_enabled
+        self._max_visual_frames = max_visual_frames
+        if self._multimodal_visual_enabled and not self._chapter_screenshots_enabled:
+            raise ValueError("启用多模态视觉增强前必须先启用章节截图。")
+        if self._max_visual_frames <= 0:
+            raise ValueError("max_visual_frames 必须是正整数。")
 
     async def run(
         self,
@@ -431,15 +443,37 @@ class GenerateVideoSummary:
             except Exception as error:
                 raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         _raise_if_cancelled(progress_reporter, cancellation)
+        extracted_frames: list[ExtractedChapterFrame] = []
         if self._chapter_screenshots_enabled:
-            summary_document = await _attach_chapter_screenshots(
+            summary_document, extracted_frames = await _attach_chapter_screenshots(
                 summary_document,
                 video=video,
                 staging_dir=staging_dir,
                 frame_extractor=self._frame_extractor,
                 progress_reporter=progress_reporter,
                 cancellation=cancellation,
+                max_visual_frames=self._max_visual_frames,
             )
+        if self._multimodal_visual_enabled and extracted_frames:
+            if self._visual_summary_enricher is None:
+                raise RuntimeError("多模态视觉增强未配置模型适配器。")
+            if progress_reporter is not None:
+                progress_reporter.update("enrich_visual_summary", 98.0, "正在结合截图生成最终概况")
+            _raise_if_cancelled(progress_reporter, cancellation)
+            try:
+                summary_document, visual_evidence = await self._visual_summary_enricher.enrich(
+                    video=video,
+                    transcript=transcript,
+                    draft=summary_document,
+                    frames=extracted_frames,
+                    cancellation=cancellation,
+                )
+            except GenerateCancelledError:
+                raise
+            except Exception as error:
+                raise RuntimeError(_build_llm_stage_error("多模态视觉增强", error)) from error
+            _raise_if_cancelled(progress_reporter, cancellation)
+            await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
         await asyncio.to_thread(
@@ -459,58 +493,40 @@ async def _attach_chapter_screenshots(
     frame_extractor: FrameExtractor | None,
     progress_reporter: ProgressReporter | None,
     cancellation: GenerationCancellationContext | None,
-) -> SummaryDocument:
-    """为每章抽取中点截图；音频媒体跳过，其他失败记录可见警告。"""
+    max_visual_frames: int,
+) -> tuple[SummaryDocument, list[ExtractedChapterFrame]]:
+    """按模型规划时间点抽取章节截图；音频媒体不产生视觉制品。"""
     chapters = document.summary_data.get("chapters")
     if frame_extractor is None or not isinstance(chapters, list) or not chapters:
-        return document
+        return document, []
 
     summary_data = dict(document.summary_data)
+    plans = validate_visual_frame_plan(document=document, video=video, max_visual_frames=max_visual_frames)
+    plan_by_chapter_id = {plan.chapter_id: plan for plan in plans}
     enriched_chapters: list[object] = []
-    warnings: list[str] = []
+    extracted_frames: list[ExtractedChapterFrame] = []
     screenshot_dir = staging_dir / "screenshots"
     for index, raw_chapter in enumerate(chapters, start=1):
         if not isinstance(raw_chapter, dict):
-            message = f"第 {index} 章插图未生成：章节数据不是对象。"
-            LOGGER.warning(message, extra={"event": "chapter_screenshot_skipped"})
-            warnings.append(message)
             enriched_chapters.append(raw_chapter)
             continue
-        start_seconds = raw_chapter.get("start_seconds")
-        end_seconds = raw_chapter.get("end_seconds")
-        if not isinstance(start_seconds, int | float) or not isinstance(end_seconds, int | float):
-            message = f"第 {index} 章插图未生成：章节时间范围无效。"
-            LOGGER.warning(message, extra={"event": "chapter_screenshot_skipped"})
-            warnings.append(message)
+        plan = plan_by_chapter_id.get(str(raw_chapter.get("id", "")).strip())
+        if plan is None:
             enriched_chapters.append(raw_chapter)
             continue
-        if not math.isfinite(start_seconds) or not math.isfinite(end_seconds) or end_seconds < start_seconds:
-            message = f"第 {index} 章插图未生成：章节时间范围无效。"
-            LOGGER.warning(
-                message,
-                extra={
-                    "event": "chapter_screenshot_skipped",
-                    "timestamp_seconds": {"start": start_seconds, "end": end_seconds},
-                },
-            )
-            warnings.append(message)
-            enriched_chapters.append(raw_chapter)
-            continue
-        timestamp = min(max((float(start_seconds) + float(end_seconds)) / 2, 0.0), video.duration_seconds)
-        filename = f"chapter-{index:02d}.jpg"
         if progress_reporter is not None:
             progress_reporter.update(
                 "extract_screenshots",
-                92.0 + index * 6.0 / len(chapters),
-                f"正在生成章节插图 {index}/{len(chapters)}",
+                92.0 + len(extracted_frames) * 6.0 / max(1, len(plans)),
+                f"正在生成章节插图 {len(extracted_frames) + 1}/{len(plans)}",
             )
         _raise_if_cancelled(progress_reporter, cancellation)
         try:
             await asyncio.to_thread(
                 frame_extractor.extract_frame,
                 video.source_path,
-                timestamp,
-                screenshot_dir / filename,
+                plan.timestamp_seconds,
+                screenshot_dir / plan.image_filename,
                 cancellation,
             )
         except InterruptedError as error:
@@ -522,28 +538,73 @@ async def _attach_chapter_screenshots(
             )
             enriched_chapters.append(raw_chapter)
             enriched_chapters.extend(chapters[index:])
-            break
+            summary_data["chapters"] = enriched_chapters
+            return SummaryDocument(
+                markdown=render_markdown(summary_data),
+                summary_data=summary_data,
+                mindmap_data=document.mindmap_data,
+            ), []
         except Exception as error:
-            message = f"第 {index} 章插图未生成，概况已保留。"
-            LOGGER.warning(
-                message,
-                extra={"event": "chapter_screenshot_failed", "timestamp_seconds": timestamp},
-                exc_info=error,
-            )
-            warnings.append(message)
-            enriched_chapters.append(raw_chapter)
-            continue
+            raise RuntimeError(f"第 {index} 章截图生成失败。") from error
         _raise_if_cancelled(progress_reporter, cancellation)
-        enriched_chapters.append({**raw_chapter, "image_filename": filename})
+        enriched_chapters.append({**raw_chapter, "image_filename": plan.image_filename})
+        extracted_frames.append(
+            ExtractedChapterFrame(
+                chapter_id=plan.chapter_id,
+                timestamp_seconds=plan.timestamp_seconds,
+                image_filename=plan.image_filename,
+                path=screenshot_dir / plan.image_filename,
+            )
+        )
 
     summary_data["chapters"] = enriched_chapters
-    if warnings:
-        summary_data["generation_warnings"] = warnings
     return SummaryDocument(
         markdown=render_markdown(summary_data),
         summary_data=summary_data,
         mindmap_data=document.mindmap_data,
-    )
+    ), extracted_frames
+
+
+def validate_visual_frame_plan(
+    *,
+    document: SummaryDocument,
+    video: VideoAsset,
+    max_visual_frames: int,
+) -> list[PlannedChapterFrame]:
+    """验证模型截图计划，拒绝越界、重复和超额时间点。"""
+    if max_visual_frames <= 0:
+        raise ValueError("max_visual_frames 必须是正整数。")
+    chapters = document.summary_data.get("chapters")
+    if not isinstance(chapters, list):
+        raise ValueError("总结章节数据无效。")
+    plans: list[PlannedChapterFrame] = []
+    seen_ids: set[str] = set()
+    for index, chapter in enumerate(chapters, start=1):
+        if not isinstance(chapter, dict):
+            raise ValueError(f"第 {index} 章数据不是对象。")
+        chapter_id = str(chapter.get("id", "")).strip()
+        if not chapter_id or chapter_id in seen_ids:
+            raise ValueError(f"第 {index} 章 ID 无效或重复。")
+        seen_ids.add(chapter_id)
+        timestamp = chapter.get("image_timestamp_seconds")
+        if timestamp is None:
+            continue
+        start = chapter.get("start_seconds")
+        end = chapter.get("end_seconds")
+        if not all(isinstance(value, int | float) and math.isfinite(value) for value in (timestamp, start, end)):
+            raise ValueError(f"第 {index} 章截图时间范围无效。")
+        if end < start or timestamp < start or timestamp > end or timestamp < 0 or timestamp > video.duration_seconds:
+            raise ValueError(f"第 {index} 章截图时间点不在有效范围内。")
+        plans.append(
+            PlannedChapterFrame(
+                chapter_id=chapter_id,
+                timestamp_seconds=float(timestamp),
+                image_filename=f"chapter-{index:02d}.jpg",
+            )
+        )
+    if len(plans) > max_visual_frames:
+        raise ValueError(f"模型选择了 {len(plans)} 张截图，超过上限 {max_visual_frames}。")
+    return plans
 
 
 def _build_no_transcribable_audio_transcript(duration_seconds: float) -> Transcript:
@@ -716,7 +777,7 @@ def _commit_generation_artifacts(
             shutil.move(str(source), str(target))
             continue
         source.replace(target)
-    for artifact_name in ("transcript.enhanced.json", "mindmap.json", "knowledge_cards.json"):
+    for artifact_name in ("transcript.enhanced.json", "mindmap.json", "knowledge_cards.json", "visual.evidence.json"):
         if artifact_name not in staged_names:
             (output_dir / artifact_name).unlink(missing_ok=True)
     if "screenshots" not in staged_names:
@@ -751,7 +812,7 @@ def _commit_transcript_artifacts(
     if remove_manual_source:
         (output_dir / "transcript.manual.srt").unlink(missing_ok=True)
         (output_dir / "transcript.source.json").unlink(missing_ok=True)
-    for artifact_name in ("summary.json", "summary.md", "mindmap.json", "knowledge_cards.json"):
+    for artifact_name in ("summary.json", "summary.md", "mindmap.json", "knowledge_cards.json", "visual.evidence.json"):
         (output_dir / artifact_name).unlink(missing_ok=True)
     _remove_tree_if_exists(output_dir / "screenshots")
     (output_dir.parent / "mindmap.json").unlink(missing_ok=True)

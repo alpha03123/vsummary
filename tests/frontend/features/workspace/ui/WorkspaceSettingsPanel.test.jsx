@@ -52,6 +52,34 @@ describe("WorkspaceSettingsPanel provider settings", () => {
     expect(screen.getByText("保存 Key")).toBeInTheDocument();
   });
 
+  it("shows the image limit only in multimodal chapter visual mode", () => {
+    const { rerender } = renderPanel({ chapterVisualMode: "screenshots" }, { initialTab: "ai" });
+
+    expect(screen.getByText("章节画面")).toBeInTheDocument();
+    expect(screen.queryByText("单视频图片上限")).not.toBeInTheDocument();
+
+    rerender(
+      <WorkspaceSettingsPanel
+        ui={{ ...defaultUiSettings, chapterVisualMode: "multimodal" }}
+        initialTab="ai"
+        fasterWhisperModels={[]}
+        fasterWhisperModelsLoading={false}
+        ragModels={[]}
+        onChangeSetting={vi.fn()}
+        onSaveProviderSettings={vi.fn()}
+        onSaveApiKey={vi.fn()}
+        onRevealOpenaiApiKey={vi.fn()}
+        onTestProviderConnection={vi.fn()}
+        onDownloadFasterWhisperModel={vi.fn()}
+        onDownloadRagModel={vi.fn()}
+        onResetSettings={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("单视频图片上限")).toBeInTheDocument();
+  });
+
   it("opens the dedicated usage page from provider settings", () => {
     const onOpenUsagePage = vi.fn();
     renderPanel({}, { onOpenUsagePage });

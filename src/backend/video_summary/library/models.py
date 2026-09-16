@@ -174,6 +174,25 @@ class VideoSummaryDTO:
 
 
 @dataclass(frozen=True)
+class VideoVisualEvidenceFrameDTO:
+    """一张工作区截图对应的可检索文字证据。"""
+
+    chapter_id: str
+    timestamp_seconds: float
+    image_filename: str
+    text: str
+
+
+@dataclass(frozen=True)
+class VideoVisualEvidenceDTO:
+    """单个视频的逐帧视觉证据制品。"""
+
+    series_id: str
+    video_id: str
+    frames: list[VideoVisualEvidenceFrameDTO]
+
+
+@dataclass(frozen=True)
 class TranscriptSegmentDTO:
     """单条转写片段。
 
