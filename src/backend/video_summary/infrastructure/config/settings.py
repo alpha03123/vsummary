@@ -29,7 +29,6 @@ from backend.shared.filesystem import atomic_write_text
 VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper", "whisper_cpp", "aliyun_bailian"}
 VALID_THEMES = {"light", "dark"}
-VALID_WORKSPACE_LAYOUT_MODES = {"video_center", "chat_center"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
 VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
@@ -240,7 +239,6 @@ class WorkspaceUiSettings:
 
     theme: str
     show_takeaways: bool
-    layout_mode: str
 
 
 @dataclass(frozen=True)
@@ -474,7 +472,6 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     workspace_ui_settings = WorkspaceUiSettings(
         theme=_normalize_theme(workspace_ui_payload.get("theme")),
         show_takeaways=bool(workspace_ui_payload.get("show_takeaways", True)),
-        layout_mode=_normalize_workspace_layout_mode(workspace_ui_payload.get("layout_mode")),
     )
     debug_payload = payload.get("debug", {})
     debug_settings = DebugSettings(
@@ -980,12 +977,6 @@ def _normalize_theme(value: object) -> str:
     return "light"
 
 
-def _normalize_workspace_layout_mode(value: object) -> str:
-    if isinstance(value, str) and value in VALID_WORKSPACE_LAYOUT_MODES:
-        return value
-    return "video_center"
-
-
 def _normalize_transcription_mode(value: object) -> str:
     """校验转写模式枚举；非合法值回退为 `"fast"`。"""
     if isinstance(value, str):
@@ -1084,7 +1075,6 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "[workspace_ui]",
         f'theme = "{settings.workspace_ui.theme}"',
         f"show_takeaways = {_toml_bool(settings.workspace_ui.show_takeaways)}",
-        f'layout_mode = "{settings.workspace_ui.layout_mode}"',
         "",
         "[debug]",
         f"mode = {_toml_bool(settings.debug.mode)}",

@@ -54,7 +54,6 @@ function toWorkspaceSettings(payload) {
   return {
     theme: payload.theme,
     showTakeaways: payload.show_takeaways,
-    layoutMode: payload.layout_mode,
     transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
     asrProvider: payload.asr_provider,
     asrModelQuality: payload.asr_model_quality,
@@ -120,7 +119,6 @@ export async function updateWorkspaceSettings(settings) {
     body: JSON.stringify({
       theme: settings.theme,
       show_takeaways: settings.showTakeaways,
-      layout_mode: settings.layoutMode,
       transcript_enhancement_enabled: settings.transcriptEnhancementEnabled,
       asr_provider: settings.asrProvider,
       asr_model_quality: settings.asrModelQuality,

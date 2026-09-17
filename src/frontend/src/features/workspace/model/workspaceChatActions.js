@@ -45,7 +45,6 @@ export function createWorkspaceChatActions({
       state.selectedContextType,
       state.selectedSeriesId,
       state.selectedVideoId,
-      state.selectedToolId,
     );
 
     const requestId = Date.now();
@@ -166,7 +165,6 @@ export function createWorkspaceChatActions({
       state.selectedContextType,
       state.selectedSeriesId,
       state.selectedVideoId,
-      state.selectedToolId,
     );
     try {
       await clearAgentSession(sessionId, context);
@@ -188,40 +186,31 @@ export function createWorkspaceChatActions({
       return;
     }
 
-    if (state.selectedToolId === "preview") {
-      if (typeof reference.seconds !== "number") {
+    if (reference.videoId && reference.videoId !== state.selectedVideoId) {
+      if (state.selectedContextType !== "series") {
         return;
       }
-      if (reference.videoId && reference.videoId !== state.selectedVideoId) {
-        return;
-      }
-      dispatchPlayerSeek(reference);
-      return;
-    }
-
-    if (state.selectedToolId === "overview") {
-      if (reference.videoId && reference.videoId !== state.selectedVideoId) {
-        return;
-      }
-      if (typeof reference.seconds !== "number" && !reference.chapterId) {
-        return;
-      }
-      dispatch({
-        type: "citation_focus_requested",
-        focus: {
-          ...reference,
-          requestId: `${Date.now()}-${reference.seconds ?? reference.chapterId}`,
-        },
-      });
-      return;
-    }
-
-    if (state.selectedToolId === "series-overview" && reference.videoId) {
       dispatch({
         type: "citation_focus_requested",
         focus: {
           ...reference,
           requestId: `${Date.now()}-${reference.videoId}`,
+        },
+      });
+      return;
+    }
+    if (typeof reference.seconds !== "number" && !reference.chapterId) {
+      return;
+    }
+    if (typeof reference.seconds === "number") {
+      dispatchPlayerSeek(reference);
+    }
+    if (reference.chapterId || typeof reference.seconds === "number") {
+      dispatch({
+        type: "citation_focus_requested",
+        focus: {
+          ...reference,
+          requestId: `${Date.now()}-${reference.seconds ?? reference.chapterId}`,
         },
       });
     }

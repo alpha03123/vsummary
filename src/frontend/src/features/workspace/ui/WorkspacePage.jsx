@@ -6,6 +6,7 @@ import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
 import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
+import { WorkspaceStudioPanels } from "./WorkspaceStudioPanels";
 import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceImportModal } from "./WorkspaceImportModal";
 import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
@@ -13,13 +14,7 @@ import { WorkspaceRenameDialog } from "./shared/WorkspaceRenameDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
-import {
-  clampChatDrawerWidth,
-  clampMiddleWidth,
-  clampSidebarWidth,
-  loadWorkspaceLayout,
-  persistWorkspaceLayout,
-} from "./workspaceLayout";
+import { clampChatDrawerWidth, clampPanelWidth, clampSidebarWidth, createPanelId, getPanelType, isPanelAllowedForScope, loadWorkspaceLayout, persistWorkspaceLayout, STUDIO_PANEL_TYPES, WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
 
 const WorkspaceLibraryHomePane = lazy(() =>
   import("./WorkspaceLibraryHomePane").then((module) => ({
@@ -67,7 +62,17 @@ export function WorkspacePage({ page }) {
     selectedContextType,
   } = shell;
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [layout, setLayout] = useState(loadWorkspaceLayout);
+  const studioScope = selectedContextType === "series" ? "series" : "video";
+  const [layoutsByScope, setLayoutsByScope] = useState(() => ({
+    video: loadWorkspaceLayout("video"),
+    series: loadWorkspaceLayout("series"),
+  }));
+  const layout = layoutsByScope[studioScope];
+  const setLayout = (updater) => setLayoutsByScope((current) => ({
+    ...current,
+    [studioScope]: typeof updater === "function" ? updater(current[studioScope]) : updater,
+  }));
+  const [focusedPanel, setFocusedPanel] = useState("overview");
   const [importModalState, setImportModalState] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -76,7 +81,6 @@ export function WorkspacePage({ page }) {
   const [playbackTime, setPlaybackTime] = useState(null);
   const [followOverviewPlayback, setFollowOverviewPlayback] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
-  const [chatDraftReady, setChatDraftReady] = useState(false);
   const [resumePosition, setResumePosition] = useState({ videoKey: null, seconds: null });
   const playbackPositionsRef = useRef(new Map());
   const containerRef = useRef(null);
@@ -87,9 +91,8 @@ export function WorkspacePage({ page }) {
   useFocusTrap(settingsModalRef, state.settingsPanelOpen);
   useFocusTrap(usageModalRef, state.usagePageOpen);
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
-  const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const hasRightPane = Boolean(activeSeries);
-  const isChatCenterMode = ui.layoutMode === "chat_center";
+  const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const summaryLocked = selectedContextType === "series"
     ? !(activeSeries?.videos ?? []).some((video) => video.processed)
     : selectedContextType === "video" && selectedVideo?.processed !== true;
@@ -112,9 +115,6 @@ export function WorkspacePage({ page }) {
     draft: chatDraft,
     onDraftChange: (nextDraft) => {
       setChatDraft(nextDraft);
-      if (nextDraft !== "帮我生成一份笔记") {
-        setChatDraftReady(false);
-      }
     },
     onSelectChatSession: chat.selectChatSession,
     onStartNewChat: chat.startNewChat,
@@ -126,8 +126,9 @@ export function WorkspacePage({ page }) {
   };
 
   useEffect(() => {
-    persistWorkspaceLayout(layout);
-  }, [layout]);
+    persistWorkspaceLayout(layoutsByScope.video, "video");
+    persistWorkspaceLayout(layoutsByScope.series, "series");
+  }, [layoutsByScope]);
 
   const selectedVideoKey = activeSeries && selectedVideo
     ? `${activeSeries.id}/${selectedVideo.id}`
@@ -153,7 +154,11 @@ export function WorkspacePage({ page }) {
 
     const startX = startEvent.clientX;
     const startSidebarWidth = layout.sidebarWidth;
-    const startMiddleWidth = layout.middleWidth;
+    const panelId = type === "sidebar" ? null : type;
+    const panelIndex = panelId ? layout.studioPanels.indexOf(panelId) : -1;
+    const rightPanelId = panelIndex >= 0 ? layout.studioPanels[panelIndex + 1] : null;
+    const startPanelWidth = panelId ? (layout.panelWidths[panelId] ?? WORKSPACE_LAYOUT_LIMITS.panelDefaultWidth) : null;
+    const startRightPanelWidth = rightPanelId ? (layout.panelWidths[rightPanelId] ?? WORKSPACE_LAYOUT_LIMITS.panelDefaultWidth) : null;
     const containerWidth = container.getBoundingClientRect().width;
 
     function handlePointerMove(event) {
@@ -170,13 +175,29 @@ export function WorkspacePage({ page }) {
         return;
       }
 
+      const maxLeftWidth = rightPanelId
+        ? startPanelWidth + startRightPanelWidth - WORKSPACE_LAYOUT_LIMITS.panelMinWidth
+        : clampPanelWidth({
+            proposedWidth: Number.MAX_SAFE_INTEGER,
+            containerWidth,
+            panelCount: layout.studioPanels.length,
+            sidebarWidth: isSidebarOpen ? layout.sidebarWidth : 0,
+          });
+      const nextLeftWidth = Math.min(
+        Math.max(WORKSPACE_LAYOUT_LIMITS.panelMinWidth, startPanelWidth + deltaX),
+        maxLeftWidth,
+      );
+      const appliedDelta = nextLeftWidth - startPanelWidth;
+      const nextRightWidth = rightPanelId
+        ? Math.max(WORKSPACE_LAYOUT_LIMITS.panelMinWidth, startRightPanelWidth - appliedDelta)
+        : null;
       setLayout((current) => ({
         ...current,
-        middleWidth: clampMiddleWidth({
-          proposedWidth: startMiddleWidth + deltaX,
-          containerWidth,
-          sidebarWidth: isSidebarOpen ? current.sidebarWidth : 0,
-        }),
+        panelWidths: {
+          ...current.panelWidths,
+          [panelId]: nextLeftWidth,
+          ...(rightPanelId ? { [rightPanelId]: nextRightWidth } : {}),
+        },
       }));
     }
 
@@ -193,17 +214,83 @@ export function WorkspacePage({ page }) {
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
+  function openStudioPanel(toolId) {
+    if (!STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) {
+      return;
+    }
+    const existingPanel = layout.studioPanels.find((panelId) => (
+      (layout.panelTools[panelId] ?? getPanelType(panelId)) === toolId
+    ));
+    if (existingPanel) {
+      setFocusedPanel(existingPanel);
+      return;
+    }
+    if (layout.studioPanels.length >= WORKSPACE_LAYOUT_LIMITS.maxPanels) {
+      return;
+    }
+    const panelId = createPanelId(toolId);
+    setLayout((current) => ({
+      ...current,
+      studioPanels: [...current.studioPanels, panelId],
+      panelTools: { ...current.panelTools, [panelId]: toolId },
+    }));
+    setFocusedPanel(panelId);
+  }
+
+  function addStudioPanel() {
+    if (layout.studioPanels.length >= WORKSPACE_LAYOUT_LIMITS.maxPanels) return;
+    const panelId = createPanelId("studio");
+    setLayout((current) => ({
+      ...current,
+      studioPanels: [...current.studioPanels, panelId],
+      panelTools: { ...current.panelTools, [panelId]: "studio" },
+    }));
+    setFocusedPanel(panelId);
+  }
+
+  function setPanelTool(panelId, toolId) {
+    if (!STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) return;
+    setLayout((current) => ({
+      ...current,
+      panelTools: { ...current.panelTools, [panelId]: toolId },
+    }));
+    setFocusedPanel(panelId);
+  }
+
+  function closeStudioPanel(panelId) {
+    setLayout((current) => {
+      const panelTools = { ...current.panelTools };
+      const panelWidths = { ...current.panelWidths };
+      delete panelTools[panelId];
+      delete panelWidths[panelId];
+      return { ...current, studioPanels: current.studioPanels.filter((item) => item !== panelId), panelTools, panelWidths };
+    });
+    setFocusedPanel((current) => current === panelId ? null : current);
+  }
+
+  function reorderStudioPanels(sourcePanelId, targetPanelId) {
+    setLayout((current) => {
+      const sourceIndex = current.studioPanels.indexOf(sourcePanelId);
+      const targetIndex = current.studioPanels.indexOf(targetPanelId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+        return current;
+      }
+      const studioPanels = [...current.studioPanels];
+      studioPanels.splice(sourceIndex, 1);
+      studioPanels.splice(targetIndex, 0, sourcePanelId);
+      return { ...current, studioPanels };
+    });
+    setFocusedPanel(sourcePanelId);
+  }
+
   function updateChatDrawerWidth(proposedWidth) {
     setLayout((current) => ({
       ...current,
-      chatDrawerWidth: clampChatDrawerWidth({
-        proposedWidth,
-        viewportWidth: window.innerWidth,
-      }),
+      chatDrawerWidth: clampChatDrawerWidth({ proposedWidth, viewportWidth: window.innerWidth }),
     }));
   }
 
-  function renderVideoPlayerPane() {
+  function renderVideoPlayerPane(onBackToTools = null) {
     if (selectedVideo) {
       if (selectedVideo.status === "source_missing") {
         return (
@@ -221,6 +308,17 @@ export function WorkspacePage({ page }) {
         // 与右栏 WorkspaceReadingPane 的 p-6 保持一致，否则媒体卡贴着面板边缘、
         // 而右侧内容缩进 24px，同一行两栏看起来没有对齐。
         <div className="flex h-full flex-col overflow-y-auto p-6">
+          {onBackToTools ? (
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={onBackToTools}
+                className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                ← 返回工具页
+              </button>
+            </div>
+          ) : null}
           <WorkspaceVideoPlayer
             videoSource={tools?.preview?.previewUrl ?? previewUrl}
             subtitleSource={tools?.preview?.subtitleUrl ?? null}
@@ -257,15 +355,16 @@ export function WorkspacePage({ page }) {
     );
   }
 
-  function renderReadingPane() {
-    return (
-      <WorkspaceVideoScopePane
-        page={page}
-        playbackTime={playbackTime}
-        followOverviewPlayback={followOverviewPlayback}
-        onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
-      />
-    );
+  function renderStudioPanel(panelId, fallbackToolId) {
+    const toolId = layout.panelTools[panelId] ?? fallbackToolId;
+    if (toolId === "preview") return renderVideoPlayerPane(() => setPanelTool(panelId, "studio"));
+    if (toolId === "ai-chat") {
+      return <WorkspaceChatPanel {...chatPanelProps} onBackToTools={() => setPanelTool(panelId, "studio")} />;
+    }
+    if (toolId === "series-overview" || toolId === "series-mindmap") {
+      return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} />;
+    }
+    return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} playbackTime={playbackTime} followOverviewPlayback={followOverviewPlayback} onFollowOverviewPlaybackChange={setFollowOverviewPlayback} />;
   }
 
   if (state.loading && !summary) {
@@ -424,13 +523,10 @@ export function WorkspacePage({ page }) {
           onOpenUpdate={() => actions.openSettingsPanel("update")}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onToggleChatDrawer={() => {
-            setChatDraftReady(false);
-            chat.toggleDrawer();
-          }}
+          onToggleChatDrawer={chat.toggleDrawer}
           chatDrawerOpen={chat.drawerOpen}
-          chatDraftReady={!isChatCenterMode && chatDraftReady && !chat.drawerOpen}
-          chatDrawerEnabled={!isChatCenterMode}
+          studioPanels={layout.studioPanels}
+          onAddStudioPanel={addStudioPanel}
         />
 
         {state.error && (
@@ -454,27 +550,7 @@ export function WorkspacePage({ page }) {
 
         <WorkspaceKnowledgeMemoryStatusBar snapshot={state.knowledgeMemorySnapshot} />
 
-        <div className="flex-1 min-h-0 relative flex overflow-hidden bg-transparent">
-          {activeSeries && !isPlaygroundHome ? (
-            <section
-              style={hasRightPane ? { width: `${layout.middleWidth}px` } : undefined}
-              className="shrink-0 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90"
-            >
-              {isChatCenterMode ? <WorkspaceChatPanel {...chatPanelProps} /> : renderVideoPlayerPane()}
-            </section>
-          ) : null}
-          {isPlaygroundHome ? (
-            <section className="flex-1 min-w-[320px] h-full overflow-hidden block border-r border-stone-200/70 dark:border-stone-800/90">
-              <div className="flex h-full items-center justify-center p-8">
-                <WorkspaceStateBlock
-                  eyebrow="Playground"
-                  title="选择一个视频开始分析"
-                  dashed
-                />
-              </div>
-            </section>
-          ) : null}
-
+        <div className="flex-1 min-h-0 relative overflow-hidden bg-transparent">
           {!activeSeries ? (
             <AnimatePresence mode="wait">
               <Suspense fallback={<WorkspaceSidePaneLoadingState title="正在载入工作区首页" />}>
@@ -486,21 +562,21 @@ export function WorkspacePage({ page }) {
                 />
               </Suspense>
             </AnimatePresence>
+          ) : isPlaygroundHome ? (
+            <div className="flex h-full items-center justify-center p-8"><WorkspaceStateBlock eyebrow="Playground" title="选择一个视频开始分析" dashed /></div>
           ) : (
-            <>
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="调整对话与工具页宽度"
-                onPointerDown={(event) => beginResize("middle", event)}
-                className="group relative z-30 -mx-1 hidden w-5 shrink-0 cursor-col-resize touch-none md:block"
-              >
-                <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
-              </div>
-              <section className="min-w-[320px] flex-1 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90">
-                {renderReadingPane()}
-              </section>
-            </>
+            <WorkspaceStudioPanels
+              panels={layout.studioPanels}
+              panelWidths={layout.panelWidths}
+              panelTools={layout.panelTools}
+              focusedPanel={focusedPanel}
+              onFocus={setFocusedPanel}
+              onAdd={openStudioPanel}
+              onClose={closeStudioPanel}
+              onResizeStart={beginResize}
+              onReorder={reorderStudioPanels}
+              renderPanel={renderStudioPanel}
+            />
           )}
 
           {/* Loading Overlay when generating AI Summary */}
@@ -611,15 +687,13 @@ export function WorkspacePage({ page }) {
         </AnimatePresence>
       </main>
 
-      {!isChatCenterMode ? (
-        <ChatDrawer
-          isOpen={chat.drawerOpen}
-          onClose={chat.closeDrawer}
-          width={layout.chatDrawerWidth}
-          onWidthChange={updateChatDrawerWidth}
-          {...chatPanelProps}
-        />
-      ) : null}
+      <ChatDrawer
+        isOpen={chat.drawerOpen}
+        onClose={chat.closeDrawer}
+        width={layout.chatDrawerWidth}
+        onWidthChange={updateChatDrawerWidth}
+        {...chatPanelProps}
+      />
 
       {importModalState && (
         <WorkspaceImportModal
@@ -766,8 +840,8 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
 
 function WorkspaceSidePaneLoadingState({ title }) {
   return (
-    <section className="w-[clamp(320px,38vw,720px)] shrink-0 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all">
-      <div className="flex h-full p-8">
+    <section className="flex-1 min-w-[320px] h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all">
+      <div className="flex h-full items-center justify-center p-8">
         <WorkspaceStateBlock title={title} description="界面资源按需加载中。" loading />
       </div>
     </section>

@@ -134,7 +134,6 @@ class WorkspaceSettingsResponse(BaseModel):
 
     theme: str
     show_takeaways: bool
-    layout_mode: str
     transcript_enhancement_enabled: bool
     asr_provider: str
     asr_model_quality: str
@@ -190,7 +189,6 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
 
     theme: str
     show_takeaways: bool
-    layout_mode: str
     transcript_enhancement_enabled: bool
     asr_provider: str = "faster_whisper"
     asr_model_quality: str

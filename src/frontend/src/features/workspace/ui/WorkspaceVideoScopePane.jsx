@@ -7,6 +7,8 @@ export function WorkspaceVideoScopePane({
   onFollowOverviewPlaybackChange = () => {},
   onProcessLinkedVideo = null,
   onExternalSeek = null,
+  panelToolId = null,
+  onPanelSelectTool = null,
 }) {
   const { shell, generation, actions, chat } = page;
 
@@ -43,7 +45,7 @@ export function WorkspaceVideoScopePane({
         shell.player.seekToTime(request);
         onExternalSeek?.(request);
       }}
-      selectedToolId={shell.state.selectedToolId}
+      selectedToolId={panelToolId ?? shell.state.selectedToolId}
       selectedChapterId={shell.state.selectedChapterId}
       summaryLoading={shell.state.summaryLoading}
       mindmapLoading={shell.state.mindmapLoading}
@@ -54,6 +56,11 @@ export function WorkspaceVideoScopePane({
       isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
       isGeneratingSelectedVideo={generation.isGeneratingSummary}
       onSelectTool={(toolId) => {
+        if (onPanelSelectTool) {
+          onPanelSelectTool(toolId);
+          actions.selectTool(toolId);
+          return;
+        }
         if (
           toolId === "overview" &&
           onProcessLinkedVideo &&

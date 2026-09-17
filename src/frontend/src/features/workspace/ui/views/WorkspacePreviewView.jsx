@@ -76,7 +76,7 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
           {previewSubtitleSource ? (
             <track
               ref={subtitleTrackRef}
-              kind="metadata"
+              kind="subtitles"
               src={previewSubtitleSource}
               srcLang="zh-CN"
               label="中文字幕"
@@ -84,6 +84,7 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
           ) : null}
         </video>
         <WorkspaceSubtitleDisplay
+          videoRef={previewVideoRef}
           subtitleTrackRef={subtitleTrackRef}
           subtitleSource={previewSubtitleSource}
           enabled={subtitlesEnabled}

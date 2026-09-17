@@ -24,7 +24,6 @@ from backend.video_summary.infrastructure.config.settings import (
     VALID_CHAPTER_VISUAL_MODES,
     VALID_AUTO_GENERATE_ARTIFACTS,
     VALID_THEMES,
-    VALID_WORKSPACE_LAYOUT_MODES,
     VALID_TRANSCRIPTION_MODES,
     VALID_ANSWER_DETAIL_LEVELS,
     VALID_NOTE_LENGTHS,
@@ -113,7 +112,6 @@ class WorkspaceSettings:
 
     theme: str
     show_takeaways: bool
-    layout_mode: str
     transcript_enhancement_enabled: bool
     asr_provider: str
     asr_model_quality: str
@@ -155,7 +153,6 @@ class SettingsServicePort(Protocol):
         *,
         theme: str,
         show_takeaways: bool,
-        layout_mode: str,
         transcript_enhancement_enabled: bool,
         asr_model_quality: str,
         transcription_mode: str,
@@ -291,7 +288,6 @@ class SettingsService:
         return WorkspaceSettings(
             theme=settings.workspace_ui.theme,
             show_takeaways=settings.workspace_ui.show_takeaways,
-            layout_mode=settings.workspace_ui.layout_mode,
             transcript_enhancement_enabled=settings.asr.transcript_enhancement_enabled,
             asr_provider=settings.asr.provider,
             asr_model_quality=(
@@ -326,7 +322,6 @@ class SettingsService:
         *,
         theme: str,
         show_takeaways: bool,
-        layout_mode: str,
         transcript_enhancement_enabled: bool,
         asr_model_quality: str,
         transcription_mode: str,
@@ -384,8 +379,6 @@ class SettingsService:
         """
         if theme not in VALID_THEMES:
             raise SettingsValidationError(f"unsupported theme '{theme}'")
-        if layout_mode not in VALID_WORKSPACE_LAYOUT_MODES:
-            raise SettingsValidationError(f"unsupported workspace layout mode '{layout_mode}'")
         normalized_asr_provider = asr_provider.strip().lower()
         if normalized_asr_provider not in VALID_ASR_PROVIDERS:
             raise SettingsValidationError(f"unsupported asr provider '{normalized_asr_provider}'")
@@ -446,7 +439,6 @@ class SettingsService:
                 WorkspaceUiSettings(
                     theme=theme,
                     show_takeaways=show_takeaways,
-                    layout_mode=layout_mode,
                 ),
             )
             next_settings = replace_transcript_enhancement_enabled(next_settings, transcript_enhancement_enabled)
@@ -505,7 +497,6 @@ class SettingsService:
         return WorkspaceSettings(
             theme=theme,
             show_takeaways=show_takeaways,
-            layout_mode=layout_mode,
             transcript_enhancement_enabled=transcript_enhancement_enabled,
             asr_provider=next_settings.asr.provider,
             asr_model_quality=(

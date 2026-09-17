@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
 import { MINDMAP_DEPTH_OPTIONS } from "../../model/mindmapDepthOptions";
@@ -152,20 +151,12 @@ export function WorkspaceSeriesMindmapView({
       </div>
     </div>
   );
-  const headerActionHost = typeof document === "undefined" ? null : document.getElementById("workspace-tool-header-actions");
-  const actionSlot = headerActionHost
-    ? createPortal(actionBar, headerActionHost)
-    : <div className="mb-3 flex justify-end">{actionBar}</div>;
-
   return (
-    <>
-      {actionSlot}
-      <div className="workspace-elevated-panel relative h-full min-h-[500px] w-full overflow-hidden rounded-3xl border outline-dashed outline-1 outline-offset-4 outline-stone-200 dark:outline-stone-800">
-        <div className="pointer-events-none absolute left-4 top-4 z-10">
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Series Mindmap</p>
-        </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-3 flex justify-end">{actionBar}</div>
+      <div className="workspace-elevated-panel relative min-h-0 flex-1 w-full overflow-hidden rounded-3xl border outline-dashed outline-1 outline-offset-4 outline-stone-200 dark:outline-stone-800">
         <MindmapCanvas root={seriesMindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} theme={theme} />
       </div>
-    </>
+    </div>
   );
 }

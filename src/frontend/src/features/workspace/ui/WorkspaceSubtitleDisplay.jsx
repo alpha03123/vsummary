@@ -7,9 +7,11 @@ function activeCueText(track) {
     .join("\n");
 }
 
-export function WorkspaceSubtitleDisplay({ subtitleTrackRef, subtitleSource, enabled, style }) {
+export function WorkspaceSubtitleDisplay({ videoRef, subtitleTrackRef, subtitleSource, enabled, style }) {
   const [text, setText] = useState("");
+  const [containerHeight, setContainerHeight] = useState(0);
   const dragOriginRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     const trackElement = subtitleTrackRef.current;
@@ -18,11 +20,21 @@ export function WorkspaceSubtitleDisplay({ subtitleTrackRef, subtitleSource, ena
       return undefined;
     }
     const sync = () => setText(activeCueText(track));
+    const trackElementSync = () => sync();
+    const video = videoRef?.current;
     track.mode = "hidden";
     track.addEventListener("cuechange", sync);
+    trackElement.addEventListener("load", trackElementSync);
+    video?.addEventListener("timeupdate", sync);
+    video?.addEventListener("loadeddata", sync);
     sync();
-    return () => track.removeEventListener("cuechange", sync);
-  }, [subtitleSource, subtitleTrackRef]);
+    return () => {
+      track.removeEventListener("cuechange", sync);
+      trackElement.removeEventListener("load", trackElementSync);
+      video?.removeEventListener("timeupdate", sync);
+      video?.removeEventListener("loadeddata", sync);
+    };
+  }, [subtitleSource, subtitleTrackRef, videoRef]);
 
   useEffect(() => {
     const move = (event) => {
@@ -40,13 +52,21 @@ export function WorkspaceSubtitleDisplay({ subtitleTrackRef, subtitleSource, ena
     };
   }, [style]);
 
-  if (!enabled || !text) {
-    return null;
-  }
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return undefined;
+    }
+    const updateHeight = () => setContainerHeight(container.getBoundingClientRect().height);
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(container);
+    updateHeight();
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-live="off">
-      <button
+    <div ref={containerRef} className="pointer-events-none absolute inset-0 overflow-hidden" aria-live="off">
+      {enabled && text ? <button
         type="button"
         aria-label="拖动调整字幕位置"
         title="拖动调整字幕位置"
@@ -59,12 +79,12 @@ export function WorkspaceSubtitleDisplay({ subtitleTrackRef, subtitleSource, ena
           top: `${style.position}%`,
           color: style.color,
           backgroundColor: style.backgroundColor,
-          fontSize: `${style.fontSize}px`,
+          fontSize: `${containerHeight * ((style.fontScale ?? 4.2) / 100)}px`,
           whiteSpace: "pre-wrap",
         }}
       >
         {text}
-      </button>
+      </button> : null}
     </div>
   );
 }

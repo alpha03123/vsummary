@@ -500,7 +500,7 @@ export function workspaceReducer(state, action) {
         error: "",
       };
     case "series_selected": {
-      const chatBaseScopeKey = buildChatScopeKey("series", action.seriesId, null, "series-home");
+      const chatBaseScopeKey = buildChatScopeKey("series", action.seriesId, null);
       const chatSessionScope = resolveChatSessionsForScope(
         state.chatSessionIdsByScope,
         state.chatSessionListsByScope,
@@ -575,7 +575,7 @@ export function workspaceReducer(state, action) {
       ) {
         return state;
       }
-      const chatBaseScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId, "studio");
+      const chatBaseScopeKey = buildChatScopeKey("video", action.seriesId, action.videoId);
       const chatSessionScope = resolveChatSessionsForScope(
         state.chatSessionIdsByScope,
         state.chatSessionListsByScope,
@@ -638,7 +638,7 @@ export function workspaceReducer(state, action) {
         error: "",
       };
     case "series_context_selected": {
-      const chatBaseScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null, "series-home");
+      const chatBaseScopeKey = buildChatScopeKey("series", state.selectedSeriesId, null);
       const chatSessionScope = resolveChatSessionsForScope(
         state.chatSessionIdsByScope,
         state.chatSessionListsByScope,

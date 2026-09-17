@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
+import { Sparkles, ArrowLeft, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 import { CopyToClipboardButton } from "./shared/CopyToClipboardButton";
@@ -30,6 +30,7 @@ export function WorkspaceChatPanel({
   onDraftChange,
   onSelectChatSession,
   onStartNewChat,
+  onBackToTools,
   onOpenSeekReference,
   onOpenCitationReference,
   onOpenSettings,
@@ -200,7 +201,18 @@ export function WorkspaceChatPanel({
               height of the control stack opposite it. */}
           <div className="flex min-w-0 flex-col gap-0.5">
             <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
-            <h3 className="min-w-0 truncate text-base font-bold leading-5 text-stone-800 dark:text-stone-100">分析助手</h3>
+            <div className="flex min-w-0 items-center gap-2">
+              {onBackToTools ? (
+                <button
+                  type="button"
+                  onClick={onBackToTools}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-semibold text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                >
+                  <ArrowLeft size={13} /> 返回工具页
+                </button>
+              ) : null}
+              <h3 className="min-w-0 truncate text-base font-bold leading-5 text-stone-800 dark:text-stone-100">分析助手</h3>
+            </div>
           </div>
         </div>
         {/* Right column: caption, then the switcher. The budget pill used to
@@ -587,6 +599,7 @@ function truncateConversationPrompt(prompt) {
 }
 
 function WorkspaceContextUsageInline({ usage, loading }) {
+  const [expanded, setExpanded] = useState(false);
   if ((loading && !usage) || !usage) {
     return null;
   }
@@ -601,12 +614,18 @@ function WorkspaceContextUsageInline({ usage, loading }) {
   const usageLabel = `${formatTokenCount(usage.estimatedTotalTokens)} / ${formatTokenCount(usage.windowTokens)}`;
 
   return (
-    <div className="relative group">
-      <div className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold cursor-default transition-colors ${resolveUsageToneClass(usage.level)}`}>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${resolveUsageToneClass(usage.level)}`}
+      >
         {thresholdLabel}
         <span className="opacity-60">{usage.usagePercent.toFixed(1)}%</span>
-      </div>
-      <div className="absolute right-0 top-full mt-2 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 w-72">
+      </button>
+      {expanded ? (
+      <div className="absolute right-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)]">
         <div className="rounded-2xl border border-stone-200/80 bg-white/95 p-4 shadow-xl backdrop-blur-lg dark:border-stone-700 dark:bg-stone-900/95">
           <div className="flex items-center justify-between mb-2">
             <strong className="text-xs font-semibold text-stone-700 dark:text-stone-200">上下文预算</strong>
@@ -633,6 +652,7 @@ function WorkspaceContextUsageInline({ usage, loading }) {
           </div>
         </div>
       </div>
+      ) : null}
     </div>
   );
 }

@@ -146,7 +146,7 @@ export function WorkspaceVideoPlayer({
             {subtitleSource ? (
               <track
                 ref={subtitleTrackRef}
-                kind="metadata"
+                kind="subtitles"
                 src={subtitleSource}
                 srcLang="zh-CN"
                 label="中文字幕"
@@ -154,6 +154,7 @@ export function WorkspaceVideoPlayer({
             ) : null}
           </video>
           <WorkspaceSubtitleDisplay
+            videoRef={videoRef}
             subtitleTrackRef={subtitleTrackRef}
             subtitleSource={subtitleSource}
             enabled={subtitlesEnabled}

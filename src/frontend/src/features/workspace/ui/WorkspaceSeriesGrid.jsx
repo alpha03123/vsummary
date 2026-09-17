@@ -67,6 +67,7 @@ function SeriesSelectionButton({ seriesItem, selected, onToggle }) {
 export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequestBulkDelete, compact = false }) {
   const allSeries = library?.series ?? [];
   const sourceSeries = allSeries.filter((item) => item.id !== "__playground__");
+  const availableSeriesIdsKey = sourceSeries.map((item) => item.id).join("\u0000");
   const [searchText, setSearchText] = useState("");
   const [selectedSeriesIds, setSelectedSeriesIds] = useState([]);
   const normalizedSearch = searchText.trim().toLowerCase();
@@ -84,8 +85,11 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
   }, [normalizedSearch, sourceSeries]);
   useEffect(() => {
     const availableIds = new Set(sourceSeries.map((item) => item.id));
-    setSelectedSeriesIds((current) => current.filter((seriesId) => availableIds.has(seriesId)));
-  }, [sourceSeries]);
+    setSelectedSeriesIds((current) => {
+      const next = current.filter((seriesId) => availableIds.has(seriesId));
+      return next.length === current.length ? current : next;
+    });
+  }, [availableSeriesIdsKey]);
   const selectedSeriesSet = useMemo(() => new Set(selectedSeriesIds), [selectedSeriesIds]);
   const toggleSeriesSelection = (seriesId) => {
     setSelectedSeriesIds((current) => current.includes(seriesId)

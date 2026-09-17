@@ -7,7 +7,7 @@ import { WorkspaceToggleSwitch } from "./shared/WorkspaceSettingsControls";
 export const DEFAULT_SUBTITLE_STYLE = {
   color: "#ffffff",
   backgroundColor: "#111827",
-  fontSize: 20,
+  fontScale: 4.2,
   position: 82,
 };
 
@@ -40,7 +40,12 @@ export function WorkspaceNativeSubtitleSettings({
       if (!bounds) {
         return;
       }
-      setPanelPosition({ left: bounds.left, top: bounds.bottom + 8 });
+      const panelWidth = Math.min(320, window.innerWidth - 32);
+      const left = Math.min(
+        Math.max(16, bounds.right - panelWidth),
+        window.innerWidth - panelWidth - 16,
+      );
+      setPanelPosition({ left, top: bounds.bottom + 8, width: panelWidth });
     };
     updatePanelPosition();
     window.addEventListener("resize", updatePanelPosition);
@@ -100,8 +105,8 @@ export function WorkspaceNativeSubtitleSettings({
       {open && panelPosition ? createPortal(
         <div
           ref={panelRef}
-          className="workspace-elevated-panel fixed z-[70] w-80 max-w-[calc(100vw-2rem)] rounded-3xl border p-4 text-stone-900 shadow-2xl motion-fade-scale dark:text-stone-100"
-          style={{ left: panelPosition.left, top: panelPosition.top }}
+          className="workspace-elevated-panel fixed z-[70] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border p-4 text-stone-900 shadow-2xl motion-fade-scale dark:text-stone-100"
+          style={{ left: panelPosition.left, top: panelPosition.top, width: panelPosition.width }}
         >
           <div className="mb-4 flex items-center justify-between border-b border-stone-200/80 pb-3 dark:border-stone-800">
             <div>
@@ -165,8 +170,8 @@ export function WorkspaceNativeSubtitleSettings({
           <section className="mt-4 space-y-3">
             <p className="px-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">排版</p>
             <label className="workspace-muted-panel block cursor-pointer rounded-2xl border px-4 py-3">
-              <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字体大小</span><span className="text-accent">{style.fontSize}px</span></span>
-              <input aria-label="字幕字体大小" type="range" min="14" max="44" value={style.fontSize} onChange={(event) => updateStyle({ fontSize: Number(event.target.value) })} className="block w-full cursor-pointer accent-accent" />
+              <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字体大小</span><span className="text-accent">{style.fontScale}%</span></span>
+              <input aria-label="字幕字体大小" type="range" min="1" max="8" step="0.1" value={style.fontScale} onChange={(event) => updateStyle({ fontScale: Number(event.target.value) })} className="block w-full cursor-pointer accent-accent" />
             </label>
             <label className="workspace-muted-panel block cursor-pointer rounded-2xl border px-4 py-3">
               <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字幕位置</span><span className="text-accent">{Math.round(style.position)}%</span></span>

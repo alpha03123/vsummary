@@ -1,7 +1,6 @@
 export const defaultUiSettings = {
   showTakeaways: true,
   theme: "light",
-  layoutMode: "video_center",
   transcriptEnhancementEnabled: true,
   asrProvider: "faster_whisper",
   asrModelQuality: "large-v3-turbo",
@@ -142,12 +141,12 @@ export function createWelcomeChatMessages() {
   ];
 }
 
-export function buildChatScopeKey(selectedContextType, seriesId, videoId, selectedToolId) {
+export function buildChatScopeKey(selectedContextType, seriesId, videoId) {
   if (selectedContextType === "series") {
-    return `series|${seriesId ?? ""}|${selectedToolId ?? "series-home"}`;
+    return `series|${seriesId ?? ""}`;
   }
   if (selectedContextType === "video") {
-    return `video|${seriesId ?? ""}|${videoId ?? ""}|${selectedToolId ?? "studio"}`;
+    return `video|${seriesId ?? ""}|${videoId ?? ""}`;
   }
   return null;
 }
@@ -739,7 +738,6 @@ export function normalizeUiSettings(value) {
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
     theme: record.theme === "dark" ? "dark" : "light",
-    layoutMode: record.layoutMode === "chat_center" ? "chat_center" : "video_center",
     transcriptEnhancementEnabled:
       typeof record.transcriptEnhancementEnabled === "boolean" ? record.transcriptEnhancementEnabled : true,
     asrProvider:

@@ -507,7 +507,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
       state.selectedContextType,
       state.selectedSeriesId,
       state.selectedVideoId,
-      state.selectedToolId,
     );
 
     let cancelled = false;
@@ -543,7 +542,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
     state.selectedContextType,
     state.selectedSeriesId,
     state.selectedVideoId,
-    state.selectedToolId,
     state.chatRecoveryByScope,
   ]);
 
@@ -557,7 +555,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
       state.selectedContextType,
       state.selectedSeriesId,
       state.selectedVideoId,
-      state.selectedToolId,
     );
 
     let cancelled = false;
@@ -593,7 +590,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
     state.selectedContextType,
     state.selectedSeriesId,
     state.selectedVideoId,
-    state.selectedToolId,
   ]);
 
   useEffect(() => {
@@ -667,7 +663,6 @@ export function useWorkspaceDataEffects(state, dispatch) {
     if (
       !selectedVideo ||
       state.selectedContextType !== "video" ||
-      state.selectedToolId !== "mindmap" ||
       !state.tools?.mindmap.generated
     ) {
       dispatch({ type: "mindmap_cleared" });
@@ -694,13 +689,10 @@ export function useWorkspaceDataEffects(state, dispatch) {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.mindmap.generated]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.mindmap.generated]);
 
   useEffect(() => {
-    if (
-      state.selectedContextType !== "series" ||
-      state.selectedToolId !== "series-mindmap"
-    ) {
+    if (state.selectedContextType !== "series") {
       dispatch({ type: "series_mindmap_cleared" });
       return;
     }
@@ -716,13 +708,10 @@ export function useWorkspaceDataEffects(state, dispatch) {
       });
 
     return () => { cancelled = true; };
-  }, [dispatch, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
+  }, [dispatch, state.selectedSeriesId, state.selectedContextType]);
 
   useEffect(() => {
-    if (
-      state.selectedContextType !== "series" ||
-      state.selectedToolId !== "series-overview"
-    ) {
+    if (state.selectedContextType !== "series") {
       dispatch({ type: "series_overview_cleared" });
       return;
     }
@@ -757,14 +746,13 @@ export function useWorkspaceDataEffects(state, dispatch) {
       });
 
     return () => { cancelled = true; };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedContextType, state.selectedToolId]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedContextType]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
     if (
       !selectedVideo ||
       state.selectedContextType !== "video" ||
-      state.selectedToolId !== "knowledge-cards" ||
       !state.tools?.knowledgeCards.generated
     ) {
       dispatch({ type: "knowledge_cards_cleared" });
@@ -791,14 +779,13 @@ export function useWorkspaceDataEffects(state, dispatch) {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId, state.tools?.knowledgeCards.generated]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.knowledgeCards.generated]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
     if (
       !selectedVideo ||
-      state.selectedContextType !== "video" ||
-      state.selectedToolId !== "notes"
+      state.selectedContextType !== "video"
     ) {
       dispatch({ type: "notes_cleared" });
       return;
@@ -824,5 +811,5 @@ export function useWorkspaceDataEffects(state, dispatch) {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.selectedToolId]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType]);
 }

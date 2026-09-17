@@ -30,7 +30,7 @@ const DISABLED_VISUALS = {
 function ToolStatusChip({ label, tone }) {
   return (
     <span
-      className={`mt-3 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+      className={`mt-3 inline-flex w-fit shrink-0 whitespace-nowrap items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
         STATUS_TONES[tone] ?? STATUS_TONES.pending
       }`}
     >
@@ -41,7 +41,15 @@ function ToolStatusChip({ label, tone }) {
 
 export function WorkspaceToolGrid({ items, onSelect }) {
   return (
-    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
+    /* Column count is driven by one threshold. It was `17rem` (272px), which
+       needed ~556px of container before a second column appeared — but the
+       middle pane defaults to 640px and is user-resizable, so any width between
+       roughly 460–556px fell back to a single full-bleed column: a 380px-wide
+       card holding three lines of text and a lot of dead space. At `14rem`
+       (224px) two columns fit from ~460px, so the default 640px pane shows a
+       balanced pair (314px each) and the single-column case only survives in
+       genuinely narrow panes. */
+    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
       {items.map(({ id, meta, status = null, description, disabled = false }, index) => {
         const Icon = meta.icon;
         return (

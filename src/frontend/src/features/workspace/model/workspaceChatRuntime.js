@@ -1,6 +1,6 @@
 import { findSeriesById, findVideoById } from "./workspaceState";
 
-export function buildAgentChatContextPayload(library, selectedContextType, seriesId, videoId, selectedToolId) {
+export function buildAgentChatContextPayload(library, selectedContextType, seriesId, videoId) {
   if (selectedContextType !== "series" && selectedContextType !== "video") {
     throw new Error("Agent 对话上下文必须是 series 或 video。");
   }
@@ -12,7 +12,7 @@ export function buildAgentChatContextPayload(library, selectedContextType, serie
     series_title: activeSeries?.title ?? null,
     video_id: selectedVideo?.id ?? null,
     video_title: selectedVideo?.title ?? null,
-    selected_tool: selectedToolId ?? null,
+    selected_tool: null,
   };
 }
 

@@ -5,6 +5,7 @@ import { WorkspaceToolGrid } from "./shared/WorkspaceToolGrid";
 import { WorkspaceExportMenu, WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
 import {
   SERIES_TOOL_TILES,
+  SERIES_STUDIO_TOOL_TILES,
   SOURCE_MISSING_STATUS,
   TOOL_TILES,
   describeToolState,
@@ -114,9 +115,11 @@ export function WorkspaceReadingPane({
   onUpdateTranscript,
   onUploadSrt,
   onRestoreAutomaticTranscript,
+  onPanelSelectTool = null,
 }) {
   const isStudioHome = selectedToolId === "studio";
   const isSeriesHome = selectedToolId === "series-home";
+  const isMindmapTool = selectedToolId === "mindmap" || selectedToolId === "series-mindmap";
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
   const currentToolMeta = resolveToolMeta(selectedToolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
@@ -131,7 +134,7 @@ export function WorkspaceReadingPane({
 
   return (
     <section className="relative flex h-full w-full flex-col bg-transparent">
-      <div className="flex flex-1 flex-col gap-5 overflow-auto p-6">
+      <div className={`flex flex-1 flex-col gap-5 p-6 ${isMindmapTool ? "overflow-hidden" : "overflow-auto"}`}>
         {!activeSeries ? (
           <WorkspaceStateBlock
             title="等待系列"
@@ -140,7 +143,8 @@ export function WorkspaceReadingPane({
           />
         ) : (
           <div key={`${selectedContextType}:${selectedToolId}:${selectedVideo?.id ?? activeSeries.id}`} className="motion-fade-scale flex h-full min-h-0 flex-col">
-            <header className="mb-5 flex shrink-0 flex-col gap-5 border-b border-stone-200/80 pb-5 dark:border-white/5">
+            {!(isStudioHome && onPanelSelectTool) ? (
+              <header className="mb-5 flex shrink-0 flex-col gap-5 border-b border-stone-200/80 pb-5 dark:border-white/5">
               {isStudioHome ? (
                 <WorkspaceHomeHeader
                   eyebrow="Studio"
@@ -169,9 +173,10 @@ export function WorkspaceReadingPane({
                   })}
                 />
               )}
-            </header>
+              </header>
+            ) : null}
 
-            <div className="relative min-h-0 flex-1 overflow-y-auto">
+            <div className={`relative min-h-0 flex-1 ${isMindmapTool ? "overflow-hidden" : "overflow-y-auto"}`}>
               <Suspense fallback={<WorkspaceToolLoadingState toolName={currentToolMeta.label} />}>
                   {isSeriesHome ? (
                     <div className="flex flex-col gap-6">
@@ -220,8 +225,7 @@ export function WorkspaceReadingPane({
                         />
                       ) : (
                         <WorkspaceToolGrid
-                          items={Object.entries(TOOL_TILES)
-                            .filter(([toolId]) => ui.layoutMode === "chat_center" || toolId !== "preview")
+                          items={Object.entries(selectedContextType === "series" ? SERIES_STUDIO_TOOL_TILES : TOOL_TILES)
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,

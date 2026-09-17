@@ -293,19 +293,6 @@ export function WorkspaceSettingsPanel({
                   />
                 </WorkspaceSettingRow>
 
-                <WorkspaceSettingRow
-                  title="显示模式"
-                  description="设定界面主视区优先展示视频播放器或 AI 对话框。"
-                >
-                  <WorkspaceSegmentedControl
-                    value={ui.layoutMode}
-                    options={[
-                      { id: "video_center", label: "视频居中" },
-                      { id: "chat_center", label: "AI 聊天居中" },
-                    ]}
-                    onChange={(nextValue) => onChangeSetting("layoutMode", nextValue)}
-                  />
-                </WorkspaceSettingRow>
               </>
             )}
 

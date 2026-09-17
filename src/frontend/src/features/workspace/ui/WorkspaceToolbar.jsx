@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { loadApplicationUpdateStatus } from "../model/workspaceApi";
+import { WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
 
 export function WorkspaceToolbar({
   activeSeries,
@@ -17,13 +18,14 @@ export function WorkspaceToolbar({
   isSidebarOpen,
   onToggleSidebar,
   onToggleChatDrawer,
-  chatDrawerOpen,
-  chatDraftReady = false,
-  chatDrawerEnabled = true,
+  chatDrawerOpen = false,
+  studioPanels = [],
+  onAddStudioPanel,
   onOpenUsagePage,
   onOpenUpdate,
 }) {
   const [versionStatus, setVersionStatus] = useState({ version: "Source", state: "source" });
+  const canAddPanel = studioPanels.length < WORKSPACE_LAYOUT_LIMITS.maxPanels;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +73,7 @@ export function WorkspaceToolbar({
       </div>
 
       <div className="flex items-center gap-3">
+        <div className="relative flex items-center gap-1">
         {versionStatus.state === "available" ? (
           <button
             type="button"
@@ -86,20 +89,20 @@ export function WorkspaceToolbar({
             {versionStatus.version}
           </span>
         )}
-        {chatDrawerEnabled ? (
+        {onAddStudioPanel ? (
+          <button type="button" disabled={!canAddPanel} onClick={onAddStudioPanel} className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-600 transition hover:bg-stone-100 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 dark:text-stone-400 dark:hover:bg-stone-800" title="添加面板" aria-label="添加面板">
+            <span className="text-2xl font-light leading-none">+</span>
+          </button>
+        ) : null}
+        </div>
+        {onToggleChatDrawer ? (
           <button
             type="button"
-            className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
-              chatDrawerOpen
-                ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm"
-                : chatDraftReady
-                  ? "animate-pulse border-2 border-accent bg-accent/10 text-accent ring-4 ring-accent/20"
-                  : "text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"
-            }`}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors ${chatDrawerOpen ? "bg-stone-200 text-stone-900 dark:bg-stone-800 dark:text-white" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-zinc-400 dark:hover:bg-neutral-900 dark:hover:text-white"}`}
             onClick={onToggleChatDrawer}
             title="打开分析助手"
             aria-label="打开分析助手"
-            aria-expanded={chatDrawerOpen ?? false}
+            aria-expanded={chatDrawerOpen}
           >
             <MessageSquare size={18} strokeWidth={2.2} />
           </button>
