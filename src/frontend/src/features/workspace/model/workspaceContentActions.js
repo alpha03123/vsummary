@@ -28,6 +28,7 @@ import {
   loadVideoNotes,
   loadVideoKnowledgeCards,
   loadVideoMindmap,
+  loadVideoTools,
   loadVideoSummaryMarkdown,
   loadVideoTranscriptMarkdown,
   initChaoxing,

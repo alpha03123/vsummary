@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
+from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.library.models import (
     GeneratedVideoAiNoteDTO,
     VideoAiSummaryDTO,
@@ -19,6 +20,7 @@ from backend.video_summary.library.usecases.ai_notes import (
     _split_note_title,
     constrain_ai_note_image_markers,
 )
+from backend.video_summary.library.note_images import materialize_note_frames
 
 
 class AiSummaryGenerator(Protocol):
@@ -87,6 +89,12 @@ class GenerateVideoAiSummary:
             enabled=generated.note_visual_mode == "screenshots",
             max_images=generated.note_max_images,
             min_gap_seconds=generated.note_image_min_gap_seconds,
+        )
+        materialize_note_frames(
+            video_path=source.source_path,
+            output_dir=source.output_dir,
+            content=content,
+            frame_extractor=FfmpegMediaProcessor(),
         )
         result = self._workspace.save_video_ai_summary(series_id, video_id, title=title, content=content)
         evidence_writer = getattr(self._workspace, "save_video_ai_summary_visual_evidence", None)

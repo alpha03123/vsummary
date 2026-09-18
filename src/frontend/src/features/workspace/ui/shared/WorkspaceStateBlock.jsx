@@ -9,6 +9,10 @@ export function WorkspaceStateBlock({
   loading = false,
   dashed = false,
   centered = true,
+  actionLabel = "",
+  actionIcon = null,
+  actionDisabled = false,
+  onAction = null,
 }) {
   const toneClassName =
     tone === "accent"
@@ -35,6 +39,17 @@ export function WorkspaceStateBlock({
         <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">{title}</h3>
         {description ? (
           <p className="mt-3 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{description}</p>
+        ) : null}
+        {actionLabel && typeof onAction === "function" ? (
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={actionDisabled}
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {actionIcon}
+            {actionLabel}
+          </button>
         ) : null}
         {children ? <div className="mt-5">{children}</div> : null}
       </div>

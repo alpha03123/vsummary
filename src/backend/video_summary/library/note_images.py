@@ -70,6 +70,7 @@ def materialize_note_frames(*, video_path: Path, output_dir: Path, content: str,
     """为合法时间标记物化可复用帧；失败由调用方日志记录且不破坏正文。"""
     duration = frame_extractor.probe_duration(video_path)
     frames_dir = output_dir / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
     for marker in parse_note_image_markers(content):
         if marker.seconds > duration:
             continue

@@ -141,16 +141,17 @@ class LiteLLMNoteGenerator:
             response_model=AiSummaryPayload,
             temperature=NOTE_TEMPERATURE,
         )
-        allowed = set(visual_context.evidence_timestamps)
+        allowed_timestamps = tuple(visual_context.evidence_timestamps)
         evidence: list[AiSummaryVisualEvidenceDTO] = []
         seen: set[float] = set()
         for item in payload.visual_evidence:
-            if item.timestamp_seconds not in allowed:
+            timestamp = _resolve_visual_evidence_timestamp(item.timestamp_seconds, allowed_timestamps)
+            if timestamp is None:
                 raise ValueError("AI 概括视觉证据引用了未提供的帧时间。")
-            if item.timestamp_seconds in seen:
+            if timestamp in seen:
                 raise ValueError("同一视频帧只能有一条 AI 概括视觉证据。")
-            seen.add(item.timestamp_seconds)
-            evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=item.timestamp_seconds, text=item.text.strip()))
+            seen.add(timestamp)
+            evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
         return GeneratedVideoAiNoteDTO(
             content=payload.markdown.strip(),
             note_visual_mode=note_visual_mode,
@@ -270,3 +271,11 @@ def _format_timestamp(seconds: float) -> str:
     minutes, seconds_part = divmod(whole_seconds, 60)
     hours, minutes = divmod(minutes, 60)
     return f"{hours:02d}:{minutes:02d}:{seconds_part:02d}" if hours else f"{minutes:02d}:{seconds_part:02d}"
+
+
+def _resolve_visual_evidence_timestamp(value: float, allowed: tuple[float, ...]) -> float | None:
+    """把九宫格显示到秒的模型输出回填为真实候选帧时间。"""
+    if not allowed:
+        return None
+    candidate = min(allowed, key=lambda timestamp: abs(timestamp - value))
+    return candidate if abs(candidate - value) <= 1.0 else None
