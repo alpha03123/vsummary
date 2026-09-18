@@ -14,8 +14,8 @@ export const WORKSPACE_LAYOUT_LIMITS = {
   contentMinWidth: 480,
 };
 
-export const DEFAULT_STUDIO_PANELS = ["preview::default", "overview::default"];
-export const DEFAULT_SERIES_STUDIO_PANELS = ["series-overview::default"];
+export const DEFAULT_STUDIO_PANELS = ["preview::default", "ai-summary::default"];
+export const DEFAULT_SERIES_STUDIO_PANELS = ["ai-chat::default"];
 export const STUDIO_PANEL_TYPES = new Set([
   "studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "notes", "ai-chat", "series-overview", "series-mindmap",
 ]);

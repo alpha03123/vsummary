@@ -27,21 +27,21 @@ const SHARED_TOOL_VISUALS = {
 
 export const TOOL_TILES = {
   "ai-chat": {
-    label: "AI 对话",
-    description: "围绕当前视频提问与协作",
+    label: "对话聊天",
+    description: "询问AI当前视频的具体细节",
     icon: MessageSquare,
     ...SHARED_TOOL_VISUALS,
   },
   overview: {
-    label: "AI 整理逐字稿",
-    description: "章节、时间轴与原文定位",
+    label: "逐字稿阅览",
+    description: "显示原文逐字稿",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
   "ai-summary": {
     label: "AI 概括",
-    description: "完整的多模态总结与学习笔记",
-    icon: FileText,
+    description: "总结与学习笔记",
+    icon: ListChecks,
     ...SHARED_TOOL_VISUALS,
   },
   mindmap: {
@@ -52,13 +52,13 @@ export const TOOL_TILES = {
   },
   "knowledge-cards": {
     label: "知识卡片",
-    description: "原子知识、标签与来源锚点",
+    description: "知识、标签与来源卡片",
     icon: BrainCircuit,
     ...SHARED_TOOL_VISUALS,
   },
   notes: {
-    label: "笔记",
-    description: "个人手记与时间标记",
+    label: "人工笔记",
+    description: "可供自己来记录笔记或者备忘事项",
     icon: StickyNote,
     ...SHARED_TOOL_VISUALS,
   },
@@ -73,13 +73,13 @@ export const TOOL_TILES = {
 export const SERIES_TOOL_TILES = {
   "series-overview": {
     label: "全局 AI 概况",
-    description: "集中查看各视频 AI 概况",
+    description: "查看全部视频 AI 概况",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
   "series-mindmap": {
     label: "全局思维导图",
-    description: "结构化展现系列知识脉络",
+    description: "结展现系列知识脉络",
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },

@@ -121,7 +121,7 @@ export function WorkspacePage({ page }) {
     onSelectChatSession: chat.selectChatSession,
     onStartNewChat: chat.startNewChat,
     onOpenSeekReference: chat.openSeekReference,
-    onOpenCitationReference: chat.openCitationReference,
+    onOpenCitationReference: openChatCitationReference,
     onOpenSettings: () => actions.openSettingsPanel("network"),
     onSubmitChat: chat.submit,
     onCancelChat: chat.cancel,
@@ -237,6 +237,34 @@ export function WorkspacePage({ page }) {
       panelTools: { ...current.panelTools, [panelId]: toolId },
     }));
     setFocusedPanel(panelId);
+  }
+
+  function openChatCitationReference(reference) {
+    chat.openCitationReference(reference);
+    if (
+      selectedContextType !== "video"
+      || !Number.isFinite(reference?.seconds)
+      || (reference.videoId && reference.videoId !== selectedVideo?.id)
+    ) {
+      return;
+    }
+    const overviewPanel = layout.studioPanels.find((panelId) => (
+      (layout.panelTools[panelId] ?? getPanelType(panelId)) === "overview"
+    ));
+    if (overviewPanel) {
+      setFocusedPanel(overviewPanel);
+      return;
+    }
+    if (layout.studioPanels.length < WORKSPACE_LAYOUT_LIMITS.maxPanels) {
+      openStudioPanel("overview");
+      return;
+    }
+    const panelId = layout.studioPanels.find((candidate) => (
+      (layout.panelTools[candidate] ?? getPanelType(candidate)) === "ai-summary"
+    )) ?? focusedPanel ?? layout.studioPanels.at(-1);
+    if (panelId) {
+      setPanelTool(panelId, "overview");
+    }
   }
 
   function addStudioPanel() {

@@ -47,6 +47,7 @@ class VisualFramePoolTests(unittest.TestCase):
             self.assertEqual(18, len(calls_after_first))
             self.assertEqual(calls_after_first, processor.calls)
             self.assertEqual(first.image_paths, second.image_paths)
+            self.assertFalse((root / "output" / "visual_frame_pool" / "grid-2" / "raw").exists())
 
     def test_keeps_incomplete_tail_grid_for_short_videos(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -60,6 +61,7 @@ class VisualFramePoolTests(unittest.TestCase):
 
             self.assertEqual(3, len(pool.image_paths))
             self.assertEqual(2, len(pool.timestamps_by_image[-1]))
+            self.assertFalse((root / "output" / "visual_frame_pool" / "grid-10" / "raw").exists())
 
 
 if __name__ == "__main__":

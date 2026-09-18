@@ -168,6 +168,9 @@ export function WorkspaceVideoScopeEmbed() {
     onOpenCitationReference: (reference) => {
       page.chat.openCitationReference(reference);
       seekBilibiliVideo(reference);
+      if (Number.isFinite(reference?.seconds)) {
+        setPanelToolId("overview");
+      }
     },
     onSubmitChat: page.chat.submit,
     onCancelChat: page.chat.cancel,

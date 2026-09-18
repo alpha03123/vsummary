@@ -150,7 +150,7 @@ export function WorkspaceAdvancedSettings({ children, defaultOpen = false }) {
       >
         <span>
           <strong className="block text-sm font-bold text-stone-900 dark:text-stone-100">高级设置</strong>
-          <span className="mt-0.5 block text-xs leading-relaxed text-stone-600 dark:text-stone-400">调整运行资源、检索质量与外部请求行为。</span>
+          <span className="mt-0.5 block text-xs leading-relaxed text-stone-600 dark:text-stone-400">进一步控制性能与成本，不确定时保持默认即可。</span>
         </span>
         <ChevronDown size={18} className={`shrink-0 text-stone-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>

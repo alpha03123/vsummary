@@ -28,7 +28,7 @@ class ConcurrentAiSummaryRunner:
         *,
         generator: LiteLLMNoteGenerator,
         max_input_images: int,
-        visual_input: str,
+        multimodal_enabled: bool,
         note_visual_mode: str,
         note_max_images: int,
         note_image_min_gap_seconds: float,
@@ -36,7 +36,7 @@ class ConcurrentAiSummaryRunner:
     ) -> None:
         self._generator = generator
         self._max_input_images = max_input_images
-        self._visual_input = visual_input
+        self._multimodal_enabled = multimodal_enabled
         self._note_visual_mode = note_visual_mode
         self._note_max_images = note_max_images
         self._note_image_min_gap_seconds = note_image_min_gap_seconds
@@ -60,7 +60,7 @@ class ConcurrentAiSummaryRunner:
                 max_input_images=self._max_input_images,
                 media_processor=self._media_processor,
             )
-            if self._visual_input == "frames"
+            if self._multimodal_enabled
             else None
         )
         image_paths = pool.image_paths if pool is not None else []
@@ -91,7 +91,7 @@ class ConcurrentAiSummaryRunner:
             summary=None,
             visual_context=context,
             template="general",
-            visual_input=self._visual_input,
+            multimodal_enabled=self._multimodal_enabled,
             note_visual_mode=self._note_visual_mode,
             note_max_images=self._note_max_images,
             note_image_min_gap_seconds=self._note_image_min_gap_seconds,

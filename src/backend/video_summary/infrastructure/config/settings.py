@@ -39,7 +39,7 @@ VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 VALID_CHAPTER_VISUAL_MODES = {"off", "screenshots", "multimodal"}
 VALID_NOTE_VISUAL_MODES = {"off", "screenshots"}
 VALID_VISUAL_INPUTS = {"none", "evidence", "frames"}
-VALID_AUTO_GENERATE_ARTIFACTS = {"mindmap", "knowledge_cards", "notes"}
+VALID_AUTO_GENERATE_ARTIFACTS = {"mindmap", "knowledge_cards"}
 VALID_LLM_PROVIDERS = {
     "ai21",
     "ai21_chat",
@@ -138,14 +138,14 @@ DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED = True
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
 DEFAULT_CHAPTER_VISUAL_MODE = "screenshots"
-DEFAULT_MAX_VISUAL_INPUT_IMAGES = 6
+DEFAULT_MAX_VISUAL_INPUT_IMAGES = 10
 DEFAULT_NOTE_VISUAL_MODE = "off"
-DEFAULT_NOTE_VISUAL_INPUT = "frames"
+DEFAULT_AI_SUMMARY_MULTIMODAL_ENABLED = True
 DEFAULT_MINDMAP_VISUAL_INPUT = "evidence"
 DEFAULT_CARDS_VISUAL_INPUT = "evidence"
-DEFAULT_NOTE_MAX_IMAGES = 6
+DEFAULT_NOTE_MAX_IMAGES = 10
 DEFAULT_NOTE_IMAGE_MIN_GAP_SECONDS = 5.0
-DEFAULT_AUTO_GENERATE_ARTIFACTS = ("notes",)
+DEFAULT_AUTO_GENERATE_ARTIFACTS: tuple[str, ...] = ()
 MAX_VISUAL_INPUT_IMAGES_LIMIT = 20
 DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
 DEFAULT_WEB_SEARCH_MODE = "native"
@@ -327,7 +327,7 @@ class GenerationConcurrencySettings:
     chapter_visual_mode: str
     max_visual_input_images: int
     note_visual_mode: str
-    note_visual_input: str
+    ai_summary_multimodal_enabled: bool
     mindmap_visual_input: str
     cards_visual_input: str
     note_max_images: int
@@ -599,11 +599,8 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             allowed=VALID_NOTE_VISUAL_MODES,
             field_name="generation.note_visual_mode",
         ),
-        note_visual_input=_normalize_choice(
-            generation_payload.get("note_visual_input"),
-            default=DEFAULT_NOTE_VISUAL_INPUT,
-            allowed=VALID_VISUAL_INPUTS,
-            field_name="generation.note_visual_input",
+        ai_summary_multimodal_enabled=bool(
+            generation_payload.get("ai_summary_multimodal_enabled", DEFAULT_AI_SUMMARY_MULTIMODAL_ENABLED)
         ),
         mindmap_visual_input=_normalize_choice(
             generation_payload.get("mindmap_visual_input"),
@@ -941,7 +938,7 @@ def replace_downstream_visual_settings(
     settings: AppSettings,
     *,
     note_visual_mode: str,
-    note_visual_input: str,
+    ai_summary_multimodal_enabled: bool,
     mindmap_visual_input: str,
     cards_visual_input: str,
     note_max_images: int,
@@ -962,12 +959,7 @@ def replace_downstream_visual_settings(
                 allowed=VALID_NOTE_VISUAL_MODES,
                 field_name="generation.note_visual_mode",
             ),
-            note_visual_input=_normalize_choice(
-                note_visual_input,
-                default=DEFAULT_NOTE_VISUAL_INPUT,
-                allowed=VALID_VISUAL_INPUTS,
-                field_name="generation.note_visual_input",
-            ),
+            ai_summary_multimodal_enabled=bool(ai_summary_multimodal_enabled),
             mindmap_visual_input=_normalize_choice(
                 mindmap_visual_input,
                 default=DEFAULT_MINDMAP_VISUAL_INPUT,
@@ -1187,7 +1179,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f'chapter_visual_mode = "{settings.generation.chapter_visual_mode}"',
         f"max_visual_input_images = {settings.generation.max_visual_input_images}",
         f'note_visual_mode = "{settings.generation.note_visual_mode}"',
-        f'note_visual_input = "{settings.generation.note_visual_input}"',
+        f"ai_summary_multimodal_enabled = {_toml_bool(settings.generation.ai_summary_multimodal_enabled)}",
         f'mindmap_visual_input = "{settings.generation.mindmap_visual_input}"',
         f'cards_visual_input = "{settings.generation.cards_visual_input}"',
         f"note_max_images = {settings.generation.note_max_images}",

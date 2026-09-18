@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
@@ -30,7 +31,13 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
     - 错误处理：本类不捕获工作流异常，错误会原样向上抛出给用例层。
     """
 
-    def __init__(self, workspace: VideoLibraryReader, workflow: ConfiguredVideoSummaryWorkflow) -> None:
+    def __init__(
+        self,
+        workspace: VideoLibraryReader,
+        workflow: ConfiguredVideoSummaryWorkflow,
+        *,
+        ai_summary_completion_notifier: Callable[[str, str], None] | None = None,
+    ) -> None:
         """注入工作区读取端口与已配置好的总结工作流。
 
         Args:
@@ -39,6 +46,7 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
         """
         self._workspace = workspace
         self._workflow = workflow
+        self._ai_summary_completion_notifier = ai_summary_completion_notifier
 
     async def run(
         self,
@@ -71,6 +79,8 @@ class WorkspaceBackedVideoSummaryGenerator(VideoSummaryGenerator):
             "manual_transcript": manual_transcript,
             "use_saved_manual_transcript": use_saved_manual_transcript,
         }
+        if self._ai_summary_completion_notifier is not None:
+            arguments["on_ai_summary_completed"] = lambda: self._ai_summary_completion_notifier(series_id, video_id)
         if processing_mode != "summary":
             arguments["processing_mode"] = processing_mode
         await self._workflow.run(video.source_path, video.output_dir, **arguments)

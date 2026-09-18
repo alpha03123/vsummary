@@ -51,59 +51,6 @@ class LiteLLMNoteGenerator:
     def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
-    def run(
-        self,
-        *,
-        transcript: VideoTranscriptDTO,
-        summary: VideoSummaryDTO | None,
-        visual_context: VideoAiNoteVisualContextDTO,
-        template: str,
-        visual_input: str,
-        note_visual_mode: str,
-        note_max_images: int,
-        note_image_min_gap_seconds: float,
-    ) -> GeneratedVideoAiNoteDTO:
-        transcript_text = "\n".join(
-            f"{_format_timestamp(segment.start_seconds)} - {segment.text.strip()}"
-            for segment in transcript.segments
-            if segment.text.strip()
-        )
-        if not transcript_text:
-            raise ValueError("视频转写为空，无法生成 AI 笔记。")
-        summary_text = _extract_summary_text(summary)
-        outline_text = _build_outline_text(summary)
-        prompt = build_ai_note_prompt(
-                title=transcript.title,
-                transcript_text=transcript_text,
-                template=template,
-                summary_text=summary_text,
-                outline_text=outline_text,
-                visual_context=(
-                    VideoAiNoteVisualContextDTO(frames=[], evidence_text=visual_context.evidence_text)
-                    if visual_input == "evidence"
-                    else VideoAiNoteVisualContextDTO(frames=[], evidence_text="")
-                    if visual_input == "none"
-                    else visual_context
-                ),
-                note_visual_mode=note_visual_mode,
-            )
-        content = self._gateway.complete_text(
-            [{"role": "user", "content": (
-                build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
-                if visual_input == "frames" and visual_context.frames
-                else prompt
-            )}],
-            temperature=NOTE_TEMPERATURE,
-        )
-        if not content.strip():
-            raise RuntimeError("模型未返回 AI 笔记。")
-        return GeneratedVideoAiNoteDTO(
-            content=content.strip(),
-            note_visual_mode=note_visual_mode,
-            note_max_images=note_max_images,
-            note_image_min_gap_seconds=note_image_min_gap_seconds,
-        )
-
     def run_ai_summary(
         self,
         *,
@@ -111,7 +58,7 @@ class LiteLLMNoteGenerator:
         summary: VideoSummaryDTO | None,
         visual_context: VideoAiNoteVisualContextDTO,
         template: str,
-        visual_input: str,
+        multimodal_enabled: bool,
         note_visual_mode: str,
         note_max_images: int,
         note_image_min_gap_seconds: float,
@@ -130,11 +77,7 @@ class LiteLLMNoteGenerator:
             summary_text=_extract_summary_text(summary),
             outline_text=_build_outline_text(summary),
             visual_context=(
-                visual_context
-                if visual_input == "frames"
-                else VideoAiNoteVisualContextDTO(frames=[], evidence_text=visual_context.evidence_text)
-                if visual_input == "evidence"
-                else VideoAiNoteVisualContextDTO(frames=[])
+                visual_context if multimodal_enabled else VideoAiNoteVisualContextDTO(frames=[])
             ),
             note_visual_mode=note_visual_mode,
         ) + (
@@ -149,7 +92,7 @@ class LiteLLMNoteGenerator:
         payload = self._gateway.complete_structured(
             [{"role": "user", "content": (
                 build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
-                if visual_input == "frames" and visual_context.frames
+                if multimodal_enabled and visual_context.frames
                 else prompt
             )}],
             response_model=AiSummaryPayload,
@@ -194,27 +137,6 @@ class ConfiguredNoteGenerator:
         self._signature: tuple[str, str] | None = None
         self._generator: LiteLLMNoteGenerator | None = None
 
-    def run(
-        self,
-        *,
-        transcript: VideoTranscriptDTO,
-        summary: VideoSummaryDTO | None,
-        visual_context: VideoAiNoteVisualContextDTO,
-        template: str,
-    ) -> GeneratedVideoAiNoteDTO:
-        generator = self._get_generator()
-        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
-        return generator.run(
-            transcript=transcript,
-            summary=summary,
-            visual_context=visual_context,
-            template=template,
-            visual_input=settings.generation.note_visual_input,
-            note_visual_mode=settings.generation.note_visual_mode,
-            note_max_images=settings.generation.note_max_images,
-            note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
-        )
-
     def run_ai_summary(
         self,
         *,
@@ -230,7 +152,7 @@ class ConfiguredNoteGenerator:
             summary=summary,
             visual_context=visual_context,
             template=template,
-            visual_input=settings.generation.note_visual_input,
+            multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
             note_visual_mode=settings.generation.note_visual_mode,
             note_max_images=settings.generation.note_max_images,
             note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,

@@ -93,20 +93,17 @@ export function WorkspaceSettingsPanel({
   );
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
   const visualInputOptions = [
-    { id: "none", label: "不使用画面" },
+    { id: "none", label: "关闭" },
     {
       id: "evidence",
-      label: "使用画面证据文本",
+      label: "标准",
+      disabled: !ui.aiSummaryMultimodalEnabled,
+      disabledReason: "需先开启 AI 概括多模态以生成画面证据。",
     },
     {
       id: "frames",
-      label: "使用视频帧池",
+      label: "精细",
     },
-  ];
-  const aiSummaryVisualInputOptions = [
-    { id: "none", label: "不使用画面" },
-    { id: "evidence", label: "使用画面证据文本" },
-    { id: "frames", label: "使用视频帧池" },
   ];
   const providerModelOptions = [...new Set([...detectedProviderModels, ui.openaiModel].filter(Boolean))]
     .map((model) => ({ id: model, label: model }));
@@ -321,7 +318,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="自动生成"
-                  description="AI 整理逐字稿完成后自动生成所选内容。"
+                  description="AI 整理逐字稿完成后自动生成导图或知识卡片。"
                   contentClassName="2xl:w-[340px] 2xl:flex-none"
                 >
                   <WorkspaceMultiSelect
@@ -329,7 +326,6 @@ export function WorkspaceSettingsPanel({
                     options={[
                       { id: "mindmap", label: "思维导图" },
                       { id: "knowledge_cards", label: "知识卡片" },
-                      { id: "notes", label: "笔记" },
                     ]}
                     onChange={(nextValues) => onChangeSetting("autoGenerateArtifacts", nextValues)}
                   />
@@ -652,37 +648,22 @@ export function WorkspaceSettingsPanel({
                 )}
 
                 <WorkspaceSettingRow
-                  title="章节画面"
-                  description="整理逐字稿中每章生成一张代表画面，用于章节浏览与时间定位。"
+                  title="逐字稿配图"
+                  description="在逐字稿里给每章配一张画面"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.chapterVisualMode}
                     options={[
-                      { id: "off", label: "无" },
+                      { id: "off", label: "不生成" },
                       { id: "screenshots", label: "生成截图" },
                     ]}
                     onChange={(nextValue) => onChangeSetting("chapterVisualMode", nextValue)}
                   />
                 </WorkspaceSettingRow>
 
-                {ui.noteVisualInput === "frames" && (
-                  <WorkspaceSettingRow
-                    title="AI 概括帧池上限"
-                    description="限制单个视频送入 AI 概括的九宫格图片数，每张最多包含 9 个时间点。"
-                  >
-                    <WorkspaceTextInput
-                      value={String(ui.maxVisualInputImages)}
-                      onChange={(nextValue) => onChangeSetting("maxVisualInputImages", Number.parseInt(nextValue, 10) || 1)}
-                      placeholder="6"
-                      className="w-full sm:w-[180px]"
-                      type="number"
-                    />
-                  </WorkspaceSettingRow>
-                )}
-
                 <WorkspaceSettingRow
                   title="AI 概括配图"
-                  description="控制 AI 概括是否自动在正文中插入可点击的视频画面。"
+                  description="在 AI 概括正文中自动插入视频画面"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.noteVisualMode}
@@ -694,20 +675,45 @@ export function WorkspaceSettingsPanel({
                   />
                 </WorkspaceSettingRow>
 
+                <WorkspaceSettingRow
+                  title="AI 概括多模态"
+                  description="开启后增强概括质量，需要多模态模型"
+                >
+                  <WorkspaceToggleSwitch
+                    checked={ui.aiSummaryMultimodalEnabled}
+                    onChange={() => onChangeSetting("aiSummaryMultimodalEnabled", !ui.aiSummaryMultimodalEnabled)}
+                  />
+                </WorkspaceSettingRow>
+
                 <WorkspaceAdvancedSettings>
+                  {ui.aiSummaryMultimodalEnabled && (
+                    <WorkspaceSettingRow
+                      title="AI 概括多模态质量"
+                      description="默认10,调大这个数字会增大TOKEN消耗"
+                    >
+                      <WorkspaceTextInput
+                        value={String(ui.maxVisualInputImages)}
+                        onChange={(nextValue) => onChangeSetting("maxVisualInputImages", Number.parseInt(nextValue, 10) || 1)}
+                        placeholder="6"
+                        className="w-full sm:w-[180px]"
+                        type="number"
+                      />
+                    </WorkspaceSettingRow>
+                  )}
                   <WorkspaceSettingRow
-                    title="AI 概括画面输入"
-                    description="决定 AI 概括是否使用独立视频帧池；原图可提供最完整的画面细节。"
+                    title="AI 概括配图上限"
+                    description="AI 概括最多自动插入多少张画面,默认10；你在笔记里手动插入的图片不受此限制。"
                   >
-                    <WorkspaceSegmentedControl
-                      value={ui.noteVisualInput}
-                      options={aiSummaryVisualInputOptions}
-                      onChange={(nextValue) => onChangeSetting("noteVisualInput", nextValue)}
+                    <WorkspaceTextInput
+                      value={String(ui.noteMaxImages)}
+                      onChange={(nextValue) => onChangeSetting("noteMaxImages", Number.parseInt(nextValue, 10) || 1)}
+                      className="w-full sm:w-[180px]"
+                      type="number"
                     />
                   </WorkspaceSettingRow>
                   <WorkspaceSettingRow
-                    title="思维导图画面输入"
-                    description="控制导图生成时使用的画面信息。"
+                    title="思维导图多模态输入"
+                    description={"打开会略微提高多模态质量，'标准'依赖'ai概括多模态'但不消耗TOKEN，'精细'需要多模态模型且会消耗更多TOKEN" }
                   >
                     <WorkspaceSegmentedControl
                       value={ui.mindmapVisualInput}
@@ -716,24 +722,13 @@ export function WorkspaceSettingsPanel({
                     />
                   </WorkspaceSettingRow>
                   <WorkspaceSettingRow
-                    title="知识卡片画面输入"
-                    description="控制知识卡片生成时使用的画面信息。"
+                    title="知识卡片多模态输入"
+                    description={ "打开会略微提高多模态质量，'标准'依赖'ai概括多模态'但不消耗TOKEN，'精细'需要多模态模型且会消耗更多TOKEN"}
                   >
                     <WorkspaceSegmentedControl
                       value={ui.cardsVisualInput}
                       options={visualInputOptions}
                       onChange={(nextValue) => onChangeSetting("cardsVisualInput", nextValue)}
-                    />
-                  </WorkspaceSettingRow>
-                  <WorkspaceSettingRow
-                    title="AI 概括图片上限"
-                    description="限制 AI 概括自动插入的图片数量；不限制手动笔记。"
-                  >
-                    <WorkspaceTextInput
-                      value={String(ui.noteMaxImages)}
-                      onChange={(nextValue) => onChangeSetting("noteMaxImages", Number.parseInt(nextValue, 10) || 1)}
-                      className="w-full sm:w-[180px]"
-                      type="number"
                     />
                   </WorkspaceSettingRow>
                   <WorkspaceSettingRow

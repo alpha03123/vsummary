@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -79,6 +80,14 @@ class _UnexpectedSummarizer:
         raise AssertionError("无可转写信息时不应调用总结模型")
 
 
+async def _completed_ai_summary_runner(**_kwargs) -> None:
+    return None
+
+
+async def _failing_ai_summary_runner(**_kwargs) -> None:
+    raise RuntimeError("AI 概括生成失败")
+
+
 class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
     async def test_subtitle_transcript_skips_media_and_asr(self) -> None:
         store = _ArtifactStore()
@@ -138,3 +147,51 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
         assert document.summary_data["transcription_status"] == "untranscribable"
         assert document.summary_data["one_sentence_summary"] == "该视频没有可供转写的信息，无法生成内容概况。"
         assert document.summary_data["key_takeaways"] == ["未找到可用中文字幕，且视频不含可供转写的音频流。"]
+
+    async def test_completed_ai_summary_notifies_index_refresh_after_its_own_task_finishes(self) -> None:
+        store = _ArtifactStore()
+        completed: list[str] = []
+        use_case = GenerateVideoSummary(
+            media_processor=_MediaProcessor(),
+            transcriber=_Transcriber(),
+            transcript_enhancer=None,
+            summarizer=_Summarizer(),
+            artifact_store=store,
+            subtitle_provider=_SubtitleSource(),
+            ai_summary_runner=_completed_ai_summary_runner,
+        )
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            await use_case.run(
+                root / "video.mp4",
+                root / "output",
+                on_ai_summary_completed=lambda: completed.append("indexed"),
+            )
+            await asyncio.sleep(0)
+
+        assert completed == ["indexed"]
+
+    async def test_failed_ai_summary_does_not_notify_index_refresh(self) -> None:
+        store = _ArtifactStore()
+        completed: list[str] = []
+        use_case = GenerateVideoSummary(
+            media_processor=_MediaProcessor(),
+            transcriber=_Transcriber(),
+            transcript_enhancer=None,
+            summarizer=_Summarizer(),
+            artifact_store=store,
+            subtitle_provider=_SubtitleSource(),
+            ai_summary_runner=_failing_ai_summary_runner,
+        )
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            await use_case.run(
+                root / "video.mp4",
+                root / "output",
+                on_ai_summary_completed=lambda: completed.append("indexed"),
+            )
+            await asyncio.sleep(0)
+
+        assert completed == []

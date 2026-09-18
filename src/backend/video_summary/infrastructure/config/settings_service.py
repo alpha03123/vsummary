@@ -132,7 +132,7 @@ class WorkspaceSettings:
     chapter_visual_mode: str
     max_visual_input_images: int
     note_visual_mode: str
-    note_visual_input: str
+    ai_summary_multimodal_enabled: bool
     mindmap_visual_input: str
     cards_visual_input: str
     note_max_images: int
@@ -170,13 +170,13 @@ class SettingsServicePort(Protocol):
         video_generation_concurrency: int,
         web_search_enabled: bool,
         chapter_visual_mode: str = "screenshots",
-        max_visual_input_images: int = 6,
+        max_visual_input_images: int = 10,
         note_visual_mode: str = "off",
-        note_visual_input: str = "frames",
+        ai_summary_multimodal_enabled: bool = True,
         mindmap_visual_input: str = "evidence",
         cards_visual_input: str = "evidence",
-        note_max_images: int = 6,
-        auto_generate_artifacts: list[str] | tuple[str, ...] = ("notes",),
+        note_max_images: int = 10,
+        auto_generate_artifacts: list[str] | tuple[str, ...] = (),
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -320,7 +320,7 @@ class SettingsService:
             chapter_visual_mode=settings.generation.chapter_visual_mode,
             max_visual_input_images=settings.generation.max_visual_input_images,
             note_visual_mode=settings.generation.note_visual_mode,
-            note_visual_input=settings.generation.note_visual_input,
+            ai_summary_multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
             mindmap_visual_input=settings.generation.mindmap_visual_input,
             cards_visual_input=settings.generation.cards_visual_input,
             note_max_images=settings.generation.note_max_images,
@@ -347,13 +347,13 @@ class SettingsService:
         video_generation_concurrency: int,
         web_search_enabled: bool,
         chapter_visual_mode: str = "screenshots",
-        max_visual_input_images: int = 6,
+        max_visual_input_images: int = 10,
         note_visual_mode: str = "off",
-        note_visual_input: str = "frames",
+        ai_summary_multimodal_enabled: bool = True,
         mindmap_visual_input: str = "evidence",
         cards_visual_input: str = "evidence",
-        note_max_images: int = 6,
-        auto_generate_artifacts: list[str] | tuple[str, ...] = ("notes",),
+        note_max_images: int = 10,
+        auto_generate_artifacts: list[str] | tuple[str, ...] = (),
         asr_provider: str = "faster_whisper",
         asr_cloud_model: str = "paraformer-v2",
         asr_base_url: str = "https://dashscope.aliyuncs.com",
@@ -437,7 +437,6 @@ class SettingsService:
         if note_visual_mode not in VALID_NOTE_VISUAL_MODES:
             raise SettingsValidationError("note_visual_mode 必须是 off 或 screenshots。")
         for field_name, value in (
-            ("note_visual_input", note_visual_input),
             ("mindmap_visual_input", mindmap_visual_input),
             ("cards_visual_input", cards_visual_input),
         ):
@@ -498,7 +497,7 @@ class SettingsService:
             next_settings = replace_downstream_visual_settings(
                 next_settings,
                 note_visual_mode=note_visual_mode,
-                note_visual_input=note_visual_input,
+                ai_summary_multimodal_enabled=ai_summary_multimodal_enabled,
                 mindmap_visual_input=mindmap_visual_input,
                 cards_visual_input=cards_visual_input,
                 note_max_images=note_max_images,
@@ -554,7 +553,7 @@ class SettingsService:
             chapter_visual_mode=next_settings.generation.chapter_visual_mode,
             max_visual_input_images=next_settings.generation.max_visual_input_images,
             note_visual_mode=next_settings.generation.note_visual_mode,
-            note_visual_input=next_settings.generation.note_visual_input,
+            ai_summary_multimodal_enabled=next_settings.generation.ai_summary_multimodal_enabled,
             mindmap_visual_input=next_settings.generation.mindmap_visual_input,
             cards_visual_input=next_settings.generation.cards_visual_input,
             note_max_images=next_settings.generation.note_max_images,

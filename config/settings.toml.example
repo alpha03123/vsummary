@@ -18,7 +18,7 @@ compute_type = "float16"
 # 转写策略。"fast" 更快，"balanced" 平衡速度和质量，"accurate" 更重视准确度。
 transcription_mode = "accurate"
 # 转写首段上下文提示词。自动识别语言时建议留空；中文 ASR 输出会自动规范为简体。
-initial_prompt = ""
+initial_prompt = "以下为简体中文普通话转写文本。"
 
 # whisper.cpp 转写引擎配置。模型由设置页下载，或手动放入 data/models/whisper-cpp/<model>/。
 [asr.whisper_cpp]
@@ -50,7 +50,7 @@ window_tokens = 1000000
 # Agent 回复长度偏好。"short" 简短回答，"medium" 默认适中，"long" 适合学习复习时充分展开。
 answer_detail_level = "medium"
 # 推理模型思考强度。"none" 不传思考强度，"low" 更快，"medium" 平衡，"high" 更充分但更慢。
-reasoning_effort = "none"
+reasoning_effort = "high"
 # Video Talk / Series Talk 的用户自定义回答要求。只影响对话回答，不影响视频摘要、知识卡片或导图生成。
 talk_custom_prompt = ""
 
@@ -96,19 +96,19 @@ video_generation_concurrency = 5
 summary_chunk_concurrency = 3
 # 章节画面策略："off" 不生成，"screenshots" 每章生成一张截图。
 chapter_visual_mode = "screenshots"
-# 单视频最多送入 AI 概括的九宫格帧池图片数；每张最多包含 9 个时间点。
-max_visual_input_images = 6
+# 视觉输入预算：单视频最多送入 AI 概括的九宫格帧池图片数（每张含 9 个时间点），原始帧目标数 = 该值 x 9。
+max_visual_input_images = 10
 # AI 概括是否自动插图；与模型是否读取画面信息分开设置。
-note_visual_mode = "off"
-# 下游产物读取的画面输入："none"、"evidence"（已有文字证据）或 "frames"（共享视频帧池）。
-note_visual_input = "frames"
-mindmap_visual_input = "evidence"
-cards_visual_input = "evidence"
+note_visual_mode = "screenshots"
+# 是否让 AI 概括读取共享九宫格帧池并产出画面证据；关闭时只依据逐字稿生成。
+ai_summary_multimodal_enabled = false
+mindmap_visual_input = "none"
+cards_visual_input = "none"
 # AI 概括最多自动插入的图片数，以及和章节截图避让的最小秒数。
-note_max_images = 6
+note_max_images = 10
 note_image_min_gap_seconds = 5.0
-# 启用 notes 时，转写完成即并发生成唯一 AI 概括；另可自动生成 "mindmap"、"knowledge_cards"。
-auto_generate_artifacts = ["notes"]
+# AI 概括会在转写完成后始终并发生成；这里只选择是否自动生成 "mindmap"、"knowledge_cards"。
+auto_generate_artifacts = []
 
 # 联网搜索设置。
 [web_search]

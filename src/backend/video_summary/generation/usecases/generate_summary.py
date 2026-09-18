@@ -136,6 +136,7 @@ class GenerateVideoSummary:
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
+        on_ai_summary_completed: Callable[[], None] | None = None,
     ) -> SummaryDocument | None:
         """为指定视频生成结构化总结文档。
 
@@ -174,6 +175,7 @@ class GenerateVideoSummary:
                 manual_transcript=manual_transcript,
                 use_saved_manual_transcript=use_saved_manual_transcript,
                 processing_mode=processing_mode,
+                on_ai_summary_completed=on_ai_summary_completed,
             )
         finally:
             if cancel_watch_task is not None:
@@ -191,6 +193,7 @@ class GenerateVideoSummary:
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
         processing_mode: str,
+        on_ai_summary_completed: Callable[[], None] | None,
     ) -> SummaryDocument | None:
         """前置取消检查 → 准备 staging 目录 → 跑核心流水线 → 清理 staging。
 
@@ -213,6 +216,7 @@ class GenerateVideoSummary:
                     manual_transcript=manual_transcript,
                     use_saved_manual_transcript=use_saved_manual_transcript,
                     processing_mode=processing_mode,
+                    on_ai_summary_completed=on_ai_summary_completed,
                 )
             except FileNotFoundError:
                 if attempt == 0 and not staging_dir.exists():
@@ -232,6 +236,7 @@ class GenerateVideoSummary:
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
         processing_mode: str,
+        on_ai_summary_completed: Callable[[], None] | None,
     ) -> SummaryDocument | None:
         """在 staging 目录下依次跑各生成阶段，全部成功后原子提交到 `output_dir`。
 
@@ -426,7 +431,12 @@ class GenerateVideoSummary:
         # B（唯一 AI 概括）只依赖转写和原视频。它从此处并发启动，不等待
         # A（AI 整理逐字稿）的章节整理、封面抽帧或 staging 提交。
         if processing_mode == "summary" and self._ai_summary_runner is not None:
-            self._start_ai_summary_task(video=video, transcript=transcript, output_dir=output_dir)
+            self._start_ai_summary_task(
+                video=video,
+                transcript=transcript,
+                output_dir=output_dir,
+                on_completed=on_ai_summary_completed,
+            )
 
         if processing_mode == "transcript":
             if unavailable_reason is not None:
@@ -498,7 +508,14 @@ class GenerateVideoSummary:
         )
         return summary_document
 
-    def _start_ai_summary_task(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path) -> None:
+    def _start_ai_summary_task(
+        self,
+        *,
+        video: VideoAsset,
+        transcript: Transcript,
+        output_dir: Path,
+        on_completed: Callable[[], None] | None,
+    ) -> None:
         task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir))
         self._ai_summary_tasks.add(task)
 
@@ -513,6 +530,12 @@ class GenerateVideoSummary:
                     "并发 AI 概括生成失败",
                     exc_info=(type(error), error, error.__traceback__),
                 )
+                return
+            if on_completed is not None:
+                try:
+                    on_completed()
+                except Exception:
+                    LOGGER.exception("并发 AI 概括完成后的索引刷新排队失败")
 
         task.add_done_callback(_record_completion)
 

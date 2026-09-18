@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -191,9 +192,16 @@ def build_api_container(
     whisper_cpp_manager = whisper_cpp_model_manager or WhisperCppModelManager(
         root_dir / "data" / "models" / "whisper-cpp"
     )
+    def queue_ai_summary_index_refresh(series_id: str, video_id: str) -> None:
+        index_refresher = index_refresher_ref["value"]
+        if index_refresher is None:
+            raise RuntimeError("AI 概括索引刷新器尚未初始化。")
+        index_refresher.upsert_video(series_id, video_id)
+
     resolved_generator = generator or WorkspaceBackedVideoSummaryGenerator(
         workspace=workspace,
         workflow=ConfiguredVideoSummaryWorkflow(root_dir, usage_recorder=usage_store),
+        ai_summary_completion_notifier=queue_ai_summary_index_refresh,
     )
     resolved_mindmap_generator = mindmap_generator or WorkspaceBackedVideoMindmapGenerator(
         workspace=workspace,
@@ -232,15 +240,35 @@ def build_api_container(
         resolved_note_generator,
         index_refresher,
         max_visual_input_images=settings.generation.max_visual_input_images,
-        visual_input=settings.generation.note_visual_input,
+        multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
     )
+
+    async def wait_for_ai_summary_visual_evidence(series_id: str, video_id: str) -> None:
+        current_settings = load_settings(config_path, root_dir)
+        if not current_settings.generation.ai_summary_multimodal_enabled:
+            raise RuntimeError("标准画面输入需要开启 AI 概括多模态。")
+        for _ in range(1_200):
+            evidence = workspace.get_video_ai_summary_visual_evidence(series_id, video_id)
+            if evidence is not None and evidence.frames:
+                return
+            tools = workspace.get_video_workspace_tools(series_id, video_id)
+            status = tools.ai_summary.status if tools is not None and tools.ai_summary is not None else "failed"
+            if status == "failed":
+                raise RuntimeError("AI 概括多模态生成失败，无法提供标准画面输入。")
+            if status == "ready":
+                raise RuntimeError("AI 概括未产出可用画面证据，无法提供标准画面输入。")
+            await asyncio.sleep(0.5)
+        raise RuntimeError("等待 AI 概括画面证据超时。")
+
+    def auto_artifact_requires_visual_evidence(artifact: str) -> bool:
+        current_settings = load_settings(config_path, root_dir)
+        return (
+            (artifact == "mindmap" and current_settings.generation.mindmap_visual_input == "evidence")
+            or (artifact == "knowledge_cards" and current_settings.generation.cards_visual_input == "evidence")
+        )
+
     auto_artifacts = AutoGenerateVideoArtifacts(
-        # AI 概括在转写完成时由生成流水线并发启动；不能在 A 完成后再串行跑一次。
-        load_enabled_artifacts=lambda: tuple(
-            artifact
-            for artifact in load_settings(config_path, root_dir).generation.auto_generate_artifacts
-            if artifact != "notes"
-        ),
+        load_enabled_artifacts=lambda: load_settings(config_path, root_dir).generation.auto_generate_artifacts,
         generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
             workspace,
             resolved_mindmap_generator,
@@ -254,7 +282,8 @@ def build_api_container(
             visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
         ).run(series_id, video_id),
-        generate_note=lambda series_id, video_id: ai_summary_use_case.run(series_id, video_id, template="general"),
+        requires_visual_evidence=auto_artifact_requires_visual_evidence,
+        wait_for_visual_evidence=wait_for_ai_summary_visual_evidence,
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,

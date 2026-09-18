@@ -8,7 +8,7 @@ device = "cpu"
 model_size = "large-v3-turbo"
 compute_type = "int8"
 transcription_mode = "accurate"
-initial_prompt = ""
+initial_prompt = "以下为简体中文普通话转写文本。"
 
 [asr.whisper_cpp]
 binary_path = "whisper-cli"
@@ -21,15 +21,14 @@ model = "paraformer-v2"
 [workspace_ui]
 theme = "light"
 show_takeaways = true
-layout_mode = "video_center"
 
 [debug]
-mode = false
+mode = true
 
 [agent_context]
 window_tokens = 1000000
 answer_detail_level = "medium"
-reasoning_effort = "none"
+reasoning_effort = "high"
 talk_custom_prompt = ""
 
 [agent_context.advanced]
@@ -51,10 +50,17 @@ max_hits = 5
 rerank_enabled = false
 
 [generation]
-video_generation_concurrency = 1
-summary_chunk_concurrency = 1
+video_generation_concurrency = 5
+summary_chunk_concurrency = 3
 chapter_visual_mode = "screenshots"
-max_visual_input_images = 6
+max_visual_input_images = 10
+note_visual_mode = "screenshots"
+ai_summary_multimodal_enabled = false
+mindmap_visual_input = "none"
+cards_visual_input = "none"
+note_max_images = 10
+note_image_min_gap_seconds = 5.0
+auto_generate_artifacts = []
 
 [web_search]
 enabled = false

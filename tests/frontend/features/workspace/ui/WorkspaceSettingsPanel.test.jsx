@@ -52,34 +52,6 @@ describe("WorkspaceSettingsPanel provider settings", () => {
     expect(screen.getByText("保存 Key")).toBeInTheDocument();
   });
 
-  it("shows the AI summary frame-pool budget only when frame input is enabled", () => {
-    const { rerender } = renderPanel({ noteVisualInput: "evidence" }, { initialTab: "ai" });
-
-    expect(screen.getByText("章节画面")).toBeInTheDocument();
-    expect(screen.queryByText("AI 概括帧池上限")).not.toBeInTheDocument();
-
-    rerender(
-      <WorkspaceSettingsPanel
-        ui={{ ...defaultUiSettings, noteVisualInput: "frames" }}
-        initialTab="ai"
-        fasterWhisperModels={[]}
-        fasterWhisperModelsLoading={false}
-        ragModels={[]}
-        onChangeSetting={vi.fn()}
-        onSaveProviderSettings={vi.fn()}
-        onSaveApiKey={vi.fn()}
-        onRevealOpenaiApiKey={vi.fn()}
-        onTestProviderConnection={vi.fn()}
-        onDownloadFasterWhisperModel={vi.fn()}
-        onDownloadRagModel={vi.fn()}
-        onResetSettings={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("AI 概括帧池上限")).toBeInTheDocument();
-  });
-
   it("opens the dedicated usage page from provider settings", () => {
     const onOpenUsagePage = vi.fn();
     renderPanel({}, { onOpenUsagePage });
@@ -112,27 +84,27 @@ describe("WorkspaceSettingsPanel provider settings", () => {
 
 describe("WorkspaceSettingsPanel auto-generate multi-select", () => {
   it("renders the artifact options as toggle pills with the saved selection marked", () => {
-    renderPanel({ autoGenerateArtifacts: ["notes"] }, { initialTab: "ai" });
+    renderPanel({ autoGenerateArtifacts: ["mindmap"] }, { initialTab: "ai" });
 
-    expect(screen.getByRole("button", { name: "笔记" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "思维导图" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "思维导图" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "知识卡片" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: "笔记" })).not.toBeInTheDocument();
   });
 
   it("adds an artifact to the selection when toggled on", () => {
     const onChangeSetting = vi.fn();
-    renderPanel({ autoGenerateArtifacts: ["notes"] }, { initialTab: "ai", onChangeSetting });
+    renderPanel({ autoGenerateArtifacts: ["mindmap"] }, { initialTab: "ai", onChangeSetting });
 
-    fireEvent.click(screen.getByRole("button", { name: "思维导图" }));
+    fireEvent.click(screen.getByRole("button", { name: "知识卡片" }));
 
-    expect(onChangeSetting).toHaveBeenCalledWith("autoGenerateArtifacts", ["notes", "mindmap"]);
+    expect(onChangeSetting).toHaveBeenCalledWith("autoGenerateArtifacts", ["mindmap", "knowledge_cards"]);
   });
 
   it("drops an artifact from the selection when toggled off", () => {
     const onChangeSetting = vi.fn();
-    renderPanel({ autoGenerateArtifacts: ["notes", "mindmap"] }, { initialTab: "ai", onChangeSetting });
+    renderPanel({ autoGenerateArtifacts: ["mindmap", "knowledge_cards"] }, { initialTab: "ai", onChangeSetting });
 
-    fireEvent.click(screen.getByRole("button", { name: "笔记" }));
+    fireEvent.click(screen.getByRole("button", { name: "知识卡片" }));
 
     expect(onChangeSetting).toHaveBeenCalledWith("autoGenerateArtifacts", ["mindmap"]);
   });

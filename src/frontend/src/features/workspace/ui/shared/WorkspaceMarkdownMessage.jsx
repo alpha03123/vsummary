@@ -295,8 +295,11 @@ function NoteFrameImage({ src, alt, seconds, onSeek, onOpenTranscriptAtTime, ...
       type="button"
       onClick={() => {
         const request = { seconds };
+        if (onOpenTranscriptAtTime) {
+          onOpenTranscriptAtTime(request);
+          return;
+        }
         onSeek?.(request);
-        onOpenTranscriptAtTime?.(request);
       }}
       className="note-frame-trigger group block w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 text-left dark:border-stone-800 dark:bg-stone-950"
       title={`跳转到 ${formatImageTimestamp(seconds)}`}

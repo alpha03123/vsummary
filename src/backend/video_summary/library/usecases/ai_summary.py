@@ -50,13 +50,13 @@ class GenerateVideoAiSummary:
         generator: AiSummaryGenerator,
         index_refresher: WorkspaceIndexRefresher | None = None,
         max_visual_input_images: int | None = None,
-        visual_input: str = "frames",
+        multimodal_enabled: bool = True,
     ) -> None:
         self._workspace = workspace
         self._generator = generator
         self._index_refresher = index_refresher
         self._max_visual_input_images = max_visual_input_images
-        self._visual_input = visual_input
+        self._multimodal_enabled = multimodal_enabled
 
     def run(self, series_id: str, video_id: str, *, template: str = "general") -> VideoAiSummaryDTO | None:
         source = self._workspace.get_video_source(series_id, video_id)
@@ -67,13 +67,8 @@ class GenerateVideoAiSummary:
             raise ValueError("请先生成视频转写，再生成 AI 概括。")
         outline = self._workspace.get_video_summary(series_id, video_id)
         # B 的事实输入是原始转写和独立帧池，不反向依赖 A 的章节文案或封面图。
-        visual_evidence_reader = getattr(self._workspace, "get_video_ai_summary_visual_evidence", None)
-        existing_evidence = visual_evidence_reader(series_id, video_id) if callable(visual_evidence_reader) else None
-        visual_context = VideoAiNoteVisualContextDTO(
-            frames=[],
-            evidence_text="\n".join(frame.text for frame in existing_evidence.frames) if existing_evidence is not None else "",
-        )
-        if self._visual_input == "frames" and self._max_visual_input_images is not None:
+        visual_context = VideoAiNoteVisualContextDTO(frames=[])
+        if self._multimodal_enabled and self._max_visual_input_images is not None:
             visual_context = _build_frame_pool_context(source, visual_context, self._max_visual_input_images)
         generated = self._generator.run_ai_summary(
             transcript=transcript,

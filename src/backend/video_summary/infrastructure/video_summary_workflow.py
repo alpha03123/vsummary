@@ -14,6 +14,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Callable
 from threading import Lock
 
 from backend.video_summary.domain.models import ManualTranscriptInput
@@ -58,6 +59,7 @@ class ConfiguredVideoSummaryWorkflow:
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
+        on_ai_summary_completed: Callable[[], None] | None = None,
     ) -> None:
         """基于当前配置执行一次视频总结生成。
 
@@ -93,6 +95,7 @@ class ConfiguredVideoSummaryWorkflow:
                     "progress_reporter": resolved_progress_reporter,
                     "manual_transcript": manual_transcript,
                     "use_saved_manual_transcript": use_saved_manual_transcript,
+                    "on_ai_summary_completed": on_ai_summary_completed,
                 }
                 if processing_mode != "summary":
                     arguments["processing_mode"] = processing_mode

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
+import shutil
 
 from PIL import Image, ImageChops, ImageDraw, ImageStat
 
@@ -41,50 +42,54 @@ def build_or_load_visual_frame_pool(
     processor = media_processor or FfmpegMediaProcessor()
     pool_dir = output_dir / "visual_frame_pool" / f"grid-{max_input_images}"
     manifest_path = pool_dir / "manifest.json"
+    raw_dir = pool_dir / "raw"
     cached = _load_pool(manifest_path, pool_dir)
     if cached is not None:
+        _remove_raw_frames(raw_dir)
         return cached
 
-    duration = processor.probe_duration(video_path)
-    timestamps = _candidate_timestamps(duration, max_input_images * TILES_PER_GRID)
-    raw_dir = pool_dir / "raw"
-    raw_frames: list[tuple[float, Path]] = []
-    for timestamp in timestamps:
-        filename = f"{timestamp:.3f}".rstrip("0").rstrip(".") + ".jpg"
-        target = raw_dir / filename
-        try:
-            processor.extract_frame(video_path, timestamp, target)
-        except NoVideoFramesError:
-            return VisualFramePool(image_paths=[], timestamps_by_image=[])
-        except Exception:
-            continue
-        if target.is_file() and _is_distinct_frame(target, raw_frames[-1][1] if raw_frames else None):
-            raw_frames.append((timestamp, target))
+    try:
+        duration = processor.probe_duration(video_path)
+        timestamps = _candidate_timestamps(duration, max_input_images * TILES_PER_GRID)
+        raw_frames: list[tuple[float, Path]] = []
+        for timestamp in timestamps:
+            filename = f"{timestamp:.3f}".rstrip("0").rstrip(".") + ".jpg"
+            target = raw_dir / filename
+            try:
+                processor.extract_frame(video_path, timestamp, target)
+            except NoVideoFramesError:
+                return VisualFramePool(image_paths=[], timestamps_by_image=[])
+            except Exception:
+                continue
+            if target.is_file() and _is_distinct_frame(target, raw_frames[-1][1] if raw_frames else None):
+                raw_frames.append((timestamp, target))
 
-    grid_dir = pool_dir / "grids"
-    image_paths: list[Path] = []
-    timestamps_by_image: list[list[float]] = []
-    for index in range(0, len(raw_frames), TILES_PER_GRID):
-        group = raw_frames[index:index + TILES_PER_GRID]
-        grid_path = grid_dir / f"grid-{index // TILES_PER_GRID + 1:02d}.jpg"
-        _compose_grid(group, grid_path)
-        image_paths.append(grid_path)
-        timestamps_by_image.append([timestamp for timestamp, _ in group])
+        grid_dir = pool_dir / "grids"
+        image_paths: list[Path] = []
+        timestamps_by_image: list[list[float]] = []
+        for index in range(0, len(raw_frames), TILES_PER_GRID):
+            group = raw_frames[index:index + TILES_PER_GRID]
+            grid_path = grid_dir / f"grid-{index // TILES_PER_GRID + 1:02d}.jpg"
+            _compose_grid(group, grid_path)
+            image_paths.append(grid_path)
+            timestamps_by_image.append([timestamp for timestamp, _ in group])
 
-    pool_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(
-        manifest_path,
-        json.dumps(
-            {
-                "max_input_images": max_input_images,
-                "images": [path.name for path in image_paths],
-                "timestamps": timestamps_by_image,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
-    return VisualFramePool(image_paths=image_paths, timestamps_by_image=timestamps_by_image)
+        pool_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            manifest_path,
+            json.dumps(
+                {
+                    "max_input_images": max_input_images,
+                    "images": [path.name for path in image_paths],
+                    "timestamps": timestamps_by_image,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+        return VisualFramePool(image_paths=image_paths, timestamps_by_image=timestamps_by_image)
+    finally:
+        _remove_raw_frames(raw_dir)
 
 
 def _candidate_timestamps(duration: float, target_count: int) -> list[float]:
@@ -140,6 +145,11 @@ def _load_pool(manifest_path: Path, pool_dir: Path) -> VisualFramePool | None:
         return VisualFramePool(image_paths=paths, timestamps_by_image=normalized_timestamps)
     except (OSError, ValueError, TypeError):
         return None
+
+
+def _remove_raw_frames(raw_dir: Path) -> None:
+    if raw_dir.exists():
+        shutil.rmtree(raw_dir)
 
 
 def _format_timestamp(seconds: float) -> str:

@@ -227,10 +227,6 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const library = await reloadWorkspaceLibrary();
       if (processingMode === "summary") {
         const autoArtifacts = state.ui.autoGenerateArtifacts ?? [];
-        if (autoArtifacts.includes("notes")) {
-          const notes = await loadVideoNotes(seriesId, videoId);
-          dispatch({ type: "notes_loaded", notes });
-        }
         if (autoArtifacts.includes("knowledge_cards")) {
           const cards = await loadVideoKnowledgeCards(seriesId, videoId);
           dispatch({ type: "knowledge_cards_loaded", cards });

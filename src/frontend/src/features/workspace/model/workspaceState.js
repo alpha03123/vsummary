@@ -28,13 +28,13 @@ export const defaultUiSettings = {
   talkCustomPrompt: "",
   videoGenerationConcurrency: 1,
   chapterVisualMode: "screenshots",
-  maxVisualInputImages: 6,
+  maxVisualInputImages: 10,
   noteVisualMode: "off",
-  noteVisualInput: "frames",
+  aiSummaryMultimodalEnabled: true,
   mindmapVisualInput: "evidence",
   cardsVisualInput: "evidence",
-  noteMaxImages: 6,
-  autoGenerateArtifacts: ["notes"],
+  noteMaxImages: 10,
+  autoGenerateArtifacts: [],
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
 };
@@ -737,8 +737,8 @@ export function resetUiSettings() {
 export function normalizeUiSettings(value) {
   const record = value && typeof value === "object" ? value : {};
   const autoGenerateArtifacts = Array.isArray(record.autoGenerateArtifacts)
-    ? [...new Set(record.autoGenerateArtifacts.filter((item) => ["mindmap", "knowledge_cards", "notes"].includes(item)))]
-    : ["notes"];
+    ? [...new Set(record.autoGenerateArtifacts.filter((item) => ["mindmap", "knowledge_cards"].includes(item)))]
+    : [];
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
     theme: record.theme === "dark" ? "dark" : "light",
@@ -820,12 +820,12 @@ export function normalizeUiSettings(value) {
     maxVisualInputImages:
       typeof record.maxVisualInputImages === "number" && Number.isInteger(record.maxVisualInputImages) && record.maxVisualInputImages > 0
         ? record.maxVisualInputImages
-        : 6,
+        : 10,
     noteVisualMode: ["off", "screenshots"].includes(record.noteVisualMode) ? record.noteVisualMode : "off",
-    noteVisualInput: ["none", "evidence", "frames"].includes(record.noteVisualInput) ? record.noteVisualInput : "frames",
+    aiSummaryMultimodalEnabled: typeof record.aiSummaryMultimodalEnabled === "boolean" ? record.aiSummaryMultimodalEnabled : true,
     mindmapVisualInput: ["none", "evidence", "frames"].includes(record.mindmapVisualInput) ? record.mindmapVisualInput : "evidence",
     cardsVisualInput: ["none", "evidence", "frames"].includes(record.cardsVisualInput) ? record.cardsVisualInput : "evidence",
-    noteMaxImages: typeof record.noteMaxImages === "number" && Number.isInteger(record.noteMaxImages) && record.noteMaxImages > 0 ? record.noteMaxImages : 6,
+    noteMaxImages: typeof record.noteMaxImages === "number" && Number.isInteger(record.noteMaxImages) && record.noteMaxImages > 0 ? record.noteMaxImages : 10,
     autoGenerateArtifacts,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),

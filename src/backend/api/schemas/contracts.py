@@ -158,13 +158,13 @@ class WorkspaceSettingsResponse(BaseModel):
     talk_custom_prompt: str = ""
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
-    max_visual_input_images: int = Field(default=6, ge=1, le=20)
+    max_visual_input_images: int = Field(default=10, ge=1, le=20)
     note_visual_mode: Literal["off", "screenshots"] = "off"
-    note_visual_input: Literal["none", "evidence", "frames"] = "frames"
+    ai_summary_multimodal_enabled: bool = True
     mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
     cards_visual_input: Literal["none", "evidence", "frames"] = "evidence"
-    note_max_images: int = Field(default=6, ge=1)
-    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "notes"]] = Field(default_factory=lambda: ["notes"])
+    note_max_images: int = Field(default=10, ge=1)
+    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards"]] = Field(default_factory=list)
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3
@@ -216,13 +216,13 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     talk_custom_prompt: str = ""
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
-    max_visual_input_images: int = Field(default=6, ge=1, le=20)
+    max_visual_input_images: int = Field(default=10, ge=1, le=20)
     note_visual_mode: Literal["off", "screenshots"] = "off"
-    note_visual_input: Literal["none", "evidence", "frames"] = "frames"
+    ai_summary_multimodal_enabled: bool = True
     mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
     cards_visual_input: Literal["none", "evidence", "frames"] = "evidence"
-    note_max_images: int = Field(default=6, ge=1)
-    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "notes"]] = Field(default_factory=lambda: ["notes"])
+    note_max_images: int = Field(default=10, ge=1)
+    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards"]] = Field(default_factory=list)
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3

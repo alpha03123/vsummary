@@ -170,8 +170,8 @@ describe("WorkspaceMarkdownMessage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "视频画面（00:05）" }));
 
-    expect(onSeek).toHaveBeenCalledWith({ seconds: 5 });
     expect(onOpenTranscriptAtTime).toHaveBeenCalledWith({ seconds: 5 });
+    expect(onSeek).not.toHaveBeenCalled();
   });
 
   it("renders model think tags as a collapsible thinking block", () => {

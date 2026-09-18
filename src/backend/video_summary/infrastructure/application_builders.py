@@ -86,18 +86,14 @@ def build_video_summary_application(
     runtime = build_video_summary_runtime(settings, usage_recorder=usage_recorder)
     artifact_store = FileSystemGenerationArtifactStore()
     media_processor = FfmpegMediaProcessor()
-    ai_summary_runner = (
-        ConcurrentAiSummaryRunner(
-            generator=LiteLLMNoteGenerator(runtime.gateway),
-            max_input_images=settings.generation.max_visual_input_images,
-            visual_input=settings.generation.note_visual_input,
-            note_visual_mode=settings.generation.note_visual_mode,
-            note_max_images=settings.generation.note_max_images,
-            note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
-            media_processor=media_processor,
-        )
-        if "notes" in settings.generation.auto_generate_artifacts
-        else None
+    ai_summary_runner = ConcurrentAiSummaryRunner(
+        generator=LiteLLMNoteGenerator(runtime.gateway),
+        max_input_images=settings.generation.max_visual_input_images,
+        multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
+        note_visual_mode=settings.generation.note_visual_mode,
+        note_max_images=settings.generation.note_max_images,
+        note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
+        media_processor=media_processor,
     )
     use_case = GenerateVideoSummary(
         media_processor=media_processor,
@@ -119,7 +115,7 @@ def build_video_summary_application(
         visual_summary_enricher=None,
         multimodal_visual_enabled=False,
         max_visual_frames=1,
-        ai_summary_runner=ai_summary_runner.run if ai_summary_runner is not None else None,
+        ai_summary_runner=ai_summary_runner.run,
     )
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 

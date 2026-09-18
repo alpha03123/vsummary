@@ -141,6 +141,17 @@ export function WorkspaceReadingPane({
   });
   const sourceMissing = selectedVideo?.status === "source_missing";
 
+  function openAiSummaryTranscript(reference) {
+    if (!reference || !Number.isFinite(reference.seconds)) {
+      return;
+    }
+    onOpenCitationReference?.({
+      ...reference,
+      videoId: reference.videoId || selectedVideo?.id,
+    });
+    onSelectTool("overview");
+  }
+
   return (
     <section className="@container relative flex h-full w-full flex-col bg-transparent">
       {/* 面板宽度是拖拽的（最小 320px），字号与间距都比视口更早到临界点：
@@ -283,8 +294,8 @@ export function WorkspaceReadingPane({
                       onUpdate={onUpdateAiSummary}
                       noteImageContext={activeSeries && selectedVideo ? { seriesId: activeSeries.id, videoId: selectedVideo.id, durationSeconds: Number.POSITIVE_INFINITY } : null}
                       onSeek={onSeek}
-                      onOpenCitationReference={onOpenCitationReference}
-                      onOpenTranscriptAtTime={() => onSelectTool("overview")}
+                      onOpenCitationReference={openAiSummaryTranscript}
+                      onOpenTranscriptAtTime={openAiSummaryTranscript}
                     />
                   ) : null}
                   {toolId === "mindmap" ? (

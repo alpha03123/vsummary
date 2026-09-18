@@ -374,6 +374,20 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "video_generation_concurrency"):
                 load_settings(config_path, root_dir)
 
+    def test_load_settings_rejects_ai_summary_as_optional_auto_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(
+                _sample_settings_toml() + "\n\n[generation]\nauto_generate_artifacts = [\"notes\"]\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "auto_generate_artifacts"):
+                load_settings(config_path, root_dir)
+
     def test_load_settings_rejects_rag_max_hits_smaller_than_one(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
