@@ -37,6 +37,7 @@ class GenerateMindmap:
         output_dir: Path,
         transcript_text: str = "",
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
         progress_reporter: ProgressReporter | None = None,
         max_depth: int | None = None,
     ) -> dict[str, object]:
@@ -64,6 +65,8 @@ class GenerateMindmap:
         }
         if visual_evidence_text:
             arguments["visual_evidence_text"] = visual_evidence_text
+        if visual_frame_paths:
+            arguments["visual_frame_paths"] = visual_frame_paths
         mindmap = await self._generator.generate(**arguments)
         if progress_reporter is not None:
             progress_reporter.update("save", 80.0, "正在保存思维导图")

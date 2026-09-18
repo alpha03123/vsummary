@@ -454,7 +454,8 @@ class GenerateVideoSummary:
                 cancellation=cancellation,
                 max_visual_frames=self._max_visual_frames,
             )
-        if self._multimodal_visual_enabled and extracted_frames:
+        visual_frames = _select_visual_analysis_frames(extracted_frames, self._max_visual_frames)
+        if self._multimodal_visual_enabled and visual_frames:
             if self._visual_summary_enricher is None:
                 raise RuntimeError("多模态视觉增强未配置模型适配器。")
             if progress_reporter is not None:
@@ -465,15 +466,19 @@ class GenerateVideoSummary:
                     video=video,
                     transcript=transcript,
                     draft=summary_document,
-                    frames=extracted_frames,
+                    frames=visual_frames,
                     cancellation=cancellation,
                 )
+                summary_document = _restore_display_frame_references(summary_document, extracted_frames)
             except GenerateCancelledError:
                 raise
-            except Exception as error:
-                raise RuntimeError(_build_llm_stage_error("多模态视觉增强", error)) from error
-            _raise_if_cancelled(progress_reporter, cancellation)
-            await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
+            except Exception:
+                LOGGER.exception("多模态视觉增强失败，保留文本概况和章节截图")
+                if progress_reporter is not None:
+                    progress_reporter.update("enrich_visual_summary", 99.0, "文本概况已完成；本次未能解析画面")
+            else:
+                _raise_if_cancelled(progress_reporter, cancellation)
+                await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
         await asyncio.to_thread(
@@ -544,8 +549,10 @@ async def _attach_chapter_screenshots(
                 summary_data=summary_data,
                 mindmap_data=document.mindmap_data,
             ), []
-        except Exception as error:
-            raise RuntimeError(f"第 {index} 章截图生成失败。") from error
+        except Exception:
+            LOGGER.exception("章节截图生成失败", extra={"chapter_id": plan.chapter_id})
+            enriched_chapters.append(raw_chapter)
+            continue
         _raise_if_cancelled(progress_reporter, cancellation)
         enriched_chapters.append({**raw_chapter, "image_filename": plan.image_filename})
         extracted_frames.append(
@@ -571,7 +578,7 @@ def validate_visual_frame_plan(
     video: VideoAsset,
     max_visual_frames: int,
 ) -> list[PlannedChapterFrame]:
-    """验证模型截图计划，拒绝越界、重复和超额时间点。"""
+    """验证每章一张的截图计划；读图配额不在此处裁剪。"""
     if max_visual_frames <= 0:
         raise ValueError("max_visual_frames 必须是正整数。")
     chapters = document.summary_data.get("chapters")
@@ -588,7 +595,7 @@ def validate_visual_frame_plan(
         seen_ids.add(chapter_id)
         timestamp = chapter.get("image_timestamp_seconds")
         if timestamp is None:
-            continue
+            raise ValueError(f"第 {index} 章缺少章节截图时间点。")
         start = chapter.get("start_seconds")
         end = chapter.get("end_seconds")
         if not all(isinstance(value, int | float) and math.isfinite(value) for value in (timestamp, start, end)):
@@ -602,9 +609,58 @@ def validate_visual_frame_plan(
                 image_filename=f"chapter-{index:02d}.jpg",
             )
         )
-    if len(plans) > max_visual_frames:
-        raise ValueError(f"模型选择了 {len(plans)} 张截图，超过上限 {max_visual_frames}。")
+    if len(plans) != len(chapters):
+        raise ValueError("每个章节都必须提供一个截图时间点。")
     return plans
+
+
+def _select_visual_analysis_frames(
+    frames: list[ExtractedChapterFrame],
+    max_visual_frames: int,
+) -> list[ExtractedChapterFrame]:
+    """从每章展示帧中确定性选出受视觉 token 配额限制的读图子集。"""
+    if len(frames) <= max_visual_frames:
+        return frames
+    if max_visual_frames <= 0:
+        raise ValueError("max_visual_frames 必须是正整数。")
+    if max_visual_frames == 1:
+        return [frames[0]]
+    last_index = len(frames) - 1
+    indexes = {
+        round(position * last_index / (max_visual_frames - 1))
+        for position in range(max_visual_frames)
+    }
+    return [frame for index, frame in enumerate(frames) if index in indexes]
+
+
+def _restore_display_frame_references(
+    document: SummaryDocument,
+    frames: list[ExtractedChapterFrame],
+) -> SummaryDocument:
+    """视觉增强只读取子集时，仍由系统恢复所有章节的展示帧绑定。"""
+    frames_by_chapter = {frame.chapter_id: frame for frame in frames}
+    chapters = document.summary_data.get("chapters")
+    if not isinstance(chapters, list):
+        raise ValueError("多模态总结缺少章节数据。")
+    summary_data = dict(document.summary_data)
+    restored_chapters: list[object] = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            raise ValueError("多模态总结章节格式无效。")
+        restored = dict(chapter)
+        restored.pop("image_timestamp_seconds", None)
+        restored.pop("image_filename", None)
+        frame = frames_by_chapter.get(str(chapter.get("id", "")))
+        if frame is not None:
+            restored["image_timestamp_seconds"] = frame.timestamp_seconds
+            restored["image_filename"] = frame.image_filename
+        restored_chapters.append(restored)
+    summary_data["chapters"] = restored_chapters
+    return SummaryDocument(
+        markdown=render_markdown(summary_data),
+        summary_data=summary_data,
+        mindmap_data=document.mindmap_data,
+    )
 
 
 def _build_no_transcribable_audio_transcript(duration_seconds: float) -> Transcript:

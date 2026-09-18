@@ -28,6 +28,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,7 @@ from backend.shared.filesystem import KeyedLockManager, atomic_write_text
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.schemas import TranscriptSegmentPayload
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
+from backend.video_summary.library.note_images import format_note_image_timestamp, parse_note_image_markers
 from backend.video_summary.infrastructure.rag.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.library.constants import BILIBILI_INBOX_SERIES_ID, PLAYGROUND_SERIES_ID
@@ -65,6 +67,7 @@ from backend.video_summary.library.usecases.series_synopsis_generation import bu
 
 
 _UNTRANSCRIBABLE_STATUS = "untranscribable"
+LOGGER = logging.getLogger(__name__)
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
@@ -634,6 +637,7 @@ class FileSystemVideoWorkspace:
         next_title = _require_note_text(title, "title")
         next_content = _require_note_text(content, "content")
         next_source = _require_note_source(source)
+        self._materialize_note_frames(series_id, video_id, next_content)
         now = _now_iso()
         note_record = {
             "id": f"note-{uuid4().hex}",
@@ -676,6 +680,7 @@ class FileSystemVideoWorkspace:
 
         next_title = _require_note_text(title, "title")
         next_content = _require_note_text(content, "content")
+        self._materialize_note_frames(series_id, video_id, next_content)
         with self._notes_locks.hold(_notes_lock_key(series_id, video_id)):
             notes_payload = self._read_notes_payload(series_id, video_id)
             for note in notes_payload["notes"]:
@@ -687,6 +692,32 @@ class FileSystemVideoWorkspace:
                 self._write_notes_payload(series_id, video_id, notes_payload)
                 return _to_note_view(note)
         return None
+
+    def _materialize_note_frames(self, series_id: str, video_id: str, content: str) -> None:
+        """为合法且在视频范围内的笔记图片标记准备可复用 JPEG 帧。"""
+        source = self.get_video_source(series_id, video_id)
+        if source is None:
+            return
+        try:
+            duration_seconds = self._media_processor.probe_duration(source.source_path)
+        except Exception:
+            LOGGER.exception("无法探测笔记图片的视频时长", extra={"series_id": series_id, "video_id": video_id})
+            return
+        frames_dir = source.output_dir / "frames"
+        for marker in parse_note_image_markers(content):
+            if marker.seconds > duration_seconds:
+                continue
+            filename = f"{format_note_image_timestamp(marker.seconds)}.jpg"
+            output_path = frames_dir / filename
+            if output_path.is_file():
+                continue
+            try:
+                self._media_processor.extract_frame(source.source_path, marker.seconds, output_path)
+            except Exception:
+                LOGGER.exception(
+                    "笔记图片抽帧失败",
+                    extra={"series_id": series_id, "video_id": video_id, "timestamp_seconds": marker.seconds},
+                )
 
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
         """按 `note_id` 从 `notes.json` 中删除该笔记。

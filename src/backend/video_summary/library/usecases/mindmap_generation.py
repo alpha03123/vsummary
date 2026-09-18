@@ -57,6 +57,8 @@ class GenerateVideoMindmapFromLibrary:
         visual_reader = getattr(self._workspace, "get_video_visual_evidence", None)
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
+        source = self._workspace.get_video_source(series_id, video_id)
+        visual_frame_paths = _summary_frame_paths(source.output_dir, summary.summary) if source is not None else []
 
         try:
             arguments = {
@@ -69,7 +71,26 @@ class GenerateVideoMindmapFromLibrary:
             }
             if visual_evidence_text:
                 arguments["visual_evidence_text"] = visual_evidence_text
+            if visual_frame_paths:
+                arguments["visual_frame_paths"] = visual_frame_paths
             await self._generator.run(**arguments)
         except LookupError:
             return None
         return self._workspace.get_video_mindmap(series_id, video_id)
+
+
+def _summary_frame_paths(output_dir, summary_data: dict[str, object]):
+    chapters = summary_data.get("chapters")
+    if not isinstance(chapters, list):
+        return []
+    result = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            continue
+        filename = chapter.get("image_filename")
+        if not isinstance(filename, str) or not filename or filename != filename.split("/")[-1] or "\\" in filename:
+            continue
+        path = output_dir / "screenshots" / filename
+        if path.is_file():
+            result.append(path)
+    return result

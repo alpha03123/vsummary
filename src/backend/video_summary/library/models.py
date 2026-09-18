@@ -193,6 +193,34 @@ class VideoVisualEvidenceDTO:
 
 
 @dataclass(frozen=True)
+class VideoVisualInputFrameDTO:
+    """可被下游产物作为原图输入的已抽取章节帧。"""
+
+    chapter_id: str
+    timestamp_seconds: float
+    image_filename: str
+    image_path: Path
+
+
+@dataclass(frozen=True)
+class VideoAiNoteVisualContextDTO:
+    """AI 笔记可选消费的概况画面输入。"""
+
+    frames: list[VideoVisualInputFrameDTO]
+    evidence_text: str = ""
+
+
+@dataclass(frozen=True)
+class GeneratedVideoAiNoteDTO:
+    """AI 生成器返回的笔记正文及其自动配图校验策略。"""
+
+    content: str
+    note_visual_mode: str
+    note_max_images: int
+    note_image_min_gap_seconds: float
+
+
+@dataclass(frozen=True)
 class TranscriptSegmentDTO:
     """单条转写片段。
 

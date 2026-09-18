@@ -152,6 +152,11 @@ class WorkspaceSettingsResponse(BaseModel):
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_frames: int = Field(default=6, ge=1, le=20)
+    note_visual_mode: Literal["off", "screenshots"] = "off"
+    note_visual_input: Literal["none", "evidence", "frames"] = "frames"
+    mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
+    cards_visual_input: Literal["none", "evidence", "frames"] = "evidence"
+    note_max_images: int = Field(default=6, ge=1)
     auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "notes"]] = Field(default_factory=lambda: ["notes"])
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
@@ -205,6 +210,11 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_frames: int = Field(default=6, ge=1, le=20)
+    note_visual_mode: Literal["off", "screenshots"] = "off"
+    note_visual_input: Literal["none", "evidence", "frames"] = "frames"
+    mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
+    cards_visual_input: Literal["none", "evidence", "frames"] = "evidence"
+    note_max_images: int = Field(default=6, ge=1)
     auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "notes"]] = Field(default_factory=lambda: ["notes"])
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2

@@ -79,6 +79,8 @@ export function WorkspaceNotesView({
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
+  noteImageContext = null,
+  onSeek,
 }) {
   const [viewState, setViewState] = useState("list"); // "list" | "create" | "detail"
   const [selectedNoteId, setSelectedNoteId] = useState(null);
@@ -283,7 +285,7 @@ export function WorkspaceNotesView({
               <h1 className="mt-4 text-2xl font-bold text-stone-900 dark:text-stone-100">{selectedNote.title}</h1>
               <div className="my-5 h-px w-full bg-stone-100 dark:bg-stone-800/60" />
               <div className="markdown-body mt-2 text-sm text-stone-700 dark:text-stone-300">
-                <WorkspaceMarkdownMessage content={selectedNote.content} />
+                <WorkspaceMarkdownMessage content={selectedNote.content} noteImageContext={noteImageContext} onSeek={onSeek} />
               </div>
             </>
           )}

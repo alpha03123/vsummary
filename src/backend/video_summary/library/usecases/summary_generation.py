@@ -97,6 +97,7 @@ class GenerateVideoSummaryFromLibrary:
         self._active_tasks: dict[str, asyncio.Task[VideoSummaryDTO | VideoTranscriptDTO | None]] = {}
         self._active_tasks_lock = asyncio.Lock()
         self._active_task_keys: set[tuple[str, str]] = set()
+        self._auto_artifact_tasks: set[asyncio.Task[None]] = set()
         self._active_series_generation_ids: set[str] = set()
         self._activity_lock = Lock()
         self._video_generation_slots = CapacityLimiter(max(1, video_generation_concurrency))
@@ -281,6 +282,7 @@ class GenerateVideoSummaryFromLibrary:
             - 其他 `RuntimeError` 与未知异常会先更新 reporter 失败状态再上抛。
         """
         reporter = progress_reporter or self._progress_tracker.create_reporter(f"{series_id}/{video_id}")
+        should_start_auto_artifacts = False
         try:
             if self._video_generation_slots.available_tokens <= 0:
                 reporter.update("prepare", 0.0, "正在等待当前生成任务完成")
@@ -302,13 +304,13 @@ class GenerateVideoSummaryFromLibrary:
                         self._series_memory_refresher.refresh(series_id, video_id)
                     except Exception:
                         LOGGER.exception("series knowledge memory refresh failed for %s", series_id)
-                if processing_mode == "summary" and self._auto_generate_artifacts is not None:
-                    await self._auto_generate_artifacts(series_id, video_id)
             if processing_mode == "transcript":
                 reporter.completed("字幕已获取")
                 return self._workspace.get_video_transcript(series_id, video_id)
             reporter.completed("AI 概况已生成")
-            return self._workspace.get_video_summary(series_id, video_id)
+            summary = self._workspace.get_video_summary(series_id, video_id)
+            should_start_auto_artifacts = summary is not None and self._auto_generate_artifacts is not None
+            return summary
         except LookupError:
             return None
         except GenerateCancelledError:
@@ -325,6 +327,29 @@ class GenerateVideoSummaryFromLibrary:
             raise RuntimeError(str(error)) from error
         finally:
             await self._clear_task(task_id)
+            if should_start_auto_artifacts:
+                self._start_auto_artifacts(series_id, video_id)
+
+    def _start_auto_artifacts(self, series_id: str, video_id: str) -> None:
+        """在概况任务终态后启动独立的自动制品任务。"""
+        if self._auto_generate_artifacts is None:
+            return
+        task = asyncio.create_task(
+            self._auto_generate_artifacts(series_id, video_id),
+            name=f"auto-artifacts:{series_id}/{video_id}",
+        )
+        self._auto_artifact_tasks.add(task)
+
+        def on_done(completed_task: asyncio.Task[None]) -> None:
+            self._auto_artifact_tasks.discard(completed_task)
+            try:
+                completed_task.result()
+            except asyncio.CancelledError:
+                LOGGER.info("auto artifacts cancelled for %s/%s", series_id, video_id)
+            except Exception:
+                LOGGER.exception("auto artifacts failed for %s/%s", series_id, video_id)
+
+        task.add_done_callback(on_done)
 
     async def _clear_task(self, task_id: str) -> None:
         """从活跃任务表中移除当前任务（仅在调用方就是当前 Task 时才生效）。"""

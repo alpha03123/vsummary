@@ -312,7 +312,31 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(evidence["frames"][0]["image_filename"], "chapter-01.jpg")
             self.assertEqual(evidence["frames"][0]["text"], "画面中展示了一张系统架构图。")
 
-    async def test_chapter_screenshot_failure_aborts_generation(self) -> None:
+    async def test_multimodal_limits_read_frames_without_dropping_chapter_images(self) -> None:
+        frame_extractor = _FrameExtractor()
+        enricher = _VisualEnricher()
+        use_case = GenerateVideoSummary(
+            media_processor=_UnexpectedMediaProcessor(),
+            transcriber=_UnexpectedTranscriber(),
+            transcript_enhancer=None,
+            summarizer=_TwoChapterSummarizer(),
+            artifact_store=FileSystemGenerationArtifactStore(),
+            subtitle_provider=_UnexpectedSubtitleProvider(),
+            frame_extractor=frame_extractor,
+            visual_summary_enricher=enricher,
+            multimodal_visual_enabled=True,
+            max_visual_frames=1,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            document = await use_case.run(root / "video.mp4", root / "output", manual_transcript=_manual_input())
+
+            self.assertEqual(frame_extractor.timestamps, [2.0, 3.0])
+            self.assertEqual(enricher.calls, 1)
+            self.assertEqual(document.summary_data["chapters"][0]["image_filename"], "chapter-01.jpg")
+            self.assertEqual(document.summary_data["chapters"][1]["image_filename"], "chapter-02.jpg")
+
+    async def test_chapter_screenshot_failure_keeps_other_chapter_artifacts(self) -> None:
         frame_extractor = _PartiallyFailingFrameExtractor()
         use_case = GenerateVideoSummary(
             media_processor=_UnexpectedMediaProcessor(),
@@ -326,11 +350,12 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             output_dir = root / "output"
-            with self.assertRaisesRegex(RuntimeError, "第 1 章截图生成失败"):
-                await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
+            document = await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
 
-            self.assertEqual(frame_extractor.timestamps, [2.0])
-            self.assertFalse((output_dir / "summary.json").exists())
+            self.assertEqual(frame_extractor.timestamps, [2.0, 3.0])
+            self.assertNotIn("image_filename", document.summary_data["chapters"][0])
+            self.assertEqual(document.summary_data["chapters"][1]["image_filename"], "chapter-02.jpg")
+            self.assertTrue((output_dir / "summary.json").exists())
 
     async def test_audio_only_media_skips_chapter_screenshots_without_warning(self) -> None:
         frame_extractor = _AudioOnlyFrameExtractor()

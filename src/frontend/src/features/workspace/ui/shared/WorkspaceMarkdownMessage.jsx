@@ -11,6 +11,7 @@ const CITATION_PREVIEW_ESTIMATED_MAX_HEIGHT = 260;
 const CITATION_PREVIEW_GAP = 8;
 const CITATION_PREVIEW_VIEWPORT_PADDING = 16;
 const THINK_BLOCK_PATTERN = /<think>([\s\S]*?)(?:<\/think>|$)/gi;
+const NOTE_IMAGE_MARKER_PATTERN = /\[\[IMG:(\d+(?::\d{2}){1,2}(?:\.\d+)?|\d+(?:\.\d+)?)\]\]/g;
 
 function normalizeCitations(citations) {
   if (!Array.isArray(citations)) {
@@ -263,15 +264,75 @@ function ThinkBlock({ content }) {
   );
 }
 
-function MarkdownSegment({ content, citations, onOpenCitationReference }) {
+function normalizeImageSeconds(value) {
+  const parts = String(value).split(":");
+  if (parts.length === 1) return Number(parts[0]);
+  if (parts.length === 2) return Number(parts[0]) * 60 + Number(parts[1]);
+  if (parts.length === 3) return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2]);
+  return NaN;
+}
+
+function formatImageTimestamp(seconds) {
+  const whole = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(whole / 60);
+  const secondPart = whole % 60;
+  const hours = Math.floor(minutes / 60);
+  const minutePart = minutes % 60;
+  return hours ? `${String(hours).padStart(2, "0")}:${String(minutePart).padStart(2, "0")}:${String(secondPart).padStart(2, "0")}` : `${String(minutes).padStart(2, "0")}:${String(secondPart).padStart(2, "0")}`;
+}
+
+function normalizeFrameKey(seconds) {
+  return String(Math.round(seconds * 1000) / 1000).replace(/\.0+$/, "");
+}
+
+function NoteFrameImage({ src, alt, seconds, onSeek, ...props }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">此处插图不可用：{formatImageTimestamp(seconds)} 的视频画面无法加载</p>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onSeek?.({ seconds })}
+      className="group block w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 text-left dark:border-stone-800 dark:bg-stone-950"
+      title={`跳转到 ${formatImageTimestamp(seconds)}`}
+    >
+      <img {...props} src={src} alt={alt} onError={() => setFailed(true)} className="aspect-video w-full object-cover transition-transform duration-200 group-hover:scale-[1.01]" />
+    </button>
+  );
+}
+
+function replaceNoteImageMarkers(content, noteImageContext) {
+  if (!noteImageContext || typeof content !== "string") return content;
+  return content.replace(NOTE_IMAGE_MARKER_PATTERN, (raw, timestamp) => {
+    const seconds = normalizeImageSeconds(timestamp);
+    if (!Number.isFinite(seconds) || seconds < 0 || seconds > noteImageContext.durationSeconds) {
+      return `> 此处插图不可用：${raw} 超出视频时长`;
+    }
+    const filename = `${normalizeFrameKey(seconds)}.jpg`;
+    const src = `/api/videos/${encodeURIComponent(noteImageContext.seriesId)}/${encodeURIComponent(noteImageContext.videoId)}/frames/${encodeURIComponent(filename)}`;
+    return `![视频画面（${formatImageTimestamp(seconds)}）](${src} "seek:${seconds}")`;
+  });
+}
+
+function MarkdownSegment({ content, citations, onOpenCitationReference, noteImageContext, onSeek }) {
   const normalizedCitations = normalizeCitations(citations);
-  const renderedContent = injectCitationLinks(normalizeMathDelimiters(content), normalizedCitations);
+  const renderedContent = injectCitationLinks(normalizeMathDelimiters(replaceNoteImageMarkers(content, noteImageContext)), normalizedCitations);
   const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       components={{
+        img: ({ node: _node, src, alt, title, ...props }) => {
+          const seconds = typeof title === "string" && title.startsWith("seek:")
+            ? Number(title.slice("seek:".length))
+            : NaN;
+          if (Number.isFinite(seconds)) {
+            return <NoteFrameImage {...props} src={src} alt={alt} seconds={seconds} onSeek={onSeek} />;
+          }
+          return <img {...props} src={src} alt={alt} />;
+        },
         a: ({ node: _node, href, children, ...props }) => {
           if (typeof href === "string" && href.startsWith("#citation-")) {
             const citationId = href.replace("#citation-", "");
@@ -309,7 +370,7 @@ function MarkdownSegment({ content, citations, onOpenCitationReference }) {
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCitationReference }) {
+export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCitationReference, noteImageContext = null, onSeek = null }) {
   const parts = splitThinkBlocks(content);
   return (
     <div className="flex flex-col gap-4">
@@ -322,6 +383,8 @@ export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCita
             content={part.content}
             citations={citations}
             onOpenCitationReference={onOpenCitationReference}
+            noteImageContext={noteImageContext}
+            onSeek={onSeek}
           />
         )
       ))}

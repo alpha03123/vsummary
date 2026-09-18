@@ -294,6 +294,7 @@ class VideoMindmapGenerator(Protocol):
         summary_data: dict[str, object],
         transcript_text: str = "",
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
         progress_reporter: ProgressReporter | None = None,
         max_depth: int | None = None,
     ) -> None:
@@ -346,6 +347,7 @@ class KnowledgeCardGenerator(Protocol):
         title: str,
         summary_data: dict[str, object],
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
     ) -> list[KnowledgeCardDTO]:
         """基于总结数据生成知识卡列表；不与文件系统交互。"""
 

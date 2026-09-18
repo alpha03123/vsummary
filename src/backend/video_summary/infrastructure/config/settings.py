@@ -37,6 +37,8 @@ VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
 VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
 VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 VALID_CHAPTER_VISUAL_MODES = {"off", "screenshots", "multimodal"}
+VALID_NOTE_VISUAL_MODES = {"off", "screenshots"}
+VALID_VISUAL_INPUTS = {"none", "evidence", "frames"}
 VALID_AUTO_GENERATE_ARTIFACTS = {"mindmap", "knowledge_cards", "notes"}
 VALID_LLM_PROVIDERS = {
     "ai21",
@@ -137,6 +139,12 @@ DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
 DEFAULT_CHAPTER_VISUAL_MODE = "screenshots"
 DEFAULT_MAX_VISUAL_FRAMES = 6
+DEFAULT_NOTE_VISUAL_MODE = "off"
+DEFAULT_NOTE_VISUAL_INPUT = "frames"
+DEFAULT_MINDMAP_VISUAL_INPUT = "evidence"
+DEFAULT_CARDS_VISUAL_INPUT = "evidence"
+DEFAULT_NOTE_MAX_IMAGES = 6
+DEFAULT_NOTE_IMAGE_MIN_GAP_SECONDS = 5.0
 DEFAULT_AUTO_GENERATE_ARTIFACTS = ("notes",)
 MAX_VISUAL_FRAMES_LIMIT = 20
 DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
@@ -318,6 +326,12 @@ class GenerationConcurrencySettings:
     summary_chunk_concurrency: int
     chapter_visual_mode: str
     max_visual_frames: int
+    note_visual_mode: str
+    note_visual_input: str
+    mindmap_visual_input: str
+    cards_visual_input: str
+    note_max_images: int
+    note_image_min_gap_seconds: float
     auto_generate_artifacts: tuple[str, ...]
 
 
@@ -578,6 +592,40 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             generation_payload.get("max_visual_frames"),
             default=DEFAULT_MAX_VISUAL_FRAMES,
             field_name="generation.max_visual_frames",
+        ),
+        note_visual_mode=_normalize_choice(
+            generation_payload.get("note_visual_mode"),
+            default=DEFAULT_NOTE_VISUAL_MODE,
+            allowed=VALID_NOTE_VISUAL_MODES,
+            field_name="generation.note_visual_mode",
+        ),
+        note_visual_input=_normalize_choice(
+            generation_payload.get("note_visual_input"),
+            default=DEFAULT_NOTE_VISUAL_INPUT,
+            allowed=VALID_VISUAL_INPUTS,
+            field_name="generation.note_visual_input",
+        ),
+        mindmap_visual_input=_normalize_choice(
+            generation_payload.get("mindmap_visual_input"),
+            default=DEFAULT_MINDMAP_VISUAL_INPUT,
+            allowed=VALID_VISUAL_INPUTS,
+            field_name="generation.mindmap_visual_input",
+        ),
+        cards_visual_input=_normalize_choice(
+            generation_payload.get("cards_visual_input"),
+            default=DEFAULT_CARDS_VISUAL_INPUT,
+            allowed=VALID_VISUAL_INPUTS,
+            field_name="generation.cards_visual_input",
+        ),
+        note_max_images=_normalize_positive_int(
+            generation_payload.get("note_max_images"),
+            default=DEFAULT_NOTE_MAX_IMAGES,
+            field_name="generation.note_max_images",
+        ),
+        note_image_min_gap_seconds=_normalize_non_negative_float(
+            generation_payload.get("note_image_min_gap_seconds"),
+            default=DEFAULT_NOTE_IMAGE_MIN_GAP_SECONDS,
+            field_name="generation.note_image_min_gap_seconds",
         ),
         auto_generate_artifacts=_normalize_auto_generate_artifacts(
             generation_payload.get("auto_generate_artifacts"),
@@ -889,6 +937,55 @@ def replace_chapter_visual_settings(
     )
 
 
+def replace_downstream_visual_settings(
+    settings: AppSettings,
+    *,
+    note_visual_mode: str,
+    note_visual_input: str,
+    mindmap_visual_input: str,
+    cards_visual_input: str,
+    note_max_images: int,
+    note_image_min_gap_seconds: float,
+) -> AppSettings:
+    """派生替换笔记及下游产物的视觉消费策略。"""
+    if note_max_images <= 0:
+        raise ValueError("generation.note_max_images 必须是大于 0 的整数。")
+    if note_image_min_gap_seconds < 0:
+        raise ValueError("generation.note_image_min_gap_seconds 必须是大于等于 0 的数字。")
+    return replace(
+        settings,
+        generation=replace(
+            settings.generation,
+            note_visual_mode=_normalize_choice(
+                note_visual_mode,
+                default=DEFAULT_NOTE_VISUAL_MODE,
+                allowed=VALID_NOTE_VISUAL_MODES,
+                field_name="generation.note_visual_mode",
+            ),
+            note_visual_input=_normalize_choice(
+                note_visual_input,
+                default=DEFAULT_NOTE_VISUAL_INPUT,
+                allowed=VALID_VISUAL_INPUTS,
+                field_name="generation.note_visual_input",
+            ),
+            mindmap_visual_input=_normalize_choice(
+                mindmap_visual_input,
+                default=DEFAULT_MINDMAP_VISUAL_INPUT,
+                allowed=VALID_VISUAL_INPUTS,
+                field_name="generation.mindmap_visual_input",
+            ),
+            cards_visual_input=_normalize_choice(
+                cards_visual_input,
+                default=DEFAULT_CARDS_VISUAL_INPUT,
+                allowed=VALID_VISUAL_INPUTS,
+                field_name="generation.cards_visual_input",
+            ),
+            note_max_images=note_max_images,
+            note_image_min_gap_seconds=float(note_image_min_gap_seconds),
+        ),
+    )
+
+
 def replace_auto_generate_artifacts(settings: AppSettings, artifacts: object) -> AppSettings:
     """派生替换 AI 概况完成后自动生成的制品集合。"""
     return replace(
@@ -1089,6 +1186,12 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
         f'chapter_visual_mode = "{settings.generation.chapter_visual_mode}"',
         f"max_visual_frames = {settings.generation.max_visual_frames}",
+        f'note_visual_mode = "{settings.generation.note_visual_mode}"',
+        f'note_visual_input = "{settings.generation.note_visual_input}"',
+        f'mindmap_visual_input = "{settings.generation.mindmap_visual_input}"',
+        f'cards_visual_input = "{settings.generation.cards_visual_input}"',
+        f"note_max_images = {settings.generation.note_max_images}",
+        f"note_image_min_gap_seconds = {settings.generation.note_image_min_gap_seconds}",
         f"auto_generate_artifacts = {_toml_string_list(settings.generation.auto_generate_artifacts)}",
         "",
         "[web_search]",

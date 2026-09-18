@@ -302,6 +302,14 @@ export function WorkspaceReadingPane({
                       onCreateNote={onCreateNote}
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}
+                      noteImageContext={activeSeries && selectedVideo ? {
+                        seriesId: activeSeries.id,
+                        videoId: selectedVideo.id,
+                        durationSeconds: Array.isArray(summary?.chapters)
+                          ? Math.max(0, ...summary.chapters.map((chapter) => Number.isFinite(chapter.end_seconds) ? chapter.end_seconds : 0))
+                          : Number.POSITIVE_INFINITY,
+                      } : null}
+                      onSeek={onSeek}
                     />
                   ) : null}
                   {toolId === "preview" ? (

@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Literal
 
-from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.video_summary.generation.ports import MindmapGenerator
 from backend.video_summary.infrastructure.llm.prompts import MINDMAP_PROMPT_TEMPLATE
 from backend.video_summary.generation import FlatMindmapPayload, MindmapNodePayload
@@ -57,6 +58,7 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
         summary_data: dict[str, object],
         transcript_text: str = "",
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
         max_depth: int | None = None,
     ) -> dict[str, object]:
         """生成一次思维导图节点/边字典。
@@ -84,8 +86,13 @@ class LiteLLMMindmapGenerator(MindmapGenerator):
             max_depth=max_depth,
         )
         response_model = FlatMindmapPayload if self._output_encoding == "flat" else MindmapNodePayload
+        message_content = (
+            build_multimodal_user_content(text=prompt, image_paths=visual_frame_paths)
+            if visual_frame_paths
+            else prompt
+        )
         payload = await self._gateway.acomplete_structured(
-            [{"role": "user", "content": prompt}],
+            [{"role": "user", "content": message_content}],
             response_model=response_model,
             retries=3,
             timeout=120,

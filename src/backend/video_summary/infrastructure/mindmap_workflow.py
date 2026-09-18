@@ -11,7 +11,7 @@ from pathlib import Path
 from threading import Lock
 
 from backend.video_summary.infrastructure.application_builders import build_mindmap_application
-from backend.video_summary.infrastructure.config.settings import ensure_settings_file
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
 from backend.shared.llm.usage import LlmUsageRecorder
 
 
@@ -44,6 +44,7 @@ class ConfiguredMindmapWorkflow:
         summary_data: dict[str, object],
         transcript_text: str = "",
         visual_evidence_text: str = "",
+        visual_frame_paths=None,
         progress_reporter=None,
         max_depth: int | None = None,
     ) -> None:
@@ -60,13 +61,16 @@ class ConfiguredMindmapWorkflow:
             progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
         """
         application = self._get_application()
+        settings = load_settings(self._config_path, self._root_dir)
+        visual_input = settings.generation.mindmap_visual_input
         await application.use_case.run(
             title=source_path.stem,
             duration_seconds=_resolve_duration_seconds(summary_data),
             summary_data=summary_data,
             output_dir=output_dir,
             transcript_text=transcript_text,
-            visual_evidence_text=visual_evidence_text,
+            visual_evidence_text=visual_evidence_text if visual_input == "evidence" else "",
+            visual_frame_paths=visual_frame_paths if visual_input == "frames" else None,
             progress_reporter=progress_reporter,
             max_depth=max_depth,
         )

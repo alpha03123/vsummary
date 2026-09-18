@@ -29,6 +29,11 @@ export const defaultUiSettings = {
   videoGenerationConcurrency: 1,
   chapterVisualMode: "screenshots",
   maxVisualFrames: 6,
+  noteVisualMode: "off",
+  noteVisualInput: "frames",
+  mindmapVisualInput: "evidence",
+  cardsVisualInput: "evidence",
+  noteMaxImages: 6,
   autoGenerateArtifacts: ["notes"],
   chaoxingRequestDelaySeconds: 0.2,
   chaoxingInitCourseDelaySeconds: 0.3,
@@ -816,6 +821,11 @@ export function normalizeUiSettings(value) {
       typeof record.maxVisualFrames === "number" && Number.isInteger(record.maxVisualFrames) && record.maxVisualFrames > 0
         ? record.maxVisualFrames
         : 6,
+    noteVisualMode: ["off", "screenshots"].includes(record.noteVisualMode) ? record.noteVisualMode : "off",
+    noteVisualInput: ["none", "evidence", "frames"].includes(record.noteVisualInput) ? record.noteVisualInput : "frames",
+    mindmapVisualInput: ["none", "evidence", "frames"].includes(record.mindmapVisualInput) ? record.mindmapVisualInput : "evidence",
+    cardsVisualInput: ["none", "evidence", "frames"].includes(record.cardsVisualInput) ? record.cardsVisualInput : "evidence",
+    noteMaxImages: typeof record.noteMaxImages === "number" && Number.isInteger(record.noteMaxImages) && record.noteMaxImages > 0 ? record.noteMaxImages : 6,
     autoGenerateArtifacts,
     chaoxingRequestDelaySeconds: normalizeNonNegativeNumber(record.chaoxingRequestDelaySeconds, 0.2),
     chaoxingInitCourseDelaySeconds: normalizeNonNegativeNumber(record.chaoxingInitCourseDelaySeconds, 0.3),

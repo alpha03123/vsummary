@@ -12,7 +12,7 @@ from threading import Lock
 
 from pydantic import BaseModel, Field
 
-from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
@@ -72,6 +72,7 @@ class LiteLLMKnowledgeCardGenerator:
         title: str,
         summary_data: dict[str, object],
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
     ) -> list[KnowledgeCardDTO]:
         """根据总结数据生成一批清洗后的知识卡片。
 
@@ -91,8 +92,13 @@ class LiteLLMKnowledgeCardGenerator:
             summary_data=summary_data,
             visual_evidence_text=visual_evidence_text,
         )
+        message_content = (
+            build_multimodal_user_content(text=prompt, image_paths=visual_frame_paths)
+            if visual_frame_paths
+            else prompt
+        )
         payload = self._gateway.complete_structured(
-            [{"role": "user", "content": prompt}],
+            [{"role": "user", "content": message_content}],
             response_model=KnowledgeCardCollectionPayload,
             retries=3,
         )
@@ -141,6 +147,7 @@ class ConfiguredKnowledgeCardGenerator:
         title: str,
         summary_data: dict[str, object],
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
     ) -> list[KnowledgeCardDTO]:
         """获取（或复用缓存的）知识卡片生成器并运行一次。
 
@@ -152,10 +159,13 @@ class ConfiguredKnowledgeCardGenerator:
             与 `LiteLLMKnowledgeCardGenerator.run` 同义的 `KnowledgeCardDTO` 列表。
         """
         generator = self._get_generator()
+        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+        visual_input = settings.generation.cards_visual_input
         return generator.run(
             title=title,
             summary_data=summary_data,
-            visual_evidence_text=visual_evidence_text,
+            visual_evidence_text=visual_evidence_text if visual_input == "evidence" else "",
+            visual_frame_paths=visual_frame_paths if visual_input == "frames" else None,
         )
 
     def _get_generator(self) -> LiteLLMKnowledgeCardGenerator:

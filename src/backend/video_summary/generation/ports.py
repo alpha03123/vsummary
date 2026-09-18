@@ -142,6 +142,7 @@ class MindmapGenerator(Protocol):
         summary_data: dict[str, object],
         transcript_text: str = "",
         visual_evidence_text: str = "",
+        visual_frame_paths: list[Path] | None = None,
         max_depth: int | None = None,
     ) -> dict[str, object]:
         """基于总结数据生成思维导图节点/边字典。"""

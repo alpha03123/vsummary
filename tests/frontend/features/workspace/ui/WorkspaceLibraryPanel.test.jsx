@@ -150,4 +150,44 @@ describe("WorkspaceLibraryPanel", () => {
     expect(onSelectSeriesContext).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the same download action for an undownloaded link in transcript mode", () => {
+    const onDownloadVideo = vi.fn();
+    const linkedVideo = {
+      ...linkedDownloadedVideo,
+      id: "linked-video",
+      isLinked: true,
+      status: "linked",
+    };
+    render(
+      <WorkspaceLibraryPanel
+        activeSeries={{ id: "s1", title: "S1", videos: [linkedVideo] }}
+        selectedContextType="video"
+        selectedVideo={linkedVideo}
+        isGeneratingSelectedVideo={false}
+        isGeneratingSeries={false}
+        seriesGenerationQueue={null}
+        currentAsrModel={{ id: "large-v3-turbo", label: "large-v3-turbo", downloaded: true }}
+        ragModels={[]}
+        processingMode="transcript"
+        onEnterLibraryHome={vi.fn()}
+        onSelectSeriesContext={vi.fn()}
+        onSelectVideo={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onGenerateSeries={vi.fn()}
+        onCancelGeneration={vi.fn()}
+        onDownloadVideo={onDownloadVideo}
+        onAddPlaygroundVideo={vi.fn()}
+        onAddSeriesVideo={vi.fn()}
+        onRequestDeleteCurrentVideo={vi.fn()}
+        onRequestDeleteSeries={vi.fn()}
+        downloadProgress={null}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "下载视频" }));
+    expect(onDownloadVideo).toHaveBeenCalledWith(linkedVideo);
+    expect(screen.queryByRole("button", { name: "获取字幕文件" })).not.toBeInTheDocument();
+  });
+
 });

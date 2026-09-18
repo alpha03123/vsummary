@@ -54,6 +54,10 @@ class GenerateVideoKnowledgeCards:
         if self._workspace.get_video_source(series_id, video_id) is None:
             return None
 
+        source = self._workspace.get_video_source(series_id, video_id)
+        if source is None:
+            return None
+
         summary = self._workspace.get_video_summary(series_id, video_id)
         if summary is None:
             return None
@@ -62,6 +66,9 @@ class GenerateVideoKnowledgeCards:
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         arguments = {"title": summary.title, "summary_data": summary.summary}
+        visual_frame_paths = _summary_frame_paths(source.output_dir, summary.summary)
+        if visual_frame_paths:
+            arguments["visual_frame_paths"] = visual_frame_paths
         if visual_evidence_text:
             arguments["visual_evidence_text"] = visual_evidence_text
         cards = self._generator.run(**arguments)
@@ -74,3 +81,20 @@ class GenerateVideoKnowledgeCards:
         if self._index_refresher is not None:
             self._index_refresher.upsert_video(series_id, video_id)
         return self._workspace.get_video_knowledge_cards(series_id, video_id)
+
+
+def _summary_frame_paths(output_dir, summary_data: dict[str, object]):
+    chapters = summary_data.get("chapters")
+    if not isinstance(chapters, list):
+        return []
+    result = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            continue
+        filename = chapter.get("image_filename")
+        if not isinstance(filename, str) or not filename or filename != filename.split("/")[-1] or "\\" in filename:
+            continue
+        path = output_dir / "screenshots" / filename
+        if path.is_file():
+            result.append(path)
+    return result

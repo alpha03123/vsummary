@@ -302,7 +302,7 @@ export function WorkspaceSelect({
       className={`max-w-full rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 ${className}`}
     >
       {options.map((option) => (
-        <option key={option.id} value={option.id}>
+        <option key={option.id} value={option.id} disabled={option.disabled}>
           {option.label}
         </option>
       ))}

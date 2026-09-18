@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from backend.video_summary.library.models import VideoAiNoteVisualContextDTO
+
 
 # 笔记风格预设：`label` 为界面展示名，`instruction` 为该风格的写作侧重。
 # key 是对外契约值（见 `api.schemas.contracts.AiNoteTemplate`），不要随意改动。
@@ -58,6 +60,8 @@ def build_ai_note_prompt(
     template: str = DEFAULT_NOTE_TEMPLATE,
     summary_text: str = "",
     outline_text: str = "",
+    visual_context: VideoAiNoteVisualContextDTO | None = None,
+    note_visual_mode: str = "off",
 ) -> str:
     """构建直接生成 AI 笔记时使用的提示词。
 
@@ -84,6 +88,7 @@ def build_ai_note_prompt(
         if outline_text.strip()
         else ""
     )
+    visual_section = _build_visual_section(visual_context, note_visual_mode)
     return (
         "你是专业的视频笔记助手，擅长把视频转写整理成内容完整、条理清晰、可以直接复习的 Markdown 笔记。\n"
         "语言：笔记用中文撰写；专有名词、技术术语、品牌名和人名保留原文（通常是英文），不要硬译。\n\n"
@@ -105,5 +110,23 @@ def build_ai_note_prompt(
         "不要照抄视频标题，不要用感叹号、营销词或活动标签。\n"
         "- 只输出最终 Markdown 正文，不要用代码块包裹，也不要加开场白或结束语。\n"
         "- 编号标题统一写成 `## 1. 标题`；如需加粗编号，写成 `1\\. **内容**`，避免被渲染成有序列表。\n"
-        f"{summary_section}{outline_section}\n视频转写（格式：时间 - 内容）：\n---\n{transcript_text.strip()}\n---"
+        f"{summary_section}{outline_section}{visual_section}\n视频转写（格式：时间 - 内容）：\n---\n{transcript_text.strip()}\n---"
     )
+
+
+def _build_visual_section(visual_context: VideoAiNoteVisualContextDTO | None, note_visual_mode: str) -> str:
+    if visual_context is None:
+        return ""
+    lines: list[str] = []
+    if visual_context.evidence_text.strip():
+        lines.extend(["\n已验证画面证据（可作为画面事实的依据）：", visual_context.evidence_text.strip()])
+    if visual_context.frames:
+        lines.append("\n本消息附有概况章节截图，可用于核验正文中的画面事实；不要把未附图的新插图当作事实依据。")
+    if note_visual_mode == "screenshots":
+        lines.append(
+            "\n自动配图已启用：可在适合的位置单独一行写 [[IMG:mm:ss]]（也可写秒数，如 [[IMG:51.0]]）。"
+            "图片会在保存时由系统抽取；不要描述这张新图片的内容，也不要写“如下图所示”。"
+        )
+    else:
+        lines.append("\n自动配图未启用：不要输出 [[IMG:...]] 标记。")
+    return "\n".join(lines) + "\n"

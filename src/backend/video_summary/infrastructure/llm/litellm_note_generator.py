@@ -6,11 +6,16 @@ from pathlib import Path
 from threading import Lock
 
 from backend.agent_graph.prompts.notes import build_ai_note_prompt
-from backend.shared.llm import LiteLLMCompletionGateway
+from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
-from backend.video_summary.library.models import VideoSummaryDTO, VideoTranscriptDTO
+from backend.video_summary.library.models import (
+    GeneratedVideoAiNoteDTO,
+    VideoAiNoteVisualContextDTO,
+    VideoSummaryDTO,
+    VideoTranscriptDTO,
+)
 
 
 # 笔记属于创作型任务：温度略高于 0，避免模型挑最保守的写法导致句式死板、篇幅偏短。
@@ -23,7 +28,18 @@ class LiteLLMNoteGenerator:
     def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
-    def run(self, *, transcript: VideoTranscriptDTO, summary: VideoSummaryDTO | None, template: str) -> str:
+    def run(
+        self,
+        *,
+        transcript: VideoTranscriptDTO,
+        summary: VideoSummaryDTO | None,
+        visual_context: VideoAiNoteVisualContextDTO,
+        template: str,
+        visual_input: str,
+        note_visual_mode: str,
+        note_max_images: int,
+        note_image_min_gap_seconds: float,
+    ) -> GeneratedVideoAiNoteDTO:
         transcript_text = "\n".join(
             f"{_format_timestamp(segment.start_seconds)} - {segment.text.strip()}"
             for segment in transcript.segments
@@ -33,19 +49,37 @@ class LiteLLMNoteGenerator:
             raise ValueError("视频转写为空，无法生成 AI 笔记。")
         summary_text = _extract_summary_text(summary)
         outline_text = _build_outline_text(summary)
-        content = self._gateway.complete_text(
-            [{"role": "user", "content": build_ai_note_prompt(
+        prompt = build_ai_note_prompt(
                 title=transcript.title,
                 transcript_text=transcript_text,
                 template=template,
                 summary_text=summary_text,
                 outline_text=outline_text,
+                visual_context=(
+                    VideoAiNoteVisualContextDTO(frames=[], evidence_text=visual_context.evidence_text)
+                    if visual_input == "evidence"
+                    else VideoAiNoteVisualContextDTO(frames=[], evidence_text="")
+                    if visual_input == "none"
+                    else visual_context
+                ),
+                note_visual_mode=note_visual_mode,
+            )
+        content = self._gateway.complete_text(
+            [{"role": "user", "content": (
+                build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
+                if visual_input == "frames" and visual_context.frames
+                else prompt
             )}],
             temperature=NOTE_TEMPERATURE,
         )
         if not content.strip():
             raise RuntimeError("模型未返回 AI 笔记。")
-        return content.strip()
+        return GeneratedVideoAiNoteDTO(
+            content=content.strip(),
+            note_visual_mode=note_visual_mode,
+            note_max_images=note_max_images,
+            note_image_min_gap_seconds=note_image_min_gap_seconds,
+        )
 
 
 class ConfiguredNoteGenerator:
@@ -60,8 +94,26 @@ class ConfiguredNoteGenerator:
         self._signature: tuple[str, str] | None = None
         self._generator: LiteLLMNoteGenerator | None = None
 
-    def run(self, *, transcript: VideoTranscriptDTO, summary: VideoSummaryDTO | None, template: str) -> str:
-        return self._get_generator().run(transcript=transcript, summary=summary, template=template)
+    def run(
+        self,
+        *,
+        transcript: VideoTranscriptDTO,
+        summary: VideoSummaryDTO | None,
+        visual_context: VideoAiNoteVisualContextDTO,
+        template: str,
+    ) -> GeneratedVideoAiNoteDTO:
+        generator = self._get_generator()
+        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+        return generator.run(
+            transcript=transcript,
+            summary=summary,
+            visual_context=visual_context,
+            template=template,
+            visual_input=settings.generation.note_visual_input,
+            note_visual_mode=settings.generation.note_visual_mode,
+            note_max_images=settings.generation.note_max_images,
+            note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
+        )
 
     def _get_generator(self) -> LiteLLMNoteGenerator:
         ensure_settings_file(self._config_path)

@@ -92,6 +92,19 @@ export function WorkspaceSettingsPanel({
     downloadingRagModelKey === "reranker"
   );
   const effectiveRerankEnabled = !rerankerNeedsDownload && ui.ragRerankEnabled;
+  const visualInputOptions = [
+    { id: "none", label: "不使用画面" },
+    {
+      id: "evidence",
+      label: "使用画面证据文本",
+      disabled: ui.chapterVisualMode !== "multimodal",
+    },
+    {
+      id: "frames",
+      label: "使用章节原图",
+      disabled: ui.chapterVisualMode === "off",
+    },
+  ];
   const providerModelOptions = [...new Set([...detectedProviderModels, ui.openaiModel].filter(Boolean))]
     .map((model) => ({ id: model, label: model }));
   const isProviderModelSelectActive = providerModelDiscovery === "ready";
@@ -637,7 +650,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="章节画面"
-                  description="选择不生成画面、只生成章节截图，或让模型识别截图并补充可检索的视觉信息。"
+                  description="每章生成一张代表画面；多模态只额外读取其中一部分，以补充可检索的视觉信息。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.chapterVisualMode}
@@ -665,7 +678,62 @@ export function WorkspaceSettingsPanel({
                   </WorkspaceSettingRow>
                 )}
 
+                <WorkspaceSettingRow
+                  title="AI 笔记配图"
+                  description="控制 AI 笔记是否自动在正文中插入可点击的视频画面。"
+                >
+                  <WorkspaceSegmentedControl
+                    value={ui.noteVisualMode}
+                    options={[
+                      { id: "off", label: "关闭" },
+                      { id: "screenshots", label: "自动配图" },
+                    ]}
+                    onChange={(nextValue) => onChangeSetting("noteVisualMode", nextValue)}
+                  />
+                </WorkspaceSettingRow>
+
                 <WorkspaceAdvancedSettings>
+                  <WorkspaceSettingRow
+                    title="AI 笔记画面输入"
+                    description="决定生成笔记时是否使用概况已有的画面信息；原图可提供最完整的画面细节。"
+                  >
+                    <WorkspaceSegmentedControl
+                      value={ui.noteVisualInput}
+                      options={visualInputOptions}
+                      onChange={(nextValue) => onChangeSetting("noteVisualInput", nextValue)}
+                    />
+                  </WorkspaceSettingRow>
+                  <WorkspaceSettingRow
+                    title="思维导图画面输入"
+                    description="控制导图生成时使用的画面信息。"
+                  >
+                    <WorkspaceSegmentedControl
+                      value={ui.mindmapVisualInput}
+                      options={visualInputOptions}
+                      onChange={(nextValue) => onChangeSetting("mindmapVisualInput", nextValue)}
+                    />
+                  </WorkspaceSettingRow>
+                  <WorkspaceSettingRow
+                    title="知识卡片画面输入"
+                    description="控制知识卡片生成时使用的画面信息。"
+                  >
+                    <WorkspaceSegmentedControl
+                      value={ui.cardsVisualInput}
+                      options={visualInputOptions}
+                      onChange={(nextValue) => onChangeSetting("cardsVisualInput", nextValue)}
+                    />
+                  </WorkspaceSettingRow>
+                  <WorkspaceSettingRow
+                    title="AI 笔记图片上限"
+                    description="限制 AI 自动插入的图片数量；不限制手动笔记。"
+                  >
+                    <WorkspaceTextInput
+                      value={String(ui.noteMaxImages)}
+                      onChange={(nextValue) => onChangeSetting("noteMaxImages", Number.parseInt(nextValue, 10) || 1)}
+                      className="w-full sm:w-[180px]"
+                      type="number"
+                    />
+                  </WorkspaceSettingRow>
                   <WorkspaceSettingRow
                     title="视频并行处理数"
                     description="控制全局最多同时处理多少个视频。"

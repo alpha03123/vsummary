@@ -11,6 +11,7 @@ const GENERATION_STAGE_ITEMS = [
   { id: "transcribe", label: "语音转写" },
   { id: "enhance_transcript", label: "AI 修正文本" },
   { id: "summarize", label: "AI 生成概况" },
+  { id: "enrich_visual_summary", label: "视觉增强概况" },
   { id: "completed", label: "完成" },
 ];
 

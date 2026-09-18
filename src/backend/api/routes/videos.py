@@ -301,6 +301,23 @@ def get_video_summary_screenshot(
     return FileResponse(screenshot, media_type="image/jpeg")
 
 
+@router.get("/api/videos/{series_id}/{video_id}/frames/{filename}")
+def get_video_note_frame(
+    series_id: str,
+    video_id: str,
+    filename: str,
+    container: ApiContainerDep,
+) -> FileResponse:
+    """返回由笔记图片标记按时间抽取的共享视频帧。"""
+    if Path(filename).name != filename or Path(filename).suffix.lower() != ".jpg":
+        raise HTTPException(status_code=404, detail="frame not found")
+    source = _ensure_video_exists(container, series_id, video_id)
+    frame = source.output_dir / "frames" / filename
+    if not frame.is_file():
+        raise HTTPException(status_code=404, detail="frame not found")
+    return FileResponse(frame, media_type="image/jpeg")
+
+
 @router.get("/api/videos/{series_id}/{video_id}/exports/video")
 def export_video_source(series_id: str, video_id: str, container: ApiContainerDep) -> FileResponse:
     """GET /api/videos/{series_id}/{video_id}/exports/video — 下载原始视频文件。

@@ -60,6 +60,32 @@ class SummaryGenerationCancellationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(use_case.is_video_generation_active("series-1", "video-1"))
         self.assertFalse(use_case.is_series_generation_active("series-1"))
 
+    async def test_auto_artifacts_do_not_delay_summary_completion(self) -> None:
+        tracker = FakeProgressTracker()
+        workspace = FakeWorkspace()
+        artifacts_started = asyncio.Event()
+        artifacts_release = asyncio.Event()
+
+        async def generate_artifacts(series_id: str, video_id: str) -> None:
+            self.assertEqual((series_id, video_id), ("series-1", "video-1"))
+            artifacts_started.set()
+            await artifacts_release.wait()
+
+        use_case = GenerateVideoSummaryFromLibrary(
+            workspace,
+            StageReportingGenerator(),
+            tracker,
+            auto_generate_artifacts=generate_artifacts,
+        )
+
+        result = await asyncio.wait_for(use_case.run("series-1", "video-1"), timeout=1.0)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(tracker.reporters["series-1/video-1"].completed_calls, ["AI 概况已生成"])
+        self.assertFalse(use_case.is_video_generation_active("series-1", "video-1"))
+        await asyncio.wait_for(artifacts_started.wait(), timeout=1.0)
+        artifacts_release.set()
+
     async def test_cancel_stops_active_generator_task_immediately(self) -> None:
         tracker = FakeProgressTracker()
         workspace = FakeWorkspace()

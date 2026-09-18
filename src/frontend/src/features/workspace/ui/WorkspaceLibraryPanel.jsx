@@ -422,12 +422,12 @@ function PanelFooter({
               ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
               : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
             }`}
-          onClick={processingMode === "transcript"
-            ? (isGeneratingSelectedVideo ? onCancelGeneration : onProcessLinkedVideo)
+          onClick={isGeneratingSelectedVideo
+            ? onCancelGeneration
             : () => onDownloadVideo?.(selectedVideo)}
         >
-          {isGeneratingSelectedVideo || selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : processingMode === "transcript" ? <Captions size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
-          {isGeneratingSelectedVideo ? "取消字幕获取" : selectedVideoIsDownloading ? "取消下载" : processingMode === "transcript" ? "获取字幕文件" : "下载视频"}
+          {isGeneratingSelectedVideo || selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
+          {isGeneratingSelectedVideo ? "取消当前处理" : selectedVideoIsDownloading ? "取消下载" : "下载视频"}
         </button>
         {hasSelectedVideoDownloadError && downloadError ? (
           <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{downloadError}</p>

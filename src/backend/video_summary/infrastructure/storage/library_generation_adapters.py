@@ -105,6 +105,7 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
         summary_data: dict[str, object],
         transcript_text: str = "",
         visual_evidence_text: str = "",
+        visual_frame_paths=None,
         progress_reporter: ProgressReporter | None = None,
         max_depth: int | None = None,
     ) -> None:
@@ -128,6 +129,7 @@ class WorkspaceBackedVideoMindmapGenerator(VideoMindmapGenerator):
             summary_data,
             transcript_text=transcript_text,
             visual_evidence_text=visual_evidence_text,
+            visual_frame_paths=visual_frame_paths,
             progress_reporter=progress_reporter,
             max_depth=max_depth,
         )
