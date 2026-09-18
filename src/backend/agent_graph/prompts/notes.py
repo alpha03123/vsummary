@@ -121,7 +121,9 @@ def _build_visual_section(visual_context: VideoAiNoteVisualContextDTO | None, no
     if visual_context.evidence_text.strip():
         lines.extend(["\n已验证画面证据（可作为画面事实的依据）：", visual_context.evidence_text.strip()])
     if visual_context.frames:
-        lines.append("\n本消息附有概况章节截图，可用于核验正文中的画面事实；不要把未附图的新插图当作事实依据。")
+        lines.append("\n本消息附有视频帧池九宫格图，可用于核验正文中的画面事实；不要把未附图的新插图当作事实依据。")
+    if visual_context.evidence_timestamps:
+        lines.append("视觉证据的 timestamp_seconds 只能从以下真实帧时间中选择：" + ", ".join(f"{value:.3f}" for value in visual_context.evidence_timestamps))
     if note_visual_mode == "screenshots":
         lines.append(
             "\n自动配图已启用：可在适合的位置单独一行写 [[IMG:mm:ss]]（也可写秒数，如 [[IMG:51.0]]）。"

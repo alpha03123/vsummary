@@ -138,7 +138,7 @@ DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED = True
 DEFAULT_VIDEO_GENERATION_CONCURRENCY = 1
 DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
 DEFAULT_CHAPTER_VISUAL_MODE = "screenshots"
-DEFAULT_MAX_VISUAL_FRAMES = 6
+DEFAULT_MAX_VISUAL_INPUT_IMAGES = 6
 DEFAULT_NOTE_VISUAL_MODE = "off"
 DEFAULT_NOTE_VISUAL_INPUT = "frames"
 DEFAULT_MINDMAP_VISUAL_INPUT = "evidence"
@@ -146,7 +146,7 @@ DEFAULT_CARDS_VISUAL_INPUT = "evidence"
 DEFAULT_NOTE_MAX_IMAGES = 6
 DEFAULT_NOTE_IMAGE_MIN_GAP_SECONDS = 5.0
 DEFAULT_AUTO_GENERATE_ARTIFACTS = ("notes",)
-MAX_VISUAL_FRAMES_LIMIT = 20
+MAX_VISUAL_INPUT_IMAGES_LIMIT = 20
 DEFAULT_WEB_SEARCH_PROVIDER = "litellm"
 DEFAULT_WEB_SEARCH_MODE = "native"
 DEFAULT_WEB_SEARCH_CONTEXT_SIZE = "medium"
@@ -325,7 +325,7 @@ class GenerationConcurrencySettings:
     video_generation_concurrency: int
     summary_chunk_concurrency: int
     chapter_visual_mode: str
-    max_visual_frames: int
+    max_visual_input_images: int
     note_visual_mode: str
     note_visual_input: str
     mindmap_visual_input: str
@@ -588,10 +588,10 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             allowed=VALID_CHAPTER_VISUAL_MODES,
             field_name="generation.chapter_visual_mode",
         ),
-        max_visual_frames=_normalize_positive_int(
-            generation_payload.get("max_visual_frames"),
-            default=DEFAULT_MAX_VISUAL_FRAMES,
-            field_name="generation.max_visual_frames",
+        max_visual_input_images=_normalize_positive_int(
+            generation_payload.get("max_visual_input_images"),
+            default=DEFAULT_MAX_VISUAL_INPUT_IMAGES,
+            field_name="generation.max_visual_input_images",
         ),
         note_visual_mode=_normalize_choice(
             generation_payload.get("note_visual_mode"),
@@ -631,8 +631,8 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             generation_payload.get("auto_generate_artifacts"),
         ),
     )
-    if generation_settings.max_visual_frames > MAX_VISUAL_FRAMES_LIMIT:
-        raise ValueError(f"generation.max_visual_frames 不能大于 {MAX_VISUAL_FRAMES_LIMIT}。")
+    if generation_settings.max_visual_input_images > MAX_VISUAL_INPUT_IMAGES_LIMIT:
+        raise ValueError(f"generation.max_visual_input_images 不能大于 {MAX_VISUAL_INPUT_IMAGES_LIMIT}。")
     web_search_payload = payload.get("web_search", {})
     web_search_settings = WebSearchSettings(
         enabled=bool(web_search_payload.get("enabled", False)),
@@ -911,7 +911,7 @@ def replace_chapter_visual_settings(
     settings: AppSettings,
     *,
     chapter_visual_mode: str,
-    max_visual_frames: int,
+    max_visual_input_images: int,
 ) -> AppSettings:
     """派生替换章节画面策略与单视频图片上限。"""
     mode = _normalize_choice(
@@ -921,18 +921,18 @@ def replace_chapter_visual_settings(
         field_name="generation.chapter_visual_mode",
     )
     normalized_limit = _normalize_positive_int(
-        max_visual_frames,
-        default=DEFAULT_MAX_VISUAL_FRAMES,
-        field_name="generation.max_visual_frames",
+        max_visual_input_images,
+        default=DEFAULT_MAX_VISUAL_INPUT_IMAGES,
+        field_name="generation.max_visual_input_images",
     )
-    if normalized_limit > MAX_VISUAL_FRAMES_LIMIT:
-        raise ValueError(f"generation.max_visual_frames 不能大于 {MAX_VISUAL_FRAMES_LIMIT}。")
+    if normalized_limit > MAX_VISUAL_INPUT_IMAGES_LIMIT:
+        raise ValueError(f"generation.max_visual_input_images 不能大于 {MAX_VISUAL_INPUT_IMAGES_LIMIT}。")
     return replace(
         settings,
         generation=replace(
             settings.generation,
             chapter_visual_mode=mode,
-            max_visual_frames=normalized_limit,
+            max_visual_input_images=normalized_limit,
         ),
     )
 
@@ -1185,7 +1185,7 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
         f'chapter_visual_mode = "{settings.generation.chapter_visual_mode}"',
-        f"max_visual_frames = {settings.generation.max_visual_frames}",
+        f"max_visual_input_images = {settings.generation.max_visual_input_images}",
         f'note_visual_mode = "{settings.generation.note_visual_mode}"',
         f'note_visual_input = "{settings.generation.note_visual_input}"',
         f'mindmap_visual_input = "{settings.generation.mindmap_visual_input}"',

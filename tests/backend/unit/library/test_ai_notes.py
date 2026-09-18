@@ -2,59 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from backend.video_summary.library.models import (
-    GeneratedVideoAiNoteDTO,
-    VideoNoteDTO,
-    VideoSourceDTO,
-    VideoTranscriptDTO,
-    TranscriptSegmentDTO,
-)
-from backend.video_summary.library.usecases.ai_notes import GenerateVideoAiNote, _constrain_ai_note_image_markers
+from backend.video_summary.library.usecases.ai_notes import constrain_ai_note_image_markers
 
 
-class FakeWorkspace:
-    def __init__(self) -> None:
-        self.created: list[dict[str, str]] = []
-
-    def get_video_source(self, series_id: str, video_id: str):
-        return VideoSourceDTO(series_id, video_id, "第一讲", "first.mp4", None, None, True)
-
-    def get_video_transcript(self, series_id: str, video_id: str):
-        return VideoTranscriptDTO(series_id, video_id, "第一讲", 10.0, [
-            TranscriptSegmentDTO(0, 10, "重要内容"),
-        ])
-
-    def get_video_summary(self, series_id: str, video_id: str):
-        return None
-
-    def create_video_note(self, series_id: str, video_id: str, *, title: str, content: str, source: str):
-        self.created.append({"title": title, "content": content, "source": source})
-        return VideoNoteDTO("note-1", title, content, source, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z")
-
-
-class FakeGenerator:
-    def run(self, *, transcript, summary, visual_context, template: str) -> GeneratedVideoAiNoteDTO:
-        self.template = template
-        self.visual_context = visual_context
-        return GeneratedVideoAiNoteDTO("## 重点\n\n内容", "off", 6, 5.0)
-
-
-class GenerateVideoAiNoteTests(unittest.TestCase):
-    def test_generates_and_saves_agent_note(self) -> None:
-        workspace = FakeWorkspace()
-        generator = FakeGenerator()
-
-        note = GenerateVideoAiNote(workspace, generator).run("series-1", "video-1", template="tutorial")
-
-        self.assertEqual("note-1", note.id)
-        self.assertEqual("tutorial", generator.template)
-        self.assertEqual(
-            [{"title": "第一讲", "content": "## 重点\n\n内容", "source": "agent"}],
-            workspace.created,
-        )
-
+class AiNoteMarkerConstraintTests(unittest.TestCase):
     def test_allows_ai_image_markers_without_a_summary(self) -> None:
-        content = _constrain_ai_note_image_markers(
+        content = constrain_ai_note_image_markers(
             "正文\n\n[[IMG:00:05]]",
             summary=None,
             duration_seconds=10,
@@ -63,6 +16,19 @@ class GenerateVideoAiNoteTests(unittest.TestCase):
             min_gap_seconds=5,
         )
 
+        self.assertIn("[[IMG:00:05]]", content)
+
+    def test_keeps_out_of_duration_marker_for_the_renderer(self) -> None:
+        content = constrain_ai_note_image_markers(
+            "正文\n\n[[IMG:00:15]]\n\n[[IMG:00:05]]",
+            summary=None,
+            duration_seconds=10,
+            enabled=True,
+            max_images=1,
+            min_gap_seconds=5,
+        )
+
+        self.assertIn("[[IMG:00:15]]", content)
         self.assertIn("[[IMG:00:05]]", content)
 
 

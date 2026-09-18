@@ -30,7 +30,7 @@ from backend.video_summary.infrastructure.config.settings import (
     VALID_ANSWER_DETAIL_LEVELS,
     VALID_LLM_PROVIDERS,
     VALID_REASONING_EFFORTS,
-    MAX_VISUAL_FRAMES_LIMIT,
+    MAX_VISUAL_INPUT_IMAGES_LIMIT,
     WorkspaceUiSettings,
     apply_runtime_env_overrides,
     load_env_settings,
@@ -130,7 +130,7 @@ class WorkspaceSettings:
     talk_custom_prompt: str
     video_generation_concurrency: int
     chapter_visual_mode: str
-    max_visual_frames: int
+    max_visual_input_images: int
     note_visual_mode: str
     note_visual_input: str
     mindmap_visual_input: str
@@ -170,7 +170,7 @@ class SettingsServicePort(Protocol):
         video_generation_concurrency: int,
         web_search_enabled: bool,
         chapter_visual_mode: str = "screenshots",
-        max_visual_frames: int = 6,
+        max_visual_input_images: int = 6,
         note_visual_mode: str = "off",
         note_visual_input: str = "frames",
         mindmap_visual_input: str = "evidence",
@@ -318,7 +318,7 @@ class SettingsService:
             talk_custom_prompt=settings.agent_context.talk_custom_prompt,
             video_generation_concurrency=settings.generation.video_generation_concurrency,
             chapter_visual_mode=settings.generation.chapter_visual_mode,
-            max_visual_frames=settings.generation.max_visual_frames,
+            max_visual_input_images=settings.generation.max_visual_input_images,
             note_visual_mode=settings.generation.note_visual_mode,
             note_visual_input=settings.generation.note_visual_input,
             mindmap_visual_input=settings.generation.mindmap_visual_input,
@@ -347,7 +347,7 @@ class SettingsService:
         video_generation_concurrency: int,
         web_search_enabled: bool,
         chapter_visual_mode: str = "screenshots",
-        max_visual_frames: int = 6,
+        max_visual_input_images: int = 6,
         note_visual_mode: str = "off",
         note_visual_input: str = "frames",
         mindmap_visual_input: str = "evidence",
@@ -430,9 +430,9 @@ class SettingsService:
             raise SettingsValidationError("video_generation_concurrency 必须是正整数。")
         if chapter_visual_mode not in VALID_CHAPTER_VISUAL_MODES:
             raise SettingsValidationError("chapter_visual_mode 必须是 off、screenshots 或 multimodal。")
-        if not 0 < max_visual_frames <= MAX_VISUAL_FRAMES_LIMIT:
+        if not 0 < max_visual_input_images <= MAX_VISUAL_INPUT_IMAGES_LIMIT:
             raise SettingsValidationError(
-                f"max_visual_frames 必须是 1 到 {MAX_VISUAL_FRAMES_LIMIT} 的整数。"
+                f"max_visual_input_images 必须是 1 到 {MAX_VISUAL_INPUT_IMAGES_LIMIT} 的整数。"
             )
         if note_visual_mode not in VALID_NOTE_VISUAL_MODES:
             raise SettingsValidationError("note_visual_mode 必须是 off 或 screenshots。")
@@ -493,7 +493,7 @@ class SettingsService:
             next_settings = replace_chapter_visual_settings(
                 next_settings,
                 chapter_visual_mode=chapter_visual_mode,
-                max_visual_frames=max_visual_frames,
+                max_visual_input_images=max_visual_input_images,
             )
             next_settings = replace_downstream_visual_settings(
                 next_settings,
@@ -552,7 +552,7 @@ class SettingsService:
             talk_custom_prompt=next_settings.agent_context.talk_custom_prompt,
             video_generation_concurrency=next_settings.generation.video_generation_concurrency,
             chapter_visual_mode=next_settings.generation.chapter_visual_mode,
-            max_visual_frames=next_settings.generation.max_visual_frames,
+            max_visual_input_images=next_settings.generation.max_visual_input_images,
             note_visual_mode=next_settings.generation.note_visual_mode,
             note_visual_input=next_settings.generation.note_visual_input,
             mindmap_visual_input=next_settings.generation.mindmap_visual_input,

@@ -112,6 +112,18 @@ function asNote(value, label) {
   };
 }
 
+function asAiSummary(value, label) {
+  const record = asRecord(value, label);
+  return {
+    seriesId: asString(record.series_id, `${label}.series_id`),
+    videoId: asString(record.video_id, `${label}.video_id`),
+    title: asString(record.title, `${label}.title`),
+    content: asString(record.content, `${label}.content`),
+    createdAt: asString(record.created_at, `${label}.created_at`),
+    updatedAt: asString(record.updated_at, `${label}.updated_at`),
+  };
+}
+
 function asChapter(value, label) {
   const record = asRecord(value, label);
   return {
@@ -193,6 +205,9 @@ export function toWorkspaceTools(payload) {
     seriesId: asString(record.series_id, "tools.series_id"),
     videoId: asString(record.video_id, "tools.video_id"),
     overview: asTool(record.overview, "tools.overview"),
+    aiSummary: record.ai_summary
+      ? asTool(record.ai_summary, "tools.ai_summary")
+      : { id: "ai-summary", title: "AI 概括", available: false, generated: false, status: "blocked", previewUrl: null, subtitleUrl: null },
     knowledgeCards: asTool(record.knowledge_cards, "tools.knowledge_cards"),
     mindmap: asTool(record.mindmap, "tools.mindmap"),
     notes: asTool(record.notes, "tools.notes"),
@@ -242,6 +257,10 @@ export function toWorkspaceNotes(payload) {
 
 export function toWorkspaceNote(payload) {
   return asNote(payload, "note");
+}
+
+export function toWorkspaceAiSummary(payload) {
+  return asAiSummary(payload, "aiSummary");
 }
 
 export function toWorkspaceLibrary(payload) {

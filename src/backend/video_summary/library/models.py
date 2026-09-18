@@ -208,6 +208,7 @@ class VideoAiNoteVisualContextDTO:
 
     frames: list[VideoVisualInputFrameDTO]
     evidence_text: str = ""
+    evidence_timestamps: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,15 @@ class GeneratedVideoAiNoteDTO:
     note_visual_mode: str
     note_max_images: int
     note_image_min_gap_seconds: float
+    visual_evidence: tuple["AiSummaryVisualEvidenceDTO", ...] = ()
+
+
+@dataclass(frozen=True)
+class AiSummaryVisualEvidenceDTO:
+    """AI 概括从共享视频帧池确认的一条画面事实。"""
+
+    timestamp_seconds: float
+    text: str
 
 
 @dataclass(frozen=True)
@@ -400,6 +410,27 @@ class VideoNotesDTO:
 
 
 @dataclass(frozen=True)
+class VideoAiSummaryDTO:
+    """单视频唯一、可编辑的 AI 概括制品。"""
+
+    series_id: str
+    video_id: str
+    title: str
+    content: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class VideoAiSummaryVisualEvidenceDTO:
+    """唯一 AI 概括对应的可检索视觉证据集合。"""
+
+    series_id: str
+    video_id: str
+    frames: list[AiSummaryVisualEvidenceDTO]
+
+
+@dataclass(frozen=True)
 class WorkspaceToolDTO:
     """工作区单个工具面板的状态。
 
@@ -450,3 +481,4 @@ class VideoWorkspaceToolsDTO:
     notes: WorkspaceToolDTO
     preview: WorkspaceToolDTO
     ai_todo: str
+    ai_summary: WorkspaceToolDTO | None = None

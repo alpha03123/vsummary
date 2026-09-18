@@ -1,5 +1,5 @@
 from backend.video_summary.library.usecases.knowledge_cards import GenerateVideoKnowledgeCards
-from backend.video_summary.library.usecases.ai_notes import GenerateVideoAiNote
+from backend.video_summary.library.usecases.ai_summary import GenerateVideoAiSummary, UpdateVideoAiSummary
 from backend.video_summary.library.usecases.auto_generate_artifacts import AutoGenerateVideoArtifacts
 from backend.video_summary.library.usecases.library_queries import (
     GetSeriesMindmap,
@@ -8,6 +8,7 @@ from backend.video_summary.library.usecases.library_queries import (
     GetVideoMindmap,
     GetVideoSource,
     GetVideoSummary,
+    GetVideoAiSummary,
     GetVideoTranscript,
     GetVideoWorkspaceTools,
     ListVideoLibrary,
@@ -56,7 +57,7 @@ __all__ = [
     "RenameSeries",
     "RenameVideo",
     "GenerateVideoKnowledgeCards",
-    "GenerateVideoAiNote",
+    "GenerateVideoAiSummary",
     "AutoGenerateVideoArtifacts",
     "GenerateSeriesMindmapFromLibrary",
     "GenerateVideoMindmapFromLibrary",
@@ -70,6 +71,7 @@ __all__ = [
     "GetVideoNotes",
     "GetVideoSource",
     "GetVideoSummary",
+    "GetVideoAiSummary",
     "GetVideoTranscript",
     "GetVideoWorkspaceTools",
     "ImportLocalPlaygroundVideos",
@@ -85,4 +87,5 @@ __all__ = [
     "UpdateVideoNote",
     "UpdateVideoSummary",
     "UpdateVideoTranscript",
+    "UpdateVideoAiSummary",
 ]

@@ -7,7 +7,8 @@ import { getPanelType, WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
 const PANEL_META = {
   studio: { label: "工具页", icon: FileText },
   preview: { label: "视频预览", icon: PlaySquare },
-  overview: { label: "AI 概况", icon: FileText },
+  overview: { label: "AI 整理逐字稿", icon: FileText },
+  "ai-summary": { label: "AI 概括", icon: FileText },
   mindmap: { label: "思维导图", icon: Network },
   "knowledge-cards": { label: "知识卡片", icon: BrainCircuit },
   notes: { label: "笔记", icon: StickyNote },

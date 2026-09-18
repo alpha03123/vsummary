@@ -15,8 +15,9 @@ from backend.video_summary.generation.usecases.generate_summary import GenerateV
 from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
-from backend.video_summary.infrastructure.llm.litellm_visual_summary_enricher import LiteLLMVisualSummaryEnricher
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
+from backend.video_summary.infrastructure.concurrent_ai_summary_runner import ConcurrentAiSummaryRunner
+from backend.video_summary.infrastructure.llm.litellm_note_generator import LiteLLMNoteGenerator
 from backend.video_summary.infrastructure.subtitle_transcripts import CleanedTranscriptProvider, ManualSrtTranscriptProvider, SubtitleTranscriptProvider
 from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
@@ -85,6 +86,19 @@ def build_video_summary_application(
     runtime = build_video_summary_runtime(settings, usage_recorder=usage_recorder)
     artifact_store = FileSystemGenerationArtifactStore()
     media_processor = FfmpegMediaProcessor()
+    ai_summary_runner = (
+        ConcurrentAiSummaryRunner(
+            generator=LiteLLMNoteGenerator(runtime.gateway),
+            max_input_images=settings.generation.max_visual_input_images,
+            visual_input=settings.generation.note_visual_input,
+            note_visual_mode=settings.generation.note_visual_mode,
+            note_max_images=settings.generation.note_max_images,
+            note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
+            media_processor=media_processor,
+        )
+        if "notes" in settings.generation.auto_generate_artifacts
+        else None
+    )
     use_case = GenerateVideoSummary(
         media_processor=media_processor,
         transcriber=runtime.transcriber,
@@ -100,13 +114,12 @@ def build_video_summary_application(
         saved_transcript_provider=CleanedTranscriptProvider(),
         frame_extractor=media_processor,
         chapter_screenshots_enabled=settings.generation.chapter_visual_mode != "off",
-        visual_summary_enricher=(
-            LiteLLMVisualSummaryEnricher(runtime.gateway)
-            if settings.generation.chapter_visual_mode == "multimodal"
-            else None
-        ),
-        multimodal_visual_enabled=settings.generation.chapter_visual_mode == "multimodal",
-        max_visual_frames=settings.generation.max_visual_frames,
+        # A（AI 整理逐字稿）只消费转写并决定章节小封面时间；
+        # 多模态理解与视觉证据由唯一 AI 概括的共享帧池任务承担。
+        visual_summary_enricher=None,
+        multimodal_visual_enabled=False,
+        max_visual_frames=1,
+        ai_summary_runner=ai_summary_runner.run if ai_summary_runner is not None else None,
     )
     return VideoSummaryApplication(settings=settings, use_case=use_case)
 

@@ -730,7 +730,7 @@ def _build_series_signatures(workspace: VideoLibraryReader) -> SeriesSignatureMa
 
 
 def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> SeriesSignature:
-    """为一个系列生成签名：把每条视频的状态 + 4 类制品哈希拼成有序元组。
+    """为一个系列生成签名：把每条视频的状态与可检索制品哈希拼成有序元组。
 
     系列不存在时返回空元组，便于"系列已被删除"这种边界情况。
     """
@@ -744,14 +744,19 @@ def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> Se
         notes = workspace.get_video_notes(series.id, video.id)
         cards = workspace.get_video_knowledge_cards(series.id, video.id)
         visual_evidence = _get_visual_evidence(workspace, series.id, video.id)
+        ai_summary = _get_ai_summary(workspace, series.id, video.id)
+        ai_summary_visual_evidence = _get_ai_summary_visual_evidence(workspace, series.id, video.id)
         summary_hash = _artifact_fingerprint(summary)
         transcript_hash = _artifact_fingerprint(transcript)
         notes_hash = _artifact_fingerprint(notes)
         cards_hash = _artifact_fingerprint(cards)
         visual_evidence_hash = _artifact_fingerprint(visual_evidence)
+        ai_summary_hash = _artifact_fingerprint(ai_summary)
+        ai_summary_visual_evidence_hash = _artifact_fingerprint(ai_summary_visual_evidence)
         video_parts.append(
             f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:"
-            f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}:{visual_evidence_hash}"
+            f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}:{visual_evidence_hash}:"
+            f"{ai_summary_hash}:{ai_summary_visual_evidence_hash}"
         )
     return tuple(sorted(video_parts))
 
@@ -816,25 +821,31 @@ def _build_documents_for_video(
     """为单个视频读取四类制品并交给 `_build_documents_for_assets` 合成文档。"""
     return _build_documents_for_assets(
         summary=workspace.get_video_summary(series_id, video_id),
+        ai_summary=_get_ai_summary(workspace, series_id, video_id),
         transcript=workspace.get_video_transcript(series_id, video_id),
         notes=workspace.get_video_notes(series_id, video_id),
         knowledge_cards=workspace.get_video_knowledge_cards(series_id, video_id),
         visual_evidence=_get_visual_evidence(workspace, series_id, video_id),
+        ai_summary_visual_evidence=_get_ai_summary_visual_evidence(workspace, series_id, video_id),
     )
 
 
 def _build_documents_for_assets(
     *,
     summary,
+    ai_summary,
     transcript,
     notes,
     knowledge_cards,
     visual_evidence,
+    ai_summary_visual_evidence,
 ) -> list[RetrievalDocument]:
     """把四类制品（总结/转写/笔记/知识卡）按"存在则加入"的原则拼成文档列表。"""
     documents: list[RetrievalDocument] = []
     if summary is not None:
         documents.extend(_build_summary_documents(summary))
+    if ai_summary is not None:
+        documents.extend(_build_ai_summary_documents(ai_summary))
     if transcript is not None:
         documents.extend(_build_transcript_documents(transcript))
     if notes is not None:
@@ -843,6 +854,8 @@ def _build_documents_for_assets(
         documents.extend(_build_knowledge_card_documents(knowledge_cards))
     if visual_evidence is not None:
         documents.extend(_build_visual_evidence_documents(visual_evidence))
+    if ai_summary_visual_evidence is not None:
+        documents.extend(_build_ai_summary_visual_evidence_documents(ai_summary_visual_evidence))
     return documents
 
 
@@ -934,6 +947,28 @@ def _build_summary_documents(summary) -> list[RetrievalDocument]:
     return docs
 
 
+def _build_ai_summary_documents(ai_summary) -> list[RetrievalDocument]:
+    """把唯一 AI 概括作为独立 RAG 来源，不混入时间轴 summary。"""
+    text = "\n".join(part for part in [str(ai_summary.title).strip(), str(ai_summary.content).strip()] if part)
+    if not text:
+        return []
+    return [
+        RetrievalDocument(
+            text=text,
+            metadata=_with_common_metadata(
+                {
+                    "doc_id": f"series:{ai_summary.series_id}:video:{ai_summary.video_id}:ai_summary",
+                    "series_id": ai_summary.series_id,
+                    "video_id": ai_summary.video_id,
+                    "title": ai_summary.title,
+                    "source_type": "ai_summary",
+                    "source_family": "ai_summary",
+                }
+            ),
+        )
+    ]
+
+
 def _build_visual_evidence_documents(visual_evidence) -> list[RetrievalDocument]:
     """将每张截图的文字解释作为独立的可定位 RAG 证据。"""
     documents: list[RetrievalDocument] = []
@@ -965,9 +1000,44 @@ def _build_visual_evidence_documents(visual_evidence) -> list[RetrievalDocument]
     return documents
 
 
+def _build_ai_summary_visual_evidence_documents(visual_evidence) -> list[RetrievalDocument]:
+    """把 AI 概括帧池证据作为可定位的独立视觉来源。"""
+    documents: list[RetrievalDocument] = []
+    for frame in visual_evidence.frames:
+        if not str(frame.text).strip():
+            continue
+        documents.append(
+            RetrievalDocument(
+                text=frame.text.strip(),
+                metadata=_with_common_metadata(
+                    {
+                        "doc_id": f"series:{visual_evidence.series_id}:video:{visual_evidence.video_id}:ai_summary_visual:{frame.timestamp_seconds}",
+                        "series_id": visual_evidence.series_id,
+                        "video_id": visual_evidence.video_id,
+                        "source_type": "visual_frame",
+                        "source_family": "visual",
+                        "start_seconds": frame.timestamp_seconds,
+                        "end_seconds": frame.timestamp_seconds,
+                    }
+                ),
+            )
+        )
+    return documents
+
+
 def _get_visual_evidence(workspace: VideoLibraryReader, series_id: str, video_id: str):
     """兼容尚未实现新视觉制品读取端口的历史测试/外部工作区。"""
     reader = getattr(workspace, "get_video_visual_evidence", None)
+    return reader(series_id, video_id) if callable(reader) else None
+
+
+def _get_ai_summary(workspace: VideoLibraryReader, series_id: str, video_id: str):
+    reader = getattr(workspace, "get_video_ai_summary", None)
+    return reader(series_id, video_id) if callable(reader) else None
+
+
+def _get_ai_summary_visual_evidence(workspace: VideoLibraryReader, series_id: str, video_id: str):
+    reader = getattr(workspace, "get_video_ai_summary_visual_evidence", None)
     return reader(series_id, video_id) if callable(reader) else None
 
 

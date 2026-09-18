@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 import logging
 import math
@@ -94,6 +95,7 @@ class GenerateVideoSummary:
         visual_summary_enricher: VisualSummaryEnricher | None = None,
         multimodal_visual_enabled: bool = False,
         max_visual_frames: int = 6,
+        ai_summary_runner: Callable[..., Awaitable[None]] | None = None,
     ) -> None:
         """注入媒体处理、转写、（可选）转写增强、总结与制品落盘端口。
 
@@ -118,6 +120,8 @@ class GenerateVideoSummary:
         self._visual_summary_enricher = visual_summary_enricher
         self._multimodal_visual_enabled = multimodal_visual_enabled
         self._max_visual_frames = max_visual_frames
+        self._ai_summary_runner = ai_summary_runner
+        self._ai_summary_tasks: set[asyncio.Task[None]] = set()
         if self._multimodal_visual_enabled and not self._chapter_screenshots_enabled:
             raise ValueError("启用多模态视觉增强前必须先启用章节截图。")
         if self._max_visual_frames <= 0:
@@ -419,6 +423,11 @@ class GenerateVideoSummary:
         )
         _raise_if_cancelled(progress_reporter, cancellation)
 
+        # B（唯一 AI 概括）只依赖转写和原视频。它从此处并发启动，不等待
+        # A（AI 整理逐字稿）的章节整理、封面抽帧或 staging 提交。
+        if processing_mode == "summary" and self._ai_summary_runner is not None:
+            self._start_ai_summary_task(video=video, transcript=transcript, output_dir=output_dir)
+
         if processing_mode == "transcript":
             if unavailable_reason is not None:
                 raise RuntimeError(unavailable_reason)
@@ -434,7 +443,7 @@ class GenerateVideoSummary:
             summary_document = _build_no_transcribable_audio_summary(video, unavailable_reason)
         else:
             if progress_reporter is not None:
-                progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
+                progress_reporter.update("summarize", 88.0, "正在整理逐字稿")
             _raise_if_cancelled(progress_reporter, cancellation)
             try:
                 summary_document = await self._summarizer.summarize(video, transcript, cancellation)
@@ -488,6 +497,24 @@ class GenerateVideoSummary:
             remove_manual_source=not use_saved_manual_transcript,
         )
         return summary_document
+
+    def _start_ai_summary_task(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path) -> None:
+        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir))
+        self._ai_summary_tasks.add(task)
+
+        def _record_completion(completed: asyncio.Task[None]) -> None:
+            self._ai_summary_tasks.discard(completed)
+            if completed.cancelled():
+                LOGGER.info("并发 AI 概括任务已取消", extra={"event": "ai_summary_cancelled"})
+                return
+            error = completed.exception()
+            if error is not None:
+                LOGGER.error(
+                    "并发 AI 概括生成失败",
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+
+        task.add_done_callback(_record_completion)
 
 
 async def _attach_chapter_screenshots(

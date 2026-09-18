@@ -29,6 +29,9 @@ const WorkspaceNotesView = lazy(() =>
     default: module.WorkspaceNotesView,
   })),
 );
+const WorkspaceAiSummaryView = lazy(() =>
+  import("./views/WorkspaceAiSummaryView").then((module) => ({ default: module.WorkspaceAiSummaryView })),
+);
 const WorkspaceOverviewView = lazy(() =>
   import("./views/WorkspaceOverviewView").then((module) => ({
     default: module.WorkspaceOverviewView,
@@ -66,6 +69,7 @@ export function WorkspaceReadingPane({
   tools,
   chat,
   summary,
+  aiSummary,
   playbackTime,
   followOverviewPlayback,
   onFollowOverviewPlaybackChange,
@@ -84,11 +88,12 @@ export function WorkspaceReadingPane({
   toolId,
   selectedChapterId,
   summaryLoading,
+  aiSummaryLoading,
+  generatingAiSummary,
   mindmapLoading,
   knowledgeCardsLoading,
   notesLoading,
   savingNote,
-  generatingAiNote,
   isGeneratingMindmapSelectedVideo,
   isGeneratingSelectedVideo,
   seriesMindmap,
@@ -106,7 +111,8 @@ export function WorkspaceReadingPane({
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
-  onGenerateAiNote,
+  onGenerateAiSummary,
+  onUpdateAiSummary,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -261,8 +267,21 @@ export function WorkspaceReadingPane({
                       onLoadSummaryMarkdown={onLoadSummaryMarkdown}
                       onUpdateSummary={onUpdateSummary}
                       onUpdateTranscript={onUpdateTranscript}
+                      onOpenAiSummary={() => onSelectTool("ai-summary")}
                       onUploadSrt={onUploadSrt}
                       onRestoreAutomaticTranscript={onRestoreAutomaticTranscript}
+                    />
+                  ) : null}
+                  {toolId === "ai-summary" ? (
+                    <WorkspaceAiSummaryView
+                      aiSummary={aiSummary}
+                      loading={aiSummaryLoading}
+                      generating={generatingAiSummary || tools?.aiSummary?.status === "running"}
+                      canGenerate={!(selectedVideo?.isLinked === true || selectedVideo?.status === "linked")}
+                      onGenerate={onGenerateAiSummary}
+                      onUpdate={onUpdateAiSummary}
+                      noteImageContext={activeSeries && selectedVideo ? { seriesId: activeSeries.id, videoId: selectedVideo.id, durationSeconds: Number.POSITIVE_INFINITY } : null}
+                      onSeek={onSeek}
                     />
                   ) : null}
                   {toolId === "mindmap" ? (
@@ -296,9 +315,6 @@ export function WorkspaceReadingPane({
                       notes={notes}
                       notesLoading={notesLoading}
                       savingNote={savingNote}
-                      generatingAiNote={generatingAiNote}
-                      canGenerateAiNote={!(selectedVideo?.isLinked === true || selectedVideo?.status === "linked")}
-                      onGenerateAiNote={onGenerateAiNote}
                       onCreateNote={onCreateNote}
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}

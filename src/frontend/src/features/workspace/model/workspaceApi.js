@@ -1,5 +1,6 @@
 import {
   toWorkspaceCards,
+  toWorkspaceAiSummary,
   toWorkspaceContextUsage,
   toWorkspaceKnowledgeCards,
   toWorkspaceLibrary,
@@ -73,7 +74,7 @@ function toWorkspaceSettings(payload) {
     talkCustomPrompt: payload.talk_custom_prompt,
     videoGenerationConcurrency: payload.video_generation_concurrency,
     chapterVisualMode: payload.chapter_visual_mode,
-    maxVisualFrames: payload.max_visual_frames,
+    maxVisualInputImages: payload.max_visual_input_images,
     noteVisualMode: payload.note_visual_mode,
     noteVisualInput: payload.note_visual_input,
     mindmapVisualInput: payload.mindmap_visual_input,
@@ -140,7 +141,7 @@ export async function updateWorkspaceSettings(settings) {
       talk_custom_prompt: settings.talkCustomPrompt,
       video_generation_concurrency: settings.videoGenerationConcurrency,
       chapter_visual_mode: settings.chapterVisualMode,
-      max_visual_frames: settings.maxVisualFrames,
+      max_visual_input_images: settings.maxVisualInputImages,
       note_visual_mode: settings.noteVisualMode,
       note_visual_input: settings.noteVisualInput,
       mindmap_visual_input: settings.mindmapVisualInput,
@@ -414,14 +415,28 @@ export async function createVideoNote(seriesId, videoId, note) {
   );
 }
 
-export async function generateVideoAiNote(seriesId, videoId, template) {
-  return toWorkspaceNote(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes/generate`, {
+export async function loadVideoAiSummary(seriesId, videoId) {
+  return toWorkspaceAiSummary(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary`),
+  );
+}
+
+export async function generateVideoAiSummary(seriesId, videoId, template = "general") {
+  return toWorkspaceAiSummary(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary/generate`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ template }),
+    }),
+  );
+}
+
+export async function updateVideoAiSummary(seriesId, videoId, summary) {
+  return toWorkspaceAiSummary(
+    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: summary.title, content: summary.content }),
     }),
   );
 }

@@ -23,6 +23,9 @@ from backend.video_summary.library.models import (
     VideoMindmapDTO,
     VideoNoteDTO,
     VideoNotesDTO,
+    VideoAiSummaryDTO,
+    AiSummaryVisualEvidenceDTO,
+    VideoAiSummaryVisualEvidenceDTO,
     VideoSourceDTO,
     VideoSummaryDTO,
     VideoTranscriptDTO,
@@ -73,6 +76,12 @@ class VideoLibraryReader(Protocol):
 
     def get_video_notes(self, series_id: str, video_id: str) -> VideoNotesDTO | None:
         """取视频的笔记集合；不存在则返回 `None`。"""
+
+    def get_video_ai_summary(self, series_id: str, video_id: str) -> VideoAiSummaryDTO | None:
+        """取视频唯一的 AI 概括；未生成时返回 None。"""
+
+    def get_video_ai_summary_visual_evidence(self, series_id: str, video_id: str) -> VideoAiSummaryVisualEvidenceDTO | None:
+        """取 AI 概括生成的共享帧池视觉证据。"""
 
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
         """取视频工作区工具栏的完整状态。"""
@@ -182,6 +191,39 @@ class VideoContentEditor(Protocol):
         markdown: str,
     ) -> VideoTranscriptDTO | None:
         """校验并覆盖原始 Markdown 转写，同时使依赖旧转写的制品失效。"""
+
+
+class VideoAiSummaryStore(Protocol):
+    """唯一 AI 概括制品的读写端口。"""
+
+    def save_video_ai_summary(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        title: str,
+        content: str,
+    ) -> VideoAiSummaryDTO | None:
+        """原子替换唯一 AI 概括。"""
+
+    def update_video_ai_summary(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        title: str,
+        content: str,
+    ) -> VideoAiSummaryDTO | None:
+        """更新既有 AI 概括；未生成时返回 None。"""
+
+    def save_video_ai_summary_visual_evidence(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        frames: list[AiSummaryVisualEvidenceDTO],
+    ) -> None:
+        """原子替换 AI 概括对应的视觉证据。"""
 
 
 class VideoImportStore(Protocol):

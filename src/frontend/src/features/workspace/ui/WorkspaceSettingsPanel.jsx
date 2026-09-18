@@ -97,13 +97,16 @@ export function WorkspaceSettingsPanel({
     {
       id: "evidence",
       label: "使用画面证据文本",
-      disabled: ui.chapterVisualMode !== "multimodal",
     },
     {
       id: "frames",
-      label: "使用章节原图",
-      disabled: ui.chapterVisualMode === "off",
+      label: "使用视频帧池",
     },
+  ];
+  const aiSummaryVisualInputOptions = [
+    { id: "none", label: "不使用画面" },
+    { id: "evidence", label: "使用画面证据文本" },
+    { id: "frames", label: "使用视频帧池" },
   ];
   const providerModelOptions = [...new Set([...detectedProviderModels, ui.openaiModel].filter(Boolean))]
     .map((model) => ({ id: model, label: model }));
@@ -318,7 +321,7 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="自动生成"
-                  description="AI 概况完成后自动生成所选内容。"
+                  description="AI 整理逐字稿完成后自动生成所选内容。"
                   contentClassName="2xl:w-[340px] 2xl:flex-none"
                 >
                   <WorkspaceMultiSelect
@@ -650,27 +653,26 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceSettingRow
                   title="章节画面"
-                  description="每章生成一张代表画面；多模态只额外读取其中一部分，以补充可检索的视觉信息。"
+                  description="整理逐字稿中每章生成一张代表画面，用于章节浏览与时间定位。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.chapterVisualMode}
                     options={[
                       { id: "off", label: "无" },
                       { id: "screenshots", label: "生成截图" },
-                      { id: "multimodal", label: "多模态" },
                     ]}
                     onChange={(nextValue) => onChangeSetting("chapterVisualMode", nextValue)}
                   />
                 </WorkspaceSettingRow>
 
-                {ui.chapterVisualMode === "multimodal" && (
+                {ui.noteVisualInput === "frames" && (
                   <WorkspaceSettingRow
-                    title="单视频图片上限"
-                    description="限制单个视频抽取并发送给模型的章节截图数量。"
+                    title="AI 概括帧池上限"
+                    description="限制单个视频送入 AI 概括的九宫格图片数，每张最多包含 9 个时间点。"
                   >
                     <WorkspaceTextInput
-                      value={String(ui.maxVisualFrames)}
-                      onChange={(nextValue) => onChangeSetting("maxVisualFrames", Number.parseInt(nextValue, 10) || 1)}
+                      value={String(ui.maxVisualInputImages)}
+                      onChange={(nextValue) => onChangeSetting("maxVisualInputImages", Number.parseInt(nextValue, 10) || 1)}
                       placeholder="6"
                       className="w-full sm:w-[180px]"
                       type="number"
@@ -679,8 +681,8 @@ export function WorkspaceSettingsPanel({
                 )}
 
                 <WorkspaceSettingRow
-                  title="AI 笔记配图"
-                  description="控制 AI 笔记是否自动在正文中插入可点击的视频画面。"
+                  title="AI 概括配图"
+                  description="控制 AI 概括是否自动在正文中插入可点击的视频画面。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.noteVisualMode}
@@ -694,12 +696,12 @@ export function WorkspaceSettingsPanel({
 
                 <WorkspaceAdvancedSettings>
                   <WorkspaceSettingRow
-                    title="AI 笔记画面输入"
-                    description="决定生成笔记时是否使用概况已有的画面信息；原图可提供最完整的画面细节。"
+                    title="AI 概括画面输入"
+                    description="决定 AI 概括是否使用独立视频帧池；原图可提供最完整的画面细节。"
                   >
                     <WorkspaceSegmentedControl
                       value={ui.noteVisualInput}
-                      options={visualInputOptions}
+                      options={aiSummaryVisualInputOptions}
                       onChange={(nextValue) => onChangeSetting("noteVisualInput", nextValue)}
                     />
                   </WorkspaceSettingRow>
@@ -724,8 +726,8 @@ export function WorkspaceSettingsPanel({
                     />
                   </WorkspaceSettingRow>
                   <WorkspaceSettingRow
-                    title="AI 笔记图片上限"
-                    description="限制 AI 自动插入的图片数量；不限制手动笔记。"
+                    title="AI 概括图片上限"
+                    description="限制 AI 概括自动插入的图片数量；不限制手动笔记。"
                   >
                     <WorkspaceTextInput
                       value={String(ui.noteMaxImages)}

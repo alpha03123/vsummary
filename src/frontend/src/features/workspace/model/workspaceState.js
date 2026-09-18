@@ -28,7 +28,7 @@ export const defaultUiSettings = {
   talkCustomPrompt: "",
   videoGenerationConcurrency: 1,
   chapterVisualMode: "screenshots",
-  maxVisualFrames: 6,
+  maxVisualInputImages: 6,
   noteVisualMode: "off",
   noteVisualInput: "frames",
   mindmapVisualInput: "evidence",
@@ -524,6 +524,7 @@ export function createInitialWorkspaceState() {
     library: null,
     tools: null,
     summary: null,
+    aiSummary: null,
     mindmap: null,
     knowledgeCards: null,
     notes: null,
@@ -562,13 +563,14 @@ export function createInitialWorkspaceState() {
     modelDownloadError: null,
     toolsLoading: false,
     summaryLoading: false,
+    aiSummaryLoading: false,
+    generatingAiSummary: false,
     mindmapLoading: false,
     knowledgeCardsLoading: false,
     knowledgeCardsGenerating: false,
     knowledgeCardsFeedback: null,
     notesLoading: false,
     savingNote: false,
-    generatingAiNote: false,
     fasterWhisperModels: [],
     fasterWhisperModelsLoading: false,
     ragModels: [],
@@ -814,12 +816,10 @@ export function normalizeUiSettings(value) {
         ? record.videoGenerationConcurrency
         : 1,
     chapterVisualMode:
-      ["off", "screenshots", "multimodal"].includes(record.chapterVisualMode)
-        ? record.chapterVisualMode
-        : "screenshots",
-    maxVisualFrames:
-      typeof record.maxVisualFrames === "number" && Number.isInteger(record.maxVisualFrames) && record.maxVisualFrames > 0
-        ? record.maxVisualFrames
+      record.chapterVisualMode === "off" ? "off" : "screenshots",
+    maxVisualInputImages:
+      typeof record.maxVisualInputImages === "number" && Number.isInteger(record.maxVisualInputImages) && record.maxVisualInputImages > 0
+        ? record.maxVisualInputImages
         : 6,
     noteVisualMode: ["off", "screenshots"].includes(record.noteVisualMode) ? record.noteVisualMode : "off",
     noteVisualInput: ["none", "evidence", "frames"].includes(record.noteVisualInput) ? record.noteVisualInput : "frames",

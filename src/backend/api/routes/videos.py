@@ -24,7 +24,8 @@ from backend.api.local_media_picker import select_local_media_paths
 from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
-    GenerateVideoAiNoteRequest,
+    GenerateVideoAiSummaryRequest,
+    UpdateVideoAiSummaryRequest,
     GenerateMindmapRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
@@ -43,6 +44,7 @@ from backend.api.schemas.responses import (
     VideoLibraryResponse,
     VideoNoteResponse,
     VideoNotesResponse,
+    VideoAiSummaryResponse,
     VideoWorkspaceToolsResponse,
 )
 from backend.api.schemas.sse import stream_progress_events
@@ -612,6 +614,53 @@ def get_video_notes(series_id: str, video_id: str, container: ApiContainerDep) -
     return VideoNotesResponse.from_model(video_notes)
 
 
+@router.get("/api/videos/{series_id}/{video_id}/ai-summary", response_model=VideoAiSummaryResponse)
+def get_video_ai_summary(series_id: str, video_id: str, container: ApiContainerDep) -> VideoAiSummaryResponse:
+    summary = container.get_video_ai_summary.run(series_id, video_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"ai summary not found for video '{series_id}/{video_id}'")
+    return VideoAiSummaryResponse.from_model(summary)
+
+
+@router.post("/api/videos/{series_id}/{video_id}/ai-summary/generate", response_model=VideoAiSummaryResponse)
+def generate_video_ai_summary(
+    series_id: str,
+    video_id: str,
+    request: GenerateVideoAiSummaryRequest,
+    container: ApiContainerDep,
+) -> VideoAiSummaryResponse:
+    try:
+        summary = container.generate_video_ai_summary.run(series_id, video_id, template=request.template)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
+    return VideoAiSummaryResponse.from_model(summary)
+
+
+@router.put("/api/videos/{series_id}/{video_id}/ai-summary", response_model=VideoAiSummaryResponse)
+def update_video_ai_summary(
+    series_id: str,
+    video_id: str,
+    request: UpdateVideoAiSummaryRequest,
+    container: ApiContainerDep,
+) -> VideoAiSummaryResponse:
+    try:
+        summary = container.update_video_ai_summary.run(
+            series_id,
+            video_id,
+            title=request.title,
+            content=request.content,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"ai summary not found for video '{series_id}/{video_id}'")
+    return VideoAiSummaryResponse.from_model(summary)
+
+
 @router.post("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNoteResponse)
 def create_video_note(
     series_id: str,
@@ -636,6 +685,8 @@ def create_video_note(
         HTTPException(400): 输入参数无效。
         HTTPException(404): 视频不存在。
     """
+    if request.source != "manual":
+        raise HTTPException(status_code=400, detail="个人笔记只支持 manual 来源；请使用 AI 概括接口。")
     try:
         note = container.create_video_note.run(
             series_id,
@@ -647,25 +698,6 @@ def create_video_note(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    if note is None:
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return VideoNoteResponse.from_model(note)
-
-
-@router.post("/api/videos/{series_id}/{video_id}/notes/generate", response_model=VideoNoteResponse)
-def generate_video_ai_note(
-    series_id: str,
-    video_id: str,
-    request: GenerateVideoAiNoteRequest,
-    container: ApiContainerDep,
-) -> VideoNoteResponse:
-    """根据已有转写直接生成并保存一篇 AI 笔记。"""
-    try:
-        note = container.generate_video_ai_note.run(series_id, video_id, template=request.template)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
     if note is None:
         raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return VideoNoteResponse.from_model(note)

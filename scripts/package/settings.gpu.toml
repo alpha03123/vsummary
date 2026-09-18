@@ -54,7 +54,7 @@ rerank_enabled = false
 video_generation_concurrency = 1
 summary_chunk_concurrency = 1
 chapter_visual_mode = "screenshots"
-max_visual_frames = 6
+max_visual_input_images = 6
 
 [web_search]
 enabled = false

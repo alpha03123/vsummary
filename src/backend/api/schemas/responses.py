@@ -19,6 +19,7 @@ from backend.video_summary.library.models import (
     VideoLibraryDTO,
     VideoNoteDTO,
     VideoNotesDTO,
+    VideoAiSummaryDTO,
     VideoWorkspaceToolsDTO,
     WorkspaceDTO,
     WorkspaceToolDTO,
@@ -206,6 +207,7 @@ class VideoWorkspaceToolsResponse(BaseModel):
     notes: WorkspaceToolResponse
     preview: WorkspaceToolResponse
     ai_todo: str
+    ai_summary: WorkspaceToolResponse | None = None
 
     @classmethod
     def from_model(cls, tools: VideoWorkspaceToolsDTO) -> "VideoWorkspaceToolsResponse":
@@ -226,6 +228,7 @@ class VideoWorkspaceToolsResponse(BaseModel):
             notes=WorkspaceToolResponse.from_model(tools.notes),
             preview=WorkspaceToolResponse.from_model(tools.preview),
             ai_todo=tools.ai_todo,
+            ai_summary=WorkspaceToolResponse.from_model(tools.ai_summary) if tools.ai_summary is not None else None,
         )
 
 
@@ -410,6 +413,28 @@ class VideoNotesResponse(BaseModel):
             video_id=notes.video_id,
             title=notes.title,
             notes=[VideoNoteResponse.from_model(note) for note in notes.notes],
+        )
+
+
+class VideoAiSummaryResponse(BaseModel):
+    """唯一 AI 概括的 API 响应。"""
+
+    series_id: str
+    video_id: str
+    title: str
+    content: str
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_model(cls, summary: VideoAiSummaryDTO) -> "VideoAiSummaryResponse":
+        return cls(
+            series_id=summary.series_id,
+            video_id=summary.video_id,
+            title=summary.title,
+            content=summary.content,
+            created_at=summary.created_at,
+            updated_at=summary.updated_at,
         )
 
 

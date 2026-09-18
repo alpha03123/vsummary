@@ -64,7 +64,7 @@ class GenerationScopeBusyError(RuntimeError):
 class GenerateVideoSummaryFromLibrary:
     """单视频总结生成的"库层"用例。
 
-    业务场景：用户在某个视频上点击"生成 AI 概况"，本用例被触发；它负责
+    业务场景：用户在某个视频上启动内容生成，本用例负责生成 AI 整理逐字稿；
     维护当前正在跑的任务集合、并发限流（基于 anyio `CapacityLimiter`），
     并把"生成完成 → 写回总结 → 触发系列知识记忆刷新"封装为可被并发调用的
     安全单元。系列级批量生成会复用本用例作为 worker 入口。
@@ -307,17 +307,17 @@ class GenerateVideoSummaryFromLibrary:
             if processing_mode == "transcript":
                 reporter.completed("字幕已获取")
                 return self._workspace.get_video_transcript(series_id, video_id)
-            reporter.completed("AI 概况已生成")
+            reporter.completed("AI 整理逐字稿已生成")
             summary = self._workspace.get_video_summary(series_id, video_id)
             should_start_auto_artifacts = summary is not None and self._auto_generate_artifacts is not None
             return summary
         except LookupError:
             return None
         except GenerateCancelledError:
-            reporter.cancelled("字幕获取已取消" if processing_mode == "transcript" else "AI 概况生成已取消")
+            reporter.cancelled("字幕获取已取消" if processing_mode == "transcript" else "AI 整理逐字稿生成已取消")
             return None
         except asyncio.CancelledError:
-            reporter.cancelled("字幕获取已取消" if processing_mode == "transcript" else "AI 概况生成已取消")
+            reporter.cancelled("字幕获取已取消" if processing_mode == "transcript" else "AI 整理逐字稿生成已取消")
             return None
         except RuntimeError as error:
             reporter.failed(str(error))
@@ -331,7 +331,7 @@ class GenerateVideoSummaryFromLibrary:
                 self._start_auto_artifacts(series_id, video_id)
 
     def _start_auto_artifacts(self, series_id: str, video_id: str) -> None:
-        """在概况任务终态后启动独立的自动制品任务。"""
+        """在整理逐字稿任务终态后启动独立的自动制品任务。"""
         if self._auto_generate_artifacts is None:
             return
         task = asyncio.create_task(

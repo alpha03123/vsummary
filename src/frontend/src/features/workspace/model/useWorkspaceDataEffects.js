@@ -12,6 +12,7 @@ import {
   loadProviderSettings,
   loadProviderUsage,
   loadVideoKnowledgeCards,
+  loadVideoAiSummary,
   loadVideoGenerationStatus,
   loadVideoMindmap,
   loadVideoNotes,
@@ -45,6 +46,7 @@ function clearLocalVideoContent(dispatch) {
   dispatch({ type: "mindmap_cleared" });
   dispatch({ type: "knowledge_cards_cleared" });
   dispatch({ type: "notes_cleared" });
+  dispatch({ type: "ai_summary_cleared" });
 }
 
 function clearGenerationSubscription(taskKey) {
@@ -780,6 +782,42 @@ export function useWorkspaceDataEffects(state, dispatch) {
       cancelled = true;
     };
   }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.knowledgeCards.generated]);
+
+  useEffect(() => {
+    const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
+    if (!selectedVideo || state.selectedContextType !== "video" || !state.tools?.aiSummary.generated || isLinkedVideo(selectedVideo)) {
+      dispatch({ type: "ai_summary_cleared" });
+      return;
+    }
+    let cancelled = false;
+    dispatch({ type: "ai_summary_loading_started" });
+    loadVideoAiSummary(state.selectedSeriesId, state.selectedVideoId)
+      .then((summary) => { if (!cancelled) dispatch({ type: "ai_summary_loaded", summary }); })
+      .catch((error) => { if (!cancelled) dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "AI 概括加载失败" }); });
+    return () => { cancelled = true; };
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.aiSummary.generated]);
+
+  useEffect(() => {
+    if (
+      state.selectedContextType !== "video" ||
+      !state.selectedSeriesId ||
+      !state.selectedVideoId ||
+      state.tools?.aiSummary?.status !== "running"
+    ) {
+      return undefined;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      loadVideoTools(state.selectedSeriesId, state.selectedVideoId)
+        .then((tools) => { if (!cancelled) dispatch({ type: "tools_loaded", tools }); })
+        .catch(() => {});
+    };
+    const intervalId = window.setInterval(refresh, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [dispatch, state.selectedContextType, state.selectedSeriesId, state.selectedVideoId, state.tools?.aiSummary?.status]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);

@@ -33,8 +33,14 @@ export const TOOL_TILES = {
     ...SHARED_TOOL_VISUALS,
   },
   overview: {
-    label: "AI 概况",
-    description: "章节与关键结论",
+    label: "AI 整理逐字稿",
+    description: "章节、时间轴与原文定位",
+    icon: FileText,
+    ...SHARED_TOOL_VISUALS,
+  },
+  "ai-summary": {
+    label: "AI 概括",
+    description: "完整的多模态总结与学习笔记",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
@@ -52,7 +58,7 @@ export const TOOL_TILES = {
   },
   notes: {
     label: "笔记",
-    description: "手记与 Agent 记录",
+    description: "个人手记与时间标记",
     icon: StickyNote,
     ...SHARED_TOOL_VISUALS,
   },
@@ -124,7 +130,7 @@ export function describeToolState(toolId, toolState) {
     return { label: "随时可查看", tone: "ready" };
   }
   if (toolId === "notes") {
-    return { label: toolState.generated ? "可记录与整理" : "可立即使用", tone: "ready" };
+    return { label: toolState.generated ? "可记录" : "可立即使用", tone: "ready" };
   }
   if (toolState.generated) {
     return { label: "已生成", tone: "ready" };
@@ -141,6 +147,9 @@ export function getToolState(tools, toolId) {
   }
   if (toolId === "knowledge-cards") {
     return tools.knowledgeCards ?? null;
+  }
+  if (toolId === "ai-summary") {
+    return tools.aiSummary ?? null;
   }
   return tools[toolId] ?? null;
 }

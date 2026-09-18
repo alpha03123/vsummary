@@ -54,20 +54,12 @@ export function WorkspaceVideoScopePane({
       knowledgeCardsLoading={generation.knowledgeCardsLoading}
       notesLoading={generation.notesLoading}
       savingNote={generation.savingNote}
-      generatingAiNote={generation.generatingAiNote}
+      aiSummary={shell.aiSummary}
+      aiSummaryLoading={generation.aiSummaryLoading}
+      generatingAiSummary={generation.generatingAiSummary}
       isGeneratingMindmapSelectedVideo={generation.isGeneratingMindmap}
       isGeneratingSelectedVideo={generation.isGeneratingSummary}
-      onSelectTool={(toolId) => {
-        if (
-          toolId === "overview" &&
-          onProcessLinkedVideo &&
-          shell.tools?.overview?.generated !== true &&
-          !generation.isGeneratingSummary
-        ) {
-          void onProcessLinkedVideo();
-        }
-        onPanelSelectTool?.(toolId);
-      }}
+      onSelectTool={(toolId) => onPanelSelectTool?.(toolId)}
       onSelectVideo={actions.selectVideo}
       onFocusNode={(node) => {
         actions.focusNode(node);
@@ -83,7 +75,8 @@ export function WorkspaceVideoScopePane({
       onGenerateSeriesMindmap={actions.generateSeriesMindmap}
       onGenerateKnowledgeCards={actions.generateKnowledgeCards}
       onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
-      onGenerateAiNote={actions.generateAiNote}
+      onGenerateAiSummary={actions.generateAiSummary}
+      onUpdateAiSummary={actions.updateAiSummary}
       onCreateNote={actions.createNote}
       onUpdateNote={actions.updateNote}
       onDeleteNote={actions.deleteNote}

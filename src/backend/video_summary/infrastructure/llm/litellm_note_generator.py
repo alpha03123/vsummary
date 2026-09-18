@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock
 
+from pydantic import BaseModel, Field
+
 from backend.agent_graph.prompts.notes import build_ai_note_prompt
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
@@ -12,6 +14,7 @@ from backend.video_summary.infrastructure.config.settings import ensure_settings
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 from backend.video_summary.library.models import (
     GeneratedVideoAiNoteDTO,
+    AiSummaryVisualEvidenceDTO,
     VideoAiNoteVisualContextDTO,
     VideoSummaryDTO,
     VideoTranscriptDTO,
@@ -20,6 +23,16 @@ from backend.video_summary.library.models import (
 
 # 笔记属于创作型任务：温度略高于 0，避免模型挑最保守的写法导致句式死板、篇幅偏短。
 NOTE_TEMPERATURE = 0.3
+
+
+class AiSummaryEvidencePayload(BaseModel):
+    timestamp_seconds: float
+    text: str = Field(min_length=1)
+
+
+class AiSummaryPayload(BaseModel):
+    markdown: str = Field(min_length=1)
+    visual_evidence: list[AiSummaryEvidencePayload] = Field(default_factory=list)
 
 
 class LiteLLMNoteGenerator:
@@ -81,6 +94,71 @@ class LiteLLMNoteGenerator:
             note_image_min_gap_seconds=note_image_min_gap_seconds,
         )
 
+    def run_ai_summary(
+        self,
+        *,
+        transcript: VideoTranscriptDTO,
+        summary: VideoSummaryDTO | None,
+        visual_context: VideoAiNoteVisualContextDTO,
+        template: str,
+        visual_input: str,
+        note_visual_mode: str,
+        note_max_images: int,
+        note_image_min_gap_seconds: float,
+    ) -> GeneratedVideoAiNoteDTO:
+        transcript_text = "\n".join(
+            f"{_format_timestamp(segment.start_seconds)} - {segment.text.strip()}"
+            for segment in transcript.segments
+            if segment.text.strip()
+        )
+        if not transcript_text:
+            raise ValueError("视频转写为空，无法生成 AI 概括。")
+        prompt = build_ai_note_prompt(
+            title=transcript.title,
+            transcript_text=transcript_text,
+            template=template,
+            summary_text=_extract_summary_text(summary),
+            outline_text=_build_outline_text(summary),
+            visual_context=(
+                visual_context
+                if visual_input == "frames"
+                else VideoAiNoteVisualContextDTO(frames=[], evidence_text=visual_context.evidence_text)
+                if visual_input == "evidence"
+                else VideoAiNoteVisualContextDTO(frames=[])
+            ),
+            note_visual_mode=note_visual_mode,
+        ) + (
+            "\n额外输出要求：返回 JSON 对象，包含 markdown 与 visual_evidence。"
+            "markdown 是最终 AI 概括 Markdown；visual_evidence 每项含 timestamp_seconds 和 text。"
+            "仅记录确实能从随附九宫格图确认的画面事实；timestamp_seconds 必须使用给出的真实帧时间。"
+        )
+        payload = self._gateway.complete_structured(
+            [{"role": "user", "content": (
+                build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
+                if visual_input == "frames" and visual_context.frames
+                else prompt
+            )}],
+            response_model=AiSummaryPayload,
+            temperature=NOTE_TEMPERATURE,
+        )
+        allowed = set(visual_context.evidence_timestamps)
+        evidence: list[AiSummaryVisualEvidenceDTO] = []
+        seen: set[float] = set()
+        for item in payload.visual_evidence:
+            if item.timestamp_seconds not in allowed:
+                raise ValueError("AI 概括视觉证据引用了未提供的帧时间。")
+            if item.timestamp_seconds in seen:
+                raise ValueError("同一视频帧只能有一条 AI 概括视觉证据。")
+            seen.add(item.timestamp_seconds)
+            evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=item.timestamp_seconds, text=item.text.strip()))
+        return GeneratedVideoAiNoteDTO(
+            content=payload.markdown.strip(),
+            note_visual_mode=note_visual_mode,
+            note_max_images=note_max_images,
+            note_image_min_gap_seconds=note_image_min_gap_seconds,
+            visual_evidence=tuple(evidence),
+        )
+
 
 class ConfiguredNoteGenerator:
     """按当前设置懒加载并复用 AI 笔记生成器。"""
@@ -105,6 +183,27 @@ class ConfiguredNoteGenerator:
         generator = self._get_generator()
         settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
         return generator.run(
+            transcript=transcript,
+            summary=summary,
+            visual_context=visual_context,
+            template=template,
+            visual_input=settings.generation.note_visual_input,
+            note_visual_mode=settings.generation.note_visual_mode,
+            note_max_images=settings.generation.note_max_images,
+            note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
+        )
+
+    def run_ai_summary(
+        self,
+        *,
+        transcript: VideoTranscriptDTO,
+        summary: VideoSummaryDTO | None,
+        visual_context: VideoAiNoteVisualContextDTO,
+        template: str,
+    ) -> GeneratedVideoAiNoteDTO:
+        generator = self._get_generator()
+        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+        return generator.run_ai_summary(
             transcript=transcript,
             summary=summary,
             visual_context=visual_context,

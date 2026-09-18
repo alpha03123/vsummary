@@ -157,7 +157,7 @@ class DebugFileProgressReporter:
         self._started_at = time.perf_counter()
         self._current_stage: str | None = None
         self._current_stage_started_at: float | None = None
-        self._log("run_started", detail="开始生成 AI 概况")
+        self._log("run_started", detail="开始生成 AI 整理逐字稿")
 
     def update(self, stage: str, progress: float | None = None, detail: str | None = None) -> None:
         """转发进度更新到下层 reporter，并把事件追加到调试日志。

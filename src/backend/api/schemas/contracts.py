@@ -64,7 +64,7 @@ class AgentSeriesProcessRequest(BaseModel):
 class CreateVideoNoteRequest(BaseModel):
     """创建视频笔记的请求体。
 
-    source 区分来源："manual" 为用户手写，"ai" 为 LLM 生成。
+    个人笔记仅允许用户手写来源。
     """
 
     title: str
@@ -72,10 +72,17 @@ class CreateVideoNoteRequest(BaseModel):
     source: str = "manual"
 
 
-class GenerateVideoAiNoteRequest(BaseModel):
-    """生成 AI 笔记时选用的展示模板。"""
+class GenerateVideoAiSummaryRequest(BaseModel):
+    """生成唯一 AI 概括时选用的展示模板。"""
 
     template: AiNoteTemplate = "general"
+
+
+class UpdateVideoAiSummaryRequest(BaseModel):
+    """更新唯一 AI 概括正文。"""
+
+    title: str
+    content: str
 
 
 class UpdateVideoNoteRequest(BaseModel):
@@ -151,7 +158,7 @@ class WorkspaceSettingsResponse(BaseModel):
     talk_custom_prompt: str = ""
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
-    max_visual_frames: int = Field(default=6, ge=1, le=20)
+    max_visual_input_images: int = Field(default=6, ge=1, le=20)
     note_visual_mode: Literal["off", "screenshots"] = "off"
     note_visual_input: Literal["none", "evidence", "frames"] = "frames"
     mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
@@ -209,7 +216,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     talk_custom_prompt: str = ""
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
-    max_visual_frames: int = Field(default=6, ge=1, le=20)
+    max_visual_input_images: int = Field(default=6, ge=1, le=20)
     note_visual_mode: Literal["off", "screenshots"] = "off"
     note_visual_input: Literal["none", "evidence", "frames"] = "frames"
     mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"

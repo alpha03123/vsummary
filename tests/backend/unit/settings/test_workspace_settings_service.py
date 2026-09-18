@@ -141,7 +141,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 video_generation_concurrency=5,
                 web_search_enabled=True,
                 chapter_visual_mode="multimodal",
-                max_visual_frames=8,
+                max_visual_input_images=8,
             )
 
             self.assertEqual(updated.window_tokens, 222_222)
@@ -163,7 +163,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertIn("video_generation_concurrency = 5", rendered)
             self.assertIn("summary_chunk_concurrency = 1", rendered)
             self.assertIn('chapter_visual_mode = "multimodal"', rendered)
-            self.assertIn("max_visual_frames = 8", rendered)
+            self.assertIn("max_visual_input_images = 8", rendered)
             self.assertIn("[agent_retrieval]", rendered)
             self.assertIn("max_hits = 7", rendered)
             self.assertIn("rerank_enabled = false", rendered)

@@ -52,7 +52,7 @@ from backend.video_summary.library.usecases import (
     RenameVideo,
     ExportSeriesArchive,
     GenerateVideoKnowledgeCards,
-    GenerateVideoAiNote,
+    GenerateVideoAiSummary,
     AutoGenerateVideoArtifacts,
     RefreshSeriesKnowledgeMemory,
     GenerateSeriesMindmapFromLibrary,
@@ -66,6 +66,7 @@ from backend.video_summary.library.usecases import (
     GetVideoNotes,
     GetVideoSource,
     GetVideoSummary,
+    GetVideoAiSummary,
     GetVideoTranscript,
     GetVideoWorkspaceTools,
     ImportLocalPlaygroundVideos,
@@ -82,6 +83,7 @@ from backend.video_summary.library.usecases import (
     UpdateVideoNote,
     UpdateVideoSummary,
     UpdateVideoTranscript,
+    UpdateVideoAiSummary,
 )
 
 
@@ -99,10 +101,12 @@ class ApiContainer:
     get_video_chapter_cards: GetVideoChapterCards
     get_video_cards: GetVideoKnowledgeCards
     generate_video_cards: GenerateVideoKnowledgeCards
-    generate_video_ai_note: GenerateVideoAiNote
+    generate_video_ai_summary: GenerateVideoAiSummary
+    get_video_ai_summary: GetVideoAiSummary
     get_video_notes: GetVideoNotes
     create_video_note: CreateVideoNote
     update_video_note: UpdateVideoNote
+    update_video_ai_summary: UpdateVideoAiSummary
     update_video_summary: UpdateVideoSummary
     update_video_transcript: UpdateVideoTranscript
     delete_video_note: DeleteVideoNote
@@ -223,17 +227,27 @@ def build_api_container(
         workspace=workspace,
         index_refresher=index_refresher,
     )
+    ai_summary_use_case = GenerateVideoAiSummary(
+        workspace,
+        resolved_note_generator,
+        index_refresher,
+        max_visual_input_images=settings.generation.max_visual_input_images,
+        visual_input=settings.generation.note_visual_input,
+    )
     auto_artifacts = AutoGenerateVideoArtifacts(
-        load_enabled_artifacts=lambda: load_settings(config_path, root_dir).generation.auto_generate_artifacts,
+        # AI 概括在转写完成时由生成流水线并发启动；不能在 A 完成后再串行跑一次。
+        load_enabled_artifacts=lambda: tuple(
+            artifact
+            for artifact in load_settings(config_path, root_dir).generation.auto_generate_artifacts
+            if artifact != "notes"
+        ),
         generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
             workspace, resolved_mindmap_generator
         ).run(series_id, video_id),
         generate_knowledge_cards=lambda series_id, video_id: GenerateVideoKnowledgeCards(
             workspace, resolved_knowledge_card_generator, index_refresher
         ).run(series_id, video_id),
-        generate_note=lambda series_id, video_id: GenerateVideoAiNote(
-            workspace, resolved_note_generator, index_refresher
-        ).run(series_id, video_id, template="general"),
+        generate_note=lambda series_id, video_id: ai_summary_use_case.run(series_id, video_id, template="general"),
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,
@@ -325,10 +339,12 @@ def build_api_container(
         get_video_chapter_cards=GetVideoChapterCards(workspace),
         get_video_cards=GetVideoKnowledgeCards(workspace),
         generate_video_cards=GenerateVideoKnowledgeCards(workspace, resolved_knowledge_card_generator, index_refresher),
-        generate_video_ai_note=GenerateVideoAiNote(workspace, resolved_note_generator, index_refresher),
+        generate_video_ai_summary=ai_summary_use_case,
+        get_video_ai_summary=GetVideoAiSummary(workspace),
         get_video_notes=GetVideoNotes(workspace),
         create_video_note=CreateVideoNote(workspace, index_refresher),
         update_video_note=UpdateVideoNote(workspace, index_refresher),
+        update_video_ai_summary=UpdateVideoAiSummary(workspace, index_refresher),
         update_video_summary=UpdateVideoSummary(workspace, series_memory_refresher),
         update_video_transcript=UpdateVideoTranscript(workspace, index_refresher),
         delete_video_note=DeleteVideoNote(workspace, index_refresher),

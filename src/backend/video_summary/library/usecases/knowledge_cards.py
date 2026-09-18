@@ -66,7 +66,8 @@ class GenerateVideoKnowledgeCards:
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         arguments = {"title": summary.title, "summary_data": summary.summary}
-        visual_frame_paths = _summary_frame_paths(source.output_dir, summary.summary)
+        output_dir = getattr(source, "output_dir", None)
+        visual_frame_paths = _summary_frame_paths(output_dir, summary.summary) if output_dir is not None else []
         if visual_frame_paths:
             arguments["visual_frame_paths"] = visual_frame_paths
         if visual_evidence_text:

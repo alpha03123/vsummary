@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
+
+from backend.video_summary.generation.ports import NoVideoFramesError
 
 
 NOTE_IMAGE_MARKER = re.compile(r"\[\[IMG:(?P<timestamp>\d+(?::\d{2}){1,2}(?:\.\d+)?|\d+(?:\.\d+)?)\]\]")
@@ -61,3 +64,20 @@ def format_note_image_label(seconds: float) -> str:
     minutes, second_part = divmod(whole_seconds, 60)
     hours, minutes = divmod(minutes, 60)
     return f"{hours:02d}:{minutes:02d}:{second_part:02d}" if hours else f"{minutes:02d}:{second_part:02d}"
+
+
+def materialize_note_frames(*, video_path: Path, output_dir: Path, content: str, frame_extractor) -> None:
+    """为合法时间标记物化可复用帧；失败由调用方日志记录且不破坏正文。"""
+    duration = frame_extractor.probe_duration(video_path)
+    frames_dir = output_dir / "frames"
+    for marker in parse_note_image_markers(content):
+        if marker.seconds > duration:
+            continue
+        filename = f"{format_note_image_timestamp(marker.seconds)}.jpg"
+        target = frames_dir / filename
+        if target.is_file():
+            continue
+        try:
+            frame_extractor.extract_frame(video_path, marker.seconds, target)
+        except NoVideoFramesError:
+            return

@@ -38,7 +38,7 @@ from backend.shared.filesystem import KeyedLockManager, atomic_write_text
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.schemas import TranscriptSegmentPayload
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
-from backend.video_summary.library.note_images import format_note_image_timestamp, parse_note_image_markers
+from backend.video_summary.library.note_images import materialize_note_frames
 from backend.video_summary.infrastructure.rag.agent_memory.document_schema import SeriesCatalogPayload
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.library.constants import BILIBILI_INBOX_SERIES_ID, PLAYGROUND_SERIES_ID
@@ -54,6 +54,9 @@ from backend.video_summary.library.models import (
     VideoMindmapDTO as VideoMindmapDTO,
     VideoNoteDTO as VideoNoteDTO,
     VideoNotesDTO as VideoNotesDTO,
+    VideoAiSummaryDTO as VideoAiSummaryDTO,
+    AiSummaryVisualEvidenceDTO as AiSummaryVisualEvidenceDTO,
+    VideoAiSummaryVisualEvidenceDTO as VideoAiSummaryVisualEvidenceDTO,
     VideoSourceDTO as VideoSourceDTO,
     VideoSummaryDTO as VideoSummaryDTO,
     VideoTranscriptDTO as VideoTranscriptDTO,
@@ -605,8 +608,137 @@ class FileSystemVideoWorkspace:
             notes=[
                 _to_note_view(note)
                 for note in notes_payload["notes"]
+                if note["source"] == "manual"
             ],
         )
+
+    def get_video_ai_summary(self, series_id: str, video_id: str) -> VideoAiSummaryDTO | None:
+        if self.get_video_source(series_id, video_id) is None:
+            return None
+        path = self._get_video_output_dir(series_id, video_id) / "ai_summary.json"
+        if not path.is_file():
+            self._migrate_latest_agent_note_to_ai_summary(series_id, video_id)
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return VideoAiSummaryDTO(
+            series_id=series_id,
+            video_id=video_id,
+            title=_require_note_text(payload.get("title"), "ai_summary.title"),
+            content=_require_note_text(payload.get("content"), "ai_summary.content"),
+            created_at=_require_note_text(payload.get("created_at"), "ai_summary.created_at"),
+            updated_at=_require_note_text(payload.get("updated_at"), "ai_summary.updated_at"),
+        )
+
+    def _migrate_latest_agent_note_to_ai_summary(self, series_id: str, video_id: str) -> None:
+        """把历史 agent 笔记一次性迁移为唯一 AI 概括，保留原 notes.json。"""
+        path = self._get_video_output_dir(series_id, video_id) / "ai_summary.json"
+        with self._content_locks.hold(_content_lock_key(series_id, video_id)):
+            if path.is_file():
+                return
+            legacy_notes = [note for note in self._read_notes_payload(series_id, video_id)["notes"] if note["source"] == "agent"]
+            if not legacy_notes:
+                return
+            latest = max(legacy_notes, key=lambda note: note["updated_at"])
+            atomic_write_text(
+                path,
+                json.dumps(
+                    {
+                        "title": latest["title"],
+                        "content": latest["content"],
+                        "created_at": latest["created_at"],
+                        "updated_at": latest["updated_at"],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+            LOGGER.info("migrated legacy agent note to ai summary", extra={"series_id": series_id, "video_id": video_id})
+
+    def save_video_ai_summary(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        title: str,
+        content: str,
+    ) -> VideoAiSummaryDTO | None:
+        if self.get_video_source(series_id, video_id) is None:
+            return None
+        next_title = _require_note_text(title, "ai_summary.title")
+        next_content = _require_note_text(content, "ai_summary.content")
+        path = self._get_video_output_dir(series_id, video_id) / "ai_summary.json"
+        with self._content_locks.hold(_content_lock_key(series_id, video_id)):
+            now = _now_iso()
+            previous_created_at = now
+            if path.is_file():
+                previous_payload = json.loads(path.read_text(encoding="utf-8"))
+                previous_created_at = _require_note_text(previous_payload.get("created_at"), "ai_summary.created_at")
+            atomic_write_text(
+                path,
+                json.dumps(
+                    {
+                        "title": next_title,
+                        "content": next_content,
+                        "created_at": previous_created_at,
+                        "updated_at": now,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+            atomic_write_text(
+                path.with_name("ai_summary.status.json"),
+                json.dumps({"status": "ready", "error": ""}, ensure_ascii=False, indent=2),
+            )
+        return self.get_video_ai_summary(series_id, video_id)
+
+    def get_video_ai_summary_visual_evidence(self, series_id: str, video_id: str) -> VideoAiSummaryVisualEvidenceDTO | None:
+        if self.get_video_source(series_id, video_id) is None:
+            return None
+        path = self._get_video_output_dir(series_id, video_id) / "ai_summary.visual_evidence.json"
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw_frames = payload.get("frames") if isinstance(payload, dict) else None
+        if not isinstance(raw_frames, list):
+            raise ValueError("ai_summary.visual_evidence.json 的 frames 必须是数组。")
+        frames = []
+        for item in raw_frames:
+            if not isinstance(item, dict) or not isinstance(item.get("timestamp_seconds"), (int, float)) or not isinstance(item.get("text"), str) or not item["text"].strip():
+                raise ValueError("ai_summary.visual_evidence.json 含无效证据。")
+            frames.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=float(item["timestamp_seconds"]), text=item["text"].strip()))
+        return VideoAiSummaryVisualEvidenceDTO(series_id=series_id, video_id=video_id, frames=frames)
+
+    def save_video_ai_summary_visual_evidence(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        frames: list[AiSummaryVisualEvidenceDTO],
+    ) -> None:
+        output_dir = self._get_video_output_dir(series_id, video_id)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            output_dir / "ai_summary.visual_evidence.json",
+            json.dumps(
+                {"frames": [{"timestamp_seconds": frame.timestamp_seconds, "text": frame.text} for frame in frames]},
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+
+    def update_video_ai_summary(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        title: str,
+        content: str,
+    ) -> VideoAiSummaryDTO | None:
+        if self.get_video_ai_summary(series_id, video_id) is None:
+            return None
+        return self.save_video_ai_summary(series_id, video_id, title=title, content=content)
 
     def create_video_note(
         self,
@@ -699,25 +831,14 @@ class FileSystemVideoWorkspace:
         if source is None:
             return
         try:
-            duration_seconds = self._media_processor.probe_duration(source.source_path)
+            materialize_note_frames(
+                video_path=source.source_path,
+                output_dir=source.output_dir,
+                content=content,
+                frame_extractor=self._media_processor,
+            )
         except Exception:
-            LOGGER.exception("无法探测笔记图片的视频时长", extra={"series_id": series_id, "video_id": video_id})
-            return
-        frames_dir = source.output_dir / "frames"
-        for marker in parse_note_image_markers(content):
-            if marker.seconds > duration_seconds:
-                continue
-            filename = f"{format_note_image_timestamp(marker.seconds)}.jpg"
-            output_path = frames_dir / filename
-            if output_path.is_file():
-                continue
-            try:
-                self._media_processor.extract_frame(source.source_path, marker.seconds, output_path)
-            except Exception:
-                LOGGER.exception(
-                    "笔记图片抽帧失败",
-                    extra={"series_id": series_id, "video_id": video_id, "timestamp_seconds": marker.seconds},
-                )
+            LOGGER.exception("笔记图片抽帧失败", extra={"series_id": series_id, "video_id": video_id})
 
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
         """按 `note_id` 从 `notes.json` 中删除该笔记。
@@ -766,6 +887,8 @@ class FileSystemVideoWorkspace:
 
         source_available = video.source_path.is_file()
         summary_exists = (video.output_dir / "summary.json").exists()
+        ai_summary_exists = (video.output_dir / "ai_summary.json").exists()
+        ai_summary_status = _read_ai_summary_status(video.output_dir)
         knowledge_cards_exists = (video.output_dir / "knowledge_cards.json").exists()
         mindmap_exists = (video.output_dir / "mindmap.json").exists()
         preview_url = f"/api/videos/{series_id}/{video_id}/preview"
@@ -781,10 +904,21 @@ class FileSystemVideoWorkspace:
             video_id=video_id,
             overview=WorkspaceToolDTO(
                 id="overview",
-                title="AI概况",
+                title="AI整理逐字稿",
                 available=source_available,
                 generated=summary_exists,
                 status="source_missing" if not source_available else ("ready" if summary_exists else "pending"),
+            ),
+            ai_summary=WorkspaceToolDTO(
+                id="ai-summary",
+                title="AI概括",
+                available=source_available,
+                generated=ai_summary_exists,
+                status=(
+                    "source_missing"
+                    if not source_available
+                    else ("ready" if ai_summary_exists else ai_summary_status)
+                ),
             ),
             knowledge_cards=WorkspaceToolDTO(
                 id="knowledge-cards",
@@ -1909,6 +2043,19 @@ def _to_note_view(note_record: dict[str, str]) -> VideoNoteDTO:
         created_at=note_record["created_at"],
         updated_at=note_record["updated_at"],
     )
+
+
+def _read_ai_summary_status(output_dir: Path) -> str:
+    """读取并发 AI 概括状态；损坏或缺失状态文件不伪造完成态。"""
+    status_path = output_dir / "ai_summary.status.json"
+    if not status_path.is_file():
+        return "available"
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "failed"
+    status = payload.get("status") if isinstance(payload, dict) else None
+    return status if status in {"running", "ready", "failed"} else "failed"
 
 
 def _require_note_text(value: object, field_name: str) -> str:

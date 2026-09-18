@@ -1,21 +1,9 @@
 import { useState } from "react";
-import { LoaderCircle, PencilLine, Trash2, Plus, Calendar, Sparkles } from "lucide-react";
+import { LoaderCircle, PencilLine, Trash2, Plus, Calendar } from "lucide-react";
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { WorkspaceBackButton } from "../shared/WorkspaceBackButton";
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
-import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
-
-const AI_NOTE_TEMPLATE_OPTIONS = [
-  { id: "general", label: "通用笔记" },
-  { id: "minimal", label: "要点速览" },
-  { id: "detailed", label: "深度详记" },
-  { id: "tutorial", label: "操作教程" },
-  { id: "academic", label: "学术论文" },
-  { id: "life_journal", label: "生活随笔" },
-  { id: "task_oriented", label: "任务清单" },
-  { id: "meeting_minutes", label: "会议纪要" },
-];
 
 // 笔记时间戳由后端以 UTC 存储（形如 2026-09-17T11:30:16.056886Z），
 // 这里统一转换为浏览器本地时区后再展示，避免直接截断字符串导致显示成 UTC 时间。
@@ -73,9 +61,6 @@ export function WorkspaceNotesView({
   notes,
   notesLoading,
   savingNote,
-  generatingAiNote,
-  canGenerateAiNote = true,
-  onGenerateAiNote,
   onCreateNote,
   onUpdateNote,
   onDeleteNote,
@@ -93,7 +78,6 @@ export function WorkspaceNotesView({
   const [isEditing, setIsEditing] = useState(false);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingContent, setEditingContent] = useState("");
-  const [aiTemplate, setAiTemplate] = useState("general");
 
   const selectedNote = notes?.notes?.find((n) => n.id === selectedNoteId);
 
@@ -303,25 +287,6 @@ export function WorkspaceNotesView({
           <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
         </div>
         <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
-          <WorkspaceProviderSelect
-            value={aiTemplate}
-            onChange={setAiTemplate}
-            options={AI_NOTE_TEMPLATE_OPTIONS}
-            disabled={generatingAiNote}
-            ariaLabel="AI 笔记模板"
-            hideGroupLabels
-            className="w-36"
-          />
-          <button
-            type="button"
-            onClick={() => onGenerateAiNote(aiTemplate)}
-            disabled={generatingAiNote || !canGenerateAiNote}
-            title={canGenerateAiNote ? undefined : "该视频尚未下载，请先下载视频后再生成笔记"}
-            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-accent/30 dark:bg-accent/15 dark:text-accent dark:hover:bg-accent dark:hover:text-white"
-          >
-            {generatingAiNote ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generatingAiNote ? "正在生成" : "AI 笔记"}
-          </button>
           <button
             type="button"
             onClick={() => setViewState("create")}
@@ -333,20 +298,8 @@ export function WorkspaceNotesView({
       </div>
 
       <div className="flex flex-col gap-3">
-        {generatingAiNote || (notes?.notes ?? []).length ? (
+        {(notes?.notes ?? []).length ? (
           <>
-            {generatingAiNote ? (
-              <NoteListItem
-                note={{
-                  id: "pending-ai-note",
-                  title: "正在生成笔记",
-                  content: "正在根据视频转写整理内容，完成后会自动加入列表。",
-                  source: "agent",
-                  pending: true,
-                }}
-                onOpen={openDetail}
-              />
-            ) : null}
             {(notes?.notes ?? []).map((note) => (
               <NoteListItem key={note.id} note={note} onOpen={openDetail} />
             ))}
@@ -356,7 +309,7 @@ export function WorkspaceNotesView({
             <WorkspaceStateBlock
               eyebrow="Notes"
               title="暂无笔记"
-              description="点击右上角生成 AI 笔记，或手动记录重要内容。"
+              description="记录个人要点、想法和待办。"
               dashed
             />
           </div>

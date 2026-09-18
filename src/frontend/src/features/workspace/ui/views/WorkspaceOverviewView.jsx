@@ -22,17 +22,18 @@ export function WorkspaceOverviewView({
   onLoadSummaryMarkdown,
   onUpdateSummary,
   onUpdateTranscript,
+  onOpenAiSummary,
 }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const hasSummary = Boolean(summary);
-  const overviewTitle = summary?.title ?? selectedVideo?.title ?? "AI 概况";
+  const overviewTitle = summary?.title ?? selectedVideo?.title ?? "AI 整理逐字稿";
 
   if (!selectedVideo) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Overview"
+        eyebrow="AI Transcript"
         title="等待视频"
-        description="先在左侧选中一个具体视频，这里才会显示对应的 AI 概况。"
+        description="先在左侧选中一个具体视频，这里才会显示对应的整理逐字稿。"
         dashed
       />
     );
@@ -41,15 +42,17 @@ export function WorkspaceOverviewView({
   if (!tools?.overview.generated) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Overview"
+        eyebrow="AI Transcript"
         title={overviewTitle}
-        description="先在左侧点击生成，生成完成后这里会显示 AI 概况、章节纪要和关键结论。"
+        description="整理逐字稿会在 AI 概括生成流程中一并生成，包含章节、时间轴与原文定位。"
+        actionLabel="前往 AI 概括"
+        onAction={onOpenAiSummary}
       >
         {isGeneratingSelectedVideo ? (
           <div className="motion-fade-up mt-6 w-full max-w-xl">
             <div className="motion-busy-button inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 shadow-sm">
               <LoaderCircle size={16} strokeWidth={2.2} className="animate-spin text-accent" />
-              正在生成概况...
+              正在整理逐字稿...
             </div>
             <div className="workspace-elevated-panel mt-6 rounded-3xl border p-6">
               <div className="motion-shimmer h-3 w-24 rounded-full bg-stone-100 dark:bg-stone-800"></div>
@@ -67,9 +70,9 @@ export function WorkspaceOverviewView({
   if (summaryLoading) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Overview"
+        eyebrow="AI Transcript"
         title={overviewTitle}
-        description="正在读取已生成的概况结果。"
+        description="正在读取已生成的整理逐字稿。"
         loading
       />
     );
@@ -84,7 +87,7 @@ export function WorkspaceOverviewView({
       {isGeneratingSelectedVideo ? (
         <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-sm text-stone-700 dark:text-stone-200">
           <LoaderCircle size={16} className="animate-spin text-accent" />
-          正在生成概况，当前仍显示上一次结果。
+          正在整理逐字稿，当前仍显示上一次结果。
         </div>
       ) : null}
       <div className="flex flex-wrap justify-end gap-2">

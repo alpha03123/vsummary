@@ -58,7 +58,8 @@ class GenerateVideoMindmapFromLibrary:
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         source = self._workspace.get_video_source(series_id, video_id)
-        visual_frame_paths = _summary_frame_paths(source.output_dir, summary.summary) if source is not None else []
+        output_dir = getattr(source, "output_dir", None) if source is not None else None
+        visual_frame_paths = _summary_frame_paths(output_dir, summary.summary) if output_dir is not None else []
 
         try:
             arguments = {

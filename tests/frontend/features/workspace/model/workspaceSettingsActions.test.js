@@ -444,14 +444,14 @@ describe("createWorkspaceSettingsActions provider settings", () => {
       asrProvider: "aliyun_bailian",
       runtimeCapabilities: null,
       chapterVisualMode: "off",
-      maxVisualFrames: 6,
+      maxVisualInputImages: 6,
     });
     const controller = createWorkspaceSettingsActions({
       state: {
         ui: {
           asrProvider: "aliyun_bailian",
           chapterVisualMode: "multimodal",
-          maxVisualFrames: 6,
+          maxVisualInputImages: 6,
         },
       },
       dispatch: vi.fn(),

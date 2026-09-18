@@ -12,7 +12,7 @@ import {
   renameVideoSource,
   generateSeriesMindmap,
   generateVideoKnowledgeCards,
-  generateVideoAiNote,
+  generateVideoAiSummary,
   generateVideoMindmap,
   generateSeriesSummaries,
   generateVideoSummary,
@@ -43,6 +43,7 @@ import {
   subscribeSeriesMindmapGenerationProgress,
   subscribeVideoDownloadProgress,
   updateVideoNote,
+  updateVideoAiSummary,
   updateVideoSummary,
   updateVideoTranscript,
   uploadSrtAndGenerateVideoSummary,
@@ -710,26 +711,27 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onGenerateAiNote(template = "general") {
-    if (!state.selectedSeriesId || !state.selectedVideoId || !selectedVideo) {
-      return;
-    }
-
-    dispatch({ type: "ai_note_generation_started" });
+  async function onGenerateAiSummary(template = "general") {
+    if (!state.selectedSeriesId || !state.selectedVideoId) return;
+    dispatch({ type: "ai_summary_generation_started" });
     try {
-      const note = await generateVideoAiNote(state.selectedSeriesId, state.selectedVideoId, template);
-      dispatch({
-        type: "note_created",
-        seriesId: state.selectedSeriesId,
-        videoId: state.selectedVideoId,
-        videoTitle: selectedVideo.title,
-        note,
-      });
+      const summary = await generateVideoAiSummary(state.selectedSeriesId, state.selectedVideoId, template);
+      dispatch({ type: "ai_summary_loaded", summary });
+      const tools = await loadVideoTools(state.selectedSeriesId, state.selectedVideoId);
+      dispatch({ type: "tools_loaded", tools });
     } catch (error) {
-      dispatch({
-        type: "ai_note_generation_failed",
-        message: error instanceof Error ? error.message : "AI 笔记生成失败",
-      });
+      dispatch({ type: "ai_summary_generation_failed", message: error instanceof Error ? error.message : "AI 概括生成失败" });
+    }
+  }
+
+  async function onUpdateAiSummary(summary) {
+    if (!state.selectedSeriesId || !state.selectedVideoId) return;
+    dispatch({ type: "ai_summary_loading_started" });
+    try {
+      const updated = await updateVideoAiSummary(state.selectedSeriesId, state.selectedVideoId, summary);
+      dispatch({ type: "ai_summary_loaded", summary: updated });
+    } catch (error) {
+      dispatch({ type: "ai_summary_generation_failed", message: error instanceof Error ? error.message : "AI 概括更新失败" });
     }
   }
 
@@ -1221,7 +1223,8 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onGenerateSeries,
     onCancelGeneration,
     onCreateNote,
-    onGenerateAiNote,
+    onGenerateAiSummary,
+    onUpdateAiSummary,
     onUpdateNote,
     onDeleteNote,
     onLoadTranscriptMarkdown,

@@ -808,23 +808,20 @@ export function workspaceReducer(state, action) {
         savingNote: true,
         error: "",
       };
-    case "ai_note_generation_started":
-      return {
-        ...state,
-        generatingAiNote: true,
-        error: "",
-      };
-    case "ai_note_generation_failed":
-      return {
-        ...state,
-        generatingAiNote: false,
-        error: action.message,
-      };
+    case "ai_summary_loading_started":
+      return { ...state, aiSummaryLoading: true, error: "" };
+    case "ai_summary_loaded":
+      return { ...state, aiSummary: action.summary, aiSummaryLoading: false, generatingAiSummary: false, error: "" };
+    case "ai_summary_cleared":
+      return { ...state, aiSummary: null, aiSummaryLoading: false, generatingAiSummary: false };
+    case "ai_summary_generation_started":
+      return { ...state, generatingAiSummary: true, error: "" };
+    case "ai_summary_generation_failed":
+      return { ...state, generatingAiSummary: false, error: action.message };
     case "note_created":
       return {
         ...state,
         savingNote: false,
-        generatingAiNote: false,
         notes: state.notes == null
           ? {
             seriesId: action.seriesId,

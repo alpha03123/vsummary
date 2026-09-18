@@ -52,15 +52,15 @@ describe("WorkspaceSettingsPanel provider settings", () => {
     expect(screen.getByText("保存 Key")).toBeInTheDocument();
   });
 
-  it("shows the image limit only in multimodal chapter visual mode", () => {
-    const { rerender } = renderPanel({ chapterVisualMode: "screenshots" }, { initialTab: "ai" });
+  it("shows the AI summary frame-pool budget only when frame input is enabled", () => {
+    const { rerender } = renderPanel({ noteVisualInput: "evidence" }, { initialTab: "ai" });
 
     expect(screen.getByText("章节画面")).toBeInTheDocument();
-    expect(screen.queryByText("单视频图片上限")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI 概括帧池上限")).not.toBeInTheDocument();
 
     rerender(
       <WorkspaceSettingsPanel
-        ui={{ ...defaultUiSettings, chapterVisualMode: "multimodal" }}
+        ui={{ ...defaultUiSettings, noteVisualInput: "frames" }}
         initialTab="ai"
         fasterWhisperModels={[]}
         fasterWhisperModelsLoading={false}
@@ -77,7 +77,7 @@ describe("WorkspaceSettingsPanel provider settings", () => {
       />,
     );
 
-    expect(screen.getByText("单视频图片上限")).toBeInTheDocument();
+    expect(screen.getByText("AI 概括帧池上限")).toBeInTheDocument();
   });
 
   it("opens the dedicated usage page from provider settings", () => {

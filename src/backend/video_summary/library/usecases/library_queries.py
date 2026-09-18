@@ -14,6 +14,7 @@ from backend.video_summary.library.models import (
     VideoMindmapDTO,
     VideoSourceDTO,
     VideoSummaryDTO,
+    VideoAiSummaryDTO,
     VideoTranscriptDTO,
     VideoWorkspaceToolsDTO,
 )
@@ -54,6 +55,16 @@ class GetVideoSummary:
             总结 DTO，若没有则返回 `None`（区别于"生成失败"）。
         """
         return self._workspace.get_video_summary(series_id, video_id)
+
+
+class GetVideoAiSummary:
+    """读取视频唯一的 AI 概括制品。"""
+
+    def __init__(self, workspace: VideoLibraryReader) -> None:
+        self._workspace = workspace
+
+    def run(self, series_id: str, video_id: str) -> VideoAiSummaryDTO | None:
+        return self._workspace.get_video_ai_summary(series_id, video_id)
 
 
 class GetVideoSource:
