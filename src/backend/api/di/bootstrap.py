@@ -242,10 +242,17 @@ def build_api_container(
             if artifact != "notes"
         ),
         generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
-            workspace, resolved_mindmap_generator
+            workspace,
+            resolved_mindmap_generator,
+            visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
+            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
         ).run(series_id, video_id),
         generate_knowledge_cards=lambda series_id, video_id: GenerateVideoKnowledgeCards(
-            workspace, resolved_knowledge_card_generator, index_refresher
+            workspace,
+            resolved_knowledge_card_generator,
+            index_refresher,
+            visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
+            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
         ).run(series_id, video_id),
         generate_note=lambda series_id, video_id: ai_summary_use_case.run(series_id, video_id, template="general"),
     )
@@ -338,7 +345,13 @@ def build_api_container(
         get_video_mindmap=GetVideoMindmap(workspace),
         get_video_chapter_cards=GetVideoChapterCards(workspace),
         get_video_cards=GetVideoKnowledgeCards(workspace),
-        generate_video_cards=GenerateVideoKnowledgeCards(workspace, resolved_knowledge_card_generator, index_refresher),
+        generate_video_cards=GenerateVideoKnowledgeCards(
+            workspace,
+            resolved_knowledge_card_generator,
+            index_refresher,
+            visual_input=settings.generation.cards_visual_input,
+            max_visual_input_images=settings.generation.max_visual_input_images,
+        ),
         generate_video_ai_summary=ai_summary_use_case,
         get_video_ai_summary=GetVideoAiSummary(workspace),
         get_video_notes=GetVideoNotes(workspace),
@@ -351,7 +364,12 @@ def build_api_container(
         get_video_workspace_tools=GetVideoWorkspaceTools(workspace),
         generate_video_summary=summary_generation_use_case,
         generate_series_summaries=series_generation_use_case,
-        generate_video_mindmap=GenerateVideoMindmapFromLibrary(workspace, resolved_mindmap_generator),
+        generate_video_mindmap=GenerateVideoMindmapFromLibrary(
+            workspace,
+            resolved_mindmap_generator,
+            visual_input=settings.generation.mindmap_visual_input,
+            max_visual_input_images=settings.generation.max_visual_input_images,
+        ),
         generate_series_mindmap=GenerateSeriesMindmapFromLibrary(workspace, resolved_series_mindmap_generator),
         get_series_mindmap=GetSeriesMindmap(workspace),
         delete_series=DeleteSeries(workspace, index_refresher, generation_activity_checker=series_generation_use_case),

@@ -9,6 +9,7 @@ from __future__ import annotations
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.library.models import VideoMindmapDTO
 from backend.video_summary.library.ports import VideoLibraryReader, VideoMindmapGenerator
+from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
 
 
 class GenerateVideoMindmapFromLibrary:
@@ -19,7 +20,14 @@ class GenerateVideoMindmapFromLibrary:
     前置条件：必须先存在 `VideoSummaryDTO`；缺失则短路返回 `None`。
     """
 
-    def __init__(self, workspace: VideoLibraryReader, generator: VideoMindmapGenerator) -> None:
+    def __init__(
+        self,
+        workspace: VideoLibraryReader,
+        generator: VideoMindmapGenerator,
+        *,
+        visual_input: str = "evidence",
+        max_visual_input_images: int | None = None,
+    ) -> None:
         """注入只读端口与思维导图生成器。
 
         Args:
@@ -29,6 +37,8 @@ class GenerateVideoMindmapFromLibrary:
         """
         self._workspace = workspace
         self._generator = generator
+        self._visual_input = visual_input
+        self._max_visual_input_images = max_visual_input_images
 
     async def run(
         self,
@@ -54,12 +64,15 @@ class GenerateVideoMindmapFromLibrary:
 
         transcript = self._workspace.get_video_transcript(series_id, video_id)
         transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
-        visual_reader = getattr(self._workspace, "get_video_visual_evidence", None)
+        visual_reader = getattr(self._workspace, "get_video_ai_summary_visual_evidence", None)
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         source = self._workspace.get_video_source(series_id, video_id)
-        output_dir = getattr(source, "output_dir", None) if source is not None else None
-        visual_frame_paths = _summary_frame_paths(output_dir, summary.summary) if output_dir is not None else []
+        visual_frame_paths = _visual_frame_pool_paths(
+            source,
+            visual_input=self._visual_input,
+            max_visual_input_images=self._max_visual_input_images,
+        )
 
         try:
             arguments = {
@@ -80,18 +93,11 @@ class GenerateVideoMindmapFromLibrary:
         return self._workspace.get_video_mindmap(series_id, video_id)
 
 
-def _summary_frame_paths(output_dir, summary_data: dict[str, object]):
-    chapters = summary_data.get("chapters")
-    if not isinstance(chapters, list):
+def _visual_frame_pool_paths(source, *, visual_input: str, max_visual_input_images: int | None):
+    if visual_input != "frames" or source is None or max_visual_input_images is None:
         return []
-    result = []
-    for chapter in chapters:
-        if not isinstance(chapter, dict):
-            continue
-        filename = chapter.get("image_filename")
-        if not isinstance(filename, str) or not filename or filename != filename.split("/")[-1] or "\\" in filename:
-            continue
-        path = output_dir / "screenshots" / filename
-        if path.is_file():
-            result.append(path)
-    return result
+    return build_or_load_visual_frame_pool(
+        video_path=source.source_path,
+        output_dir=source.output_dir,
+        max_input_images=max_visual_input_images,
+    ).image_paths

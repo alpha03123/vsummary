@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from backend.video_summary.library.models import VideoKnowledgeCardsDTO
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoKnowledgeCardStore, WorkspaceIndexRefresher
+from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
 
 
 class GenerateVideoKnowledgeCards:
@@ -27,6 +28,9 @@ class GenerateVideoKnowledgeCards:
         workspace: VideoKnowledgeCardStore,
         generator: KnowledgeCardGenerator,
         index_refresher: WorkspaceIndexRefresher | None = None,
+        *,
+        visual_input: str = "evidence",
+        max_visual_input_images: int | None = None,
     ) -> None:
         """注入读/写知识卡的复合端口、生成器与可选的索引刷新器。
 
@@ -39,6 +43,8 @@ class GenerateVideoKnowledgeCards:
         self._workspace = workspace
         self._generator = generator
         self._index_refresher = index_refresher
+        self._visual_input = visual_input
+        self._max_visual_input_images = max_visual_input_images
 
     def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         """为指定视频生成知识卡并落盘，返回最终制品 DTO。
@@ -62,12 +68,15 @@ class GenerateVideoKnowledgeCards:
         if summary is None:
             return None
 
-        visual_reader = getattr(self._workspace, "get_video_visual_evidence", None)
+        visual_reader = getattr(self._workspace, "get_video_ai_summary_visual_evidence", None)
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         arguments = {"title": summary.title, "summary_data": summary.summary}
-        output_dir = getattr(source, "output_dir", None)
-        visual_frame_paths = _summary_frame_paths(output_dir, summary.summary) if output_dir is not None else []
+        visual_frame_paths = _visual_frame_pool_paths(
+            source,
+            visual_input=self._visual_input,
+            max_visual_input_images=self._max_visual_input_images,
+        )
         if visual_frame_paths:
             arguments["visual_frame_paths"] = visual_frame_paths
         if visual_evidence_text:
@@ -84,18 +93,11 @@ class GenerateVideoKnowledgeCards:
         return self._workspace.get_video_knowledge_cards(series_id, video_id)
 
 
-def _summary_frame_paths(output_dir, summary_data: dict[str, object]):
-    chapters = summary_data.get("chapters")
-    if not isinstance(chapters, list):
+def _visual_frame_pool_paths(source, *, visual_input: str, max_visual_input_images: int | None):
+    if visual_input != "frames" or source is None or max_visual_input_images is None:
         return []
-    result = []
-    for chapter in chapters:
-        if not isinstance(chapter, dict):
-            continue
-        filename = chapter.get("image_filename")
-        if not isinstance(filename, str) or not filename or filename != filename.split("/")[-1] or "\\" in filename:
-            continue
-        path = output_dir / "screenshots" / filename
-        if path.is_file():
-            result.append(path)
-    return result
+    return build_or_load_visual_frame_pool(
+        video_path=source.source_path,
+        output_dir=source.output_dir,
+        max_input_images=max_visual_input_images,
+    ).image_paths
