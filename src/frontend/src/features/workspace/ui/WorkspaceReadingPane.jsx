@@ -284,6 +284,7 @@ export function WorkspaceReadingPane({
                       noteImageContext={activeSeries && selectedVideo ? { seriesId: activeSeries.id, videoId: selectedVideo.id, durationSeconds: Number.POSITIVE_INFINITY } : null}
                       onSeek={onSeek}
                       onOpenCitationReference={onOpenCitationReference}
+                      onOpenTranscriptAtTime={() => onSelectTool("overview")}
                     />
                   ) : null}
                   {toolId === "mindmap" ? (

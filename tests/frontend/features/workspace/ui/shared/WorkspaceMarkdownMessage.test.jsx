@@ -155,6 +155,25 @@ describe("WorkspaceMarkdownMessage", () => {
     });
   });
 
+  it("seeks and opens the transcript when clicking an AI summary image", () => {
+    const onSeek = vi.fn();
+    const onOpenTranscriptAtTime = vi.fn();
+
+    render(
+      <WorkspaceMarkdownMessage
+        content="画面说明\n\n[[IMG:00:05]]"
+        noteImageContext={{ seriesId: "series-1", videoId: "video-1", durationSeconds: 30 }}
+        onSeek={onSeek}
+        onOpenTranscriptAtTime={onOpenTranscriptAtTime}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "视频画面（00:05）" }));
+
+    expect(onSeek).toHaveBeenCalledWith({ seconds: 5 });
+    expect(onOpenTranscriptAtTime).toHaveBeenCalledWith({ seconds: 5 });
+  });
+
   it("renders model think tags as a collapsible thinking block", () => {
     render(
       <WorkspaceMarkdownMessage

@@ -285,7 +285,7 @@ function normalizeFrameKey(seconds) {
   return String(Math.round(seconds * 1000) / 1000).replace(/\.0+$/, "");
 }
 
-function NoteFrameImage({ src, alt, seconds, onSeek, ...props }) {
+function NoteFrameImage({ src, alt, seconds, onSeek, onOpenTranscriptAtTime, ...props }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">此处插图不可用：{formatImageTimestamp(seconds)} 的视频画面无法加载</p>;
@@ -293,11 +293,15 @@ function NoteFrameImage({ src, alt, seconds, onSeek, ...props }) {
   return (
     <button
       type="button"
-      onClick={() => onSeek?.({ seconds })}
-      className="group block w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 text-left dark:border-stone-800 dark:bg-stone-950"
+      onClick={() => {
+        const request = { seconds };
+        onSeek?.(request);
+        onOpenTranscriptAtTime?.(request);
+      }}
+      className="note-frame-trigger group block w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 text-left dark:border-stone-800 dark:bg-stone-950"
       title={`跳转到 ${formatImageTimestamp(seconds)}`}
     >
-      <img {...props} src={src} alt={alt} onError={() => setFailed(true)} className="aspect-video w-full object-cover transition-transform duration-200 group-hover:scale-[1.01]" />
+      <img {...props} src={src} alt={alt} onError={() => setFailed(true)} className="note-frame-image aspect-video w-full object-cover" />
     </button>
   );
 }
@@ -315,7 +319,7 @@ function replaceNoteImageMarkers(content, noteImageContext) {
   });
 }
 
-function MarkdownSegment({ content, citations, onOpenCitationReference, noteImageContext, onSeek }) {
+function MarkdownSegment({ content, citations, onOpenCitationReference, noteImageContext, onSeek, onOpenTranscriptAtTime }) {
   const normalizedCitations = normalizeCitations(citations);
   const renderedContent = injectCitationLinks(normalizeMathDelimiters(replaceNoteImageMarkers(content, noteImageContext)), normalizedCitations);
   const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
@@ -329,7 +333,7 @@ function MarkdownSegment({ content, citations, onOpenCitationReference, noteImag
             ? Number(title.slice("seek:".length))
             : NaN;
           if (Number.isFinite(seconds)) {
-            return <NoteFrameImage {...props} src={src} alt={alt} seconds={seconds} onSeek={onSeek} />;
+            return <NoteFrameImage {...props} src={src} alt={alt} seconds={seconds} onSeek={onSeek} onOpenTranscriptAtTime={onOpenTranscriptAtTime} />;
           }
           return <img {...props} src={src} alt={alt} />;
         },
@@ -370,7 +374,7 @@ function MarkdownSegment({ content, citations, onOpenCitationReference, noteImag
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCitationReference, noteImageContext = null, onSeek = null }) {
+export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCitationReference, noteImageContext = null, onSeek = null, onOpenTranscriptAtTime = null }) {
   const parts = splitThinkBlocks(content);
   return (
     <div className="flex flex-col gap-4">
@@ -385,6 +389,7 @@ export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCita
             onOpenCitationReference={onOpenCitationReference}
             noteImageContext={noteImageContext}
             onSeek={onSeek}
+            onOpenTranscriptAtTime={onOpenTranscriptAtTime}
           />
         )
       ))}

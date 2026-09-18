@@ -43,7 +43,16 @@ export function WorkspaceVideoScopePane({
       playerSeekRequest={shell.playerSeekRequest}
       citationFocus={shell.citationFocus}
       onSeek={(request) => {
-        shell.player.seekToTime(request);
+        if (shell.selectedVideo?.id && Number.isFinite(request?.seconds)) {
+          chat.openCitationReference?.({
+            videoId: shell.selectedVideo.id,
+            seconds: request.seconds,
+            endSeconds: request.endSeconds ?? request.seconds,
+            chapterTitle: request.chapterTitle ?? "",
+          });
+        } else {
+          shell.player.seekToTime(request);
+        }
         onExternalSeek?.(request);
       }}
       toolId={panelToolId}

@@ -432,6 +432,16 @@
     transform: translateX(2px);
   }
 
+  .note-frame-image {
+    transform: scale(1);
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .note-frame-trigger:hover .note-frame-image,
+  .note-frame-trigger:focus-visible .note-frame-image {
+    transform: scale(1.012);
+  }
+
   .motion-shimmer {
     position: relative;
     overflow: hidden;
@@ -528,6 +538,7 @@
   }
 
   .motion-arrow-shift,
+  .note-frame-image,
   .workspace-panel,
   .workspace-muted-panel,
   .workspace-toolbar-surface,
