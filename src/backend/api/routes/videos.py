@@ -591,7 +591,7 @@ def get_video_notes(series_id: str, video_id: str, container: ApiContainerDep) -
     """
     video_notes = container.get_video_notes.run(series_id, video_id)
     if video_notes is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return VideoNotesResponse.from_model(video_notes)
 
 
@@ -631,7 +631,7 @@ def create_video_note(
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     if note is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return VideoNoteResponse.from_model(note)
 
 
@@ -650,7 +650,7 @@ def generate_video_ai_note(
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     if note is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return VideoNoteResponse.from_model(note)
 
 
@@ -690,7 +690,7 @@ def update_video_note(
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     if container.get_video_source.run(series_id, video_id) is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     if note is None:
         raise HTTPException(status_code=404, detail=f"note not found '{note_id}'")
     return VideoNoteResponse.from_model(note)
@@ -719,7 +719,7 @@ def delete_video_note(
     """
     deleted = container.delete_video_note.run(series_id, video_id, note_id)
     if deleted is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     if deleted is False:
         raise HTTPException(status_code=404, detail=f"note not found '{note_id}'")
     return {"status": "deleted", "note_id": note_id}
@@ -742,7 +742,7 @@ def get_video_tools(series_id: str, video_id: str, container: ApiContainerDep) -
     """
     video_tools = container.get_video_workspace_tools.run(series_id, video_id)
     if video_tools is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return VideoWorkspaceToolsResponse.from_model(video_tools)
 
 
@@ -763,7 +763,7 @@ def preview_video(series_id: str, video_id: str, container: ApiContainerDep) -> 
     """
     source = container.get_video_source.run(series_id, video_id)
     if source is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     _ensure_source_media_available(source)
     return FileResponse(source.source_path)
 
@@ -818,7 +818,7 @@ async def generate_video_summary(
         snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
         if snapshot.status == "cancelled":
             raise HTTPException(status_code=409, detail="generation cancelled")
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     if processing_mode == "transcript":
         return {"series_id": series_id, "video_id": video_id, "status": "transcript_ready"}
     return video_summary.summary
@@ -868,7 +868,7 @@ async def upload_srt_and_generate_video_summary(
         snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
         if snapshot.status == "cancelled":
             raise HTTPException(status_code=409, detail="generation cancelled")
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return video_summary.summary
 
 
@@ -899,7 +899,7 @@ async def restore_automatic_transcript_and_generate_video_summary(
         snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
         if snapshot.status == "cancelled":
             raise HTTPException(status_code=409, detail="generation cancelled")
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return video_summary.summary
 
 
@@ -1640,7 +1640,7 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     """
     source = container.get_video_source.run(series_id, video_id)
     if source is None:
-        raise HTTPException(status_code=404, detail=f"video not found '{series_id}/{video_id}'")
+        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     return source
 
 

@@ -32,7 +32,7 @@ def execute_open_overview(call: OpenOverviewCall, context: AgentContext) -> Tool
     return ToolExecutionResult(
         tool_name=ToolName.OPEN_OVERVIEW,
         status="ok",
-        payload={"selected_tool": "overview"},
+        payload={},
     )
 
 
@@ -40,5 +40,5 @@ def execute_generate_overview(call: GenerateOverviewCall, context: AgentContext)
     return ToolExecutionResult(
         tool_name=ToolName.GENERATE_OVERVIEW,
         status="ok",
-        payload={"action": "generate_overview", "selected_tool": "overview"},
+        payload={"action": "generate_overview"},
     )

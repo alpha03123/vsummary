@@ -32,7 +32,7 @@ def execute_open_mindmap(call: OpenMindmapCall, context: AgentContext) -> ToolEx
     return ToolExecutionResult(
         tool_name=ToolName.OPEN_MINDMAP,
         status="ok",
-        payload={"selected_tool": "mindmap"},
+        payload={},
     )
 
 
@@ -40,5 +40,5 @@ def execute_generate_mindmap(call: GenerateMindmapCall, context: AgentContext) -
     return ToolExecutionResult(
         tool_name=ToolName.GENERATE_MINDMAP,
         status="ok",
-        payload={"selected_tool": "mindmap", "action": "generate_mindmap"},
+        payload={"action": "generate_mindmap"},
     )

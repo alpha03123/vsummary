@@ -417,7 +417,7 @@ class AgentChatContextRequest(BaseModel):
     """Agent 对话的上下文请求体。
 
     前端在发起对话前发送此请求，告知 Agent 当前用户在查看哪个系列/视频，
-    以及选中的工具类型。所有字段均为可选，允许渐进式传递上下文。
+    所有字段均为可选，允许渐进式传递上下文。
     """
 
     scope_type: str | None = None
@@ -425,7 +425,6 @@ class AgentChatContextRequest(BaseModel):
     series_title: str | None = None
     video_id: str | None = None
     video_title: str | None = None
-    selected_tool: str | None = None
 
 
 class ResolveBilibiliSeriesRequest(BaseModel):

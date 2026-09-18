@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, ArrowLeft, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
+import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 import { CopyToClipboardButton } from "./shared/CopyToClipboardButton";
@@ -17,7 +17,6 @@ export function WorkspaceChatPanel({
   activeSeries,
   selectedVideo,
   selectedContextType,
-  selectedToolId,
   chatMessages = [],
   chatSessions = [],
   activeSessionId = null,
@@ -30,7 +29,6 @@ export function WorkspaceChatPanel({
   onDraftChange,
   onSelectChatSession,
   onStartNewChat,
-  onBackToTools,
   onOpenSeekReference,
   onOpenCitationReference,
   onOpenSettings,
@@ -164,17 +162,14 @@ export function WorkspaceChatPanel({
   }
 
   return (
-    <div className="h-full w-full flex flex-col bg-transparent">
+    <div className="@container h-full w-full flex flex-col bg-transparent">
       {/* Header. Two lines were deleted here, both for the same reason — they
           restated information the user can already see elsewhere:
 
           1. The tool-name badge (`工具首页` / `AI概况` / …). It implied the
-             assistant knows which tool page you are on, but the backend never
-             reads it: `AgentContext.selected_tool` is written by
-             `agent.py::_build_agent_context_override` and then read by nobody,
-             and it appears in no prompt template. So the badge promised a
-             session awareness that does not exist, while the tool page itself
-             already shows the same name in its own header.
+             assistant knows which tool page you are on, but the panel-local
+             tool choice is intentionally not part of Agent 对话上下文。工具页
+             本身已经在自己的标题中展示名称，因此这层 badge 只会重复信息。
 
           2. The `基于《…》` subtitle. The left rail lists the active series and
              video with full titles; this line repeated the video title and then
@@ -188,40 +183,55 @@ export function WorkspaceChatPanel({
           the title 28px from the top while leaving the composer 44px from the
           bottom — the bottom gap was more than half again the top and the whole
           panel read as sinking. */}
-      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex items-center justify-between gap-6 px-6 pb-4 pt-3 border-b border-stone-200/80 dark:border-stone-800">
+      {/*
+        窄面板（320px 可达）下头部需要换策略，而不是继续挤。
+
+        `flex-wrap` 单独用是不够的：它只保证「放不下就换行」，但不保证换到哪。
+        实测宽度不足时，右侧「当前对话」切换器会跟左侧的预算胶囊撞进同一视觉行，
+        看起来就是两坨东西糊在一起 —— 比不换行还糟。
+
+        所以这里改成真正的两段式：
+          - 窄面板：`flex-col`，左列（胶囊 + 返回）和右列（切换器）各占满一行，互不重叠
+          - 宽面板（@[440px] 起）：恢复 `flex-row justify-between` 的左右并排
+
+        切换点取 440px —— 这是按各部件实测宽度算出来的，不是拍的：
+          左列 = 图标 36 + gap 12 + max(预算胶囊 94, 返回按钮 90) = 142px
+          右列 = 切换器 w-40 (160) + 新建按钮 40 + 边框 1        = 201px
+          加上 gap-x-3 (12) 和宽面板内边距 px-6*2 (48)           = 403px
+        也就是并排至少要 ~403px 才不挤，取 440px 留约 37px 余量。
+        （早先取 520px 过于保守，面板还宽着就提前换行了。） */}
+      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex flex-col gap-2.5 px-4 pb-3.5 pt-3.5 border-b border-stone-200/80 dark:border-stone-800 @[440px]:flex-row @[440px]:items-center @[440px]:justify-between @[440px]:gap-x-3 @[440px]:px-5 @[440px]:pb-4 @[440px]:pt-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="w-9 h-9 shrink-0 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
             <Sparkles size={16} className="text-accent" />
           </div>
-          {/* The budget pill sits above the title rather than beside the
+          {/* The budget pill sits above the back button rather than beside the
               switcher: it is passive status, so giving it its own line keeps it
               out of the control row's way, and it reads as a caption for the
-              whole panel instead of a label for the switcher. The two rows run
-              tight (`gap-0.5`) so the stacked identity block stays close to the
-              height of the control stack opposite it. */}
+              whole panel instead of a label for the switcher.
+
+              The `分析助手` title that used to sit on the second row is gone.
+              It restated what the panel already is — the drawer header above
+              says `AI 对话`, the input below says `向 AI 助手提问…`, and the
+              messages are visibly a conversation. Deleting it also removed the
+              row's only flex child, so the back button no longer competes for
+              width with a truncating title that carried no information. */}
           <div className="flex min-w-0 flex-col gap-0.5">
             <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
-            <div className="flex min-w-0 items-center gap-2">
-              {onBackToTools ? (
-                <button
-                  type="button"
-                  onClick={onBackToTools}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-semibold text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
-                >
-                  <ArrowLeft size={13} /> 返回工具页
-                </button>
-              ) : null}
-              <h3 className="min-w-0 truncate text-base font-bold leading-5 text-stone-800 dark:text-stone-100">分析助手</h3>
-            </div>
           </div>
         </div>
         {/* Right column: caption, then the switcher. The budget pill used to
-            share the caption row; it now lives above the title on the left, so
-            this column is just the label plus the control it labels. */}
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+            share the caption row; it now lives above the back button on the left,
+            so this column is just the label plus the control it labels.
+
+            窄面板下这一列 left-align 到自己的行上（原来是 items-end 靠右），
+            因为它已经独占一行了，再靠右反而和上一行的胶囊错开。 */}
+        <div className="flex shrink-0 flex-col items-start gap-1 @[440px]:items-end @[440px]:gap-1.5">
           {chatSessionOptions.length > 0 ? (
             <>
-              <span className="text-[10px] font-bold uppercase leading-none tracking-widest text-stone-400 dark:text-stone-500">
+              {/* 「对话管理」只是给切换器加的说明标签，窄面板下没有它切换器依然自明，
+                  优先让它消失以腾出横向空间。 */}
+              <span className="hidden text-[10px] font-bold uppercase leading-none tracking-widest text-stone-400 dark:text-stone-500 @[440px]:block">
                 对话管理
               </span>
               {/* Switcher + "new chat" share one bordered shell with an inset
@@ -236,7 +246,7 @@ export function WorkspaceChatPanel({
                   hideGroupLabels
                   align="end"
                   menuClassName="min-w-[14rem]"
-                  className="w-48 rounded-l-xl"
+                  className="w-40 rounded-l-xl @[440px]:w-48"
                   triggerVariant="bare"
                   leading={<MessagesSquare size={14} />}
                 />
@@ -319,8 +329,8 @@ export function WorkspaceChatPanel({
           this container instead, and vertical space was freed at the top (the
           header lost a line) to offset the gutter it needs. */}
       <div className={`relative z-0 min-h-0 flex-1 transition ${lockedContentClass}`}>
-        <div ref={chatHistoryRef} className="h-full overflow-auto px-6 py-5 md:px-8">
-          <div ref={threadRef} className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+        <div ref={chatHistoryRef} className="h-full overflow-auto px-4 py-4 @[440px]:px-6 @[440px]:py-5 md:@[440px]:px-8">
+          <div ref={threadRef} className="mx-auto flex w-full max-w-4xl flex-col gap-4 @[440px]:gap-6">
             {chatMessages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 mt-8">
             <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-6 border border-accent/20 shadow-sm">
@@ -385,7 +395,7 @@ export function WorkspaceChatPanel({
           hugging it. Header and composer now bracket the thread with the same
           optical rhythm. */}
       <div
-        className={`shrink-0 p-4 md:px-6 md:pb-5 md:pt-3 bg-transparent transition-all ${lockedContentClass}`}
+        className={`shrink-0 p-3 @[440px]:p-4 md:@[440px]:px-6 md:@[440px]:pb-5 md:@[440px]:pt-3 bg-transparent transition-all ${lockedContentClass}`}
       >
         <div className="max-w-4xl mx-auto relative flex items-end rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
@@ -402,7 +412,7 @@ export function WorkspaceChatPanel({
             /* `overflow-y-auto` draws a permanent scrollbar track in some
                browsers even at one line, so the box scrolls only once it is
                actually capped by `max-h-40`. */
-            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-5 py-3 text-[15px] leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500"
+            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-4 py-3 text-[15px] leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 @[440px]:px-5"
           rows={1}
             value={currentDraft}
             onChange={(event) => updateDraft(event.target.value)}
@@ -460,7 +470,7 @@ function ConversationMessage({ message, renderMessageContent }) {
   return (
     <div
       id={`chat-message-${message.id}`}
-      className={`flex items-start gap-4 max-w-2xl ${isAssistant ? "" : "self-end justify-end"}`}
+      className={`flex items-start gap-3 max-w-2xl @[440px]:gap-4 ${isAssistant ? "" : "self-end justify-end"}`}
     >
       {isAssistant ? (
         <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
@@ -476,18 +486,21 @@ function ConversationMessage({ message, renderMessageContent }) {
               ? "w-full"
               : isAssistant
                 ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
-                : "px-5 py-3 rounded-[1.5rem] rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm"
+                : "px-4 py-3 rounded-[1.5rem] rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm @[440px]:px-5"
           }
         >
           {renderMessageContent(message, isAssistant)}
         </div>
+        {/* 窄面板下这一行会被压到宽度不足，`复制` 按钮里的两个字被折成竖排
+            （复 / 制 各占一行），而 meta 文本也折成两行。两者都禁止换行：
+            文本允许截断，按钮整体不参与收缩。 */}
         <div className={`flex items-center gap-2 text-xs text-stone-500 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
-          <span>{message.meta}</span>
+          <span className="min-w-0 truncate">{message.meta}</span>
           {canCopy ? (
             <CopyToClipboardButton
               text={message.content}
               iconSize={12}
-              className="gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+              className="shrink-0 whitespace-nowrap gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
             />
           ) : null}
         </div>

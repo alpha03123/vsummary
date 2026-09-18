@@ -12,23 +12,7 @@ export function buildAgentChatContextPayload(library, selectedContextType, serie
     series_title: activeSeries?.title ?? null,
     video_id: selectedVideo?.id ?? null,
     video_title: selectedVideo?.title ?? null,
-    selected_tool: null,
   };
-}
-
-export function normalizeAgentToolId(toolId) {
-  if (
-    toolId === "series-overview" ||
-    toolId === "overview" ||
-    toolId === "cards" ||
-    toolId === "knowledge-cards" ||
-    toolId === "mindmap" ||
-    toolId === "notes" ||
-    toolId === "series-home"
-  ) {
-    return toolId;
-  }
-  return null;
 }
 
 export function normalizeAgentToolTraceStep(result) {
@@ -63,8 +47,6 @@ export function normalizeAgentToolTraceStep(result) {
       return createToolTraceStep(result.tool_name, "生成 AI 概况");
     case "generate_mindmap":
       return createToolTraceStep(result.tool_name, "生成思维导图");
-    case "save_note":
-      return createToolTraceStep(result.tool_name, "保存笔记", payload.note_title);
     case "get_video_transcript":
       return createToolTraceStep(
         result.tool_name,

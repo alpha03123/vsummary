@@ -51,8 +51,6 @@ class AgentContext(BaseModel):
         video_id: video scope 下的目标视频 ID；非 video scope
             时为 `None`。
         video_title: 视频标题；`video_id` 为 `None` 时为 `None`。
-        selected_tool: 用户当前在工作区侧栏选中的工具名（用于
-            在提示词中突出引导），未选中时为 `None`。
         overview: 系列概览制品的就绪状态。
         mindmap: 思维导图制品的就绪状态。
         knowledge_cards: 知识卡制品的就绪状态。
@@ -69,7 +67,6 @@ class AgentContext(BaseModel):
     series_title: str | None = None
     video_id: str | None = None
     video_title: str | None = None
-    selected_tool: str | None = None
     overview: ToolAvailability = Field(default_factory=ToolAvailability)
     mindmap: ToolAvailability = Field(default_factory=ToolAvailability)
     knowledge_cards: ToolAvailability = Field(default_factory=ToolAvailability)

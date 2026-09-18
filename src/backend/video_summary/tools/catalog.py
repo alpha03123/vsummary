@@ -12,7 +12,7 @@ from backend.video_summary.tools.library_info import (
     LIST_SERIES_VIDEOS_TOOL,
 )
 from backend.video_summary.tools.mindmap import GENERATE_MINDMAP_TOOL, OPEN_MINDMAP_TOOL
-from backend.video_summary.tools.notes import OPEN_KNOWLEDGE_CARDS_TOOL, OPEN_NOTES_TOOL, SAVE_NOTE_TOOL
+from backend.video_summary.tools.notes import OPEN_KNOWLEDGE_CARDS_TOOL, OPEN_NOTES_TOOL
 from backend.video_summary.tools.overview import GENERATE_OVERVIEW_TOOL, OPEN_OVERVIEW_TOOL
 from backend.video_summary.tools.series import OPEN_SERIES_HOME_TOOL, OPEN_SERIES_OVERVIEW_TOOL
 from backend.video_summary.tools.video import OPEN_VIDEO_TOOL, VIDEO_SEEK_TOOL
@@ -36,7 +36,6 @@ UI_ACTION_TOOL_DEFINITIONS: list[ToolDefinition] = [
     GENERATE_MINDMAP_TOOL,
     OPEN_VIDEO_TOOL,
     VIDEO_SEEK_TOOL,
-    SAVE_NOTE_TOOL,
 ]
 
 ALL_TOOL_DEFINITIONS: list[ToolDefinition] = [

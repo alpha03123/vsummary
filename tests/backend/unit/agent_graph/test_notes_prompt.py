@@ -13,7 +13,7 @@ class AiNotePromptTests(unittest.TestCase):
             template="tutorial",
         )
 
-        self.assertIn("笔记风格：教程", prompt)
+        self.assertIn("笔记风格：操作教程", prompt)
         self.assertIn("00:00 - 重点内容", prompt)
         self.assertIn("只输出最终 Markdown", prompt)
 

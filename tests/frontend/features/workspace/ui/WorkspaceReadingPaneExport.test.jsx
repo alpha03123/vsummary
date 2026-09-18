@@ -33,7 +33,7 @@ function renderPane(overrides = {}) {
       selectedVideo={overrides.selectedVideo === undefined ? selectedVideo : overrides.selectedVideo}
       selectedContextType={overrides.selectedContextType ?? "video"}
       selectedNode={null}
-      selectedToolId={overrides.selectedToolId ?? "overview"}
+      toolId={overrides.toolId ?? "overview"}
       selectedChapterId={null}
       toolsLoading={overrides.toolsLoading ?? false}
       summaryLoading={false}
@@ -83,7 +83,7 @@ describe("WorkspaceReadingPane markdown exports", () => {
   });
 
   it("disables knowledge card export before cards are generated", async () => {
-    renderPane({ selectedToolId: "knowledge-cards" });
+    renderPane({ toolId: "knowledge-cards" });
 
     expect(await screen.findByRole("button", { name: "导出" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: "知识卡片导出" })).toBeNull();
@@ -91,7 +91,7 @@ describe("WorkspaceReadingPane markdown exports", () => {
 
   it("enables notes export when the current video has notes", async () => {
     renderPane({
-      selectedToolId: "notes",
+      toolId: "notes",
       notes: {
         notes: [
           {
@@ -115,7 +115,7 @@ describe("WorkspaceReadingPane markdown exports", () => {
 
   it("disables notes export when there are no notes", async () => {
     renderPane({
-      selectedToolId: "notes",
+      toolId: "notes",
       notes: { notes: [] },
     });
 

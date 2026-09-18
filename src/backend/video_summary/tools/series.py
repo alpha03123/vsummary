@@ -32,7 +32,7 @@ def execute_open_series_home(call: OpenSeriesHomeCall, context: AgentContext) ->
     return ToolExecutionResult(
         tool_name=ToolName.OPEN_SERIES_HOME,
         status="ok",
-        payload={"selected_tool": "series-home"},
+        payload={},
     )
 
 
@@ -40,5 +40,5 @@ def execute_open_series_overview(call: OpenSeriesOverviewCall, context: AgentCon
     return ToolExecutionResult(
         tool_name=ToolName.OPEN_SERIES_OVERVIEW,
         status="ok",
-        payload={"selected_tool": "series-overview"},
+        payload={},
     )

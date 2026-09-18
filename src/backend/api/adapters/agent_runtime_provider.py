@@ -22,7 +22,7 @@ from backend.video_summary.infrastructure.config.settings import load_env_settin
 from backend.shared.llm.usage import LlmUsageRecorder
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.tool_executor import RegistryAgentToolExecutor
-from backend.video_summary.tools.notes import execute_open_notes, execute_save_note
+from backend.video_summary.tools.notes import execute_open_notes
 from backend.video_summary.tools.video import execute_video_seek
 
 
@@ -81,14 +81,10 @@ class LazyAgentRuntimeProvider:
                     answer_detail_level=app_settings.agent_context.answer_detail_level,
                     talk_custom_prompt=app_settings.agent_context.talk_custom_prompt,
                 )
-                video_action_planner = VideoActionPlanner(
-                    gateway=planner_gateway,
-                    note_length=app_settings.agent_context.note_length,
-                )
+                video_action_planner = VideoActionPlanner(gateway=planner_gateway)
                 tool_executor = RegistryAgentToolExecutor(
                     registry={
                         ToolName.OPEN_NOTES: execute_open_notes,
-                        ToolName.SAVE_NOTE: execute_save_note,
                         ToolName.VIDEO_SEEK: execute_video_seek,
                     }
                 )

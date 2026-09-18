@@ -3,7 +3,7 @@ import {
   loadAgentContextUsage,
   streamAgentChat,
 } from "./workspaceApi";
-import { buildAgentChatContextPayload, normalizeAgentToolId } from "./workspaceChatRuntime";
+import { buildAgentChatContextPayload } from "./workspaceChatRuntime";
 import { createNextChatSessionMeta, getChatSessionListForScope } from "./workspaceState";
 
 export function createWorkspaceChatActions({
@@ -242,13 +242,6 @@ export function createWorkspaceChatActions({
 
     const payload = event.payload?.payload ?? {};
 
-    if (payload.selected_tool) {
-      const nextToolId = normalizeAgentToolId(payload.selected_tool);
-      if (nextToolId) {
-        dispatch({ type: "tool_selected", toolId: nextToolId });
-      }
-    }
-
     if (typeof payload.seek_seconds === "number") {
       dispatch({
         type: "player_seek_requested",
@@ -269,17 +262,6 @@ export function createWorkspaceChatActions({
       void contentActions.onGenerateMindmap();
     }
 
-    if (
-      payload.action === "save_note" &&
-      typeof payload.note_title === "string" &&
-      typeof payload.note_content === "string"
-    ) {
-      await contentActions.onCreateNote({
-        title: payload.note_title,
-        content: payload.note_content,
-        source: typeof payload.note_source === "string" ? payload.note_source : "agent",
-      });
-    }
   }
 
   return {

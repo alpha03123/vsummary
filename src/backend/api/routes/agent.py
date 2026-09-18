@@ -267,7 +267,6 @@ def _build_agent_context_override(session_id: str, request_context) -> AgentCont
         series_title=request_context.series_title,
         video_id=request_context.video_id,
         video_title=request_context.video_title,
-        selected_tool=request_context.selected_tool,
     )
 
 

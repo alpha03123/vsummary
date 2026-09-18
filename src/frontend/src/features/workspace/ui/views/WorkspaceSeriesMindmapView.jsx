@@ -6,7 +6,6 @@ import { MindmapCanvas } from "../MindmapCanvas";
 import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { exportMindmapAsSVG } from "../mindmapSVGExport";
-import { useOutsidePointerUp } from "../../../../shared/lib/useOutsidePointerUp";
 
 export function WorkspaceSeriesMindmapView({
   seriesId,
@@ -20,10 +19,8 @@ export function WorkspaceSeriesMindmapView({
   mindmapGenerationProgress,
   theme,
 }) {
-  const [exportOpen, setExportOpen] = useState(false);
   const [maxDepth, setMaxDepth] = useState(null);
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
-  const exportRef = useRef(null);
   const markmapRef = useRef(null);
 
   useEffect(() => {
@@ -46,7 +43,6 @@ export function WorkspaceSeriesMindmapView({
     return () => window.clearInterval(timer);
   }, [mindmapGenerationProgress]);
 
-  useOutsidePointerUp(exportOpen, [exportRef], () => setExportOpen(false));
 
   if (seriesMindmapLoading) {
     return (
@@ -139,21 +135,15 @@ export function WorkspaceSeriesMindmapView({
       <button type="button" onClick={() => onGenerateSeriesMindmap(maxDepth)} disabled={generatingSeriesMindmap} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
         <RefreshCw size={14} strokeWidth={2} className={generatingSeriesMindmap ? "animate-spin" : ""} />{generatingSeriesMindmap ? `正在生成 · ${Math.round(liveElapsedSeconds)}s` : "重新生成"}
       </button>
-      <div className="relative" ref={exportRef}>
-        <button type="button" onClick={() => setExportOpen(!exportOpen)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent"><Download size={14} strokeWidth={2} />导出</button>
-        {exportOpen ? (
-          <div className="absolute right-0 top-full z-20 mt-1 min-w-[130px] rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:bg-neutral-900">
-            <a href={`/api/series/${encodeURIComponent(seriesId)}/mindmap/export?format=md`} download className="block px-4 py-2 text-xs text-stone-700 hover:bg-stone-50 dark:text-zinc-300 dark:hover:bg-neutral-800" onClick={() => setExportOpen(false)}>Markdown (.md)</a>
-            <a href={`/api/series/${encodeURIComponent(seriesId)}/mindmap/export?format=html`} download className="block px-4 py-2 text-xs text-stone-700 hover:bg-stone-50 dark:text-zinc-300 dark:hover:bg-neutral-800" onClick={() => setExportOpen(false)}>HTML (.html)</a>
-            <button type="button" className="block w-full px-4 py-2 text-left text-xs text-stone-700 hover:bg-stone-50 dark:text-zinc-300 dark:hover:bg-neutral-800" onClick={() => { setExportOpen(false); markmapRef.current && exportMindmapAsSVG(markmapRef.current, `series-mindmap-${seriesId}.svg`); }}>SVG (.svg)</button>
-          </div>
-        ) : null}
-      </div>
+      <button type="button" className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `series-mindmap-${seriesId}.svg`)}><Download size={14} strokeWidth={2} />导出 SVG</button>
     </div>
   );
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-3 flex justify-end">{actionBar}</div>
+      {/* 与 WorkspaceMindmapView 保持一致：分隔线 + 上间距，避免工具条贴住工具页头造成「错位感」。 */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200/70 pt-3 dark:border-white/5">
+        {actionBar}
+      </div>
       <div className="workspace-elevated-panel relative min-h-0 flex-1 w-full overflow-hidden rounded-3xl border outline-dashed outline-1 outline-offset-4 outline-stone-200 dark:outline-stone-800">
         <MindmapCanvas root={seriesMindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} theme={theme} />
       </div>

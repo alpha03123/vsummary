@@ -112,10 +112,6 @@ export function useWorkspaceController() {
     dispatch({ type: "series_context_selected" });
   }
 
-  function onSelectTool(toolId) {
-    dispatch({ type: "tool_selected", toolId });
-  }
-
   function onFocusNode(node) {
     const chapterId = findChapterForNode(state.summary?.chapters ?? [], node)?.id ?? null;
     dispatch({
@@ -123,6 +119,20 @@ export function useWorkspaceController() {
       nodeId: node.id,
       chapterId,
     });
+
+    // 复用 citation 的定位通道：让已经打开的「AI 概况」卡片滚动到对应章节与转写段落。
+    // 仅在视频作用域下发 —— 系列导图的节点时间分属各个视频，用当前视频的概况去匹配会跳错章节。
+    if (state.selectedContextType === "video") {
+      dispatch({
+        type: "citation_focus_requested",
+        focus: {
+          seconds: node.start_seconds,
+          endSeconds: node.end_seconds,
+          chapterId,
+          requestId: `${Date.now()}-${node.id}`,
+        },
+      });
+    }
 
     onSeekToTime({
       seconds: node.start_seconds,
@@ -229,7 +239,6 @@ export function useWorkspaceController() {
     onEnterLibraryHome,
     onSelectVideo,
     onSelectSeriesContext,
-    onSelectTool,
     onFocusNode,
     onSubmitChat: chatActions.onSubmitChat,
     onCancelChat: chatActions.onCancelChat,

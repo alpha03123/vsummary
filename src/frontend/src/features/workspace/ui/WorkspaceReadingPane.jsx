@@ -2,7 +2,8 @@ import { lazy, Suspense } from "react";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceToolGrid } from "./shared/WorkspaceToolGrid";
-import { WorkspaceExportMenu, WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
+import { WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
+import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
 import {
   SERIES_TOOL_TILES,
   SERIES_STUDIO_TOOL_TILES,
@@ -80,7 +81,7 @@ export function WorkspaceReadingPane({
   previewUrl,
   playerSeekRequest,
   citationFocus,
-  selectedToolId,
+  toolId,
   selectedChapterId,
   summaryLoading,
   mindmapLoading,
@@ -116,16 +117,17 @@ export function WorkspaceReadingPane({
   onUploadSrt,
   onRestoreAutomaticTranscript,
   onPanelSelectTool = null,
+  embeddedInStudioPanel = false,
 }) {
-  const isStudioHome = selectedToolId === "studio";
-  const isSeriesHome = selectedToolId === "series-home";
-  const isMindmapTool = selectedToolId === "mindmap" || selectedToolId === "series-mindmap";
+  const isStudioHome = toolId === "studio";
+  const isSeriesHome = toolId === "series-home";
+  const isMindmapTool = toolId === "mindmap" || toolId === "series-mindmap";
   const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
-  const currentToolMeta = resolveToolMeta(selectedToolId);
+  const currentToolMeta = resolveToolMeta(toolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
   const previewSubtitleSource = tools?.preview?.subtitleUrl ?? null;
   const toolHeaderBadge = resolveSeriesOverviewBadge({
-    selectedToolId,
+    toolId,
     activeSeries,
     seriesOverviewSummariesByVideoId,
     seriesOverviewLoading,
@@ -133,8 +135,10 @@ export function WorkspaceReadingPane({
   const sourceMissing = selectedVideo?.status === "source_missing";
 
   return (
-    <section className="relative flex h-full w-full flex-col bg-transparent">
-      <div className={`flex flex-1 flex-col gap-5 p-6 ${isMindmapTool ? "overflow-hidden" : "overflow-auto"}`}>
+    <section className="@container relative flex h-full w-full flex-col bg-transparent">
+      {/* 面板宽度是拖拽的（最小 320px），字号与间距都比视口更早到临界点：
+          这里按容器宽度整体收一档，否则窄面板下每层留白叠加起来要拉很长才换行。 */}
+      <div className={`flex flex-1 flex-col gap-3 p-4 @[480px]:gap-5 @[480px]:p-6 ${isMindmapTool ? "overflow-hidden" : "overflow-auto"}`}>
         {!activeSeries ? (
           <WorkspaceStateBlock
             title="等待系列"
@@ -142,9 +146,9 @@ export function WorkspaceReadingPane({
             dashed
           />
         ) : (
-          <div key={`${selectedContextType}:${selectedToolId}:${selectedVideo?.id ?? activeSeries.id}`} className="motion-fade-scale flex h-full min-h-0 flex-col">
-            {!(isStudioHome && onPanelSelectTool) ? (
-              <header className="mb-5 flex shrink-0 flex-col gap-5 border-b border-stone-200/80 pb-5 dark:border-white/5">
+          <div key={`${selectedContextType}:${toolId}:${selectedVideo?.id ?? activeSeries.id}`} className="motion-fade-scale flex h-full min-h-0 flex-col">
+            {!embeddedInStudioPanel && !(isStudioHome && onPanelSelectTool) ? (
+              <header className="mb-3 flex shrink-0 flex-col gap-3 border-b border-stone-200/80 pb-3 dark:border-white/5 @[480px]:mb-5 @[480px]:gap-5 @[480px]:pb-5">
               {isStudioHome ? (
                 <WorkspaceHomeHeader
                   eyebrow="Studio"
@@ -163,11 +167,11 @@ export function WorkspaceReadingPane({
                   meta={currentToolMeta}
                   badge={toolHeaderBadge}
                   onBack={() => onSelectTool(selectedContextType === "series" ? "series-home" : "studio")}
-                  exportActions={buildExportActions({
+                  exportActions={buildWorkspaceToolExportActions({
                     activeSeries,
                     notes,
                     summary,
-                    selectedToolId,
+                    toolId,
                     selectedVideo,
                     tools,
                   })}
@@ -187,7 +191,7 @@ export function WorkspaceReadingPane({
                       <WorkspaceSeriesHomeView activeSeries={activeSeries} />
                     </div>
                   ) : null}
-                  {selectedToolId === "series-mindmap" ? (
+                  {toolId === "series-mindmap" ? (
                     <WorkspaceSeriesMindmapView
                       seriesId={activeSeries.id}
                       seriesMindmap={seriesMindmap}
@@ -201,7 +205,7 @@ export function WorkspaceReadingPane({
                       theme={ui?.theme}
                     />
                   ) : null}
-                  {selectedToolId === "series-overview" ? (
+                  {toolId === "series-overview" ? (
                     <WorkspaceSeriesOverviewView
                       activeSeries={activeSeries}
                       ui={ui}
@@ -239,7 +243,7 @@ export function WorkspaceReadingPane({
                       )}
                     </div>
                   ) : null}
-                  {selectedToolId === "overview" ? (
+                  {toolId === "overview" ? (
                     <WorkspaceOverviewView
                       ui={ui}
                       tools={tools}
@@ -261,7 +265,7 @@ export function WorkspaceReadingPane({
                       onRestoreAutomaticTranscript={onRestoreAutomaticTranscript}
                     />
                   ) : null}
-                  {selectedToolId === "mindmap" ? (
+                  {toolId === "mindmap" ? (
                     <WorkspaceMindmapView
                       tools={tools}
                       mindmap={mindmap}
@@ -276,7 +280,7 @@ export function WorkspaceReadingPane({
                       theme={ui?.theme}
                     />
                   ) : null}
-                  {selectedToolId === "knowledge-cards" ? (
+                  {toolId === "knowledge-cards" ? (
                     <WorkspaceKnowledgeCardsView
                       tools={tools}
                       knowledgeCards={knowledgeCards}
@@ -287,19 +291,20 @@ export function WorkspaceReadingPane({
                       onClearKnowledgeCardsFeedback={onClearKnowledgeCardsFeedback}
                     />
                   ) : null}
-                  {selectedToolId === "notes" ? (
+                  {toolId === "notes" ? (
                     <WorkspaceNotesView
                       notes={notes}
                       notesLoading={notesLoading}
                       savingNote={savingNote}
                       generatingAiNote={generatingAiNote}
+                      canGenerateAiNote={!(selectedVideo?.isLinked === true || selectedVideo?.status === "linked")}
                       onGenerateAiNote={onGenerateAiNote}
                       onCreateNote={onCreateNote}
                       onUpdateNote={onUpdateNote}
                       onDeleteNote={onDeleteNote}
                     />
                   ) : null}
-                  {selectedToolId === "preview" ? (
+                  {toolId === "preview" ? (
                     <WorkspacePreviewView previewSource={previewSource} previewSubtitleSource={previewSubtitleSource} previewSeekRequest={playerSeekRequest} />
                   ) : null}
               </Suspense>
@@ -346,12 +351,12 @@ function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount,
 }
 
 function resolveSeriesOverviewBadge({
-  selectedToolId,
+  toolId,
   activeSeries,
   seriesOverviewSummariesByVideoId,
   seriesOverviewLoading,
 }) {
-  if (selectedToolId !== "series-overview" || seriesOverviewLoading) {
+  if (toolId !== "series-overview" || seriesOverviewLoading) {
     return null;
   }
   const videos = activeSeries?.videos ?? [];
@@ -362,116 +367,6 @@ function resolveSeriesOverviewBadge({
   return `${generated} / ${videos.length} 视频概况`;
 }
 
-function buildExportActions({ activeSeries, notes, summary, selectedToolId, selectedVideo, tools }) {
-  if (!activeSeries || !selectedVideo) {
-    return [];
-  }
-  if (selectedToolId === "overview") {
-    const overviewGenerated = tools?.overview?.generated === true;
-    const screenshotsGenerated = Array.isArray(summary?.chapters) && summary.chapters.some((chapter) => chapter.image_url);
-    return [
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"),
-        enabled: overviewGenerated,
-        label: "概况导出",
-        disabledReason: "AI 概况生成后才能导出",
-      },
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary-with-screenshots.zip"),
-        enabled: screenshotsGenerated,
-        label: "概况与截图导出",
-        disabledReason: "AI 概况和章节截图生成后才能导出",
-      },
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"),
-        enabled: overviewGenerated,
-        label: "转写导出",
-        disabledReason: "AI 概况生成后才能导出",
-      },
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "subtitles.srt"),
-        enabled: selectedVideo.hasTranscript === true,
-        label: "SRT 字幕导出",
-        disabledReason: "获取字幕后才能导出",
-      },
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"),
-        enabled: overviewGenerated,
-        label: "混合导出",
-        disabledReason: "AI 概况生成后才能导出",
-      },
-    ];
-  }
-  if (selectedToolId === "knowledge-cards") {
-    return [
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "knowledge-cards"),
-        enabled: tools?.knowledgeCards?.generated === true,
-        label: "知识卡片导出",
-        disabledReason: "知识卡片生成后才能导出",
-      },
-    ];
-  }
-  if (selectedToolId === "notes") {
-    return [
-      {
-        href: videoExportUrl(activeSeries.id, selectedVideo.id, "notes"),
-        enabled: Boolean(notes?.notes?.length),
-        label: "笔记导出",
-        disabledReason: "有笔记后才能导出",
-      },
-    ];
-  }
-  if (selectedToolId === "preview") {
-    return [
-      {
-        href: videoSourceExportUrl(activeSeries.id, selectedVideo.id),
-        enabled: tools?.preview?.available === true,
-        label: "视频导出",
-        disabledReason: "视频源存在后才能导出",
-      },
-    ];
-  }
-  return [];
-}
-
-function buildSeriesExportActions(activeSeries) {
-  if (!activeSeries) {
-    return [];
-  }
-  return [
-    {
-      href: seriesExportUrl(activeSeries.id, "mixed"),
-      enabled: true,
-      label: "AI 概括混合导出",
-    },
-    {
-      href: seriesExportUrl(activeSeries.id, "knowledge-cards"),
-      enabled: true,
-      label: "知识卡片导出",
-    },
-    {
-      href: seriesExportUrl(activeSeries.id, "mindmaps"),
-      enabled: true,
-      label: "导图导出",
-    },
-  ];
-}
-
-function videoExportUrl(seriesId, videoId, exportName) {
-  if (exportName.endsWith(".zip") || exportName.endsWith(".srt")) {
-    return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}`;
-  }
-  return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;
-}
-
-function seriesExportUrl(seriesId, exportName) {
-  return `/api/series/${encodeURIComponent(seriesId)}/exports/${exportName}.zip`;
-}
-
-function videoSourceExportUrl(seriesId, videoId) {
-  return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/video`;
-}
 function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">

@@ -21,7 +21,7 @@ class AgentStreamErrorTests(unittest.TestCase):
             response = client.post(
                 "/api/agent/chat/stream",
                 json={
-                    "session_id": "video|series-1|video-1|studio",
+                    "session_id": "video|series-1|video-1",
                     "message": "总结一下",
                     "context": {"scope_type": "video", "series_id": "series-1", "video_id": "video-1"},
                 },
@@ -39,7 +39,7 @@ class AgentStreamErrorTests(unittest.TestCase):
             response = client.post(
                 "/api/agent/chat",
                 json={
-                    "session_id": "video|series-1|video-1|studio",
+                    "session_id": "video|series-1|video-1",
                     "message": "总结一下",
                     "context": {"scope_type": "video", "series_id": "series-1", "video_id": "video-1"},
                 },
@@ -56,7 +56,7 @@ class AgentStreamErrorTests(unittest.TestCase):
             response = client.post(
                 "/api/agent/chat",
                 json={
-                    "session_id": "video|series-1|video-1|studio",
+                    "session_id": "video|series-1|video-1",
                     "message": "联网查一下",
                     "context": {"scope_type": "video", "series_id": "series-1", "video_id": "video-1"},
                 },
@@ -76,7 +76,7 @@ class AgentStreamErrorTests(unittest.TestCase):
             response = client.post(
                 "/api/agent/chat/stream",
                 json={
-                    "session_id": "video|series-1|video-1|studio",
+                    "session_id": "video|series-1|video-1",
                     "message": "联网查一下",
                     "context": {"scope_type": "video", "series_id": "series-1", "video_id": "video-1"},
                 },

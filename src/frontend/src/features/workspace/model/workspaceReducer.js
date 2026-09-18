@@ -514,7 +514,6 @@ export function workspaceReducer(state, action) {
         selectedSeriesId: action.seriesId,
         selectedVideoId: null,
         selectedContextType: "series",
-        selectedToolId: "series-home",
         summary: null,
         mindmap: null,
         knowledgeCards: null,
@@ -543,7 +542,6 @@ export function workspaceReducer(state, action) {
         selectedSeriesId: PLAYGROUND_SERIES_ID,
         selectedVideoId: null,
         selectedContextType: "playground",
-        selectedToolId: "studio",
         tools: null,
         summary: null,
         mindmap: null,
@@ -588,7 +586,6 @@ export function workspaceReducer(state, action) {
         selectedSeriesId: action.seriesId,
         selectedVideoId: action.videoId,
         selectedContextType: "video",
-        selectedToolId: "studio",
         tools: null,
         summary: null,
         mindmap: null,
@@ -614,14 +611,6 @@ export function workspaceReducer(state, action) {
         contextUsageLoading: false,
       };
     }
-    case "tool_selected":
-      return {
-        ...state,
-        selectedToolId: action.toolId,
-        citationFocus: null,
-        knowledgeCardsFeedback: action.toolId === "knowledge-cards" ? state.knowledgeCardsFeedback : null,
-        error: "",
-      };
     case "citation_focus_requested":
       return {
         ...state,
@@ -630,7 +619,6 @@ export function workspaceReducer(state, action) {
     case "overview_opened_at_time":
       return {
         ...state,
-        selectedToolId: "overview",
         citationFocus: {
           seconds: action.seconds,
           requestId: action.requestId,
@@ -650,7 +638,6 @@ export function workspaceReducer(state, action) {
         ...state,
         selectedContextType: "series",
         selectedVideoId: null,
-        selectedToolId: "series-home",
         tools: null,
         summary: null,
         mindmap: null,

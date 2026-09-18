@@ -16,9 +16,9 @@ describe("loadAgentSessionRecovery", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        session_id: "series|series-1|series-home",
+        session_id: "series|series-1",
         restored: true,
-        memory_key: "series|series-1|series-home",
+        memory_key: "series|series-1",
         updated_at: "2026-05-15T00:00:00Z",
         message_count: 2,
         messages: [
@@ -53,7 +53,7 @@ describe("loadAgentSessionRecovery", () => {
       }),
     })));
 
-    const recovery = await loadAgentSessionRecovery("series|series-1|series-home", null);
+    const recovery = await loadAgentSessionRecovery("series|series-1", null);
 
     expect(recovery.messages[1].citations).toEqual([
       {

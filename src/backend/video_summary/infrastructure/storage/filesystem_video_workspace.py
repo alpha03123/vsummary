@@ -220,7 +220,9 @@ class FileSystemVideoWorkspace:
                 return VideoSourceDTO(
                     series_id=series_id,
                     video_id=video_id,
-                    title=self._read_video_title(series_id, video_id) or video_path.stem,
+                    title=self._read_video_title(series_id, video_id)
+                    or self._find_linked_video_title(series_id, video_id)
+                    or video_path.stem,
                     source_name=video_path.name,
                     source_type=_source_type_for_path(video_path),
                     source_path=video_path,
@@ -228,6 +230,31 @@ class FileSystemVideoWorkspace:
                     processed=(output_dir / "summary.json").exists(),
                 )
         return self._get_external_video_source(series_id, video_id)
+
+    def _find_linked_video_title(self, series_id: str, video_id: str) -> str | None:
+        """在 `linked_series.json` 中按来源 ID 查出该视频的采集标题。
+
+        本地媒体文件的 stem 通常是平台视频 ID（例如 `BV...`），直接拿它当标题
+        既不可读也无法作为"视频标题"使用；这里回退到采集阶段保存的真实标题。
+
+        Args:
+            series_id: 所属系列 ID。
+            video_id: 视频 ID，与 `linked_series.json` 中的 `source_id`
+                （多分 P 时追加 `_p<item_index>`）对应。
+
+        Returns:
+            命中的标题字符串；无关联元数据或标题为空时返回 `None`。
+        """
+        linked = self.get_linked_series(series_id)
+        if linked is None:
+            return None
+        for video in linked.videos:
+            expected_video_id = (
+                video.source_id if video.item_index <= 1 else f"{video.source_id}_p{video.item_index}"
+            )
+            if expected_video_id == video_id:
+                return video.title.strip() or None
+        return None
 
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
         """读取视频总结 JSON 并把对应章节的转写片段附加到 chapters 上。
@@ -358,7 +385,9 @@ class FileSystemVideoWorkspace:
             return None
 
         payload = json.loads(transcript_path.read_text(encoding="utf-8"))
-        title = str(payload.get("title", video.title)).strip() or video.title
+        stored_title = str(payload.get("title", "")).strip()
+        # 历史制品的 title 可能退化成媒体文件名（平台视频 ID），此时改用视频源标题。
+        title = stored_title if stored_title and stored_title != video_id else video.title
         return VideoTranscriptDTO(
             series_id=series_id,
             video_id=video_id,

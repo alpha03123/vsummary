@@ -31,14 +31,12 @@ from backend.agent.schemas.chat_stream import ChatCompletionStreamChunk
 from backend.agent.schemas.action_plan import ScopeType
 from backend.agent.schemas.tool_calls import (
     OpenNotesCall,
-    SaveNoteCall,
     ToolName,
     VideoSeekCall,
 )
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot
 from backend.agent.session.store import FileAgentSessionStore
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
-from backend.video_summary.tools.notes import execute_save_note
 from backend.video_summary.tools.notes import execute_open_notes
 from backend.video_summary.tools.video import execute_video_seek
 from backend.agent_graph.actions.video_action_planner import (
@@ -47,7 +45,6 @@ from backend.agent_graph.actions.video_action_planner import (
 )
 from backend.api.schemas.responses import AgentChatResponse
 from backend.shared.llm.json_mode import validate_json_response
-from backend.video_summary.tools.notes import SAVE_NOTE_TOOL
 from backend.video_summary.library.models import (
     LibrarySeriesDTO,
     LibraryVideoCardDTO,
@@ -176,7 +173,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         result = graph.invoke(
             {
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "scope_type": "series",
                 "series_id": "series-1",
                 "video_id": "",
@@ -257,7 +254,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         result = graph.invoke(
             {
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "scope_type": "series",
                 "series_id": "series-1",
                 "video_id": "",
@@ -294,7 +291,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         result = graph.invoke(
             {
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "scope_type": "series",
                 "series_id": "series-1",
                 "video_id": "",
@@ -321,7 +318,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         result = graph.invoke(
             {
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "scope_type": "series",
                 "series_id": "series-1",
                 "video_id": "",
@@ -348,7 +345,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         result = graph.invoke(
             {
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "scope_type": "series",
                 "series_id": "series-1",
                 "video_id": "",
@@ -375,7 +372,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "联网搜索失败：Request timed out"):
             graph.invoke(
                 {
-                    "session_id": "series|series-1|series-home",
+                    "session_id": "series|series-1",
                     "scope_type": "series",
                     "series_id": "series-1",
                     "video_id": "",
@@ -389,7 +386,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         turn = builder.build(
             context=AgentContext(
-                session_id="series|series-1|series-home",
+                session_id="series|series-1",
                 scope_type=ScopeType.SERIES.value,
                 series_id="series-1",
             ),
@@ -413,7 +410,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
-                    session_id="series|series-1|series-home",
+                    session_id="series|series-1",
                     scope_type=ScopeType.SERIES.value,
                     series_id="series-1",
                 )
@@ -427,7 +424,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         )
 
         turn = service.run_turn(
-            session_id="series|series-1|series-home",
+            session_id="series|series-1",
             user_message="这个系列讲了啥",
             debug_trace=debug_trace,
         )
@@ -444,9 +441,9 @@ class SeriesScopeContractTests(unittest.TestCase):
         recorder = AgentGraphSessionRecorder(session_store=store)
 
         recorder.persist_turn(
-            session_id="series|series-1|series-home",
+            session_id="series|series-1",
             context=AgentContext(
-                session_id="series|series-1|series-home",
+                session_id="series|series-1",
                 scope_type=ScopeType.SERIES.value,
                 series_id="series-1",
             ),
@@ -464,13 +461,12 @@ class SeriesScopeContractTests(unittest.TestCase):
             store = FileAgentSessionStore(Path(temp_dir))
 
             store.append_turn(
-                session_id="series|series-1|series-home",
-                memory_key="series|series-1|series-home",
-                context=AgentContext(
-                    session_id="series|series-1|series-home",
-                    scope_type=ScopeType.SERIES.value,
-                    series_id="series-1",
-                    selected_tool="series-home",
+            session_id="series|series-1",
+            memory_key="series|series-1",
+            context=AgentContext(
+                session_id="series|series-1",
+                scope_type=ScopeType.SERIES.value,
+                series_id="series-1",
                 ),
                 messages=[
                     AgentChatMessage(role="user", content="这个系列讲什么？"),
@@ -488,7 +484,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertNotIn("evidence_entries", payload)
 
     def test_graph_input_builder_uses_persisted_messages_as_memory_messages(self) -> None:
-        session_id = "video|series-1|video-1|overview"
+        session_id = "video|series-1|video-1"
         store = FakeSnapshotStore(
             AgentSessionSnapshot(
                 session_id=session_id,
@@ -498,7 +494,6 @@ class SeriesScopeContractTests(unittest.TestCase):
                     scope_type=ScopeType.VIDEO.value,
                     series_id="series-1",
                     video_id="video-1",
-                    selected_tool="overview",
                 ),
                 messages=[
                     AgentSessionMessageEntry(role="system", content="更早对话摘要：用户关注 embedding。", created_at="t1"),
@@ -515,7 +510,6 @@ class SeriesScopeContractTests(unittest.TestCase):
                     scope_type=ScopeType.VIDEO.value,
                     series_id="series-1",
                     video_id="video-1",
-                    selected_tool="overview",
                 )
             ),
             session_store=store,
@@ -540,7 +534,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertNotIn("evidence_history", bundle.payload)
 
     def test_session_recorder_replaces_messages_with_compacted_summary(self) -> None:
-        session_id = "series|series-1|series-home"
+        session_id = "series|series-1"
         store = FakeSnapshotStore(
             AgentSessionSnapshot(
                 session_id=session_id,
@@ -583,7 +577,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         self.assertNotIn("tool_results", store.last_append)
 
     def test_session_recorder_persists_assistant_citations_with_message(self) -> None:
-        session_id = "series|series-1|series-home"
+        session_id = "series|series-1"
         store = FakeSnapshotStore(None)
         recorder = AgentGraphSessionRecorder(session_store=store)
 
@@ -660,7 +654,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         turn = builder.build(
             context=AgentContext(
-                session_id="series|series-1|series-home",
+                session_id="series|series-1",
                 scope_type=ScopeType.SERIES.value,
                 series_id="series-1",
             ),
@@ -699,7 +693,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         turn = builder.build(
             context=AgentContext(
-                session_id="series|series-1|series-home",
+                session_id="series|series-1",
                 scope_type=ScopeType.SERIES.value,
                 series_id="series-1",
             ),
@@ -791,40 +785,6 @@ class SeriesScopeContractTests(unittest.TestCase):
         source_types = [item["source_type"] for item in answer.last_retrieval_results]
         self.assertEqual(source_types, ["summary_global", "transcript_chunk"])
 
-    def test_video_scope_executes_save_note_action_from_context_evidence(self) -> None:
-        workspace = FakeVideoWorkspace(
-            transcript_text="这里说明 RAG 先读取视频概况，再按问题检索转写片段。",
-        )
-        planner = FakeVideoActionPlanner(
-            [
-                SaveNoteCall(
-                    note_title="RAG 检索流程",
-                    note_content="先读取视频概况，再按问题检索转写片段。",
-                )
-            ]
-        )
-        answer = FakeVideoAnswerProgram()
-        graph = build_agent_graph(
-            retrieval_service=ExplodingRetriever(),
-            answer_program=answer,
-            workspace=workspace,
-            video_action_planner=planner,
-            tool_executor=RegistryAgentToolExecutor(
-                registry={ToolName.SAVE_NOTE: execute_save_note}
-            ),
-            context_window_tokens=10_000,
-            reserved_output_tokens=100,
-        )
-
-        result = graph.invoke(video_graph_input("帮我记一下 RAG 检索流程"))
-
-        self.assertEqual(planner.last_retrieval_results[0]["source_type"], "summary_global")
-        self.assertEqual(result["tool_results"][0]["tool_name"], "save_note")
-        self.assertEqual(result["tool_results"][0]["payload"]["action"], "save_note")
-        self.assertEqual(result["tool_results"][0]["payload"]["note_title"], "RAG 检索流程")
-        self.assertNotEqual(result["tool_results"][0]["tool_name"], "get_video_transcript")
-        self.assertEqual(answer.last_meta_state["action_summary"], "video action completed")
-
     def test_video_scope_executes_video_seek_action_from_transcript_hit(self) -> None:
         workspace = FakeVideoWorkspace(transcript_text="超长转录 " * 200)
         retriever = FakeTranscriptRetriever()
@@ -874,42 +834,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         result = graph.invoke(video_graph_input("打开笔记"))
 
         self.assertEqual(result["tool_results"][0]["tool_name"], "open_notes")
-        self.assertEqual(result["tool_results"][0]["payload"]["selected_tool"], "notes")
-
-    def test_video_action_planner_uses_tool_schema_contracts(self) -> None:
-        gateway = FakeVideoActionGateway()
-        planner = VideoActionPlanner(gateway=gateway)
-
-        plan = planner.run(
-            user_message="帮我记一下 RAG 检索流程",
-            retrieval_results=[
-                {
-                    "source_type": "transcript_chunk",
-                    "source_family": "transcript",
-                    "title": "Video 1",
-                    "start_seconds": 12.0,
-                    "end_seconds": 18.0,
-                    "text": "RAG 先读取视频概况，再按问题检索转写片段。",
-                    "snippet": "RAG 先读取视频概况，再按问题检索转写片段。",
-                }
-            ],
-        )
-
-        self.assertIsInstance(plan.tool_calls[0], SaveNoteCall)
-        self.assertEqual(plan.tool_calls[0].note_title, "RAG 检索流程")
-        self.assertEqual(plan.tool_calls[0].note_content, "先读取视频概况，再按问题检索转写片段。")
-        self.assertIn(SAVE_NOTE_TOOL.description, gateway.messages[0].content)
-        self.assertIn("`note_content`：支持 Markdown 的笔记正文", gateway.messages[0].content)
-
-    def test_video_action_planner_payload_schema_avoids_openai_unsupported_one_of(self) -> None:
-        schema = VideoActionPlannerPayload.model_json_schema()
-        serialized_schema = json.dumps(schema)
-
-        self.assertNotIn('"oneOf"', serialized_schema)
-        self.assertEqual(
-            schema["$defs"]["PlannedVideoToolCall"]["properties"]["tool_name"]["enum"],
-            ["open_notes", "save_note", "video_seek"],
-        )
+        self.assertEqual(result["tool_results"][0]["payload"], {})
 
     def test_stream_with_context_streams_deferred_series_answer_from_gateway(self) -> None:
         synthesizer = FakeDeferredSeriesAnswerSynthesizer()
@@ -923,7 +848,7 @@ class SeriesScopeContractTests(unittest.TestCase):
         service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
-                    session_id="series|series-1|series-home",
+                    session_id="series|series-1",
                     scope_type="series",
                     series_id="series-1",
                 )
@@ -935,7 +860,7 @@ class SeriesScopeContractTests(unittest.TestCase):
 
         events = list(
             service.stream_with_context(
-                session_id="series|series-1|series-home",
+                session_id="series|series-1",
                 user_message="这个系列讲了啥",
             )
         )
@@ -1434,28 +1359,6 @@ class FakeVideoActionPlanner:
         return FakeVideoActionPlan(self._tool_calls)
 
 
-class FakeVideoActionGateway:
-    def create_structured_completion(self, messages, response_model):
-        self.messages = messages
-        self.response_model = response_model
-        self.assert_response_model()
-        return VideoActionPlannerPayload(
-            requested_artifact="note",
-            tool_calls=[
-                {
-                    "tool_name": "save_note",
-                    "note_title": "RAG 检索流程",
-                    "note_content": "先读取视频概况，再按问题检索转写片段。",
-                }
-            ],
-            action_summary="已保存笔记。",
-        )
-
-    def assert_response_model(self) -> None:
-        if self.response_model is not VideoActionPlannerPayload:
-            raise AssertionError("video action planner must request structured output")
-
-
 class FakeVideoWorkspace:
     def __init__(self, *, transcript_text: str) -> None:
         self._transcript_text = transcript_text
@@ -1815,7 +1718,7 @@ def video_graph_input(user_message: str) -> dict[str, object]:
 
 def series_graph_input(user_message: str) -> dict[str, object]:
     return {
-        "session_id": "series|series-1|series-home",
+        "session_id": "series|series-1",
         "scope_type": "series",
         "series_id": "series-1",
         "video_id": "",

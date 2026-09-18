@@ -12,7 +12,6 @@ describe("WorkspaceChatPanel", () => {
         activeSeries={{ id: "series-1", title: "课程" }}
         selectedVideo={{ id: "video-2", title: "第二讲", processed: false }}
         selectedContextType="video"
-        selectedToolId="studio"
         chatMessages={[]}
         onSubmitChat={onSubmitChat}
       />,
@@ -33,7 +32,6 @@ describe("WorkspaceChatPanel composer", () => {
     activeSeries: { id: "series-1", title: "课程" },
     selectedVideo: { id: "video-2", title: "第二讲", processed: true },
     selectedContextType: "video",
-    selectedToolId: "studio",
     chatMessages: [],
     onSubmitChat: vi.fn(),
   };
@@ -90,7 +88,6 @@ describe("WorkspaceChatPanel session switcher", () => {
     activeSeries: { id: "series-1", title: "课程" },
     selectedVideo: { id: "video-2", title: "第二讲", processed: true },
     selectedContextType: "video",
-    selectedToolId: "studio",
     chatMessages: [],
     onSubmitChat: vi.fn(),
   };

@@ -790,6 +790,12 @@ export function useWorkspaceDataEffects(state, dispatch) {
       dispatch({ type: "notes_cleared" });
       return;
     }
+    // 未下载的链接视频没有任何本地制品，后端 `/notes` 会直接返回 404；
+    // 这里与上面的 tools effect 保持一致，直接清空而不是发请求。
+    if (isLinkedVideo(selectedVideo)) {
+      dispatch({ type: "notes_cleared" });
+      return;
+    }
 
     let cancelled = false;
     dispatch({ type: "notes_loading_started" });

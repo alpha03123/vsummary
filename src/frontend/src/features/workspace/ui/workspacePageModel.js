@@ -106,7 +106,6 @@ export function buildWorkspacePageModel(controller) {
       enterLibraryHome: controller.onEnterLibraryHome,
       selectVideo: controller.onSelectVideo,
       selectSeriesContext: controller.onSelectSeriesContext,
-      selectTool: controller.onSelectTool,
       focusNode: controller.onFocusNode,
       generateVideo: controller.onGenerateVideo,
       processLinkedVideo: controller.onProcessLinkedVideo,

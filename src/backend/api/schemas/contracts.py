@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 ProcessingMode = Literal["summary", "transcript"]
-AiNoteTemplate = Literal["general", "short", "long", "minimal", "detailed", "tutorial", "academic", "xiaohongshu", "life_journal", "task_oriented", "business", "meeting_minutes"]
+AiNoteTemplate = Literal["general", "minimal", "detailed", "tutorial", "academic", "life_journal", "task_oriented", "meeting_minutes"]
 
 class GenerateVideoSummaryRequest(BaseModel):
     """请求生成单个视频的结构化总结。
@@ -149,7 +149,6 @@ class WorkspaceSettingsResponse(BaseModel):
     answer_detail_level: str = "medium"
     reasoning_effort: str = "none"
     talk_custom_prompt: str = ""
-    note_length: str = "long"
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_frames: int = Field(default=6, ge=1, le=20)
@@ -203,7 +202,6 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     answer_detail_level: str = "medium"
     reasoning_effort: str = "none"
     talk_custom_prompt: str = ""
-    note_length: str = "long"
     video_generation_concurrency: int
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_frames: int = Field(default=6, ge=1, le=20)

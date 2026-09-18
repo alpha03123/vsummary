@@ -454,7 +454,6 @@ describe("workspaceReducer chat drawer", () => {
       selectedContextType: "video",
       selectedSeriesId: "series-1",
       selectedVideoId: "video-1",
-      selectedToolId: "overview",
       tools: { overview: { generated: true } },
       summary: { title: "已加载概况", chapters: [] },
       summaryLoading: false,

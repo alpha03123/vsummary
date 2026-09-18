@@ -1,5 +1,4 @@
 from backend.agent_graph.prompts.actions import VIDEO_ACTION_PLANNER_SYSTEM_PROMPT
-from backend.agent_graph.prompts.notes import NOTE_LENGTH_INSTRUCTIONS, build_note_length_instruction
 from backend.agent_graph.prompts.query import (
     ANSWER_DETAIL_LEVEL_PROMPTS,
     build_answer_detail_level_prompt,
@@ -17,6 +16,4 @@ __all__ = [
     "SERIES_QUERY_PROCESSOR_SYSTEM_PROMPT",
     "VIDEO_ANSWER_SYNTHESIZER_SYSTEM_PROMPT",
     "VIDEO_ACTION_PLANNER_SYSTEM_PROMPT",
-    "NOTE_LENGTH_INSTRUCTIONS",
-    "build_note_length_instruction",
 ]

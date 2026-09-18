@@ -36,7 +36,6 @@ class ToolName(str, Enum):
     VIDEO_SEEK = "video_seek"
     GENERATE_OVERVIEW = "generate_overview"
     GENERATE_MINDMAP = "generate_mindmap"
-    SAVE_NOTE = "save_note"
 
 
 class ToolContextTag(str, Enum):
@@ -187,19 +186,6 @@ class GenerateMindmapCall(BaseModel):
     tool_name: Literal[ToolName.GENERATE_MINDMAP] = ToolName.GENERATE_MINDMAP
 
 
-class SaveNoteCall(BaseModel):
-    """`save_note` 工具的调用载荷：把一段笔记持久化到当前视频。
-
-    Attributes:
-        note_title: 笔记标题。
-        note_content: 笔记正文（Markdown）。
-    """
-
-    tool_name: Literal[ToolName.SAVE_NOTE] = ToolName.SAVE_NOTE
-    note_title: str
-    note_content: str
-
-
 ToolCall = Annotated[
     ListSeriesVideosCall
     | GetVideoSummaryCall
@@ -214,8 +200,7 @@ ToolCall = Annotated[
     | OpenVideoCall
     | VideoSeekCall
     | GenerateOverviewCall
-    | GenerateMindmapCall
-    | SaveNoteCall,
+    | GenerateMindmapCall,
     Field(discriminator="tool_name"),
 ]
 

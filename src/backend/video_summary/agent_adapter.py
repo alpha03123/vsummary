@@ -10,7 +10,7 @@ class WorkspaceAgentContextLoader:
         self._workspace = workspace
 
     def load(self, session_id: str) -> AgentContext:
-        scope_type, series_id, video_id, selected_tool = _parse_session_id(session_id)
+        scope_type, series_id, video_id = _parse_session_id(session_id)
         workspace_view = self._workspace.get_workspace()
 
         series = next((item for item in self._workspace.list_series() if item.id == series_id), None)
@@ -24,7 +24,6 @@ class WorkspaceAgentContextLoader:
                 scope_type="series",
                 series_id=series.id,
                 series_title=series.title,
-                selected_tool=selected_tool or "series-home",
             )
 
         video = self._workspace.get_video_source(series.id, video_id)
@@ -47,7 +46,6 @@ class WorkspaceAgentContextLoader:
             series_title=series.title,
             video_id=video.video_id if video is not None else video_id,
             video_title=video.title if video is not None else video_id,
-            selected_tool=selected_tool or "studio",
             overview=_map_tool_availability(None if tools is None else tools.overview),
             mindmap=_map_tool_availability(None if tools is None else tools.mindmap),
             knowledge_cards=_map_tool_availability(None if tools is None else tools.knowledge_cards),
@@ -67,19 +65,14 @@ def _map_tool_availability(tool) -> ToolAvailability:
     )
 
 
-def _parse_session_id(session_id: str) -> tuple[str, str | None, str | None, str | None]:
+def _parse_session_id(session_id: str) -> tuple[str, str | None, str | None]:
     parts = [part for part in session_id.split("|") if part]
     if not parts:
-        return "series", None, None, "series-home"
+        return "series", None, None
 
     scope_type = parts[0]
     if scope_type == "series":
-        return "series", parts[1] if len(parts) > 1 else None, None, parts[2] if len(parts) > 2 else "series-home"
+        return "series", parts[1] if len(parts) > 1 else None, None
     if scope_type == "video":
-        return (
-            "video",
-            parts[1] if len(parts) > 1 else None,
-            parts[2] if len(parts) > 2 else None,
-            parts[3] if len(parts) > 3 else "studio",
-        )
-    return "series", None, None, "series-home"
+        return "video", parts[1] if len(parts) > 1 else None, parts[2] if len(parts) > 2 else None
+    return "series", None, None

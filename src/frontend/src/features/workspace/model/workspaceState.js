@@ -26,7 +26,6 @@ export const defaultUiSettings = {
   answerDetailLevel: "medium",
   reasoningEffort: "none",
   talkCustomPrompt: "",
-  noteLength: "short",
   videoGenerationConcurrency: 1,
   chapterVisualMode: "screenshots",
   maxVisualFrames: 6,
@@ -526,7 +525,6 @@ export function createInitialWorkspaceState() {
     selectedSeriesId: null,
     selectedVideoId: null,
     selectedContextType: null,
-    selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
     playerSeekRequest: null,
@@ -629,7 +627,6 @@ export function createLibraryHomeState(library, currentState) {
     selectedSeriesId: null,
     selectedVideoId: null,
     selectedContextType: null,
-    selectedToolId: "studio",
     selectedChapterId: null,
     selectedNodeId: null,
     playerSeekRequest: null,
@@ -805,7 +802,6 @@ export function normalizeUiSettings(value) {
         ? record.reasoningEffort
         : "none",
     talkCustomPrompt: typeof record.talkCustomPrompt === "string" ? record.talkCustomPrompt : "",
-    noteLength: record.noteLength === "long" ? "long" : "short",
     videoGenerationConcurrency:
       typeof record.videoGenerationConcurrency === "number"
         && Number.isInteger(record.videoGenerationConcurrency)

@@ -16,7 +16,7 @@ const PANEL_META = {
   "series-mindmap": { label: "全局思维导图", icon: Network },
 };
 
-export function WorkspaceStudioPanels({ panels, panelWidths, panelTools, focusedPanel, onFocus, onClose, onResizeStart, onReorder, renderPanel }) {
+export function WorkspaceStudioPanels({ panels, panelWidths, panelTools, focusedPanel, onFocus, onClose, onResizeStart, onReorder, renderPanel, renderPanelActions, renderPanelLeadingActions }) {
   const [draggedPanelId, setDraggedPanelId] = useState(null);
 
   function handleDrop(targetPanelId) {
@@ -34,15 +34,23 @@ export function WorkspaceStudioPanels({ panels, panelWidths, panelTools, focused
             const type = panelTools[panel] ?? getPanelType(panel);
             const meta = PANEL_META[type] ?? PANEL_META.studio;
             const Icon = meta.icon;
+            const panelActions = renderPanelActions?.(panel, type);
+            const panelLeadingActions = renderPanelLeadingActions?.(panel, type);
             return (
               <div key={panel} className={`flex h-full min-h-0 min-w-[320px] flex-1 transition-opacity ${draggedPanelId === panel ? "opacity-45" : ""}`} style={{ flexBasis: `${panelWidths[panel] ?? WORKSPACE_LAYOUT_LIMITS.panelDefaultWidth}px` }} onDragOver={(event) => event.preventDefault()} onDrop={() => handleDrop(panel)}>
                 <section className="workspace-panel flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border">
                   <header draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", panel); setDraggedPanelId(panel); }} onDragEnd={() => setDraggedPanelId(null)} className="flex shrink-0 cursor-grab items-center justify-between border-b border-stone-200/80 px-4 py-2.5 active:cursor-grabbing dark:border-stone-800">
-                    <button type="button" onClick={() => onFocus(panel)} className="inline-flex min-w-0 items-center gap-2 text-left">
-                      <GripVertical size={15} className="shrink-0 text-stone-400" aria-hidden="true" />
-                      {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-accent" /><span className="truncate text-sm font-bold text-stone-800 dark:text-stone-100">{meta.label}</span></>}
-                    </button>
-                    <button type="button" draggable={false} onClick={(event) => { event.stopPropagation(); onClose(panel); }} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-danger dark:hover:bg-stone-800" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <button type="button" onClick={() => onFocus(panel)} className="inline-flex min-w-0 items-center gap-2 text-left">
+                        <GripVertical size={15} className="shrink-0 text-stone-400" aria-hidden="true" />
+                        {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-accent" /><span className="truncate text-sm font-bold text-stone-800 dark:text-stone-100">{meta.label}</span></>}
+                      </button>
+                      {panelLeadingActions ? <div className="shrink-0" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div> : null}
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-1" onPointerDown={(event) => event.stopPropagation()}>
+                      {panelActions}
+                      <button type="button" draggable={false} onClick={(event) => { event.stopPropagation(); onClose(panel); }} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+                    </div>
                   </header>
                   <div className="min-h-0 flex-1 overflow-hidden">{renderPanel(panel, type)}</div>
                 </section>

@@ -1,24 +1,36 @@
 import { useState } from "react";
-import { LoaderCircle, PencilLine, Trash2, Plus, ChevronLeft, Calendar, Sparkles } from "lucide-react";
+import { LoaderCircle, PencilLine, Trash2, Plus, Calendar, Sparkles } from "lucide-react";
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceBackButton } from "../shared/WorkspaceBackButton";
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
 import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
 
 const AI_NOTE_TEMPLATE_OPTIONS = [
-  { id: "general", label: "通用" },
-  { id: "short", label: "短笔记" },
-  { id: "long", label: "长笔记" },
-  { id: "minimal", label: "精简" },
-  { id: "detailed", label: "详细" },
-  { id: "tutorial", label: "教程" },
-  { id: "academic", label: "学术" },
-  { id: "xiaohongshu", label: "小红书" },
-  { id: "life_journal", label: "生活向" },
-  { id: "task_oriented", label: "任务导向" },
-  { id: "business", label: "商业风格" },
+  { id: "general", label: "通用笔记" },
+  { id: "minimal", label: "要点速览" },
+  { id: "detailed", label: "深度详记" },
+  { id: "tutorial", label: "操作教程" },
+  { id: "academic", label: "学术论文" },
+  { id: "life_journal", label: "生活随笔" },
+  { id: "task_oriented", label: "任务清单" },
   { id: "meeting_minutes", label: "会议纪要" },
 ];
+
+// 笔记时间戳由后端以 UTC 存储（形如 2026-09-17T11:30:16.056886Z），
+// 这里统一转换为浏览器本地时区后再展示，避免直接截断字符串导致显示成 UTC 时间。
+function formatNoteTimestamp(value) {
+  if (!value) {
+    return "";
+  }
+  const normalized = String(value).replace(/(\.\d{3})\d+/, "$1");
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) {
+    return String(value).replace("T", " ").replace("Z", "").substring(0, 16);
+  }
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function NoteListItem({ note, onOpen }) {
   const pending = note.pending === true;
@@ -49,7 +61,7 @@ function NoteListItem({ note, onOpen }) {
         ) : (
           <>
             <Calendar size={12} className="mr-1.5" />
-            {note.createdAt.replace("T", " ").substring(0, 16)}
+            {formatNoteTimestamp(note.createdAt)}
           </>
         )}
       </div>
@@ -62,6 +74,7 @@ export function WorkspaceNotesView({
   notesLoading,
   savingNote,
   generatingAiNote,
+  canGenerateAiNote = true,
   onGenerateAiNote,
   onCreateNote,
   onUpdateNote,
@@ -150,12 +163,12 @@ export function WorkspaceNotesView({
     return (
       <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center justify-between px-2">
-          <button 
-            onClick={() => setViewState("list")} 
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
-          >
-            <ChevronLeft size={16} /> 返回列表
-          </button>
+          <WorkspaceBackButton
+            onClick={() => setViewState("list")}
+            label="返回列表"
+            variant="chevron"
+            className="text-sm"
+          />
           <h2 className="text-sm font-bold tracking-widest text-stone-500 uppercase dark:text-stone-500">新建笔记</h2>
           <div className="w-[88px]" /> {/* 占位符以居中标题 */}
         </div>
@@ -195,12 +208,12 @@ export function WorkspaceNotesView({
     return (
       <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center justify-between px-2">
-          <button 
-            onClick={() => { setViewState("list"); setIsEditing(false); }} 
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
-          >
-            <ChevronLeft size={16} /> 返回列表
-          </button>
+          <WorkspaceBackButton
+            onClick={() => { setViewState("list"); setIsEditing(false); }}
+            label="返回列表"
+            variant="chevron"
+            className="text-sm"
+          />
           <div className="flex items-center gap-2">
             {isEditing ? (
               <>
@@ -263,7 +276,7 @@ export function WorkspaceNotesView({
                   {selectedNote.source === "agent" ? "Agent Note" : "✍️ Manual Note"}
                 </span>
                 <span className="text-xs font-medium text-stone-500 dark:text-stone-500">
-                  {selectedNote.createdAt.replace("T", " ").replace("Z", "").substring(0, 16)}
+                  {formatNoteTimestamp(selectedNote.createdAt)}
                   {selectedNote.updatedAt !== selectedNote.createdAt && " (已编辑)"}
                 </span>
               </div>
@@ -281,8 +294,8 @@ export function WorkspaceNotesView({
 
   // ========== 列表视图 (默认) ==========
   return (
-    <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-left-4 duration-300">
-      <div className="flex flex-wrap items-center justify-between gap-4 px-2">
+    <div className="flex h-full flex-col gap-3 animate-in fade-in slide-in-from-left-4 duration-300 @[480px]:gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2">
         <div className="min-w-[7rem] flex-1">
           <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">全部笔记</h2>
           <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
@@ -300,7 +313,8 @@ export function WorkspaceNotesView({
           <button
             type="button"
             onClick={() => onGenerateAiNote(aiTemplate)}
-            disabled={generatingAiNote}
+            disabled={generatingAiNote || !canGenerateAiNote}
+            title={canGenerateAiNote ? undefined : "该视频尚未下载，请先下载视频后再生成笔记"}
             className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-accent/30 dark:bg-accent/15 dark:text-accent dark:hover:bg-accent dark:hover:text-white"
           >
             {generatingAiNote ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}

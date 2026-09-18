@@ -1,4 +1,5 @@
 import colors from 'tailwindcss/colors';
+import containerQueries from '@tailwindcss/container-queries';
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -30,5 +31,9 @@ export default {
       }
     },
   },
-  plugins: [],
+  plugins: [
+    // 面板宽度是拖拽出来的（workspaceLayout.js panelMinWidth 320），视口媒体查询
+    // 完全测不到它。工具页头部需要 ~460px，容器查询是唯一能按「面板宽度」降级的方案。
+    containerQueries,
+  ],
 }

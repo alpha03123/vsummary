@@ -52,6 +52,7 @@ export function WorkspaceVideoScopeEmbed() {
   const [seekError, setSeekError] = useState(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
+  const [panelToolId, setPanelToolId] = useState("studio");
 
   useEffect(() => {
     function handleVideoContext(event) {
@@ -87,6 +88,7 @@ export function WorkspaceVideoScopeEmbed() {
     setChatOpen(false);
     setChatDraft("");
     setSeekError(null);
+    setPanelToolId("studio");
   }, [target?.key]);
 
   function seekBilibiliVideo({ seconds } = {}) {
@@ -146,7 +148,6 @@ export function WorkspaceVideoScopeEmbed() {
     activeSeries: page.shell.activeSeries,
     selectedVideo: page.shell.selectedVideo,
     selectedContextType: page.shell.selectedContextType,
-    selectedToolId: page.shell.state.selectedToolId,
     chatMessages: page.chat.messages,
     chatSessions: page.chat.sessions,
     activeSessionId: page.chat.activeSessionId,
@@ -181,6 +182,8 @@ export function WorkspaceVideoScopeEmbed() {
       ) : null}
       <WorkspaceVideoScopePane
         page={page}
+        panelToolId={panelToolId}
+        onPanelSelectTool={setPanelToolId}
         onProcessLinkedVideo={controller.onProcessLinkedVideo}
         onOpenChat={() => setChatOpen(true)}
         onExternalSeek={seekBilibiliVideo}

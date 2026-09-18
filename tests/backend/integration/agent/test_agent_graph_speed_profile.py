@@ -98,7 +98,7 @@ class AgentGraphSpeedProfileTests(unittest.TestCase):
         service = AgentGraphService(
             context_loader=StaticAgentContextLoader(
                 AgentContext(
-                    session_id="series|series-a|series-home",
+                    session_id="series|series-a",
                     scope_type="series",
                     series_id="series-a",
                 )
@@ -115,7 +115,7 @@ class AgentGraphSpeedProfileTests(unittest.TestCase):
         with ExitStack() as stack:
             module._attach_service_profiling(stack, service, profiler)
             service.run_turn(
-                session_id="series|series-a|series-home",
+                session_id="series|series-a",
                 user_message="这个系列主要讲了什么？",
             )
 

@@ -88,8 +88,8 @@ def _build_session_id(*, scope_type: str, series_id: str, video_id: str) -> str:
     """按 scope 拼接稳定的 graph session_id，供下游 `AgentContext` 使用。
 
     Args:
-        scope_type: `video` 时返回 `video|{series_id}|{video_id}|graph`；
-            其他情况返回 `series|{series_id}|graph`。
+        scope_type: `video` 时返回 `video|{series_id}|{video_id}`；
+            其他情况返回 `series|{series_id}`。
         series_id: 所属系列 ID。
         video_id: 视频 ID（仅 `scope_type == "video"` 时参与拼接）。
 
@@ -97,8 +97,8 @@ def _build_session_id(*, scope_type: str, series_id: str, video_id: str) -> str:
         拼接好的 session_id 字符串。
     """
     if scope_type == "video":
-        return f"video|{series_id}|{video_id}|graph"
-    return f"series|{series_id}|graph"
+        return f"video|{series_id}|{video_id}"
+    return f"series|{series_id}"
 
 
 def _default_action_response(action_name: str) -> str:
@@ -115,7 +115,6 @@ def _default_action_response(action_name: str) -> str:
         "open_mindmap": "我已经帮你打开思维导图工具。",
         "open_notes": "我已经帮你打开笔记工具。",
         "open_video": "我已经帮你打开视频工具。",
-        "save_note": "我已经帮你记好这条笔记。",
         "generate_overview": "我已经开始帮你生成概况。",
         "generate_mindmap": "我已经开始帮你生成思维导图。",
     }

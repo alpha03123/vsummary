@@ -14,7 +14,10 @@ import { WorkspaceRenameDialog } from "./shared/WorkspaceRenameDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
+import { WorkspaceBackButton } from "./shared/WorkspaceBackButton";
+import { WorkspaceExportMenu } from "./shared/WorkspaceToolHeader";
 import { clampChatDrawerWidth, clampPanelWidth, clampSidebarWidth, createPanelId, getPanelType, isPanelAllowedForScope, loadWorkspaceLayout, persistWorkspaceLayout, STUDIO_PANEL_TYPES, WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
+import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
 
 const WorkspaceLibraryHomePane = lazy(() =>
   import("./WorkspaceLibraryHomePane").then((module) => ({
@@ -101,7 +104,6 @@ export function WorkspacePage({ page }) {
     activeSeries,
     selectedVideo,
     selectedContextType,
-    selectedToolId: state.selectedToolId,
     tools,
     chatMessages: chat.messages,
     chatSessions: chat.sessions,
@@ -290,7 +292,7 @@ export function WorkspacePage({ page }) {
     }));
   }
 
-  function renderVideoPlayerPane(onBackToTools = null) {
+  function renderVideoPlayerPane(onOpenOverviewAtTime = null) {
     if (selectedVideo) {
       if (selectedVideo.status === "source_missing") {
         return (
@@ -308,17 +310,6 @@ export function WorkspacePage({ page }) {
         // 与右栏 WorkspaceReadingPane 的 p-6 保持一致，否则媒体卡贴着面板边缘、
         // 而右侧内容缩进 24px，同一行两栏看起来没有对齐。
         <div className="flex h-full flex-col overflow-y-auto p-6">
-          {onBackToTools ? (
-            <div className="mb-3 flex justify-end">
-              <button
-                type="button"
-                onClick={onBackToTools}
-                className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
-              >
-                ← 返回工具页
-              </button>
-            </div>
-          ) : null}
           <WorkspaceVideoPlayer
             videoSource={tools?.preview?.previewUrl ?? previewUrl}
             subtitleSource={tools?.preview?.subtitleUrl ?? null}
@@ -336,7 +327,7 @@ export function WorkspacePage({ page }) {
                 playbackPositionsRef.current.delete(selectedVideoKey);
               }
             }}
-            onOpenOverviewAtTime={tools?.overview?.generated === true ? actions.openOverviewAtTime : undefined}
+            onOpenOverviewAtTime={tools?.overview?.generated === true ? onOpenOverviewAtTime : undefined}
             followOverviewPlayback={followOverviewPlayback}
             onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
           />
@@ -357,14 +348,43 @@ export function WorkspacePage({ page }) {
 
   function renderStudioPanel(panelId, fallbackToolId) {
     const toolId = layout.panelTools[panelId] ?? fallbackToolId;
-    if (toolId === "preview") return renderVideoPlayerPane(() => setPanelTool(panelId, "studio"));
+    if (toolId === "preview") {
+      return renderVideoPlayerPane(
+        (seconds) => {
+          actions.openOverviewAtTime(seconds);
+          setPanelTool(panelId, "overview");
+        },
+      );
+    }
     if (toolId === "ai-chat") {
-      return <WorkspaceChatPanel {...chatPanelProps} onBackToTools={() => setPanelTool(panelId, "studio")} />;
+      return <WorkspaceChatPanel {...chatPanelProps} />;
     }
     if (toolId === "series-overview" || toolId === "series-mindmap") {
-      return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} />;
+      return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel />;
     }
-    return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} playbackTime={playbackTime} followOverviewPlayback={followOverviewPlayback} onFollowOverviewPlaybackChange={setFollowOverviewPlayback} />;
+    return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel playbackTime={playbackTime} followOverviewPlayback={followOverviewPlayback} onFollowOverviewPlaybackChange={setFollowOverviewPlayback} />;
+  }
+
+  function renderPanelActions(panelId, toolId) {
+    if (toolId === "studio" || toolId === "preview" || toolId === "ai-chat") {
+      return null;
+    }
+    const exportActions = buildWorkspaceToolExportActions({
+      activeSeries,
+      notes,
+      summary,
+      toolId,
+      selectedVideo,
+      tools,
+    });
+    return exportActions.length ? <WorkspaceExportMenu exportActions={exportActions} /> : null;
+  }
+
+  function renderPanelLeadingActions(panelId, toolId) {
+    if (toolId === "studio") {
+      return null;
+    }
+    return <WorkspaceBackButton onClick={() => setPanelTool(panelId, "studio")} variant="panel" />;
   }
 
   if (state.loading && !summary) {
@@ -576,6 +596,8 @@ export function WorkspacePage({ page }) {
               onResizeStart={beginResize}
               onReorder={reorderStudioPanels}
               renderPanel={renderStudioPanel}
+              renderPanelActions={renderPanelActions}
+              renderPanelLeadingActions={renderPanelLeadingActions}
             />
           )}
 

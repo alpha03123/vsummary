@@ -33,7 +33,7 @@ def execute_open_video(call: OpenVideoCall, context: AgentContext) -> ToolExecut
     return ToolExecutionResult(
         tool_name=ToolName.OPEN_VIDEO,
         status="ok",
-        payload={"selected_tool": "video"},
+        payload={},
     )
 
 

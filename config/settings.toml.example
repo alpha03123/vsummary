@@ -37,7 +37,6 @@ model = "paraformer-v2"
 theme = "light"
 # 是否在视频详情页默认显示关键结论。
 show_takeaways = true
-# 显示模式。"video_center" 视频居中，"chat_center" AI 聊天居中。
 
 # 调试设置。
 [debug]
@@ -54,8 +53,6 @@ answer_detail_level = "medium"
 reasoning_effort = "none"
 # Video Talk / Series Talk 的用户自定义回答要求。只影响对话回答，不影响视频摘要、知识卡片或导图生成。
 talk_custom_prompt = ""
-# AI 笔记长度。"short" 提炼重点，"long" 展开主题、细节与行动项。
-  note_length = "long"
 
 # Agent 上下文高级策略。
 [agent_context.advanced]

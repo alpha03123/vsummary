@@ -66,18 +66,18 @@ describe("workspaceState chat session persistence", () => {
       CHAT_SESSION_STORAGE_KEY,
       JSON.stringify({
         activeSessionIdsByScope: {
-          "series|series-a|series-home": "series|series-a|series-home::2",
+          "series|series-a": "series|series-a::2",
         },
         sessionListsByScope: {
-          "series|series-a|series-home": [
+          "series|series-a": [
             {
-              id: "series|series-a|series-home::2",
+              id: "series|series-a::2",
               title: "第二个问题",
               createdAt: 2,
               updatedAt: 3,
             },
             {
-              id: "series|series-a|series-home",
+              id: "series|series-a",
               title: "当前对话",
               createdAt: 1,
               updatedAt: 1,
@@ -90,18 +90,18 @@ describe("workspaceState chat session persistence", () => {
     const initialState = createInitialWorkspaceState();
 
     expect(initialState.chatSessionIdsByScope).toEqual({
-      "series|series-a|series-home": "series|series-a|series-home::2",
+      "series|series-a": "series|series-a::2",
     });
     expect(initialState.chatSessionListsByScope).toEqual({
-      "series|series-a|series-home": [
+      "series|series-a": [
         expect.objectContaining({
-          id: "series|series-a|series-home::2",
+          id: "series|series-a::2",
           title: "第二个问题",
           createdAt: 2,
           updatedAt: 3,
         }),
         expect.objectContaining({
-          id: "series|series-a|series-home",
+          id: "series|series-a",
           title: "当前对话",
           createdAt: 1,
           updatedAt: 1,
@@ -114,7 +114,7 @@ describe("workspaceState chat session persistence", () => {
     window.localStorage.setItem(
       CHAT_SESSION_STORAGE_KEY,
       JSON.stringify({
-        "series|series-a|series-home": "series|series-a|series-home::legacy",
+        "series|series-a": "series|series-a::legacy",
       }),
     );
 
@@ -123,42 +123,42 @@ describe("workspaceState chat session persistence", () => {
     const resolved = resolveChatSessionsForScope(
       sessionIdsByScope,
       sessionListsByScope,
-      "series|series-a|series-home",
+      "series|series-a",
     );
 
-    expect(resolved.activeSessionId).toBe("series|series-a|series-home::legacy");
+    expect(resolved.activeSessionId).toBe("series|series-a::legacy");
     expect(resolved.sessions).toEqual([
       expect.objectContaining({
-        id: "series|series-a|series-home::legacy",
+        id: "series|series-a::legacy",
         title: "当前对话",
       }),
     ]);
-    expect(resolved.chatSessionListsByScope["series|series-a|series-home"]).toHaveLength(1);
+    expect(resolved.chatSessionListsByScope["series|series-a"]).toHaveLength(1);
   });
 
   it("removes deleted session metadata and scoped records", () => {
     const sessionListsByScope = {
-      "series|series-a|series-home": [
-        { id: "series|series-a|series-home::2", title: "第二个问题" },
-        { id: "series|series-a|series-home", title: "当前对话" },
+      "series|series-a": [
+        { id: "series|series-a::2", title: "第二个问题" },
+        { id: "series|series-a", title: "当前对话" },
       ],
     };
     const chatThreads = {
-      "series|series-a|series-home::2": [{ id: "msg-2", role: "assistant", content: "第二个回答" }],
-      "series|series-a|series-home": [{ id: "msg-1", role: "assistant", content: "第一个回答" }],
+      "series|series-a::2": [{ id: "msg-2", role: "assistant", content: "第二个回答" }],
+      "series|series-a": [{ id: "msg-1", role: "assistant", content: "第一个回答" }],
     };
 
     expect(
       removeChatSessionForScope(
         sessionListsByScope,
-        "series|series-a|series-home",
-        "series|series-a|series-home::2",
-      )["series|series-a|series-home"],
+        "series|series-a",
+        "series|series-a::2",
+      )["series|series-a"],
     ).toEqual([
-      expect.objectContaining({ id: "series|series-a|series-home", title: "当前对话" }),
+      expect.objectContaining({ id: "series|series-a", title: "当前对话" }),
     ]);
-    expect(removeScopedValue(chatThreads, "series|series-a|series-home::2")).toEqual({
-      "series|series-a|series-home": [{ id: "msg-1", role: "assistant", content: "第一个回答" }],
+    expect(removeScopedValue(chatThreads, "series|series-a::2")).toEqual({
+      "series|series-a": [{ id: "msg-1", role: "assistant", content: "第一个回答" }],
     });
   });
 });
@@ -371,7 +371,7 @@ describe("workspace chat stream errors", () => {
   });
 
   it("marks the understand-query stage as failed when the stream errors after that stage starts", () => {
-    const chatScopeKey = "series|series-a|series-home";
+    const chatScopeKey = "series|series-a";
     const requestId = 123;
     let state = {
       ...createInitialWorkspaceState(),

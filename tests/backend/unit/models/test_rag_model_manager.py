@@ -417,7 +417,7 @@ class RagModelAgentRouteTests(unittest.TestCase):
         response = client.post(
             "/api/agent/chat",
             json={
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "message": "这个系列讲了啥",
                 "context": {"scope_type": "series", "series_id": "series-1"},
             },
@@ -436,7 +436,7 @@ class RagModelAgentRouteTests(unittest.TestCase):
         response = client.post(
             "/api/agent/chat",
             json={
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "message": "这期视频讲了啥",
                 "context": {"scope_type": "series", "series_id": "series-1"},
             },
@@ -458,13 +458,13 @@ class RagModelAgentRouteTests(unittest.TestCase):
         response = client.post(
             "/api/agent/session/clear",
             json={
-                "session_id": "series|series-1|series-home",
+                "session_id": "series|series-1",
                 "context": {"scope_type": "series", "series_id": "series-1"},
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(session_store.cleared_session_ids, ["series|series-1|series-home"])
+        self.assertEqual(session_store.cleared_session_ids, ["series|series-1"])
         self.assertFalse(container.graph_service_called)
 
 
