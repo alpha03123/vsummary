@@ -96,7 +96,13 @@ class GenerateVideoAiSummary:
             content=content,
             frame_extractor=FfmpegMediaProcessor(),
         )
-        result = self._workspace.save_video_ai_summary(series_id, video_id, title=title, content=content)
+        result = self._workspace.save_video_ai_summary(
+            series_id,
+            video_id,
+            title=title,
+            content=content,
+            citations=list(generated.citations),
+        )
         evidence_writer = getattr(self._workspace, "save_video_ai_summary_visual_evidence", None)
         if result is not None and callable(evidence_writer):
             evidence_writer(series_id, video_id, frames=list(generated.visual_evidence))

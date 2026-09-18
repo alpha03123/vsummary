@@ -86,6 +86,7 @@ export function WorkspaceVideoScopePane({
       onUpdateTranscript={actions.updateTranscript}
       onUploadSrt={actions.uploadSrt}
       onRestoreAutomaticTranscript={actions.restoreAutomaticTranscript}
+      onOpenCitationReference={chat.openCitationReference}
     />
   );
 }

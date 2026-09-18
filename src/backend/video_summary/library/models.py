@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
+
+from backend.agent.schemas.action_plan import CitationReference
 
 
 @dataclass(frozen=True)
@@ -220,6 +222,7 @@ class GeneratedVideoAiNoteDTO:
     note_max_images: int
     note_image_min_gap_seconds: float
     visual_evidence: tuple["AiSummaryVisualEvidenceDTO", ...] = ()
+    citations: tuple[CitationReference, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -419,6 +422,7 @@ class VideoAiSummaryDTO:
     content: str
     created_at: str
     updated_at: str
+    citations: list[CitationReference] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

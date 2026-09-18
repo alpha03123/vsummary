@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from threading import Lock
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from backend.agent_graph.prompts.notes import build_ai_note_prompt
+from backend.agent.schemas.action_plan import CitationReference, CitationSlot
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
@@ -30,9 +33,16 @@ class AiSummaryEvidencePayload(BaseModel):
     text: str = Field(min_length=1)
 
 
+class AiSummaryCitationPayload(BaseModel):
+    citation_id: int = Field(ge=1, le=20)
+    source_type: Literal["transcript", "visual"]
+    timestamp_seconds: float = Field(ge=0)
+
+
 class AiSummaryPayload(BaseModel):
     markdown: str = Field(min_length=1)
     visual_evidence: list[AiSummaryEvidencePayload] = Field(default_factory=list)
+    citations: list[AiSummaryCitationPayload] = Field(min_length=1, max_length=20)
 
 
 class LiteLLMNoteGenerator:
@@ -107,7 +117,7 @@ class LiteLLMNoteGenerator:
         note_image_min_gap_seconds: float,
     ) -> GeneratedVideoAiNoteDTO:
         transcript_text = "\n".join(
-            f"{_format_timestamp(segment.start_seconds)} - {segment.text.strip()}"
+            f"[{segment.start_seconds:.3f}-{segment.end_seconds:.3f}] {segment.text.strip()}"
             for segment in transcript.segments
             if segment.text.strip()
         )
@@ -128,9 +138,13 @@ class LiteLLMNoteGenerator:
             ),
             note_visual_mode=note_visual_mode,
         ) + (
-            "\n额外输出要求：返回 JSON 对象，包含 markdown 与 visual_evidence。"
+            "\n额外输出要求：返回 JSON 对象，包含 markdown、visual_evidence 与 citations。"
             "markdown 是最终 AI 概括 Markdown；visual_evidence 每项含 timestamp_seconds 和 text。"
             "仅记录确实能从随附九宫格图确认的画面事实；timestamp_seconds 必须使用给出的真实帧时间。"
+            "citations 至少提供 3 条、最多 20 条，只为需要追溯的关键事实、步骤、数字、直接表述或画面描述建立，避免每一句都引用。"
+            "在对应正文句末写 [citation_id]；citation_id 必须从 1 连续编号且只出现一次。"
+            "source_type=transcript 时 timestamp_seconds 必须精确使用某行转写方括号中的 start 秒数；"
+            "source_type=visual 时 timestamp_seconds 必须使用 visual_evidence 中已返回的真实帧时间。"
         )
         payload = self._gateway.complete_structured(
             [{"role": "user", "content": (
@@ -152,12 +166,19 @@ class LiteLLMNoteGenerator:
                 raise ValueError("同一视频帧只能有一条 AI 概括视觉证据。")
             seen.add(timestamp)
             evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
+        citations = _build_ai_summary_citations(
+            markdown=payload.markdown,
+            citations=payload.citations,
+            transcript=transcript,
+            visual_evidence=evidence,
+        )
         return GeneratedVideoAiNoteDTO(
             content=payload.markdown.strip(),
             note_visual_mode=note_visual_mode,
             note_max_images=note_max_images,
             note_image_min_gap_seconds=note_image_min_gap_seconds,
             visual_evidence=tuple(evidence),
+            citations=tuple(citations),
         )
 
 
@@ -279,3 +300,93 @@ def _resolve_visual_evidence_timestamp(value: float, allowed: tuple[float, ...])
         return None
     candidate = min(allowed, key=lambda timestamp: abs(timestamp - value))
     return candidate if abs(candidate - value) <= 1.0 else None
+
+
+def _build_ai_summary_citations(
+    *,
+    markdown: str,
+    citations: list[AiSummaryCitationPayload],
+    transcript: VideoTranscriptDTO,
+    visual_evidence: list[AiSummaryVisualEvidenceDTO],
+) -> list[CitationReference]:
+    marker_ids = {int(value) for value in re.findall(r"\[(\d+)\]", markdown)}
+    declared_ids = {item.citation_id for item in citations}
+    if marker_ids != declared_ids:
+        raise ValueError("AI 概括正文中的引用角标必须与 citations 一一对应。")
+    if len(citations) != len(declared_ids):
+        raise ValueError("AI 概括引用 ID 不能重复。")
+    if declared_ids != set(range(1, len(citations) + 1)):
+        raise ValueError("AI 概括引用 ID 必须从 1 连续编号。")
+
+    result: list[CitationReference] = []
+    for item in sorted(citations, key=lambda citation: citation.citation_id):
+        citation_id = str(item.citation_id)
+        if item.source_type == "transcript":
+            segment = _resolve_transcript_segment(item.timestamp_seconds, transcript)
+            if segment is None:
+                raise ValueError("AI 概括引用了未提供的转写时间。")
+            result.append(
+                CitationReference(
+                    id=citation_id,
+                    label=transcript.title,
+                    source_type="transcript",
+                    search_scope="transcript",
+                    slots=[
+                        CitationSlot(
+                            slot=1,
+                            target_type="video",
+                            video_id=transcript.video_id,
+                            video_title=transcript.title,
+                            start_seconds=segment.start_seconds,
+                            end_seconds=segment.end_seconds,
+                        ),
+                        CitationSlot(
+                            slot=2,
+                            target_type="transcript",
+                            video_id=transcript.video_id,
+                            video_title=transcript.title,
+                            start_seconds=segment.start_seconds,
+                            end_seconds=segment.end_seconds,
+                            text=segment.text,
+                        ),
+                    ],
+                )
+            )
+            continue
+        evidence = _resolve_visual_evidence(item.timestamp_seconds, visual_evidence)
+        if evidence is None:
+            raise ValueError("AI 概括引用了未验证的视觉证据时间。")
+        result.append(
+            CitationReference(
+                id=citation_id,
+                label=transcript.title,
+                source_type="visual",
+                search_scope="visual",
+                slots=[
+                    CitationSlot(
+                        slot=1,
+                        target_type="video",
+                        video_id=transcript.video_id,
+                        video_title=transcript.title,
+                        start_seconds=evidence.timestamp_seconds,
+                        end_seconds=evidence.timestamp_seconds,
+                        text=evidence.text,
+                    )
+                ],
+            )
+        )
+    return result
+
+
+def _resolve_transcript_segment(timestamp: float, transcript: VideoTranscriptDTO):
+    if not transcript.segments:
+        return None
+    candidate = min(transcript.segments, key=lambda segment: abs(segment.start_seconds - timestamp))
+    return candidate if abs(candidate.start_seconds - timestamp) <= 0.01 else None
+
+
+def _resolve_visual_evidence(timestamp: float, evidence: list[AiSummaryVisualEvidenceDTO]) -> AiSummaryVisualEvidenceDTO | None:
+    if not evidence:
+        return None
+    candidate = min(evidence, key=lambda item: abs(item.timestamp_seconds - timestamp))
+    return candidate if abs(candidate.timestamp_seconds - timestamp) <= 1.0 else None

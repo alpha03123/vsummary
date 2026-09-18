@@ -425,6 +425,7 @@ class VideoAiSummaryResponse(BaseModel):
     content: str
     created_at: str
     updated_at: str
+    citations: list["CitationResponse"] = Field(default_factory=list)
 
     @classmethod
     def from_model(cls, summary: VideoAiSummaryDTO) -> "VideoAiSummaryResponse":
@@ -435,6 +436,7 @@ class VideoAiSummaryResponse(BaseModel):
             content=summary.content,
             created_at=summary.created_at,
             updated_at=summary.updated_at,
+            citations=[CitationResponse.from_model(citation) for citation in summary.citations],
         )
 
 

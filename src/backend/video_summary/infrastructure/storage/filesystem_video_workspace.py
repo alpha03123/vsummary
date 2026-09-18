@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from backend.agent.schemas.action_plan import CitationReference
 from backend.shared.filesystem import KeyedLockManager, atomic_write_text
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.schemas import TranscriptSegmentPayload
@@ -628,6 +629,7 @@ class FileSystemVideoWorkspace:
             content=_require_note_text(payload.get("content"), "ai_summary.content"),
             created_at=_require_note_text(payload.get("created_at"), "ai_summary.created_at"),
             updated_at=_require_note_text(payload.get("updated_at"), "ai_summary.updated_at"),
+            citations=_read_ai_summary_citations(payload),
         )
 
     def _migrate_latest_agent_note_to_ai_summary(self, series_id: str, video_id: str) -> None:
@@ -662,6 +664,7 @@ class FileSystemVideoWorkspace:
         *,
         title: str,
         content: str,
+        citations: list[CitationReference] | None = None,
     ) -> VideoAiSummaryDTO | None:
         if self.get_video_source(series_id, video_id) is None:
             return None
@@ -671,15 +674,19 @@ class FileSystemVideoWorkspace:
         with self._content_locks.hold(_content_lock_key(series_id, video_id)):
             now = _now_iso()
             previous_created_at = now
+            previous_citations: list[dict[str, object]] = []
             if path.is_file():
                 previous_payload = json.loads(path.read_text(encoding="utf-8"))
                 previous_created_at = _require_note_text(previous_payload.get("created_at"), "ai_summary.created_at")
+                previous_citations = [citation.model_dump(mode="json") for citation in _read_ai_summary_citations(previous_payload)]
+            next_citations = previous_citations if citations is None else [citation.model_dump(mode="json") for citation in citations]
             atomic_write_text(
                 path,
                 json.dumps(
                     {
                         "title": next_title,
                         "content": next_content,
+                        "citations": next_citations,
                         "created_at": previous_created_at,
                         "updated_at": now,
                     },
@@ -2056,6 +2063,20 @@ def _read_ai_summary_status(output_dir: Path) -> str:
         return "failed"
     status = payload.get("status") if isinstance(payload, dict) else None
     return status if status in {"running", "ready", "failed"} else "failed"
+
+
+def _read_ai_summary_citations(payload: object) -> list[CitationReference]:
+    """读取唯一 AI 概括的受验证引用；旧制品没有该字段时返回空列表。"""
+    raw_citations = payload.get("citations", []) if isinstance(payload, dict) else []
+    if raw_citations is None:
+        return []
+    if not isinstance(raw_citations, list):
+        raise ValueError("ai_summary.citations 必须是数组。")
+    citations = [CitationReference.model_validate(item) for item in raw_citations]
+    ids = [citation.id for citation in citations]
+    if len(ids) != len(set(ids)):
+        raise ValueError("ai_summary.citations 含重复引用 ID。")
+    return citations
 
 
 def _require_note_text(value: object, field_name: str) -> str:

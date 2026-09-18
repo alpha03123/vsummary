@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.agent.schemas.action_plan import CitationReference, CitationSlot
 
 
 class VideoAiSummaryStorageTests(unittest.TestCase):
@@ -27,6 +28,25 @@ class VideoAiSummaryStorageTests(unittest.TestCase):
             self.assertEqual("内容二", workspace.get_video_ai_summary(series.id, "video").content)
             self.assertEqual(first.created_at, second.created_at)
             self.assertEqual([], workspace.get_video_notes(series.id, "video").notes)
+
+    def test_persists_ai_summary_citations(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video_path = root / "video.mp4"
+            video_path.write_bytes(b"video")
+            workspace = FileSystemVideoWorkspace(root)
+            series = workspace.import_local_series_from_paths(title="series-1", source_paths=[video_path], storage_mode="copy")
+            citation = CitationReference(
+                id="1",
+                label="视频",
+                source_type="transcript",
+                search_scope="transcript",
+                slots=[CitationSlot(slot=1, target_type="video", video_id="video", start_seconds=3.0)],
+            )
+
+            workspace.save_video_ai_summary(series.id, "video", title="概括", content="正文[1]", citations=[citation])
+
+            self.assertEqual("1", workspace.get_video_ai_summary(series.id, "video").citations[0].id)
 
     def test_migrates_latest_legacy_agent_note_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

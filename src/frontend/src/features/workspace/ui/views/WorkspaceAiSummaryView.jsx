@@ -13,6 +13,7 @@ export function WorkspaceAiSummaryView({
   onUpdate,
   noteImageContext,
   onSeek,
+  onOpenCitationReference,
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
@@ -80,7 +81,7 @@ export function WorkspaceAiSummaryView({
           <>
             <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">{aiSummary.title}</h1>
             <div className="my-5 h-px bg-stone-100 dark:bg-stone-800" />
-            <div className="markdown-body text-sm text-stone-700 dark:text-stone-300"><WorkspaceMarkdownMessage content={aiSummary.content} noteImageContext={noteImageContext} onSeek={onSeek} /></div>
+            <div className="markdown-body text-sm text-stone-700 dark:text-stone-300"><WorkspaceMarkdownMessage content={aiSummary.content} citations={aiSummary.citations} noteImageContext={noteImageContext} onSeek={onSeek} onOpenCitationReference={onOpenCitationReference} /></div>
           </>
         )}
       </article>

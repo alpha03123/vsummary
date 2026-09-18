@@ -121,6 +121,7 @@ function asAiSummary(value, label) {
     content: asString(record.content, `${label}.content`),
     createdAt: asString(record.created_at, `${label}.created_at`),
     updatedAt: asString(record.updated_at, `${label}.updated_at`),
+    citations: Array.isArray(record.citations) ? record.citations : [],
   };
 }
 

@@ -33,6 +33,7 @@ from backend.video_summary.library.models import (
     VideoWorkspaceToolsDTO,
     WorkspaceDTO,
 )
+from backend.agent.schemas.action_plan import CitationReference
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 
@@ -203,6 +204,7 @@ class VideoAiSummaryStore(Protocol):
         *,
         title: str,
         content: str,
+        citations: list[CitationReference] | None = None,
     ) -> VideoAiSummaryDTO | None:
         """原子替换唯一 AI 概括。"""
 

@@ -114,7 +114,17 @@ class ConcurrentAiSummaryRunner:
         now = _utc_now()
         atomic_write_text(
             output_dir / "ai_summary.json",
-            json.dumps({"title": title, "content": content, "created_at": now, "updated_at": now}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {
+                    "title": title,
+                    "content": content,
+                    "citations": [citation.model_dump(mode="json") for citation in generated.citations],
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
         )
         atomic_write_text(
             output_dir / "ai_summary.visual_evidence.json",

@@ -122,6 +122,7 @@ export function WorkspaceReadingPane({
   onUpdateTranscript,
   onUploadSrt,
   onRestoreAutomaticTranscript,
+  onOpenCitationReference,
   onPanelSelectTool = null,
   embeddedInStudioPanel = false,
 }) {
@@ -282,6 +283,7 @@ export function WorkspaceReadingPane({
                       onUpdate={onUpdateAiSummary}
                       noteImageContext={activeSeries && selectedVideo ? { seriesId: activeSeries.id, videoId: selectedVideo.id, durationSeconds: Number.POSITIVE_INFINITY } : null}
                       onSeek={onSeek}
+                      onOpenCitationReference={onOpenCitationReference}
                     />
                   ) : null}
                   {toolId === "mindmap" ? (
