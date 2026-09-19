@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 
 from backend.api.http.app import create_app
-from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
@@ -118,23 +117,20 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertFalse(tracker.is_cancel_requested("series-1/video-1"))
         self.assertEqual(tracker.get_snapshot("series/series-1").status, "running")
 
-    def test_video_generate_returns_conflict_when_generation_is_cancelled(self) -> None:
+    def test_video_generate_submits_a_durable_job(self) -> None:
         tracker = InMemoryProgressTracker()
-        reporter = tracker.create_reporter("series-1/video-1")
-        reporter.cancelled("任务已取消")
         container = _build_container(tracker)
-
-        async def _cancelled_generate(series_id: str, video_id: str, transcript_enhancement_enabled=None):
-            del series_id, video_id, transcript_enhancement_enabled
-            raise GenerateCancelledError("任务已取消")
-
-        container.generate_video_summary = SimpleNamespace(run=_cancelled_generate)
+        repository = _FakeJobRepository()
+        container.sql_workspace = SimpleNamespace(get_workspace=lambda: SimpleNamespace(id="workspace-1"))
+        container.job_repository = repository
         client = TestClient(create_app(container))
 
         response = client.post("/api/videos/series-1/video-1/generate")
 
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["detail"], "generation cancelled")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-1")
+        self.assertEqual(repository.calls[0]["operation"], "generate_summary")
+        self.assertEqual(repository.calls[0]["active_key"], "video:video-1:generate_summary")
 
     def test_video_cancel_immediately_sets_terminal_status_and_interrupts_active_generation(self) -> None:
         tracker = InMemoryProgressTracker()
@@ -217,6 +213,15 @@ async def _raise_duplicate_series(series_id: str, transcript_enhancement_enabled
 def _complete_reporter_after_delay(reporter) -> None:
     time.sleep(0.1)
     reporter.completed("done")
+
+
+class _FakeJobRepository:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def submit(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(id="job-1", status="queued")
 
 
 if __name__ == "__main__":

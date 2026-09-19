@@ -47,6 +47,13 @@ class SqlVideoWorkspace:
     def session_factory(self) -> sessionmaker[Session]:
         return self._sessions
 
+    @staticmethod
+    def get_workspace_id(session_factory: sessionmaker[Session]) -> str | None:
+        with session_factory() as session:
+            return session.execute(
+                text("SELECT id FROM workspaces WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1")
+            ).scalar()
+
     def get_workspace(self) -> WorkspaceDTO:
         with self._sessions() as session:
             row = session.execute(text("SELECT id, title FROM workspaces WHERE deleted_at IS NULL ORDER BY created_at LIMIT 1")).mappings().first()
@@ -490,6 +497,30 @@ class SqlVideoWorkspace:
         self.clear_generated_artifacts(video_id)
         self._refresh_rag(series_id, video_id)
         return self.get_video_summary(series_id, video_id)
+
+    def publish_generated_content(
+        self,
+        *,
+        series_id: str,
+        video_id: str,
+        job_id: str,
+        worker_id: str,
+        lease_token: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Publish one worker-owned generation result without creating a second job."""
+
+        if self.get_video_source(series_id, video_id) is None:
+            raise LookupError(f"video not found '{series_id}/{video_id}'")
+        self._content.stage(
+            job_id=job_id,
+            video_id=video_id,
+            payload=payload,
+            worker_id=worker_id,
+            lease_token=lease_token,
+        )
+        self._content.publish(job_id=job_id, worker_id=worker_id, lease_token=lease_token)
+        self.clear_generated_artifacts(video_id)
 
     def _current_payload(self, series_id: str, video_id: str) -> dict[str, Any] | None:
         with self._sessions() as session:

@@ -15,6 +15,7 @@ import asyncio
 import json
 import sys
 import tempfile
+import time
 import wave
 from dataclasses import replace
 from pathlib import Path
@@ -201,6 +202,9 @@ async def run(mysql_home: Path) -> dict[str, object]:
             container.generate_video_summary._series_memory_refresher = fixture_index_refresher
             container.generate_video_cards._index_refresher = fixture_index_refresher
             with TestClient(create_app(container=container)) as client:
+                worker_thread = container.job_worker._thread
+                if worker_thread is None or not worker_thread.is_alive():
+                    raise RuntimeError("Job worker did not start with the API lifespan.")
                 _require_ok(client.get("/api/health"), "health")
                 imported = _require_ok(
                     client.post(
@@ -216,7 +220,26 @@ async def run(mysql_home: Path) -> dict[str, object]:
                 series_id = imported["id"]
                 video_id = imported["videos"][0]["id"]
 
-                _require_ok(client.post(f"/api/videos/{series_id}/{video_id}/generate", json={}), "generate summary")
+                request_headers = {"Idempotency-Key": "mysql-e2e-summary"}
+                submitted = _require_ok(
+                    client.post(f"/api/videos/{series_id}/{video_id}/generate", json={}, headers=request_headers),
+                    "submit summary job",
+                )
+                if submitted.status_code != 202:
+                    raise RuntimeError(f"Expected 202 when submitting summary job, got {submitted.status_code}.")
+                repeated = _require_ok(
+                    client.post(f"/api/videos/{series_id}/{video_id}/generate", json={}, headers=request_headers),
+                    "repeat idempotent summary job submission",
+                )
+                if repeated.status_code != 202 or repeated.json()["job_id"] != submitted.json()["job_id"]:
+                    raise RuntimeError("Idempotent job submission did not return the original job.")
+                job_id = submitted.json()["job_id"]
+                job = _wait_for_job(client, job_id)
+                if job["status"] != "succeeded":
+                    raise RuntimeError(f"Summary job did not succeed: {job}")
+                events = _require_ok(client.get(f"/api/jobs/{job_id}/events"), "read job events").text
+                if '"stage": "claimed"' not in events or '"stage": "succeeded"' not in events:
+                    raise RuntimeError(f"Job event stream is incomplete: {events}")
                 workspace.save_video_ai_summary(series_id, video_id, title="SQL E2E 概括", content="为卡片和导图提供画面证据。")
                 workspace.save_video_ai_summary_visual_evidence(
                     series_id,
@@ -271,6 +294,7 @@ async def run(mysql_home: Path) -> dict[str, object]:
                 "knowledge_card_count": len(cards["cards"]),
                 "mindmap_root": mindmap["name"],
                 "rag_document_count": len(rag_documents),
+                "summary_job_id": job_id,
                 "agent_chat": chat["assistant_message"],
             }
         finally:
@@ -281,6 +305,18 @@ def _require_ok(response, action: str):
     if response.is_success:
         return response
     raise RuntimeError(f"E2E {action} failed with HTTP {response.status_code}: {response.text}")
+
+
+def _wait_for_job(client, job_id: str, timeout_seconds: float = 20.0) -> dict[str, object]:
+    deadline = time.monotonic() + timeout_seconds
+    payload = None
+    while time.monotonic() < deadline:
+        response = _require_ok(client.get(f"/api/jobs/{job_id}"), "read job")
+        payload = response.json()
+        if payload["status"] in {"succeeded", "failed", "cancelled"}:
+            return payload
+        time.sleep(0.1)
+    raise RuntimeError(f"Timed out waiting for job {job_id}: {payload}")
 
 
 def main() -> None:

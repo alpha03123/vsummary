@@ -47,23 +47,24 @@ def main() -> None:
     configure_event_loop_policy()
     managed_mysql = None
     application = None
-    if args.managed_mysql_home is not None:
-        from backend.video_summary.infrastructure.persistence.managed_local_mysql import ManagedLocalMySql
-        from backend.video_summary.infrastructure.persistence.blob_store import FileBlobStore
-        from backend.video_summary.infrastructure.persistence.database import create_session_factory
-        from backend.video_summary.infrastructure.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
-        from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
-
-        managed_mysql = ManagedLocalMySql(mysql_home=args.managed_mysql_home, data_root=args.managed_data_root)
-        database_options = managed_mysql.start_and_migrate()
-        data_root = managed_mysql.paths.root
-        blob_store = FileBlobStore(data_root / "blobs")
-        sessions = create_session_factory(database_options)
-        if not args.skip_legacy_import:
-            LegacyWorkspaceImporter(root_dir=_repository_root(), session_factory=sessions, blob_store=blob_store).import_local_workspace()
-        workspace = SqlVideoWorkspace(session_factory=sessions, blob_store=blob_store, cache_root=data_root / "cache")
-        application = create_app(container=build_api_container(_repository_root(), workspace_override=workspace))
     try:
+        if args.managed_mysql_home is not None:
+            from backend.video_summary.infrastructure.persistence.managed_local_mysql import ManagedLocalMySql
+            from backend.video_summary.infrastructure.persistence.blob_store import FileBlobStore
+            from backend.video_summary.infrastructure.persistence.database import create_session_factory
+            from backend.video_summary.infrastructure.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
+            from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
+
+            managed_mysql = ManagedLocalMySql(mysql_home=args.managed_mysql_home, data_root=args.managed_data_root)
+            database_options = managed_mysql.start_and_migrate()
+            data_root = managed_mysql.paths.root
+            blob_store = FileBlobStore(data_root / "blobs")
+            sessions = create_session_factory(database_options)
+            _ensure_local_workspace(sessions)
+            if not args.skip_legacy_import:
+                LegacyWorkspaceImporter(root_dir=_repository_root(), session_factory=sessions, blob_store=blob_store).import_local_workspace()
+            workspace = SqlVideoWorkspace(session_factory=sessions, blob_store=blob_store, cache_root=data_root / "cache")
+            application = create_app(container=build_api_container(_repository_root(), workspace_override=workspace))
         if application is None:
             application = create_app()
         uvicorn.run(application, host=args.host, port=args.port)
@@ -74,6 +75,22 @@ def main() -> None:
 
 def _repository_root() -> Path:
     return Path(__file__).resolve().parents[4]
+
+
+def _ensure_local_workspace(session_factory) -> None:
+    """Create the single local-installation workspace before any import or API request."""
+
+    from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
+    from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
+
+    # Local mode intentionally has one owner scope. Cloud hosts provide their
+    # own workspace provisioning and do not use this managed-local entrypoint.
+    workspace = SqlVideoWorkspace.get_workspace_id(session_factory)
+    if workspace is None:
+        SqlControlPlaneRepository(session_factory).create_workspace(
+            owner_scope_id="local-installation",
+            title="VSummary",
+        )
 
 
 if __name__ == "__main__":

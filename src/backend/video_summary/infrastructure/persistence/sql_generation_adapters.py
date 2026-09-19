@@ -23,7 +23,20 @@ class SqlBackedVideoSummaryGenerator:
         self._workflow = workflow
         self._temp_root = temp_root
 
-    async def run(self, *, series_id: str, video_id: str, progress_reporter: ProgressReporter | None = None, transcript_enhancement_enabled: bool | None = None, manual_transcript: ManualTranscriptInput | None = None, use_saved_manual_transcript: bool = True, processing_mode: str = "summary") -> None:
+    async def run(
+        self,
+        *,
+        series_id: str,
+        video_id: str,
+        progress_reporter: ProgressReporter | None = None,
+        transcript_enhancement_enabled: bool | None = None,
+        manual_transcript: ManualTranscriptInput | None = None,
+        use_saved_manual_transcript: bool = True,
+        processing_mode: str = "summary",
+        job_id: str | None = None,
+        worker_id: str | None = None,
+        lease_token: str | None = None,
+    ) -> None:
         source = self._workspace.get_video_source(series_id, video_id)
         if source is None:
             raise LookupError(f"video not found '{series_id}/{video_id}'")
@@ -53,7 +66,19 @@ class SqlBackedVideoSummaryGenerator:
                     "chapters": _chapters(summary),
                 },
             }
-            self._workspace._publish_manual_content(series_id, video_id, payload, "generate")
+            if job_id is None:
+                self._workspace._publish_manual_content(series_id, video_id, payload, "generate")
+            else:
+                if not worker_id or not lease_token:
+                    raise ValueError("Worker-owned generation requires worker_id and lease_token.")
+                self._workspace.publish_generated_content(
+                    series_id=series_id,
+                    video_id=video_id,
+                    job_id=job_id,
+                    worker_id=worker_id,
+                    lease_token=lease_token,
+                    payload=payload,
+                )
             for image in (output_dir / "screenshots").glob("*.jpg") if (output_dir / "screenshots").is_dir() else []:
                 self._workspace.save_binary_artifact(video_id=video_id, kind="screenshot", source_path=image)
             for image in (output_dir / "frames").glob("*.jpg") if (output_dir / "frames").is_dir() else []:

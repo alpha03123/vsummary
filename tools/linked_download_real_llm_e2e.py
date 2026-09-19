@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -54,14 +55,18 @@ def run(base_url: str, series_id: str, video_id: str) -> dict[str, Any]:
         if download["status"] != "completed":
             raise RuntimeError(f"Linked video download did not complete: {download}")
 
-        first_summary = _ok(
+        first_job = _ok(
             client.post(f"/api/videos/{series_id}/{video_id}/generate", json={"processing_mode": "summary"}),
             "first generated summary",
         ).json()
-        regenerated_summary = _ok(
+        _wait_job(client, first_job["job_id"])
+        first_summary = _ok(client.get(f"/api/videos/{series_id}/{video_id}/summary"), "first generated summary read").json()
+        regenerated_job = _ok(
             client.post(f"/api/videos/{series_id}/{video_id}/generate", json={"processing_mode": "summary"}),
             "regenerated summary",
         ).json()
+        _wait_job(client, regenerated_job["job_id"])
+        regenerated_summary = _ok(client.get(f"/api/videos/{series_id}/{video_id}/summary"), "regenerated summary read").json()
         preview = _ok(client.get(f"/api/videos/{series_id}/{video_id}/preview"), "downloaded preview")
         video_chat = _ok(
             client.post(
@@ -127,6 +132,18 @@ def _wait_download(client: httpx.Client, series_id: str, video_id: str) -> dict[
             if snapshot.get("status") in {"completed", "failed", "cancelled"}:
                 return snapshot
     raise RuntimeError("Linked video download progress stream ended without a terminal state.")
+
+
+def _wait_job(client: httpx.Client, job_id: str, timeout_seconds: float = 300.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        job = _ok(client.get(f"/api/jobs/{job_id}"), "summary job status").json()
+        if job["status"] == "succeeded":
+            return job
+        if job["status"] in {"failed", "cancelled"}:
+            raise RuntimeError(f"Summary job did not succeed: {job}")
+        time.sleep(0.5)
+    raise RuntimeError(f"Timed out waiting for summary job {job_id}.")
 
 
 def _find_video(library: dict[str, Any], series_id: str, video_id: str) -> tuple[dict[str, Any], dict[str, Any]]:

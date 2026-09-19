@@ -73,6 +73,7 @@ class ControlPlaneSchemaTests(unittest.TestCase):
                 "summary_chapters",
                 "job_content_staging",
                 "jobs",
+                "job_attempts",
                 "idempotency_keys",
                 "job_events",
                 "outbox_events",
@@ -99,7 +100,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0008_sessions_and_usage")
+        self.assertEqual(script.get_current_head(), "0009_job_execution")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))

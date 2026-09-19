@@ -20,6 +20,7 @@ from backend.api.di.container import build_default_container
 from backend.api.routes.agent import router as agent_router
 from backend.api.routes.chaoxing import router as chaoxing_router
 from backend.api.routes.health import router as health_router
+from backend.api.routes.jobs import router as jobs_router
 from backend.api.routes.linked import router as linked_router
 from backend.api.routes.settings import router as settings_router
 from backend.api.routes.videos import router as videos_router
@@ -34,13 +35,18 @@ LOGGER = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     mcp_server = getattr(app.state, "mcp_server", None)
+    job_worker = getattr(getattr(app.state, "container", None), "job_worker", None)
     try:
+        if job_worker is not None:
+            job_worker.start()
         if mcp_server is None:
             yield
         else:
             async with mcp_server.session_manager.run():
                 yield
     finally:
+        if job_worker is not None:
+            job_worker.stop()
         root_dir = getattr(getattr(app.state, "container", None), "root_dir", None)
         if root_dir is not None:
             close_application_logging(root_dir)
@@ -48,6 +54,7 @@ async def lifespan(app: FastAPI):
 
 def include_api_routers(app: FastAPI) -> None:
     app.include_router(health_router)
+    app.include_router(jobs_router)
     app.include_router(settings_router)
     app.include_router(videos_router)
     app.include_router(agent_router)

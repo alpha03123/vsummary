@@ -43,6 +43,8 @@ from backend.video_summary.infrastructure.config.settings_service import Setting
 from backend.video_summary.infrastructure.config.settings import load_settings
 from backend.shared.llm.usage import MySqlLlmUsageStore
 from backend.video_summary.infrastructure.persistence.sql_agent_session_store import SqlAgentSessionStore
+from backend.video_summary.infrastructure.persistence.job_repository import SqlJobRepository
+from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
@@ -92,6 +94,9 @@ from backend.video_summary.library.usecases import (
 class ApiContainer:
     config_path: Path
     root_dir: Path
+    sql_workspace: SqlVideoWorkspace
+    job_repository: SqlJobRepository
+    job_worker: SqlJobWorker
     faster_whisper_model_manager: FasterWhisperModelManager
     whisper_cpp_model_manager: WhisperCppModelManager
     list_video_library: ListVideoLibrary
@@ -208,6 +213,14 @@ def build_api_container(
         workspace=workspace,
         workflow=ConfiguredVideoSummaryWorkflow(root_dir, usage_recorder=usage_store),
         temp_root=workspace.cache_root,
+    )
+    if not isinstance(resolved_generator, SqlBackedVideoSummaryGenerator):
+        raise RuntimeError("SQL job execution requires SqlBackedVideoSummaryGenerator.")
+    job_repository = SqlJobRepository(workspace.session_factory)
+    job_worker = SqlJobWorker(
+        repository=job_repository,
+        summary_generator=resolved_generator,
+        options=WorkerOptions.local(),
     )
     resolved_mindmap_generator = mindmap_generator or SqlBackedVideoMindmapGenerator(
         workspace=workspace,
@@ -354,6 +367,9 @@ def build_api_container(
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
+        sql_workspace=workspace,
+        job_repository=job_repository,
+        job_worker=job_worker,
         faster_whisper_model_manager=model_manager,
         whisper_cpp_model_manager=whisper_cpp_manager,
         list_video_library=ListVideoLibrary(workspace),

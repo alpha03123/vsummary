@@ -16,8 +16,8 @@ from threading import Lock
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, Body, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
 from backend.api.local_media_picker import select_local_media_paths
@@ -50,6 +50,7 @@ from backend.api.schemas.responses import (
 from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import build_video_download_task_id
 from backend.video_summary.infrastructure.video_summary_runtime import AsrModelNotReadyError
+from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.subtitle_transcripts import parse_srt_transcript
@@ -804,9 +805,10 @@ def preview_video(series_id: str, video_id: str, container: ApiContainerDep) -> 
 async def generate_video_summary(
     series_id: str,
     video_id: str,
+    http_request: Request,
     request: GenerateVideoSummaryRequest | None = None,
     container: ApiContainerDep = None,
-) -> dict[str, object]:
+) -> JSONResponse:
     """POST /api/videos/{series_id}/{video_id}/generate — 触发单个视频的总结生成。
 
     异步执行全流程：ASR 转写 → LLM 总结 → 思维导图 → 落盘；
@@ -829,31 +831,67 @@ async def generate_video_summary(
     """
     _ensure_source_media_available(_require_video_source(container, series_id, video_id))
     processing_mode = "summary" if request is None else request.processing_mode
-    arguments = {
-        "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
+    return _submit_video_generation_job(
+        container=container,
+        series_id=series_id,
+        video_id=video_id,
+        processing_mode=processing_mode,
+        transcript_enhancement_enabled=None if request is None else request.transcript_enhancement_enabled,
+        idempotency_key=http_request.headers.get("Idempotency-Key"),
+    )
+
+
+def _submit_video_generation_job(
+    *,
+    container,
+    series_id: str,
+    video_id: str,
+    processing_mode: str,
+    transcript_enhancement_enabled: bool | None,
+    idempotency_key: str | None,
+    manual_transcript: dict[str, str] | None = None,
+    use_saved_manual_transcript: bool = True,
+) -> JSONResponse:
+    operation = "generate_summary" if processing_mode == "summary" else "generate_transcript"
+    request_payload = {
+        "series_id": series_id,
+        "video_id": video_id,
+        "processing_mode": processing_mode,
+        "transcript_enhancement_enabled": transcript_enhancement_enabled,
+        "use_saved_manual_transcript": use_saved_manual_transcript,
     }
-    if processing_mode != "summary":
-        arguments["processing_mode"] = processing_mode
+    if manual_transcript is not None:
+        request_payload["manual_transcript"] = manual_transcript
     try:
-        video_summary = await container.generate_video_summary.run(series_id, video_id, **arguments)
-    except AsrModelNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except GenerateCancelledError as error:
-        raise HTTPException(status_code=409, detail="generation cancelled") from error
-    except GenerationScopeBusyError as error:
+        workspace = container.sql_workspace.get_workspace()
+        if not workspace.id:
+            raise RuntimeError("No SQL workspace is available for job submission.")
+        submitted = container.job_repository.submit(
+            workspace_id=workspace.id,
+            resource_type="video",
+            resource_id=video_id,
+            operation=operation,
+            request_payload=request_payload,
+            active_key=f"video:{video_id}:{operation}",
+            idempotency_scope_id=workspace.id if idempotency_key else None,
+            idempotency_key=idempotency_key,
+        )
+    except ControlPlaneConflictError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
-    if video_summary is None:
-        snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
-        if snapshot.status == "cancelled":
-            raise HTTPException(status_code=409, detail="generation cancelled")
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    if processing_mode == "transcript":
-        return {"series_id": series_id, "video_id": video_id, "status": "transcript_ready"}
-    return video_summary.summary
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.post("/api/videos/{series_id}/{video_id}/transcript/srt-and-generate")
@@ -861,8 +899,9 @@ async def upload_srt_and_generate_video_summary(
     series_id: str,
     video_id: str,
     file: UploadFile = File(...),
+    http_request: Request = None,
     container: ApiContainerDep = None,
-) -> dict[str, object]:
+) -> JSONResponse:
     """上传人工 SRT，并在同一原子生成任务中产出新的 AI 概况。"""
     filename = Path(file.filename or "").name
     if Path(filename).suffix.lower() != ".srt":
@@ -872,67 +911,40 @@ async def upload_srt_and_generate_video_summary(
     except UnicodeDecodeError as error:
         raise HTTPException(status_code=400, detail="SRT 文件必须使用 UTF-8 编码") from error
     try:
-        manual_transcript = ManualTranscriptInput(
-            transcript=parse_srt_transcript(raw_srt),
-            raw_srt=raw_srt,
-            filename=filename,
-        )
+        parse_srt_transcript(raw_srt)
     except (ValueError, TypeError) as error:
         raise HTTPException(status_code=400, detail=f"SRT 解析失败：{error}") from error
 
-    try:
-        video_summary = await container.generate_video_summary.run(
-            series_id,
-            video_id,
-            manual_transcript=manual_transcript,
-        )
-    except AsrModelNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except GenerateCancelledError as error:
-        raise HTTPException(status_code=409, detail="generation cancelled") from error
-    except GenerationScopeBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    if video_summary is None:
-        snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
-        if snapshot.status == "cancelled":
-            raise HTTPException(status_code=409, detail="generation cancelled")
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return video_summary.summary
+    _ensure_source_media_available(_require_video_source(container, series_id, video_id))
+    return _submit_video_generation_job(
+        container=container,
+        series_id=series_id,
+        video_id=video_id,
+        processing_mode="summary",
+        transcript_enhancement_enabled=None,
+        idempotency_key=http_request.headers.get("Idempotency-Key") if http_request is not None else None,
+        manual_transcript={"raw_srt": raw_srt, "filename": filename},
+    )
 
 
 @router.post("/api/videos/{series_id}/{video_id}/transcript/restore-auto-and-generate")
 async def restore_automatic_transcript_and_generate_video_summary(
     series_id: str,
     video_id: str,
+    http_request: Request,
     container: ApiContainerDep = None,
-) -> dict[str, object]:
+) -> JSONResponse:
     """改用自动字幕/ASR 重新生成，成功后才移除当前人工 SRT。"""
-    try:
-        video_summary = await container.generate_video_summary.run(
-            series_id,
-            video_id,
-            use_saved_manual_transcript=False,
-        )
-    except AsrModelNotReadyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except GenerateCancelledError as error:
-        raise HTTPException(status_code=409, detail="generation cancelled") from error
-    except GenerationScopeBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    if video_summary is None:
-        snapshot = container.generation_progress_tracker.get_snapshot(_build_task_id(series_id, video_id))
-        if snapshot.status == "cancelled":
-            raise HTTPException(status_code=409, detail="generation cancelled")
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return video_summary.summary
+    _ensure_source_media_available(_require_video_source(container, series_id, video_id))
+    return _submit_video_generation_job(
+        container=container,
+        series_id=series_id,
+        video_id=video_id,
+        processing_mode="summary",
+        transcript_enhancement_enabled=None,
+        idempotency_key=http_request.headers.get("Idempotency-Key"),
+        use_saved_manual_transcript=False,
+    )
 
 
 @router.post("/api/videos/{series_id}/{video_id}/generate/cancel")
@@ -951,6 +963,12 @@ async def cancel_video_summary_generation(
     Returns:
         {"status": "cancelled", "task_id": ...}
     """
+    job_repository = getattr(container, "job_repository", None)
+    if job_repository is not None:
+        snapshot = job_repository.request_cancel_for_resource(resource_id=video_id, operation="generate_summary")
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="no active generation job found")
+        return {"status": snapshot.status, "job_id": snapshot.id}
     task_id = _build_task_id(series_id, video_id)
     container.generation_progress_tracker.request_cancel(task_id)
     container.video_download_progress_tracker.request_cancel(build_video_download_task_id(series_id, video_id))

@@ -5,13 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.video_summary.infrastructure.persistence.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import (
     Job,
+    JobAttempt,
     JobContentStaging,
+    JobEvent,
     KnowledgeCard,
     KnowledgeCardSet,
     Mindmap,
@@ -41,7 +43,15 @@ class SqlCurrentContentRepository:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
 
-    def stage(self, *, job_id: str, video_id: str, payload: dict[str, Any]) -> None:
+    def stage(
+        self,
+        *,
+        job_id: str,
+        video_id: str,
+        payload: dict[str, Any],
+        worker_id: str | None = None,
+        lease_token: str | None = None,
+    ) -> None:
         _validate_payload(payload)
         with self._session_factory.begin() as session:
             job = session.get(Job, job_id)
@@ -49,6 +59,7 @@ class SqlCurrentContentRepository:
                 raise ContentPublishError("Cannot stage content for a missing job.")
             if job.resource_id != video_id:
                 raise ContentPublishError("Job resource does not match staged video.")
+            _require_owned_job(session, job, worker_id=worker_id, lease_token=lease_token)
             existing = session.get(JobContentStaging, job_id)
             if existing is None:
                 session.add(JobContentStaging(job_id=job_id, video_id=video_id, payload=payload, state="ready"))
@@ -57,7 +68,13 @@ class SqlCurrentContentRepository:
             else:
                 raise ContentPublishError("Job already has different staged content.")
 
-    def publish(self, *, job_id: str) -> PublishedContent:
+    def publish(
+        self,
+        *,
+        job_id: str,
+        worker_id: str | None = None,
+        lease_token: str | None = None,
+    ) -> PublishedContent:
         with self._session_factory.begin() as session:
             staged = session.scalar(select(JobContentStaging).where(JobContentStaging.job_id == job_id).with_for_update())
             if staged is None or staged.state != "ready":
@@ -68,6 +85,9 @@ class SqlCurrentContentRepository:
                 raise ContentPublishError("Staged content references a missing job or video.")
             if job.resource_id != video.id:
                 raise ContentPublishError("Job resource does not match staged video.")
+            _require_owned_job(session, job, worker_id=worker_id, lease_token=lease_token)
+            if job.cancel_requested_at is not None:
+                raise ContentPublishError("Cancelled jobs cannot publish content.")
 
             payload = staged.payload
             _validate_payload(payload)
@@ -99,7 +119,36 @@ class SqlCurrentContentRepository:
                 state.mindmap_version = 0
             job.status = "succeeded"
             job.active_key = None
+            job.claimed_by = None
+            job.lease_token = None
+            job.lease_expires_at = None
+            job.finished_at = session.scalar(select(func.now()))
+            job.result_content_version = version
+            if worker_id is not None and lease_token is not None:
+                attempt = session.scalar(
+                    select(JobAttempt).where(
+                        JobAttempt.job_id == job.id,
+                        JobAttempt.attempt_no == job.attempt_count,
+                        JobAttempt.worker_id == worker_id,
+                        JobAttempt.lease_token == lease_token,
+                    )
+                )
+                if attempt is None:
+                    raise ContentPublishError("Job attempt is missing.")
+                attempt.finished_at = job.finished_at
+                attempt.outcome = "succeeded"
             staged.state = "published"
+            sequence = (session.scalar(select(func.max(JobEvent.sequence)).where(JobEvent.job_id == job.id)) or 0) + 1
+            session.add(
+                JobEvent(
+                    id=new_ulid(),
+                    job_id=job.id,
+                    sequence=sequence,
+                    stage="succeeded",
+                    progress=100.0,
+                    detail="内容已原子发布",
+                )
+            )
             session.add(
                 OutboxEvent(
                     id=new_ulid(),
@@ -111,6 +160,28 @@ class SqlCurrentContentRepository:
                 )
             )
             return PublishedContent(video_id=video.id, content_version=version)
+
+
+def _require_owned_job(
+    session: Session,
+    job: Job,
+    *,
+    worker_id: str | None,
+    lease_token: str | None,
+) -> None:
+    if (worker_id is None) != (lease_token is None):
+        raise ContentPublishError("Worker identity and lease token must be supplied together.")
+    if worker_id is None:
+        return
+    now = session.scalar(select(func.now()))
+    if (
+        job.status != "running"
+        or job.claimed_by != worker_id
+        or job.lease_token != lease_token
+        or job.lease_expires_at is None
+        or job.lease_expires_at <= now
+    ):
+        raise ContentPublishError("Worker no longer owns the job lease.")
 
 
 def _replace_current_content(session: Session, *, video_id: str, content_version: int, payload: dict[str, Any]) -> None:

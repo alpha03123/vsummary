@@ -13,6 +13,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -88,13 +89,17 @@ def run(base_url: str, work_dir: Path, ffmpeg: str) -> dict[str, Any]:
         series_id, video = imported["id"], imported["videos"][0]
         video_id = video["id"]
         with srt_path.open("rb") as source:
-            summary = _ok(
+            submitted = _ok(
                 client.post(
                     f"/api/videos/{series_id}/{video_id}/transcript/srt-and-generate",
                     files={"file": (srt_path.name, source, "application/x-subrip")},
                 ),
-                "real summary",
+                "real summary job submission",
             ).json()
+        if "job_id" not in submitted:
+            raise RuntimeError(f"Expected an asynchronous summary job response: {submitted}")
+        _wait_job(client, submitted["job_id"])
+        summary = _ok(client.get(f"/api/videos/{series_id}/{video_id}/summary"), "real summary read").json()
         ai_summary = _ok(
             client.post(f"/api/videos/{series_id}/{video_id}/ai-summary/generate", json={"template": "tutorial"}),
             "real AI summary",
@@ -186,6 +191,18 @@ def _ok(response: httpx.Response, action: str) -> httpx.Response:
     if response.is_success:
         return response
     raise RuntimeError(f"{action} failed with HTTP {response.status_code}: {response.text}")
+
+
+def _wait_job(client: httpx.Client, job_id: str, timeout_seconds: float = 300.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        job = _ok(client.get(f"/api/jobs/{job_id}"), "summary job status").json()
+        if job["status"] == "succeeded":
+            return job
+        if job["status"] in {"failed", "cancelled"}:
+            raise RuntimeError(f"Summary job did not succeed: {job}")
+        time.sleep(0.5)
+    raise RuntimeError(f"Timed out waiting for summary job {job_id}.")
 
 
 if __name__ == "__main__":
