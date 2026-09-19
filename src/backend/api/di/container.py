@@ -7,35 +7,19 @@
 from __future__ import annotations
 
 from typing import Annotated, cast
-from pathlib import Path
 
 from fastapi import Depends, Request
 
-from backend.api.di.bootstrap import ApiContainer, build_api_container
-from backend.video_summary.infrastructure.config.settings import ensure_settings_file
-
-
-def _resolve_root_dir(start_path: Path | None = None) -> Path:
-    resolved_start = start_path or Path(__file__).resolve()
-    for candidate in resolved_start.parents:
-        settings_path = candidate / "config" / "settings.toml"
-        example_path = candidate / "config" / "settings.toml.example"
-        if settings_path.is_file() or example_path.is_file():
-            ensure_settings_file(settings_path)
-            return candidate
-    raise FileNotFoundError("settings file not found in parent config directories")
-
-
-ROOT = _resolve_root_dir()
+from backend.api.di.bootstrap import ApiContainer
 
 
 def build_default_container() -> ApiContainer:
-    """使用项目根目录构建默认的依赖注入容器。
+    """拒绝隐式文件工作区装配。
 
-    Returns:
-        初始化完成的 ``ApiContainer`` 实例，包含所有注册的用例和端口实现。
+    生产启动必须先完成受管 MySQL 启动和旧工作区迁移，再显式注入 SQL
+    Workspace。这样不会在一个遗漏的入口里重新启用旧 JSON 读写链路。
     """
-    return build_api_container(ROOT)
+    raise RuntimeError("VSummary requires an explicit SQL workspace container; start through backend.api.http.server.")
 
 
 def get_container(request: Request) -> ApiContainer:

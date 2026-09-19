@@ -26,7 +26,6 @@ from llama_index.core.embeddings import MockEmbedding
 from llama_index.core.vector_stores import FilterCondition, FilterOperator, MetadataFilter, MetadataFilters
 from llama_index.vector_stores.lancedb import LanceDBVectorStore
 
-from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.infrastructure.config.settings import (
     AgentRetrievalSettings,
     DEFAULT_AGENT_RETRIEVAL_MAX_HITS,
@@ -86,8 +85,8 @@ class SeriesRetrievalService:
     关键不变量：
         - 索引 schema 版本由 `INDEX_SCHEMA_VERSION` 控制；表名
           `INDEX_TABLE_NAME` 携带版本号，跨版本天然隔离；
-        - 每次索引变更后会同步更新 `*.signature.json`，用于在 `search` 时
-          检测"工作区内容已变化但索引未刷新"，避免返回陈旧结果；
+        - 索引变更后仅更新进程内签名；进程重启或索引不可用时从 SQL
+          Workspace 的当前内容重建，不将签名写入本地文件；
         - 写入/删除均通过 `self._index_lock`（`RLock`）串行化，保证并发安全；
         - `search` 走的是 `_require_index` 兜底链：未构建则尝试加载持久化
           索引；都拿不到则触发 `refresh_series` 并最终要求调用方先做刷新。
@@ -819,6 +818,14 @@ def _build_documents_for_video(
     video_id: str,
 ) -> list[RetrievalDocument]:
     """为单个视频读取四类制品并交给 `_build_documents_for_assets` 合成文档。"""
+    sql_reader = getattr(workspace, "get_rag_documents", None)
+    if callable(sql_reader):
+        records = sql_reader(series_id, video_id)
+        if records:
+            return [
+                RetrievalDocument(text=str(record["text"]), metadata=dict(record["metadata"]))
+                for record in records
+            ]
     return _build_documents_for_assets(
         summary=workspace.get_video_summary(series_id, video_id),
         ai_summary=_get_ai_summary(workspace, series_id, video_id),
@@ -1190,84 +1197,22 @@ def _escape_lance_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _signature_file_path(db_uri: str, table_name: str) -> Path:
-    """返回给定 (db_uri, table_name) 对应的 signature 文件路径。"""
-    return Path(db_uri) / f"{table_name}.signature.json"
-
-
 def _write_signature_file(
     db_uri: str,
     table_name: str,
     signature: SeriesSignatureMap,
 ) -> None:
-    signature_path = _signature_file_path(db_uri, table_name)
-    signature_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(
-        signature_path,
-        json.dumps(
-            {
-                "index_schema_version": INDEX_SCHEMA_VERSION,
-                "series_signatures": {
-                    series_id: list(series_signature)
-                    for series_id, series_signature in sorted(signature.items())
-                },
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-    )
+    """不再将 RAG 一致性状态持久化为本地 signature 文件。"""
+    del db_uri, table_name, signature
 
 
 def _read_signature_file(
     db_uri: str,
     table_name: str,
 ) -> SeriesSignatureMap | None:
-    """读取 signature 文件并解析为 `SeriesSignatureMap`；兼容旧版全工作区签名格式。
-
-    文件不存在或解析失败时返回 `None`，由调用方决定是否走全量重建。
-    """
-    signature_path = _signature_file_path(db_uri, table_name)
-    if not signature_path.exists():
-        return None
-    try:
-        payload = json.loads(signature_path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    raw_series_signatures = payload.get("series_signatures")
-    if isinstance(raw_series_signatures, dict):
-        signatures: SeriesSignatureMap = {}
-        for series_id, raw_signature in raw_series_signatures.items():
-            if not isinstance(raw_signature, list):
-                return None
-            signatures[str(series_id)] = tuple(str(item) for item in raw_signature)
-        return signatures
-    raw_signature = payload.get("signature")
-    if (
-        not isinstance(raw_signature, list)
-        or len(raw_signature) != 2
-        or not isinstance(raw_signature[0], list)
-        or not isinstance(raw_signature[1], list)
-    ):
-        return None
-    return _series_signatures_from_legacy_workspace_signature(
-        tuple(str(item) for item in raw_signature[0]),
-        tuple(str(item) for item in raw_signature[1]),
-    )
-
-
-def _series_signatures_from_legacy_workspace_signature(
-    series_ids: tuple[str, ...],
-    video_parts: tuple[str, ...],
-) -> SeriesSignatureMap:
-    """把旧版 `(series_ids, video_parts)` 签名转换为按系列分组的 `SeriesSignatureMap`。"""
-    signatures: SeriesSignatureMap = {series_id: () for series_id in series_ids}
-    grouped_parts: dict[str, list[str]] = {series_id: [] for series_id in series_ids}
-    for part in video_parts:
-        series_id = part.split(":", 1)[0]
-        grouped_parts.setdefault(series_id, []).append(part)
-    for series_id, parts in grouped_parts.items():
-        signatures[series_id] = tuple(sorted(parts))
-    return signatures
+    """不读取旧 signature 文件；索引缺失时从 SQL Workspace 重建。"""
+    del db_uri, table_name
+    return None
 
 
 def _expand_transcript_hit(

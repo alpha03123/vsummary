@@ -7,9 +7,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import hashlib
 import re
+from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
@@ -20,6 +19,7 @@ from backend.video_summary.library.models import (
     LibraryVideoCardDTO,
 )
 from backend.video_summary.library.parsers import DefaultBilibiliUrlParser
+from backend.video_summary.infrastructure.persistence.ids import new_ulid
 from backend.video_summary.library.ports import (
     BilibiliUrlParser,
     LinkedSeriesResolverWorkspace,
@@ -119,15 +119,17 @@ class CreateAgentLinkedSeries:
         normalized_title = title.strip()
         if not normalized_title:
             raise ValueError("title cannot be blank")
-        series_id = f"agent-{_slugify(normalized_title)}"
-        existing = self._workspace.get_linked_series(series_id)
+        existing = next(
+            (item for item in self._workspace.list_series() if item.is_agent_managed and item.title == normalized_title),
+            None,
+        )
         if existing is not None:
-            if existing.title == normalized_title:
-                return _to_series_dto(existing)
-            series_id = self._unique_series_id(series_id, normalized_title)
+            linked_existing = self._workspace.get_linked_series(existing.id)
+            if linked_existing is not None:
+                return _to_series_dto(linked_existing)
 
         linked_series = LinkedSeries(
-            series_id=series_id,
+            series_id=new_ulid(),
             title=normalized_title,
             cover_url="",
             source_url="",
@@ -137,16 +139,6 @@ class CreateAgentLinkedSeries:
         self._workspace.save_linked_series(linked_series)
         self._invalidator.invalidate()
         return _to_series_dto(linked_series)
-
-    def _unique_series_id(self, base_id: str, title: str) -> str:
-        suffix = hashlib.sha1(title.encode("utf-8")).hexdigest()[:8]
-        candidate = f"{base_id}-{suffix}"
-        if self._workspace.get_linked_series(candidate) is None:
-            return candidate
-        index = 2
-        while self._workspace.get_linked_series(f"{candidate}-{index}") is not None:
-            index += 1
-        return f"{candidate}-{index}"
 
 
 class ResolveBilibiliSeries:
@@ -301,12 +293,9 @@ class StartLinkedVideoDownload:
         Raises:
             LookupError: 系列或视频在链接系列中不存在。
         """
-        linked_series = self._workspace.get_linked_series(series_id)
-        if linked_series is None:
-            raise LookupError(f"linked series not found: {series_id}")
-        video = next((item for item in linked_series.videos if item.video_id == video_id), None)
+        video = self._workspace.get_linked_video_for_download(series_id, video_id)
         if video is None:
-            raise LookupError(f"video not found in linked series: {video_id}")
+            raise LookupError(f"linked video not found: {series_id}/{video_id}")
         return StartLinkedVideoDownloadResult(task_id=self._starter.start(series_id=series_id, video=video))
 
 
@@ -336,11 +325,6 @@ def _to_video_card_dto(video) -> LibraryVideoCardDTO:
         source_url=video.source_url,
         provider=video.provider,
     )
-
-
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "series"
 
 
 _PROVIDER_HOSTS = {

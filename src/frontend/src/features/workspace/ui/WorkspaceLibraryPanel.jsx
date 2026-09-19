@@ -202,6 +202,10 @@ export function getSourceViewLabel(provider) {
   return labels[provider] ?? "查看原媒体";
 }
 
+export function getVideoMediaIdentifier(video) {
+  return video.sourceId || video.sourceName;
+}
+
 function PanelFooter({
   selectedContextType,
   selectedVideo,
@@ -883,7 +887,7 @@ export function WorkspaceLibraryPanel({
                     </span>
                   ) : null}
                   <span className="text-xs text-stone-600 dark:text-stone-400 truncate">
-                    {video.isLinked || video.status === "linked" ? video.sourceUrl || video.sourceName : video.sourceName}
+                    {getVideoMediaIdentifier(video)}
                   </span>
                 </div>
               </div>

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 from backend.video_summary.domain.models import SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError, GenerateVideoSummary
-from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
+from backend.video_summary.infrastructure.storage.temporary_generation_artifact_store import TemporaryGenerationArtifactStore
 
 
 class FakeArtifactStore:
@@ -251,7 +251,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=FakeTranscriber(),
                 transcript_enhancer=None,
                 summarizer=CancelAfterTranscriptSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             with self.assertRaises(GenerateCancelledError):
@@ -283,7 +283,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=transcriber,
                 transcript_enhancer=None,
                 summarizer=CancelAfterTranscriptSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             with self.assertRaises(GenerateCancelledError):
@@ -310,7 +310,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=first_transcriber,
                 transcript_enhancer=None,
                 summarizer=FakeSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             await first_use_case.run(video_path, output_dir)
@@ -323,7 +323,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=second_transcriber,
                 transcript_enhancer=None,
                 summarizer=second_summarizer,
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             document = await second_use_case.run(video_path, output_dir)
@@ -344,7 +344,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=FakeTranscriber(),
                 transcript_enhancer=None,
                 summarizer=FakeSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             await first_use_case.run(video_path, output_dir)
@@ -357,7 +357,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=second_transcriber,
                 transcript_enhancer=None,
                 summarizer=FakeSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             await second_use_case.run(video_path, output_dir)
@@ -377,7 +377,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=FakeTranscriber(),
                 transcript_enhancer=first_enhancer,
                 summarizer=FakeSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             await first_use_case.run(video_path, output_dir)
@@ -388,7 +388,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=FakeTranscriber(),
                 transcript_enhancer=second_enhancer,
                 summarizer=FakeSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
 
             await second_use_case.run(video_path, output_dir)
@@ -411,7 +411,7 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
                 transcriber=transcriber,
                 transcript_enhancer=None,
                 summarizer=FakeSummarizer(),
-                artifact_store=FileSystemGenerationArtifactStore(),
+                artifact_store=TemporaryGenerationArtifactStore(),
             )
             original_write_text = Path.write_text
             removed_staging = False

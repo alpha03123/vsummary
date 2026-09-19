@@ -275,10 +275,11 @@ class YtDlpPlatformDownloader:
 
 
 class BackgroundYtDlpDownloadStarter:
-    def __init__(self, *, root_dir: Path, downloader: YtDlpPlatformDownloader, progress_tracker: ProgressTracker) -> None:
+    def __init__(self, *, root_dir: Path, downloader: YtDlpPlatformDownloader, progress_tracker: ProgressTracker, on_downloaded: Callable[[str, str, Path], None] | None = None) -> None:
         self._root_dir = root_dir
         self._downloader = downloader
         self._progress_tracker = progress_tracker
+        self._on_downloaded = on_downloaded
 
     def start_video(self, *, series_id: str, video: LinkedVideo) -> str:
         task_id = f"download/{series_id}/{video.video_id}"
@@ -286,7 +287,10 @@ class BackgroundYtDlpDownloadStarter:
 
         async def run() -> None:
             try:
-                await self._downloader.download_async(video, self._root_dir / "videos" / series_id, reporter)
+                path = await self._downloader.download_async(video, self._root_dir / "data" / "downloads" / series_id / video.video_id, reporter)
+                if self._on_downloaded is None:
+                    raise RuntimeError("A download sink is required; refusing to persist media outside BlobStore.")
+                self._on_downloaded(series_id, video.video_id, path)
             except Exception:
                 LOGGER.exception(
                     "linked video download failed",

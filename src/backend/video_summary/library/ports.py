@@ -294,6 +294,9 @@ class LinkedSeriesStore(Protocol):
     def get_linked_series(self, series_id: str) -> LinkedSeries | None:
         """取链接型系列；不存在则返回 `None`。"""
 
+    def get_linked_video_for_download(self, series_id: str, video_id: str) -> LinkedVideo | None:
+        """按库视频 ID 取下载所需的外部链接元数据。"""
+
     def delete_linked_series(self, series_id: str) -> bool:
         """删除一个链接型系列；返回是否实际删除了记录。"""
 

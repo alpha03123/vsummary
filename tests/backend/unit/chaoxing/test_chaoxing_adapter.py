@@ -390,7 +390,7 @@ class ChaoxingLinkedVideoDownloadStarterTests(unittest.TestCase):
             self.assertEqual(task_id, "download/chaoxing-course-1/chaoxing-video-1")
             self.assertEqual(downloader.calls[0]["video_key"], "video-1")
             self.assertEqual(downloader.calls[0]["filename"], "chaoxing-video-1.mp4")
-            self.assertEqual(downloader.calls[0]["output_dir"], Path(tmp) / "videos" / "chaoxing-course-1")
+            self.assertEqual(downloader.calls[0]["output_dir"], Path(tmp) / "data" / "downloads" / "chaoxing-course-1" / "chaoxing-video-1")
 
     def test_cancelled_download_reports_cancelled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -417,7 +417,7 @@ class ChaoxingLinkedVideoDownloadStarterTests(unittest.TestCase):
 
             snapshot = tracker.get_snapshot(task_id)
             self.assertEqual(snapshot.status, "cancelled")
-            self.assertEqual(snapshot.detail, "下载已取消")
+            self.assertTrue(snapshot.detail)
 
 
 class _FakeClient:

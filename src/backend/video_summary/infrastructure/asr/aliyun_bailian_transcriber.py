@@ -130,7 +130,8 @@ class AliyunBailianTranscriber:
         output = _response_output(response)
         task_status = str(output.get("task_status", "")).upper()
         if task_status and task_status != "SUCCEEDED":
-            logger.error(_format_task_failure(task_status, output))
+            failure_message = _format_task_failure(task_status, output)
+            logger.error(failure_message)
             if _is_no_valid_fragment(output):
                 return response
             raise RuntimeError(_to_user_task_failure_message(task_status, output))

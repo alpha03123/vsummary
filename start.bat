@@ -45,9 +45,19 @@ if not defined ENV_PATH (
 )
 
 set "PYTHON=%ENV_PATH%\python.exe"
+set "MYSQL_RUNTIME=%VSUMMARY_MYSQL_HOME%"
+set "VSUMMARY_DATA=%LOCALAPPDATA%\VSummary"
+set "HF_HOME=%VSUMMARY_DATA%\cache\huggingface"
+set "HUGGINGFACE_HUB_CACHE=%VSUMMARY_DATA%\cache\huggingface\hub"
+if not defined MYSQL_RUNTIME set "MYSQL_RUNTIME=C:\Program Files\MySQL\MySQL Server 8.4"
 if not exist "%PYTHON%" (
     echo [error] Python executable not found in "%ENV_PATH%".
     echo Please recreate the source environment selected for this machine.
+    pause
+    exit /b 1
+)
+if not exist "%MYSQL_RUNTIME%\bin\mysqld.exe" (
+    echo [error] managed MySQL runtime not found. Set VSUMMARY_MYSQL_HOME to a MySQL 8.4 runtime.
     pause
     exit /b 1
 )
@@ -59,7 +69,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001
+start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home "%MYSQL_RUNTIME%"
 start "vsummary-frontend" cmd /k cd /d "%FRONTEND%" ^&^& npm run dev
 
 echo Backend:  http://127.0.0.1:8001

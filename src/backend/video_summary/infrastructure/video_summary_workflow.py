@@ -290,9 +290,6 @@ def _round_seconds(value: float | None) -> float | None:
 
 
 def _task_id_for(root_dir: Path, output_dir: Path) -> str:
-    """返回可跨 API、后台任务和子进程日志关联的视频任务 ID。"""
-    workspace_dir = root_dir / "workspace"
-    try:
-        return output_dir.relative_to(workspace_dir).as_posix()
-    except ValueError:
-        return output_dir.as_posix()
+    """返回可跨 API、后台任务和子进程日志关联的临时任务 ID。"""
+    del root_dir
+    return output_dir.name or output_dir.as_posix()

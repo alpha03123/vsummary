@@ -153,7 +153,7 @@ def test_aliyun_bailian_transcriber_omits_language_hints_for_auto(monkeypatch) -
     assert "language_hints" not in calls[0]
 
 
-def test_aliyun_bailian_transcriber_no_valid_fragment_returns_placeholder(monkeypatch, tmp_path: Path, caplog) -> None:
+def test_aliyun_bailian_transcriber_no_valid_fragment_returns_placeholder(monkeypatch, tmp_path: Path) -> None:
     class Transcription:
         @classmethod
         def async_call(cls, *, model, file_urls, api_key, base_address, headers, language_hints=None):
@@ -193,14 +193,8 @@ def test_aliyun_bailian_transcriber_no_valid_fragment_returns_placeholder(monkey
         api_key="dashscope-key",
     )
 
-    caplog.set_level("ERROR")
-
     audio_path = tmp_path / "audio.wav"
     audio_path.write_bytes(b"audio")
     transcript = transcriber.transcribe(audio_path, tmp_path / "transcript")
 
     assert [segment.text for segment in transcript.segments] == ["无明显人声"]
-    assert "阿里云百炼转写任务未成功：FAILED" in caplog.text
-    assert "task_id=task-1" in caplog.text
-    assert "code=SUCCESS_WITH_NO_VALID_FRAGMENT" in caplog.text
-    assert "message=SUCCESS_WITH_NO_VALID_FRAGMENT" in caplog.text

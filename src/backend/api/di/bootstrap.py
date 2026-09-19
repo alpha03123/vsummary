@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from backend.agent import AgentContextBudgetService, FileAgentSessionStore
+from backend.agent import AgentContextBudgetService
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator, _WorkspaceIndexRefresher
@@ -26,14 +25,14 @@ from backend.external import (
     YtDlpPlatformDownloader,
     YtDlpPlatformResolver,
 )
-from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.infrastructure.storage.library_generation_adapters import (
-    WorkspaceBackedSeriesMindmapGenerator,
-    WorkspaceBackedVideoMindmapGenerator,
-    WorkspaceBackedVideoSummaryGenerator,
+from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
+from backend.video_summary.infrastructure.persistence.sql_generation_adapters import (
+    SqlBackedSeriesMindmapGenerator,
+    SqlBackedVideoMindmapGenerator,
+    SqlBackedVideoSummaryGenerator,
 )
 from backend.video_summary.infrastructure.series_mindmap_workflow import ConfiguredSeriesMindmapWorkflow
 from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
@@ -42,7 +41,8 @@ from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMind
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
 from backend.video_summary.infrastructure.config.settings_service import SettingsService, SettingsServicePort
 from backend.video_summary.infrastructure.config.settings import load_settings
-from backend.shared.llm.usage import SQLiteLlmUsageStore
+from backend.shared.llm.usage import MySqlLlmUsageStore
+from backend.video_summary.infrastructure.persistence.sql_agent_session_store import SqlAgentSessionStore
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
@@ -141,13 +141,13 @@ class ApiContainer:
     knowledge_memory_progress_tracker: InMemoryProgressTracker
     rag_model_manager: RagModelManager
     chaoxing_importer: ChaoxingCourseImporter
-    linked_series_workspace: FileSystemVideoWorkspace
+    linked_series_workspace: object
     workspace_index_invalidator: object
     settings_service: SettingsServicePort
-    usage_store: SQLiteLlmUsageStore
+    usage_store: MySqlLlmUsageStore
     get_agent_graph_service: Callable[[], AgentGraphService]
     get_agent_context_usage: Callable[[], AgentContextBudgetService]
-    agent_session_store: FileAgentSessionStore
+    agent_session_store: object
     invalidate_agent_graph_service: Callable[[], None]
     invalidate_agent_workspace_indexes: Callable[[], None]
     refresh_agent_workspace_indexes: Callable[[], None]
@@ -160,10 +160,13 @@ def build_api_container(
     knowledge_card_generator: KnowledgeCardGenerator | None = None,
     faster_whisper_model_manager: FasterWhisperModelManager | None = None,
     whisper_cpp_model_manager: WhisperCppModelManager | None = None,
+    workspace_override: object | None = None,
 ) -> ApiContainer:
     config_path = root_dir / "config" / "settings.toml"
     settings = load_settings(config_path, root_dir)
-    workspace = FileSystemVideoWorkspace(root_dir)
+    if workspace_override is None:
+        raise RuntimeError("build_api_container requires an explicit SQL workspace.")
+    workspace = workspace_override
     progress_tracker = InMemoryProgressTracker()
     mindmap_progress_tracker = InMemoryProgressTracker()
     video_download_progress_tracker = InMemoryProgressTracker()
@@ -171,7 +174,10 @@ def build_api_container(
     chaoxing_import_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
     rag_model_progress_tracker = InMemoryProgressTracker()
-    usage_store = SQLiteLlmUsageStore(root_dir / "data" / "usage" / "llm_usage.sqlite3")
+    if not isinstance(workspace, SqlVideoWorkspace):
+        raise RuntimeError("build_api_container requires SqlVideoWorkspace.")
+    usage_store = MySqlLlmUsageStore(workspace.session_factory)
+    agent_session_store = SqlAgentSessionStore(workspace.session_factory)
     index_refresher_ref: dict[str, _WorkspaceIndexRefresher | None] = {"value": None}
 
     def on_rag_model_download_completed(model_key: str) -> None:
@@ -198,27 +204,30 @@ def build_api_container(
             raise RuntimeError("AI 概括索引刷新器尚未初始化。")
         index_refresher.upsert_video(series_id, video_id)
 
-    resolved_generator = generator or WorkspaceBackedVideoSummaryGenerator(
+    resolved_generator = generator or SqlBackedVideoSummaryGenerator(
         workspace=workspace,
         workflow=ConfiguredVideoSummaryWorkflow(root_dir, usage_recorder=usage_store),
-        ai_summary_completion_notifier=queue_ai_summary_index_refresh,
+        temp_root=workspace.cache_root,
     )
-    resolved_mindmap_generator = mindmap_generator or WorkspaceBackedVideoMindmapGenerator(
+    resolved_mindmap_generator = mindmap_generator or SqlBackedVideoMindmapGenerator(
         workspace=workspace,
         workflow=ConfiguredMindmapWorkflow(root_dir, usage_recorder=usage_store),
+        temp_root=workspace.cache_root,
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
         root_dir,
         usage_recorder=usage_store,
     )
     resolved_note_generator = ConfiguredNoteGenerator(root_dir, usage_recorder=usage_store)
-    resolved_series_mindmap_generator = WorkspaceBackedSeriesMindmapGenerator(
+    resolved_series_mindmap_generator = SqlBackedSeriesMindmapGenerator(
         workspace=workspace,
         workflow=ConfiguredSeriesMindmapWorkflow(root_dir, usage_recorder=usage_store),
+        temp_root=workspace.cache_root,
     )
     agent_runtime = LazyAgentRuntimeProvider(
         root_dir=root_dir,
         workspace=workspace,
+        session_store=agent_session_store,
         rag_model_manager=rag_model_manager,
         usage_recorder=usage_store,
     )
@@ -243,30 +252,6 @@ def build_api_container(
         multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
     )
 
-    async def wait_for_ai_summary_visual_evidence(series_id: str, video_id: str) -> None:
-        current_settings = load_settings(config_path, root_dir)
-        if not current_settings.generation.ai_summary_multimodal_enabled:
-            raise RuntimeError("标准画面输入需要开启 AI 概括多模态。")
-        for _ in range(1_200):
-            evidence = workspace.get_video_ai_summary_visual_evidence(series_id, video_id)
-            if evidence is not None and evidence.frames:
-                return
-            tools = workspace.get_video_workspace_tools(series_id, video_id)
-            status = tools.ai_summary.status if tools is not None and tools.ai_summary is not None else "failed"
-            if status == "failed":
-                raise RuntimeError("AI 概括多模态生成失败，无法提供标准画面输入。")
-            if status == "ready":
-                raise RuntimeError("AI 概括未产出可用画面证据，无法提供标准画面输入。")
-            await asyncio.sleep(0.5)
-        raise RuntimeError("等待 AI 概括画面证据超时。")
-
-    def auto_artifact_requires_visual_evidence(artifact: str) -> bool:
-        current_settings = load_settings(config_path, root_dir)
-        return (
-            (artifact == "mindmap" and current_settings.generation.mindmap_visual_input == "evidence")
-            or (artifact == "knowledge_cards" and current_settings.generation.cards_visual_input == "evidence")
-        )
-
     auto_artifacts = AutoGenerateVideoArtifacts(
         load_enabled_artifacts=lambda: load_settings(config_path, root_dir).generation.auto_generate_artifacts,
         generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
@@ -282,8 +267,6 @@ def build_api_container(
             visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
         ).run(series_id, video_id),
-        requires_visual_evidence=auto_artifact_requires_visual_evidence,
-        wait_for_visual_evidence=wait_for_ai_summary_visual_evidence,
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,
@@ -329,10 +312,14 @@ def build_api_container(
         platform.provider: DrissionCookieInitializer(root_dir=root_dir, platform=platform)
         for platform in external_platforms
     }
+    download_sink = getattr(workspace, "attach_downloaded_file", None)
+    if not callable(download_sink):
+        raise RuntimeError("SQL workspace must provide an external-download BlobStore sink.")
     bilibili_download_starter = BackgroundBilibiliDownloadStarter(
         root_dir=root_dir,
         downloader=BilibiliDownloader(),
         progress_tracker=video_download_progress_tracker,
+        on_downloaded=download_sink,
     )
     external_download_starters = {
         platform.provider: YtDlpLinkedVideoDownloadStarter(
@@ -341,6 +328,7 @@ def build_api_container(
                 root_dir=root_dir,
                 downloader=YtDlpPlatformDownloader(platform),
                 progress_tracker=video_download_progress_tracker,
+                on_downloaded=download_sink,
             ),
         )
         for platform in external_platforms
@@ -358,6 +346,7 @@ def build_api_container(
                 root_dir=root_dir,
                 client=chaoxing_client,
                 progress_tracker=video_download_progress_tracker,
+                on_downloaded=download_sink,
             ),
             **external_download_starters,
         }
@@ -437,7 +426,7 @@ def build_api_container(
         usage_store=usage_store,
         get_agent_graph_service=agent_runtime.get_agent_graph_service,
         get_agent_context_usage=agent_runtime.get_context_budget_service,
-        agent_session_store=agent_runtime.session_store,
+        agent_session_store=agent_session_store,
         invalidate_agent_graph_service=agent_runtime.invalidate_agent_graph_service,
         invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
         refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,

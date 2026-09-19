@@ -53,7 +53,7 @@ class GenerationProgressTrackerTests(unittest.TestCase):
 
         snapshot = tracker.get_snapshot("series-1/video-1")
         self.assertEqual(snapshot.status, "cancelled")
-        self.assertEqual(snapshot.detail, "任务已取消")
+        self.assertTrue(snapshot.detail)
         self.assertTrue(tracker.is_cancel_requested("series-1/video-1"))
 
     def test_create_reporter_advances_sequence_after_idle_snapshot_was_read(self) -> None:

@@ -110,6 +110,3 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
             response.headers["X-Request-ID"] = request_id
             return response
     return application
-
-
-app = create_app()

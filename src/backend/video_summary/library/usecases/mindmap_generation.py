@@ -66,8 +66,6 @@ class GenerateVideoMindmapFromLibrary:
         transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
         visual_reader = getattr(self._workspace, "get_video_ai_summary_visual_evidence", None)
         visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
-        if self._visual_input == "evidence" and (visual_evidence is None or not visual_evidence.frames):
-            raise ValueError("思维导图的标准画面输入需要先生成带多模态画面证据的 AI 概括。")
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         source = self._workspace.get_video_source(series_id, video_id)
         visual_frame_paths = _visual_frame_pool_paths(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from threading import Lock
 
-from backend.agent import AgentContextBudgetService, FileAgentSessionStore
+from backend.agent import AgentContextBudgetService
 from backend.agent.memory.messages import MemoryMessageCompactor
 from backend.agent.infrastructure import LiteLLMChatGateway
 from backend.agent.schemas.tool_calls import ToolName
@@ -20,7 +20,7 @@ from backend.video_summary.infrastructure.rag.agent_memory import AgentWorkspace
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
 from backend.video_summary.infrastructure.config.settings import load_env_settings, load_settings, normalize_openai_base_url
 from backend.shared.llm.usage import LlmUsageRecorder
-from backend.video_summary.infrastructure.storage.filesystem_video_workspace import FileSystemVideoWorkspace
+from backend.video_summary.library.ports import VideoLibraryReader
 from backend.video_summary.tool_executor import RegistryAgentToolExecutor
 from backend.video_summary.tools.notes import execute_open_notes
 from backend.video_summary.tools.video import execute_video_seek
@@ -31,7 +31,8 @@ class LazyAgentRuntimeProvider:
         self,
         *,
         root_dir: Path,
-        workspace: FileSystemVideoWorkspace,
+        workspace: VideoLibraryReader,
+        session_store,
         rag_model_manager: RagModelManager | None = None,
         usage_recorder: LlmUsageRecorder | None = None,
     ) -> None:
@@ -40,7 +41,7 @@ class LazyAgentRuntimeProvider:
         self._rag_model_manager = rag_model_manager
         self._usage_recorder = usage_recorder
         self._context_loader = WorkspaceAgentContextLoader(workspace)
-        self.session_store = FileAgentSessionStore(root_dir / "data" / "agent_sessions")
+        self.session_store = session_store
         self._lock = Lock()
         self._cached_agent_graph_service: AgentGraphService | None = None
         self._cached_context_budget_service: AgentContextBudgetService | None = None

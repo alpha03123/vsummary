@@ -535,10 +535,12 @@ class BackgroundBilibiliDownloadStarter:
         root_dir: Path,
         downloader: BilibiliDownloader,
         progress_tracker: ProgressTracker,
+        on_downloaded: Callable[[str, str, Path], None] | None = None,
     ) -> None:
         self._root_dir = root_dir
         self._downloader = downloader
         self._progress_tracker = progress_tracker
+        self._on_downloaded = on_downloaded
 
     def start(self, *, series_id: str, video_id: str, bvid: str, page: int) -> str:
         """在后台启动指定 Bilibili 视频的下载。
@@ -556,13 +558,17 @@ class BackgroundBilibiliDownloadStarter:
         """
         task_id = build_video_download_task_id(series_id, video_id)
         reporter = self._progress_tracker.create_reporter(task_id)
-        dest_dir = self._root_dir / "videos" / series_id
+        dest_dir = self._root_dir / "data" / "downloads" / series_id / video_id
 
         async def _run() -> None:
             try:
-                await self._downloader.download_async(bvid, page, dest_dir, reporter)
-            except Exception:
-                pass
+                path = await self._downloader.download_async(bvid, page, dest_dir, reporter)
+                if self._on_downloaded is not None:
+                    self._on_downloaded(series_id, video_id, path)
+                else:
+                    raise RuntimeError("A download sink is required; refusing to persist media outside BlobStore.")
+            except Exception as error:
+                reporter.failed(str(error))
 
         asyncio.create_task(_run())
         return task_id

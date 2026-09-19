@@ -668,11 +668,13 @@ class ChaoxingLinkedVideoDownloadStarter:
         client: ChaoxingDownloaderClient,
         progress_tracker: ProgressTracker,
         run_in_background: bool = True,
+        on_downloaded: Callable[[str, str, Path], None] | None = None,
     ) -> None:
         self._root_dir = root_dir
         self._client = client
         self._progress_tracker = progress_tracker
         self._run_in_background = run_in_background
+        self._on_downloaded = on_downloaded
 
     def start(self, *, series_id: str, video: LinkedVideo) -> str:
         """启动超星视频下载并返回任务 ID。
@@ -695,17 +697,20 @@ class ChaoxingLinkedVideoDownloadStarter:
             raise RuntimeError(f"chaoxing linked video missing download_key: {video.video_id}")
         task_id = build_video_download_task_id(series_id, video.video_id)
         reporter = self._progress_tracker.create_reporter(task_id)
-        dest_dir = self._root_dir / "videos" / series_id
+        dest_dir = self._root_dir / "data" / "downloads" / series_id / video.video_id
 
         def _run() -> None:
             try:
                 reporter.update("download", 0.0, "开始下载超星视频")
-                self._client.download_video(
+                path = self._client.download_video(
                     video.download_key,
                     output_dir=dest_dir,
                     filename=f"{video.video_id}.mp4",
                     progress=lambda downloaded, total: _report_download_progress_or_cancel(reporter, downloaded, total),
                 )
+                if self._on_downloaded is None:
+                    raise RuntimeError("A download sink is required; refusing to persist media outside BlobStore.")
+                self._on_downloaded(series_id, video.video_id, Path(path))
                 reporter.completed(f"下载完成：{video.video_id}.mp4")
             except ChaoxingDownloadCancelled as error:
                 reporter.cancelled(str(error))

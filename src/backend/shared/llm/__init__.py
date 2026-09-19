@@ -1,7 +1,7 @@
 from .chat_stream import ChatCompletionStreamChunk
 from .litellm_gateway import LiteLLMCompletionGateway
 from .multimodal import build_multimodal_user_content
-from .usage import LlmUsageCategory, LlmUsageRecord, SQLiteLlmUsageStore
+from .usage import LlmUsageCategory, LlmUsageRecord, MySqlLlmUsageStore
 
 __all__ = [
     "ChatCompletionStreamChunk",
@@ -9,5 +9,5 @@ __all__ = [
     "build_multimodal_user_content",
     "LlmUsageCategory",
     "LlmUsageRecord",
-    "SQLiteLlmUsageStore",
+    "MySqlLlmUsageStore",
 ]

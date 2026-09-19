@@ -16,7 +16,8 @@ param(
     [switch]$ReusePreviousRuntime,
     [switch]$KeepFrontendDist,
     [switch]$CleanNodeModules,
-    [switch]$CleanBuildArtifacts
+    [switch]$CleanBuildArtifacts,
+    [string]$MySqlRuntimeSource = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -551,6 +552,35 @@ function Copy-RuntimeFromFullPackage {
     }
 }
 
+function Copy-ManagedMySqlRuntime {
+    param([string]$DestinationRoot)
+
+    if ([string]::IsNullOrWhiteSpace($MySqlRuntimeSource)) {
+        throw "MySqlRuntimeSource is required to build a local package with managed MySQL."
+    }
+    $sourceRoot = (Resolve-Path -LiteralPath $MySqlRuntimeSource -ErrorAction Stop).Path
+    $mysqld = Join-Path $sourceRoot "bin\mysqld.exe"
+    $share = Join-Path $sourceRoot "share"
+    if (-not (Test-Path -LiteralPath $mysqld -PathType Leaf) -or -not (Test-Path -LiteralPath $share -PathType Container)) {
+        throw "MySqlRuntimeSource must contain bin\mysqld.exe and share\: $sourceRoot"
+    }
+    Remove-PathIfExists -Path $DestinationRoot
+    Ensure-Directory -Path $DestinationRoot
+    foreach ($directory in @("bin", "lib", "share")) {
+        $sourceDirectory = Join-Path $sourceRoot $directory
+        if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
+            throw "MySqlRuntimeSource is missing required directory '$directory': $sourceRoot"
+        }
+        Copy-DirectoryContents -Source $sourceDirectory -Destination (Join-Path $DestinationRoot $directory)
+    }
+    foreach ($licenseName in @("LICENSE", "LICENSE.txt", "README")) {
+        $licensePath = Join-Path $sourceRoot $licenseName
+        if (Test-Path -LiteralPath $licensePath -PathType Leaf) {
+            Copy-Item -LiteralPath $licensePath -Destination (Join-Path $DestinationRoot $licenseName) -Force
+        }
+    }
+}
+
 function Invoke-CondaUnpack {
     param([string]$RuntimeRoot)
 
@@ -761,10 +791,6 @@ function Build-FullPackage {
     Ensure-Directory -Path $Variant.PackageRoot
 
     Copy-DirectoryContents -Source $AppRoot -Destination $Variant.PackageRoot
-    Ensure-Directory -Path (Join-Path $Variant.PackageRoot "videos")
-    Ensure-Directory -Path (Join-Path $Variant.PackageRoot "workspace")
-    Ensure-Directory -Path (Join-Path $Variant.PackageRoot "data")
-
     Copy-Item -LiteralPath $Variant.SettingsTemplate -Destination (Join-Path $Variant.PackageRoot "config\settings.toml") -Force
     Set-Content -LiteralPath (Join-Path $Variant.PackageRoot "RUNTIME") -Value $Variant.Kind -Encoding ASCII
     Write-InstalledState -PackageRoot $Variant.PackageRoot -Variant $Variant
@@ -778,6 +804,7 @@ function Build-FullPackage {
         Remove-PathIfExists -Path $packageRuntimeRoot
         Copy-DirectoryContents -Source $Variant.RuntimeRoot -Destination $packageRuntimeRoot
     }
+    Copy-ManagedMySqlRuntime -DestinationRoot (Join-Path $packageRuntimeRoot "mysql")
 
     Write-Host "Checking packaged dependency contract"
     Test-PackagedDependencyContract -PackageRoot $Variant.PackageRoot -Kind $Variant.Kind

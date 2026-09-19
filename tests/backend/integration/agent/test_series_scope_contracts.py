@@ -35,7 +35,6 @@ from backend.agent.schemas.tool_calls import (
     VideoSeekCall,
 )
 from backend.agent.session.models import AgentSessionMessageEntry, AgentSessionSnapshot
-from backend.agent.session.store import FileAgentSessionStore
 from backend.agent.infrastructure.context_loader import StaticAgentContextLoader
 from backend.video_summary.tools.notes import execute_open_notes
 from backend.video_summary.tools.video import execute_video_seek
@@ -455,33 +454,6 @@ class SeriesScopeContractTests(unittest.TestCase):
         )
 
         self.assertNotIn("selected_videos", store.last_append)
-
-    def test_file_session_store_persists_only_context_and_messages(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            store = FileAgentSessionStore(Path(temp_dir))
-
-            store.append_turn(
-            session_id="series|series-1",
-            memory_key="series|series-1",
-            context=AgentContext(
-                session_id="series|series-1",
-                scope_type=ScopeType.SERIES.value,
-                series_id="series-1",
-                ),
-                messages=[
-                    AgentChatMessage(role="user", content="这个系列讲什么？"),
-                    AgentChatMessage(role="assistant", content="讲 RAG。"),
-                ],
-            )
-
-            [snapshot_path] = Path(temp_dir).glob("*.json")
-            payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
-
-        self.assertEqual(set(payload), {"session_id", "memory_key", "context", "messages", "updated_at"})
-        self.assertNotIn("dialog_history", payload["context"])
-        self.assertNotIn("history_summary", payload["context"])
-        self.assertNotIn("evidence_history", payload["context"])
-        self.assertNotIn("evidence_entries", payload)
 
     def test_graph_input_builder_uses_persisted_messages_as_memory_messages(self) -> None:
         session_id = "video|series-1|video-1"

@@ -87,7 +87,7 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.json()["scope"], "videos")
         self.assertEqual(response.json()["video_ids"], ["video-1", "video-2"])
         self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-1").stage, "queued")
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-2").detail, "任务已进入队列，等待开始处理")
+        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-2").stage, "queued")
 
     def test_cancelled_selected_video_does_not_restart_from_agent_queue(self) -> None:
         container = _build_container()

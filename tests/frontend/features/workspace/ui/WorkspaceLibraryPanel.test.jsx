@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { getSourceViewLabel, WorkspaceLibraryPanel } from "@src/features/workspace/ui/WorkspaceLibraryPanel";
+import { getSourceViewLabel, getVideoMediaIdentifier, WorkspaceLibraryPanel } from "@src/features/workspace/ui/WorkspaceLibraryPanel";
 
 const linkedDownloadedVideo = {
   id: "BV1xx411c7mD",
@@ -21,6 +21,11 @@ describe("WorkspaceLibraryPanel", () => {
     ["", "查看原媒体"],
   ])("uses the provider-specific source label for %s", (provider, expected) => {
     expect(getSourceViewLabel(provider)).toBe(expected);
+  });
+
+  it("shows the platform media identifier below the title when available", () => {
+    expect(getVideoMediaIdentifier({ sourceId: "BV1xx411c7mD", sourceName: "source.mp4" })).toBe("BV1xx411c7mD");
+    expect(getVideoMediaIdentifier({ sourceId: "", sourceName: "lesson.mp4" })).toBe("lesson.mp4");
   });
 
   function renderPanelWithVideo(video) {

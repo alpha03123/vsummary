@@ -89,6 +89,7 @@ class AgentStreamErrorTests(unittest.TestCase):
         provider = LazyAgentRuntimeProvider(
             root_dir=Path("."),
             workspace=None,
+            session_store=object(),
             rag_model_manager=None,
         )
 
@@ -107,13 +108,20 @@ class AgentStreamErrorTests(unittest.TestCase):
 
 class FakeContainer:
     def __init__(self, root_dir: Path, error: Exception) -> None:
-        self.root_dir = root_dir
+        self.root_dir = None
         self.config_path = root_dir / "config" / "settings.toml"
         self.rag_model_manager = None
         self._error = error
+        self.get_video_summary = FakeVideoSummaryQuery()
 
     def get_agent_graph_service(self):
         return FakeAgentGraphService(self._error)
+
+
+class FakeVideoSummaryQuery:
+    def run(self, series_id: str, video_id: str):
+        del series_id, video_id
+        return object()
 
 
 class FakeSettings:

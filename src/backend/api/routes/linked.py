@@ -476,7 +476,7 @@ async def cancel_video_download(series_id: str, video_id: str, container: ApiCon
     Returns:
         {"status": "cancelling"}
     """
-    task_id = build_video_download_task_id(series_id, video_id)
+    task_id = _download_task_id(container, series_id, video_id)
     container.video_download_progress_tracker.request_cancel(task_id)
     return {"status": "cancelling"}
 
@@ -496,7 +496,7 @@ async def stream_video_download_progress(series_id: str, video_id: str, containe
     Returns:
         StreamingResponse（`text/event-stream`）。
     """
-    task_id = build_video_download_task_id(series_id, video_id)
+    task_id = _download_task_id(container, series_id, video_id)
     return StreamingResponse(
         stream_progress_events(
             tracker=container.video_download_progress_tracker,
@@ -506,3 +506,12 @@ async def stream_video_download_progress(series_id: str, video_id: str, containe
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+def _download_task_id(container, series_id: str, video_id: str) -> str:
+    """解析内部视频 ID，确保启动、取消和 SSE 使用同一个下载任务 ID。"""
+
+    workspace = getattr(container, "linked_series_workspace", None)
+    resolver = getattr(workspace, "get_linked_video_for_download", None)
+    linked_video = resolver(series_id, video_id) if callable(resolver) else None
+    return build_video_download_task_id(series_id, linked_video.video_id if linked_video is not None else video_id)

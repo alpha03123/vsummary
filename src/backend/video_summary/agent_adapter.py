@@ -27,8 +27,11 @@ class WorkspaceAgentContextLoader:
             )
 
         video = self._workspace.get_video_source(series.id, video_id)
-        tools = self._workspace.get_video_workspace_tools(series.id, video_id) if video is not None else None
-        summary = self._workspace.get_video_summary(series.id, video_id) if video is not None else None
+        # A migrated video can retain SQL summaries/transcripts while its
+        # original media Blob is unavailable. Agent content access must not
+        # be coupled to preview/generation media availability.
+        tools = self._workspace.get_video_workspace_tools(series.id, video_id)
+        summary = self._workspace.get_video_summary(series.id, video_id)
         chapter_titles = []
         if summary is not None:
             raw_chapters = summary.summary.get("chapters", [])
@@ -45,7 +48,9 @@ class WorkspaceAgentContextLoader:
             series_id=series.id,
             series_title=series.title,
             video_id=video.video_id if video is not None else video_id,
-            video_title=video.title if video is not None else video_id,
+            video_title=video.title if video is not None else next(
+                (item.title for item in series.videos if item.id == video_id), video_id
+            ),
             overview=_map_tool_availability(None if tools is None else tools.overview),
             mindmap=_map_tool_availability(None if tools is None else tools.mindmap),
             knowledge_cards=_map_tool_availability(None if tools is None else tools.knowledge_cards),
@@ -66,7 +71,11 @@ def _map_tool_availability(tool) -> ToolAvailability:
 
 
 def _parse_session_id(session_id: str) -> tuple[str, str | None, str | None]:
-    parts = [part for part in session_id.split("|") if part]
+    # The frontend appends ``::timestamp`` when a user starts another chat in
+    # the same video/series scope. That suffix names a conversation instance,
+    # not a workspace resource.
+    scope_key = session_id.split("::", 1)[0]
+    parts = [part for part in scope_key.split("|") if part]
     if not parts:
         return "series", None, None
 

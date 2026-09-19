@@ -81,7 +81,7 @@ class ProviderSettingsApiTests(unittest.TestCase):
 
 class FakeContainer:
     def __init__(self, root_dir: Path, *, settings_service=None) -> None:
-        self.root_dir = root_dir
+        self.root_dir = None
         self.config_path = root_dir / "config" / "settings.toml"
         self.settings_service = settings_service or FakeSettingsService()
         self.invalidate_agent_graph_service_calls = 0

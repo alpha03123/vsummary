@@ -300,7 +300,10 @@ def _resolve_summary_block_message(context: AgentContext | None, container) -> s
         if not context.video_id or container.get_video_summary.run(context.series_id, context.video_id) is None:
             return "当前视频尚未生成 AI 概况，请先生成概况后再进行对话。"
         return None
-    library = container.list_video_library.run()
+    library_query = getattr(container, "list_video_library", None)
+    if library_query is None:
+        return None
+    library = library_query.run()
     series = next((item for item in library.series if item.id == context.series_id), None)
     if series is None or not any(video.processed for video in series.videos):
         return "当前系列尚未生成 AI 概况，请先生成至少一个视频概况后再进行对话。"

@@ -145,10 +145,7 @@ def update_video_summary(
 @router.get("/api/videos/{series_id}/{video_id}/summary/markdown")
 def get_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
     """获取可直接编辑的原始 ``summary.md``。"""
-    source = _ensure_video_exists(container, series_id, video_id)
-    path = source.output_dir / "summary.md"
-    if path.exists():
-        return {"markdown": path.read_text(encoding="utf-8")}
+    _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_summary.run(series_id, video_id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
@@ -240,7 +237,7 @@ def update_video_transcript(
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary.md")
-def export_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> FileResponse:
+def export_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/summary.md — 导出总结 Markdown 文件。
 
     返回视频总结的 summary.md 文件下载；文件由生成阶段落盘。
@@ -256,31 +253,24 @@ def export_video_summary_markdown(series_id: str, video_id: str, container: ApiC
     Raises:
         HTTPException(404): 视频不存在或 summary.md 未生成。
     """
-    source = _ensure_video_exists(container, series_id, video_id)
-    summary_path = source.output_dir / "summary.md"
-    if not summary_path.exists():
+    _ensure_video_exists(container, series_id, video_id)
+    summary = container.get_video_summary.run(series_id, video_id)
+    if summary is None:
         raise HTTPException(status_code=404, detail=f"summary markdown not found for video '{series_id}/{video_id}'")
-    return FileResponse(
-        summary_path,
-        media_type="text/markdown; charset=utf-8",
-        filename=_export_filename(video_id, "summary"),
-    )
+    return _markdown_response(render_markdown(summary.summary), _export_filename(video_id, "summary"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary-with-screenshots.zip")
 def export_video_summary_with_screenshots(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
     """导出概况 Markdown 与章节截图，保持相对图片链接可离线读取。"""
-    source = _ensure_video_exists(container, series_id, video_id)
-    summary_path = source.output_dir / "summary.md"
-    screenshots_dir = source.output_dir / "screenshots"
-    if not summary_path.is_file() or not screenshots_dir.is_dir():
-        raise HTTPException(status_code=404, detail=f"summary screenshots not found for video '{series_id}/{video_id}'")
-    screenshots = sorted(path for path in screenshots_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg")
-    if not screenshots:
+    _ensure_video_exists(container, series_id, video_id)
+    summary = container.get_video_summary.run(series_id, video_id)
+    screenshots = container.linked_series_workspace.list_artifacts(video_id=video_id, kind="screenshot")
+    if summary is None or not screenshots:
         raise HTTPException(status_code=404, detail=f"summary screenshots not found for video '{series_id}/{video_id}'")
     buffer = BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr("summary.md", summary_path.read_bytes())
+        archive.writestr("summary.md", render_markdown(summary.summary).encode("utf-8"))
         for screenshot in screenshots:
             archive.write(screenshot, f"screenshots/{screenshot.name}")
     return _zip_response(buffer.getvalue(), f"{_safe_filename_part(video_id)}-summary-with-screenshots.zip")
@@ -296,9 +286,9 @@ def get_video_summary_screenshot(
     """返回已随概况成功提交的章节截图。"""
     if Path(filename).name != filename or Path(filename).suffix.lower() != ".jpg":
         raise HTTPException(status_code=404, detail="screenshot not found")
-    source = _ensure_video_exists(container, series_id, video_id)
-    screenshot = source.output_dir / "screenshots" / filename
-    if not screenshot.is_file():
+    _ensure_video_exists(container, series_id, video_id)
+    screenshot = container.linked_series_workspace.materialize_artifact(video_id=video_id, kind="screenshot", filename=filename)
+    if screenshot is None:
         raise HTTPException(status_code=404, detail="screenshot not found")
     return FileResponse(screenshot, media_type="image/jpeg")
 
@@ -313,9 +303,9 @@ def get_video_note_frame(
     """返回由笔记图片标记按时间抽取的共享视频帧。"""
     if Path(filename).name != filename or Path(filename).suffix.lower() != ".jpg":
         raise HTTPException(status_code=404, detail="frame not found")
-    source = _ensure_video_exists(container, series_id, video_id)
-    frame = source.output_dir / "frames" / filename
-    if not frame.is_file():
+    _ensure_video_exists(container, series_id, video_id)
+    frame = container.linked_series_workspace.materialize_artifact(video_id=video_id, kind="note_frame", filename=filename)
+    if frame is None:
         raise HTTPException(status_code=404, detail="frame not found")
     return FileResponse(frame, media_type="image/jpeg")
 
@@ -335,7 +325,7 @@ def export_video_source(series_id: str, video_id: str, container: ApiContainerDe
     Raises:
         HTTPException(404): 视频不存在。
     """
-    source = _ensure_video_exists(container, series_id, video_id)
+    source = _require_video_source(container, series_id, video_id)
     _ensure_source_media_available(source)
     media_type, _ = mimetypes.guess_type(source.source_path.name)
     return FileResponse(
@@ -362,11 +352,11 @@ def export_video_transcript_markdown(series_id: str, video_id: str, container: A
     Raises:
         HTTPException(404): 视频或转写不存在。
     """
-    source = _ensure_video_exists(container, series_id, video_id)
-    transcript_path = source.output_dir / "transcript.cleaned.json"
-    if not transcript_path.exists():
+    _ensure_video_exists(container, series_id, video_id)
+    transcript = container.get_video_transcript.run(series_id, video_id)
+    if transcript is None:
         raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
-    markdown = render_transcript_markdown(json.loads(transcript_path.read_text(encoding="utf-8")))
+    markdown = render_transcript_markdown({"title": transcript.title, "duration_seconds": transcript.duration_seconds, "segments": [{"start_seconds": item.start_seconds, "end_seconds": item.end_seconds, "text": item.text} for item in transcript.segments]})
     return _markdown_response(markdown, _export_filename(video_id, "transcript"))
 
 
@@ -401,17 +391,14 @@ def export_video_mixed_markdown(series_id: str, video_id: str, container: ApiCon
     Raises:
         HTTPException(404): 总结或转写不存在。
     """
-    source = _ensure_video_exists(container, series_id, video_id)
-    summary_path = source.output_dir / "summary.json"
-    transcript_path = source.output_dir / "transcript.cleaned.json"
-    if not summary_path.exists():
+    _ensure_video_exists(container, series_id, video_id)
+    summary = container.get_video_summary.run(series_id, video_id)
+    transcript = container.get_video_transcript.run(series_id, video_id)
+    if summary is None:
         raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
-    if not transcript_path.exists():
+    if transcript is None:
         raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
-    markdown = render_mixed_overview_markdown(
-        json.loads(summary_path.read_text(encoding="utf-8")),
-        json.loads(transcript_path.read_text(encoding="utf-8")),
-    )
+    markdown = render_mixed_overview_markdown(summary.summary, {"title": transcript.title, "duration_seconds": transcript.duration_seconds, "segments": [{"start_seconds": item.start_seconds, "end_seconds": item.end_seconds, "text": item.text} for item in transcript.segments]})
     return _markdown_response(markdown, _export_filename(video_id, "mixed"))
 
 
@@ -432,11 +419,11 @@ def export_video_knowledge_cards_markdown(series_id: str, video_id: str, contain
     Raises:
         HTTPException(404): 知识卡未生成。
     """
-    source = _ensure_video_exists(container, series_id, video_id)
-    cards_path = source.output_dir / "knowledge_cards.json"
-    if not cards_path.exists():
+    _ensure_video_exists(container, series_id, video_id)
+    cards = container.get_video_cards.run(series_id, video_id)
+    if cards is None or not cards.cards:
         raise HTTPException(status_code=404, detail=f"knowledge cards not found for video '{series_id}/{video_id}'")
-    markdown = render_knowledge_cards_markdown(json.loads(cards_path.read_text(encoding="utf-8")))
+    markdown = render_knowledge_cards_markdown({"title": cards.title, "cards": [item.__dict__ for item in cards.cards]})
     return _markdown_response(markdown, _export_filename(video_id, "knowledge-cards"))
 
 
@@ -457,15 +444,11 @@ def export_video_notes_markdown(series_id: str, video_id: str, container: ApiCon
     Raises:
         HTTPException(404): 视频或笔记不存在。
     """
-    source = _ensure_video_exists(container, series_id, video_id)
-    notes_path = source.output_dir / "notes.json"
-    if not notes_path.exists():
+    _ensure_video_exists(container, series_id, video_id)
+    notes = container.get_video_notes.run(series_id, video_id)
+    if notes is None or not notes.notes:
         raise HTTPException(status_code=404, detail=f"notes not found for video '{series_id}/{video_id}'")
-    payload = json.loads(notes_path.read_text(encoding="utf-8"))
-    notes = payload.get("notes")
-    if not isinstance(notes, list) or not notes:
-        raise HTTPException(status_code=404, detail=f"notes not found for video '{series_id}/{video_id}'")
-    markdown = render_notes_markdown(source.title, payload)
+    markdown = render_notes_markdown(notes.title, {"notes": [item.__dict__ for item in notes.notes]})
     return _markdown_response(markdown, _export_filename(video_id, "notes"))
 
 
@@ -844,7 +827,7 @@ async def generate_video_summary(
         HTTPException(409): ASR 模型未就绪、生成被取消或 scope 忙碌。
         HTTPException(503): 生成过程发生运行时错误。
     """
-    _ensure_source_media_available(_ensure_video_exists(container, series_id, video_id))
+    _ensure_source_media_available(_require_video_source(container, series_id, video_id))
     processing_mode = "summary" if request is None else request.processing_mode
     arguments = {
         "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
@@ -1425,7 +1408,7 @@ def select_local_media(container: ApiContainerDep) -> dict[str, object]:
 @router.post("/api/videos/{series_id}/{video_id}/relink")
 def relink_external_video(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, bool]:
     """打开旧目录并将失效的外部媒体引用重新绑定到用户选定的文件。"""
-    source = _ensure_video_exists(container, series_id, video_id)
+    source = _require_video_source(container, series_id, video_id)
     selected_paths = select_local_media_paths(
         initial_directory=source.source_path.parent,
         allow_multiple=False,
@@ -1674,7 +1657,7 @@ def _get_pending_series_videos(container, series_id: str) -> list[object]:
 
 
 def _ensure_video_exists(container, series_id: str, video_id: str):
-    """确认视频存在并返回其源文件信息；不存在则抛出 404。
+    """确认视频资源存在；媒体动作由调用方额外要求可用源文件。
 
     Args:
         container: API 容器。
@@ -1687,16 +1670,34 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     Raises:
         HTTPException(404): 视频不存在。
     """
-    source = container.get_video_source.run(series_id, video_id)
-    if source is None:
+    source_query = getattr(container, "get_video_source", None)
+    if source_query is not None and source_query.run(series_id, video_id) is not None:
+        return source_query.run(series_id, video_id)
+    library_query = getattr(container, "list_video_library", None)
+    if library_query is None:
+        # Minimal embedded/test containers can expose artifact query use cases
+        # without a full library projection. Production SQL containers always
+        # provide list_video_library and retain the stronger membership check.
+        return None
+    library = library_query.run()
+    series = next((item for item in library.series if item.id == series_id), None)
+    if series is None or not any(video.id == video_id for video in series.videos):
         raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return source
+    return source_query.run(series_id, video_id) if source_query is not None else None
 
 
 def _ensure_source_media_available(source) -> None:
     """将断开的外部媒体引用转换为可读的 HTTP 错误。"""
     if not source.source_path.is_file():
         raise HTTPException(status_code=503, detail=f"source media unavailable: {source.source_path}")
+
+
+def _require_video_source(container, series_id: str, video_id: str):
+    _ensure_video_exists(container, series_id, video_id)
+    source = container.get_video_source.run(series_id, video_id)
+    if source is None:
+        raise HTTPException(status_code=503, detail=f"source media unavailable: {series_id}/{video_id}")
+    return source
 
 
 def _html_response(html: str, filename: str) -> Response:

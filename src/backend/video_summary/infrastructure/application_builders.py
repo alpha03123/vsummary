@@ -12,7 +12,7 @@ from pathlib import Path
 
 from backend.video_summary.generation.usecases.generate_mindmap import GenerateMindmap
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
-from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
+from backend.video_summary.infrastructure.storage.temporary_generation_artifact_store import TemporaryGenerationArtifactStore
 from backend.video_summary.infrastructure.llm.litellm_mindmap_generator import LiteLLMMindmapGenerator
 from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import LiteLLMTranscriptEnhancer
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
@@ -84,7 +84,7 @@ def build_video_summary_application(
         else transcript_enhancement_enabled
     )
     runtime = build_video_summary_runtime(settings, usage_recorder=usage_recorder)
-    artifact_store = FileSystemGenerationArtifactStore()
+    artifact_store = TemporaryGenerationArtifactStore()
     media_processor = FfmpegMediaProcessor()
     ai_summary_runner = ConcurrentAiSummaryRunner(
         generator=LiteLLMNoteGenerator(runtime.gateway),
@@ -146,7 +146,7 @@ def build_mindmap_application(
             gateway=gateway,
             output_encoding="flat",
         ),
-        artifact_store=FileSystemGenerationArtifactStore(),
+        artifact_store=TemporaryGenerationArtifactStore(),
     )
     return MindmapApplication(settings=settings, use_case=use_case)
 
@@ -180,6 +180,6 @@ def build_series_mindmap_application(
             gateway=gateway,
             output_encoding="flat",
         ),
-        artifact_store=FileSystemGenerationArtifactStore(),
+        artifact_store=TemporaryGenerationArtifactStore(),
     )
     return MindmapApplication(settings=settings, use_case=use_case)

@@ -11,7 +11,7 @@ from backend.video_summary.generation.schemas import VisualEvidencePayload
 from backend.video_summary.generation.schemas import VisualEvidencePayload
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.generation.usecases.generate_summary import GenerateVideoSummary
-from backend.video_summary.infrastructure.storage.filesystem_generation_artifact_store import FileSystemGenerationArtifactStore
+from backend.video_summary.infrastructure.storage.temporary_generation_artifact_store import TemporaryGenerationArtifactStore
 from backend.video_summary.infrastructure.subtitle_transcripts import ManualSrtTranscriptProvider, parse_srt_transcript
 
 
@@ -203,7 +203,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=summarizer,
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
         )
         with TemporaryDirectory() as directory:
@@ -223,7 +223,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=_FailingSummarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
         )
         with TemporaryDirectory() as directory:
@@ -245,7 +245,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_AutomaticTranscriber(),
             transcript_enhancer=None,
             summarizer=_Summarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             manual_transcript_provider=ManualSrtTranscriptProvider(),
         )
         with TemporaryDirectory() as directory:
@@ -270,7 +270,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=_ChapterSummarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
             frame_extractor=frame_extractor,
         )
@@ -294,7 +294,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=_ChapterSummarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
             frame_extractor=frame_extractor,
             visual_summary_enricher=enricher,
@@ -320,7 +320,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=_TwoChapterSummarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
             frame_extractor=frame_extractor,
             visual_summary_enricher=enricher,
@@ -343,7 +343,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=_TwoChapterSummarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
             frame_extractor=frame_extractor,
         )
@@ -364,7 +364,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             transcriber=_UnexpectedTranscriber(),
             transcript_enhancer=None,
             summarizer=_TwoChapterSummarizer(),
-            artifact_store=FileSystemGenerationArtifactStore(),
+            artifact_store=TemporaryGenerationArtifactStore(),
             subtitle_provider=_UnexpectedSubtitleProvider(),
             frame_extractor=frame_extractor,
         )

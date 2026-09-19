@@ -89,40 +89,80 @@ class LiteLLMNoteGenerator:
             "source_type=transcript 时 timestamp_seconds 必须精确使用某行转写方括号中的 start 秒数；"
             "source_type=visual 时 timestamp_seconds 必须使用 visual_evidence 中已返回的真实帧时间。"
         )
-        payload = self._gateway.complete_structured(
-            [{"role": "user", "content": (
-                build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
-                if multimodal_enabled and visual_context.frames
-                else prompt
-            )}],
-            response_model=AiSummaryPayload,
-            temperature=NOTE_TEMPERATURE,
+        message_content = (
+            build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
+            if multimodal_enabled and visual_context.frames
+            else prompt
         )
         allowed_timestamps = tuple(visual_context.evidence_timestamps)
-        evidence: list[AiSummaryVisualEvidenceDTO] = []
-        seen: set[float] = set()
-        for item in payload.visual_evidence:
-            timestamp = _resolve_visual_evidence_timestamp(item.timestamp_seconds, allowed_timestamps)
-            if timestamp is None:
-                raise ValueError("AI 概括视觉证据引用了未提供的帧时间。")
-            if timestamp in seen:
-                raise ValueError("同一视频帧只能有一条 AI 概括视觉证据。")
-            seen.add(timestamp)
-            evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
-        citations = _build_ai_summary_citations(
-            markdown=payload.markdown,
-            citations=payload.citations,
-            transcript=transcript,
-            visual_evidence=evidence,
-        )
-        return GeneratedVideoAiNoteDTO(
-            content=payload.markdown.strip(),
-            note_visual_mode=note_visual_mode,
-            note_max_images=note_max_images,
-            note_image_min_gap_seconds=note_image_min_gap_seconds,
-            visual_evidence=tuple(evidence),
-            citations=tuple(citations),
-        )
+        for attempt in range(2):
+            payload = self._gateway.complete_structured(
+                [{"role": "user", "content": message_content}],
+                response_model=AiSummaryPayload,
+                temperature=NOTE_TEMPERATURE,
+            )
+            try:
+                return _to_generated_note(
+                    payload=payload,
+                    transcript=transcript,
+                    allowed_timestamps=allowed_timestamps,
+                    note_visual_mode=note_visual_mode,
+                    note_max_images=note_max_images,
+                    note_image_min_gap_seconds=note_image_min_gap_seconds,
+                )
+            except ValueError:
+                if attempt:
+                    raise
+                message_content = _citation_repair_instruction(message_content)
+        raise AssertionError("AI summary validation loop must return or raise.")
+
+
+def _citation_repair_instruction(message_content):
+    instruction = (
+        "\n重试要求：上一次响应的引用契约无效。请重新生成完整 JSON；"
+        "markdown 中出现的所有 [数字] 标记集合必须与 citations 的 citation_id 集合完全相同，"
+        "每个 citation_id 必须连续、只出现一次，且不得出现未声明的数字标记。"
+    )
+    if isinstance(message_content, str):
+        return message_content + instruction
+    if isinstance(message_content, list):
+        return [*message_content, {"type": "text", "text": instruction.strip()}]
+    raise TypeError("AI summary message content must be text or multimodal content parts.")
+
+
+def _to_generated_note(
+    *,
+    payload: AiSummaryPayload,
+    transcript: VideoTranscriptDTO,
+    allowed_timestamps: tuple[float, ...],
+    note_visual_mode: str,
+    note_max_images: int,
+    note_image_min_gap_seconds: float,
+) -> GeneratedVideoAiNoteDTO:
+    evidence: list[AiSummaryVisualEvidenceDTO] = []
+    seen: set[float] = set()
+    for item in payload.visual_evidence:
+        timestamp = _resolve_visual_evidence_timestamp(item.timestamp_seconds, allowed_timestamps)
+        if timestamp is None:
+            raise ValueError("AI 概括视觉证据引用了未提供的帧时间。")
+        if timestamp in seen:
+            raise ValueError("同一视频帧只能有一条 AI 概括视觉证据。")
+        seen.add(timestamp)
+        evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
+    citations = _build_ai_summary_citations(
+        markdown=payload.markdown,
+        citations=payload.citations,
+        transcript=transcript,
+        visual_evidence=evidence,
+    )
+    return GeneratedVideoAiNoteDTO(
+        content=payload.markdown.strip(),
+        note_visual_mode=note_visual_mode,
+        note_max_images=note_max_images,
+        note_image_min_gap_seconds=note_image_min_gap_seconds,
+        visual_evidence=tuple(evidence),
+        citations=tuple(citations),
+    )
 
 
 class ConfiguredNoteGenerator:

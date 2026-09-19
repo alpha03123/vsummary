@@ -42,12 +42,13 @@ class FakeSeriesMindmapGenerator:
     def __init__(self):
         self.last_call = None
 
-    async def run(self, *, series_id, series_title, catalog, video_summaries, progress_reporter=None):
+    async def run(self, *, series_id, series_title, catalog, video_summaries, progress_reporter=None, max_depth=None):
         self.last_call = {
             "series_id": series_id,
             "catalog": catalog,
             "video_summaries": video_summaries,
             "progress_reporter": progress_reporter,
+            "max_depth": max_depth,
         }
 
 
