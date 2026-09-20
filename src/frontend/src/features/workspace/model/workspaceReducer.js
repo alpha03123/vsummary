@@ -17,6 +17,7 @@ import {
   getContextUsageForScope,
   getGenerationTaskForKey,
   hasRecoveredChatScope,
+  isGenerationSnapshotActive,
   markVideoAsReady,
   normalizeUiSettings,
   persistChatSessionIdsByScope,
@@ -1226,6 +1227,9 @@ export function workspaceReducer(state, action) {
       {
         const existing = state.generationTasksByKey?.[action.taskKey];
         if (existing?.snapshot?.status === "failed" && action.snapshot?.status === "idle") {
+          return state;
+        }
+        if (isGenerationSnapshotActive(existing?.snapshot) && action.snapshot?.status === "idle" && !action.jobId) {
           return state;
         }
         const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);

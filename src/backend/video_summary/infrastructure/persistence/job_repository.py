@@ -273,6 +273,40 @@ class SqlJobRepository:
             )
             return _snapshot(job) if job is not None else None
 
+    def active_for_resource(self, *, resource_id: str, operation: str) -> JobSnapshot | None:
+        with self._session_factory() as session:
+            job = session.scalar(
+                select(Job)
+                .where(
+                    Job.resource_id == resource_id,
+                    Job.operation == operation,
+                    Job.status.in_(("queued", "retrying", "running", "cancelling")),
+                )
+                .order_by(Job.created_at.desc())
+                .limit(1)
+            )
+            return _snapshot(job) if job is not None else None
+
+    def latest_event(self, job_id: str) -> JobEventSnapshot | None:
+        with self._session_factory() as session:
+            job = session.get(Job, job_id)
+            event = session.scalar(
+                select(JobEvent)
+                .where(JobEvent.job_id == job_id)
+                .order_by(JobEvent.sequence.desc())
+                .limit(1)
+            )
+        if job is None or event is None:
+            return None
+        return JobEventSnapshot(
+            sequence=event.sequence,
+            status=job.status,
+            stage=event.stage,
+            progress=event.progress,
+            detail=event.detail,
+            occurred_at=event.created_at,
+        )
+
     def events(self, job_id: str, *, after_sequence: int) -> list[JobEventSnapshot]:
         with self._session_factory() as session:
             rows = session.scalars(

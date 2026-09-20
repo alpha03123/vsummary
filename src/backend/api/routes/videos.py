@@ -877,7 +877,13 @@ def _submit_video_generation_job(
             idempotency_key=idempotency_key,
         )
     except ControlPlaneConflictError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        active = container.job_repository.active_for_resource(
+            resource_id=video_id,
+            operation=operation,
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
@@ -1553,14 +1559,15 @@ def get_video_generation_status(
             operations=("generate_summary", "generate_transcript"),
         )
         if snapshot is not None:
+            event = job_repository.latest_event(snapshot.id)
             return {
                 "task_id": task_id,
                 "job_id": snapshot.id,
                 "snapshot": {
                     "status": snapshot.status,
-                    "stage": snapshot.status,
-                    "progress": 100.0 if snapshot.status == "succeeded" else 0.0,
-                    "detail": snapshot.failure_detail,
+                    "stage": event.stage if event is not None else snapshot.status,
+                    "progress": event.progress if event is not None else (100.0 if snapshot.status == "succeeded" else 0.0),
+                    "detail": snapshot.failure_detail or (event.detail if event is not None else None),
                     "error": snapshot.failure_detail if snapshot.status == "failed" else None,
                 },
             }

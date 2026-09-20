@@ -22,7 +22,6 @@ import {
   loadWorkspaceSettings,
   subscribeSeriesGenerationProgress,
   subscribeDurableJobProgress,
-  subscribeVideoGenerationProgress,
 } from "./workspaceApi";
 import { buildAgentChatContextPayload } from "./workspaceChatRuntime";
 import { BACKEND_HEALTH_RETRY_DELAY_MS } from "./workspaceControllerConstants";
@@ -60,13 +59,10 @@ function clearGenerationSubscription(taskKey) {
 
 function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch }) {
   const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
-  if (!taskKey || generationSubscriptions.has(taskKey)) {
+  if (!taskKey || !jobId || generationSubscriptions.has(taskKey)) {
     return;
   }
-  const subscribe = jobId
-    ? (listener) => subscribeDurableJobProgress(jobId, listener)
-    : (listener) => subscribeVideoGenerationProgress(seriesId, videoId, listener);
-  const unsubscribe = subscribe((snapshot) => {
+  const unsubscribe = subscribeDurableJobProgress(jobId, (snapshot) => {
     dispatch({
       type: "generation_progress_updated",
       taskKey,
@@ -80,6 +76,10 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch 
     });
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       clearGenerationSubscription(taskKey);
+    }
+    if (snapshot.stage === "reconnecting") {
+      clearGenerationSubscription(taskKey);
+      return;
     }
     if (snapshot.status === "completed") {
       loadWorkspaceLibrary()

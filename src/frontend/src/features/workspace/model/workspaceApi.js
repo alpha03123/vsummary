@@ -740,7 +740,7 @@ export function subscribeDurableJobProgress(jobId, listener) {
 
   eventSource.onerror = () => {
     if (!terminal) {
-      listener({ status: "failed", stage: "failed", progress: null, detail: null, error: "生成进度连接已中断" });
+      listener({ status: "running", stage: "reconnecting", progress: null, detail: "正在重新连接任务进度...", error: null });
     }
     eventSource.close();
   };

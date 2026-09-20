@@ -140,6 +140,13 @@ class _TwoChapterSummarizer(_ChapterSummarizer):
         return document
 
 
+class _InvalidScreenshotPlanSummarizer(_ChapterSummarizer):
+    async def summarize(self, video, transcript, cancellation=None) -> SummaryDocument:
+        document = await super().summarize(video, transcript, cancellation)
+        document.summary_data["chapters"][0]["image_timestamp_seconds"] = 99.0
+        return document
+
+
 class _VisualEnricher:
     def __init__(self) -> None:
         self.calls = 0
@@ -355,6 +362,26 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(frame_extractor.timestamps, [2.0, 3.0])
             self.assertNotIn("image_filename", document.summary_data["chapters"][0])
             self.assertEqual(document.summary_data["chapters"][1]["image_filename"], "chapter-02.jpg")
+            self.assertTrue((output_dir / "summary.json").exists())
+
+    async def test_invalid_chapter_screenshot_plan_keeps_text_summary(self) -> None:
+        frame_extractor = _FrameExtractor()
+        use_case = GenerateVideoSummary(
+            media_processor=_UnexpectedMediaProcessor(),
+            transcriber=_UnexpectedTranscriber(),
+            transcript_enhancer=None,
+            summarizer=_InvalidScreenshotPlanSummarizer(),
+            artifact_store=TemporaryGenerationArtifactStore(),
+            subtitle_provider=_UnexpectedSubtitleProvider(),
+            frame_extractor=frame_extractor,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            output_dir = root / "output"
+            document = await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
+
+            self.assertEqual(frame_extractor.timestamps, [])
+            self.assertNotIn("image_filename", document.summary_data["chapters"][0])
             self.assertTrue((output_dir / "summary.json").exists())
 
     async def test_audio_only_media_skips_chapter_screenshots_without_warning(self) -> None:

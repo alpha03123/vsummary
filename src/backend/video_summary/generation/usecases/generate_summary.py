@@ -499,16 +499,20 @@ class GenerateVideoSummary:
             else:
                 _raise_if_cancelled(progress_reporter, cancellation)
                 await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
+        if ai_summary_task is not None:
+            if progress_reporter is not None:
+                progress_reporter.update("finalize_ai_summary", 98.0, "正在完成 AI 概括")
+            await ai_summary_task
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
+        if progress_reporter is not None:
+            progress_reporter.update("publish", 99.0, "正在发布内容")
         await asyncio.to_thread(
             _commit_generation_artifacts,
             staging_dir,
             output_dir,
             remove_manual_source=not use_saved_manual_transcript,
         )
-        if ai_summary_task is not None:
-            await ai_summary_task
         return summary_document
 
     def _start_ai_summary_task(
@@ -560,7 +564,15 @@ async def _attach_chapter_screenshots(
         return document, []
 
     summary_data = dict(document.summary_data)
-    plans = validate_visual_frame_plan(document=document, video=video, max_visual_frames=max_visual_frames)
+    try:
+        plans = validate_visual_frame_plan(document=document, video=video, max_visual_frames=max_visual_frames)
+    except ValueError as error:
+        LOGGER.warning(
+            "章节截图计划无效，跳过截图但继续发布文本制品：%s",
+            error,
+            extra={"event": "chapter_screenshot_plan_skipped"},
+        )
+        return document, []
     plan_by_chapter_id = {plan.chapter_id: plan for plan in plans}
     enriched_chapters: list[object] = []
     extracted_frames: list[ExtractedChapterFrame] = []

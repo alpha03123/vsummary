@@ -276,6 +276,36 @@ describe("workspaceReducer model download failures", () => {
 });
 
 describe("workspaceReducer video generation cancellation", () => {
+  it("does not let a stale idle status hide a just-started durable job", () => {
+    const taskKey = buildVideoGenerationTaskKey("series-a", "video-1");
+    let state = {
+      ...createInitialWorkspaceState(),
+      selectedContextType: "video",
+      selectedSeriesId: "series-a",
+      selectedVideoId: "video-1",
+    };
+    state = workspaceReducer(state, {
+      type: "generation_started",
+      videoKey: taskKey,
+      seriesId: "series-a",
+      videoId: "video-1",
+    });
+
+    state = workspaceReducer(state, {
+      type: "generation_status_loaded",
+      taskKey,
+      mode: "video",
+      seriesId: "series-a",
+      videoId: "video-1",
+      jobId: null,
+      snapshot: { status: "idle", stage: null, progress: null, detail: null, error: null },
+      subscriptionActive: false,
+    });
+
+    expect(state.generationTasksByKey[taskKey].snapshot.status).toBe("running");
+    expect(state.generationSnapshot.status).toBe("running");
+  });
+
   it("marks video task snapshot as cancelling on video_generation_cancelling", () => {
     const taskKey = buildVideoGenerationTaskKey("series-a", "video-1");
     let state = workspaceReducer(createInitialWorkspaceState(), {
