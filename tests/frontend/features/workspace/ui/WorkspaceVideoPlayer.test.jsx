@@ -169,4 +169,26 @@ describe("WorkspaceVideoPlayer", () => {
       expect(screen.queryByRole("button", { name: "查看当前转写" })).not.toBeInTheDocument();
     });
   });
+
+  it("uses the native subtitle track while the video is fullscreen", async () => {
+    const { container } = render(
+      <WorkspaceVideoPlayer
+        videoSource="/api/videos/s1/v1/preview"
+        subtitleSource="/api/videos/s1/v1/subtitles.vtt"
+      />,
+    );
+    const video = container.querySelector("video");
+    const trackElement = container.querySelector("track");
+    const track = new EventTarget();
+    Object.defineProperty(track, "mode", { value: "hidden", writable: true, configurable: true });
+    Object.defineProperty(trackElement, "track", { value: track, configurable: true });
+    Object.defineProperty(document, "fullscreenElement", { value: video, configurable: true });
+
+    fireEvent(document, new Event("fullscreenchange"));
+    await waitFor(() => expect(track.mode).toBe("showing"));
+
+    Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+    fireEvent(document, new Event("fullscreenchange"));
+    await waitFor(() => expect(track.mode).toBe("hidden"));
+  });
 });

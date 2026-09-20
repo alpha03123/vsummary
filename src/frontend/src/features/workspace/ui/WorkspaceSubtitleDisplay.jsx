@@ -22,7 +22,6 @@ export function WorkspaceSubtitleDisplay({ videoRef, subtitleTrackRef, subtitleS
     const sync = () => setText(activeCueText(track));
     const trackElementSync = () => sync();
     const video = videoRef?.current;
-    track.mode = "hidden";
     track.addEventListener("cuechange", sync);
     trackElement.addEventListener("load", trackElementSync);
     video?.addEventListener("timeupdate", sync);

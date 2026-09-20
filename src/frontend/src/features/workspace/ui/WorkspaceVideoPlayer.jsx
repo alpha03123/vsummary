@@ -5,6 +5,7 @@ import { Captions, Download } from "lucide-react";
 import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "./WorkspaceNativeSubtitleSettings";
 import { WorkspaceSubtitleDisplay } from "./WorkspaceSubtitleDisplay";
 import { WorkspaceMediaPreviewHeader, WorkspaceMediaSeekNotice } from "./shared/WorkspaceMediaPreviewHeader";
+import { useNativeFullscreenSubtitles } from "./useNativeFullscreenSubtitles";
 
 export function WorkspaceVideoPlayer({
   videoSource,
@@ -26,6 +27,12 @@ export function WorkspaceVideoPlayer({
   const [subtitleStyle, setSubtitleStyle] = useState(DEFAULT_SUBTITLE_STYLE);
   const updateSubtitleStyle = (next) => setSubtitleStyle((current) => ({ ...current, ...next }));
   const isAudioSource = videoSourceType === "audio";
+  const nativeFullscreen = useNativeFullscreenSubtitles({
+    videoRef,
+    subtitleTrackRef,
+    subtitleSource,
+    subtitlesEnabled,
+  });
 
   useEffect(() => {
     setIsPlaying(false);
@@ -34,13 +41,6 @@ export function WorkspaceVideoPlayer({
   useEffect(() => {
     setSubtitlesEnabled(Boolean(subtitleSource));
   }, [subtitleSource, videoSource]);
-
-  useEffect(() => {
-    const track = subtitleTrackRef.current?.track;
-    if (track) {
-      track.mode = "hidden";
-    }
-  }, [subtitlesEnabled, subtitleSource]);
 
   useEffect(() => {
     if (isAudioSource || !playerSeekRequest || !videoRef.current) {
@@ -153,13 +153,15 @@ export function WorkspaceVideoPlayer({
               />
             ) : null}
           </video>
-          <WorkspaceSubtitleDisplay
-            videoRef={videoRef}
-            subtitleTrackRef={subtitleTrackRef}
-            subtitleSource={subtitleSource}
-            enabled={subtitlesEnabled}
-            style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
-          />
+          {!nativeFullscreen ? (
+            <WorkspaceSubtitleDisplay
+              videoRef={videoRef}
+              subtitleTrackRef={subtitleTrackRef}
+              subtitleSource={subtitleSource}
+              enabled={subtitlesEnabled}
+              style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
+            />
+          ) : null}
         </div>
       ) : (
         // 未下载的媒体没有可播放源：给一个和播放器等大的 16:9 占位，

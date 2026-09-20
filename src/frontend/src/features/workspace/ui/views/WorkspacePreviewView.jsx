@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "../WorkspaceNativeSubtitleSettings";
 import { WorkspaceSubtitleDisplay } from "../WorkspaceSubtitleDisplay";
 import { WorkspaceMediaPreviewHeader, WorkspaceMediaSeekNotice } from "../shared/WorkspaceMediaPreviewHeader";
+import { useNativeFullscreenSubtitles } from "../useNativeFullscreenSubtitles";
 
 export function WorkspacePreviewView({ previewSource, previewSubtitleSource = null, previewSeekRequest }) {
   const previewVideoRef = useRef(null);
@@ -9,17 +10,17 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(Boolean(previewSubtitleSource));
   const [subtitleStyle, setSubtitleStyle] = useState(DEFAULT_SUBTITLE_STYLE);
   const updateSubtitleStyle = (next) => setSubtitleStyle((current) => ({ ...current, ...next }));
+  const nativeFullscreen = useNativeFullscreenSubtitles({
+    videoRef: previewVideoRef,
+    subtitleTrackRef,
+    subtitleSource: previewSubtitleSource,
+    subtitlesEnabled,
+  });
 
   useEffect(() => {
     setSubtitlesEnabled(Boolean(previewSubtitleSource));
   }, [previewSource, previewSubtitleSource]);
 
-  useEffect(() => {
-    const track = subtitleTrackRef.current?.track;
-    if (track) {
-      track.mode = "hidden";
-    }
-  }, [previewSubtitleSource, subtitlesEnabled]);
   useEffect(() => {
     if (!previewSeekRequest || !previewVideoRef.current) {
       return;
@@ -83,13 +84,15 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
             />
           ) : null}
         </video>
-        <WorkspaceSubtitleDisplay
-          videoRef={previewVideoRef}
-          subtitleTrackRef={subtitleTrackRef}
-          subtitleSource={previewSubtitleSource}
-          enabled={subtitlesEnabled}
-          style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
-        />
+        {!nativeFullscreen ? (
+          <WorkspaceSubtitleDisplay
+            videoRef={previewVideoRef}
+            subtitleTrackRef={subtitleTrackRef}
+            subtitleSource={previewSubtitleSource}
+            enabled={subtitlesEnabled}
+            style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
+          />
+        ) : null}
       </div>
     </div>
   );
