@@ -13,6 +13,7 @@ from sqlalchemy.schema import CreateTable
 from backend.video_summary.infrastructure.persistence.database import DatabaseDriverError, DatabaseOptions, _require_pymysql
 from backend.video_summary.infrastructure.persistence.migrate import build_alembic_config
 from backend.video_summary.infrastructure.persistence.managed_local_mysql import (
+    CREDENTIAL_FILE,
     LOCAL_DATABASE_NAME,
     LOCAL_DATABASE_USER,
     ManagedLocalMySql,
@@ -127,7 +128,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
         paths = ManagedLocalMySqlPaths(Path("C:/Users/example/AppData/Local/VSummary"))
 
         self.assertEqual(paths.data_dir, paths.root / "mysql" / "data")
-        self.assertEqual(paths.credential_path, paths.root / "mysql" / "vsummary_app.dpapi")
+        self.assertEqual(paths.credential_path, paths.root / "mysql" / CREDENTIAL_FILE)
         self.assertEqual(paths.runtime_state_path, paths.root / "mysql" / "runtime.json")
 
     def test_missing_packaged_runtime_fails_before_creating_user_data(self) -> None:

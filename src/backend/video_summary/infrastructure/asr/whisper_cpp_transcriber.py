@@ -45,8 +45,8 @@ class WhisperCppTranscriber:
             "-of",
             str(output_base),
         ]
-        if self._language != "auto":
-            command.extend(["-l", self._language])
+        # whisper-cli defaults to English when -l is omitted.
+        command.extend(["-l", self._language])
         if on_progress is not None:
             on_progress(0.0)
         completed = subprocess.run(command, capture_output=True, text=True, check=False)

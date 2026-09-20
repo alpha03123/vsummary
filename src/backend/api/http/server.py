@@ -35,7 +35,7 @@ def main() -> None:
         "--managed-data-root",
         type=Path,
         default=None,
-        help="Managed data root. Defaults to %LOCALAPPDATA%\\VSummary.",
+        help="Managed data root. Defaults to ~/Library/Application Support/VSummary on macOS or %LOCALAPPDATA%\\VSummary on Windows.",
     )
     parser.add_argument(
         "--skip-legacy-import",

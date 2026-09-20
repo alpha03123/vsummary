@@ -1,8 +1,8 @@
-"""Windows 整合包内置 MySQL 的受管运行时。
+"""Windows / macOS 私有 MySQL 的受管运行时。
 
-本模块不依赖系统服务：MySQL 二进制由发布包携带，数据与凭据始终位于用户
+本模块不依赖系统服务：MySQL 二进制来自发布包或 macOS Homebrew，数据与凭据始终位于用户
 数据目录。首次启动会初始化 data directory、创建仅限 loopback 的应用账号、
-执行 schema migration；后续启动只使用 DPAPI 解密的应用账号连接。
+执行 schema migration；后续启动使用平台凭据存储中的应用账号连接。
 """
 
 from __future__ import annotations
@@ -15,10 +15,15 @@ import subprocess
 import sys
 import time
 import ctypes
-import msvcrt
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
 
 from sqlalchemy import text
 
@@ -39,7 +44,7 @@ from backend.video_summary.infrastructure.persistence.migrate import upgrade_to_
 LOCAL_DATABASE_NAME: Final = "vsummary"
 LOCAL_DATABASE_USER: Final = "vsummary_app"
 RUNTIME_STATE_FILE: Final = "runtime.json"
-CREDENTIAL_FILE: Final = "vsummary_app.dpapi"
+CREDENTIAL_FILE: Final = "vsummary_app.keychain" if sys.platform == "darwin" else "vsummary_app.dpapi"
 STARTUP_TIMEOUT_SECONDS: Final = 30.0
 RUNTIME_STATE_VERSION: Final = 1
 
@@ -96,6 +101,7 @@ class ManagedLocalMySql:
         self._process: subprocess.Popen[str] | None = None
         self._owns_server = False
         self._instance_lock_handle = None
+        self._socket_directory: tempfile.TemporaryDirectory | None = None
 
     @property
     def paths(self) -> ManagedLocalMySqlPaths:
@@ -161,6 +167,9 @@ class ManagedLocalMySql:
                 self._process.wait(timeout=5)
         self._release_instance_lock()
         self._owns_server = False
+        if self._socket_directory is not None:
+            self._socket_directory.cleanup()
+            self._socket_directory = None
 
     def _bootstrap_new_instance(self) -> DatabaseOptions:
         port = _select_loopback_port()
@@ -221,6 +230,12 @@ class ManagedLocalMySql:
             f"--log-error={self._paths.error_log_path}",
             f"--pid-file={self._paths.pid_path}",
         ]
+        if sys.platform == "darwin":
+            # macOS Unix sockets have short path limits. Keep a private socket
+            # directory independent of the (possibly long) workspace path.
+            self._socket_directory = tempfile.TemporaryDirectory(prefix="vsummary-mysql-", dir="/tmp")
+            arguments = ["--no-defaults", *arguments, "--mysqlx=0",
+                         f"--socket={self._socket_directory.name}/mysql.sock"]
         if init_file is not None:
             arguments.append(f"--init-file={init_file}")
         try:
@@ -263,6 +278,7 @@ class ManagedLocalMySql:
         completed = subprocess.run(
             [
                 str(self._mysqladmin_path()),
+                *(["--no-defaults"] if sys.platform == "darwin" else []),
                 "--protocol=TCP",
                 "--host=127.0.0.1",
                 f"--port={port}",
@@ -304,9 +320,16 @@ class ManagedLocalMySql:
             raise ManagedLocalMySqlError("Managed MySQL pid file contains an invalid process ID.")
         return pid
 
-    @staticmethod
-    def _wait_for_server_exit(pid: int | None) -> None:
+    def _wait_for_server_exit(self, pid: int | None) -> None:
         if pid is None:
+            return
+        if sys.platform == "darwin" and self._process is not None and self._process.pid == pid:
+            # Reap our Unix child: kill(pid, 0) also succeeds for zombies and
+            # would otherwise consume the entire shutdown timeout.
+            try:
+                self._process.wait(timeout=15.0)
+            except subprocess.TimeoutExpired as error:
+                raise ManagedLocalMySqlError("Managed MySQL server process did not exit before the shutdown timeout.") from error
             return
         deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline:
@@ -319,6 +342,7 @@ class ManagedLocalMySql:
         completed = subprocess.run(
             [
                 str(self._mysqld_path()),
+                *(["--no-defaults"] if sys.platform == "darwin" else []),
                 f"--basedir={self._mysql_home}",
                 f"--datadir={self._paths.data_dir}",
                 "--initialize-insecure",
@@ -345,6 +369,8 @@ class ManagedLocalMySql:
             ]
         )
         atomic_write_text(self._paths.bootstrap_sql_path, sql + "\n")
+        if sys.platform == "darwin":
+            self._paths.bootstrap_sql_path.chmod(0o600)
 
     def _options_from_state(self, state: dict[str, object]) -> DatabaseOptions:
         port = state.get("port")
@@ -385,6 +411,9 @@ class ManagedLocalMySql:
         )
 
     def _ensure_directories(self) -> None:
+        if sys.platform == "darwin":
+            self._paths.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self._paths.root.chmod(0o700)
         for directory in (self._paths.data_dir, self._paths.logs_dir, self._paths.run_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
@@ -398,7 +427,10 @@ class ManagedLocalMySql:
             handle.write(b"0")
             handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            if sys.platform == "win32":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
             handle.close()
             raise ManagedLocalMySqlError(
@@ -412,7 +444,10 @@ class ManagedLocalMySql:
             return
         try:
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            if sys.platform == "win32":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         except OSError:
             pass
         finally:
@@ -429,12 +464,12 @@ class ManagedLocalMySql:
             )
 
     def _mysqld_path(self) -> Path:
-        return self._mysql_home / "bin" / "mysqld.exe"
+        return self._mysql_home / "bin" / ("mysqld.exe" if sys.platform == "win32" else "mysqld")
 
     def _mysqladmin_path(self) -> Path:
-        path = self._mysql_home / "bin" / "mysqladmin.exe"
+        path = self._mysql_home / "bin" / ("mysqladmin.exe" if sys.platform == "win32" else "mysqladmin")
         if not path.is_file():
-            raise ManagedLocalMySqlError("Managed MySQL runtime is missing mysqladmin.exe.")
+            raise ManagedLocalMySqlError("Managed MySQL runtime is missing mysqladmin.")
         return path
 
     def _read_error_log_tail(self) -> str:
@@ -448,6 +483,8 @@ class ManagedLocalMySql:
 
 
 def _default_data_root() -> Path:
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "VSummary"
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
         raise ManagedLocalMySqlError("LOCALAPPDATA is required for managed local MySQL.")
