@@ -459,7 +459,7 @@ export async function deleteVideoNote(seriesId, videoId, noteId) {
 }
 
 export async function generateVideoSummary(seriesId, videoId, options = {}) {
-  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate`, {
+  return toVideoGenerationSubmission(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -471,8 +471,7 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
             : undefined,
         processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
       }),
-    });
-  return options.processingMode === "transcript" ? payload : toWorkspaceSummary(payload);
+    }));
 }
 
 export async function processAgentVideo(seriesId, videoId, options = {}) {
@@ -498,7 +497,8 @@ export async function loadVideoGenerationStatus(seriesId, videoId) {
   const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/generate/status`);
   return {
     taskId: typeof payload.task_id === "string" ? payload.task_id : `${seriesId}/${videoId}`,
-    snapshot: toProgressSnapshot(payload.snapshot ?? {}),
+    jobId: typeof payload.job_id === "string" ? payload.job_id : null,
+    snapshot: payload.job_id ? toDurableGenerationSnapshot(payload.snapshot ?? {}) : toProgressSnapshot(payload.snapshot ?? {}),
   };
 }
 
@@ -678,7 +678,7 @@ export async function streamAgentChat(sessionId, message, context, listener, { s
 export async function uploadSrtAndGenerateVideoSummary(seriesId, videoId, file) {
   const formData = new FormData();
   formData.append("file", file);
-  return toWorkspaceSummary(
+  return toVideoGenerationSubmission(
     await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/transcript/srt-and-generate`, {
       method: "POST",
       body: formData,
@@ -687,11 +687,68 @@ export async function uploadSrtAndGenerateVideoSummary(seriesId, videoId, file) 
 }
 
 export async function restoreAutomaticTranscriptAndGenerateVideoSummary(seriesId, videoId) {
-  return toWorkspaceSummary(
+  return toVideoGenerationSubmission(
     await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/transcript/restore-auto-and-generate`, {
       method: "POST",
     }),
   );
+}
+
+function toVideoGenerationSubmission(payload) {
+  const jobId = typeof payload?.job_id === "string" ? payload.job_id.trim() : "";
+  const status = typeof payload?.status === "string" ? payload.status.trim() : "";
+  if (!jobId || !status) {
+    throw new Error("生成任务提交响应缺少 job_id 或 status。");
+  }
+  return { jobId, status };
+}
+
+function toDurableGenerationSnapshot(payload) {
+  const status = payload?.status === "succeeded" ? "completed" : payload?.status;
+  const detail = typeof payload?.detail === "string" ? payload.detail : null;
+  const error = typeof payload?.error === "string" ? payload.error : status === "failed" ? detail : null;
+  return {
+    status: typeof status === "string" ? status : "failed",
+    stage: typeof payload?.stage === "string" ? payload.stage : null,
+    progress: typeof payload?.progress === "number" ? payload.progress : null,
+    detail,
+    error,
+  };
+}
+
+export function subscribeDurableJobProgress(jobId, listener) {
+  const eventSource = new EventSource(`/api/jobs/${encodeURIComponent(jobId)}/events`);
+  let terminal = false;
+
+  eventSource.addEventListener("progress", (event) => {
+    let payload;
+    try {
+      payload = JSON.parse(event.data);
+    } catch {
+      listener({ status: "failed", stage: "failed", progress: null, detail: null, error: "生成进度数据格式错误" });
+      terminal = true;
+      eventSource.close();
+      return;
+    }
+    const snapshot = toDurableGenerationSnapshot(payload);
+    listener(snapshot);
+    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
+      terminal = true;
+      eventSource.close();
+    }
+  });
+
+  eventSource.onerror = () => {
+    if (!terminal) {
+      listener({ status: "failed", stage: "failed", progress: null, detail: null, error: "生成进度连接已中断" });
+    }
+    eventSource.close();
+  };
+
+  return () => {
+    terminal = true;
+    eventSource.close();
+  };
 }
 
 export function subscribeVideoGenerationProgress(seriesId, videoId, listener) {

@@ -17,10 +17,11 @@ from backend.video_summary.infrastructure.persistence.current_content_repository
 from backend.video_summary.infrastructure.persistence.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import LegacyImportItem, MediaObject
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
+from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 
 
 MEDIA_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
-LEGACY_IMPORT_FORMAT_VERSION = 4
+LEGACY_IMPORT_FORMAT_VERSION = 5
 
 
 @dataclass(frozen=True)
@@ -173,6 +174,7 @@ class LegacyWorkspaceImporter:
         key = series_dir.name
         item = self._mapped("series", key)
         if item is not None and item.target_id:
+            self._mark_playground_series(item.target_id, key)
             return item.target_id, False
         title = _legacy_title(self._root_dir / "workspace" / key / "series_meta.json", fallback=key)
         with self._session_factory() as session:
@@ -197,15 +199,28 @@ class LegacyWorkspaceImporter:
                 ).scalar_one()
             )
         if existing_series_id is not None:
+            self._mark_playground_series(existing_series_id, key)
             self._record("series", key, "series", existing_series_id, "imported")
             return existing_series_id, False
         series_id = self._control.create_series(
             workspace_id=workspace_id,
             title=title,
             position=next_position if position_taken else position,
+            source_kind="playground" if key == PLAYGROUND_SERIES_ID else "local",
         )
         self._record("series", key, "series", series_id, "imported")
         return series_id, True
+
+    def _mark_playground_series(self, series_id: str, legacy_series_id: str) -> None:
+        if legacy_series_id != PLAYGROUND_SERIES_ID:
+            return
+        with self._session_factory.begin() as session:
+            session.execute(
+                __import__("sqlalchemy").text(
+                    "UPDATE series SET source_kind='playground',updated_at=NOW() WHERE id=:series"
+                ),
+                {"series": series_id},
+            )
 
     def _video_id(self, series_id: str, legacy_series_id: str, media_path: Path) -> tuple[str, bool]:
         key = f"{legacy_series_id}/{media_path.name}"

@@ -1546,6 +1546,24 @@ def get_video_generation_status(
         {"task_id": ..., "snapshot": {status, progress, detail, ...}}
     """
     task_id = _build_task_id(series_id, video_id)
+    job_repository = getattr(container, "job_repository", None)
+    if job_repository is not None:
+        snapshot = job_repository.latest_for_resource(
+            resource_id=video_id,
+            operations=("generate_summary", "generate_transcript"),
+        )
+        if snapshot is not None:
+            return {
+                "task_id": task_id,
+                "job_id": snapshot.id,
+                "snapshot": {
+                    "status": snapshot.status,
+                    "stage": snapshot.status,
+                    "progress": 100.0 if snapshot.status == "succeeded" else 0.0,
+                    "detail": snapshot.failure_detail,
+                    "error": snapshot.failure_detail if snapshot.status == "failed" else None,
+                },
+            }
     return {
         "task_id": task_id,
         "snapshot": container.generation_progress_tracker.get_snapshot(task_id).to_dict(),

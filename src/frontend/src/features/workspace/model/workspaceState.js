@@ -175,6 +175,7 @@ export function createGenerationTaskRecord({
   seriesId,
   videoId = null,
   runId = null,
+  jobId = null,
   snapshot,
   subscriptionActive = false,
 }) {
@@ -187,6 +188,7 @@ export function createGenerationTaskRecord({
     seriesId,
     videoId,
     runId,
+    jobId,
     snapshot,
     subscriptionActive,
   };
@@ -227,7 +229,7 @@ export function getGenerationTaskForSelection(state) {
 
 export function isGenerationSnapshotActive(snapshot) {
   const status = snapshot?.status;
-  return status === "running" || status === "queued" || status === "cancelling";
+  return status === "running" || status === "queued" || status === "retrying" || status === "cancelling";
 }
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";

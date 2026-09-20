@@ -261,11 +261,13 @@ class SqlJobRepository:
             job = session.get(Job, job_id)
             return _snapshot(job) if job is not None else None
 
-    def latest_for_resource(self, *, resource_id: str, operation: str) -> JobSnapshot | None:
+    def latest_for_resource(self, *, resource_id: str, operations: tuple[str, ...]) -> JobSnapshot | None:
+        if not resource_id or not operations:
+            raise ValueError("resource_id and operations are required.")
         with self._session_factory() as session:
             job = session.scalar(
                 select(Job)
-                .where(Job.resource_id == resource_id, Job.operation == operation)
+                .where(Job.resource_id == resource_id, Job.operation.in_(operations))
                 .order_by(Job.created_at.desc())
                 .limit(1)
             )

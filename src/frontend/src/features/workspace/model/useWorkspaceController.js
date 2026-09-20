@@ -10,7 +10,7 @@ import {
   getGenerationTaskForSelection,
   isGenerationSnapshotActive,
 } from "./workspaceState";
-import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
+import { isPlaygroundSeries } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { workspaceReducer } from "./workspaceReducer";
 import { useWorkspaceDataEffects } from "./useWorkspaceDataEffects";
@@ -24,16 +24,6 @@ export function useWorkspaceController() {
 
   useWorkspaceDataEffects(state, dispatch);
 
-  useEffect(() => {
-    if (!state.error) {
-      return undefined;
-    }
-    const timeoutId = window.setTimeout(() => {
-      dispatch({ type: "error_cleared" });
-    }, 6000);
-    return () => window.clearTimeout(timeoutId);
-  }, [state.error]);
-
   const activeSeries = findSeriesById(state.library, state.selectedSeriesId);
   const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
   const summary = state.summary;
@@ -46,7 +36,7 @@ export function useWorkspaceController() {
   const mindmapGenerationProgress = state.mindmapGenerationProgress;
 
   const seriesMindmapAvailable = useMemo(() => {
-    if (!activeSeries || activeSeries.id === PLAYGROUND_SERIES_ID) return false;
+    if (!activeSeries || isPlaygroundSeries(activeSeries)) return false;
     const videos = activeSeries.videos ?? [];
     if (videos.length === 0) return false;
     return videos.some(v => v.processed === true);
@@ -89,8 +79,9 @@ export function useWorkspaceController() {
   });
 
   function onSelectSeries(seriesId) {
-    if (seriesId === PLAYGROUND_SERIES_ID) {
-      dispatch({ type: "playground_selected" });
+    const series = findSeriesById(state.library, seriesId);
+    if (isPlaygroundSeries(series)) {
+      dispatch({ type: "playground_selected", seriesId });
       return;
     }
     dispatch({ type: "series_selected", seriesId });
@@ -105,8 +96,8 @@ export function useWorkspaceController() {
   }
 
   function onSelectSeriesContext() {
-    if (state.selectedSeriesId === PLAYGROUND_SERIES_ID) {
-      dispatch({ type: "playground_selected" });
+    if (isPlaygroundSeries(activeSeries)) {
+      dispatch({ type: "playground_selected", seriesId: activeSeries.id });
       return;
     }
     dispatch({ type: "series_context_selected" });

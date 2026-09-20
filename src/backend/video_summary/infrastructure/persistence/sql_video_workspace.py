@@ -25,6 +25,7 @@ from backend.video_summary.library.models import (
     VideoAiSummaryDTO, VideoAiSummaryVisualEvidenceDTO, VideoNotesDTO, VideoSourceDTO, VideoSummaryDTO, VideoTranscriptDTO, VideoWorkspaceToolsDTO, WorkspaceDTO, WorkspaceToolDTO,
 )
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
+from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.agent.schemas.action_plan import CitationReference
 
 
@@ -86,6 +87,7 @@ class SqlVideoWorkspace:
                 is_linked=row["source_kind"] == "linked",
                 is_agent_managed=bool(_json_object(row["linked_payload"]).get("is_agent_managed")) if row["linked_payload"] is not None else False,
                 source_url=row["external_source_url"] or "",
+                kind="playground" if row["source_kind"] == "playground" else "standard",
             )
             for row in series
         ]
@@ -377,9 +379,17 @@ class SqlVideoWorkspace:
         if not workspace_id:
             raise ValueError("A workspace must exist before importing media.")
         with self._sessions() as session:
-            series_id = session.execute(text("SELECT id FROM series WHERE workspace_id=:workspace AND title='Playground' AND deleted_at IS NULL"), {"workspace": workspace_id}).scalar()
+            series_id = session.execute(
+                text("SELECT id FROM series WHERE workspace_id=:workspace AND source_kind='playground' AND deleted_at IS NULL"),
+                {"workspace": workspace_id},
+            ).scalar()
         if series_id is None:
-            series_id = self._control.create_series(workspace_id=workspace_id, title="Playground", position=0, source_kind="local")
+            series_id = self._control.create_series(
+                workspace_id=workspace_id,
+                title="Playground",
+                position=0,
+                source_kind="playground",
+            )
         return self.import_local_series_videos_from_paths(series_id=series_id, source_paths=source_paths)
 
     def rename_series(self, series_id: str, title: str) -> bool:

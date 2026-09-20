@@ -21,6 +21,7 @@ import {
   loadWorkspaceLibrary,
   loadWorkspaceSettings,
   subscribeSeriesGenerationProgress,
+  subscribeDurableJobProgress,
   subscribeVideoGenerationProgress,
 } from "./workspaceApi";
 import { buildAgentChatContextPayload } from "./workspaceChatRuntime";
@@ -57,18 +58,22 @@ function clearGenerationSubscription(taskKey) {
   generationSubscriptions.delete(taskKey);
 }
 
-function ensureVideoGenerationSubscription({ seriesId, videoId, dispatch }) {
+function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch }) {
   const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
   if (!taskKey || generationSubscriptions.has(taskKey)) {
     return;
   }
-  const unsubscribe = subscribeVideoGenerationProgress(seriesId, videoId, (snapshot) => {
+  const subscribe = jobId
+    ? (listener) => subscribeDurableJobProgress(jobId, listener)
+    : (listener) => subscribeVideoGenerationProgress(seriesId, videoId, listener);
+  const unsubscribe = subscribe((snapshot) => {
     dispatch({
       type: "generation_progress_updated",
       taskKey,
       mode: "video",
       seriesId,
       videoId,
+      jobId,
       progress: snapshot.progress,
       snapshot,
       subscriptionActive: isGenerationSnapshotActive(snapshot),
@@ -406,7 +411,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
     if (state.selectedContextType === "video" && state.selectedSeriesId && state.selectedVideoId) {
       let cancelled = false;
       loadVideoGenerationStatus(state.selectedSeriesId, state.selectedVideoId)
-        .then(({ snapshot }) => {
+        .then(({ snapshot, jobId }) => {
           if (cancelled) {
             return;
           }
@@ -416,6 +421,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
             mode: "video",
             seriesId: state.selectedSeriesId,
             videoId: state.selectedVideoId,
+            jobId,
             snapshot,
             subscriptionActive: isGenerationSnapshotActive(snapshot),
           });
@@ -473,6 +479,7 @@ export function useWorkspaceDataEffects(state, dispatch) {
         ensureVideoGenerationSubscription({
           seriesId: currentTask.seriesId,
           videoId: currentTask.videoId,
+          jobId: currentTask.jobId,
           dispatch,
         });
       } else {

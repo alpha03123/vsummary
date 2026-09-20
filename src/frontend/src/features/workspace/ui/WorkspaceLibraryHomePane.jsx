@@ -2,10 +2,11 @@ import { motion } from "framer-motion";
 import { PlusCircle } from "lucide-react";
 
 import { blurVariant, staggerContainer } from "../../../lib/animations";
+import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
 
 function summarizeLibrary(library) {
   const series = library?.series ?? [];
-  const visibleSeries = series.filter((item) => item.id !== "__playground__");
+  const visibleSeries = series.filter((item) => !isPlaygroundSeries(item));
   const totalVideos = series.reduce((count, item) => count + item.videos.length, 0);
   const processedVideos = series.reduce(
     (count, item) => count + item.videos.filter((video) => video.processed).length,
@@ -22,10 +23,11 @@ function summarizeLibrary(library) {
 
 export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries, onAddPlaygroundVideo }) {
   const librarySummary = summarizeLibrary(library);
-  const playgroundSeries = (library?.series ?? []).find((item) => item.id === "__playground__") ?? {
+  const playgroundSeries = (library?.series ?? []).find(isPlaygroundSeries) ?? {
     id: "__playground__",
     title: "Playground",
     videos: [],
+    kind: "playground",
   };
   const playgroundVideoCount = playgroundSeries.videos.length;
   const playgroundProcessedCount = playgroundSeries.videos.filter((video) => video.processed).length;

@@ -539,7 +539,7 @@ export function workspaceReducer(state, action) {
     case "playground_selected":
       return {
         ...state,
-        selectedSeriesId: PLAYGROUND_SERIES_ID,
+        selectedSeriesId: action.seriesId ?? PLAYGROUND_SERIES_ID,
         selectedVideoId: null,
         selectedContextType: "playground",
         tools: null,
@@ -1194,6 +1194,7 @@ export function workspaceReducer(state, action) {
               seriesId: action.seriesId,
               videoId: action.videoId ?? null,
               runId: action.runId ?? null,
+              jobId: action.jobId ?? null,
               snapshot: action.snapshot,
               subscriptionActive: action.subscriptionActive ?? false,
             }),
@@ -1223,6 +1224,10 @@ export function workspaceReducer(state, action) {
       }
     case "generation_status_loaded":
       {
+        const existing = state.generationTasksByKey?.[action.taskKey];
+        if (existing?.snapshot?.status === "failed" && action.snapshot?.status === "idle") {
+          return state;
+        }
         const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);
         const isCurrentSelection = matchesCurrentGenerationSelection(state, action);
         if (isStaleSeriesRunAction(state, action)) {
@@ -1263,6 +1268,7 @@ export function workspaceReducer(state, action) {
               seriesId: action.seriesId,
               videoId: action.videoId ?? null,
               runId: action.runId ?? null,
+              jobId: action.jobId ?? existing?.jobId ?? null,
               snapshot: action.snapshot,
               subscriptionActive: Boolean(action.subscriptionActive),
             }),

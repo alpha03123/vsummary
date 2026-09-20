@@ -62,13 +62,13 @@ describe("workspaceContentActions media links", () => {
     const second = actions.onGenerateVideo();
 
     expect(generateVideoSummary).toHaveBeenCalledTimes(1);
-    resolveGeneration({ title: "已生成", chapters: [] });
+    resolveGeneration({ jobId: "job-1", status: "queued" });
     await Promise.all([first, second]);
   });
 
   it("retries a downloaded pending video through the normal generation route", async () => {
     vi.resetModules();
-    const generateVideoSummary = vi.fn(() => Promise.resolve({ title: "已生成", chapters: [] }));
+    const generateVideoSummary = vi.fn(() => Promise.resolve({ jobId: "job-1", status: "queued" }));
     const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({ series: [] }));
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
@@ -95,14 +95,12 @@ describe("workspaceContentActions media links", () => {
     });
   });
 
-  it("refreshes a broken media link without showing a global error", async () => {
+  it("keeps a broken media error visible for the user", async () => {
     vi.resetModules();
     const generateVideoSummary = vi.fn(() => Promise.reject(new Error("503 source media unavailable: D:\\ABC\\lesson.mp4")));
-    const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({ series: [] }));
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
       generateVideoSummary,
-      loadWorkspaceLibrary,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -120,11 +118,13 @@ describe("workspaceContentActions media links", () => {
 
     await actions.onGenerateVideo();
 
-    expect(loadWorkspaceLibrary).toHaveBeenCalledOnce();
-    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "load_failed" }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "load_failed",
+      message: "503 source media unavailable: D:\\ABC\\lesson.mp4",
+    }));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "generation_status_loaded",
-      snapshot: expect.objectContaining({ error: null }),
+      snapshot: expect.objectContaining({ error: "503 source media unavailable: D:\\ABC\\lesson.mp4" }),
     }));
   });
 });

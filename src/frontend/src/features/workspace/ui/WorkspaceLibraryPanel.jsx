@@ -27,6 +27,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildVideoKey } from "../model/workspaceControllerUtils";
+import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 import { WorkspaceOverflowMenu } from "./shared/WorkspaceOverflowMenu";
 
@@ -232,7 +233,7 @@ function PanelFooter({
   processingMode,
   onChangeProcessingMode,
 }) {
-  const isPlayground = activeSeries?.id === "__playground__";
+  const isPlayground = isPlaygroundSeries(activeSeries);
   const modelNeedsDownload = currentAsrModel != null && !currentAsrModel.downloaded;
   const embeddingModel = ragModels?.find((model) => model.key === "embedding") ?? null;
   const embeddingNeedsDownload = embeddingModel != null && !embeddingModel.downloaded;
@@ -589,7 +590,7 @@ export function WorkspaceLibraryPanel({
   onChangeProcessingMode,
 }) {
   const videos = activeSeries?.videos ?? [];
-  const isPlayground = activeSeries?.id === "__playground__";
+  const isPlayground = isPlaygroundSeries(activeSeries);
   const isBilibiliInbox = activeSeries?.kind === "bilibili_inbox";
   const isLinkedSeries = Boolean(activeSeries?.isLinked);
   const [filterText, setFilterText] = useState("");

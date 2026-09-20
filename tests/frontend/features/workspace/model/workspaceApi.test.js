@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  generateVideoSummary,
   loadAgentSessionRecovery,
   loadProviderUsage,
   relinkExternalVideo,
@@ -167,6 +168,17 @@ describe("generateVideoMindmap", () => {
         body: JSON.stringify({ max_depth: 4 }),
       }),
     );
+  });
+});
+
+describe("generateVideoSummary", () => {
+  test("keeps the durable job submission instead of parsing it as a summary", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ job_id: "job-1", status: "queued" }),
+    })));
+
+    await expect(generateVideoSummary("series-1", "video-1")).resolves.toEqual({ jobId: "job-1", status: "queued" });
   });
 });
 

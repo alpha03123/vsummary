@@ -18,6 +18,7 @@ import { WorkspaceBackButton } from "./shared/WorkspaceBackButton";
 import { WorkspaceExportMenu } from "./shared/WorkspaceToolHeader";
 import { clampChatDrawerWidth, clampPanelWidth, clampSidebarWidth, createPanelId, getPanelType, isPanelAllowedForScope, loadWorkspaceLayout, persistWorkspaceLayout, STUDIO_PANEL_TYPES, WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
 import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
+import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
 
 const WorkspaceLibraryHomePane = lazy(() =>
   import("./WorkspaceLibraryHomePane").then((module) => ({
@@ -93,7 +94,7 @@ export function WorkspacePage({ page }) {
   // (WCAG 2.4.3 Focus Order) and focus returns to the trigger on close.
   useFocusTrap(settingsModalRef, state.settingsPanelOpen);
   useFocusTrap(usageModalRef, state.usagePageOpen);
-  const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
+  const isPlaygroundHome = isPlaygroundSeries(activeSeries) && !selectedVideo;
   const hasRightPane = Boolean(activeSeries);
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const summaryLocked = selectedContextType === "series"

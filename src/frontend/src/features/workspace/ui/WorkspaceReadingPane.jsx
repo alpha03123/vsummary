@@ -4,6 +4,7 @@ import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceToolGrid } from "./shared/WorkspaceToolGrid";
 import { WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
 import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
+import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
 import {
   SERIES_TOOL_TILES,
   SERIES_STUDIO_TOOL_TILES,
@@ -129,7 +130,7 @@ export function WorkspaceReadingPane({
   const isStudioHome = toolId === "studio";
   const isSeriesHome = toolId === "series-home";
   const isMindmapTool = toolId === "mindmap" || toolId === "series-mindmap";
-  const isPlaygroundHome = activeSeries?.id === "__playground__" && !selectedVideo;
+  const isPlaygroundHome = isPlaygroundSeries(activeSeries) && !selectedVideo;
   const currentToolMeta = resolveToolMeta(toolId);
   const previewSource = tools?.preview?.previewUrl ?? previewUrl ?? undefined;
   const previewSubtitleSource = tools?.preview?.subtitleUrl ?? null;

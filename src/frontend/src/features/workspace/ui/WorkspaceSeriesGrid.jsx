@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, FolderKanban, PlayCircle, Sparkles, LayoutGrid, CheckCircle2, Link2, Search, X, Square, CheckSquare, CheckCheck, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { staggerContainer, blurVariant } from "../../../lib/animations";
+import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
 
 function getProcessedCount(series) {
   return series.videos.filter((video) => video.processed).length;
@@ -66,7 +67,7 @@ function SeriesSelectionButton({ seriesItem, selected, onToggle }) {
 
 export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequestBulkDelete, compact = false }) {
   const allSeries = library?.series ?? [];
-  const sourceSeries = allSeries.filter((item) => item.id !== "__playground__");
+  const sourceSeries = allSeries.filter((item) => !isPlaygroundSeries(item));
   const availableSeriesIdsKey = sourceSeries.map((item) => item.id).join("\u0000");
   const [searchText, setSearchText] = useState("");
   const [selectedSeriesIds, setSelectedSeriesIds] = useState([]);

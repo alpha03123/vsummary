@@ -49,7 +49,7 @@ import {
   updateVideoTranscript,
   uploadSrtAndGenerateVideoSummary,
 } from "./workspaceApi";
-import { PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
+import { isPlaygroundSeries } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection } from "./workspaceState";
 
@@ -78,10 +78,6 @@ function isGenerationCancelledError(error) {
     return false;
   }
   return error.message.includes("generation cancelled");
-}
-
-function isSourceMediaUnavailableError(error) {
-  return error instanceof Error && error.message.startsWith("503 source media unavailable:");
 }
 
 function isDownloadCancelledError(error) {
@@ -220,45 +216,27 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     dispatch({ type: "generation_started", videoKey, seriesId, videoId });
 
     try {
-      const summaryResult = await generateVideoSummary(seriesId, videoId, {
+      const submission = await generateVideoSummary(seriesId, videoId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
         processingMode,
       });
-      const library = await reloadWorkspaceLibrary();
-      if (processingMode === "summary") {
-        const autoArtifacts = state.ui.autoGenerateArtifacts ?? [];
-        if (autoArtifacts.includes("knowledge_cards")) {
-          const cards = await loadVideoKnowledgeCards(seriesId, videoId);
-          dispatch({ type: "knowledge_cards_loaded", cards });
-        }
-        if (autoArtifacts.includes("mindmap")) {
-          const mindmap = await loadVideoMindmap(seriesId, videoId);
-          dispatch({ type: "mindmap_generation_succeeded", mindmap });
-        }
-      }
       dispatch({
-        type: "generation_succeeded",
+        type: "generation_status_loaded",
         taskKey,
+        mode: "video",
         seriesId,
         videoId,
-        summary: processingMode === "summary" ? summaryResult : null,
-        processingMode,
-        library,
+        jobId: submission.jobId,
+        snapshot: {
+          status: submission.status,
+          stage: "queued",
+          progress: 0,
+          detail: "任务已进入队列",
+          error: null,
+        },
+        subscriptionActive: true,
       });
     } catch (error) {
-      if (isSourceMediaUnavailableError(error)) {
-        await reloadWorkspaceLibrary();
-        dispatch({
-          type: "generation_status_loaded",
-          taskKey,
-          mode: "video",
-          seriesId,
-          videoId,
-          snapshot: { status: "failed", stage: "failed", progress: null, detail: null, error: null },
-          subscriptionActive: false,
-        });
-        return;
-      }
       if (isGenerationCancelledError(error)) {
         dispatch({
           type: "generation_cancelled",
@@ -847,30 +825,24 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const videoKey = buildVideoKey(seriesId, videoId);
     dispatch({ type: "generation_started", videoKey, seriesId, videoId });
     try {
-      const summaryResult = await startGeneration(seriesId, videoId);
-      const library = await reloadWorkspaceLibrary();
+      const submission = await startGeneration(seriesId, videoId);
       dispatch({
-        type: "generation_succeeded",
+        type: "generation_status_loaded",
         taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        mode: "video",
         seriesId,
         videoId,
-        summary: summaryResult,
-        library,
+        jobId: submission.jobId,
+        snapshot: {
+          status: submission.status,
+          stage: "queued",
+          progress: 0,
+          detail: "任务已进入队列",
+          error: null,
+        },
+        subscriptionActive: true,
       });
     } catch (error) {
-      if (isSourceMediaUnavailableError(error)) {
-        await reloadWorkspaceLibrary();
-        dispatch({
-          type: "generation_status_loaded",
-          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
-          mode: "video",
-          seriesId,
-          videoId,
-          snapshot: { status: "failed", stage: "failed", progress: null, detail: null, error: null },
-          subscriptionActive: false,
-        });
-        return;
-      }
       if (isGenerationCancelledError(error)) {
         dispatch({
           type: "generation_cancelled",
@@ -1138,13 +1110,14 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         await deleteVideoSource(seriesId, videoId);
         return reloadWorkspaceLibrary();
       })();
-      if (seriesId === PLAYGROUND_SERIES_ID) {
-        const nextSeries = library?.series?.find((series) => series.id === PLAYGROUND_SERIES_ID) ?? null;
+      const currentSeries = library?.series?.find((series) => series.id === seriesId) ?? null;
+      if (isPlaygroundSeries(currentSeries)) {
+        const nextSeries = currentSeries;
         const nextVideo = nextSeries?.videos?.[0] ?? null;
         if (nextVideo) {
-          dispatch({ type: "video_selected", seriesId: PLAYGROUND_SERIES_ID, videoId: nextVideo.id });
+          dispatch({ type: "video_selected", seriesId, videoId: nextVideo.id });
         } else {
-          dispatch({ type: "playground_selected" });
+          dispatch({ type: "playground_selected", seriesId });
         }
         return;
       }
