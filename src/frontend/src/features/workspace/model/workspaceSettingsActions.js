@@ -16,7 +16,7 @@ import {
   updateProviderSettings,
   updateWorkspaceSettings,
   scheduleApplicationUpdate,
-} from "./workspaceApi";
+} from "../../../local-features/api/localWorkspaceApi";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 

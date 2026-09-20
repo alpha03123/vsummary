@@ -13,9 +13,9 @@ import {
   subscribeRagModelDownloadProgress,
   updateProviderSettings,
   updateWorkspaceSettings,
-} from "@src/features/workspace/model/workspaceApi";
+} from "@src/local-features/api/localWorkspaceApi";
 
-vi.mock("@src/features/workspace/model/workspaceApi", () => ({
+vi.mock("@src/local-features/api/localWorkspaceApi", () => ({
   cancelRagModelDownload: vi.fn(),
   cancelFasterWhisperModelDownload: vi.fn(),
   discoverProviderModels: vi.fn(),

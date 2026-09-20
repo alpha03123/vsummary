@@ -3,11 +3,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   generateVideoSummary,
   loadAgentSessionRecovery,
-  loadProviderUsage,
-  relinkExternalVideo,
   loadSeriesMindmap,
   generateVideoMindmap,
 } from "@src/features/workspace/model/workspaceApi";
+import { loadProviderUsage, relinkExternalVideo } from "@src/local-features/api/localWorkspaceApi";
 
 afterEach(() => {
   vi.restoreAllMocks();

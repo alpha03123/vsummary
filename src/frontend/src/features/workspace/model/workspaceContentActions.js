@@ -1,7 +1,5 @@
 import {
   cancelSeriesSummaries,
-  cancelChaoxingInit,
-  cancelChaoxingImport,
   cancelVideoDownload,
   cancelVideoSummary,
   createVideoNote,
@@ -18,11 +16,6 @@ import {
   generateVideoSummary,
   processAgentVideo,
   restoreAutomaticTranscriptAndGenerateVideoSummary,
-  initExternalCookie,
-  importChaoxingCourse,
-  importLocalPlaygroundVideos,
-  importLocalSeries,
-  importLocalSeriesVideos,
   loadWorkspaceLibrary,
   loadVideoSummary,
   loadVideoNotes,
@@ -31,14 +24,8 @@ import {
   loadVideoTools,
   loadVideoSummaryMarkdown,
   loadVideoTranscriptMarkdown,
-  initChaoxing,
-  loadChaoxingCourses,
-  loadChaoxingStatus,
   resolveLinkedSeries,
   resolveLinkedVideo,
-  relinkExternalVideo,
-  selectLocalMedia,
-  subscribeChaoxingImportProgress,
   startVideoDownload,
   subscribeMindmapGenerationProgress,
   subscribeSeriesMindmapGenerationProgress,
@@ -49,6 +36,7 @@ import {
   updateVideoTranscript,
   uploadSrtAndGenerateVideoSummary,
 } from "./workspaceApi";
+import * as localWorkspaceApi from "../../../local-features/api/localWorkspaceApi";
 import { isPlaygroundSeries } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection } from "./workspaceState";
@@ -789,7 +777,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onSelectLocalMedia() {
     try {
-      return await selectLocalMedia();
+      return await localWorkspaceApi.selectLocalMedia();
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "选择本机媒体失败" });
       throw error;
@@ -801,7 +789,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return;
     }
     try {
-      const result = await relinkExternalVideo(state.selectedSeriesId, state.selectedVideoId);
+      const result = await localWorkspaceApi.relinkExternalVideo(state.selectedSeriesId, state.selectedVideoId);
       if (result.relinked) {
         await reloadWorkspaceLibrary();
       }
@@ -812,7 +800,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onImportLocalSeries(seriesTitle, sourcePaths, storageMode) {
     try {
-      const rawSeries = await importLocalSeries(seriesTitle, sourcePaths, storageMode);
+      const rawSeries = await localWorkspaceApi.importLocalSeries(seriesTitle, sourcePaths, storageMode);
       await reloadWorkspaceLibrary();
       return rawSeries;
     } catch (error) {
@@ -926,7 +914,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onInitExternalCookie(provider, options = {}) {
     try {
-      return await initExternalCookie(provider, options);
+      return await localWorkspaceApi.initExternalCookie(provider, options);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw error;
@@ -937,7 +925,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
   }
   async function onLoadChaoxingStatus() {
     try {
-      return await loadChaoxingStatus();
+      return await localWorkspaceApi.loadChaoxingStatus();
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "读取超星状态失败" });
       throw error;
@@ -946,7 +934,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onInitChaoxing(options = {}) {
     try {
-      return await initChaoxing(options);
+      return await localWorkspaceApi.initChaoxing(options);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw error;
@@ -958,7 +946,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onCancelChaoxingInit() {
     try {
-      await cancelChaoxingInit();
+      await localWorkspaceApi.cancelChaoxingInit();
     } catch {
       // 取消是清理动作，失败时不覆盖用户当前操作反馈。
     }
@@ -966,7 +954,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onLoadChaoxingCourses() {
     try {
-      return await loadChaoxingCourses();
+      return await localWorkspaceApi.loadChaoxingCourses();
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "读取超星课程失败" });
       throw error;
@@ -975,14 +963,14 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onImportChaoxingCourse(courseKey, onProgress = null, options = {}) {
     try {
-      const task = await importChaoxingCourse(courseKey);
+      const task = await localWorkspaceApi.importChaoxingCourse(courseKey);
       if (!task.taskId) {
         throw new Error("超星导入任务未返回 task_id");
       }
       options.onTaskStarted?.(task);
       return await new Promise((resolve, reject) => {
         let unsubscribe = null;
-        unsubscribe = subscribeChaoxingImportProgress(task.taskId, async (snapshot) => {
+        unsubscribe = localWorkspaceApi.subscribeChaoxingImportProgress(task.taskId, async (snapshot) => {
           onProgress?.(snapshot);
           if (snapshot.status === "completed") {
             unsubscribe?.();
@@ -1011,7 +999,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return;
     }
     try {
-      await cancelChaoxingImport(taskId);
+      await localWorkspaceApi.cancelChaoxingImport(taskId);
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "取消超星课程导入失败" });
       throw error;
@@ -1053,7 +1041,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onImportLocalPlaygroundVideos(sourcePaths) {
     try {
-      const rawVideos = await importLocalPlaygroundVideos(sourcePaths);
+      const rawVideos = await localWorkspaceApi.importLocalPlaygroundVideos(sourcePaths);
       await reloadWorkspaceLibrary();
       return rawVideos;
     } catch (error) {
@@ -1064,7 +1052,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function onImportSeriesVideos(seriesId, sourcePaths) {
     try {
-      const rawVideos = await importLocalSeriesVideos(seriesId, sourcePaths);
+      const rawVideos = await localWorkspaceApi.importLocalSeriesVideos(seriesId, sourcePaths);
       await reloadWorkspaceLibrary();
       return rawVideos;
     } catch (error) {

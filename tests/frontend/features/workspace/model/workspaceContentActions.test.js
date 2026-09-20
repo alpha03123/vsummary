@@ -564,6 +564,9 @@ describe("workspaceContentActions series cancellation", () => {
     });
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
+    }));
+    vi.doMock("@src/local-features/api/localWorkspaceApi", () => ({
+      ...createWorkspaceApiMock(),
       cancelChaoxingImport,
       importChaoxingCourse,
       subscribeChaoxingImportProgress,
