@@ -238,6 +238,11 @@ def build_api_container(
         workflow=ConfiguredMindmapWorkflow(root_dir, usage_recorder=usage_store),
         temp_root=workspace.cache_root,
     )
+    resolved_series_mindmap_generator = SqlBackedSeriesMindmapGenerator(
+        workspace=workspace,
+        workflow=ConfiguredSeriesMindmapWorkflow(root_dir, usage_recorder=usage_store),
+        temp_root=workspace.cache_root,
+    )
 
     async def run_video_mindmap_job(claim, reporter) -> None:
         payload = claim.request_payload
@@ -259,10 +264,28 @@ def build_api_container(
         if mindmap is None:
             raise LookupError("Summary does not exist; cannot generate a mindmap.")
 
+    async def run_series_mindmap_job(claim, reporter) -> None:
+        max_depth = claim.request_payload.get("max_depth")
+        if max_depth is not None and (isinstance(max_depth, bool) or not isinstance(max_depth, int)):
+            raise ValueError("max_depth must be an integer or null.")
+        mindmap = await GenerateSeriesMindmapFromLibrary(
+            workspace,
+            resolved_series_mindmap_generator,
+        ).run(
+            claim.resource_id,
+            progress_reporter=reporter,
+            max_depth=max_depth,
+        )
+        if mindmap is None:
+            raise LookupError("Series has no generated summaries; cannot generate a mindmap.")
+
     job_worker = SqlJobWorker(
         repository=job_repository,
         summary_generator=resolved_generator,
-        operation_handlers={"generate_video_mindmap": run_video_mindmap_job},
+        operation_handlers={
+            "generate_video_mindmap": run_video_mindmap_job,
+            "generate_series_mindmap": run_series_mindmap_job,
+        },
         options=WorkerOptions.local(),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
@@ -270,11 +293,6 @@ def build_api_container(
         usage_recorder=usage_store,
     )
     resolved_note_generator = ConfiguredNoteGenerator(root_dir, usage_recorder=usage_store)
-    resolved_series_mindmap_generator = SqlBackedSeriesMindmapGenerator(
-        workspace=workspace,
-        workflow=ConfiguredSeriesMindmapWorkflow(root_dir, usage_recorder=usage_store),
-        temp_root=workspace.cache_root,
-    )
     agent_runtime = LazyAgentRuntimeProvider(
         root_dir=root_dir,
         workspace=workspace,

@@ -36,7 +36,7 @@ class WorkerOptions:
     def local(cls) -> "WorkerOptions":
         return cls(
             worker_id=f"local-{uuid4().hex}",
-            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap"}),
+            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap", "generate_series_mindmap"}),
             resource_class="local-cpu",
             lease_seconds=120,
             heartbeat_seconds=20,

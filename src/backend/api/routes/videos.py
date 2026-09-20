@@ -12,7 +12,6 @@ import logging
 import json
 import mimetypes
 from pathlib import Path
-from threading import Lock
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -62,20 +61,6 @@ from backend.video_summary.infrastructure.storage.mindmap_export import render_m
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
-
-_series_mindmap_locks: dict[str, Lock] = {}
-_series_mindmap_locks_guard = Lock()
-
-def _acquire_series_mindmap_lock(series_id: str) -> bool:
-    with _series_mindmap_locks_guard:
-        if series_id in _series_mindmap_locks:
-            return False
-        _series_mindmap_locks[series_id] = Lock()
-        return True
-
-def _release_series_mindmap_lock(series_id: str) -> None:
-    with _series_mindmap_locks_guard:
-        _series_mindmap_locks.pop(series_id, None)
 
 
 @router.get("/api/videos", response_model=VideoLibraryResponse)
@@ -1175,11 +1160,11 @@ def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, 
 
 
 @router.post("/api/series/{series_id}/mindmap/generate")
-async def generate_series_mindmap(
+def generate_series_mindmap(
     series_id: str,
     container: ApiContainerDep,
     request: GenerateMindmapRequest = Body(default_factory=GenerateMindmapRequest),
-) -> dict[str, object]:
+) -> JSONResponse:
     """POST /api/series/{series_id}/mindmap/generate — 触发系列思维导图生成。
 
     基于系列下已生成概况的视频聚合生成思维导图；通过 SSE 进度端点订阅实时状态。
@@ -1196,59 +1181,34 @@ async def generate_series_mindmap(
         HTTPException(400): 系列下没有已生成概况的视频。
         HTTPException(409): 该系列思维导图正在生成中。
     """
-    import sys
-    if not _acquire_series_mindmap_lock(series_id):
-        raise HTTPException(status_code=409, detail="该系列导图正在生成中，请稍后再试")
-    task_id = _build_series_mindmap_task_id(series_id)
-    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
     try:
-        reporter.update("generate", 0.0, "正在生成系列思维导图")
-        try:
-            mindmap = await container.generate_series_mindmap.run(
-                series_id,
-                progress_reporter=reporter,
-                max_depth=request.max_depth,
-            )
-        except Exception:
-            reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "系列思维导图生成失败")
-            raise
-        if mindmap is None:
-            reporter.failed("系列下没有已生成概况的视频")
-            raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
-        reporter.completed("系列思维导图已生成")
-        return mindmap.mindmap
-    finally:
-        _release_series_mindmap_lock(series_id)
-
-
-@router.get("/api/series/{series_id}/mindmap/generate/progress")
-async def stream_series_mindmap_generation_progress(
-    series_id: str,
-    container: ApiContainerDep,
-) -> StreamingResponse:
-    """GET /api/series/{series_id}/mindmap/generate/progress — 订阅系列思维导图生成进度流（SSE）。
-
-    以 SSE 推送系列思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
-
-    Args:
-        series_id: 系列 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        StreamingResponse（`text/event-stream`）。
-    """
-    task_id = _build_series_mindmap_task_id(series_id)
-    return StreamingResponse(
-        stream_progress_events(
-            tracker=container.mindmap_progress_tracker,
-            task_id=task_id,
-            terminal_statuses={"idle", "completed", "failed", "cancelled"},
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="series",
+            resource_id=series_id,
+            operation="generate_series_mindmap",
+            request_payload={"series_id": series_id, "max_depth": request.max_depth},
+            active_key=f"series:{series_id}:generate_series_mindmap",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=series_id,
+            operation="generate_series_mindmap",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "series", "id": series_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
         },
     )
 
@@ -1545,18 +1505,6 @@ def _build_mindmap_task_id(series_id: str, video_id: str) -> str:
         格式为 `mindmap|{series_id}|{video_id}` 的任务 ID。
     """
     return f"mindmap|{series_id}|{video_id}"
-
-
-def _build_series_mindmap_task_id(series_id: str) -> str:
-    """构建系列思维导图生成的进度跟踪任务 ID。
-
-    Args:
-        series_id: 系列 ID。
-
-    Returns:
-        格式为 `series-mindmap|{series_id}` 的任务 ID。
-    """
-    return f"series-mindmap|{series_id}"
 
 
 def _get_pending_series_videos(container, series_id: str) -> list[object]:
