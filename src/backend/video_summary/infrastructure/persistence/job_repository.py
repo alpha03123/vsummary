@@ -218,15 +218,15 @@ class SqlJobRepository:
                 self._append_event(session, job.id, "cancelling", "cancelling", None, "已请求取消任务")
             return _snapshot(job)
 
-    def request_cancel_for_resource(self, *, resource_id: str, operation: str) -> JobSnapshot | None:
+    def request_cancel_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
             job_id = session.scalar(
                 select(Job.id)
-                .where(Job.resource_id == resource_id, Job.operation == operation, Job.status.in_(("queued", "retrying", "running", "cancelling")))
+                .where(Job.workspace_id == workspace_id, Job.resource_id == resource_id, Job.operation == operation, Job.status.in_(("queued", "retrying", "running", "cancelling")))
                 .order_by(Job.created_at.desc())
                 .limit(1)
             )
-        return self.request_cancel(job_id) if job_id is not None else None
+        return self.request_cancel(job_id, workspace_id=workspace_id) if job_id is not None else None
 
     def mark_cancelled(self, claim: ClaimedJob, *, detail: str) -> None:
         with self._session_factory.begin() as session:
@@ -274,23 +274,24 @@ class SqlJobRepository:
             job = session.scalar(statement)
             return _snapshot(job) if job is not None else None
 
-    def latest_for_resource(self, *, resource_id: str, operations: tuple[str, ...]) -> JobSnapshot | None:
-        if not resource_id or not operations:
-            raise ValueError("resource_id and operations are required.")
+    def latest_for_resource(self, *, workspace_id: str, resource_id: str, operations: tuple[str, ...]) -> JobSnapshot | None:
+        if not workspace_id or not resource_id or not operations:
+            raise ValueError("workspace_id, resource_id and operations are required.")
         with self._session_factory() as session:
             job = session.scalar(
                 select(Job)
-                .where(Job.resource_id == resource_id, Job.operation.in_(operations))
+                .where(Job.workspace_id == workspace_id, Job.resource_id == resource_id, Job.operation.in_(operations))
                 .order_by(Job.created_at.desc())
                 .limit(1)
             )
             return _snapshot(job) if job is not None else None
 
-    def active_for_resource(self, *, resource_id: str, operation: str) -> JobSnapshot | None:
+    def active_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
             job = session.scalar(
                 select(Job)
                 .where(
+                    Job.workspace_id == workspace_id,
                     Job.resource_id == resource_id,
                     Job.operation == operation,
                     Job.status.in_(("queued", "retrying", "running", "cancelling")),
@@ -300,9 +301,9 @@ class SqlJobRepository:
             )
             return _snapshot(job) if job is not None else None
 
-    def latest_event(self, job_id: str) -> JobEventSnapshot | None:
+    def latest_event(self, job_id: str, *, workspace_id: str) -> JobEventSnapshot | None:
         with self._session_factory() as session:
-            job = session.get(Job, job_id)
+            job = session.scalar(select(Job).where(Job.id == job_id, Job.workspace_id == workspace_id))
             event = session.scalar(
                 select(JobEvent)
                 .where(JobEvent.job_id == job_id)

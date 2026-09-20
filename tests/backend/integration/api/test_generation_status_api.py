@@ -49,7 +49,7 @@ class GenerationStatusApiTests(unittest.TestCase):
             latest_for_resource=lambda **_kwargs: SimpleNamespace(
                 id="job-1", status="running", failure_detail=None
             ),
-            latest_event=lambda _job_id: SimpleNamespace(
+            latest_event=lambda _job_id, **_kwargs: SimpleNamespace(
                 stage="publish", progress=99.0, detail="正在保存生成结果"
             ),
         )
@@ -235,6 +235,7 @@ def _build_container(tracker: InMemoryProgressTracker):
     )
     return SimpleNamespace(
         root_dir=None,
+        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         generation_progress_tracker=tracker,
         video_download_progress_tracker=InMemoryProgressTracker(),
         list_video_library=SimpleNamespace(run=lambda: library),

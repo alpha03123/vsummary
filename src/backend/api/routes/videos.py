@@ -873,6 +873,7 @@ def _submit_video_generation_job(
         )
     except ControlPlaneConflictError as error:
         active = container.job_repository.active_for_resource(
+            workspace_id=workspace.id,
             resource_id=video_id,
             operation=operation,
         )
@@ -966,7 +967,7 @@ async def cancel_video_summary_generation(
     """
     job_repository = getattr(container, "job_repository", None)
     if job_repository is not None:
-        snapshot = job_repository.request_cancel_for_resource(resource_id=video_id, operation="generate_summary")
+        snapshot = job_repository.request_cancel_for_resource(workspace_id=container.sql_workspace.workspace_id, resource_id=video_id, operation="generate_summary")
         if snapshot is None:
             raise HTTPException(status_code=404, detail="no active generation job found")
         return {"status": snapshot.status, "job_id": snapshot.id}
@@ -1458,11 +1459,12 @@ def get_video_generation_status(
     job_repository = getattr(container, "job_repository", None)
     if job_repository is not None:
         snapshot = job_repository.latest_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
             resource_id=video_id,
             operations=("generate_summary", "generate_transcript"),
         )
         if snapshot is not None:
-            event = job_repository.latest_event(snapshot.id)
+            event = job_repository.latest_event(snapshot.id, workspace_id=container.sql_workspace.workspace_id)
             return {
                 "task_id": task_id,
                 "job_id": snapshot.id,
