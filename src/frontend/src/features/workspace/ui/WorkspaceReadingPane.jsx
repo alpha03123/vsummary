@@ -149,7 +149,6 @@ export function WorkspaceReadingPane({
       ...reference,
       videoId: reference.videoId || selectedVideo?.id,
     });
-    onSelectTool("overview");
   }
 
   return (

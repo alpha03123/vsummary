@@ -24,6 +24,7 @@ function renderPane(overrides = {}) {
       } : overrides.tools}
       chat={null}
       summary={null}
+      aiSummary={overrides.aiSummary ?? null}
       mindmap={null}
       knowledgeCards={null}
       knowledgeCardsGenerating={false}
@@ -43,7 +44,7 @@ function renderPane(overrides = {}) {
       savingNote={false}
       isGeneratingMindmapSelectedVideo={false}
       isGeneratingSelectedVideo={false}
-      onSelectTool={vi.fn()}
+      onSelectTool={overrides.onSelectTool ?? vi.fn()}
       onFocusNode={vi.fn()}
       onSeek={vi.fn()}
       onGenerateMindmap={vi.fn()}
@@ -52,6 +53,7 @@ function renderPane(overrides = {}) {
       onCreateNote={vi.fn()}
       onUpdateNote={vi.fn()}
       onDeleteNote={vi.fn()}
+      onOpenCitationReference={overrides.onOpenCitationReference ?? vi.fn()}
     />,
   );
 }
@@ -122,4 +124,31 @@ describe("WorkspaceReadingPane markdown exports", () => {
     expect(await screen.findByRole("button", { name: "导出" })).toBeDisabled();
   });
 
+});
+
+describe("WorkspaceReadingPane AI summary references", () => {
+  it("keeps the current panel when an AI summary citation is opened", async () => {
+    const onSelectTool = vi.fn();
+    const onOpenCitationReference = vi.fn();
+    renderPane({
+      toolId: "ai-summary",
+      onSelectTool,
+      onOpenCitationReference,
+      aiSummary: {
+        title: "AI 概括",
+        content: "原文依据[1]",
+        citations: [{
+          id: "1",
+          label: "逐字稿",
+          source_type: "transcript",
+          slots: [{ target_type: "video", video_id: "video-1", start_seconds: 12, end_seconds: 14, text: "原文" }],
+        }],
+      },
+    });
+
+    fireEvent.click(await screen.findByRole("link", { name: "1" }));
+
+    expect(onOpenCitationReference).toHaveBeenCalledWith(expect.objectContaining({ seconds: 12 }));
+    expect(onSelectTool).not.toHaveBeenCalled();
+  });
 });
