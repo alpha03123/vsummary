@@ -284,6 +284,7 @@ async def run(mysql_home: Path) -> dict[str, object]:
                 and tools["overview"]["generated"]
                 and tools["knowledge_cards"]["generated"]
                 and tools["mindmap"]["generated"]
+                and tools["preview"]["subtitle_url"] == f"/api/videos/{series_id}/{video_id}/subtitles.vtt"
                 and "WEBVTT" in subtitle.text
                 and "SQL E2E 概括" in exported.text
                 and chat.get("assistant_message", "").startswith("已读取视频制品")
