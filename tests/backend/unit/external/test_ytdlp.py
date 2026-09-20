@@ -4,11 +4,14 @@ import asyncio
 from pathlib import Path
 
 from backend.external.ytdlp import (
+    BackgroundYtDlpDownloadStarter,
     ExternalVideoResolutionError,
     YtDlpPlatform,
     YtDlpPlatformDownloader,
     YtDlpPlatformResolver,
+    _external_platform_error,
 )
+from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.shared.ytdlp import write_cookies_file
 from backend.video_summary.library.linked_models import LinkedVideo
 
@@ -176,6 +179,97 @@ def test_downloader_maps_cookie_failure_to_task_error_kind(tmp_path: Path) -> No
     else:
         raise AssertionError("expected ExternalVideoResolutionError")
     assert reporter.errors
+
+
+def test_youtube_verification_failure_tells_user_to_refresh_cookie() -> None:
+    error = _external_platform_error(
+        RuntimeError("ERROR: [youtube] Sign in to confirm you're not a bot"),
+        "YouTube",
+    )
+
+    assert error.kind == "cookie_required"
+    assert str(error) == "YouTube 需要重新验证登录状态。请重新获取 Cookie 后再试。"
+
+
+def test_unclassified_platform_failure_never_returns_generic_parse_error() -> None:
+    error = _external_platform_error(RuntimeError("yt-dlp exited with an unexpected response"), "YouTube")
+
+    assert error.kind == "failed"
+    assert "发生解析错误" not in str(error)
+    assert "重新获取 Cookie" in str(error)
+
+
+def test_background_download_completes_only_after_media_is_saved(tmp_path: Path) -> None:
+    media_path = tmp_path / "video.mp4"
+    media_path.write_bytes(b"media")
+    tracker = InMemoryProgressTracker()
+    saved: list[Path] = []
+
+    class Downloader:
+        async def download_async(self, _video, _destination, reporter):
+            reporter.update("download", 100.0, "文件已下载")
+            return media_path
+
+    async def run() -> None:
+        starter = BackgroundYtDlpDownloadStarter(
+            root_dir=tmp_path,
+            downloader=Downloader(),
+            progress_tracker=tracker,
+            on_downloaded=lambda _series_id, _video_id, path: saved.append(path),
+        )
+        task_id = starter.start_video(series_id="series-1", video=_linked_video())
+        for _ in range(20):
+            snapshot = tracker.get_snapshot(task_id)
+            if snapshot.status in {"completed", "failed"}:
+                break
+            await asyncio.sleep(0.01)
+        snapshot = tracker.get_snapshot(task_id)
+        assert snapshot.status == "completed"
+        assert saved == [media_path]
+
+    asyncio.run(run())
+
+
+def test_background_download_reports_failure_when_media_cannot_be_saved(tmp_path: Path) -> None:
+    media_path = tmp_path / "video.mp4"
+    media_path.write_bytes(b"media")
+    tracker = InMemoryProgressTracker()
+
+    class Downloader:
+        async def download_async(self, _video, _destination, reporter):
+            reporter.update("download", 100.0, "文件已下载")
+            return media_path
+
+    async def run() -> None:
+        starter = BackgroundYtDlpDownloadStarter(
+            root_dir=tmp_path,
+            downloader=Downloader(),
+            progress_tracker=tracker,
+            on_downloaded=lambda _series_id, _video_id, _path: (_ for _ in ()).throw(OSError("BlobStore unavailable")),
+        )
+        task_id = starter.start_video(series_id="series-1", video=_linked_video())
+        for _ in range(20):
+            snapshot = tracker.get_snapshot(task_id)
+            if snapshot.status in {"completed", "failed"}:
+                break
+            await asyncio.sleep(0.01)
+        snapshot = tracker.get_snapshot(task_id)
+        assert snapshot.status == "failed"
+        assert snapshot.error == "下载完成后，媒体保存到工作区失败。请重试。"
+
+    asyncio.run(run())
+
+
+def _linked_video() -> LinkedVideo:
+    return LinkedVideo(
+        source_id="video-id",
+        item_index=1,
+        title="视频",
+        cover_url="",
+        duration_seconds=0,
+        source_url="https://www.youtube.com/watch?v=video-id",
+        provider="youtube",
+    )
 
 
 class _RecordingReporter:

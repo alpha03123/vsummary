@@ -435,7 +435,10 @@ function PanelFooter({
           {isGeneratingSelectedVideo ? "取消当前处理" : selectedVideoIsDownloading ? "取消下载" : "下载视频"}
         </button>
         {hasSelectedVideoDownloadError && downloadError ? (
-          <p role="alert" className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{downloadError}</p>
+          <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300">
+            <p className="font-semibold">下载失败</p>
+            <p className="mt-0.5">{downloadError}</p>
+          </div>
         ) : null}
       </div>
     );

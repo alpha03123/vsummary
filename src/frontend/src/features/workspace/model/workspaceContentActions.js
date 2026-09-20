@@ -472,7 +472,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         ? window.setInterval(() => {
             if (options.cancelCheck()) {
               cleanup();
-              dispatch({ type: "video_download_failed", seriesId, videoId });
+              dispatch({ type: "video_download_cancelled", seriesId, videoId });
               reject(new Error("任务已取消"));
             }
           }, 250)
@@ -492,7 +492,12 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           cleanup();
           resolve();
         }
-        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+        if (snapshot.status === "cancelled") {
+          cleanup();
+          dispatch({ type: "video_download_cancelled", seriesId, videoId });
+          reject(new Error("任务已取消"));
+        }
+        if (snapshot.status === "failed") {
           cleanup();
           const message = snapshot.error || snapshot.detail || "视频下载失败";
           dispatch({ type: "video_download_failed", seriesId, videoId, error: message });
@@ -1024,7 +1029,12 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       try {
         await cancelVideoDownload(seriesId, videoId);
       } catch (error) {
-        dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "取消下载失败" });
+        dispatch({
+          type: "video_download_failed",
+          seriesId,
+          videoId,
+          error: error instanceof Error ? error.message : "取消下载失败",
+        });
       }
       return;
     }
@@ -1034,8 +1044,10 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       dispatch({ type: "video_download_completed", seriesId, videoId, library });
     } catch (error) {
       const message = error instanceof Error ? error.message : "视频下载失败";
+      if (isDownloadCancelledError(error)) {
+        return;
+      }
       dispatch({ type: "video_download_failed", seriesId, videoId, error: message });
-      dispatch({ type: "load_failed", message });
     }
   }
 

@@ -522,6 +522,34 @@ describe("workspaceContentActions series cancellation", () => {
     });
   });
 
+  it("keeps a cancellation failure on the linked video instead of using the transient page error", async () => {
+    vi.resetModules();
+    const cancelVideoDownload = vi.fn(() => Promise.reject(new Error("取消请求未送达")));
+    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
+      ...createWorkspaceApiMock(),
+      cancelVideoDownload,
+    }));
+    const { createWorkspaceContentActions } = await import(
+      "@src/features/workspace/model/workspaceContentActions"
+    );
+    const dispatch = vi.fn();
+    const actions = createWorkspaceContentActions({
+      state: { selectedSeriesId: "series-a", downloadingVideoKey: "series-a/linked-1" },
+      dispatch,
+      selectedVideo: null,
+    });
+
+    await actions.onDownloadVideo({ id: "linked-1" });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "video_download_failed",
+      seriesId: "series-a",
+      videoId: "linked-1",
+      error: "取消请求未送达",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "load_failed" }));
+  });
+
   it("exposes and cancels a running chaoxing import task", async () => {
     vi.resetModules();
     let progressListener;

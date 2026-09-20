@@ -221,13 +221,12 @@ class YtDlpPlatformDownloader:
             ]
             if not candidates:
                 raise RuntimeError(f"yt-dlp 下载完成但未找到输出文件：{video.video_id}.*")
-            reporter.completed(f"下载完成：{candidates[0].name}")
             return candidates[0]
         except DownloadCancelled as error:
             reporter.cancelled(str(error))
             raise
         except Exception as error:
-            platform_error = _external_platform_error(error)
+            platform_error = _external_platform_error(error, self._platform.display_name)
             reporter.failed(str(platform_error))
             raise platform_error from error
         finally:
@@ -291,10 +290,19 @@ class BackgroundYtDlpDownloadStarter:
                 if self._on_downloaded is None:
                     raise RuntimeError("A download sink is required; refusing to persist media outside BlobStore.")
                 self._on_downloaded(series_id, video.video_id, path)
-            except Exception:
+                reporter.completed(f"下载完成：{path.name}")
+            except DownloadCancelled:
+                return
+            except ExternalVideoResolutionError:
                 LOGGER.exception(
                     "linked video download failed",
                     extra={"event": "linked_video_download_failed", "provider": video.provider, "video_id": video.video_id},
+                )
+            except Exception:
+                reporter.failed("下载完成后，媒体保存到工作区失败。请重试。")
+                LOGGER.exception(
+                    "linked video download persistence failed",
+                    extra={"event": "linked_video_download_persistence_failed", "provider": video.provider, "video_id": video.video_id},
                 )
 
         asyncio.create_task(run())
@@ -337,16 +345,32 @@ def _is_cancelled(reporter: ProgressReporter) -> bool:
     return False
 
 
-def _external_platform_error(error: Exception) -> ExternalVideoResolutionError:
+def _external_platform_error(error: Exception, platform_name: str = "该平台") -> ExternalVideoResolutionError:
     message = str(error)
     normalized_message = message.lower()
-    if "fresh cookies" in normalized_message or "cookies are needed" in normalized_message:
-        return ExternalVideoResolutionError("cookie_required", "未检测到cookie，无法下载，请先点击“获取cookie”。")
+    if (
+        "fresh cookies" in normalized_message
+        or "cookies are needed" in normalized_message
+        or "cookies are no longer valid" in normalized_message
+        or "sign in to confirm" in normalized_message
+        or "not a bot" in normalized_message
+    ):
+        return ExternalVideoResolutionError("cookie_required", f"{platform_name} 需要重新验证登录状态。请重新获取 Cookie 后再试。")
     if "unsupported url" in normalized_message:
         return ExternalVideoResolutionError("invalid_url", "URL不合法，请输入合理的URL。")
     if "private video" in normalized_message or "login required" in normalized_message:
-        return ExternalVideoResolutionError("cookie_required", "未检测到cookie。请先点击“获取cookie”。")
-    return ExternalVideoResolutionError("failed", "发生解析错误。")
+        return ExternalVideoResolutionError("cookie_required", f"{platform_name} 需要重新验证登录状态。请重新获取 Cookie 后再试。")
+    if "http error 429" in normalized_message or "too many requests" in normalized_message:
+        return ExternalVideoResolutionError("rate_limited", f"{platform_name} 暂时限制了下载请求，请稍后再试。")
+    if "requested format is not available" in normalized_message or "no video formats" in normalized_message:
+        return ExternalVideoResolutionError("format_unavailable", f"{platform_name} 未提供可下载的媒体格式，请稍后重试。")
+    if "http error 403" in normalized_message or "forbidden" in normalized_message:
+        return ExternalVideoResolutionError("access_denied", f"{platform_name} 拒绝了下载请求。请重新获取 Cookie 后再试。")
+    if "timed out" in normalized_message or "network is unreachable" in normalized_message or "connection" in normalized_message:
+        return ExternalVideoResolutionError("network_error", f"连接 {platform_name} 失败，请检查网络后重试。")
+    if "unable to extract" in normalized_message or "signature extraction failed" in normalized_message or "nsig extraction failed" in normalized_message:
+        return ExternalVideoResolutionError("extractor_outdated", f"{platform_name} 页面规则已变化，请更新 yt-dlp 后重试。")
+    return ExternalVideoResolutionError("failed", f"{platform_name} 未能提供可下载的媒体。请稍后重试；若持续失败，请重新获取 Cookie。")
 
 
 def _create_drission_page(user_data_dir: str, browser_port: int) -> object:

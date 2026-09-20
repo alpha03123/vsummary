@@ -523,7 +523,7 @@ describe("workspaceReducer video download cancellation", () => {
     expect(nextState.library.series[0].videos[0].status).toBe("linked");
   });
 
-  it("restores linked video cards when cancelling an active download", () => {
+  it("keeps the download locked while cancellation is pending", () => {
     const state = {
       downloadingVideoKey: "series-a/linked-1",
       videoDownloadProgress: 42,
@@ -545,8 +545,27 @@ describe("workspaceReducer video download cancellation", () => {
       videoId: "linked-1",
     });
 
-    expect(nextState.downloadingVideoKey).toBeNull();
+    expect(nextState.downloadingVideoKey).toBe("series-a/linked-1");
     expect(nextState.videoDownloadProgress).toBeNull();
+    expect(nextState.library.series[0].videos[0].status).toBe("downloading");
+  });
+
+  it("restores the linked card only after download cancellation is confirmed", () => {
+    const state = {
+      downloadingVideoKey: "series-a/linked-1",
+      videoDownloadProgress: 42,
+      library: {
+        series: [{ id: "series-a", videos: [{ id: "linked-1", isLinked: true, status: "downloading" }] }],
+      },
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "video_download_cancelled",
+      seriesId: "series-a",
+      videoId: "linked-1",
+    });
+
+    expect(nextState.downloadingVideoKey).toBeNull();
     expect(nextState.library.series[0].videos[0].status).toBe("linked");
   });
 

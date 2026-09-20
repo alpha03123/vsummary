@@ -1434,7 +1434,6 @@ export function workspaceReducer(state, action) {
         videoDownloadErrorKey: null,
         library: action.library,
       };
-    case "video_download_cancel_requested":
     case "video_download_failed":
       return {
         ...state,
@@ -1442,6 +1441,27 @@ export function workspaceReducer(state, action) {
         videoDownloadProgress: null,
         videoDownloadError: action.error ?? null,
         videoDownloadErrorKey: buildVideoKey(action.seriesId, action.videoId),
+        library: updateVideoCardInLibrary(
+          state.library,
+          action.seriesId,
+          action.videoId,
+          restoreLinkedDownloadStatus,
+        ),
+      };
+    case "video_download_cancel_requested":
+      return state.downloadingVideoKey !== buildVideoKey(action.seriesId, action.videoId)
+        ? state
+        : {
+            ...state,
+            videoDownloadProgress: null,
+          };
+    case "video_download_cancelled":
+      return {
+        ...state,
+        downloadingVideoKey: null,
+        videoDownloadProgress: null,
+        videoDownloadError: null,
+        videoDownloadErrorKey: null,
         library: updateVideoCardInLibrary(
           state.library,
           action.seriesId,
