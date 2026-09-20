@@ -148,11 +148,11 @@ describe("WorkspaceVideoPlayer", () => {
   });
 
   it("shows the current transcript action only while the video is playing", async () => {
-    const onOpenOverviewAtTime = vi.fn();
+    const onFocusOverviewAtTime = vi.fn();
     const { container } = render(
       <WorkspaceVideoPlayer
         videoSource="/api/videos/s1/v1/preview"
-        onOpenOverviewAtTime={onOpenOverviewAtTime}
+        onFocusOverviewAtTime={onFocusOverviewAtTime}
       />,
     );
     const video = container.querySelector("video");
@@ -162,7 +162,7 @@ describe("WorkspaceVideoPlayer", () => {
 
     fireEvent.play(video);
     fireEvent.click(await screen.findByRole("button", { name: "查看当前转写" }));
-    expect(onOpenOverviewAtTime).toHaveBeenCalledWith(42.5);
+    expect(onFocusOverviewAtTime).toHaveBeenCalledWith(42.5);
 
     fireEvent.pause(video);
     await waitFor(() => {

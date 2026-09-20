@@ -14,7 +14,7 @@ export function WorkspaceVideoPlayer({
   onTimeUpdate,
   resumeSeconds = null,
   onPlaybackEnded,
-  onOpenOverviewAtTime,
+  onFocusOverviewAtTime,
   followOverviewPlayback = false,
   onFollowOverviewPlaybackChange,
 }) {
@@ -101,7 +101,7 @@ export function WorkspaceVideoPlayer({
   function openCurrentTranscript() {
     const seconds = videoRef.current?.currentTime;
     if (Number.isFinite(seconds)) {
-      onOpenOverviewAtTime?.(seconds);
+      onFocusOverviewAtTime?.(seconds);
     }
   }
 
@@ -175,7 +175,7 @@ export function WorkspaceVideoPlayer({
         </div>
       )}
       <AnimatePresence initial={false}>
-        {isPlaying && typeof onOpenOverviewAtTime === "function" ? (
+        {isPlaying && typeof onFocusOverviewAtTime === "function" ? (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}

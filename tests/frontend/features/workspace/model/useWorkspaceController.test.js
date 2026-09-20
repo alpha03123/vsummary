@@ -65,11 +65,11 @@ describe("useWorkspaceController.onSeekToTime", () => {
   });
 });
 
-describe("useWorkspaceController.onOpenOverviewAtTime", () => {
+describe("useWorkspaceController.onFocusOverviewAtTime", () => {
   it("records a citation focus at the current playback time", () => {
     const { result } = renderHook(() => useWorkspaceController());
 
-    act(() => result.current.onOpenOverviewAtTime(42.5));
+    act(() => result.current.onFocusOverviewAtTime(42.5));
 
     expect(result.current.citationFocus).toMatchObject({ seconds: 42.5 });
     expect(result.current.citationFocus.requestId).toMatch(/^\d+-42\.5$/);
@@ -78,7 +78,7 @@ describe("useWorkspaceController.onOpenOverviewAtTime", () => {
   it("does not create a citation focus for a non-finite time", () => {
     const { result } = renderHook(() => useWorkspaceController());
 
-    act(() => result.current.onOpenOverviewAtTime(NaN));
+    act(() => result.current.onFocusOverviewAtTime(NaN));
 
     expect(result.current.citationFocus).toBeNull();
   });

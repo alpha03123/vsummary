@@ -663,18 +663,6 @@ def _build_filters(
         else:
             filters.append(MetadataFilters(filters=family_filters, condition=FilterCondition.OR))
     return MetadataFilters(filters=filters, condition=FilterCondition.AND)
-    filters: list[MetadataFilter | MetadataFilters] = [
-        MetadataFilter(key="series_id", value=series_id),
-    ]
-    if scope_type == "video":
-        filters.append(MetadataFilter(key="video_id", value=video_id))
-    family_filters = _build_source_family_filters(source_tags, target_source=target_source)
-    if family_filters:
-        if len(family_filters) == 1:
-            filters.append(family_filters[0])
-        else:
-            filters.append(MetadataFilters(filters=family_filters, condition=FilterCondition.OR))
-    return MetadataFilters(filters=filters, condition=FilterCondition.AND)
 
 
 def _build_source_family_filters(

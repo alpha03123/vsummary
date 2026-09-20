@@ -155,7 +155,7 @@ export function buildWorkspacePageModel(controller) {
       cancelRagModelDownload: controller.onCancelRagModelDownload,
       resetSettings: controller.onResetSettings,
       clearError: controller.onClearError,
-      openOverviewAtTime: controller.onOpenOverviewAtTime,
+      focusOverviewAtTime: controller.onFocusOverviewAtTime,
       resolveLinkedSeries: controller.onResolveLinkedSeries,
       selectLocalMedia: controller.onSelectLocalMedia,
       resolvePlaygroundVideo: controller.onResolvePlaygroundVideo,

@@ -7,6 +7,7 @@
     "dev": "vite",
     "test": "vitest run",
     "build": "vite build",
+    "audit:references": "knip --config knip.json",
     "preview": "vite preview",
     "test:e2e": "playwright test"
   },
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
+    "knip": "^6.37.0",
     "@tailwindcss/container-queries": "^0.1.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

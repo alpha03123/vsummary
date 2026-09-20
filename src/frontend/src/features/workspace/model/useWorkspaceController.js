@@ -159,12 +159,12 @@ export function useWorkspaceController() {
     });
   }
 
-  function onOpenOverviewAtTime(seconds) {
+  function onFocusOverviewAtTime(seconds) {
     if (!Number.isFinite(seconds)) {
       return;
     }
     dispatch({
-      type: "overview_opened_at_time",
+      type: "overview_focus_requested",
       seconds,
       requestId: `${Date.now()}-${seconds}`,
     });
@@ -293,7 +293,7 @@ export function useWorkspaceController() {
     onResetSettings: settingsActions.onResetSettings,
     onClearError,
     onSeekToTime,
-    onOpenOverviewAtTime,
+    onFocusOverviewAtTime,
     onToggleChatDrawer,
     onOpenChatDrawer,
     onCloseChatDrawer,

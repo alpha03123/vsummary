@@ -377,10 +377,6 @@ export async function loadVideoMindmap(seriesId, videoId) {
   return toWorkspaceMindmap(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap`));
 }
 
-export async function loadVideoCards(seriesId, videoId) {
-  return toWorkspaceCards(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/cards`));
-}
-
 export async function loadVideoKnowledgeCards(seriesId, videoId) {
   return toWorkspaceKnowledgeCards(
     await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards`),
@@ -551,20 +547,6 @@ export async function generateVideoMindmap(seriesId, videoId, maxDepth = null) {
       body: JSON.stringify({ max_depth: maxDepth }),
     }),
   );
-}
-
-export async function sendAgentChat(sessionId, message, context) {
-  return fetchJson("/api/agent/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      session_id: sessionId,
-      message,
-      context: context ?? null,
-    }),
-  });
 }
 
 export async function loadAgentContextUsage(sessionId, context) {
@@ -988,32 +970,6 @@ export async function importLocalSeries(seriesTitle, sourcePaths, storageMode) {
       storage_mode: storageMode,
     }),
   });
-}
-
-export async function resolveBilibiliSeries(url) {
-  return fetchJson("/api/linked/bilibili/resolve/series", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
-}
-
-export async function resolveBilibiliVideo(url, targetSeriesId = null) {
-  return fetchJson("/api/linked/bilibili/resolve/video", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, target_series_id: targetSeriesId }),
-  });
-}
-
-export async function initBilibiliCookie(options = {}) {
-  const payload = await fetchJson("/api/linked/bilibili/cookie/init", {
-    method: "POST",
-    signal: options.signal,
-  });
-  return {
-    configured: payload.configured === true,
-  };
 }
 
 export async function resolveLinkedSeries(provider, url) {

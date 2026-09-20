@@ -296,7 +296,7 @@ export function WorkspacePage({ page }) {
     }));
   }
 
-  function renderVideoPlayerPane(onOpenOverviewAtTime = null) {
+  function renderVideoPlayerPane(onFocusOverviewAtTime = null) {
     if (selectedVideo) {
       if (selectedVideo.status === "source_missing") {
         return (
@@ -331,7 +331,7 @@ export function WorkspacePage({ page }) {
                 playbackPositionsRef.current.delete(selectedVideoKey);
               }
             }}
-            onOpenOverviewAtTime={tools?.overview?.generated === true ? onOpenOverviewAtTime : undefined}
+            onFocusOverviewAtTime={tools?.overview?.generated === true ? onFocusOverviewAtTime : undefined}
             followOverviewPlayback={followOverviewPlayback}
             onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
           />
@@ -353,7 +353,7 @@ export function WorkspacePage({ page }) {
   function renderStudioPanel(panelId, fallbackToolId) {
     const toolId = layout.panelTools[panelId] ?? fallbackToolId;
     if (toolId === "preview") {
-      return renderVideoPlayerPane(actions.openOverviewAtTime);
+      return renderVideoPlayerPane(actions.focusOverviewAtTime);
     }
     if (toolId === "ai-chat") {
       return <WorkspaceChatPanel {...chatPanelProps} />;

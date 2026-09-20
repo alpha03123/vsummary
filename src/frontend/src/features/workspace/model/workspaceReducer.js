@@ -616,7 +616,7 @@ export function workspaceReducer(state, action) {
         ...state,
         citationFocus: action.focus,
       };
-    case "overview_opened_at_time":
+    case "overview_focus_requested":
       return {
         ...state,
         citationFocus: {

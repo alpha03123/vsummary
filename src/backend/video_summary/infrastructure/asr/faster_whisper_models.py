@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from backend.video_summary.infrastructure.asr.huggingface_asr_models import (
-    AsrModelInfo as FasterWhisperModelInfo,
-    AsrModelSpec,
-    HuggingFaceAsrModelManager,
-)
+from backend.video_summary.infrastructure.asr.huggingface_asr_models import AsrModelSpec, HuggingFaceAsrModelManager
 from backend.video_summary.infrastructure.asr.huggingface_model_downloader import HuggingFaceModelDownloader
 
 
