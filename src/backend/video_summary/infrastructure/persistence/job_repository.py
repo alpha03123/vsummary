@@ -239,6 +239,21 @@ class SqlJobRepository:
             self._finish_attempt(session, claim, now, outcome="cancelled")
             self._append_event(session, job.id, "cancelled", "cancelled", None, detail)
 
+    def succeed(self, claim: ClaimedJob, *, detail: str) -> None:
+        """Finish a worker-owned Job whose handler committed its own result."""
+
+        with self._session_factory.begin() as session:
+            now = _database_now(session)
+            job = self._owned_job(session, claim, now)
+            job.status = "succeeded"
+            job.active_key = None
+            job.claimed_by = None
+            job.lease_token = None
+            job.lease_expires_at = None
+            job.finished_at = now
+            self._finish_attempt(session, claim, now, outcome="succeeded")
+            self._append_event(session, job.id, "succeeded", "succeeded", 100.0, detail)
+
     def fail(self, claim: ClaimedJob, *, failure_code: str, failure_detail: str, retry_delay_seconds: int | None) -> None:
         with self._session_factory.begin() as session:
             now = _database_now(session)

@@ -27,7 +27,7 @@ import {
   resolveLinkedSeries,
   resolveLinkedVideo,
   startVideoDownload,
-  subscribeMindmapGenerationProgress,
+  subscribeDurableJobProgress,
   subscribeSeriesMindmapGenerationProgress,
   subscribeVideoDownloadProgress,
   updateVideoNote,
@@ -606,20 +606,23 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const videoKey = buildVideoKey(seriesId, videoId);
     dispatch({ type: "mindmap_generation_started", videoKey });
 
-    const unsubscribe = subscribeMindmapGenerationProgress(seriesId, videoId, (snapshot) => {
-      dispatch({ type: "mindmap_generation_progress_updated", snapshot });
-    });
-
     try {
-      const mindmapResult = await generateVideoMindmap(seriesId, videoId, maxDepth);
-      unsubscribe();
-      dispatch({ type: "mindmap_generation_progress_cleared" });
-      dispatch({
-        type: "mindmap_generation_succeeded",
-        mindmap: mindmapResult,
+      const submitted = await generateVideoMindmap(seriesId, videoId, maxDepth);
+      const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+        dispatch({ type: "mindmap_generation_progress_updated", snapshot });
+        if (snapshot.status === "completed") {
+          unsubscribe();
+          const mindmap = await loadVideoMindmap(seriesId, videoId);
+          dispatch({ type: "mindmap_generation_progress_cleared" });
+          dispatch({ type: "mindmap_generation_succeeded", mindmap });
+        }
+        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+          unsubscribe();
+          dispatch({ type: "mindmap_generation_progress_cleared" });
+          dispatch({ type: "load_failed", message: snapshot.error || snapshot.detail || "生成失败" });
+        }
       });
     } catch (error) {
-      unsubscribe();
       dispatch({ type: "mindmap_generation_progress_cleared" });
       dispatch({
         type: "load_failed",

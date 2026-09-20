@@ -1112,12 +1112,12 @@ async def cancel_series_summaries_generation(
 
 
 @router.post("/api/videos/{series_id}/{video_id}/mindmap/generate")
-async def generate_video_mindmap(
+def generate_video_mindmap(
     series_id: str,
     video_id: str,
     container: ApiContainerDep,
     request: GenerateMindmapRequest = Body(default_factory=GenerateMindmapRequest),
-) -> dict[str, object]:
+) -> JSONResponse:
     """POST /api/videos/{series_id}/{video_id}/mindmap/generate — 生成视频思维导图。
 
     基于已有总结调用 LLM 生成思维导图节点树并落盘；通过 SSE 进度端点订阅实时状态。
@@ -1133,60 +1133,35 @@ async def generate_video_mindmap(
     Raises:
         HTTPException(404): 总结未生成。
     """
-    import sys
-    task_id = _build_mindmap_task_id(series_id, video_id)
-    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
+    _ensure_video_exists(container, series_id, video_id)
     try:
-        reporter.update("generate", 0.0, "正在生成思维导图")
-        video_mindmap = await container.generate_video_mindmap.run(
-            series_id,
-            video_id,
-            progress_reporter=reporter,
-            max_depth=request.max_depth,
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="generate_video_mindmap",
+            request_payload={"series_id": series_id, "video_id": video_id, "max_depth": request.max_depth},
+            active_key=f"video:{video_id}:generate_video_mindmap",
+            idempotency_scope_id=None,
+            idempotency_key=None,
         )
-    except Exception:
-        reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "思维导图生成失败")
-        raise
-    if video_mindmap is None:
-        reporter.failed("总结不存在，无法生成思维导图")
-        raise HTTPException(
-            status_code=404,
-            detail=f"summary not found for video '{series_id}/{video_id}'",
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=video_id,
+            operation="generate_video_mindmap",
         )
-    reporter.completed("思维导图已生成")
-    return video_mindmap.mindmap
-
-
-@router.get("/api/videos/{series_id}/{video_id}/mindmap/generate/progress")
-async def stream_mindmap_generation_progress(
-    series_id: str,
-    video_id: str,
-    container: ApiContainerDep,
-) -> StreamingResponse:
-    """GET /api/videos/{series_id}/{video_id}/mindmap/generate/progress — 订阅单视频思维导图生成进度流（SSE）。
-
-    以 SSE 推送思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
-
-    Args:
-        series_id: 系列 ID。
-        video_id: 视频 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        StreamingResponse（`text/event-stream`）。
-    """
-    task_id = _build_mindmap_task_id(series_id, video_id)
-    return StreamingResponse(
-        stream_progress_events(
-            tracker=container.mindmap_progress_tracker,
-            task_id=task_id,
-            terminal_statuses={"idle", "completed", "failed", "cancelled"},
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
         },
     )
 

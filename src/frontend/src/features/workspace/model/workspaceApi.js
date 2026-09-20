@@ -232,13 +232,15 @@ export async function loadSeriesGenerationStatus(seriesId) {
 }
 
 export async function generateVideoMindmap(seriesId, videoId, maxDepth = null) {
-  return toWorkspaceMindmap(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ max_depth: maxDepth }),
-    }),
-  );
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ max_depth: maxDepth }),
+  });
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("思维导图任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function loadAgentContextUsage(sessionId, context) {
@@ -773,33 +775,6 @@ export async function generateSeriesMindmap(seriesId, maxDepth = null) {
     body: JSON.stringify({ max_depth: maxDepth }),
   });
   return toWorkspaceMindmap(payload);
-}
-
-export function subscribeMindmapGenerationProgress(seriesId, videoId, listener) {
-  const eventSource = new EventSource(
-    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate/progress`
-  );
-  let terminal = false;
-
-  eventSource.onmessage = (event) => {
-    const snapshot = JSON.parse(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      eventSource.close();
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (terminal) return;
-    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
-    eventSource.close();
-  };
-
-  return () => {
-    terminal = true;
-    eventSource.close();
-  };
 }
 
 export function subscribeSeriesMindmapGenerationProgress(seriesId, listener) {

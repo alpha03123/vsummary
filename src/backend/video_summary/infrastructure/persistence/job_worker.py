@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from threading import Event, Thread
 from uuid import uuid4
@@ -35,7 +36,7 @@ class WorkerOptions:
     def local(cls) -> "WorkerOptions":
         return cls(
             worker_id=f"local-{uuid4().hex}",
-            operation_filter=frozenset({"generate_summary", "generate_transcript"}),
+            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap"}),
             resource_class="local-cpu",
             lease_seconds=120,
             heartbeat_seconds=20,
@@ -77,10 +78,12 @@ class SqlJobWorker:
         *,
         repository: SqlJobRepository,
         summary_generator: SqlBackedVideoSummaryGenerator,
+        operation_handlers: dict[str, Callable[[ClaimedJob, SqlJobProgressReporter], Awaitable[None]]] | None = None,
         options: WorkerOptions,
     ) -> None:
         self._repository = repository
         self._summary_generator = summary_generator
+        self._operation_handlers = operation_handlers or {}
         self._options = options
         self._stop = Event()
         self._thread: Thread | None = None
@@ -126,6 +129,11 @@ class SqlJobWorker:
         heartbeat = asyncio.create_task(self._heartbeat(claim))
         try:
             reporter.raise_if_cancelled()
+            handler = self._operation_handlers.get(claim.operation)
+            if handler is not None:
+                await handler(claim, reporter)
+                self._repository.succeed(claim, detail="任务已完成")
+                return
             if claim.operation not in {"generate_summary", "generate_transcript"}:
                 self._repository.fail(
                     claim,

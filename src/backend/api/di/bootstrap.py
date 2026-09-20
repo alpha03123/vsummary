@@ -233,15 +233,37 @@ def build_api_container(
     if not isinstance(resolved_generator, SqlBackedVideoSummaryGenerator):
         raise RuntimeError("SQL job execution requires SqlBackedVideoSummaryGenerator.")
     job_repository = SqlJobRepository(workspace.session_factory)
-    job_worker = SqlJobWorker(
-        repository=job_repository,
-        summary_generator=resolved_generator,
-        options=WorkerOptions.local(),
-    )
     resolved_mindmap_generator = mindmap_generator or SqlBackedVideoMindmapGenerator(
         workspace=workspace,
         workflow=ConfiguredMindmapWorkflow(root_dir, usage_recorder=usage_store),
         temp_root=workspace.cache_root,
+    )
+
+    async def run_video_mindmap_job(claim, reporter) -> None:
+        payload = claim.request_payload
+        max_depth = payload.get("max_depth")
+        if max_depth is not None and (isinstance(max_depth, bool) or not isinstance(max_depth, int)):
+            raise ValueError("max_depth must be an integer or null.")
+        mindmap = await GenerateVideoMindmapFromLibrary(
+            workspace,
+            resolved_mindmap_generator,
+            visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
+            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            frame_pool_builder=build_or_load_visual_frame_pool,
+        ).run(
+            str(payload["series_id"]),
+            claim.resource_id,
+            progress_reporter=reporter,
+            max_depth=max_depth,
+        )
+        if mindmap is None:
+            raise LookupError("Summary does not exist; cannot generate a mindmap.")
+
+    job_worker = SqlJobWorker(
+        repository=job_repository,
+        summary_generator=resolved_generator,
+        operation_handlers={"generate_video_mindmap": run_video_mindmap_job},
+        options=WorkerOptions.local(),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
         root_dir,

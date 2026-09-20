@@ -154,11 +154,11 @@ describe("generateVideoMindmap", () => {
   test("sends the selected maximum depth", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ id: "root", title: "导图", children: [] }),
+      json: async () => ({ job_id: "job-mindmap", status: "queued" }),
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await generateVideoMindmap("series-1", "video-1", 4);
+    await expect(generateVideoMindmap("series-1", "video-1", 4)).resolves.toEqual({ jobId: "job-mindmap", status: "queued" });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/videos/series-1/video-1/mindmap/generate",
