@@ -12,6 +12,62 @@ from backend.video_summary.infrastructure.persistence import managed_local_mysql
 
 
 class PlatformRuntimeTests(unittest.TestCase):
+    def test_first_credential_failure_can_be_retried_on_the_next_launch(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = mysql.ManagedLocalMySql(mysql_home=root / "runtime", data_root=root / "data")
+            runtime._mysqld_path().parent.mkdir(parents=True)
+            runtime._mysqld_path().write_text("test binary")
+
+            def save_password(path, password):
+                path.write_text("test credential reference")
+
+            def initialize():
+                (runtime.paths.data_dir / "auto.cnf").write_text("[auto]\n")
+
+            with patch.object(runtime, "_initialize_data_directory", side_effect=initialize) as init, patch.object(
+                mysql, "save_local_mysql_password", side_effect=credentials.LocalCredentialError("keychain denied")
+            ):
+                with self.assertRaisesRegex(mysql.ManagedLocalMySqlError, "keychain denied"):
+                    runtime.start_and_migrate()
+                init.assert_not_called()
+            self.assertFalse(runtime._is_initialized())
+            self.assertFalse(runtime.paths.credential_path.exists())
+
+            # A fresh process sees the same directory after the user unlocks
+            # Keychain. No database reset or removal of user files is needed.
+            retried = mysql.ManagedLocalMySql(mysql_home=runtime._mysql_home, data_root=runtime.paths.root)
+            with patch.object(retried, "_initialize_data_directory", side_effect=initialize), patch.object(
+                mysql, "save_local_mysql_password", side_effect=save_password
+            ), patch.object(retried, "_start_server"), patch.object(retried, "_wait_for_database"), patch.object(
+                mysql, "upgrade_to_head"
+            ) as migrate:
+                try:
+                    options = retried.start_and_migrate()
+                    self.assertEqual(options.parsed_url.database, mysql.LOCAL_DATABASE_NAME)
+                    self.assertTrue(retried._is_initialized())
+                    self.assertTrue(retried.paths.runtime_state_path.is_file())
+                    migrate.assert_called_once_with(options)
+                finally:
+                    retried.stop()
+
+    def test_missing_credentials_do_not_reinitialize_an_existing_database(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = mysql.ManagedLocalMySql(mysql_home=root / "runtime", data_root=root / "data")
+            runtime._mysqld_path().parent.mkdir(parents=True)
+            runtime._mysqld_path().write_text("test binary")
+            runtime._ensure_directories()
+            (runtime.paths.data_dir / "auto.cnf").write_text("existing database")
+            with patch.object(runtime, "_initialize_data_directory") as init, patch.object(
+                mysql, "save_local_mysql_password"
+            ) as save:
+                with self.assertRaisesRegex(mysql.ManagedLocalMySqlError, "credentials are unavailable"):
+                    runtime.start_and_migrate()
+                init.assert_not_called()
+                save.assert_not_called()
+            self.assertEqual((runtime.paths.data_dir / "auto.cnf").read_text(), "existing database")
+
     def test_macos_shutdown_reaps_its_child_instead_of_polling_a_zombie(self):
         runtime = mysql.ManagedLocalMySql(mysql_home=Path("runtime"), data_root=Path("data"))
         runtime._process = Mock(pid=123)

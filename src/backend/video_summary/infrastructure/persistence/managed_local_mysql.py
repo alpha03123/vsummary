@@ -177,8 +177,10 @@ class ManagedLocalMySql:
         options = DatabaseOptions(
             url=f"mysql+pymysql://{LOCAL_DATABASE_USER}:{password}@127.0.0.1:{port}/{LOCAL_DATABASE_NAME}"
         )
-        self._initialize_data_directory()
+        # Credential access can be denied (for example by a locked Keychain).
+        # Keep the database uninitialized so the next launch can retry safely.
         save_local_mysql_password(self._paths.credential_path, password)
+        self._initialize_data_directory()
         self._write_bootstrap_sql(password)
         try:
             self._start_server(port=port, init_file=self._paths.bootstrap_sql_path)
