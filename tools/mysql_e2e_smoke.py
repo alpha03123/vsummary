@@ -247,6 +247,9 @@ async def run(mysql_home: Path) -> dict[str, object]:
                     frames=[AiSummaryVisualEvidenceDTO(timestamp_seconds=0.0, text="合成媒体的验证画面。")],
                 )
                 summary = _require_ok(client.get(f"/api/videos/{series_id}/{video_id}/summary"), "read summary").json()
+                chapter_segments = summary.get("chapters", [{}])[0].get("transcript_segments", [])
+                if len(chapter_segments) != 1 or chapter_segments[0].get("text") != "这是一段用于 SQL 端到端验证的合成音频。":
+                    raise RuntimeError(f"Summary did not restore expandable transcript segments: {summary}")
                 cards = _require_ok(client.post(f"/api/videos/{series_id}/{video_id}/knowledge-cards/generate"), "generate knowledge cards").json()
                 mindmap = _require_ok(
                     client.post(f"/api/videos/{series_id}/{video_id}/mindmap/generate", json={"max_depth": 3}),

@@ -146,7 +146,26 @@ class SqlVideoWorkspace:
         with self._sessions() as session:
             row = session.execute(text("""SELECT su.title, su.payload FROM summaries su JOIN videos v ON v.id=su.video_id
                 WHERE su.video_id=:video AND v.series_id=:series AND v.deleted_at IS NULL"""), {"video": video_id, "series": series_id}).mappings().first()
-        return None if row is None else VideoSummaryDTO(series_id=series_id, video_id=video_id, title=row["title"], summary=_json_object(row["payload"]))
+            segments = session.execute(
+                text("SELECT start_ms,end_ms,text FROM transcript_segments WHERE video_id=:video ORDER BY ordinal"),
+                {"video": video_id},
+            ).mappings().all() if row is not None else []
+        if row is None:
+            return None
+        transcript_segments = [
+            {
+                "start_seconds": segment["start_ms"] / 1000,
+                "end_seconds": segment["end_ms"] / 1000,
+                "text": segment["text"],
+            }
+            for segment in segments
+        ]
+        return VideoSummaryDTO(
+            series_id=series_id,
+            video_id=video_id,
+            title=row["title"],
+            summary=_attach_chapter_transcript(_json_object(row["payload"]), transcript_segments),
+        )
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
         with self._sessions() as session:
@@ -633,6 +652,40 @@ def _json_list_of_objects(value: object) -> list[dict[str, Any]]:
     if not isinstance(decoded, list) or not all(isinstance(item, dict) for item in decoded):
         raise ValueError("Expected a JSON object array in the SQL content store.")
     return decoded
+
+
+def _attach_chapter_transcript(
+    summary: dict[str, Any],
+    transcript_segments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Restore per-chapter transcript expansion from current SQL transcript rows."""
+
+    chapters = summary.get("chapters")
+    if not isinstance(chapters, list):
+        return summary
+
+    enriched_chapters: list[object] = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            enriched_chapters.append(chapter)
+            continue
+        start_seconds = _as_optional_seconds(chapter.get("start_seconds"))
+        end_seconds = _as_optional_seconds(chapter.get("end_seconds"))
+        matching_segments = []
+        if start_seconds is not None and end_seconds is not None:
+            matching_segments = [
+                segment
+                for segment in transcript_segments
+                if segment["end_seconds"] >= start_seconds and segment["start_seconds"] <= end_seconds
+            ]
+        enriched_chapters.append({**chapter, "transcript_segments": matching_segments})
+    return {**summary, "chapters": enriched_chapters}
+
+
+def _as_optional_seconds(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
 
 
 def _sha256_path(path: Path) -> str:
