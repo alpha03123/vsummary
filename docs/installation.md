@@ -22,6 +22,14 @@ cd ../..
 start.bat
 ```
 
+源码版需要一个 MySQL 8.4 runtime，但不需要把它注册成 Windows 服务。`start.bat` 会优先使用 `VSUMMARY_MYSQL_HOME`，其次从系统 `PATH` 和 `%ProgramFiles%\MySQL` 自动发现；找到后由 VSummary 在 `127.0.0.1` 启动并管理私有实例。自动发现失败时，在终端执行以下命令，并重新打开终端：
+
+```bat
+setx VSUMMARY_MYSQL_HOME "D:\tools\mysql-8.4.9-winx64"
+```
+
+变量值是 MySQL 安装根目录，必须包含 `bin\mysqld.exe` 与 `share\`。数据目录和 DPAPI 加密的应用凭据保存在 `%LOCALAPPDATA%\VSummary\mysql`。
+
 `config/settings.toml`：
 
 ```toml

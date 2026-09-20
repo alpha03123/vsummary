@@ -45,19 +45,60 @@ if not defined ENV_PATH (
 )
 
 set "PYTHON=%ENV_PATH%\python.exe"
-set "MYSQL_RUNTIME=%VSUMMARY_MYSQL_HOME%"
+set "MYSQL_RUNTIME="
+set "MYSQL_RUNTIME_SOURCE="
 set "VSUMMARY_DATA=%LOCALAPPDATA%\VSummary"
 set "HF_HOME=%VSUMMARY_DATA%\cache\huggingface"
 set "HUGGINGFACE_HUB_CACHE=%VSUMMARY_DATA%\cache\huggingface\hub"
-if not defined MYSQL_RUNTIME set "MYSQL_RUNTIME=C:\Program Files\MySQL\MySQL Server 8.4"
+
+rem Source checkout: honor an explicit runtime first, then discover an installed MySQL.
+if defined VSUMMARY_MYSQL_HOME (
+    set "MYSQL_RUNTIME=%VSUMMARY_MYSQL_HOME%"
+    set "MYSQL_RUNTIME_SOURCE=VSUMMARY_MYSQL_HOME"
+) else (
+    for /f "delims=" %%I in ('where mysqld.exe 2^>nul') do (
+        if not defined MYSQL_RUNTIME (
+            for %%J in ("%%~dpI..") do (
+                if exist "%%~fJ\bin\mysqld.exe" if exist "%%~fJ\share" (
+                    set "MYSQL_RUNTIME=%%~fJ"
+                    set "MYSQL_RUNTIME_SOURCE=PATH"
+                )
+            )
+        )
+    )
+    if not defined MYSQL_RUNTIME if defined ProgramFiles (
+        for /d %%D in ("%ProgramFiles%\MySQL\MySQL Server *") do (
+            if not defined MYSQL_RUNTIME if exist "%%~fD\bin\mysqld.exe" if exist "%%~fD\share" (
+                set "MYSQL_RUNTIME=%%~fD"
+                set "MYSQL_RUNTIME_SOURCE=%ProgramFiles%"
+            )
+        )
+    )
+)
 if not exist "%PYTHON%" (
     echo [error] Python executable not found in "%ENV_PATH%".
     echo Please recreate the source environment selected for this machine.
     pause
     exit /b 1
 )
+if not defined MYSQL_RUNTIME (
+    echo [error] MySQL runtime was not found in PATH or %%ProgramFiles%%\MySQL.
+    echo Install MySQL 8.4 or set VSUMMARY_MYSQL_HOME to its installation directory.
+    pause
+    exit /b 1
+)
+if not exist "%MYSQL_RUNTIME%\bin\mysqld.exe" if defined VSUMMARY_MYSQL_HOME (
+    echo [error] VSUMMARY_MYSQL_HOME does not contain bin\mysqld.exe: %MYSQL_RUNTIME%
+    pause
+    exit /b 1
+)
 if not exist "%MYSQL_RUNTIME%\bin\mysqld.exe" (
-    echo [error] managed MySQL runtime not found. Set VSUMMARY_MYSQL_HOME to a MySQL 8.4 runtime.
+    echo [error] discovered MySQL runtime is incomplete: %MYSQL_RUNTIME%
+    pause
+    exit /b 1
+)
+if not exist "%MYSQL_RUNTIME%\share" (
+    echo [error] MySQL runtime is missing its share directory: %MYSQL_RUNTIME%
     pause
     exit /b 1
 )
@@ -72,5 +113,6 @@ if errorlevel 1 (
 start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home "%MYSQL_RUNTIME%"
 start "vsummary-frontend" cmd /k cd /d "%FRONTEND%" ^&^& npm run dev
 
+echo MySQL runtime: %MYSQL_RUNTIME% ^(%MYSQL_RUNTIME_SOURCE%^)
 echo Backend:  http://127.0.0.1:8001
 echo Frontend: http://127.0.0.1:4173

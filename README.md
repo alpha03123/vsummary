@@ -78,6 +78,18 @@ AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 
 
 - [安装、硬件与 ASR 配置](docs/installation.md)：Windows NVIDIA、Windows AMD、macOS 的环境、模型与启动方式。
 
+### 源码版 MySQL
+
+Windows 整合包自带 MySQL，不需要安装 Windows 服务。源码版的 `start.bat` 会依次从 `VSUMMARY_MYSQL_HOME`、系统 `PATH`、`%ProgramFiles%\MySQL` 自动寻找 MySQL；找到后由应用在本机回环地址启动私有实例并管理迁移，不使用系统 MySQL 服务。
+
+自动发现失败时，将 `VSUMMARY_MYSQL_HOME` 设为 MySQL 安装根目录（其中应有 `bin\mysqld.exe` 和 `share\`），然后重新打开终端运行：
+
+```bat
+setx VSUMMARY_MYSQL_HOME "D:\tools\mysql-8.4.9-winx64"
+```
+
+新终端生效。数据库数据和应用凭据位于 `%LOCALAPPDATA%\VSummary\mysql`。
+
 ## 浏览器插件
 
 VSummary 提供 Chrome 浏览器插件。观看 Bilibili 视频时，可以直接在浏览器侧边栏中查看 AI 概况、章节、思维导图、知识卡片和笔记，并围绕当前视频提问。
