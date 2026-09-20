@@ -9,7 +9,8 @@
     "build": "vite build",
     "audit:references": "knip --config knip.json",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:real-browser": "node ../../tools/real_llm_browser_e2e.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.10",
