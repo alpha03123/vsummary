@@ -146,7 +146,7 @@ class SqlCurrentContentRepository:
                     sequence=sequence,
                     stage="succeeded",
                     progress=100.0,
-                    detail="内容已原子发布",
+                    detail="生成内容已保存",
                 )
             )
             session.add(
