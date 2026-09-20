@@ -585,6 +585,64 @@ describe("workspaceReducer video download cancellation", () => {
   });
 });
 
+describe("workspaceReducer completed video generation refresh", () => {
+  it("updates the current AI summary card from the completed job readback", () => {
+    const state = {
+      selectedContextType: "video",
+      selectedSeriesId: "series-a",
+      selectedVideoId: "video-1",
+      library: { series: [{ id: "series-a", videos: [{ id: "video-1", processed: false, status: "pending" }] }] },
+      tools: { aiSummary: { generated: false, status: "available" } },
+      aiSummary: null,
+      toolsLoading: true,
+      aiSummaryLoading: true,
+      generatingAiSummary: true,
+    };
+    const completedTools = {
+      overview: { generated: true, status: "ready" },
+      aiSummary: { generated: true, status: "ready" },
+    };
+    const aiSummary = { title: "同步 AI 概括", content: "已与逐字稿一同生成", citations: [] };
+
+    const nextState = workspaceReducer(state, {
+      type: "video_generation_content_refreshed",
+      seriesId: "series-a",
+      videoId: "video-1",
+      library: { series: [{ id: "series-a", videos: [{ id: "video-1", processed: true, status: "ready" }] }] },
+      tools: completedTools,
+      aiSummary,
+    });
+
+    expect(nextState.tools).toBe(completedTools);
+    expect(nextState.aiSummary).toBe(aiSummary);
+    expect(nextState.aiSummaryLoading).toBe(false);
+    expect(nextState.generatingAiSummary).toBe(false);
+  });
+
+  it("does not replace a different video panel when a previous job completes", () => {
+    const state = {
+      selectedContextType: "video",
+      selectedSeriesId: "series-a",
+      selectedVideoId: "video-2",
+      library: { series: [{ id: "series-a", videos: [{ id: "video-1" }, { id: "video-2" }] }] },
+      tools: { aiSummary: { generated: false } },
+      aiSummary: { title: "Video 2" },
+    };
+
+    const nextState = workspaceReducer(state, {
+      type: "video_generation_content_refreshed",
+      seriesId: "series-a",
+      videoId: "video-1",
+      library: { series: [{ id: "series-a", videos: [{ id: "video-1", processed: true }, { id: "video-2" }] }] },
+      tools: { aiSummary: { generated: true } },
+      aiSummary: { title: "Video 1" },
+    });
+
+    expect(nextState.aiSummary).toEqual({ title: "Video 2" });
+    expect(nextState.tools).toEqual({ aiSummary: { generated: false } });
+  });
+});
+
 describe("workspaceReducer provider usage", () => {
   it("stores provider usage after loading", () => {
     const state = workspaceReducer(createInitialWorkspaceState(), {

@@ -57,6 +57,17 @@ function clearGenerationSubscription(taskKey) {
   generationSubscriptions.delete(taskKey);
 }
 
+async function refreshCompletedVideoContent({ seriesId, videoId, dispatch }) {
+  const [library, tools] = await Promise.all([
+    loadWorkspaceLibrary(),
+    loadVideoTools(seriesId, videoId),
+  ]);
+  const aiSummary = tools.aiSummary?.generated
+    ? await loadVideoAiSummary(seriesId, videoId)
+    : null;
+  dispatch({ type: "video_generation_content_refreshed", seriesId, videoId, library, tools, aiSummary });
+}
+
 function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch }) {
   const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
   if (!taskKey || !jobId || generationSubscriptions.has(taskKey)) {
@@ -82,9 +93,7 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch 
       return;
     }
     if (snapshot.status === "completed") {
-      loadWorkspaceLibrary()
-        .then((library) => dispatch({ type: "workspace_loaded", library }))
-        .catch(() => {});
+      refreshCompletedVideoContent({ seriesId, videoId, dispatch }).catch(() => {});
     }
     if (snapshot.status === "failed" && snapshot.error) {
       dispatch({ type: "load_failed", message: snapshot.error });

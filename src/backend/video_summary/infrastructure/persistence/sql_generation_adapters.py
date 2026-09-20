@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
+from backend.agent.schemas.action_plan import CitationReference
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
@@ -91,7 +92,11 @@ class SqlBackedVideoSummaryGenerator:
                     video_id,
                     title=str(ai_summary.get("title") or source.title),
                     content=str(ai_summary.get("content") or ""),
-                    citations=None,
+                    citations=[
+                        CitationReference.model_validate(item)
+                        for item in ai_summary.get("citations", [])
+                        if isinstance(item, dict)
+                    ],
                 )
                 evidence_path = output_dir / "ai_summary.visual_evidence.json"
                 if evidence_path.is_file():

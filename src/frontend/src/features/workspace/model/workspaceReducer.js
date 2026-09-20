@@ -675,6 +675,21 @@ export function workspaceReducer(state, action) {
         toolsLoading: false,
         error: "",
       };
+    case "video_generation_content_refreshed": {
+      const isCurrentVideo =
+        state.selectedContextType === "video" &&
+        state.selectedSeriesId === action.seriesId &&
+        state.selectedVideoId === action.videoId;
+      return {
+        ...state,
+        library: action.library,
+        tools: isCurrentVideo ? action.tools : state.tools,
+        toolsLoading: isCurrentVideo ? false : state.toolsLoading,
+        aiSummary: isCurrentVideo ? action.aiSummary : state.aiSummary,
+        aiSummaryLoading: isCurrentVideo ? false : state.aiSummaryLoading,
+        generatingAiSummary: isCurrentVideo ? false : state.generatingAiSummary,
+      };
+    }
     case "summary_loading_started":
       return {
         ...state,
