@@ -140,9 +140,9 @@ DEFAULT_SUMMARY_CHUNK_CONCURRENCY = 1
 DEFAULT_CHAPTER_VISUAL_MODE = "screenshots"
 DEFAULT_MAX_VISUAL_INPUT_IMAGES = 10
 DEFAULT_NOTE_VISUAL_MODE = "off"
-DEFAULT_AI_SUMMARY_MULTIMODAL_ENABLED = True
-DEFAULT_MINDMAP_VISUAL_INPUT = "evidence"
-DEFAULT_CARDS_VISUAL_INPUT = "evidence"
+DEFAULT_AI_SUMMARY_MULTIMODAL_ENABLED = False
+DEFAULT_MINDMAP_VISUAL_INPUT = "none"
+DEFAULT_CARDS_VISUAL_INPUT = "none"
 DEFAULT_NOTE_MAX_IMAGES = 10
 DEFAULT_NOTE_IMAGE_MIN_GAP_SECONDS = 5.0
 DEFAULT_AUTO_GENERATE_ARTIFACTS: tuple[str, ...] = ()
@@ -411,7 +411,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         已校验的 `AppSettings` 不可变实例。
     """
     ensure_settings_file(config_path)
-    payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    payload = _load_settings_payload(config_path)
     env_values = load_env_settings(root_dir)
 
     asr_payload = payload["asr"]
@@ -705,6 +705,37 @@ def ensure_settings_file(config_path: Path) -> None:
         raise FileNotFoundError(f"settings file not found: {config_path}")
     config_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(example_path, config_path)
+
+
+def _load_settings_payload(config_path: Path) -> dict[str, object]:
+    """Load user settings over the current template without overwriting user files.
+
+    A release can add new settings after a user already has ``settings.toml``.
+    The example file is the product-owned default source for those missing
+    fields; the user's explicit values always win. We deliberately do not
+    rewrite the file here, so comments and any future host-owned TOML fields
+    remain intact until an explicit settings save occurs.
+    """
+
+    user_payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    example_path = config_path.with_name(f"{config_path.name}.example")
+    if not example_path.exists():
+        return user_payload
+    template_payload = tomllib.loads(example_path.read_text(encoding="utf-8"))
+    return _merge_settings_payload(template_payload, user_payload)
+
+
+def _merge_settings_payload(template: dict[str, object], user: dict[str, object]) -> dict[str, object]:
+    """Recursively overlay user TOML values onto template defaults."""
+
+    merged: dict[str, object] = dict(template)
+    for key, user_value in user.items():
+        template_value = merged.get(key)
+        if isinstance(template_value, dict) and isinstance(user_value, dict):
+            merged[key] = _merge_settings_payload(template_value, user_value)
+        else:
+            merged[key] = user_value
+    return merged
 
 
 def replace_workspace_ui_settings(settings: AppSettings, workspace_ui: WorkspaceUiSettings) -> AppSettings:

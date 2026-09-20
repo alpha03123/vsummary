@@ -160,9 +160,9 @@ class WorkspaceSettingsResponse(BaseModel):
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_input_images: int = Field(default=10, ge=1, le=20)
     note_visual_mode: Literal["off", "screenshots"] = "off"
-    ai_summary_multimodal_enabled: bool = True
-    mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
-    cards_visual_input: Literal["none", "evidence", "frames"] = "evidence"
+    ai_summary_multimodal_enabled: bool = False
+    mindmap_visual_input: Literal["none", "evidence", "frames"] = "none"
+    cards_visual_input: Literal["none", "evidence", "frames"] = "none"
     note_max_images: int = Field(default=10, ge=1)
     auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards"]] = Field(default_factory=list)
     web_search_enabled: bool
@@ -218,9 +218,9 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     chapter_visual_mode: Literal["off", "screenshots", "multimodal"] = "screenshots"
     max_visual_input_images: int = Field(default=10, ge=1, le=20)
     note_visual_mode: Literal["off", "screenshots"] = "off"
-    ai_summary_multimodal_enabled: bool = True
-    mindmap_visual_input: Literal["none", "evidence", "frames"] = "evidence"
-    cards_visual_input: Literal["none", "evidence", "frames"] = "evidence"
+    ai_summary_multimodal_enabled: bool = False
+    mindmap_visual_input: Literal["none", "evidence", "frames"] = "none"
+    cards_visual_input: Literal["none", "evidence", "frames"] = "none"
     note_max_images: int = Field(default=10, ge=1)
     auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards"]] = Field(default_factory=list)
     web_search_enabled: bool

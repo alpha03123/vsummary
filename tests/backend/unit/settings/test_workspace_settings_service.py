@@ -359,6 +359,51 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             self.assertTrue(config_path.exists())
             self.assertEqual(config_path.read_text(encoding="utf-8"), _sample_settings_toml())
 
+    def test_load_settings_uses_example_values_for_new_fields_in_existing_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            config_dir = root_dir / "config"
+            config_dir.mkdir(parents=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = config_dir / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+            (config_dir / "settings.toml.example").write_text(
+                "[generation]\n"
+                'mindmap_visual_input = "frames"\n'
+                'cards_visual_input = "none"\n'
+                "ai_summary_multimodal_enabled = false\n",
+                encoding="utf-8",
+            )
+
+            settings = load_settings(config_path, root_dir)
+
+            self.assertEqual(settings.generation.mindmap_visual_input, "frames")
+            self.assertEqual(settings.generation.cards_visual_input, "none")
+            self.assertFalse(settings.generation.ai_summary_multimodal_enabled)
+
+    def test_existing_settings_override_example_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            config_dir = root_dir / "config"
+            config_dir.mkdir(parents=True)
+            (root_dir / ".env").write_text("", encoding="utf-8")
+            config_path = config_dir / "settings.toml"
+            config_path.write_text(
+                _sample_settings_toml() + "\n\n[generation]\nmindmap_visual_input = \"evidence\"\n",
+                encoding="utf-8",
+            )
+            (config_dir / "settings.toml.example").write_text(
+                "[generation]\n"
+                'mindmap_visual_input = "frames"\n'
+                'cards_visual_input = "none"\n',
+                encoding="utf-8",
+            )
+
+            settings = load_settings(config_path, root_dir)
+
+            self.assertEqual(settings.generation.mindmap_visual_input, "evidence")
+            self.assertEqual(settings.generation.cards_visual_input, "none")
+
     def test_load_settings_rejects_generation_concurrency_smaller_than_one(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
