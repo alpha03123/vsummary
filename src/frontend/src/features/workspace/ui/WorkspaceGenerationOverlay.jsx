@@ -12,11 +12,14 @@ const GENERATION_STAGE_ITEMS = [
   { id: "enhance_transcript", label: "AI 修正文本" },
   { id: "summarize", label: "AI 生成概况" },
   { id: "enrich_visual_summary", label: "视觉增强概况" },
-  { id: "finalize_ai_summary", label: "完成 AI 概括" },
-  { id: "publish", label: "发布内容" },
-  { id: "reconnecting", label: "重连任务进度" },
+  { id: "finalize_ai_summary", label: "整理 AI 概括" },
+  { id: "publish", label: "保存生成结果" },
   { id: "completed", label: "完成" },
 ];
+
+const TRANSIENT_STAGE_LABELS = {
+  reconnecting: "同步进度",
+};
 
 function formatDurationLabel(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -47,7 +50,7 @@ export function WorkspaceGenerationOverlay({
   const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : "处理中";
   const activeStageId = generationSnapshot?.status === "completed" ? "completed" : generationSnapshot?.stage;
   const activeStageLabel =
-    GENERATION_STAGE_ITEMS.find((item) => item.id === activeStageId)?.label ?? "处理中";
+    GENERATION_STAGE_ITEMS.find((item) => item.id === activeStageId)?.label ?? TRANSIENT_STAGE_LABELS[activeStageId] ?? "处理中";
   const elapsedLabel = formatDurationLabel(generationSnapshot?.elapsedSeconds);
   const estimatedTotalLabel = formatDurationLabel(generationSnapshot?.estimatedTotalSeconds);
   const remainingLabel = formatDurationLabel(generationSnapshot?.remainingSeconds);

@@ -501,12 +501,12 @@ class GenerateVideoSummary:
                 await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
         if ai_summary_task is not None:
             if progress_reporter is not None:
-                progress_reporter.update("finalize_ai_summary", 98.0, "正在完成 AI 概括")
+                progress_reporter.update("finalize_ai_summary", 98.0, "正在整理 AI 概括")
             await ai_summary_task
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
         if progress_reporter is not None:
-            progress_reporter.update("publish", 99.0, "正在发布内容")
+            progress_reporter.update("publish", 99.0, "正在保存生成结果")
         await asyncio.to_thread(
             _commit_generation_artifacts,
             staging_dir,

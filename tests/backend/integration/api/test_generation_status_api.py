@@ -50,7 +50,7 @@ class GenerationStatusApiTests(unittest.TestCase):
                 id="job-1", status="running", failure_detail=None
             ),
             latest_event=lambda _job_id: SimpleNamespace(
-                stage="publish", progress=99.0, detail="正在发布内容"
+                stage="publish", progress=99.0, detail="正在保存生成结果"
             ),
         )
         client = TestClient(create_app(container))
@@ -63,7 +63,7 @@ class GenerationStatusApiTests(unittest.TestCase):
             "status": "running",
             "stage": "publish",
             "progress": 99.0,
-            "detail": "正在发布内容",
+            "detail": "正在保存生成结果",
             "error": None,
         })
 
