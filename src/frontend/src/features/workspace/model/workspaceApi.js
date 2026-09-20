@@ -76,11 +76,13 @@ export async function loadVideoKnowledgeCards(seriesId, videoId) {
 }
 
 export async function generateVideoKnowledgeCards(seriesId, videoId) {
-  return toWorkspaceKnowledgeCards(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards/generate`, {
-      method: "POST",
-    }),
-  );
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards/generate`, {
+    method: "POST",
+  });
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("知识卡片任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function loadVideoNotes(seriesId, videoId) {

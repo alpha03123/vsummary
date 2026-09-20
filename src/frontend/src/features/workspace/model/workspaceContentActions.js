@@ -164,15 +164,26 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
     dispatch({ type: "knowledge_cards_generation_started" });
     try {
-      const cards = await generateVideoKnowledgeCards(state.selectedSeriesId, state.selectedVideoId);
-      dispatch({
-        type: "knowledge_cards_loaded",
-        cards,
-        feedbackTone: "success",
-        feedbackMessage:
-          Array.isArray(cards?.cards) && cards.cards.length
-            ? `已生成 ${cards.cards.length} 张知识卡片`
-            : "知识卡片已生成，但这次没有抽取出稳定卡片",
+      const seriesId = state.selectedSeriesId;
+      const videoId = state.selectedVideoId;
+      const submitted = await generateVideoKnowledgeCards(seriesId, videoId);
+      const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+        if (snapshot.status === "completed") {
+          unsubscribe();
+          const cards = await loadVideoKnowledgeCards(seriesId, videoId);
+          dispatch({
+            type: "knowledge_cards_loaded",
+            cards,
+            feedbackTone: "success",
+            feedbackMessage: Array.isArray(cards?.cards) && cards.cards.length
+              ? `已生成 ${cards.cards.length} 张知识卡片`
+              : "知识卡片已生成，但这次没有抽取出稳定卡片",
+          });
+        }
+        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+          unsubscribe();
+          dispatch({ type: "load_failed", message: snapshot.error || snapshot.detail || "知识卡片生成失败" });
+        }
       });
     } catch (error) {
       dispatch({

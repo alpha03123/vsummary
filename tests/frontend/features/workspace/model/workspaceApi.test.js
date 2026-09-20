@@ -5,6 +5,7 @@ import {
   loadAgentSessionRecovery,
   loadSeriesMindmap,
   generateVideoMindmap,
+  generateVideoKnowledgeCards,
 } from "@src/features/workspace/model/workspaceApi";
 import { loadProviderUsage, relinkExternalVideo } from "@src/local-features/api/localWorkspaceApi";
 
@@ -167,6 +168,14 @@ describe("generateVideoMindmap", () => {
         body: JSON.stringify({ max_depth: 4 }),
       }),
     );
+  });
+});
+
+describe("generateVideoKnowledgeCards", () => {
+  test("submits a durable knowledge-card job", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ job_id: "job-cards", status: "queued" }) })));
+
+    await expect(generateVideoKnowledgeCards("series-1", "video-1")).resolves.toEqual({ jobId: "job-cards", status: "queued" });
   });
 });
 

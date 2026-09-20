@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -279,13 +280,14 @@ def build_api_container(
         if mindmap is None:
             raise LookupError("Series has no generated summaries; cannot generate a mindmap.")
 
+    operation_handlers = {
+        "generate_video_mindmap": run_video_mindmap_job,
+        "generate_series_mindmap": run_series_mindmap_job,
+    }
     job_worker = SqlJobWorker(
         repository=job_repository,
         summary_generator=resolved_generator,
-        operation_handlers={
-            "generate_video_mindmap": run_video_mindmap_job,
-            "generate_series_mindmap": run_series_mindmap_job,
-        },
+        operation_handlers=operation_handlers,
         options=WorkerOptions.local(),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
@@ -313,6 +315,24 @@ def build_api_container(
         workspace=workspace,
         index_refresher=index_refresher,
     )
+
+    async def run_video_knowledge_cards_job(claim, reporter) -> None:
+        cards = await asyncio.to_thread(
+            GenerateVideoKnowledgeCards(
+                workspace,
+                resolved_knowledge_card_generator,
+                index_refresher,
+                visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
+                max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+                frame_pool_builder=build_or_load_visual_frame_pool,
+            ).run,
+            str(claim.request_payload["series_id"]),
+            claim.resource_id,
+        )
+        if cards is None:
+            raise LookupError("Summary does not exist; cannot generate knowledge cards.")
+
+    operation_handlers["generate_video_knowledge_cards"] = run_video_knowledge_cards_job
     ai_summary_use_case = GenerateVideoAiSummary(
         workspace,
         resolved_note_generator,

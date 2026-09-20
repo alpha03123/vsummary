@@ -521,12 +521,12 @@ def get_video_knowledge_cards(
     return VideoKnowledgeCardsResponse.from_model(video_cards)
 
 
-@router.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate", response_model=VideoKnowledgeCardsResponse)
+@router.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate")
 def generate_video_knowledge_cards(
     series_id: str,
     video_id: str,
     container: ApiContainerDep,
-) -> VideoKnowledgeCardsResponse:
+) -> JSONResponse:
     """POST /api/videos/{series_id}/{video_id}/knowledge-cards/generate — 生成视频知识卡。
 
     基于已有总结调用 LLM 生成知识卡列表并落盘；
@@ -547,14 +547,35 @@ def generate_video_knowledge_cards(
     """
     _ensure_video_exists(container, series_id, video_id)
     try:
-        video_cards = container.generate_video_cards.run(series_id, video_id)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    if video_cards is None:
-        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
-    return VideoKnowledgeCardsResponse.from_model(video_cards)
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="generate_video_knowledge_cards",
+            request_payload={"series_id": series_id, "video_id": video_id},
+            active_key=f"video:{video_id}:generate_video_knowledge_cards",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=video_id,
+            operation="generate_video_knowledge_cards",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.get("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNotesResponse)
