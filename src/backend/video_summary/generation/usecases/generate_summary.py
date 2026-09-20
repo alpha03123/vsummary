@@ -428,10 +428,11 @@ class GenerateVideoSummary:
         )
         _raise_if_cancelled(progress_reporter, cancellation)
 
-        # B（唯一 AI 概括）只依赖转写和原视频。它从此处并发启动，不等待
-        # A（AI 整理逐字稿）的章节整理、封面抽帧或 staging 提交。
+        ai_summary_task: asyncio.Task[None] | None = None
+        # B（唯一 AI 概括）只依赖转写和原视频。它与 A 并发执行，但主任务
+        # 必须在发布完成前等待它，避免 SQL 层把「只有逐字稿」误报为完整生成。
         if processing_mode == "summary" and self._ai_summary_runner is not None:
-            self._start_ai_summary_task(
+            ai_summary_task = self._start_ai_summary_task(
                 video=video,
                 transcript=transcript,
                 output_dir=output_dir,
@@ -506,6 +507,8 @@ class GenerateVideoSummary:
             output_dir,
             remove_manual_source=not use_saved_manual_transcript,
         )
+        if ai_summary_task is not None:
+            await ai_summary_task
         return summary_document
 
     def _start_ai_summary_task(
@@ -515,7 +518,7 @@ class GenerateVideoSummary:
         transcript: Transcript,
         output_dir: Path,
         on_completed: Callable[[], None] | None,
-    ) -> None:
+    ) -> asyncio.Task[None]:
         task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir))
         self._ai_summary_tasks.add(task)
 
@@ -538,6 +541,7 @@ class GenerateVideoSummary:
                     LOGGER.exception("并发 AI 概括完成后的索引刷新排队失败")
 
         task.add_done_callback(_record_completion)
+        return task
 
 
 async def _attach_chapter_screenshots(

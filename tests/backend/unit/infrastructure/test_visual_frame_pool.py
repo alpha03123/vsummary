@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from pathlib import Path
 
@@ -62,6 +63,26 @@ class VisualFramePoolTests(unittest.TestCase):
             self.assertEqual(3, len(pool.image_paths))
             self.assertEqual(2, len(pool.timestamps_by_image[-1]))
             self.assertFalse((root / "output" / "visual_frame_pool" / "grid-10" / "raw").exists())
+
+    def test_serializes_concurrent_builds_for_the_same_pool(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            processor = FakeFrameProcessor(duration=20)
+
+            def build_pool():
+                return build_or_load_visual_frame_pool(
+                    video_path=root / "video.mp4",
+                    output_dir=root / "output",
+                    max_input_images=2,
+                    media_processor=processor,
+                )
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                first, second = list(executor.map(lambda _item: build_pool(), range(2)))
+
+            self.assertEqual(first.image_paths, second.image_paths)
+            self.assertTrue(all(path.is_file() for path in first.image_paths))
+            self.assertFalse((root / "output" / "visual_frame_pool" / "grid-2" / "raw").exists())
 
 
 if __name__ == "__main__":

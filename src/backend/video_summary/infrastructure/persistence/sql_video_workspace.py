@@ -364,9 +364,11 @@ class SqlVideoWorkspace:
         workspace_id = self.get_workspace().id
         if not workspace_id or not title.strip() or not source_paths:
             raise ValueError("A workspace, non-empty title, and media files are required.")
-        with self._sessions() as session:
-            position = int(session.execute(text("SELECT COALESCE(MAX(position), -1) + 1 FROM series WHERE workspace_id=:workspace AND deleted_at IS NULL"), {"workspace": workspace_id}).scalar_one())
-        series_id = self._control.create_series(workspace_id=workspace_id, title=title.strip(), position=position, source_kind="local")
+        series_id = self._control.create_series_at_next_position(
+            workspace_id=workspace_id,
+            title=title.strip(),
+            source_kind="local",
+        )
         self._import_paths(series_id, source_paths)
         return next(item for item in self.list_series() if item.id == series_id)
 
@@ -384,10 +386,9 @@ class SqlVideoWorkspace:
                 {"workspace": workspace_id},
             ).scalar()
         if series_id is None:
-            series_id = self._control.create_series(
+            series_id = self._control.create_series_at_next_position(
                 workspace_id=workspace_id,
                 title="Playground",
-                position=0,
                 source_kind="playground",
             )
         return self.import_local_series_videos_from_paths(series_id=series_id, source_paths=source_paths)

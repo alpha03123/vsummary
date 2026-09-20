@@ -94,6 +94,7 @@ class ManagedLocalMySql:
         self._mysql_home = mysql_home
         self._paths = ManagedLocalMySqlPaths(data_root or _default_data_root())
         self._process: subprocess.Popen[str] | None = None
+        self._owns_server = False
         self._instance_lock_handle = None
 
     @property
@@ -139,7 +140,7 @@ class ManagedLocalMySql:
         """使用 MySQL 协议关闭实际 server 子进程，再清理启动父进程。"""
 
         state = self._read_runtime_state()
-        if state is not None:
+        if state is not None and self._owns_server:
             try:
                 options = self._options_from_state(state)
                 server_pid = self._read_server_pid()
@@ -159,6 +160,7 @@ class ManagedLocalMySql:
                 self._process.kill()
                 self._process.wait(timeout=5)
         self._release_instance_lock()
+        self._owns_server = False
 
     def _bootstrap_new_instance(self) -> DatabaseOptions:
         port = _select_loopback_port()
@@ -201,6 +203,9 @@ class ManagedLocalMySql:
         )
 
     def _start_existing_instance(self, options: DatabaseOptions) -> None:
+        port = options.parsed_url.port
+        if port is not None and _is_loopback_port_open(port):
+            return
         self._start_server(port=options.parsed_url.port or 3306, init_file=None)
 
     def _start_server(self, *, port: int, init_file: Path | None) -> None:
@@ -226,6 +231,7 @@ class ManagedLocalMySql:
                 stderr=subprocess.DEVNULL,
                 text=True,
             )
+            self._owns_server = True
         except OSError as error:
             raise ManagedLocalMySqlError("Managed MySQL process could not be started.") from error
 
@@ -452,6 +458,12 @@ def _select_loopback_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         return int(listener.getsockname()[1])
+
+
+def _is_loopback_port_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.25)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
 def _new_password() -> str:

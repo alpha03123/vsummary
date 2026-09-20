@@ -172,7 +172,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
 
         assert completed == ["indexed"]
 
-    async def test_failed_ai_summary_does_not_notify_index_refresh(self) -> None:
+    async def test_failed_ai_summary_fails_the_parent_generation_without_notifying_index_refresh(self) -> None:
         store = _ArtifactStore()
         completed: list[str] = []
         use_case = GenerateVideoSummary(
@@ -187,11 +187,11 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            await use_case.run(
-                root / "video.mp4",
-                root / "output",
-                on_ai_summary_completed=lambda: completed.append("indexed"),
-            )
-            await asyncio.sleep(0)
+            with self.assertRaisesRegex(RuntimeError, "AI 概括生成失败"):
+                await use_case.run(
+                    root / "video.mp4",
+                    root / "output",
+                    on_ai_summary_completed=lambda: completed.append("indexed"),
+                )
 
         assert completed == []

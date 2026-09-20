@@ -20,7 +20,7 @@ from backend.video_summary.infrastructure.persistence.managed_local_mysql import
     ManagedLocalMySqlPaths,
 )
 from backend.video_summary.infrastructure.persistence.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import Base, Job, Video
+from backend.video_summary.infrastructure.persistence.models import Base, Job, Series, Video
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import _persisted_card_ids
 from backend.video_summary.library.models import KnowledgeCardDTO
 
@@ -86,6 +86,11 @@ class ControlPlaneSchemaTests(unittest.TestCase):
 
         self.assertIn("uq_jobs_active_key", job_constraint_names)
         self.assertIn("uq_videos_series_external_source", video_constraint_names)
+
+    def test_series_position_is_unique_within_a_workspace(self) -> None:
+        constraint_names = {constraint.name for constraint in Series.__table__.constraints}
+
+        self.assertIn("uq_series_workspace_position", constraint_names)
 
     def test_schema_compiles_for_mysql(self) -> None:
         ddl = str(CreateTable(Job.__table__).compile(dialect=mysql.dialect()))
@@ -174,6 +179,61 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             self.assertEqual(options.parsed_url.port, 25331)
             self.assertEqual(options.parsed_url.password, "secret")
             self.assertTrue(runtime.paths.runtime_state_path.is_file())
+
+    def test_stop_does_not_shutdown_an_adopted_instance(self) -> None:
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = ManagedLocalMySql(mysql_home=root / "mysql-runtime", data_root=root / "user-data")
+            runtime._ensure_directories()
+            runtime._write_runtime_state(25331)
+            runtime._process = None
+
+            with (
+                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
+                patch.object(runtime, "_shutdown_server") as shutdown,
+            ):
+                runtime.stop()
+
+            shutdown.assert_not_called()
+
+    def test_stop_shuts_down_the_actual_server_even_if_its_starting_parent_has_exited(self) -> None:
+        from unittest.mock import Mock, patch
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = ManagedLocalMySql(mysql_home=root / "mysql-runtime", data_root=root / "user-data")
+            runtime._ensure_directories()
+            runtime._write_runtime_state(25331)
+            runtime.paths.pid_path.write_text("9999", encoding="ascii")
+            runtime._owns_server = True
+            runtime._process = Mock()
+            runtime._process.poll.return_value = 0
+
+            with (
+                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
+                patch.object(runtime, "_shutdown_server") as shutdown,
+                patch.object(runtime, "_wait_for_port_to_close"),
+                patch.object(runtime, "_wait_for_server_exit"),
+            ):
+                runtime.stop()
+
+            shutdown.assert_called_once()
+
+    def test_existing_listening_database_is_adopted_without_starting_a_second_server(self) -> None:
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = ManagedLocalMySql(mysql_home=root / "mysql-runtime", data_root=root / "user-data")
+            with (
+                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql._is_loopback_port_open", return_value=True),
+                patch.object(runtime, "_start_server") as start_server,
+            ):
+                runtime._start_existing_instance(DatabaseOptions(url="mysql+pymysql://user:secret@127.0.0.1:25331/vsummary"))
+
+            start_server.assert_not_called()
 
 
 class IdentifierTests(unittest.TestCase):

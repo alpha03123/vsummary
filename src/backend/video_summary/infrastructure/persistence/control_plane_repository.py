@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -67,6 +67,42 @@ class SqlControlPlaneRepository:
             raise ValueError("Series position cannot be negative.")
         series_id = new_ulid()
         with self._session_factory.begin() as session:
+            session.add(
+                Series(
+                    id=series_id,
+                    workspace_id=workspace_id,
+                    title=title.strip(),
+                    position=position,
+                    source_kind=source_kind,
+                    external_source_url=external_source_url,
+                )
+            )
+        return series_id
+
+    def create_series_at_next_position(
+        self,
+        *,
+        workspace_id: str,
+        title: str,
+        source_kind: str = "local",
+        external_source_url: str | None = None,
+    ) -> str:
+        """Create a series after serializing position allocation for one workspace."""
+
+        _require_text(workspace_id, field_name="workspace_id")
+        _require_text(title, field_name="series title")
+        series_id = new_ulid()
+        with self._session_factory.begin() as session:
+            workspace = session.get(Workspace, workspace_id, with_for_update=True)
+            if workspace is None or workspace.deleted_at is not None:
+                raise LookupError(f"workspace not found '{workspace_id}'")
+            position = int(
+                session.scalar(
+                    select(func.coalesce(func.max(Series.position), -1) + 1).where(
+                        Series.workspace_id == workspace_id
+                    )
+                )
+            )
             session.add(
                 Series(
                     id=series_id,

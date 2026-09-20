@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi import Request
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from backend.api.http.access_log import install_access_log_filters
 from backend.api.di.bootstrap import ApiContainer
@@ -89,6 +91,13 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     install_mcp_http_endpoint(application)
     if root_dir is not None:
         mount_frontend_dist(application, root_dir)
+
+    @application.exception_handler(OperationalError)
+    async def database_unavailable(_request: Request, _error: OperationalError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "数据服务暂不可用，正在恢复连接。"},
+        )
 
     @application.middleware("http")
     async def log_request(request: Request, call_next):

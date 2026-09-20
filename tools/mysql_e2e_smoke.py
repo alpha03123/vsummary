@@ -291,6 +291,21 @@ async def run(mysql_home: Path) -> dict[str, object]:
                 and rag_documents
             ):
                 raise RuntimeError("The HTTP E2E did not produce readable SQL-backed artifacts.")
+            with TestClient(create_app(container=container)) as cleanup_client:
+                _require_ok(cleanup_client.delete(f"/api/series/{series_id}"), "delete generated series")
+                recreated = _require_ok(
+                    cleanup_client.post(
+                    "/api/import/local/series/from-paths",
+                    json={
+                        "series_title": "SQL E2E Recreated Series",
+                        "source_paths": [str(media_path)],
+                        "storage_mode": "copy",
+                    },
+                    ),
+                    "recreate series after soft delete",
+                ).json()
+                recreated_series_id = recreated["id"]
+                _require_ok(cleanup_client.delete(f"/api/series/{recreated_series_id}"), "delete recreated series")
             return {
                 "series_id": series_id,
                 "video_id": video_id,
@@ -300,6 +315,7 @@ async def run(mysql_home: Path) -> dict[str, object]:
                 "rag_document_count": len(rag_documents),
                 "summary_job_id": job_id,
                 "agent_chat": chat["assistant_message"],
+                "series_cleanup_verified": True,
             }
         finally:
             runtime.stop()

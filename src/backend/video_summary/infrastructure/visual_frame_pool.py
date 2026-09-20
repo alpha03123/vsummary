@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import shutil
+from threading import Lock
 
 from PIL import Image, ImageChops, ImageDraw, ImageStat
 
@@ -19,6 +20,8 @@ GRID_COLUMNS = 3
 GRID_ROWS = 3
 TILES_PER_GRID = GRID_COLUMNS * GRID_ROWS
 TILE_SIZE = (320, 180)
+_POOL_LOCKS: dict[Path, Lock] = {}
+_POOL_LOCKS_GUARD = Lock()
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,23 @@ def build_or_load_visual_frame_pool(
         raise ValueError("max_input_images 必须是正整数。")
     processor = media_processor or FfmpegMediaProcessor()
     pool_dir = output_dir / "visual_frame_pool" / f"grid-{max_input_images}"
+    lock = _pool_lock(pool_dir)
+    with lock:
+        return _build_or_load_visual_frame_pool(
+            video_path=video_path,
+            pool_dir=pool_dir,
+            max_input_images=max_input_images,
+            processor=processor,
+        )
+
+
+def _build_or_load_visual_frame_pool(
+    *,
+    video_path: Path,
+    pool_dir: Path,
+    max_input_images: int,
+    processor: FfmpegMediaProcessor,
+) -> VisualFramePool:
     manifest_path = pool_dir / "manifest.json"
     raw_dir = pool_dir / "raw"
     cached = _load_pool(manifest_path, pool_dir)
@@ -90,6 +110,16 @@ def build_or_load_visual_frame_pool(
         return VisualFramePool(image_paths=image_paths, timestamps_by_image=timestamps_by_image)
     finally:
         _remove_raw_frames(raw_dir)
+
+
+def _pool_lock(pool_dir: Path) -> Lock:
+    key = pool_dir.resolve()
+    with _POOL_LOCKS_GUARD:
+        lock = _POOL_LOCKS.get(key)
+        if lock is None:
+            lock = Lock()
+            _POOL_LOCKS[key] = lock
+        return lock
 
 
 def _candidate_timestamps(duration: float, target_count: int) -> list[float]:
