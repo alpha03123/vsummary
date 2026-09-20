@@ -19,7 +19,7 @@ from backend.video_summary.library.models import (
     LibraryVideoCardDTO,
 )
 from backend.video_summary.library.parsers import DefaultBilibiliUrlParser
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 from backend.video_summary.library.ports import (
     BilibiliUrlParser,
     LinkedSeriesResolverWorkspace,

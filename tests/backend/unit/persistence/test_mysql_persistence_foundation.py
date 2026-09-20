@@ -12,14 +12,14 @@ from sqlalchemy.schema import CreateTable
 
 from backend.video_summary.infrastructure.persistence.database import DatabaseDriverError, DatabaseOptions, _require_pymysql
 from backend.video_summary.infrastructure.persistence.migrate import build_alembic_config
-from backend.video_summary.infrastructure.persistence.managed_local_mysql import (
+from backend.local.persistence.managed_mysql import (
     LOCAL_DATABASE_NAME,
     LOCAL_DATABASE_USER,
     ManagedLocalMySql,
     ManagedLocalMySqlError,
     ManagedLocalMySqlPaths,
 )
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import Base, Job, Series, Video
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import _persisted_card_ids
 from backend.video_summary.library.models import KnowledgeCardDTO
@@ -105,7 +105,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0009_job_execution")
+        self.assertEqual(script.get_current_head(), "0010_workspace_scoped_agent_sessions")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -171,8 +171,8 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             (runtime.paths.data_dir / "auto.cnf").write_text("[auto]", encoding="utf-8")
 
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql._select_loopback_port", return_value=25331),
+                patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
+                patch("backend.local.persistence.managed_mysql._select_loopback_port", return_value=25331),
             ):
                 options = runtime._recover_runtime_state()
 
@@ -191,7 +191,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             runtime._process = None
 
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
+                patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
                 patch.object(runtime, "_shutdown_server") as shutdown,
             ):
                 runtime.stop()
@@ -212,7 +212,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             runtime._process.poll.return_value = 0
 
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
+                patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
                 patch.object(runtime, "_shutdown_server") as shutdown,
                 patch.object(runtime, "_wait_for_port_to_close"),
                 patch.object(runtime, "_wait_for_server_exit"),
@@ -228,7 +228,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             root = Path(temp_dir)
             runtime = ManagedLocalMySql(mysql_home=root / "mysql-runtime", data_root=root / "user-data")
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql._is_loopback_port_open", return_value=True),
+                patch("backend.local.persistence.managed_mysql._is_loopback_port_open", return_value=True),
                 patch.object(runtime, "_start_server") as start_server,
             ):
                 runtime._start_existing_instance(DatabaseOptions(url="mysql+pymysql://user:secret@127.0.0.1:25331/vsummary"))

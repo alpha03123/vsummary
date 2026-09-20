@@ -15,7 +15,7 @@ from backend.video_summary.infrastructure.persistence.control_plane_repository i
     SqlControlPlaneRepository,
     SubmittedJob,
 )
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent
 
 
@@ -92,24 +92,31 @@ class SqlJobRepository:
             idempotency_scope_id=idempotency_scope_id,
             idempotency_key=idempotency_key,
         )
-        if submitted.created:
-            with self._session_factory.begin() as session:
-                self._append_event(session, submitted.id, "queued", "queued", 0.0, "任务已进入队列")
         return submitted
 
-    def claim(self, *, worker_id: str, lease_seconds: int) -> ClaimedJob | None:
+    def claim(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int,
+        operations: frozenset[str] | None = None,
+    ) -> ClaimedJob | None:
         if not worker_id.strip() or lease_seconds < 1:
             raise ValueError("worker_id and a positive lease_seconds are required.")
+        if operations is not None and not operations:
+            raise ValueError("operations must be non-empty when supplied.")
         with self._session_factory.begin() as session:
             now = _database_now(session)
             self._recover_expired_leases(session, now)
+            statement = select(Job).where(
+                Job.status.in_(("queued", "retrying")),
+                Job.available_at <= now,
+                Job.cancel_requested_at.is_(None),
+            )
+            if operations is not None:
+                statement = statement.where(Job.operation.in_(operations))
             job = session.scalar(
-                select(Job)
-                .where(
-                    Job.status.in_(("queued", "retrying")),
-                    Job.available_at <= now,
-                    Job.cancel_requested_at.is_(None),
-                )
+                statement
                 .order_by(Job.available_at, Job.created_at)
                 .with_for_update(skip_locked=True)
                 .limit(1)
@@ -189,10 +196,13 @@ class SqlJobRepository:
                 raise JobLeaseLostError("Job lease was replaced.")
             return job.cancel_requested_at is not None or job.status in {"cancelling", "cancelled"}
 
-    def request_cancel(self, job_id: str) -> JobSnapshot | None:
+    def request_cancel(self, job_id: str, *, workspace_id: str | None = None) -> JobSnapshot | None:
         with self._session_factory.begin() as session:
             now = _database_now(session)
-            job = session.scalar(select(Job).where(Job.id == job_id).with_for_update())
+            statement = select(Job).where(Job.id == job_id)
+            if workspace_id is not None:
+                statement = statement.where(Job.workspace_id == workspace_id)
+            job = session.scalar(statement.with_for_update())
             if job is None:
                 return None
             if job.status in {"succeeded", "failed", "cancelled"}:
@@ -256,9 +266,12 @@ class SqlJobRepository:
                 job.finished_at = now
                 self._append_event(session, job.id, "failed", "failed", None, failure_detail)
 
-    def get(self, job_id: str) -> JobSnapshot | None:
+    def get(self, job_id: str, *, workspace_id: str | None = None) -> JobSnapshot | None:
         with self._session_factory() as session:
-            job = session.get(Job, job_id)
+            statement = select(Job).where(Job.id == job_id)
+            if workspace_id is not None:
+                statement = statement.where(Job.workspace_id == workspace_id)
+            job = session.scalar(statement)
             return _snapshot(job) if job is not None else None
 
     def latest_for_resource(self, *, resource_id: str, operations: tuple[str, ...]) -> JobSnapshot | None:
@@ -307,14 +320,19 @@ class SqlJobRepository:
             occurred_at=event.created_at,
         )
 
-    def events(self, job_id: str, *, after_sequence: int) -> list[JobEventSnapshot]:
+    def events(self, job_id: str, *, after_sequence: int, workspace_id: str | None = None) -> list[JobEventSnapshot]:
         with self._session_factory() as session:
+            job_statement = select(Job).where(Job.id == job_id)
+            if workspace_id is not None:
+                job_statement = job_statement.where(Job.workspace_id == workspace_id)
+            status = session.scalar(job_statement)
+            if status is None:
+                return []
             rows = session.scalars(
                 select(JobEvent)
                 .where(JobEvent.job_id == job_id, JobEvent.sequence > after_sequence)
                 .order_by(JobEvent.sequence)
             ).all()
-            status = session.get(Job, job_id)
         current_status = status.status if status is not None else "missing"
         return [
             JobEventSnapshot(

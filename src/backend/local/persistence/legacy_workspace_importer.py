@@ -11,10 +11,10 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.video_summary.infrastructure.persistence.blob_store import BlobReference, BlobStoreError, FileBlobStore
+from backend.core.blob_store import BlobReference, BlobStore, BlobStoreError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.current_content_repository import SqlCurrentContentRepository
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import LegacyImportItem, MediaObject
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
@@ -35,7 +35,7 @@ class LegacyImportReport:
 class LegacyWorkspaceImporter:
     """显式迁移工具；它不会被正常 API 启动路径自动调用。"""
 
-    def __init__(self, *, root_dir: Path, session_factory: sessionmaker[Session], blob_store: FileBlobStore) -> None:
+    def __init__(self, *, root_dir: Path, session_factory: sessionmaker[Session], blob_store: BlobStore) -> None:
         self._root_dir = root_dir
         self._session_factory = session_factory
         self._blob_store = blob_store
@@ -59,7 +59,7 @@ class LegacyWorkspaceImporter:
                     except Exception as error:
                         failures.append(f"{directory.name}: {error}")
         try:
-            self._import_agent_sessions()
+            self._import_agent_sessions(workspace_id)
             self._import_llm_usage()
         except Exception as error:
             failures.append(f"agent state: {error}")
@@ -85,7 +85,7 @@ class LegacyWorkspaceImporter:
             self._mark_completed()
         return LegacyImportReport(imported_series, imported_videos, imported_content, tuple(failures))
 
-    def _import_agent_sessions(self) -> None:
+    def _import_agent_sessions(self, workspace_id: str) -> None:
         directory = self._root_dir / "data" / "agent_sessions"
         if not directory.is_dir():
             return
@@ -99,7 +99,7 @@ class LegacyWorkspaceImporter:
             if not session_id or not memory_key:
                 raise ValueError(f"invalid legacy agent session: {path.name}")
             with self._session_factory.begin() as session:
-                session.execute(__import__("sqlalchemy").text("INSERT INTO agent_session_snapshots (session_id,memory_key,payload,updated_at) VALUES (:id,:key,CAST(:payload AS JSON),NOW()) ON DUPLICATE KEY UPDATE memory_key=VALUES(memory_key),payload=VALUES(payload),updated_at=NOW()"), {"id": session_id, "key": memory_key, "payload": json.dumps(payload, ensure_ascii=False)})
+                session.execute(__import__("sqlalchemy").text("INSERT INTO agent_session_snapshots (workspace_id,session_id,memory_key,payload,updated_at) VALUES (:workspace,:id,:key,CAST(:payload AS JSON),NOW()) ON DUPLICATE KEY UPDATE memory_key=VALUES(memory_key),payload=VALUES(payload),updated_at=NOW()"), {"workspace": workspace_id, "id": session_id, "key": memory_key, "payload": json.dumps(payload, ensure_ascii=False)})
             self._record("agent_session", key, "agent_session", session_id[:26], "imported", _sha256(path))
 
     def _import_llm_usage(self) -> None:
@@ -166,7 +166,19 @@ class LegacyWorkspaceImporter:
         item = self._mapped("workspace", key)
         if item is not None and item.target_id:
             return item.target_id
-        workspace_id = self._control.create_workspace(owner_scope_id="legacy-local", title="Migrated local library")
+        with self._session_factory() as session:
+            local_workspace_ids = session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT id FROM workspaces WHERE owner_scope_id='local-installation' AND deleted_at IS NULL"
+                )
+            ).scalars().all()
+        if len(local_workspace_ids) > 1:
+            raise RuntimeError("Multiple local-installation Workspaces exist; legacy import cannot choose one.")
+        workspace_id = (
+            local_workspace_ids[0]
+            if local_workspace_ids
+            else self._control.create_workspace(owner_scope_id="local-installation", title="VSummary")
+        )
         self._record("workspace", key, "workspace", workspace_id, "imported")
         return workspace_id
 

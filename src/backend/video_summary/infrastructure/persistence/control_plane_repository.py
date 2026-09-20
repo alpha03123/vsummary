@@ -16,10 +16,11 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import (
     IdempotencyKey,
     Job,
+    JobEvent,
     OutboxEvent,
     Series,
     Video,
@@ -188,6 +189,16 @@ class SqlControlPlaneRepository:
                 # IdempotencyKey has a direct FK to jobs but no ORM relationship.
                 # Flush now so MySQL always sees the parent row before the key row.
                 session.flush()
+                session.add(
+                    JobEvent(
+                        id=new_ulid(),
+                        job_id=job_id,
+                        sequence=1,
+                        stage="queued",
+                        progress=0.0,
+                        detail="任务已进入队列",
+                    )
+                )
                 if idempotency_scope_id is not None and idempotency_key is not None:
                     session.add(
                         IdempotencyKey(
@@ -211,10 +222,17 @@ class SqlControlPlaneRepository:
                 )
             return SubmittedJob(id=job_id, created=True, status="queued")
         except IntegrityError as error:
+            if idempotency_scope_id is not None:
+                existing = self._existing_idempotency_result(
+                    scope_id=idempotency_scope_id,
+                    key=idempotency_key,
+                    request_hash=request_hash,
+                )
+                if existing is not None:
+                    return existing
+                raise ControlPlaneConflictError("An idempotency key conflict occurred; retry the request.") from error
             if active_key is not None:
                 raise ControlPlaneConflictError("An active job already exists for this resource.") from error
-            if idempotency_scope_id is not None:
-                raise ControlPlaneConflictError("An idempotency key conflict occurred; retry the request.") from error
             raise
 
     @staticmethod
@@ -232,12 +250,38 @@ class SqlControlPlaneRepository:
         )
         if record is None:
             return None
+        if record.expires_at <= datetime.now(timezone.utc):
+            session.delete(record)
+            session.flush()
+            return None
         if record.request_hash != request_hash:
             raise ControlPlaneConflictError("Idempotency key was reused with a different request.")
         job = session.get(Job, record.job_id)
         if job is None:
             raise RuntimeError("Idempotency record references a missing job.")
         return SubmittedJob(id=job.id, created=False, status=job.status)
+
+    def _existing_idempotency_result(
+        self,
+        *,
+        scope_id: str,
+        key: str | None,
+        request_hash: str,
+    ) -> SubmittedJob | None:
+        if key is None:
+            return None
+        with self._session_factory() as session:
+            record = session.scalar(
+                select(IdempotencyKey).where(IdempotencyKey.scope_id == scope_id, IdempotencyKey.key == key)
+            )
+            if record is None or record.expires_at <= datetime.now(timezone.utc):
+                return None
+            if record.request_hash != request_hash:
+                raise ControlPlaneConflictError("Idempotency key was reused with a different request.")
+            job = session.get(Job, record.job_id)
+            if job is None:
+                raise RuntimeError("Idempotency record references a missing job.")
+            return SubmittedJob(id=job.id, created=False, status=job.status)
 
 
 def _request_hash(payload: dict[str, Any]) -> str:

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from backend.agent.memory.context import AgentContext
-from backend.agent.schemas.action_plan import CitationReference
+from backend.core.citations import CitationReference
 
 
 class AgentSessionMessageEntry(BaseModel):

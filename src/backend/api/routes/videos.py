@@ -1,7 +1,7 @@
 """视频库管理路由。
 
-提供视频库的增删查改、视频总结/思维导图/知识卡的生成与导出、
-本地文件导入、以及生成进度 SSE 流的 HTTP 端点。
+提供视频库的增删查改、视频总结/思维导图/知识卡的生成与导出，
+以及生成进度 SSE 流的 HTTP 端点。
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
-from backend.api.local_media_picker import select_local_media_paths
 from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
@@ -29,16 +28,12 @@ from backend.api.schemas.contracts import (
     GenerateMindmapRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
-    LocalMediaPathImportRequest,
-    LocalMediaSeriesPathImportRequest,
     RenameTitleRequest,
     UpdateVideoNoteRequest,
     UpdateVideoSummaryRequest,
     UpdateVideoTranscriptRequest,
 )
 from backend.api.schemas.responses import (
-    SeriesResponse,
-    VideoCardResponse,
     VideoChapterCardsResponse,
     VideoKnowledgeCardsResponse,
     VideoLibraryResponse,
@@ -1407,98 +1402,6 @@ def rename_video(
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return {"series_id": renamed.series_id, "video_id": renamed.video_id, "title": renamed.title}
-
-
-@router.post("/api/import/local/select")
-def select_local_media(container: ApiContainerDep) -> dict[str, object]:
-    """POST /api/import/local/select — 由本机后端打开媒体文件选择框。"""
-    try:
-        source_paths = select_local_media_paths()
-        workspace_device = container.root_dir.stat().st_dev
-        incompatible_paths = [
-            Path(path).name
-            for path in source_paths
-            if Path(path).stat().st_dev != workspace_device
-        ]
-        return {
-            "source_paths": source_paths,
-            "hardlink_available": not incompatible_paths,
-            "incompatible_source_names": incompatible_paths,
-        }
-    except Exception as error:
-        raise HTTPException(status_code=503, detail=f"无法打开本机文件选择框：{error}") from error
-
-
-@router.post("/api/videos/{series_id}/{video_id}/relink")
-def relink_external_video(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, bool]:
-    """打开旧目录并将失效的外部媒体引用重新绑定到用户选定的文件。"""
-    source = _require_video_source(container, series_id, video_id)
-    selected_paths = select_local_media_paths(
-        initial_directory=source.source_path.parent,
-        allow_multiple=False,
-    )
-    if not selected_paths:
-        return {"relinked": False}
-    try:
-        container.linked_series_workspace.relink_external_video(
-            series_id=series_id,
-            video_id=video_id,
-            source_path=Path(selected_paths[0]),
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return {"relinked": True}
-
-
-@router.post("/api/import/local/series/from-paths", response_model=SeriesResponse)
-def import_local_series_from_paths(
-    request: LocalMediaSeriesPathImportRequest,
-    container: ApiContainerDep,
-) -> SeriesResponse:
-    """POST /api/import/local/series/from-paths — 从本机路径新建系列。"""
-    if request.storage_mode is None:
-        raise HTTPException(status_code=400, detail="storage_mode 不能为空。")
-    try:
-        series = container.import_local_series.run_from_paths(
-            title=request.series_title,
-            source_paths=[Path(path) for path in request.source_paths],
-            storage_mode=request.storage_mode,
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return SeriesResponse.from_model(series)
-
-
-@router.post("/api/import/local/playground/from-paths", response_model=list[VideoCardResponse])
-def import_local_playground_videos_from_paths(
-    request: LocalMediaPathImportRequest,
-    container: ApiContainerDep,
-) -> list[VideoCardResponse]:
-    """POST /api/import/local/playground/from-paths — 从本机路径复制到 Playground。"""
-    try:
-        videos = container.import_local_playground_videos.run_from_paths(
-            source_paths=[Path(path) for path in request.source_paths],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return [VideoCardResponse.from_model(video) for video in videos]
-
-
-@router.post("/api/import/local/series/{series_id}/from-paths", response_model=list[VideoCardResponse])
-def import_local_series_videos_from_paths(
-    series_id: str,
-    request: LocalMediaPathImportRequest,
-    container: ApiContainerDep,
-) -> list[VideoCardResponse]:
-    """POST /api/import/local/series/{series_id}/from-paths — 按系列模式追加本机媒体。"""
-    try:
-        videos = container.import_local_series_videos.run_from_paths(
-            series_id=series_id,
-            source_paths=[Path(path) for path in request.source_paths],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return [VideoCardResponse.from_model(video) for video in videos]
 
 
 @router.get("/api/videos/{series_id}/{video_id}/generate/progress")

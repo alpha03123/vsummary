@@ -9,8 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from backend.agent_graph.prompts.notes import build_ai_note_prompt
-from backend.agent.schemas.action_plan import CitationReference, CitationSlot
+from backend.video_summary.infrastructure.llm.prompts.notes import build_ai_note_prompt
+from backend.core.citations import CitationReference, CitationSlot
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings

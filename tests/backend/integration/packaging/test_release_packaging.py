@@ -8,7 +8,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests import _path_setup
-from backend.api.http.app import create_app
+from backend.local.http.app import create_app
 from backend.api.adapters.agent_runtime_provider import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
     PACKAGE_VARIANTS,

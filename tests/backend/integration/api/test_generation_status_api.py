@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 
-from backend.api.http.app import create_app
+from backend.local.http.app import create_app
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
 from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError

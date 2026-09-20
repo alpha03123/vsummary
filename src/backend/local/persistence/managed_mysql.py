@@ -28,7 +28,7 @@ from backend.video_summary.infrastructure.persistence.database import (
     DatabaseOptions,
     create_database_engine,
 )
-from backend.video_summary.infrastructure.persistence.local_credentials import (
+from backend.local.persistence.local_credentials import (
     LocalCredentialError,
     load_local_mysql_password,
     save_local_mysql_password,

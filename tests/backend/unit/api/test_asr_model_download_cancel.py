@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.api.routes.settings import cancel_asr_model_download
+from backend.local.routes.settings import cancel_asr_model_download
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 
 

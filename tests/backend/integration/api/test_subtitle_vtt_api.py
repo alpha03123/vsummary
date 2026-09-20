@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend.api.http.app import create_app
+from backend.local.http.app import create_app
 from backend.video_summary.library.models import TranscriptSegmentDTO, VideoTranscriptDTO
 
 

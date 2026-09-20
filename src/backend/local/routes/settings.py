@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.api.di.container import ApiContainerDep
-from backend.api.application_update import ApplicationUpdateError, get_update_status, schedule_update
+from backend.local.application_update import ApplicationUpdateError, get_update_status, schedule_update
 from backend.api.schemas.contracts import (
     ApplicationUpdateScheduleResponse,
     ApplicationUpdateStatusResponse,

@@ -25,13 +25,21 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class WorkerOptions:
     worker_id: str
+    operation_filter: frozenset[str] | None = None
+    resource_class: str = "general"
     lease_seconds: int = 60
     heartbeat_seconds: int = 15
     poll_seconds: float = 0.25
 
     @classmethod
     def local(cls) -> "WorkerOptions":
-        return cls(worker_id=f"local-{uuid4().hex}", lease_seconds=120, heartbeat_seconds=20)
+        return cls(
+            worker_id=f"local-{uuid4().hex}",
+            operation_filter=frozenset({"generate_summary", "generate_transcript"}),
+            resource_class="local-cpu",
+            lease_seconds=120,
+            heartbeat_seconds=20,
+        )
 
 
 class SqlJobProgressReporter:
@@ -97,6 +105,7 @@ class SqlJobWorker:
                 claim = self._repository.claim(
                     worker_id=self._options.worker_id,
                     lease_seconds=self._options.lease_seconds,
+                    operations=self._options.operation_filter,
                 )
             except Exception:
                 LOGGER.exception("job claim failed")

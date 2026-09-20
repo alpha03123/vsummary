@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from backend.core.context import WorkspaceContextProvider
+from backend.core.capabilities import CapabilitySet
+from backend.core.quota import QuotaGuard, UsageMeter
 from backend.agent import AgentContextBudgetService
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
@@ -28,6 +31,9 @@ from backend.external import (
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
+from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
+from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
+from backend.video_summary.library.note_images import materialize_note_frames
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 from backend.video_summary.infrastructure.persistence.sql_generation_adapters import (
     SqlBackedSeriesMindmapGenerator,
@@ -95,6 +101,10 @@ class ApiContainer:
     config_path: Path
     root_dir: Path
     sql_workspace: SqlVideoWorkspace
+    context_provider: WorkspaceContextProvider
+    quota_guard: QuotaGuard
+    usage_meter: UsageMeter
+    capabilities: CapabilitySet
     job_repository: SqlJobRepository
     job_worker: SqlJobWorker
     faster_whisper_model_manager: FasterWhisperModelManager
@@ -166,6 +176,10 @@ def build_api_container(
     faster_whisper_model_manager: FasterWhisperModelManager | None = None,
     whisper_cpp_model_manager: WhisperCppModelManager | None = None,
     workspace_override: object | None = None,
+    context_provider: WorkspaceContextProvider | None = None,
+    quota_guard: QuotaGuard | None = None,
+    usage_meter: UsageMeter | None = None,
+    capabilities: CapabilitySet | None = None,
 ) -> ApiContainer:
     config_path = root_dir / "config" / "settings.toml"
     settings = load_settings(config_path, root_dir)
@@ -181,8 +195,10 @@ def build_api_container(
     rag_model_progress_tracker = InMemoryProgressTracker()
     if not isinstance(workspace, SqlVideoWorkspace):
         raise RuntimeError("build_api_container requires SqlVideoWorkspace.")
+    if context_provider is None or quota_guard is None or usage_meter is None or capabilities is None:
+        raise RuntimeError("build_api_container requires explicit context, quota, usage, and capability adapters.")
     usage_store = MySqlLlmUsageStore(workspace.session_factory)
-    agent_session_store = SqlAgentSessionStore(workspace.session_factory)
+    agent_session_store = SqlAgentSessionStore(workspace.session_factory, workspace_id=workspace.workspace_id)
     index_refresher_ref: dict[str, _WorkspaceIndexRefresher | None] = {"value": None}
 
     def on_rag_model_download_completed(model_key: str) -> None:
@@ -263,6 +279,8 @@ def build_api_container(
         index_refresher,
         max_visual_input_images=settings.generation.max_visual_input_images,
         multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
+        frame_pool_builder=build_or_load_visual_frame_pool,
+        note_frame_materializer=lambda *, video_path, output_dir, content: materialize_note_frames(video_path=video_path, output_dir=output_dir, content=content, frame_extractor=FfmpegMediaProcessor()),
     )
 
     auto_artifacts = AutoGenerateVideoArtifacts(
@@ -272,6 +290,7 @@ def build_api_container(
             resolved_mindmap_generator,
             visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            frame_pool_builder=build_or_load_visual_frame_pool,
         ).run(series_id, video_id),
         generate_knowledge_cards=lambda series_id, video_id: GenerateVideoKnowledgeCards(
             workspace,
@@ -279,6 +298,7 @@ def build_api_container(
             index_refresher,
             visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            frame_pool_builder=build_or_load_visual_frame_pool,
         ).run(series_id, video_id),
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
@@ -368,6 +388,10 @@ def build_api_container(
         config_path=config_path,
         root_dir=root_dir,
         sql_workspace=workspace,
+        context_provider=context_provider,
+        quota_guard=quota_guard,
+        usage_meter=usage_meter,
+        capabilities=capabilities,
         job_repository=job_repository,
         job_worker=job_worker,
         faster_whisper_model_manager=model_manager,
@@ -385,6 +409,7 @@ def build_api_container(
             index_refresher,
             visual_input=settings.generation.cards_visual_input,
             max_visual_input_images=settings.generation.max_visual_input_images,
+            frame_pool_builder=build_or_load_visual_frame_pool,
         ),
         generate_video_ai_summary=ai_summary_use_case,
         get_video_ai_summary=GetVideoAiSummary(workspace),
@@ -403,6 +428,7 @@ def build_api_container(
             resolved_mindmap_generator,
             visual_input=settings.generation.mindmap_visual_input,
             max_visual_input_images=settings.generation.max_visual_input_images,
+            frame_pool_builder=build_or_load_visual_frame_pool,
         ),
         generate_series_mindmap=GenerateSeriesMindmapFromLibrary(workspace, resolved_series_mindmap_generator),
         get_series_mindmap=GetSeriesMindmap(workspace),

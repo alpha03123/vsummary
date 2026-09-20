@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from tests import _path_setup  # noqa: F401
 
-from backend.api.http.app import create_app
+from backend.local.http.app import create_app
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 
 

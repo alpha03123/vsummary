@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from backend.agent.schemas.action_plan import CitationReference
+from backend.core.citations import CitationReference
 
 
 @dataclass(frozen=True)

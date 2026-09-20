@@ -9,35 +9,16 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
-from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 from uuid import uuid4
 
 
+from backend.core.blob_store import BlobReference, BlobStoreError, StagedBlob
+
+
 COPY_BUFFER_SIZE = 1_048_576
 MAX_OBJECT_KEY_LENGTH = 512
-
-
-class BlobStoreError(RuntimeError):
-    """Blob 对象不存在、校验失败或对象键不安全。"""
-
-
-@dataclass(frozen=True)
-class BlobReference:
-    key: str
-    sha256: str
-    byte_size: int
-    content_type: str
-
-
-@dataclass(frozen=True)
-class StagedBlob:
-    job_id: str
-    token: str
-    sha256: str
-    byte_size: int
-    content_type: str
 
 
 class FileBlobStore:

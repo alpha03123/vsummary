@@ -33,7 +33,7 @@ from backend.video_summary.library.models import (
     VideoWorkspaceToolsDTO,
     WorkspaceDTO,
 )
-from backend.agent.schemas.action_plan import CitationReference
+from backend.core.citations import CitationReference
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 
@@ -92,6 +92,14 @@ class VideoLibraryReader(Protocol):
 
     def get_series_dir(self, series_id: str) -> Path:
         """返回到系列工作区根目录的路径。"""
+
+
+class VisualFramePoolBuilder(Protocol):
+    def __call__(self, *, video_path: Path, output_dir: Path, max_input_images: int): ...
+
+
+class NoteFrameMaterializer(Protocol):
+    def __call__(self, *, video_path: Path, output_dir: Path, content: str) -> None: ...
 
 
 class VideoKnowledgeCardWriter(Protocol):

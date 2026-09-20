@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from backend.agent.schemas.action_plan import CitationReference
+from backend.core.citations import CitationReference
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace

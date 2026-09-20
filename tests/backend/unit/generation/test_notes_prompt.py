@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from backend.agent_graph.prompts.notes import build_ai_note_prompt
+from backend.video_summary.infrastructure.llm.prompts.notes import build_ai_note_prompt
 
 
 class AiNotePromptTests(unittest.TestCase):

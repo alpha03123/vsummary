@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vsummary-core"
+version = "0.3.9"
+description = "Public Core contracts and services for VSummary"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "alembic>=1.14,<2",
+    "anyio>=4,<5",
+    "fastapi>=0.115,<1",
+    "httpx>=0.27,<1",
+    "litellm==1.74.0",
+    "pydantic>=2,<3",
+    "PyMySQL>=1.1,<2",
+    "SQLAlchemy>=2.0.36,<3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+    "backend.agent*",
+    "backend.agent_graph*",
+    "backend.api*",
+    "backend.bilibili*",
+    "backend.chaoxing*",
+    "backend.core*",
+    "backend.external*",
+    "backend.mcp*",
+    "backend.shared*",
+    "backend.video_summary*",
+]
+exclude = ["backend.local*"]
+
+[tool.setuptools.package-data]
+"backend.video_summary.infrastructure.persistence.migrations" = ["*.py", "versions/*.py"]

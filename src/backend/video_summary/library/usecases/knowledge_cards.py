@@ -8,8 +8,7 @@
 from __future__ import annotations
 
 from backend.video_summary.library.models import VideoKnowledgeCardsDTO
-from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoKnowledgeCardStore, WorkspaceIndexRefresher
-from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
+from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoKnowledgeCardStore, VisualFramePoolBuilder, WorkspaceIndexRefresher
 
 
 class GenerateVideoKnowledgeCards:
@@ -31,6 +30,7 @@ class GenerateVideoKnowledgeCards:
         *,
         visual_input: str = "none",
         max_visual_input_images: int | None = None,
+        frame_pool_builder: VisualFramePoolBuilder | None = None,
     ) -> None:
         """注入读/写知识卡的复合端口、生成器与可选的索引刷新器。
 
@@ -45,6 +45,7 @@ class GenerateVideoKnowledgeCards:
         self._index_refresher = index_refresher
         self._visual_input = visual_input
         self._max_visual_input_images = max_visual_input_images
+        self._frame_pool_builder = frame_pool_builder
 
     def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         """为指定视频生成知识卡并落盘，返回最终制品 DTO。
@@ -75,7 +76,7 @@ class GenerateVideoKnowledgeCards:
         visual_frame_paths = _visual_frame_pool_paths(
             source,
             visual_input=self._visual_input,
-            max_visual_input_images=self._max_visual_input_images,
+            max_visual_input_images=self._max_visual_input_images, frame_pool_builder=self._frame_pool_builder,
         )
         if visual_frame_paths:
             arguments["visual_frame_paths"] = visual_frame_paths
@@ -93,10 +94,10 @@ class GenerateVideoKnowledgeCards:
         return self._workspace.get_video_knowledge_cards(series_id, video_id)
 
 
-def _visual_frame_pool_paths(source, *, visual_input: str, max_visual_input_images: int | None):
-    if visual_input != "frames" or source is None or max_visual_input_images is None:
+def _visual_frame_pool_paths(source, *, visual_input: str, max_visual_input_images: int | None, frame_pool_builder: VisualFramePoolBuilder | None):
+    if visual_input != "frames" or source is None or max_visual_input_images is None or frame_pool_builder is None:
         return []
-    return build_or_load_visual_frame_pool(
+    return frame_pool_builder(
         video_path=source.source_path,
         output_dir=source.output_dir,
         max_input_images=max_visual_input_images,

@@ -11,7 +11,6 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from backend.api.di.container import ApiContainerDep
 from backend.api.schemas.contracts import AgentSeriesCreateRequest, AgentSeriesProcessRequest
@@ -27,7 +26,6 @@ from backend.api.schemas.responses import (
 from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import (
     BILIBILI_COOKIE_REQUIRED_MESSAGE,
-    BilibiliCookieInitError,
     build_video_download_task_id,
 )
 from backend.external.ytdlp import ExternalVideoResolutionError
@@ -38,11 +36,6 @@ router = APIRouter()
 LOGGER = logging.getLogger(__name__)
 DOWNLOAD_POLL_INTERVAL_SECONDS = 0.5
 DOWNLOAD_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
-
-
-class BilibiliCookieStatusResponse(BaseModel):
-    """Bilibili Cookie 配置状态响应。"""
-    configured: bool
 
 
 @router.post("/api/agent/series", response_model=SeriesResponse)
@@ -115,18 +108,6 @@ async def process_agent_series(
         "video_ids": [],
         "status": "scheduled",
     }
-
-
-@router.post("/api/linked/bilibili/cookie/init", response_model=BilibiliCookieStatusResponse)
-async def init_bilibili_cookie(container: ApiContainerDep) -> BilibiliCookieStatusResponse:
-    """POST /api/linked/bilibili/cookie/init — 打开登录页并写入 Bilibili Cookie。"""
-    try:
-        configured = await asyncio.to_thread(container.bilibili_cookie_initializer.init)
-    except BilibiliCookieInitError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    return BilibiliCookieStatusResponse(configured=configured)
 
 
 @router.post("/api/linked/bilibili/resolve/series", response_model=SeriesResponse)
@@ -367,19 +348,6 @@ async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container
             raise HTTPException(status_code=409, detail=BILIBILI_COOKIE_REQUIRED_MESSAGE) from error
         raise HTTPException(status_code=502, detail=str(error)) from error
     return VideoCardResponse.from_model(video)
-
-
-@router.post("/api/linked/{provider}/cookie/init", response_model=BilibiliCookieStatusResponse)
-async def init_external_cookie(provider: str, container: ApiContainerDep) -> BilibiliCookieStatusResponse:
-    """打开指定平台登录页，将该平台 Cookie 保存到独立配置项。"""
-    initializer = container.external_cookie_initializers.get(provider.lower())
-    if initializer is None:
-        raise HTTPException(status_code=404, detail=f"unsupported external provider '{provider}'")
-    try:
-        configured = await asyncio.to_thread(initializer.init)
-    except Exception as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    return BilibiliCookieStatusResponse(configured=configured)
 
 
 @router.post("/api/linked/{provider}/resolve/series", response_model=SeriesResponse)
