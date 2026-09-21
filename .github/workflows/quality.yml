@@ -12,9 +12,9 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
       - shell: pwsh
-        run: python -m pip install -r requirements.dev.txt import-linter pytest
+        run: python -m pip install -r requirements.cpu.txt -r requirements.dev.txt import-linter pytest
       - shell: pwsh
         run: $env:PYTHONPATH = 'src;.'; lint-imports
       - shell: pwsh

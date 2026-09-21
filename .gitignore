@@ -47,6 +47,9 @@ docs/superpowers/
 /scripts/*
 !/scripts/build_release.ps1
 !/scripts/bili_downloader.py
+!/scripts/analysis/
+/scripts/analysis/*
+!/scripts/analysis/run_speed_profile.py
 !/scripts/package/
 !/scripts/package/**
 
