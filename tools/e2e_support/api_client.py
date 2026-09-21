@@ -78,6 +78,8 @@ class CoreApiClient:
 
     def copy_preview_to(self, series_id: str, video_id: str, target: Path) -> None:
         with self._client.stream("GET", f"/api/videos/{series_id}/{video_id}/preview") as response:
+            if not response.is_success:
+                response.read()
             _require_success(response, "source video preview")
             with target.open("wb") as output:
                 for chunk in response.iter_bytes():

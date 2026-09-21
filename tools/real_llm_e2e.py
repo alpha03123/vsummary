@@ -34,8 +34,20 @@ def main() -> None:
     parser.add_argument("--source-series-id", default=None)
     parser.add_argument("--source-video-id", default=None)
     args = parser.parse_args()
-    result = run(args.base_url, args.work_dir, source_series_id=args.source_series_id, source_video_id=args.source_video_id)
     args.report.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = run(args.base_url, args.work_dir, source_series_id=args.source_series_id, source_video_id=args.source_video_id)
+    except Exception as error:
+        failure = {
+            "status": "failed",
+            "base_url": args.base_url,
+            "source_series_id": args.source_series_id,
+            "source_video_id": args.source_video_id,
+            "error": str(error),
+        }
+        args.report.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(failure, ensure_ascii=False, indent=2), file=sys.stderr)
+        raise
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
