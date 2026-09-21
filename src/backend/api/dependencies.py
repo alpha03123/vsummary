@@ -14,6 +14,9 @@ def get_workspace_context(
     request: Request,
     container: ApiContainerDep,
 ) -> WorkspaceContext:
+    context = getattr(request.state, "workspace_context", None)
+    if isinstance(context, WorkspaceContext):
+        return context
     request_id = request.headers.get("X-Request-ID") or uuid4().hex
     return container.context_provider.get_context(request_id=request_id)
 
