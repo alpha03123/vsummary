@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock
 
-from backend.local.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
+from backend.local.persistence.legacy_workspace_importer import (
+    LegacyWorkspaceImporter,
+    _latest_agent_note_as_ai_summary,
+    _legacy_transcript_payload,
+)
 
 
 class _Rows:
@@ -58,3 +62,31 @@ class LegacyImportWorkspaceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "Multiple local-installation"):
             importer._workspace_id()
+
+
+class LegacyPayloadConversionTests(unittest.TestCase):
+    def test_preserves_a_transcript_without_a_summary(self) -> None:
+        transcript = _legacy_transcript_payload(
+            {
+                "language": "zh",
+                "duration_seconds": 2.5,
+                "segments": [{"start_seconds": 0.0, "end_seconds": 2.5, "text": "独立转写"}],
+            }
+        )
+
+        self.assertEqual(transcript["language"], "zh")
+        self.assertEqual(transcript["duration_ms"], 2500)
+        self.assertEqual(transcript["segments"], [{"start": 0, "end": 2500, "text": "独立转写"}])
+
+    def test_promotes_latest_legacy_agent_note_only(self) -> None:
+        summary = _latest_agent_note_as_ai_summary(
+            {
+                "notes": [
+                    {"source": "manual", "title": "手写", "content": "保留为笔记", "updated_at": "2026-01-02"},
+                    {"source": "agent", "title": "旧概括", "content": "旧内容", "updated_at": "2026-01-01"},
+                    {"source": "agent", "title": "新概括", "content": "新内容", "updated_at": "2026-01-03"},
+                ]
+            }
+        )
+
+        self.assertEqual(summary, {"title": "新概括", "content": "新内容", "citations": "[]"})

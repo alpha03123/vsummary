@@ -87,8 +87,9 @@ class SqlVideoWorkspace:
             series = session.execute(text("""SELECT s.id,s.title,s.source_kind,s.external_source_url,m.payload AS linked_payload
                 FROM series s LEFT JOIN linked_series_metadata m ON m.series_id=s.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL ORDER BY s.position,s.created_at"""), {"workspace": self._workspace_id}).mappings().all()
-            videos = session.execute(text("""SELECT v.id,v.series_id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key
+            videos = session.execute(text("""SELECT v.id,v.series_id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key,t.video_id AS transcript_video_id
                 FROM videos v JOIN series s ON s.id=v.series_id LEFT JOIN media_objects m ON m.video_id=v.id AND m.state='ready'
+                LEFT JOIN transcripts t ON t.video_id=v.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL AND v.deleted_at IS NULL ORDER BY v.created_at"""), {"workspace": self._workspace_id}).mappings().all()
         by_series: dict[str, list[LibraryVideoCardDTO]] = {row["id"]: [] for row in series}
         for video in videos:
@@ -96,7 +97,7 @@ class SqlVideoWorkspace:
             by_series.setdefault(video["series_id"], []).append(LibraryVideoCardDTO(
                 id=video["id"], title=video["title"], source_name=Path(video["blob_key"] or "media").name,
                 processed=video["content_version"] > 0, status="ready" if video["content_version"] > 0 else ("linked" if linked else "pending"),
-                has_transcript=video["content_version"] > 0, source_type="video" if linked else video["source_kind"],
+                has_transcript=video["transcript_video_id"] is not None, source_type="video" if linked else video["source_kind"],
                 is_linked=linked, source_id=video["external_source_id"] or "", provider=video["source_kind"] if linked else "",
             ))
         return [

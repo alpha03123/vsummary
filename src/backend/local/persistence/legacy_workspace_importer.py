@@ -75,6 +75,8 @@ class LegacyWorkspaceImporter:
                         self._import_media(video_id, media_path)
                         if self._import_content(workspace_id, video_id, series_dir.name, media_path.stem):
                             imported_content += 1
+                        elif self._import_transcript_only(video_id, series_dir.name, media_path.stem):
+                            imported_content += 1
                         self._import_structured_artifacts(video_id, series_dir.name, media_path.stem)
                         self._import_binary_artifacts(workspace_id, video_id, series_dir.name, media_path.stem)
                         self._rag_source.refresh_video(workspace_id=workspace_id, series_id=series_id, video_id=video_id)
@@ -328,6 +330,40 @@ class LegacyWorkspaceImporter:
         self._record("content", key, "video_content", video_id, "imported", _sha256(summary_path))
         return True
 
+    def _import_transcript_only(self, video_id: str, legacy_series_id: str, legacy_video_id: str) -> bool:
+        """Preserve legacy transcripts that were never summarized."""
+
+        base = self._root_dir / "workspace" / legacy_series_id / legacy_video_id
+        transcript_path = base / "transcript.cleaned.json"
+        if not transcript_path.is_file() or (base / "summary.json").is_file():
+            return False
+        key = f"transcript/{legacy_series_id}/{legacy_video_id}"
+        item = self._mapped("transcript", key)
+        if item is not None and item.status == "imported":
+            return False
+        transcript = _legacy_transcript_payload(json.loads(transcript_path.read_text(encoding="utf-8")))
+        with self._session_factory.begin() as session:
+            session.execute(__import__("sqlalchemy").text("DELETE FROM transcript_segments WHERE video_id=:video"), {"video": video_id})
+            session.execute(
+                __import__("sqlalchemy").text(
+                    "INSERT INTO transcripts (video_id,content_version,language,source_type,duration_ms,raw_srt_artifact_id,created_at,updated_at) "
+                    "VALUES (:video,0,:language,'legacy',:duration,NULL,NOW(),NOW()) "
+                    "ON DUPLICATE KEY UPDATE content_version=VALUES(content_version),language=VALUES(language),"
+                    "source_type=VALUES(source_type),duration_ms=VALUES(duration_ms),updated_at=NOW()"
+                ),
+                {"video": video_id, "language": transcript["language"], "duration": transcript["duration_ms"]},
+            )
+            for ordinal, segment in enumerate(transcript["segments"]):
+                session.execute(
+                    __import__("sqlalchemy").text(
+                        "INSERT INTO transcript_segments (id,video_id,content_version,ordinal,start_ms,end_ms,text) "
+                        "VALUES (:id,:video,0,:ordinal,:start,:end,:text)"
+                    ),
+                    {"id": new_ulid(), "video": video_id, "ordinal": ordinal, **segment},
+                )
+        self._record("transcript", key, "transcript", video_id, "imported", _sha256(transcript_path))
+        return True
+
     def _import_structured_artifacts(self, video_id: str, legacy_series_id: str, legacy_video_id: str) -> None:
         base = self._root_dir / "workspace" / legacy_series_id / legacy_video_id
         for filename, kind, target in (
@@ -360,6 +396,33 @@ class LegacyWorkspaceImporter:
                         if isinstance(frame, dict):
                             session.execute(__import__("sqlalchemy").text("INSERT INTO ai_summary_visual_evidence (id,video_id,ordinal,timestamp_ms,text) VALUES (:id,:video,:ordinal,:timestamp,:text)"), {"id": new_ulid(), "video": video_id, "ordinal": ordinal, "timestamp": round(float(frame.get("timestamp_seconds") or 0)*1000), "text": str(frame.get("text") or "")})
             self._record(kind, f"{legacy_series_id}/{legacy_video_id}", target, video_id, "imported", _sha256(path))
+        self._import_latest_agent_note_as_ai_summary(video_id, legacy_series_id, legacy_video_id)
+
+    def _import_latest_agent_note_as_ai_summary(self, video_id: str, legacy_series_id: str, legacy_video_id: str) -> None:
+        """Match v0.4's lazy Agent-note-to-AI-summary compatibility behavior."""
+
+        base = self._root_dir / "workspace" / legacy_series_id / legacy_video_id
+        notes_path = base / "notes.json"
+        if (base / "ai_summary.json").is_file() or not notes_path.is_file():
+            return
+        key = f"agent_note_ai_summary/{legacy_series_id}/{legacy_video_id}"
+        if self._mapped("agent_note_ai_summary", key) is not None:
+            return
+        summary = _latest_agent_note_as_ai_summary(json.loads(notes_path.read_text(encoding="utf-8")))
+        if summary is None:
+            return
+        with self._session_factory.begin() as session:
+            existing = session.execute(__import__("sqlalchemy").text("SELECT video_id FROM ai_summaries WHERE video_id=:video"), {"video": video_id}).scalar()
+            if existing is not None:
+                return
+            session.execute(
+                __import__("sqlalchemy").text(
+                    "INSERT INTO ai_summaries (video_id,title,content,citations,status,created_at,updated_at) "
+                    "VALUES (:video,:title,:content,CAST(:citations AS JSON),'ready',NOW(),NOW())"
+                ),
+                {"video": video_id, **summary},
+            )
+        self._record("agent_note_ai_summary", key, "ai_summaries", video_id, "imported", _sha256(notes_path))
 
     def _import_binary_artifacts(self, workspace_id: str, video_id: str, legacy_series_id: str, legacy_video_id: str) -> None:
         base = self._root_dir / "workspace" / legacy_series_id / legacy_video_id
@@ -414,6 +477,50 @@ def _sha256(path: Path) -> str:
         while chunk := source.read(1_048_576):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _legacy_transcript_payload(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise ValueError("legacy transcript must be an object")
+    raw_segments = payload.get("segments")
+    if not isinstance(raw_segments, list):
+        raise ValueError("legacy transcript segments must be a list")
+    segments: list[dict[str, object]] = []
+    for item in raw_segments:
+        if not isinstance(item, dict):
+            raise ValueError("legacy transcript segment must be an object")
+        start, end, text = item.get("start_seconds"), item.get("end_seconds"), item.get("text")
+        if not isinstance(start, (int, float)) or not isinstance(end, (int, float)) or not isinstance(text, str) or not text.strip():
+            raise ValueError("legacy transcript segment is invalid")
+        start_ms, end_ms = round(start * 1000), round(end * 1000)
+        if start_ms < 0 or end_ms < start_ms:
+            raise ValueError("legacy transcript timestamps are invalid")
+        segments.append({"start": start_ms, "end": end_ms, "text": text.strip()})
+    duration = payload.get("duration_seconds")
+    return {
+        "language": str(payload.get("language") or "und"),
+        "duration_ms": round(duration * 1000) if isinstance(duration, (int, float)) else None,
+        "segments": segments,
+    }
+
+
+def _latest_agent_note_as_ai_summary(payload: object) -> dict[str, str] | None:
+    if not isinstance(payload, dict) or not isinstance(payload.get("notes"), list):
+        return None
+    candidates = [
+        note
+        for note in payload["notes"]
+        if isinstance(note, dict)
+        and note.get("source") == "agent"
+        and isinstance(note.get("title"), str)
+        and note["title"].strip()
+        and isinstance(note.get("content"), str)
+        and note["content"].strip()
+    ]
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda note: str(note.get("updated_at") or note.get("created_at") or ""))
+    return {"title": latest["title"].strip(), "content": latest["content"].strip(), "citations": json.dumps([])}
 
 
 def _to_current_content(transcript: dict[str, object], summary: dict[str, object]) -> dict[str, object]:
