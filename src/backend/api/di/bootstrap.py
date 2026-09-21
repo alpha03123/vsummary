@@ -12,7 +12,8 @@ from backend.agent import AgentContextBudgetService
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 from backend.api.adapters.linked_video_downloader import ProviderLinkedVideoDownloader
-from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator, _WorkspaceIndexRefresher
+from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator
+from backend.api.adapters.durable_workspace_index_refresher import DurableWorkspaceIndexRefresher, submit_workspace_index_refresh
 from backend.bilibili import (
     BilibiliDownloader,
     DrissionBilibiliCookieInitializer,
@@ -198,7 +199,7 @@ def build_api_container(
         raise RuntimeError("build_api_container requires explicit context, quota, usage, and capability adapters.")
     usage_store = MySqlLlmUsageStore(workspace.session_factory)
     agent_session_store = SqlAgentSessionStore(workspace.session_factory, workspace_id=workspace.workspace_id)
-    index_refresher_ref: dict[str, _WorkspaceIndexRefresher | None] = {"value": None}
+    index_refresher_ref: dict[str, DurableWorkspaceIndexRefresher | None] = {"value": None}
 
     def on_rag_model_download_completed(model_key: str) -> None:
         if model_key != "embedding":
@@ -300,12 +301,11 @@ def build_api_container(
         rag_model_manager=rag_model_manager,
         usage_recorder=usage_store,
     )
-    index_refresher = _WorkspaceIndexRefresher(
-        refresh_all=agent_runtime.refresh_workspace_indexes,
-        upsert_video=agent_runtime.upsert_workspace_video,
-        delete_video=agent_runtime.delete_workspace_video,
-        delete_series=agent_runtime.delete_workspace_series,
-        progress_tracker=knowledge_memory_progress_tracker,
+    index_refresher = DurableWorkspaceIndexRefresher(
+        lambda: submit_workspace_index_refresh(
+            repository=job_repository,
+            workspace_id=workspace.workspace_id,
+        ),
     )
     workspace_index_invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
     index_refresher_ref["value"] = index_refresher
@@ -488,6 +488,13 @@ def build_api_container(
 
     operation_handlers["prepare_asr_model"] = run_asr_model_prepare_job
     operation_handlers["prepare_rag_model"] = run_rag_model_prepare_job
+
+    async def run_rag_index_refresh_job(_claim, reporter) -> None:
+        reporter.update("index", 10.0, "正在重建工作区 RAG 索引")
+        await asyncio.to_thread(agent_runtime.refresh_workspace_indexes)
+        reporter.update("index", 100.0, "工作区 RAG 索引已更新")
+
+    operation_handlers["refresh_rag_index"] = run_rag_index_refresh_job
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
