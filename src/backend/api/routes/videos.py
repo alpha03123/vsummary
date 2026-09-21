@@ -1013,56 +1013,53 @@ async def cancel_video_summary_generation(
 
 
 @router.post("/api/series/{series_id}/generate")
-async def generate_series_summaries(
+def generate_series_summaries(
     series_id: str,
     request: GenerateSeriesSummariesRequest | None = None,
     container: ApiContainerDep = None,
-) -> dict[str, object]:
-    """POST /api/series/{series_id}/generate — 触发系列下所有未处理视频的批量总结生成。
-
-    按队列调度串联每个视频的生成流程；前端通过系列级 SSE 进度端点订阅进度。
-
-    Args:
-        series_id: 系列 ID。
-        request: 可选的批次参数（如 transcript_enhancement_enabled 和 run_id）。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        {"series_id": ..., "completed_videos": ..., "skipped_videos": ..., "cancelled_videos": ..., "cancelled_video_id": ...}
-
-    Raises:
-        HTTPException(400): 参数无效。
-        HTTPException(404): 系列不存在。
-        HTTPException(409): 重复触发或 scope 忙碌。
-        HTTPException(503): 生成过程发生运行时错误。
-    """
+) -> JSONResponse:
+    """提交系列父 Job，由 Worker 创建每个视频的持久子 Job。"""
     processing_mode = "summary" if request is None else request.processing_mode
-    arguments = {
-        "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
-        "run_id": None if request is None else request.run_id,
-    }
-    if processing_mode != "summary":
-        arguments["processing_mode"] = processing_mode
     try:
-        result = await container.generate_series_summaries.run(series_id, **arguments)
+        series = next((item for item in container.list_video_library.run().series if item.id == series_id), None)
+        if series is None:
+            raise LookupError(f"series not found '{series_id}'")
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="series",
+            resource_id=series_id,
+            operation="generate_series_batch",
+            request_payload={
+                "series_id": series_id,
+                "processing_mode": processing_mode,
+                "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
+                "run_id": None if request is None else request.run_id,
+            },
+            active_key=f"series:{series_id}:generate_series_batch",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except DuplicateSeriesGenerationError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except GenerationScopeBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    return {
-        "series_id": result.series_id,
-        "completed_videos": result.completed_videos,
-        "skipped_videos": result.skipped_videos,
-        "skipped_video_errors": result.skipped_video_errors,
-        "cancelled_videos": result.cancelled_videos,
-        "cancelled_video_id": result.cancelled_video_id,
-    }
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=series_id,
+            operation="generate_series_batch",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "series", "id": series_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.post("/api/series/{series_id}/generate/cancel")
@@ -1085,6 +1082,21 @@ async def cancel_series_summaries_generation(
         {"status": "cancelled"/"stale", "task_id": ..., "cancelled_video_ids": [...]}
     """
     series_task_id = _build_series_task_id(series_id)
+    job_repository = getattr(container, "job_repository", None)
+    if job_repository is not None:
+        snapshot = job_repository.request_cancel_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=series_id,
+            operation="generate_series_batch",
+        )
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="no active series batch job found")
+        return {
+            "status": snapshot.status,
+            "job_id": snapshot.id,
+            "task_id": series_task_id,
+            "cancelled_video_ids": [],
+        }
     requested_run_id = None if request is None else request.run_id
     get_active_run_id = getattr(container.generate_series_summaries, "get_active_run_id", None)
     active_run_id = get_active_run_id(series_id) if callable(get_active_run_id) else None

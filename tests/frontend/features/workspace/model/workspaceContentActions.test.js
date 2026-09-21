@@ -409,27 +409,15 @@ describe("workspaceContentActions series cancellation", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "workspace_loaded", library: refreshedLibrary });
   });
 
-  it("skips failed linked video downloads and continues the series run", async () => {
+  it("submits one durable parent job for the series", async () => {
     vi.resetModules();
-    const startVideoDownload = vi.fn((seriesId, videoId) => Promise.resolve({ jobId: `download-${videoId}` }));
     const subscribeDurableJobProgress = vi.fn((jobId, listener) => {
       queueMicrotask(() => {
-        listener(
-          jobId === "download-linked-1"
-            ? { status: "failed", error: "yt-dlp 退出码 1：HTTP Error 403" }
-            : { status: "completed", progress: 100 },
-        );
+        listener({ status: "completed", progress: 100, detail: "视频子任务已入队" });
       });
       return vi.fn();
     });
-    const generateSeriesSummaries = vi.fn(() => Promise.resolve({
-      completed_videos: ["linked-2"],
-      skipped_videos: ["linked-1"],
-      skipped_video_errors: [
-        { video_id: "linked-1", title: "Linked 1", error: "源文件不存在" },
-      ],
-      cancelled_videos: [],
-    }));
+    const generateSeriesSummaries = vi.fn(() => Promise.resolve({ jobId: "series-job", status: "queued" }));
     const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({
       series: [
         {
@@ -445,7 +433,6 @@ describe("workspaceContentActions series cancellation", () => {
       ...createWorkspaceApiMock(),
       generateSeriesSummaries,
       loadWorkspaceLibrary,
-      startVideoDownload,
       subscribeDurableJobProgress,
     }));
     const { createWorkspaceContentActions } = await import(
@@ -477,17 +464,13 @@ describe("workspaceContentActions series cancellation", () => {
     });
 
     await actions.onGenerateSeries();
+    await new Promise((resolve) => queueMicrotask(resolve));
 
-    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
-    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-2");
     expect(generateSeriesSummaries).toHaveBeenCalledWith("series-a", {
       transcriptEnhancementEnabled: true,
       runId: expect.any(String),
     });
-    const completedSnapshot = dispatch.mock.calls.find(([action]) => action.type === "generation_status_loaded")?.[0]?.snapshot;
-    expect(completedSnapshot?.detail).toContain("跳过 1 个");
-    expect(completedSnapshot?.detail).toContain("HTTP Error 403");
-    expect(completedSnapshot?.detail).toContain("源文件不存在");
+    expect(subscribeDurableJobProgress).toHaveBeenCalledWith("series-job", expect.any(Function));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "series_generation_queue_finished",
       seriesId: "series-a",

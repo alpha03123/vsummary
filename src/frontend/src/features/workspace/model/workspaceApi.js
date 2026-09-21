@@ -199,7 +199,7 @@ export async function loadVideoGenerationStatus(seriesId, videoId) {
 }
 
 export async function generateSeriesSummaries(seriesId, options = {}) {
-  return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
+  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -718,6 +718,9 @@ export async function resolveLinkedVideo(provider, url, targetSeriesId = null) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, target_series_id: targetSeriesId }),
   });
+  const jobId = typeof payload?.job_id === "string" ? payload.job_id.trim() : "";
+  if (!jobId) throw new Error("系列任务未返回 job_id。");
+  return { jobId, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function deleteSeries(seriesId) {

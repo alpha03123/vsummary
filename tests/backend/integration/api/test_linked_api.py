@@ -197,75 +197,15 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "cancelled", "job_id": "job-1"})
 
-    def test_cancel_series_generation_marks_active_video_and_linked_download_tasks(self) -> None:
-        container = _build_container(
-            active_video_ids=["local-video"],
-            videos=[
-                LibraryVideoCardDTO(
-                    id="local-video",
-                    title="本地视频",
-                    source_name="local-video.mp4",
-                    processed=False,
-                    status="pending",
-                ),
-                LibraryVideoCardDTO(
-                    id="BV1xx411c7mD",
-                    title="外链视频",
-                    source_name="BV1xx411c7mD.mp4",
-                    processed=False,
-                    status="linked",
-                    is_linked=True,
-                    source_id="BV1xx411c7mD",
-                    item_index=1,
-                    source_url="https://www.bilibili.com/video/BV1xx411c7mD",
-                ),
-                LibraryVideoCardDTO(
-                    id="ready-video",
-                    title="已完成视频",
-                    source_name="ready-video.mp4",
-                    processed=True,
-                    status="ready",
-                ),
-            ]
-        )
-        client = TestClient(create_app(container))
+    def test_cancel_series_generation_requests_durable_parent_job(self) -> None:
+        container = _build_container()
+        container.job_repository.request_cancel_for_resource = lambda **_kwargs: SimpleNamespace(id="series-job", status="cancelled")
 
-        response = client.post("/api/series/series-1/generate/cancel")
+        response = TestClient(create_app(container)).post("/api/series/series-1/generate/cancel")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["cancelled_video_ids"], ["local-video", "BV1xx411c7mD"])
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series/series-1").status, "cancelled")
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/local-video").status, "cancelled")
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/BV1xx411c7mD").status, "idle")
-        self.assertEqual(
-            container.video_download_progress_tracker.get_snapshot("download/series-1/BV1xx411c7mD").status,
-            "cancelling",
-        )
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/ready-video").status, "idle")
-
-    def test_cancel_series_generation_marks_series_cancelled_when_no_backend_series_task_is_active(self) -> None:
-        container = _build_container(
-            active_video_ids=[],
-            videos=[
-                LibraryVideoCardDTO(
-                    id="BV1xx411c7mD",
-                    title="外链视频",
-                    source_name="BV1xx411c7mD.mp4",
-                    processed=False,
-                    status="linked",
-                    is_linked=True,
-                    source_id="BV1xx411c7mD",
-                    item_index=1,
-                    source_url="https://www.bilibili.com/video/BV1xx411c7mD",
-                ),
-            ],
-        )
-        client = TestClient(create_app(container))
-
-        response = client.post("/api/series/series-1/generate/cancel")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series/series-1").status, "cancelled")
+        self.assertEqual(response.json()["job_id"], "series-job")
+        self.assertEqual(response.json()["status"], "cancelled")
 
     def test_mcp_streamable_http_endpoint_calls_existing_agent_series_api(self) -> None:
         container = _build_container()

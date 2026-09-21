@@ -481,6 +481,52 @@ def build_api_container(
 
     operation_handlers["process_agent_video"] = run_agent_video_job
 
+    async def run_series_batch_job(claim, reporter) -> None:
+        payload = claim.request_payload
+        series_id = claim.resource_id
+        processing_mode = str(payload.get("processing_mode") or "summary")
+        if processing_mode not in {"summary", "transcript"}:
+            raise ValueError("processing_mode must be summary or transcript.")
+        series = next((item for item in workspace.list_series() if item.id == series_id), None)
+        if series is None:
+            raise LookupError(f"series not found '{series_id}'")
+        pending = [video for video in series.videos if not video.processed]
+        reporter.update("queue", 0.0, f"正在创建 {len(pending)} 个视频子任务")
+        for index, video in enumerate(pending, start=1):
+            reporter.raise_if_cancelled()
+            has_source = workspace.get_video_source(series_id, video.id) is not None
+            child_operation = (
+                "process_agent_video"
+                if not has_source and (video.is_linked or video.status == "linked")
+                else ("generate_summary" if processing_mode == "summary" else "generate_transcript")
+            )
+            if not has_source and child_operation != "process_agent_video":
+                reporter.update("queue", index / max(1, len(pending)) * 100.0, f"跳过缺少媒体文件的视频：{video.title}")
+                continue
+            try:
+                job_repository.submit(
+                    workspace_id=claim.workspace_id,
+                    resource_type="video",
+                    resource_id=video.id,
+                    operation=child_operation,
+                    request_payload={
+                        "series_id": series_id,
+                        "video_id": video.id,
+                        "processing_mode": processing_mode,
+                        "transcript_enhancement_enabled": payload.get("transcript_enhancement_enabled"),
+                        "use_saved_manual_transcript": True,
+                        "parent_job_id": claim.id,
+                    },
+                    active_key=f"video:{video.id}:{child_operation}",
+                    idempotency_scope_id=None,
+                    idempotency_key=None,
+                )
+            except ControlPlaneConflictError:
+                pass
+            reporter.update("queue", index / max(1, len(pending)) * 100.0, f"已创建 {index}/{len(pending)} 个视频子任务")
+
+    operation_handlers["generate_series_batch"] = run_series_batch_job
+
     async def run_chaoxing_course_import_job(claim, reporter) -> None:
         course_key = claim.request_payload.get("course_key")
         if not isinstance(course_key, str) or not course_key.strip():

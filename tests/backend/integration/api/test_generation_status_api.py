@@ -97,17 +97,30 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(payload["snapshot"]["stage"], "batch")
         self.assertEqual(payload["snapshot"]["progress"], 40.0)
 
-    def test_duplicate_series_generate_request_returns_conflict(self) -> None:
+    def test_series_generate_submits_durable_parent_job(self) -> None:
         tracker = InMemoryProgressTracker()
         container = _build_container(tracker)
-        container.generate_series_summaries = SimpleNamespace(
-            run=_raise_duplicate_series,
-        )
+        repository = _FakeJobRepository()
+        container.job_repository = repository
         client = TestClient(create_app(container))
 
-        response = client.post("/api/series/series-1/generate")
+        response = client.post("/api/series/series-1/generate", json={"processing_mode": "summary"})
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-1")
+        self.assertEqual(repository.calls[0]["operation"], "generate_series_batch")
+        self.assertEqual(repository.calls[0]["resource_id"], "series-1")
+        self.assertEqual(repository.calls[0]["request_payload"]["series_id"], "series-1")
+
+    def test_duplicate_series_submit_returns_existing_parent_job(self) -> None:
+        tracker = InMemoryProgressTracker()
+        container = _build_container(tracker)
+        container.job_repository = _FakeJobRepository(conflict=True)
+
+        response = TestClient(create_app(container)).post("/api/series/series-1/generate")
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-existing")
 
     def test_series_cancel_marks_series_and_active_video_tasks(self) -> None:
         tracker = InMemoryProgressTracker()
@@ -123,6 +136,18 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertTrue(tracker.is_cancel_requested("series/series-1"))
         self.assertTrue(tracker.is_cancel_requested("series-1/video-1"))
         self.assertTrue(tracker.is_cancel_requested("series-1/video-2"))
+
+    def test_series_cancel_requests_durable_parent_job(self) -> None:
+        tracker = InMemoryProgressTracker()
+        container = _build_container(tracker)
+        repository = _FakeJobRepository()
+        container.job_repository = repository
+
+        response = TestClient(create_app(container)).post("/api/series/series-1/generate/cancel")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job_id"], "job-1")
+        self.assertEqual(response.json()["status"], "cancelled")
 
     def test_stale_series_cancel_run_id_does_not_cancel_current_series_task(self) -> None:
         tracker = InMemoryProgressTracker()
@@ -245,11 +270,6 @@ def _build_container(tracker: InMemoryProgressTracker):
     )
 
 
-async def _raise_duplicate_series(series_id: str, transcript_enhancement_enabled=None, run_id=None):
-    del transcript_enhancement_enabled, run_id
-    raise DuplicateSeriesGenerationError(f"series '{series_id}' generation is already running")
-
-
 def _complete_reporter_after_delay(reporter) -> None:
     time.sleep(0.1)
     reporter.completed("done")
@@ -272,6 +292,9 @@ class _FakeJobRepository:
         if not self.conflict:
             return None
         return SimpleNamespace(id="job-existing", status="running")
+
+    def request_cancel_for_resource(self, **_kwargs):
+        return SimpleNamespace(id="job-1", status="cancelled")
 
 
 if __name__ == "__main__":
