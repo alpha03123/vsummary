@@ -244,7 +244,17 @@ class SqlJobRepository:
 
         with self._session_factory.begin() as session:
             now = _database_now(session)
-            job = self._owned_job(session, claim, now)
+            job = self._owned_job(session, claim, now, allow_cancelling=True)
+            if job.cancel_requested_at is not None:
+                job.status = "cancelled"
+                job.active_key = None
+                job.claimed_by = None
+                job.lease_token = None
+                job.lease_expires_at = None
+                job.finished_at = now
+                self._finish_attempt(session, claim, now, outcome="cancelled")
+                self._append_event(session, job.id, "cancelled", "cancelled", None, "任务已取消")
+                return
             job.status = "succeeded"
             job.active_key = None
             job.claimed_by = None
