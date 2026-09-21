@@ -21,7 +21,6 @@ from backend.video_summary.infrastructure.persistence.models import (
     IdempotencyKey,
     Job,
     JobEvent,
-    OutboxEvent,
     Series,
     Video,
     Workspace,
@@ -210,16 +209,6 @@ class SqlControlPlaneRepository:
                             expires_at=datetime.now(timezone.utc) + idempotency_ttl,
                         )
                     )
-                session.add(
-                    OutboxEvent(
-                        id=new_ulid(),
-                        aggregate_type="job",
-                        aggregate_id=job_id,
-                        event_type="job_queued",
-                        payload={"workspace_id": workspace_id, "resource_type": resource_type, "resource_id": resource_id},
-                        attempt_count=0,
-                    )
-                )
             return SubmittedJob(id=job_id, created=True, status="queued")
         except IntegrityError as error:
             if idempotency_scope_id is not None:

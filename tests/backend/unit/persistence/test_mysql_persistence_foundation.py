@@ -105,7 +105,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0010_workspace_scoped_agent_sessions")
+        self.assertEqual(script.get_current_head(), "0011_outbox_claim_token")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))

@@ -29,15 +29,20 @@ LOGGER = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     mcp_server = getattr(app.state, "mcp_server", None)
     job_worker = getattr(getattr(app.state, "container", None), "job_worker", None)
+    outbox_worker = getattr(getattr(app.state, "container", None), "outbox_worker", None)
     try:
         if job_worker is not None:
             job_worker.start()
+        if outbox_worker is not None:
+            outbox_worker.start()
         if mcp_server is None:
             yield
         else:
             async with mcp_server.session_manager.run():
                 yield
     finally:
+        if outbox_worker is not None:
+            outbox_worker.stop()
         if job_worker is not None:
             job_worker.stop()
         root_dir = getattr(getattr(app.state, "container", None), "root_dir", None)

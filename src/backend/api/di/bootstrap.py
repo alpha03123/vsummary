@@ -52,6 +52,8 @@ from backend.shared.llm.usage import MySqlLlmUsageStore
 from backend.video_summary.infrastructure.persistence.sql_agent_session_store import SqlAgentSessionStore
 from backend.video_summary.infrastructure.persistence.job_repository import SqlJobRepository
 from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
+from backend.video_summary.infrastructure.persistence.outbox_repository import SqlOutboxRepository
+from backend.video_summary.infrastructure.persistence.outbox_worker import SqlOutboxWorker
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
 from backend.video_summary.library.usecases import (
@@ -108,6 +110,7 @@ class ApiContainer:
     capabilities: CapabilitySet
     job_repository: SqlJobRepository
     job_worker: SqlJobWorker
+    outbox_worker: SqlOutboxWorker
     faster_whisper_model_manager: FasterWhisperModelManager
     whisper_cpp_model_manager: WhisperCppModelManager
     list_video_library: ListVideoLibrary
@@ -311,6 +314,18 @@ def build_api_container(
     )
     workspace_index_invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
     index_refresher_ref["value"] = index_refresher
+
+    def invalidate_workspace_indexes_from_outbox(_event) -> None:
+        agent_runtime.invalidate_workspace_indexes()
+
+    outbox_worker = SqlOutboxWorker(
+        repository=SqlOutboxRepository(workspace.session_factory),
+        handlers={
+            "content_published": invalidate_workspace_indexes_from_outbox,
+            "note_published": invalidate_workspace_indexes_from_outbox,
+            "knowledge_cards_published": invalidate_workspace_indexes_from_outbox,
+        },
+    )
     series_memory_refresher = RefreshSeriesKnowledgeMemory(
         workspace=workspace,
         index_refresher=index_refresher,
@@ -468,6 +483,7 @@ def build_api_container(
         capabilities=capabilities,
         job_repository=job_repository,
         job_worker=job_worker,
+        outbox_worker=outbox_worker,
         faster_whisper_model_manager=model_manager,
         whisper_cpp_model_manager=whisper_cpp_manager,
         list_video_library=ListVideoLibrary(workspace),
