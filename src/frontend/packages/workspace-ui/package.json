@@ -1,13 +1,23 @@
 {
-  "name": "@vsummary/workspace-ui",
-  "version": "0.5.0-alpha.2",
+  "name": "@alpha03123/vsummary-workspace-ui",
+  "version": "0.5.0-alpha.3",
   "private": false,
+  "description": "Reusable product-neutral workspace components for VSummary shells",
+  "license": "Apache-2.0",
+  "readme": "README.md",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alpha03123/vsummary.git"
   },
   "files": ["dist"],
   "peerDependencies": {
