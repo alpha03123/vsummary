@@ -87,7 +87,8 @@ class LiteLLMNoteGenerator:
             "citations 至少提供 3 条、最多 20 条，只为需要追溯的关键事实、步骤、数字、直接表述或画面描述建立，避免每一句都引用。"
             "在对应正文句末写 [citation_id]；citation_id 必须从 1 连续编号且只出现一次。"
             "source_type=transcript 时 timestamp_seconds 必须精确使用某行转写方括号中的 start 秒数；"
-            "source_type=visual 时 timestamp_seconds 必须使用 visual_evidence 中已返回的真实帧时间。"
+            "source_type=visual 时 timestamp_seconds 必须逐字复制 visual_evidence 中已返回的真实帧时间，"
+            "不得根据转写、章节或画面内容推断新的时间。"
         )
         message_content = (
             build_multimodal_user_content(text=prompt, image_paths=[frame.image_path for frame in visual_context.frames])
@@ -144,19 +145,24 @@ def _to_generated_note(
     for item in payload.visual_evidence:
         timestamp = _resolve_visual_evidence_timestamp(item.timestamp_seconds, allowed_timestamps)
         if timestamp is None:
-            raise ValueError("AI 概括视觉证据引用了未提供的帧时间。")
+            continue
         if timestamp in seen:
-            raise ValueError("同一视频帧只能有一条 AI 概括视觉证据。")
+            continue
         seen.add(timestamp)
         evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
-    citations = _build_ai_summary_citations(
+    markdown, citations = _drop_unverified_visual_citations(
         markdown=payload.markdown,
         citations=payload.citations,
+        visual_evidence=evidence,
+    )
+    citations = _build_ai_summary_citations(
+        markdown=markdown,
+        citations=citations,
         transcript=transcript,
         visual_evidence=evidence,
     )
     return GeneratedVideoAiNoteDTO(
-        content=payload.markdown.strip(),
+        content=markdown.strip(),
         note_visual_mode=note_visual_mode,
         note_max_images=note_max_images,
         note_image_min_gap_seconds=note_image_min_gap_seconds,
@@ -262,6 +268,35 @@ def _resolve_visual_evidence_timestamp(value: float, allowed: tuple[float, ...])
         return None
     candidate = min(allowed, key=lambda timestamp: abs(timestamp - value))
     return candidate if abs(candidate - value) <= 1.0 else None
+
+
+def _drop_unverified_visual_citations(
+    *,
+    markdown: str,
+    citations: list[AiSummaryCitationPayload],
+    visual_evidence: list[AiSummaryVisualEvidenceDTO],
+) -> tuple[str, list[AiSummaryCitationPayload]]:
+    """Remove model-only visual references instead of rejecting the whole note."""
+
+    retained = [
+        citation
+        for citation in citations
+        if citation.source_type != "visual" or _resolve_visual_evidence(citation.timestamp_seconds, visual_evidence) is not None
+    ]
+    retained_ids = {citation.citation_id for citation in retained}
+    renumbered_ids = {citation_id: index for index, citation_id in enumerate(sorted(retained_ids), start=1)}
+
+    def replace_marker(match: re.Match[str]) -> str:
+        citation_id = int(match.group(1))
+        if citation_id not in retained_ids:
+            return ""
+        return f"[{renumbered_ids[citation_id]}]"
+
+    normalized_citations = [
+        citation.model_copy(update={"citation_id": renumbered_ids[citation.citation_id]})
+        for citation in retained
+    ]
+    return re.sub(r"\[(\d+)\]", replace_marker, markdown), normalized_citations
 
 
 def _build_ai_summary_citations(

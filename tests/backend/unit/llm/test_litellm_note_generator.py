@@ -1,7 +1,10 @@
 from backend.video_summary.infrastructure.llm.litellm_note_generator import _resolve_visual_evidence_timestamp
 from backend.video_summary.infrastructure.llm.litellm_note_generator import (
     AiSummaryCitationPayload,
+    AiSummaryEvidencePayload,
+    AiSummaryPayload,
     _build_ai_summary_citations,
+    _to_generated_note,
 )
 from backend.video_summary.library.models import AiSummaryVisualEvidenceDTO, TranscriptSegmentDTO, VideoTranscriptDTO
 
@@ -50,3 +53,28 @@ def test_rejects_markers_without_matching_declared_citation() -> None:
         assert "一一对应" in str(error)
     else:
         raise AssertionError("缺少声明引用时必须失败")
+
+
+def test_discards_unverified_visual_evidence_and_its_citation_without_rejecting_note() -> None:
+    transcript = VideoTranscriptDTO(
+        "series-1", "video-1", "视频标题", 20, [TranscriptSegmentDTO(2.5, 5.0, "真实转写内容")]
+    )
+    note = _to_generated_note(
+        payload=AiSummaryPayload(
+            markdown="转写事实[1]，模型推断的画面事实[2]。",
+            visual_evidence=[AiSummaryEvidencePayload(timestamp_seconds=15.0, text="不存在的帧")],
+            citations=[
+                AiSummaryCitationPayload(citation_id=1, source_type="transcript", timestamp_seconds=2.5),
+                AiSummaryCitationPayload(citation_id=2, source_type="visual", timestamp_seconds=15.0),
+            ],
+        ),
+        transcript=transcript,
+        allowed_timestamps=(8.25,),
+        note_visual_mode="off",
+        note_max_images=0,
+        note_image_min_gap_seconds=0,
+    )
+
+    assert note.content == "转写事实[1]，模型推断的画面事实。"
+    assert note.visual_evidence == ()
+    assert [citation.id for citation in note.citations] == ["1"]
