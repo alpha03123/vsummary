@@ -197,15 +197,20 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "cancelled", "job_id": "job-1"})
 
-    def test_cancel_series_generation_requests_durable_parent_job(self) -> None:
+    def test_cancel_series_generation_cancels_durable_parent_and_children(self) -> None:
         container = _build_container()
-        container.job_repository.request_cancel_for_resource = lambda **_kwargs: SimpleNamespace(id="series-job", status="cancelled")
+        container.job_repository.request_cancel_series_generation = lambda **_kwargs: [
+            SimpleNamespace(id="series-job", resource_id="series-1", resource_type="series", operation="generate_series_batch", status="cancelled"),
+            SimpleNamespace(id="video-job", resource_id="BV1xx411c7mD", resource_type="video", operation="generate_summary", status="cancelled"),
+        ]
 
         response = TestClient(create_app(container)).post("/api/series/series-1/generate/cancel")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["job_id"], "series-job")
         self.assertEqual(response.json()["status"], "cancelled")
+        self.assertEqual(response.json()["cancelled_video_ids"], ["BV1xx411c7mD"])
+        self.assertEqual(response.json()["cancelled_job_ids"], ["series-job", "video-job"])
 
     def test_mcp_streamable_http_endpoint_calls_existing_agent_series_api(self) -> None:
         container = _build_container()

@@ -246,6 +246,7 @@ class Job(TimestampedRow, Base):
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=False)
+    parent_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=True, index=True)
     resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
     resource_id: Mapped[str] = mapped_column(String(26), nullable=False)
     operation: Mapped[str] = mapped_column(String(64), nullable=False)

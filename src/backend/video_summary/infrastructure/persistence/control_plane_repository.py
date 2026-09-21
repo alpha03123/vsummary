@@ -152,6 +152,7 @@ class SqlControlPlaneRepository:
         operation: str,
         request_payload: dict[str, Any],
         active_key: str | None,
+        parent_job_id: str | None = None,
         idempotency_scope_id: str | None = None,
         idempotency_key: str | None = None,
         idempotency_ttl: timedelta = timedelta(days=1),
@@ -174,9 +175,14 @@ class SqlControlPlaneRepository:
                 )
                 if existing is not None:
                     return existing
+                if parent_job_id is not None:
+                    parent = session.get(Job, parent_job_id)
+                    if parent is None or parent.workspace_id != workspace_id:
+                        raise ValueError("parent_job_id must reference a Job in the same Workspace.")
                 job = Job(
                     id=job_id,
                     workspace_id=workspace_id,
+                    parent_job_id=parent_job_id,
                     resource_type=resource_type,
                     resource_id=resource_id,
                     operation=operation,

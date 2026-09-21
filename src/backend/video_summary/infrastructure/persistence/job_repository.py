@@ -27,6 +27,7 @@ class JobLeaseLostError(RuntimeError):
 class JobSnapshot:
     id: str
     workspace_id: str
+    parent_job_id: str | None
     resource_type: str
     resource_id: str
     operation: str
@@ -81,6 +82,7 @@ class SqlJobRepository:
         active_key: str,
         idempotency_scope_id: str | None,
         idempotency_key: str | None,
+        parent_job_id: str | None = None,
     ) -> SubmittedJob:
         submitted = self._control.submit_job(
             workspace_id=workspace_id,
@@ -91,6 +93,7 @@ class SqlJobRepository:
             active_key=active_key,
             idempotency_scope_id=idempotency_scope_id,
             idempotency_key=idempotency_key,
+            parent_job_id=parent_job_id,
         )
         return submitted
 
@@ -205,18 +208,7 @@ class SqlJobRepository:
             job = session.scalar(statement.with_for_update())
             if job is None:
                 return None
-            if job.status in {"succeeded", "failed", "cancelled"}:
-                return _snapshot(job)
-            job.cancel_requested_at = now
-            if job.status in {"queued", "retrying"}:
-                job.status = "cancelled"
-                job.active_key = None
-                job.finished_at = now
-                self._append_event(session, job.id, "cancelled", "cancelled", None, "任务在执行前被取消")
-            else:
-                job.status = "cancelling"
-                self._append_event(session, job.id, "cancelling", "cancelling", None, "已请求取消任务")
-            return _snapshot(job)
+            return self._request_cancel_locked(session, job, now)
 
     def request_cancel_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
@@ -227,6 +219,38 @@ class SqlJobRepository:
                 .limit(1)
             )
         return self.request_cancel(job_id, workspace_id=workspace_id) if job_id is not None else None
+
+    def request_cancel_series_generation(self, *, workspace_id: str, series_id: str) -> list[JobSnapshot]:
+        """Cancel an active series batch and every generation child it owns."""
+
+        active_statuses = ("queued", "retrying", "running", "cancelling")
+        with self._session_factory.begin() as session:
+            parent = session.scalar(
+                select(Job)
+                .where(
+                    Job.workspace_id == workspace_id,
+                    Job.resource_id == series_id,
+                    Job.operation == "generate_series_batch",
+                )
+                .order_by(Job.created_at.desc())
+                .with_for_update()
+                .limit(1)
+            )
+            if parent is None:
+                return []
+            jobs = list(
+                session.scalars(
+                    select(Job)
+                    .where(
+                        Job.workspace_id == workspace_id,
+                        Job.status.in_(active_statuses),
+                        (Job.id == parent.id) | (Job.parent_job_id == parent.id),
+                    )
+                    .with_for_update()
+                )
+            )
+            now = _database_now(session)
+            return [self._request_cancel_locked(session, job, now) for job in jobs]
 
     def mark_cancelled(self, claim: ClaimedJob, *, detail: str) -> None:
         with self._session_factory.begin() as session:
@@ -325,6 +349,20 @@ class SqlJobRepository:
                 .limit(1)
             )
             return _snapshot(job) if job is not None else None
+
+    def _request_cancel_locked(self, session: Session, job: Job, now: datetime) -> JobSnapshot:
+        if job.status in {"succeeded", "failed", "cancelled"}:
+            return _snapshot(job)
+        job.cancel_requested_at = now
+        if job.status in {"queued", "retrying"}:
+            job.status = "cancelled"
+            job.active_key = None
+            job.finished_at = now
+            self._append_event(session, job.id, "cancelled", "cancelled", None, "任务在执行前被取消")
+        else:
+            job.status = "cancelling"
+            self._append_event(session, job.id, "cancelling", "cancelling", None, "已请求取消任务")
+        return _snapshot(job)
 
     def latest_event(self, job_id: str, *, workspace_id: str) -> JobEventSnapshot | None:
         with self._session_factory() as session:
@@ -468,6 +506,7 @@ def _snapshot(job: Job) -> JobSnapshot:
     return JobSnapshot(
         id=job.id,
         workspace_id=job.workspace_id,
+        parent_job_id=job.parent_job_id,
         resource_type=job.resource_type,
         resource_id=job.resource_id,
         operation=job.operation,

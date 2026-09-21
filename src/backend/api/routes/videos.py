@@ -1084,18 +1084,22 @@ async def cancel_series_summaries_generation(
     series_task_id = _build_series_task_id(series_id)
     job_repository = getattr(container, "job_repository", None)
     if job_repository is not None:
-        snapshot = job_repository.request_cancel_for_resource(
+        cancelled_jobs = job_repository.request_cancel_series_generation(
             workspace_id=container.sql_workspace.workspace_id,
-            resource_id=series_id,
-            operation="generate_series_batch",
+            series_id=series_id,
         )
-        if snapshot is None:
+        if not cancelled_jobs:
             raise HTTPException(status_code=404, detail="no active series batch job found")
+        snapshot = next(
+            (job for job in cancelled_jobs if job.resource_id == series_id and job.operation == "generate_series_batch"),
+            cancelled_jobs[0],
+        )
         return {
             "status": snapshot.status,
             "job_id": snapshot.id,
             "task_id": series_task_id,
-            "cancelled_video_ids": [],
+            "cancelled_video_ids": [job.resource_id for job in cancelled_jobs if job.resource_type == "video"],
+            "cancelled_job_ids": [job.id for job in cancelled_jobs],
         }
     requested_run_id = None if request is None else request.run_id
     get_active_run_id = getattr(container.generate_series_summaries, "get_active_run_id", None)

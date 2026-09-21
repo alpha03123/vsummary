@@ -515,11 +515,11 @@ def build_api_container(
                         "processing_mode": processing_mode,
                         "transcript_enhancement_enabled": payload.get("transcript_enhancement_enabled"),
                         "use_saved_manual_transcript": True,
-                        "parent_job_id": claim.id,
                     },
                     active_key=f"video:{video.id}:{child_operation}",
                     idempotency_scope_id=None,
                     idempotency_key=None,
+                    parent_job_id=claim.id,
                 )
             except ControlPlaneConflictError:
                 pass
