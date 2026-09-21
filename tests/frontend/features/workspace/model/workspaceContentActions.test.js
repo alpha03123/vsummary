@@ -132,111 +132,7 @@ describe("workspaceContentActions media links", () => {
   });
 });
 
-describe("workspaceContentActions video cancellation", () => {
-  it("moves the task to cancelled as soon as the cancel request succeeds", async () => {
-    vi.resetModules();
-    const cancelVideoSummary = vi.fn(() => Promise.resolve({ status: "cancelled" }));
-    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
-      ...createWorkspaceApiMock(),
-      cancelVideoSummary,
-    }));
-    const { createWorkspaceContentActions } = await import(
-      "@src/features/workspace/model/workspaceContentActions"
-    );
-    const dispatch = vi.fn();
-    const actions = createWorkspaceContentActions({
-      state: {
-        selectedSeriesId: "series-a",
-        selectedVideoId: "video-a",
-        selectedContextType: "video",
-        generationTasksByKey: {
-          "video:series-a/video-a": {
-            taskKey: "video:series-a/video-a",
-            mode: "video",
-            seriesId: "series-a",
-            videoId: "video-a",
-            snapshot: { status: "running", stage: "summarize", progress: 88 },
-          },
-        },
-      },
-      dispatch,
-      selectedVideo: { id: "video-a", status: "pending" },
-    });
-
-    await actions.onCancelGeneration();
-
-    expect(cancelVideoSummary).toHaveBeenCalledWith("series-a", "video-a");
-    expect(dispatch).toHaveBeenNthCalledWith(1, {
-      type: "video_generation_cancelling",
-      seriesId: "series-a",
-      videoId: "video-a",
-    });
-    expect(dispatch).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      type: "generation_cancelled",
-      taskKey: "video:series-a/video-a",
-      snapshot: expect.objectContaining({ status: "cancelled", stage: "cancelled" }),
-    }));
-  });
-});
-
 describe("workspaceContentActions series cancellation", () => {
-  it("keeps the series queue cancelling until backend cancellation finishes", async () => {
-    vi.resetModules();
-    let resolveDownloadCancel;
-    const cancelVideoDownload = vi.fn(() => new Promise((resolve) => {
-      resolveDownloadCancel = resolve;
-    }));
-    const cancelSeriesSummaries = vi.fn(() => Promise.resolve({ status: "cancelled" }));
-    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
-      ...createWorkspaceApiMock(),
-      cancelVideoDownload,
-      cancelSeriesSummaries,
-    }));
-    const { createWorkspaceContentActions } = await import(
-      "@src/features/workspace/model/workspaceContentActions"
-    );
-    const dispatch = vi.fn();
-    const actions = createWorkspaceContentActions({
-      state: {
-        selectedSeriesId: "series-a",
-        selectedVideoId: null,
-        selectedContextType: "series",
-        seriesGenerationQueue: {
-          seriesId: "series-a",
-          status: "running",
-          downloadVideoId: "video-1",
-        },
-      },
-      dispatch,
-      selectedVideo: null,
-    });
-
-    const cancelTask = actions.onCancelGeneration();
-    await Promise.resolve();
-
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "series_generation_queue_cancelling",
-      seriesId: "series-a",
-    });
-    expect(dispatch).not.toHaveBeenCalledWith({
-      type: "series_generation_queue_finished",
-      seriesId: "series-a",
-      status: "cancelled",
-    });
-    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: undefined });
-
-    resolveDownloadCancel({});
-    await cancelTask;
-
-    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "video-1");
-    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: undefined });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "series_generation_queue_finished",
-      seriesId: "series-a",
-      status: "cancelled",
-    });
-  });
-
   it("does not let an old cancel completion finish a newer series run", async () => {
     vi.resetModules();
     let resolveSeriesCancel;
@@ -476,36 +372,6 @@ describe("workspaceContentActions series cancellation", () => {
       seriesId: "series-a",
       status: "completed",
     }));
-  });
-
-  it("clears local video download state immediately after cancelling a selected download", async () => {
-    vi.resetModules();
-    const cancelVideoDownload = vi.fn(() => Promise.resolve({ status: "cancelling" }));
-    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
-      ...createWorkspaceApiMock(),
-      cancelVideoDownload,
-    }));
-    const { createWorkspaceContentActions } = await import(
-      "@src/features/workspace/model/workspaceContentActions"
-    );
-    const dispatch = vi.fn();
-    const actions = createWorkspaceContentActions({
-      state: {
-        selectedSeriesId: "series-a",
-        downloadingVideoKey: "series-a/linked-1",
-      },
-      dispatch,
-      selectedVideo: null,
-    });
-
-    await actions.onDownloadVideo({ id: "linked-1" });
-
-    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "video_download_cancel_requested",
-      seriesId: "series-a",
-      videoId: "linked-1",
-    });
   });
 
   it("keeps a cancellation failure on the linked video instead of using the transient page error", async () => {

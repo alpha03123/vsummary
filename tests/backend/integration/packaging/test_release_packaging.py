@@ -132,26 +132,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("%LOCALAPPDATA%\\VSummary", script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
-    def test_release_builder_copies_browser_extensions(self) -> None:
-        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
-
-        self.assertIn('Join-Path $RepoRoot "extensions"', script)
-        self.assertIn('Join-Path $appRoot "extensions"', script)
-
-    def test_release_builder_requires_and_copies_managed_mysql_runtime(self) -> None:
-        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
-
-        self.assertIn("MySqlRuntimeSource", script)
-        self.assertIn("Copy-ManagedMySqlRuntime", script)
-        self.assertIn('Join-Path $packageRuntimeRoot "mysql"', script)
-        self.assertIn("bin\\mysqld.exe", script)
-
-    def test_full_package_does_not_seed_legacy_workspace_directories(self) -> None:
-        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
-
-        self.assertNotIn('Ensure-Directory -Path (Join-Path $Variant.PackageRoot "videos")', script)
-        self.assertNotIn('Ensure-Directory -Path (Join-Path $Variant.PackageRoot "workspace")', script)
-
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)

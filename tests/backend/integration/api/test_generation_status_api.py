@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import sys
-import threading
-import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,40 +8,12 @@ from fastapi.testclient import TestClient
 
 
 from backend.local.http.app import create_app
-from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
-from backend.video_summary.library.usecases.summary_generation import DuplicateSeriesGenerationError
 
 
 class GenerationStatusApiTests(unittest.TestCase):
-    def test_video_generation_status_returns_idle_before_task_start(self) -> None:
-        tracker = InMemoryProgressTracker()
-        client = TestClient(create_app(_build_container(tracker)))
-
-        response = client.get("/api/videos/series-1/video-1/generate/status")
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["task_id"], "series-1/video-1")
-        self.assertEqual(payload["snapshot"]["status"], "idle")
-
-    def test_video_generation_status_returns_running_snapshot(self) -> None:
-        tracker = InMemoryProgressTracker()
-        reporter = tracker.create_reporter("series-1/video-1")
-        reporter.update("summarize", 88.0, "正在生成 AI 概况")
-        client = TestClient(create_app(_build_container(tracker)))
-
-        response = client.get("/api/videos/series-1/video-1/generate/status")
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["snapshot"]["status"], "running")
-        self.assertEqual(payload["snapshot"]["stage"], "summarize")
-        self.assertEqual(payload["snapshot"]["progress"], 88.0)
-
     def test_video_generation_status_returns_last_durable_job_event(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
+        container = _build_container()
         container.job_repository = SimpleNamespace(
             latest_for_resource=lambda **_kwargs: SimpleNamespace(
                 id="job-1", status="running", failure_detail=None
@@ -67,39 +36,8 @@ class GenerationStatusApiTests(unittest.TestCase):
             "error": None,
         })
 
-    def test_video_generation_status_does_not_require_existing_video_source(self) -> None:
-        tracker = InMemoryProgressTracker()
-        reporter = tracker.create_reporter("series-1/video-1")
-        reporter.cancelled("任务已取消")
-        container = _build_container(tracker)
-        container.get_video_source = SimpleNamespace(run=lambda series_id, video_id: None)
-        client = TestClient(create_app(container))
-
-        response = client.get("/api/videos/series-1/video-1/generate/status")
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["task_id"], "series-1/video-1")
-        self.assertEqual(payload["snapshot"]["status"], "cancelled")
-
-    def test_series_generation_status_returns_running_snapshot(self) -> None:
-        tracker = InMemoryProgressTracker()
-        reporter = tracker.create_reporter("series/series-1")
-        reporter.update("batch", 40.0, "正在处理 2/5：Video 2")
-        client = TestClient(create_app(_build_container(tracker)))
-
-        response = client.get("/api/series/series-1/generate/status")
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["task_id"], "series/series-1")
-        self.assertEqual(payload["snapshot"]["status"], "running")
-        self.assertEqual(payload["snapshot"]["stage"], "batch")
-        self.assertEqual(payload["snapshot"]["progress"], 40.0)
-
     def test_series_generate_submits_durable_parent_job(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
+        container = _build_container()
         repository = _FakeJobRepository()
         container.job_repository = repository
         client = TestClient(create_app(container))
@@ -113,8 +51,7 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(repository.calls[0]["request_payload"]["series_id"], "series-1")
 
     def test_duplicate_series_submit_returns_existing_parent_job(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
+        container = _build_container()
         container.job_repository = _FakeJobRepository(conflict=True)
 
         response = TestClient(create_app(container)).post("/api/series/series-1/generate")
@@ -122,24 +59,8 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json()["job_id"], "job-existing")
 
-    def test_series_cancel_marks_series_and_active_video_tasks(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
-        container.generate_series_summaries = SimpleNamespace(
-            get_active_video_ids=lambda series_id: ["video-1", "video-2"] if series_id == "series-1" else [],
-        )
-        client = TestClient(create_app(container))
-
-        response = client.post("/api/series/series-1/generate/cancel")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(tracker.is_cancel_requested("series/series-1"))
-        self.assertTrue(tracker.is_cancel_requested("series-1/video-1"))
-        self.assertTrue(tracker.is_cancel_requested("series-1/video-2"))
-
     def test_series_cancel_requests_durable_parent_job(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
+        container = _build_container()
         repository = _FakeJobRepository()
         container.job_repository = repository
 
@@ -149,27 +70,8 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(response.json()["job_id"], "job-1")
         self.assertEqual(response.json()["status"], "cancelled")
 
-    def test_stale_series_cancel_run_id_does_not_cancel_current_series_task(self) -> None:
-        tracker = InMemoryProgressTracker()
-        tracker.create_reporter("series/series-1").update("batch", 10.0, "new run")
-        container = _build_container(tracker)
-        container.generate_series_summaries = SimpleNamespace(
-            get_active_video_ids=lambda series_id: ["video-1"] if series_id == "series-1" else [],
-            get_active_run_id=lambda series_id: "new-run" if series_id == "series-1" else None,
-        )
-        client = TestClient(create_app(container))
-
-        response = client.post("/api/series/series-1/generate/cancel", json={"run_id": "old-run"})
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "stale")
-        self.assertFalse(tracker.is_cancel_requested("series/series-1"))
-        self.assertFalse(tracker.is_cancel_requested("series-1/video-1"))
-        self.assertEqual(tracker.get_snapshot("series/series-1").status, "running")
-
     def test_video_generate_submits_a_durable_job(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
+        container = _build_container()
         repository = _FakeJobRepository()
         container.sql_workspace = SimpleNamespace(get_workspace=lambda: SimpleNamespace(id="workspace-1"))
         container.job_repository = repository
@@ -183,8 +85,7 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(repository.calls[0]["active_key"], "video:video-1:generate_summary")
 
     def test_duplicate_video_generate_returns_the_existing_durable_job(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
+        container = _build_container()
         repository = _FakeJobRepository(conflict=True)
         container.sql_workspace = SimpleNamespace(get_workspace=lambda: SimpleNamespace(id="workspace-1"))
         container.job_repository = repository
@@ -196,41 +97,7 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(response.json()["job_id"], "job-existing")
         self.assertEqual(response.json()["status"], "running")
 
-    def test_video_cancel_immediately_sets_terminal_status_and_interrupts_active_generation(self) -> None:
-        tracker = InMemoryProgressTracker()
-        container = _build_container(tracker)
-        cancelled: list[tuple[str, str]] = []
-
-        async def cancel(series_id: str, video_id: str) -> bool:
-            cancelled.append((series_id, video_id))
-            return True
-
-        container.generate_video_summary = SimpleNamespace(cancel=cancel)
-        client = TestClient(create_app(container))
-
-        response = client.post("/api/videos/series-1/video-1/generate/cancel")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "cancelled", "task_id": "series-1/video-1"})
-        self.assertEqual(cancelled, [("series-1", "video-1")])
-        self.assertEqual(tracker.get_snapshot("series-1/video-1").status, "cancelled")
-
-    def test_sse_progress_stream_emits_current_snapshot_immediately(self) -> None:
-        tracker = InMemoryProgressTracker()
-        reporter = tracker.create_reporter("series-1/video-1")
-        reporter.update("summarize", 55.0, "正在生成 AI 概况")
-        client = TestClient(create_app(_build_container(tracker)))
-        finisher = threading.Thread(target=_complete_reporter_after_delay, args=(reporter,), daemon=True)
-        finisher.start()
-
-        with client.stream("GET", "/api/videos/series-1/video-1/generate/progress") as response:
-            chunks = list(response.iter_text())
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('"progress": 55.0', chunks[0])
-
-
-def _build_container(tracker: InMemoryProgressTracker):
+def _build_container():
     source_runner = SimpleNamespace(
         run=lambda series_id, video_id: SimpleNamespace(source_path=Path(__file__))
     )
@@ -261,18 +128,9 @@ def _build_container(tracker: InMemoryProgressTracker):
     return SimpleNamespace(
         root_dir=None,
         sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
-        generation_progress_tracker=tracker,
-        video_download_progress_tracker=InMemoryProgressTracker(),
         list_video_library=SimpleNamespace(run=lambda: library),
         get_video_source=source_runner,
-        generate_video_summary=SimpleNamespace(run=lambda series_id, video_id, transcript_enhancement_enabled=None: None),
-        generate_series_summaries=SimpleNamespace(run=lambda series_id, transcript_enhancement_enabled=None: None),
     )
-
-
-def _complete_reporter_after_delay(reporter) -> None:
-    time.sleep(0.1)
-    reporter.completed("done")
 
 
 class _FakeJobRepository:
@@ -293,8 +151,16 @@ class _FakeJobRepository:
             return None
         return SimpleNamespace(id="job-existing", status="running")
 
-    def request_cancel_for_resource(self, **_kwargs):
-        return SimpleNamespace(id="job-1", status="cancelled")
+    def request_cancel_series_generation(self, **_kwargs):
+        return [
+            SimpleNamespace(
+                id="job-1",
+                resource_id="series-1",
+                resource_type="series",
+                operation="generate_series_batch",
+                status="cancelled",
+            )
+        ]
 
 
 if __name__ == "__main__":

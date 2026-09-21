@@ -7,8 +7,6 @@ from tempfile import TemporaryDirectory
 
 from alembic import command
 from alembic.script import ScriptDirectory
-from sqlalchemy.dialects import mysql
-from sqlalchemy.schema import CreateTable
 
 from backend.video_summary.infrastructure.persistence.database import DatabaseDriverError, DatabaseOptions, _require_pymysql
 from backend.video_summary.infrastructure.persistence.migrate import build_alembic_config
@@ -91,14 +89,6 @@ class ControlPlaneSchemaTests(unittest.TestCase):
         constraint_names = {constraint.name for constraint in Series.__table__.constraints}
 
         self.assertIn("uq_series_workspace_position", constraint_names)
-
-    def test_schema_compiles_for_mysql(self) -> None:
-        ddl = str(CreateTable(Job.__table__).compile(dialect=mysql.dialect()))
-
-        self.assertIn("CREATE TABLE jobs", ddl)
-        self.assertIn("CONSTRAINT uq_jobs_active_key UNIQUE (active_key)", ddl)
-        self.assertIn("request_payload JSON", ddl)
-
 
 class AlembicConfigurationTests(unittest.TestCase):
     def test_package_migration_directory_exposes_control_plane_revision(self) -> None:

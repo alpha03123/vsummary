@@ -555,10 +555,10 @@ class GenerateSeriesSummaryFromLibrary:
                 reporter.update(
                     stage,
                     aggregate_progress,
-                    f"已完成 {finished_count}/{len(pending_videos)}，正在处理 {index}/{len(pending_videos)}：{video.title} · {detail or '正在处理'}",
+                    f"已完成 {finished_count}/{len(pending_videos)}，正在处理 {index}/{len(pending_videos)}：{video.title} · {detail or '处理中'}",
                 )
 
-            reporter.update("batch", 0.0, f"已完成 0/{len(pending_videos)}，正在准备批量处理")
+            reporter.update("batch", 0.0, f"已完成 0/{len(pending_videos)}，正在准备处理")
 
             async def worker() -> None:
                 """单 worker：从队列取视频并复用 `GenerateVideoSummaryFromLibrary` 跑生成。"""
