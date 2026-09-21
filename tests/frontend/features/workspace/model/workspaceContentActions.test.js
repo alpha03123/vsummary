@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 describe("workspaceContentActions media links", () => {
   it("uses the agent processing route for a linked video", async () => {
     vi.resetModules();
-    const processAgentVideo = vi.fn(() => Promise.resolve({ status: "scheduled" }));
+    const processAgentVideo = vi.fn(() => Promise.resolve({ jobId: "job-agent-1", status: "queued" }));
+    const subscribeDurableJobProgress = vi.fn(() => () => {});
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
       processAgentVideo,
+      subscribeDurableJobProgress,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -26,6 +28,7 @@ describe("workspaceContentActions media links", () => {
     expect(processAgentVideo).toHaveBeenCalledWith("bilibili", "BV1example", {
       processingMode: undefined,
     });
+    expect(subscribeDurableJobProgress).toHaveBeenCalledWith("job-agent-1", expect.any(Function));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "generation_status_loaded",
       snapshot: expect.objectContaining({ status: "queued", stage: "queued" }),

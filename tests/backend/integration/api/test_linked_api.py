@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import unittest
 from pathlib import Path
@@ -45,24 +44,7 @@ class LinkedApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
-    def test_process_agent_series_schedules_existing_series_generation(self) -> None:
-        client = TestClient(create_app(_build_container()))
-
-        response = client.post("/api/agent/series/series-1/process", json={"run_id": "run-1"})
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            {
-                "series_id": "series-1",
-                "run_id": "run-1",
-                "scope": "series",
-                "video_ids": [],
-                "status": "scheduled",
-            },
-            response.json(),
-        )
-
-    def test_process_agent_series_accepts_multiple_selected_videos(self) -> None:
+    def test_process_agent_series_submits_one_durable_job_per_pending_video(self) -> None:
         container = _build_container(videos=[
             LibraryVideoCardDTO(
                 id="video-1",
@@ -86,50 +68,19 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["scope"], "videos")
         self.assertEqual(response.json()["video_ids"], ["video-1", "video-2"])
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-1").stage, "queued")
-        self.assertEqual(container.generation_progress_tracker.get_snapshot("series-1/video-2").stage, "queued")
-
-    def test_cancelled_selected_video_does_not_restart_from_agent_queue(self) -> None:
-        container = _build_container()
-        reporter = container.generation_progress_tracker.create_reporter("series-1/BV1xx411c7mD")
-        container.generation_progress_tracker.request_cancel("series-1/BV1xx411c7mD")
-
-        from backend.api.routes.linked import _run_agent_selected_video_generation
-
-        asyncio.run(
-            _run_agent_selected_video_generation(
-                container=container,
-                series_id="series-1",
-                video_ids=["BV1xx411c7mD"],
-                transcript_enhancement_enabled=None,
-                progress_reporters={"BV1xx411c7mD": reporter},
-            )
-        )
-
-        self.assertEqual(container.download_calls, [])
+        self.assertEqual([job["job_id"] for job in response.json()["jobs"]], ["job-1", "job-2"])
         self.assertEqual(
-            container.generation_progress_tracker.get_snapshot("series-1/BV1xx411c7mD").status,
-            "cancelled",
+            container.job_repository.agent_submissions,
+            [("video-1", "process_agent_video"), ("video-2", "process_agent_video")],
         )
 
-    def test_process_agent_series_downloads_linked_videos_before_generation(self) -> None:
+    def test_process_agent_series_submits_all_pending_videos_when_not_explicitly_selected(self) -> None:
         container = _build_container()
+        response = TestClient(create_app(container)).post("/api/agent/series/series-1/process", json={})
 
-        async def run() -> None:
-            await asyncio.wait_for(
-                container.run_agent_series_generation(
-                    container=container,
-                    series_id="series-1",
-                    run_id="run-1",
-                    transcript_enhancement_enabled=None,
-                ),
-                timeout=1.0,
-            )
-
-        asyncio.run(run())
-
-        self.assertEqual(container.download_calls, [("series-1", "BV1xx411c7mD")])
-        self.assertEqual(container.generate_series_summaries.calls, [("series-1", "run-1")])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["video_ids"], ["BV1xx411c7mD"])
+        self.assertEqual(response.json()["jobs"][0]["job_id"], "job-1")
 
     def test_resolve_bilibili_video_returns_linked_video_card(self) -> None:
         client = TestClient(create_app(_build_container()))
@@ -423,8 +374,6 @@ def _build_container(
     bilibili_cookie_initializer = _FakeBilibiliCookieInitializer()
     create_agent_series = _FakeCreateAgentSeries()
 
-    from backend.api.routes.linked import _run_agent_series_generation
-
     download_calls: list[tuple[str, str]] = []
     linked_workspace = _FakeLinkedWorkspace(video)
     job_repository = _FakeJobRepository(download_calls)
@@ -455,7 +404,6 @@ def _build_container(
         sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         job_repository=job_repository,
         download_calls=download_calls,
-        run_agent_series_generation=_run_agent_series_generation,
     )
     return container
 
@@ -543,10 +491,15 @@ class _FakeJobRepository:
     def __init__(self, download_calls: list[tuple[str, str]]) -> None:
         self._download_calls = download_calls
         self._jobs: dict[str, SimpleNamespace] = {}
+        self.agent_submissions: list[tuple[str, str]] = []
 
     def submit(self, *, request_payload, **_kwargs):
         job_id = f"job-{len(self._jobs) + 1}"
-        self._download_calls.append((request_payload["series_id"], request_payload["video_id"]))
+        operation = _kwargs["operation"]
+        if operation == "download_linked_video":
+            self._download_calls.append((request_payload["series_id"], request_payload["video_id"]))
+        if operation == "process_agent_video":
+            self.agent_submissions.append((request_payload["video_id"], operation))
         self._jobs[job_id] = SimpleNamespace(id=job_id, status="queued", failure_detail=None)
         return SimpleNamespace(id=job_id, status="queued")
 

@@ -453,6 +453,34 @@ def build_api_container(
 
     operation_handlers["download_linked_video"] = run_linked_video_download_job
 
+    async def run_agent_video_job(claim, reporter) -> None:
+        payload = claim.request_payload
+        series_id = str(payload["series_id"])
+        processing_mode = str(payload.get("processing_mode") or "summary")
+        if processing_mode not in {"summary", "transcript"}:
+            raise ValueError("processing_mode must be summary or transcript.")
+        linked_video = workspace.get_linked_video_for_download(series_id, claim.resource_id)
+        if linked_video is not None:
+            reporter.update("download", 0.0, "正在下载外链视频")
+            await asyncio.to_thread(
+                DownloadLinkedVideo(workspace, durable_linked_downloader).run,
+                series_id=series_id,
+                video_id=claim.resource_id,
+                reporter=reporter,
+            )
+        await resolved_generator.run(
+            series_id=series_id,
+            video_id=claim.resource_id,
+            processing_mode=processing_mode,
+            transcript_enhancement_enabled=payload.get("transcript_enhancement_enabled"),
+            progress_reporter=reporter,
+            job_id=claim.id,
+            worker_id=claim.worker_id,
+            lease_token=claim.lease_token,
+        )
+
+    operation_handlers["process_agent_video"] = run_agent_video_job
+
     async def run_chaoxing_course_import_job(claim, reporter) -> None:
         course_key = claim.request_payload.get("course_key")
         if not isinstance(course_key, str) or not course_key.strip():

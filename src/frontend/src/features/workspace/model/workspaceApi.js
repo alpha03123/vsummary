@@ -171,7 +171,7 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
 }
 
 export async function processAgentVideo(seriesId, videoId, options = {}) {
-  return fetchJson(`/api/agent/series/${encodeURIComponent(seriesId)}/process`, {
+  const payload = await fetchJson(`/api/agent/series/${encodeURIComponent(seriesId)}/process`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -702,6 +702,14 @@ export async function resolveLinkedSeries(provider, url) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
   });
+  const job = Array.isArray(payload?.jobs)
+    ? payload.jobs.find((item) => item?.resource?.id === videoId)
+    : null;
+  const jobId = typeof job?.job_id === "string" ? job.job_id.trim() : "";
+  if (!jobId) {
+    throw new Error("Agent 视频处理任务未返回 job_id。");
+  }
+  return { jobId, status: typeof job.status === "string" ? job.status : "queued" };
 }
 
 export async function resolveLinkedVideo(provider, url, targetSeriesId = null) {

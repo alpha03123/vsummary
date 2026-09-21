@@ -286,7 +286,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const videoId = state.selectedVideoId;
     const processingMode = state.processingMode;
     try {
-      await processAgentVideo(seriesId, videoId, { processingMode });
+      const submitted = await processAgentVideo(seriesId, videoId, { processingMode });
       dispatch({
         type: "generation_status_loaded",
         taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
@@ -301,6 +301,25 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           error: null,
         },
         subscriptionActive: true,
+      });
+      const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+        dispatch({
+          type: "generation_status_loaded",
+          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          mode: "video",
+          seriesId,
+          videoId,
+          jobId: submitted.jobId,
+          snapshot,
+          subscriptionActive: snapshot.status === "running" || snapshot.status === "queued",
+        });
+        if (snapshot.status === "completed") {
+          unsubscribe();
+          await reloadWorkspaceLibrary();
+        }
+        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+          unsubscribe();
+        }
       });
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "提交视频处理失败" });

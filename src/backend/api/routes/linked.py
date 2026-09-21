@@ -5,10 +5,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import logging
-from uuid import uuid4
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
@@ -26,13 +22,9 @@ from backend.bilibili.ytdlp_bilibili import (
     BILIBILI_COOKIE_REQUIRED_MESSAGE,
 )
 from backend.external.ytdlp import ExternalVideoResolutionError
-from backend.video_summary.generation.ports import ProgressReporter
-from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 
 router = APIRouter()
-LOGGER = logging.getLogger(__name__)
-DOWNLOAD_POLL_INTERVAL_SECONDS = 0.5
 
 
 @router.post("/api/agent/series", response_model=SeriesResponse)
@@ -51,59 +43,49 @@ async def process_agent_series(
     request: AgentSeriesProcessRequest | None = None,
     container: ApiContainerDep = None,
 ) -> dict[str, object]:
-    """POST /api/agent/series/{series_id}/process — 后台启动 Agent 系列处理。"""
+    """提交 Agent 系列的视频处理 Job。"""
     payload = request or AgentSeriesProcessRequest()
     video_ids = [item.strip() for item in payload.video_ids if item.strip()]
     try:
-        _find_series(container, series_id)
-        run_id = payload.run_id or str(uuid4())
-        if video_ids:
-            progress_reporters: dict[str, ProgressReporter] = {}
-            for video_id in video_ids:
-                _find_video(container, series_id, video_id)
-                reporter = container.generation_progress_tracker.create_reporter(f"{series_id}/{video_id}")
-                reporter.update(
-                    "queued",
-                    0.0,
-                    "任务已进入队列，等待开始处理",
-                )
-                progress_reporters[video_id] = reporter
-            asyncio.create_task(
-                _run_agent_selected_video_generation(
+        series = _find_series(container, series_id)
+        target_video_ids = video_ids or [
+            video.id
+            for video in series.videos
+            if not video.processed
+        ]
+        if not target_video_ids:
+            raise ValueError("agent series has no pending videos")
+        submissions = []
+        for video_id in target_video_ids:
+            _find_video(container, series_id, video_id)
+            submissions.append(
+                _submit_agent_video_job(
                     container=container,
                     series_id=series_id,
-                    video_ids=video_ids,
+                    video_id=video_id,
                     transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
-                    progress_reporters=progress_reporters,
                     processing_mode=payload.processing_mode,
                 )
             )
-            return {
-                "series_id": series_id,
-                "run_id": run_id,
-                "scope": "videos",
-                "video_ids": video_ids,
-                "status": "scheduled",
-            }
-        asyncio.create_task(
-            _run_agent_series_generation(
-                container=container,
-                series_id=series_id,
-                run_id=run_id,
-                transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
-                processing_mode=payload.processing_mode,
-            )
-        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return {
         "series_id": series_id,
-        "run_id": run_id,
-        "scope": "series",
-        "video_ids": [],
-        "status": "scheduled",
+        "scope": "videos",
+        "video_ids": target_video_ids,
+        "status": "queued",
+        "jobs": [
+            {
+                "job_id": submitted.id,
+                "status": submitted.status,
+                "resource": {"type": "video", "id": video_id},
+                "status_url": f"/api/jobs/{submitted.id}",
+                "events_url": f"/api/jobs/{submitted.id}/events",
+            }
+            for video_id, submitted in zip(target_video_ids, submissions, strict=True)
+        ],
     }
 
 
@@ -136,169 +118,6 @@ async def resolve_bilibili_series(request: ResolveBilibiliSeriesRequest, contain
     return SeriesResponse.from_model(series)
 
 
-async def _run_agent_series_generation(
-    *,
-    container,
-    series_id: str,
-    run_id: str,
-    transcript_enhancement_enabled: bool | None,
-    processing_mode: str = "summary",
-) -> None:
-    try:
-        await _download_agent_linked_videos(
-            container=container,
-            series_id=series_id,
-            video_ids=[],
-            task_id=f"series/{series_id}",
-        )
-        arguments = {
-            "transcript_enhancement_enabled": transcript_enhancement_enabled,
-            "run_id": run_id,
-        }
-        if processing_mode != "summary":
-            arguments["processing_mode"] = processing_mode
-        await container.generate_series_summaries.run(series_id, **arguments)
-    except Exception as error:
-        container.generation_progress_tracker.create_reporter(f"series/{series_id}").failed(str(error))
-        LOGGER.exception("Background agent series generation failed: series_id=%s run_id=%s", series_id, run_id)
-
-
-async def _run_agent_selected_video_generation(
-    *,
-    container,
-    series_id: str,
-    video_ids: list[str],
-    transcript_enhancement_enabled: bool | None,
-    progress_reporters: dict[str, ProgressReporter],
-    processing_mode: str = "summary",
-) -> None:
-    for video_id in video_ids:
-        reporter = progress_reporters[video_id]
-        try:
-            if reporter.is_cancel_requested():
-                reporter.cancelled("任务已取消")
-                continue
-            downloaded = await _download_agent_linked_videos(
-                container=container,
-                series_id=series_id,
-                video_ids=[video_id],
-                progress_reporter=reporter,
-            )
-            if not downloaded or reporter.is_cancel_requested():
-                reporter.cancelled("任务已取消")
-                continue
-            arguments = {
-                "transcript_enhancement_enabled": transcript_enhancement_enabled,
-                "progress_reporter": reporter,
-            }
-            if processing_mode != "summary":
-                arguments["processing_mode"] = processing_mode
-            await container.generate_video_summary.run(series_id, video_id, **arguments)
-        except GenerateCancelledError:
-            reporter.cancelled("任务已取消")
-        except Exception as error:
-            if reporter.is_cancel_requested():
-                reporter.cancelled("任务已取消")
-                continue
-            reporter.failed(str(error))
-            LOGGER.exception(
-                "Background agent selected video generation failed: series_id=%s video_id=%s",
-                series_id,
-                video_id,
-            )
-
-
-async def _download_agent_linked_videos(
-    *,
-    container,
-    series_id: str,
-    video_ids: list[str],
-    task_id: str | None = None,
-    progress_reporter: ProgressReporter | None = None,
-) -> bool:
-    reporter = progress_reporter
-    if reporter is None and task_id is not None:
-        reporter = container.generation_progress_tracker.create_reporter(task_id)
-
-    if reporter is not None and reporter.is_cancel_requested():
-        reporter.cancelled("任务已取消")
-        return False
-
-    videos = _find_agent_download_targets(container, series_id, video_ids)
-    if not videos:
-        return True
-
-    total = len(videos)
-    for index, video in enumerate(videos, start=1):
-        if reporter is not None and reporter.is_cancel_requested():
-            reporter.cancelled("任务已取消")
-            return False
-        if reporter is not None:
-            reporter.update(
-                "download",
-                ((index - 1) / total) * 100.0,
-                f"正在下载未缓存视频 {index}/{total}: {video.title}",
-            )
-        try:
-            await _download_agent_linked_video(
-                container=container,
-                series_id=series_id,
-                video_id=video.id,
-                progress_reporter=reporter,
-            )
-        except GenerateCancelledError:
-            if reporter is not None:
-                reporter.cancelled("任务已取消")
-            return False
-        except Exception as error:
-            if reporter is not None:
-                reporter.failed(str(error))
-            raise
-
-    if reporter is not None:
-        reporter.update("download", 100.0, "未缓存视频已下载完成")
-    return True
-
-
-async def _download_agent_linked_video(
-    *,
-    container,
-    series_id: str,
-    video_id: str,
-    progress_reporter: ProgressReporter | None = None,
-) -> None:
-    submitted = _submit_linked_video_download_job(container, series_id, video_id)
-    while True:
-        if progress_reporter is not None and progress_reporter.is_cancel_requested():
-            container.job_repository.request_cancel(
-                submitted.id,
-                workspace_id=container.sql_workspace.workspace_id,
-            )
-            raise GenerateCancelledError("任务已取消")
-        snapshot = container.job_repository.get(
-            submitted.id,
-            workspace_id=container.sql_workspace.workspace_id,
-        )
-        if snapshot is None:
-            raise RuntimeError("linked video download job disappeared")
-        if snapshot.status == "succeeded":
-            return
-        if snapshot.status in {"failed", "cancelled"}:
-            detail = snapshot.failure_detail or f"linked video download {snapshot.status}"
-            raise RuntimeError(detail)
-        await asyncio.sleep(DOWNLOAD_POLL_INTERVAL_SECONDS)
-
-
-def _find_agent_download_targets(container, series_id: str, video_ids: list[str]):
-    selected_ids = set(video_ids)
-    series = _find_series(container, series_id)
-    return [
-        video
-        for video in series.videos
-        if (not selected_ids or video.id in selected_ids)
-        and not video.processed
-        and (video.is_linked or video.status == "linked")
-    ]
 
 
 def _find_series(container, series_id: str):
@@ -317,6 +136,41 @@ def _find_video(container, series_id: str, video_id: str):
         if video.id == video_id:
             return video
     raise LookupError(f"video not found '{series_id}/{video_id}'")
+
+
+def _submit_agent_video_job(
+    *,
+    container,
+    series_id: str,
+    video_id: str,
+    transcript_enhancement_enabled: bool | None,
+    processing_mode: str,
+):
+    try:
+        return container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="process_agent_video",
+            request_payload={
+                "series_id": series_id,
+                "video_id": video_id,
+                "transcript_enhancement_enabled": transcript_enhancement_enabled,
+                "processing_mode": processing_mode,
+            },
+            active_key=f"video:{video_id}:process_agent_video",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=video_id,
+            operation="process_agent_video",
+        )
+        if active is None:
+            raise
+        return active
 
 
 @router.post("/api/linked/bilibili/resolve/video", response_model=VideoCardResponse)

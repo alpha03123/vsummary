@@ -16,6 +16,10 @@ class _Repository:
     def append_progress(self, *_args, **_kwargs) -> None:
         return None
 
+    def get(self, _job_id, *, workspace_id):
+        del workspace_id
+        return SimpleNamespace(status="running")
+
     def succeed(self, claim, *, detail: str) -> None:
         self.succeeded.append(detail)
 
@@ -81,3 +85,25 @@ class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(repository.cancelled_details, ["任务已取消"])
         self.assertEqual(repository.failed, [])
+
+    async def test_custom_handler_that_publishes_content_is_not_finished_twice(self) -> None:
+        repository = _Repository()
+        repository.get = lambda _job_id, *, workspace_id: SimpleNamespace(status="succeeded")
+
+        async def handler(_claim, _reporter) -> None:
+            return None
+
+        worker = SqlJobWorker(
+            repository=repository,
+            summary_generator=SimpleNamespace(),
+            operation_handlers={"custom": handler},
+            options=WorkerOptions(worker_id="worker", operation_filter=frozenset({"custom"})),
+        )
+        claim = ClaimedJob(
+            id="job", workspace_id="workspace", resource_type="video", resource_id="video", operation="custom",
+            request_payload={}, attempt_no=1, worker_id="worker", lease_token="token", lease_expires_at=datetime.now(timezone.utc),
+        )
+
+        await worker._execute(claim)
+
+        self.assertEqual(repository.succeeded, [])

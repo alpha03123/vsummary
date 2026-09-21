@@ -36,7 +36,7 @@ class WorkerOptions:
     def local(cls) -> "WorkerOptions":
         return cls(
             worker_id=f"local-{uuid4().hex}",
-            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap", "generate_series_mindmap", "generate_video_knowledge_cards", "generate_video_ai_summary", "download_linked_video", "import_chaoxing_course", "prepare_asr_model", "prepare_rag_model", "refresh_rag_index"}),
+            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap", "generate_series_mindmap", "generate_video_knowledge_cards", "generate_video_ai_summary", "download_linked_video", "process_agent_video", "import_chaoxing_course", "prepare_asr_model", "prepare_rag_model", "refresh_rag_index"}),
             resource_class="local-cpu",
             lease_seconds=120,
             heartbeat_seconds=20,
@@ -132,6 +132,11 @@ class SqlJobWorker:
             handler = self._operation_handlers.get(claim.operation)
             if handler is not None:
                 await handler(claim, reporter)
+                snapshot = self._repository.get(claim.id, workspace_id=claim.workspace_id)
+                if snapshot is None:
+                    raise JobLeaseLostError("Job disappeared after custom handler execution.")
+                if snapshot.status in {"succeeded", "cancelled"}:
+                    return
                 self._repository.succeed(claim, detail="任务已完成")
                 return
             if claim.operation not in {"generate_summary", "generate_transcript"}:
