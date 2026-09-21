@@ -6,6 +6,7 @@ import {
   loadSeriesMindmap,
   generateVideoMindmap,
   generateVideoKnowledgeCards,
+  generateVideoAiSummary,
 } from "@src/features/workspace/model/workspaceApi";
 import { loadProviderUsage, relinkExternalVideo } from "@src/local-features/api/localWorkspaceApi";
 
@@ -176,6 +177,19 @@ describe("generateVideoKnowledgeCards", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ job_id: "job-cards", status: "queued" }) })));
 
     await expect(generateVideoKnowledgeCards("series-1", "video-1")).resolves.toEqual({ jobId: "job-cards", status: "queued" });
+  });
+});
+
+describe("generateVideoAiSummary", () => {
+  test("submits a durable AI-summary job with the selected template", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ job_id: "job-ai-summary", status: "queued" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateVideoAiSummary("series-1", "video-1", "tutorial")).resolves.toEqual({ jobId: "job-ai-summary", status: "queued" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/videos/series-1/video-1/ai-summary/generate",
+      expect.objectContaining({ body: JSON.stringify({ template: "tutorial" }) }),
+    );
   });
 });
 

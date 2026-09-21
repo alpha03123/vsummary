@@ -607,22 +607,43 @@ def get_video_ai_summary(series_id: str, video_id: str, container: ApiContainerD
     return VideoAiSummaryResponse.from_model(summary)
 
 
-@router.post("/api/videos/{series_id}/{video_id}/ai-summary/generate", response_model=VideoAiSummaryResponse)
+@router.post("/api/videos/{series_id}/{video_id}/ai-summary/generate")
 def generate_video_ai_summary(
     series_id: str,
     video_id: str,
-    request: GenerateVideoAiSummaryRequest,
     container: ApiContainerDep,
-) -> VideoAiSummaryResponse:
+    request: GenerateVideoAiSummaryRequest = Body(default_factory=GenerateVideoAiSummaryRequest),
+) -> JSONResponse:
     try:
-        summary = container.generate_video_ai_summary.run(series_id, video_id, template=request.template)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    if summary is None:
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return VideoAiSummaryResponse.from_model(summary)
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="generate_video_ai_summary",
+            request_payload={"series_id": series_id, "video_id": video_id, "template": request.template},
+            active_key=f"video:{video_id}:generate_video_ai_summary",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=video_id,
+            operation="generate_video_ai_summary",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.put("/api/videos/{series_id}/{video_id}/ai-summary", response_model=VideoAiSummaryResponse)

@@ -112,13 +112,15 @@ export async function loadVideoAiSummary(seriesId, videoId) {
 }
 
 export async function generateVideoAiSummary(seriesId, videoId, template = "general") {
-  return toWorkspaceAiSummary(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ template }),
-    }),
-  );
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template }),
+  });
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("AI 概括任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function updateVideoAiSummary(seriesId, videoId, summary) {

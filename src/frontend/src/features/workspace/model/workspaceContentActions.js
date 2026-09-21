@@ -702,10 +702,21 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     if (!state.selectedSeriesId || !state.selectedVideoId) return;
     dispatch({ type: "ai_summary_generation_started" });
     try {
-      const summary = await generateVideoAiSummary(state.selectedSeriesId, state.selectedVideoId, template);
-      dispatch({ type: "ai_summary_loaded", summary });
-      const tools = await loadVideoTools(state.selectedSeriesId, state.selectedVideoId);
-      dispatch({ type: "tools_loaded", tools });
+      const seriesId = state.selectedSeriesId;
+      const videoId = state.selectedVideoId;
+      const submitted = await generateVideoAiSummary(seriesId, videoId, template);
+      const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+        if (snapshot.status === "completed") {
+          unsubscribe();
+          const [summary, tools] = await Promise.all([loadVideoAiSummary(seriesId, videoId), loadVideoTools(seriesId, videoId)]);
+          dispatch({ type: "ai_summary_loaded", summary });
+          dispatch({ type: "tools_loaded", tools });
+        }
+        if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+          unsubscribe();
+          dispatch({ type: "ai_summary_generation_failed", message: snapshot.error || snapshot.detail || "AI 概括生成失败" });
+        }
+      });
     } catch (error) {
       dispatch({ type: "ai_summary_generation_failed", message: error instanceof Error ? error.message : "AI 概括生成失败" });
     }

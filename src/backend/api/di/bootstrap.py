@@ -332,7 +332,21 @@ def build_api_container(
         if cards is None:
             raise LookupError("Summary does not exist; cannot generate knowledge cards.")
 
+    async def run_video_ai_summary_job(claim, reporter) -> None:
+        template = claim.request_payload.get("template", "general")
+        if not isinstance(template, str) or not template.strip():
+            raise ValueError("template must be a non-empty string.")
+        summary = await asyncio.to_thread(
+            ai_summary_use_case.run,
+            str(claim.request_payload["series_id"]),
+            claim.resource_id,
+            template=template,
+        )
+        if summary is None:
+            raise LookupError("Video source does not exist; cannot generate an AI summary.")
+
     operation_handlers["generate_video_knowledge_cards"] = run_video_knowledge_cards_job
+    operation_handlers["generate_video_ai_summary"] = run_video_ai_summary_job
     ai_summary_use_case = GenerateVideoAiSummary(
         workspace,
         resolved_note_generator,
