@@ -137,7 +137,14 @@ class SqlVideoWorkspace:
                 ORDER BY a.created_at DESC LIMIT 1"""), {"video": video_id, "kind": kind, "workspace": self._workspace_id, "suffix": f"%/{filename}"}).mappings().first()
         if row is None:
             return None
-        return self._blobs.materialize(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]), task_dir=self._cache_root / "artifacts" / video_id / kind, filename=filename)
+        try:
+            return self._blobs.materialize(
+                BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]),
+                task_dir=self._cache_root / "artifacts" / video_id / kind,
+                filename=filename,
+            )
+        except BlobStoreError:
+            return None
 
     def list_artifacts(self, *, video_id: str, kind: str) -> list[Path]:
         with self._sessions() as session:
