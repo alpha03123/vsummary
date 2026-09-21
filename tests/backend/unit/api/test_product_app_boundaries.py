@@ -37,4 +37,4 @@ class ProductAppBoundaryTests(unittest.TestCase):
         self.assertIn("/api/import/local/select", schema["paths"])
         self.assertIn("/api/linked/bilibili/cookie/init", schema["paths"])
         self.assertIn("/api/application-update", schema["paths"])
-        self.assertIn("/mcp", {route.path for route in client.app.routes})
+        self.assertIn("/mcp", {getattr(route, "path", None) for route in client.app.routes})
