@@ -741,23 +741,20 @@ export async function renameVideoSource(seriesId, videoId, title) {
 }
 
 export async function startVideoDownload(seriesId, videoId) {
-  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
     method: "POST",
   });
+  const jobId = typeof payload?.job_id === "string" ? payload.job_id.trim() : "";
+  if (!jobId) {
+    throw new Error("视频下载任务未返回 job_id。");
+  }
+  return { jobId, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function cancelVideoDownload(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/cancel`, {
     method: "POST",
   });
-}
-
-export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
-  return subscribeProgress(
-    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/progress`,
-    listener,
-    "视频下载进度连接已中断",
-  );
 }
 
 export async function loadSeriesMindmap(seriesId) {

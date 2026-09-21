@@ -24,21 +24,11 @@ from backend.video_summary.library.ports import (
     BilibiliUrlParser,
     LinkedSeriesResolverWorkspace,
     LinkedSeriesStore,
-    LinkedVideoDownloadStarter,
+    LinkedVideoDownloadWorkspace,
+    LinkedVideoDownloader,
     LinkedVideoResolver,
     WorkspaceIndexInvalidator,
 )
-
-
-@dataclass(frozen=True)
-class StartLinkedVideoDownloadResult:
-    """下载启动用例的返回值包装。
-
-    Attributes:
-        task_id: 用于前端 SSE 订阅进度的下载任务 key。
-    """
-
-    task_id: str
 
 
 @dataclass(frozen=True)
@@ -263,40 +253,25 @@ class ResolveBilibiliVideo:
         return _to_video_card_dto(video)
 
 
-class StartLinkedVideoDownload:
-    """为链接型系列中的某个视频启动后台下载任务。
+class DownloadLinkedVideo:
+    """在持久 Job 的 Worker 租约内下载并提交外链视频。"""
 
-    业务场景：用户在链接型系列下点击"下载"按钮时，前端需要拿到一个 task_id
-    以便通过 SSE 订阅进度；本用例只做"启动"动作，下载本身在后台异步进行。
-    """
-
-    def __init__(self, workspace: LinkedSeriesStore, starter: LinkedVideoDownloadStarter) -> None:
-        """注入链接系列存储与下载启动器。
-
-        Args:
-            workspace: 用于读取链接系列元数据。
-            starter: 真正负责把下载任务投递到后台执行的下游端口。
-        """
+    def __init__(self, workspace: LinkedVideoDownloadWorkspace, downloader: LinkedVideoDownloader) -> None:
         self._workspace = workspace
-        self._starter = starter
+        self._downloader = downloader
 
-    def run(self, *, series_id: str, video_id: str) -> StartLinkedVideoDownloadResult:
-        """为指定视频启动下载并返回 task_id。
-
-        Args:
-            series_id: 链接型系列 ID。
-            video_id: 系列内某个视频的 ID。
-
-        Returns:
-            包含 `task_id` 的结果对象；前端凭此 key 订阅进度。
-
-        Raises:
-            LookupError: 系列或视频在链接系列中不存在。
-        """
+    def run(self, *, series_id: str, video_id: str, reporter) -> None:
         video = self._workspace.get_linked_video_for_download(series_id, video_id)
         if video is None:
             raise LookupError(f"linked video not found: {series_id}/{video_id}")
-        return StartLinkedVideoDownloadResult(task_id=self._starter.start(series_id=series_id, video=video))
+        reporter.raise_if_cancelled()
+        source_path = self._downloader.download(series_id=series_id, video=video, reporter=reporter)
+        try:
+            reporter.raise_if_cancelled()
+            reporter.update("persist", 99.0, "正在保存下载的视频")
+            self._workspace.attach_downloaded_file(series_id, video_id, source_path)
+        finally:
+            source_path.unlink(missing_ok=True)
 
 
 def _to_series_dto(linked_series: LinkedSeries) -> LibrarySeriesDTO:

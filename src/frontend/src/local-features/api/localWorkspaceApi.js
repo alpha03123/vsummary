@@ -154,10 +154,11 @@ export async function loadChaoxingCourses() {
 }
 export async function importChaoxingCourse(courseKey) {
   const payload = await fetchJson("/api/linked/chaoxing/import/course", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ course_key: courseKey }) });
-  return { taskId: typeof payload.task_id === "string" ? payload.task_id : "", seriesId: typeof payload.series_id === "string" ? payload.series_id : "" };
+  const jobId = typeof payload.job_id === "string" ? payload.job_id : "";
+  if (!jobId) throw new Error("超星导入任务未返回 job_id。");
+  return { jobId, seriesId: typeof payload.series_id === "string" ? payload.series_id : "" };
 }
-export const cancelChaoxingImport = (taskId) => fetchJson(`/api/linked/chaoxing/import/course/${encodeURIComponent(taskId)}/cancel`, { method: "POST" });
-export const subscribeChaoxingImportProgress = (taskId, listener) => subscribeProgress(`/api/linked/chaoxing/import/course/${encodeURIComponent(taskId)}/progress`, listener, "超星课程导入进度连接已中断");
+export const cancelChaoxingImport = (jobId) => fetchJson(`/api/linked/chaoxing/import/course/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
 
 function toWorkspaceSettings(payload) {
   return { theme: payload.theme, showTakeaways: payload.show_takeaways, transcriptEnhancementEnabled: payload.transcript_enhancement_enabled, asrProvider: payload.asr_provider, asrModelQuality: payload.asr_model_quality, transcriptionMode: payload.transcription_mode, asrCloudModel: payload.asr_cloud_model, asrBaseUrl: payload.asr_base_url, hasAsrApiKey: payload.has_asr_api_key, asrApiKeyMasked: payload.asr_api_key_masked, asrApiKey: "", ragEmbeddingDevice: payload.rag_embedding_device, ragMaxHits: payload.rag_max_hits, ragRerankEnabled: payload.rag_rerank_enabled, webSearchEnabled: payload.web_search_enabled, windowTokens: payload.window_tokens, answerDetailLevel: payload.answer_detail_level, reasoningEffort: payload.reasoning_effort, talkCustomPrompt: payload.talk_custom_prompt, videoGenerationConcurrency: payload.video_generation_concurrency, chapterVisualMode: payload.chapter_visual_mode, maxVisualInputImages: payload.max_visual_input_images, noteVisualMode: payload.note_visual_mode, aiSummaryMultimodalEnabled: payload.ai_summary_multimodal_enabled === true, mindmapVisualInput: payload.mindmap_visual_input, cardsVisualInput: payload.cards_visual_input, noteMaxImages: payload.note_max_images, autoGenerateArtifacts: Array.isArray(payload.auto_generate_artifacts) ? payload.auto_generate_artifacts : [], chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds, chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds, runtimeCapabilities: payload.runtime_capabilities };

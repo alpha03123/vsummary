@@ -10,12 +10,11 @@ import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 
 from backend.api.di.container import ApiContainerDep
 from backend.api.schemas.contracts import AgentSeriesCreateRequest, AgentSeriesProcessRequest
 from backend.api.schemas.responses import (
-    LinkedVideoDownloadResponse,
     ResolveBilibiliSeriesRequest,
     ResolveBilibiliVideoRequest,
     ResolveLinkedSeriesRequest,
@@ -23,19 +22,17 @@ from backend.api.schemas.responses import (
     SeriesResponse,
     VideoCardResponse,
 )
-from backend.api.schemas.sse import stream_progress_events
 from backend.bilibili.ytdlp_bilibili import (
     BILIBILI_COOKIE_REQUIRED_MESSAGE,
-    build_video_download_task_id,
 )
 from backend.external.ytdlp import ExternalVideoResolutionError
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
 DOWNLOAD_POLL_INTERVAL_SECONDS = 0.5
-DOWNLOAD_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 
 @router.post("/api/agent/series", response_model=SeriesResponse)
@@ -270,17 +267,24 @@ async def _download_agent_linked_video(
     video_id: str,
     progress_reporter: ProgressReporter | None = None,
 ) -> None:
-    result = container.start_linked_video_download.run(series_id=series_id, video_id=video_id)
-    task_id = result.task_id
+    submitted = _submit_linked_video_download_job(container, series_id, video_id)
     while True:
         if progress_reporter is not None and progress_reporter.is_cancel_requested():
-            container.video_download_progress_tracker.request_cancel(task_id)
+            container.job_repository.request_cancel(
+                submitted.id,
+                workspace_id=container.sql_workspace.workspace_id,
+            )
             raise GenerateCancelledError("任务已取消")
-        snapshot = container.video_download_progress_tracker.get_snapshot(task_id)
-        if snapshot.status == "completed":
+        snapshot = container.job_repository.get(
+            submitted.id,
+            workspace_id=container.sql_workspace.workspace_id,
+        )
+        if snapshot is None:
+            raise RuntimeError("linked video download job disappeared")
+        if snapshot.status == "succeeded":
             return
-        if snapshot.status in DOWNLOAD_TERMINAL_STATUSES:
-            detail = snapshot.error or snapshot.detail or f"linked video download {snapshot.status}"
+        if snapshot.status in {"failed", "cancelled"}:
+            detail = snapshot.failure_detail or f"linked video download {snapshot.status}"
             raise RuntimeError(detail)
         await asyncio.sleep(DOWNLOAD_POLL_INTERVAL_SECONDS)
 
@@ -407,29 +411,25 @@ def _linked_resolution_http_error(provider: str, error: Exception) -> HTTPExcept
     return HTTPException(status_code=502, detail=message)
 
 
-@router.post("/api/videos/{series_id}/{video_id}/download", response_model=LinkedVideoDownloadResponse)
-async def start_video_download(series_id: str, video_id: str, container: ApiContainerDep) -> LinkedVideoDownloadResponse:
-    """POST /api/videos/{series_id}/{video_id}/download — 启动链接型视频的后台下载。
-
-    立即返回任务 ID，实际下载在后台执行；
-    前端应通过对应的 SSE 进度端点订阅下载进度。
-
-    Args:
-        series_id: 系列 ID。
-        video_id: 视频 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        LinkedVideoDownloadResponse，含 task_id。
-
-    Raises:
-        HTTPException(404): 视频不存在。
-    """
+@router.post("/api/videos/{series_id}/{video_id}/download")
+async def start_video_download(series_id: str, video_id: str, container: ApiContainerDep) -> JSONResponse:
+    """提交外链下载的持久 Job。"""
     try:
-        result = container.start_linked_video_download.run(series_id=series_id, video_id=video_id)
+        submitted = _submit_linked_video_download_job(container, series_id, video_id)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    return LinkedVideoDownloadResponse.started(result.task_id)
+    except ControlPlaneConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.post("/api/videos/{series_id}/{video_id}/download/cancel")
@@ -444,42 +444,41 @@ async def cancel_video_download(series_id: str, video_id: str, container: ApiCon
     Returns:
         {"status": "cancelling"}
     """
-    task_id = _download_task_id(container, series_id, video_id)
-    container.video_download_progress_tracker.request_cancel(task_id)
-    return {"status": "cancelling"}
-
-
-@router.get("/api/videos/{series_id}/{video_id}/download/progress")
-async def stream_video_download_progress(series_id: str, video_id: str, container: ApiContainerDep) -> StreamingResponse:
-    """GET /api/videos/{series_id}/{video_id}/download/progress — 订阅视频下载进度流（SSE）。
-
-    以 SSE 推送下载状态变化、进度百分比与详情；
-    到达 completed、failed 或 cancelled 终端状态后自动关闭流。
-
-    Args:
-        series_id: 系列 ID。
-        video_id: 视频 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        StreamingResponse（`text/event-stream`）。
-    """
-    task_id = _download_task_id(container, series_id, video_id)
-    return StreamingResponse(
-        stream_progress_events(
-            tracker=container.video_download_progress_tracker,
-            task_id=task_id,
-            terminal_statuses={"completed", "failed", "cancelled"},
-        ),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    active = container.job_repository.active_for_resource(
+        workspace_id=container.sql_workspace.workspace_id,
+        resource_id=video_id,
+        operation="download_linked_video",
     )
+    if active is None:
+        raise HTTPException(status_code=404, detail="no active download job found")
+    snapshot = container.job_repository.request_cancel(
+        active.id,
+        workspace_id=container.sql_workspace.workspace_id,
+    )
+    return {"status": snapshot.status if snapshot is not None else "cancelling", "job_id": active.id}
 
 
-def _download_task_id(container, series_id: str, video_id: str) -> str:
-    """解析内部视频 ID，确保启动、取消和 SSE 使用同一个下载任务 ID。"""
-
-    workspace = getattr(container, "linked_series_workspace", None)
-    resolver = getattr(workspace, "get_linked_video_for_download", None)
-    linked_video = resolver(series_id, video_id) if callable(resolver) else None
-    return build_video_download_task_id(series_id, linked_video.video_id if linked_video is not None else video_id)
+def _submit_linked_video_download_job(container, series_id: str, video_id: str):
+    workspace = container.linked_series_workspace
+    if workspace.get_linked_video_for_download(series_id, video_id) is None:
+        raise LookupError(f"linked video not found: {series_id}/{video_id}")
+    try:
+        return container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="download_linked_video",
+            request_payload={"series_id": series_id, "video_id": video_id},
+            active_key=f"video:{video_id}:download_linked_video",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=video_id,
+            operation="download_linked_video",
+        )
+        if active is None:
+            raise
+        return active

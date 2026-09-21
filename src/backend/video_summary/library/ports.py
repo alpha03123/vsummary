@@ -443,15 +443,18 @@ class BilibiliUrlParser(Protocol):
         """把用户输入的 URL 归一化为可被下游解析的标准形态。"""
 
 
-class LinkedVideoDownloadStarter(Protocol):
-    """链接型视频下载启动的端口。
+class LinkedVideoDownloader(Protocol):
+    """在 Worker 任务内下载一个外链视频到临时文件。"""
 
-    启动一个后台下载任务并返回 `download_key`（用于后续查询进度）；
-    不等待任务完成，调用方应通过 SSE 订阅进度。
-    """
+    def download(self, *, series_id: str, video: LinkedVideo, reporter: ProgressReporter) -> Path:
+        """执行一次下载并返回绝对临时文件路径。"""
 
-    def start(self, *, series_id: str, video: LinkedVideo) -> str:
-        """为指定的链接视频启动下载，返回可被前端订阅的任务 key。"""
+
+class LinkedVideoDownloadWorkspace(LinkedSeriesStore, Protocol):
+    """持久外链下载所需的工作区能力。"""
+
+    def attach_downloaded_file(self, series_id: str, video_id: str, source_path: Path) -> None:
+        """把下载文件提交至 BlobStore 并关联库视频。"""
 
 
 class WorkspaceIndexInvalidator(Protocol):

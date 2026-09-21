@@ -408,11 +408,11 @@ describe("workspaceContentActions series cancellation", () => {
 
   it("skips failed linked video downloads and continues the series run", async () => {
     vi.resetModules();
-    const startVideoDownload = vi.fn(() => Promise.resolve({ taskId: "download-task" }));
-    const subscribeVideoDownloadProgress = vi.fn((seriesId, videoId, listener) => {
+    const startVideoDownload = vi.fn((seriesId, videoId) => Promise.resolve({ jobId: `download-${videoId}` }));
+    const subscribeDurableJobProgress = vi.fn((jobId, listener) => {
       queueMicrotask(() => {
         listener(
-          videoId === "linked-1"
+          jobId === "download-linked-1"
             ? { status: "failed", error: "yt-dlp 退出码 1：HTTP Error 403" }
             : { status: "completed", progress: 100 },
         );
@@ -443,7 +443,7 @@ describe("workspaceContentActions series cancellation", () => {
       generateSeriesSummaries,
       loadWorkspaceLibrary,
       startVideoDownload,
-      subscribeVideoDownloadProgress,
+      subscribeDurableJobProgress,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -554,22 +554,22 @@ describe("workspaceContentActions series cancellation", () => {
     vi.resetModules();
     let progressListener;
     const importChaoxingCourse = vi.fn(() => Promise.resolve({
-      taskId: "chaoxing-import-1",
+      jobId: "chaoxing-import-1",
       seriesId: "chaoxing-course-1",
     }));
     const cancelChaoxingImport = vi.fn(() => Promise.resolve({ status: "cancelling" }));
-    const subscribeChaoxingImportProgress = vi.fn((taskId, listener) => {
+    const subscribeDurableJobProgress = vi.fn((jobId, listener) => {
       progressListener = listener;
       return vi.fn();
     });
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
+      subscribeDurableJobProgress,
     }));
     vi.doMock("@src/local-features/api/localWorkspaceApi", () => ({
       ...createWorkspaceApiMock(),
       cancelChaoxingImport,
       importChaoxingCourse,
-      subscribeChaoxingImportProgress,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -588,7 +588,7 @@ describe("workspaceContentActions series cancellation", () => {
 
     await expect(importTask).rejects.toThrow("超星课程导入已取消");
     expect(onTaskStarted).toHaveBeenCalledWith({
-      taskId: "chaoxing-import-1",
+      jobId: "chaoxing-import-1",
       seriesId: "chaoxing-course-1",
     });
     expect(cancelChaoxingImport).toHaveBeenCalledWith("chaoxing-import-1");
@@ -622,7 +622,7 @@ function createWorkspaceApiMock() {
     relinkExternalVideo: vi.fn(),
     startVideoDownload: vi.fn(),
     subscribeChaoxingImportProgress: vi.fn(),
-    subscribeVideoDownloadProgress: vi.fn(),
+    subscribeDurableJobProgress: vi.fn(),
     updateVideoNote: vi.fn(),
   };
 }

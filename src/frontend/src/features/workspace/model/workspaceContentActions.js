@@ -28,7 +28,6 @@ import {
   resolveLinkedVideo,
   startVideoDownload,
   subscribeDurableJobProgress,
-  subscribeVideoDownloadProgress,
   updateVideoNote,
   updateVideoAiSummary,
   updateVideoSummary,
@@ -464,7 +463,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
 
   async function downloadLinkedVideo(seriesId, videoId, options = {}) {
     dispatch({ type: "video_download_started", seriesId, videoId });
-    await startVideoDownload(seriesId, videoId);
+    const submitted = await startVideoDownload(seriesId, videoId);
     await new Promise((resolve, reject) => {
       const cancelTimer = options.cancelCheck
         ? window.setInterval(() => {
@@ -482,7 +481,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
           window.clearInterval(cancelTimer);
         }
       }
-      unsubscribe = subscribeVideoDownloadProgress(seriesId, videoId, async (snapshot) => {
+      unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
         if (snapshot.status === "running" || snapshot.status === "completed") {
           dispatch({ type: "video_download_progress_updated", seriesId, videoId, progress: snapshot.progress });
         }
@@ -994,13 +993,13 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
   async function onImportChaoxingCourse(courseKey, onProgress = null, options = {}) {
     try {
       const task = await localWorkspaceApi.importChaoxingCourse(courseKey);
-      if (!task.taskId) {
-        throw new Error("超星导入任务未返回 task_id");
+      if (!task.jobId) {
+        throw new Error("超星导入任务未返回 job_id");
       }
       options.onTaskStarted?.(task);
       return await new Promise((resolve, reject) => {
         let unsubscribe = null;
-        unsubscribe = localWorkspaceApi.subscribeChaoxingImportProgress(task.taskId, async (snapshot) => {
+        unsubscribe = subscribeDurableJobProgress(task.jobId, async (snapshot) => {
           onProgress?.(snapshot);
           if (snapshot.status === "completed") {
             unsubscribe?.();
@@ -1024,12 +1023,12 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
-  async function onCancelChaoxingImport(taskId) {
-    if (!taskId) {
+  async function onCancelChaoxingImport(jobId) {
+    if (!jobId) {
       return;
     }
     try {
-      await localWorkspaceApi.cancelChaoxingImport(taskId);
+      await localWorkspaceApi.cancelChaoxingImport(jobId);
     } catch (error) {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "取消超星课程导入失败" });
       throw error;

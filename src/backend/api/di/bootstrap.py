@@ -11,20 +11,16 @@ from backend.core.quota import QuotaGuard, UsageMeter
 from backend.agent import AgentContextBudgetService
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
+from backend.api.adapters.linked_video_downloader import ProviderLinkedVideoDownloader
 from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator, _WorkspaceIndexRefresher
 from backend.bilibili import (
-    BackgroundBilibiliDownloadStarter,
     BilibiliDownloader,
-    BilibiliLinkedVideoDownloadStarter,
-    CompositeLinkedVideoDownloadStarter,
     DrissionBilibiliCookieInitializer,
     YtDlpBilibiliResolver,
 )
-from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient, ChaoxingLinkedVideoDownloadStarter
+from backend.chaoxing import ChaoxingCourseImporter, ChaoxingDownloaderClient
 from backend.external import (
-    BackgroundYtDlpDownloadStarter,
     DrissionCookieInitializer,
-    YtDlpLinkedVideoDownloadStarter,
     YtDlpPlatform,
     YtDlpPlatformDownloader,
     YtDlpPlatformResolver,
@@ -87,9 +83,9 @@ from backend.video_summary.library.usecases import (
     ListVideoLibrary,
     ResolveBilibiliSeries,
     ResolveBilibiliVideo,
+    DownloadLinkedVideo,
     ResolveLinkedSeries,
     ResolveLinkedVideo,
-    StartLinkedVideoDownload,
     CreateVideoNote,
     DeleteVideoNote,
     UpdateVideoNote,
@@ -151,7 +147,6 @@ class ApiContainer:
     resolve_linked_video: ResolveLinkedVideo
     bilibili_cookie_initializer: DrissionBilibiliCookieInitializer
     external_cookie_initializers: dict[str, DrissionCookieInitializer]
-    start_linked_video_download: StartLinkedVideoDownload
     generation_progress_tracker: InMemoryProgressTracker
     mindmap_progress_tracker: InMemoryProgressTracker
     video_download_progress_tracker: InMemoryProgressTracker
@@ -434,45 +429,45 @@ def build_api_container(
         platform.provider: DrissionCookieInitializer(root_dir=root_dir, platform=platform)
         for platform in external_platforms
     }
-    download_sink = getattr(workspace, "attach_downloaded_file", None)
-    if not callable(download_sink):
-        raise RuntimeError("SQL workspace must provide an external-download BlobStore sink.")
-    bilibili_download_starter = BackgroundBilibiliDownloadStarter(
-        root_dir=root_dir,
-        downloader=BilibiliDownloader(),
-        progress_tracker=video_download_progress_tracker,
-        on_downloaded=download_sink,
-    )
-    external_download_starters = {
-        platform.provider: YtDlpLinkedVideoDownloadStarter(
-            platform,
-            BackgroundYtDlpDownloadStarter(
-                root_dir=root_dir,
-                downloader=YtDlpPlatformDownloader(platform),
-                progress_tracker=video_download_progress_tracker,
-                on_downloaded=download_sink,
-            ),
-        )
-        for platform in external_platforms
-    }
     chaoxing_client = ChaoxingDownloaderClient(
         state_dir=root_dir / "data" / "chaoxing",
         request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
         init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
     )
     chaoxing_importer = ChaoxingCourseImporter(client=chaoxing_client)
-    linked_download_starter = CompositeLinkedVideoDownloadStarter(
-        {
-            "bilibili": BilibiliLinkedVideoDownloadStarter(bilibili_download_starter),
-            "chaoxing": ChaoxingLinkedVideoDownloadStarter(
-                root_dir=root_dir,
-                client=chaoxing_client,
-                progress_tracker=video_download_progress_tracker,
-                on_downloaded=download_sink,
-            ),
-            **external_download_starters,
-        }
+    durable_linked_downloader = ProviderLinkedVideoDownloader(
+        download_root=root_dir / "data" / "downloads",
+        bilibili_downloader=BilibiliDownloader(),
+        platform_downloaders={platform.provider: YtDlpPlatformDownloader(platform) for platform in external_platforms},
+        chaoxing_client=chaoxing_client,
     )
+
+    async def run_linked_video_download_job(claim, reporter) -> None:
+        payload = claim.request_payload
+        await asyncio.to_thread(
+            DownloadLinkedVideo(workspace, durable_linked_downloader).run,
+            series_id=str(payload["series_id"]),
+            video_id=claim.resource_id,
+            reporter=reporter,
+        )
+
+    operation_handlers["download_linked_video"] = run_linked_video_download_job
+
+    async def run_chaoxing_course_import_job(claim, reporter) -> None:
+        course_key = claim.request_payload.get("course_key")
+        if not isinstance(course_key, str) or not course_key.strip():
+            raise ValueError("course_key must be a non-empty string.")
+        linked_series = await asyncio.to_thread(
+            chaoxing_importer.import_course,
+            course_key,
+            progress=reporter,
+        )
+        reporter.raise_if_cancelled()
+        reporter.update("save", 95.0, "正在保存导入结果")
+        workspace.save_linked_series(linked_series)
+        workspace_index_invalidator.invalidate()
+
+    operation_handlers["import_chaoxing_course"] = run_chaoxing_course_import_job
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,
@@ -537,7 +532,6 @@ def build_api_container(
         resolve_linked_video=ResolveLinkedVideo(workspace, external_resolvers, workspace_index_invalidator),
         bilibili_cookie_initializer=bilibili_cookie_initializer,
         external_cookie_initializers=external_cookie_initializers,
-        start_linked_video_download=StartLinkedVideoDownload(workspace, linked_download_starter),
         generation_progress_tracker=progress_tracker,
         mindmap_progress_tracker=mindmap_progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,

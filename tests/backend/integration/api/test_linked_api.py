@@ -225,24 +225,26 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"], BILIBILI_COOKIE_REQUIRED_MESSAGE)
 
-    def test_start_linked_video_download_returns_task_id(self) -> None:
-        client = TestClient(create_app(_build_container()))
+    def test_start_linked_video_download_submits_durable_job(self) -> None:
+        container = _build_container()
+        client = TestClient(create_app(container))
 
         response = client.post("/api/videos/series-1/BV1xx411c7mD/download")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "started", "task_id": "download/series-1/BV1xx411c7mD"})
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-1")
+        self.assertEqual(response.json()["status"], "queued")
+        self.assertEqual(container.download_calls, [("series-1", "BV1xx411c7mD")])
 
-    def test_cancel_linked_video_download_marks_task_cancelling(self) -> None:
+    def test_cancel_linked_video_download_requests_durable_job_cancellation(self) -> None:
         container = _build_container()
         client = TestClient(create_app(container))
+        client.post("/api/videos/series-1/BV1xx411c7mD/download")
 
         response = client.post("/api/videos/series-1/BV1xx411c7mD/download/cancel")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "cancelling"})
-        snapshot = container.video_download_progress_tracker.get_snapshot("download/series-1/BV1xx411c7mD")
-        self.assertEqual(snapshot.status, "cancelling")
+        self.assertEqual(response.json(), {"status": "cancelled", "job_id": "job-1"})
 
     def test_cancel_series_generation_marks_active_video_and_linked_download_tasks(self) -> None:
         container = _build_container(
@@ -421,13 +423,11 @@ def _build_container(
     bilibili_cookie_initializer = _FakeBilibiliCookieInitializer()
     create_agent_series = _FakeCreateAgentSeries()
 
-    def start_download(series_id, video_id):
-        task_id = f"download/{series_id}/{video_id}"
-        container.download_calls.append((series_id, video_id))
-        video_download_progress_tracker.create_reporter(task_id).completed("下载完成")
-        return SimpleNamespace(task_id=task_id)
-
     from backend.api.routes.linked import _run_agent_series_generation
+
+    download_calls: list[tuple[str, str]] = []
+    linked_workspace = _FakeLinkedWorkspace(video)
+    job_repository = _FakeJobRepository(download_calls)
 
     container = SimpleNamespace(
         root_dir=None,
@@ -447,14 +447,14 @@ def _build_container(
         resolve_bilibili_video=SimpleNamespace(run=resolve_video),
         create_agent_series=create_agent_series,
         bilibili_cookie_initializer=bilibili_cookie_initializer,
-        start_linked_video_download=SimpleNamespace(
-            run=start_download,
-        ),
         generate_series_summaries=_FakeGenerateSeriesSummaries(active_video_ids),
         generate_video_summary=_FakeGenerateVideoSummary(),
         generation_progress_tracker=generation_progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
-        download_calls=[],
+        linked_series_workspace=linked_workspace,
+        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
+        job_repository=job_repository,
+        download_calls=download_calls,
         run_agent_series_generation=_run_agent_series_generation,
     )
     return container
@@ -527,6 +527,47 @@ class _FakeGenerateVideoSummary:
     async def run(self, series_id: str, video_id: str, *, transcript_enhancement_enabled=None, progress_reporter=None):
         del series_id, video_id, transcript_enhancement_enabled, progress_reporter
         await asyncio.sleep(0)
+
+
+class _FakeLinkedWorkspace:
+    def __init__(self, video: LibraryVideoCardDTO) -> None:
+        self._video = video
+
+    def get_linked_video_for_download(self, series_id: str, video_id: str):
+        if series_id == "series-1" and video_id == self._video.id:
+            return object()
+        return None
+
+
+class _FakeJobRepository:
+    def __init__(self, download_calls: list[tuple[str, str]]) -> None:
+        self._download_calls = download_calls
+        self._jobs: dict[str, SimpleNamespace] = {}
+
+    def submit(self, *, request_payload, **_kwargs):
+        job_id = f"job-{len(self._jobs) + 1}"
+        self._download_calls.append((request_payload["series_id"], request_payload["video_id"]))
+        self._jobs[job_id] = SimpleNamespace(id=job_id, status="queued", failure_detail=None)
+        return SimpleNamespace(id=job_id, status="queued")
+
+    def active_for_resource(self, *, resource_id, operation, **_kwargs):
+        if operation != "download_linked_video":
+            return None
+        for snapshot in reversed(list(self._jobs.values())):
+            if snapshot.status != "cancelled":
+                return snapshot
+        return None
+
+    def request_cancel(self, job_id, **_kwargs):
+        snapshot = self._jobs[job_id]
+        snapshot.status = "cancelled"
+        return snapshot
+
+    def get(self, job_id, **_kwargs):
+        snapshot = self._jobs.get(job_id)
+        if snapshot is None or snapshot.status == "cancelled":
+            return snapshot
+        return SimpleNamespace(id=snapshot.id, status="succeeded", failure_detail=None)
 
 
 if __name__ == "__main__":
