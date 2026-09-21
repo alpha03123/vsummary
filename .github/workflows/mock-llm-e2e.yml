@@ -1,0 +1,76 @@
+name: Mock LLM E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main, feature/**, fix/**]
+
+jobs:
+  mock-llm-e2e:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install runtime dependencies
+        shell: pwsh
+        run: |
+          choco install mysql --no-progress --yes
+          choco install ffmpeg --no-progress --yes
+          python -m pip install -r requirements.cpu.txt -r requirements.dev.txt
+      - name: Restore RAG embedding cache
+        uses: actions/cache@v4
+        with:
+          path: data/models/fastembed
+          key: rag-embedding-${{ runner.os }}-bge-small-zh-v1.5-v1
+      - name: Configure CI runtime
+        shell: pwsh
+        run: |
+          @(
+            'OPENAI_API_KEY=ci-test-key'
+            'OPENAI_PROVIDER=openai_compatible'
+            'OPENAI_BASE_URL=http://127.0.0.1:8899'
+            'OPENAI_MODEL=ci-e2e-model'
+          ) | Set-Content .env
+          Copy-Item config/settings.toml.example config/settings.toml
+          (Get-Content config/settings.toml) -replace 'device = "gpu"', 'device = "cpu"' -replace 'chapter_visual_mode = "screenshots"', 'chapter_visual_mode = "off"' -replace 'note_visual_mode = "screenshots"', 'note_visual_mode = "off"' | Set-Content config/settings.toml
+          $mysql = Get-ChildItem 'C:\Program Files\MySQL' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if ($null -eq $mysql) { throw 'MySQL installation was not found.' }
+          "VSUMMARY_MYSQL_HOME=$($mysql.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Start strict Mock Provider
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force temp | Out-Null
+          Start-Process python -ArgumentList 'tools/mock_openai_provider.py --port 8899' -RedirectStandardOutput temp/mock-provider.out.log -RedirectStandardError temp/mock-provider.err.log
+      - name: Start backend
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force temp/ci-mysql | Out-Null
+          $env:PYTHONPATH = 'src;.'
+          Start-Process python -ArgumentList '-m backend.local.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home', $env:VSUMMARY_MYSQL_HOME, '--managed-data-root', (Resolve-Path temp/ci-mysql), '--skip-legacy-import' -RedirectStandardOutput temp/backend.out.log -RedirectStandardError temp/backend.err.log
+          $deadline = (Get-Date).AddMinutes(3)
+          while ((Get-Date) -lt $deadline) {
+            try { if ((Invoke-WebRequest http://127.0.0.1:8001/api/health -UseBasicParsing).StatusCode -eq 200) { exit 0 } } catch {}
+            Start-Sleep -Seconds 2
+          }
+          throw 'Backend did not become healthy.'
+      - name: Build fixture and run E2E
+        shell: pwsh
+        run: |
+          ./tools/create_mock_llm_e2e_media.ps1 -OutputPath temp/mock-llm-e2e/fixture.mp4
+          $env:PYTHONPATH = 'src;.'
+          python tools/mock_llm_e2e.py --source-path temp/mock-llm-e2e/fixture.mp4
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-llm-e2e-diagnostics
+          path: |
+            temp/mock-llm-e2e
+            temp/backend.*.log
+            temp/mock-provider.*.log

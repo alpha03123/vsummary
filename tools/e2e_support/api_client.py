@@ -132,6 +132,9 @@ class LocalApiClient(CoreApiClient):
             json={"series_title": title, "source_paths": [str(path) for path in source_paths], "storage_mode": storage_mode},
         )
 
+    def submit_rag_model_download(self, model_key: str) -> dict[str, Any]:
+        return self._json("POST", f"/api/rag/models/{model_key}/download", "RAG model download")
+
 
 def _require_success(response: httpx.Response, action: str) -> httpx.Response:
     if response.is_success:
