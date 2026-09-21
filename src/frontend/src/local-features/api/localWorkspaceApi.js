@@ -123,9 +123,9 @@ export function testAsrSettings(settings) {
 
 export const loadFasterWhisperModels = (provider = "faster_whisper") => fetchJson(`/api/asr/${encodeURIComponent(provider)}/models`);
 export const loadRagModels = () => fetchJson("/api/rag/models");
-export const downloadRagModel = (modelKey) => fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download`, { method: "POST" });
+export const downloadRagModel = async (modelKey) => toDurableModelJob(await fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download`, { method: "POST" }));
 export const cancelRagModelDownload = (modelKey) => fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download/cancel`, { method: "POST" });
-export const downloadFasterWhisperModel = (provider, modelId) => fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download`, { method: "POST" });
+export const downloadFasterWhisperModel = async (provider, modelId) => toDurableModelJob(await fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download`, { method: "POST" }));
 export const cancelFasterWhisperModelDownload = (provider, modelId) => fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download/cancel`, { method: "POST" });
 export const subscribeRagModelDownloadProgress = (modelKey, listener) => subscribeProgress(`/api/rag/models/${encodeURIComponent(modelKey)}/download/progress`, listener, "RAG 模型下载进度连接已中断");
 export const subscribeFasterWhisperModelDownloadProgress = (provider, modelId, listener) => subscribeProgress(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download/progress`, listener, "模型下载进度连接已中断");
@@ -162,6 +162,12 @@ export const cancelChaoxingImport = (jobId) => fetchJson(`/api/linked/chaoxing/i
 
 function toWorkspaceSettings(payload) {
   return { theme: payload.theme, showTakeaways: payload.show_takeaways, transcriptEnhancementEnabled: payload.transcript_enhancement_enabled, asrProvider: payload.asr_provider, asrModelQuality: payload.asr_model_quality, transcriptionMode: payload.transcription_mode, asrCloudModel: payload.asr_cloud_model, asrBaseUrl: payload.asr_base_url, hasAsrApiKey: payload.has_asr_api_key, asrApiKeyMasked: payload.asr_api_key_masked, asrApiKey: "", ragEmbeddingDevice: payload.rag_embedding_device, ragMaxHits: payload.rag_max_hits, ragRerankEnabled: payload.rag_rerank_enabled, webSearchEnabled: payload.web_search_enabled, windowTokens: payload.window_tokens, answerDetailLevel: payload.answer_detail_level, reasoningEffort: payload.reasoning_effort, talkCustomPrompt: payload.talk_custom_prompt, videoGenerationConcurrency: payload.video_generation_concurrency, chapterVisualMode: payload.chapter_visual_mode, maxVisualInputImages: payload.max_visual_input_images, noteVisualMode: payload.note_visual_mode, aiSummaryMultimodalEnabled: payload.ai_summary_multimodal_enabled === true, mindmapVisualInput: payload.mindmap_visual_input, cardsVisualInput: payload.cards_visual_input, noteMaxImages: payload.note_max_images, autoGenerateArtifacts: Array.isArray(payload.auto_generate_artifacts) ? payload.auto_generate_artifacts : [], chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds, chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds, runtimeCapabilities: payload.runtime_capabilities };
+}
+
+function toDurableModelJob(payload) {
+  const jobId = typeof payload?.job_id === "string" ? payload.job_id.trim() : "";
+  if (!jobId) throw new Error("模型准备任务未返回 job_id。");
+  return { jobId, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 function toProviderSettings(payload) { return { llmProvider: payload.llm_provider, openaiBaseUrl: payload.openai_base_url, openaiModel: payload.openai_model, hasOpenaiApiKey: payload.has_openai_api_key, openaiApiKeyMasked: payload.openai_api_key_masked, hfEndpoint: payload.hf_endpoint, openaiApiKey: "" }; }

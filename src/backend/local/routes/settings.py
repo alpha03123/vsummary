@@ -6,11 +6,8 @@
 
 from __future__ import annotations
 
-from threading import Lock
-from threading import Thread
-
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 
 from backend.api.di.container import ApiContainerDep
 from backend.local.application_update import ApplicationUpdateError, get_update_status, schedule_update
@@ -37,14 +34,11 @@ from backend.api.schemas.contracts import (
     UpdateWorkspaceSettingsRequest,
     WorkspaceSettingsResponse,
 )
-from backend.api.schemas.sse import stream_progress_events
-from backend.video_summary.infrastructure.asr.huggingface_model_downloader import HuggingFaceDownloadCancelled
+from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 from backend.video_summary.infrastructure.config.settings import load_settings
 from backend.video_summary.infrastructure.runtime_capabilities import detect_runtime_capabilities
 
 router = APIRouter()
-_ASR_DOWNLOAD_LOCK = Lock()
-_ACTIVE_ASR_DOWNLOADS: set[str] = set()
 
 
 @router.get("/api/application-update", response_model=ApplicationUpdateStatusResponse)
@@ -480,8 +474,8 @@ def list_asr_models(provider: str, container: ApiContainerDep) -> list[FasterWhi
     ]
 
 
-@router.post("/api/asr/{provider}/models/{model_id}/download", response_model=FasterWhisperModelResponse)
-def download_asr_model(provider: str, model_id: str, container: ApiContainerDep) -> FasterWhisperModelResponse:
+@router.post("/api/asr/{provider}/models/{model_id}/download")
+def download_asr_model(provider: str, model_id: str, container: ApiContainerDep) -> JSONResponse:
     """POST /api/asr/{provider}/models/{model_id}/download — 触发 ASR 模型下载。
 
     在后台线程启动模型下载，同一模型同时只允许一个下载任务；
@@ -501,28 +495,28 @@ def download_asr_model(provider: str, model_id: str, container: ApiContainerDep)
     if not manager.is_supported(model_id):
         raise HTTPException(status_code=400, detail=f"unsupported {provider} model '{model_id}'")
 
-    task_id = _build_model_download_task_id(provider, model_id)
-    should_start = False
-    with _ASR_DOWNLOAD_LOCK:
-        if task_id not in _ACTIVE_ASR_DOWNLOADS:
-            _ACTIVE_ASR_DOWNLOADS.add(task_id)
-            should_start = True
-
-    if should_start:
-        reporter = container.model_download_progress_tracker.create_reporter(task_id)
-        Thread(
-            target=_run_asr_model_download,
-            args=(provider, model_id, task_id, manager, reporter),
-            daemon=True,
-        ).start()
-
-    settings = load_settings(container.config_path, container.root_dir)
-    downloaded_model = next(
-        model
-        for model in manager.list_models(_current_asr_model(provider, settings))
-        if model.id == model_id
-    )
-    return _to_asr_model_response(provider, downloaded_model, container)
+    resource_id = f"asr:{provider}:{model_id}"
+    try:
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="model",
+            resource_id=resource_id,
+            operation="prepare_asr_model",
+            request_payload={"provider": provider, "model_id": model_id},
+            active_key=f"asr-model:{provider}:{model_id}",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=resource_id,
+            operation="prepare_asr_model",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return _job_submission_response(submitted, resource_id)
 
 
 @router.post("/api/asr/{provider}/models/{model_id}/download/cancel")
@@ -532,13 +526,18 @@ def cancel_asr_model_download(provider: str, model_id: str, container: ApiContai
     if not manager.is_supported(model_id):
         raise HTTPException(status_code=400, detail=f"unsupported {provider} model '{model_id}'")
 
-    task_id = _build_model_download_task_id(provider, model_id)
-    container.model_download_progress_tracker.request_cancel(task_id)
-    return {"status": "cancelling", "task_id": task_id}
+    resource_id = f"asr:{provider}:{model_id}"
+    snapshot = container.job_repository.request_cancel_for_resource(
+        workspace_id=container.sql_workspace.workspace_id,
+        resource_id=resource_id,
+        operation="prepare_asr_model",
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="no active ASR model job found")
+    return {"status": snapshot.status, "job_id": snapshot.id}
 
 
-@router.get("/api/asr/{provider}/models/{model_id}/download/progress")
-async def stream_asr_model_download_progress(
+async def _removed_stream_asr_model_download_progress(
     provider: str,
     model_id: str,
     container: ApiContainerDep,
@@ -586,8 +585,8 @@ def list_rag_models(container: ApiContainerDep) -> list[RagModelResponse]:
     return [_to_rag_model_response(model) for model in container.rag_model_manager.list_models()]
 
 
-@router.post("/api/rag/models/{model_key}/download", response_model=RagModelResponse)
-def download_rag_model(model_key: str, container: ApiContainerDep) -> RagModelResponse:
+@router.post("/api/rag/models/{model_key}/download")
+def download_rag_model(model_key: str, container: ApiContainerDep) -> JSONResponse:
     """POST /api/rag/models/{model_key}/download — 触发 RAG 模型下载。
 
     启动指定 RAG 模型的下载任务；若已在下载则返回当前进度。
@@ -603,10 +602,31 @@ def download_rag_model(model_key: str, container: ApiContainerDep) -> RagModelRe
         HTTPException(400): 不支持的模型 key。
     """
     try:
-        status = container.rag_model_manager.start_download(model_key)
+        container.rag_model_manager.get_status(model_key)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    return _to_rag_model_response(status)
+    resource_id = f"rag:{model_key}"
+    try:
+        submitted = container.job_repository.submit(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_type="model",
+            resource_id=resource_id,
+            operation="prepare_rag_model",
+            request_payload={"model_key": model_key},
+            active_key=f"rag-model:{model_key}",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = container.job_repository.active_for_resource(
+            workspace_id=container.sql_workspace.workspace_id,
+            resource_id=resource_id,
+            operation="prepare_rag_model",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return _job_submission_response(submitted, resource_id)
 
 
 @router.post("/api/rag/models/{model_key}/download/cancel")
@@ -627,14 +647,19 @@ def cancel_rag_model_download(model_key: str, container: ApiContainerDep) -> dic
         HTTPException(400): 不支持的模型 key。
     """
     try:
-        task_id = container.rag_model_manager.stream_task_id(model_key)
+        container.rag_model_manager.get_status(model_key)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    container.rag_model_manager.progress_tracker.request_cancel(task_id)
-    return {"status": "cancelling", "task_id": task_id}
+    snapshot = container.job_repository.request_cancel_for_resource(
+        workspace_id=container.sql_workspace.workspace_id,
+        resource_id=f"rag:{model_key}",
+        operation="prepare_rag_model",
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="no active RAG model job found")
+    return {"status": snapshot.status, "job_id": snapshot.id}
 
 
-@router.get("/api/rag/models/{model_key}/download/progress")
 async def stream_rag_model_download_progress(
     model_key: str,
     container: ApiContainerDep,
@@ -682,6 +707,19 @@ def _build_model_download_task_id(provider: str, model_id: str) -> str:
         格式为 `asr-download/{model_id}` 的任务 ID。
     """
     return f"asr-download/{provider}/{model_id}"
+
+
+def _job_submission_response(submitted, resource_id: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "model", "id": resource_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 def _run_asr_model_download(provider: str, model_id: str, task_id: str, manager, reporter) -> None:

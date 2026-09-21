@@ -9,8 +9,6 @@ import {
   downloadRagModel,
   loadFasterWhisperModels,
   loadRagModels,
-  subscribeFasterWhisperModelDownloadProgress,
-  subscribeRagModelDownloadProgress,
   updateProviderSettings,
   updateWorkspaceSettings,
 } from "@src/local-features/api/localWorkspaceApi";
@@ -24,11 +22,14 @@ vi.mock("@src/local-features/api/localWorkspaceApi", () => ({
   loadFasterWhisperModels: vi.fn(),
   loadOpenaiApiKey: vi.fn(),
   loadRagModels: vi.fn(),
-  subscribeFasterWhisperModelDownloadProgress: vi.fn(),
-  subscribeRagModelDownloadProgress: vi.fn(),
   testProviderSettings: vi.fn(),
   updateProviderSettings: vi.fn(),
   updateWorkspaceSettings: vi.fn(),
+}));
+
+const { subscribeDurableJobProgress } = vi.hoisted(() => ({ subscribeDurableJobProgress: vi.fn() }));
+vi.mock("@src/features/workspace/model/workspaceApi", () => ({
+  subscribeDurableJobProgress,
 }));
 
 beforeEach(() => {
@@ -102,9 +103,8 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
   it("does not show a global failure when faster-whisper download is cancelled", async () => {
     const actions = [];
-    subscribeFasterWhisperModelDownloadProgress.mockImplementation((provider, modelId, listener) => {
-      expect(provider).toBe("faster_whisper");
-      expect(modelId).toBe("large-v3-turbo");
+    subscribeDurableJobProgress.mockImplementation((jobId, listener) => {
+      expect(jobId).toBe("job-asr");
       listener({
         status: "cancelled",
         progress: null,
@@ -112,9 +112,7 @@ describe("createWorkspaceSettingsActions downloads", () => {
       return () => {};
     });
     downloadFasterWhisperModel.mockResolvedValue({
-      id: "large-v3-turbo",
-      downloaded: false,
-      status: "running",
+      jobId: "job-asr",
     });
     loadFasterWhisperModels.mockResolvedValue([
       {
@@ -147,9 +145,8 @@ describe("createWorkspaceSettingsActions downloads", () => {
   it("keeps backend faster-whisper download errors instead of replacing them", async () => {
     vi.useFakeTimers();
     const actions = [];
-    subscribeFasterWhisperModelDownloadProgress.mockImplementation((provider, modelId, listener) => {
-      expect(provider).toBe("faster_whisper");
-      expect(modelId).toBe("large-v3-turbo");
+    subscribeDurableJobProgress.mockImplementation((jobId, listener) => {
+      expect(jobId).toBe("job-asr");
       listener({
         status: "failed",
         error: "ConnectTimeout: huggingface.co timed out",
@@ -157,8 +154,7 @@ describe("createWorkspaceSettingsActions downloads", () => {
       return () => {};
     });
     downloadFasterWhisperModel.mockResolvedValue({
-      id: "large-v3-turbo",
-      downloaded: false,
+      jobId: "job-asr",
     });
     loadFasterWhisperModels.mockResolvedValue([]);
 
@@ -189,10 +185,12 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
   it("finishes faster-whisper download when POST already returns a downloaded model", async () => {
     const actions = [];
-    subscribeFasterWhisperModelDownloadProgress.mockReturnValue(() => {});
+    subscribeDurableJobProgress.mockImplementation((_jobId, listener) => {
+      listener({ status: "completed", progress: 100 });
+      return () => {};
+    });
     downloadFasterWhisperModel.mockResolvedValue({
-      id: "medium",
-      downloaded: true,
+      jobId: "job-asr",
     });
     loadFasterWhisperModels.mockResolvedValue([
       {
@@ -226,18 +224,17 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
   it("does not switch the default ASR model after downloading a different model", async () => {
     const listeners = {};
-    subscribeFasterWhisperModelDownloadProgress.mockImplementation((modelId, listener) => {
-      listeners[modelId] = listener;
+    subscribeDurableJobProgress.mockImplementation((jobId, listener) => {
+      listeners[jobId] = listener;
       return () => {};
     });
-    downloadFasterWhisperModel.mockImplementation(async (modelId) => {
-      listeners[modelId]({
+    downloadFasterWhisperModel.mockImplementation(async (provider, modelId) => {
+      listeners[`job-${modelId}`]({
         status: "completed",
         progress: 100,
       });
       return {
-        id: modelId,
-        downloaded: true,
+        jobId: `job-${modelId}`,
       };
     });
     loadFasterWhisperModels.mockResolvedValue([
@@ -264,7 +261,8 @@ describe("createWorkspaceSettingsActions downloads", () => {
   it("keeps backend RAG download errors instead of replacing them", async () => {
     vi.useFakeTimers();
     const actions = [];
-    subscribeRagModelDownloadProgress.mockImplementation((modelKey, listener) => {
+    subscribeDurableJobProgress.mockImplementation((jobId, listener) => {
+      expect(jobId).toBe("job-rag");
       listener({
         status: "failed",
         error: "LocalEntryNotFoundError: cannot find requested files",
@@ -272,9 +270,7 @@ describe("createWorkspaceSettingsActions downloads", () => {
       return () => {};
     });
     downloadRagModel.mockResolvedValue({
-      key: "embedding",
-      downloaded: false,
-      status: "running",
+      jobId: "job-rag",
     });
     loadRagModels.mockResolvedValue([]);
 
@@ -305,11 +301,12 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
   it("finishes RAG download when POST already returns a completed status", async () => {
     const actions = [];
-    subscribeRagModelDownloadProgress.mockReturnValue(() => {});
+    subscribeDurableJobProgress.mockImplementation((_jobId, listener) => {
+      listener({ status: "completed", progress: 100 });
+      return () => {};
+    });
     downloadRagModel.mockResolvedValue({
-      key: "embedding",
-      status: "completed",
-      downloaded: true,
+      jobId: "job-rag",
     });
     loadRagModels.mockResolvedValue([
       {
@@ -341,12 +338,12 @@ describe("createWorkspaceSettingsActions downloads", () => {
 
   it("does not show a global failure when RAG download is cancelled", async () => {
     const actions = [];
-    subscribeRagModelDownloadProgress.mockImplementation((modelKey, listener) => {
-      expect(modelKey).toBe("embedding");
+    subscribeDurableJobProgress.mockImplementation((jobId, listener) => {
+      expect(jobId).toBe("job-rag");
       listener({ status: "cancelled", progress: null });
       return () => {};
     });
-    downloadRagModel.mockResolvedValue({ key: "embedding", downloaded: false, status: "running" });
+    downloadRagModel.mockResolvedValue({ jobId: "job-rag" });
     loadRagModels.mockResolvedValue([]);
     const controller = createWorkspaceSettingsActions({
       state: { ui: {} },

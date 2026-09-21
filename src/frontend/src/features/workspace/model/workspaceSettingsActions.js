@@ -9,14 +9,13 @@ import {
   loadFasterWhisperModels,
   loadOpenaiApiKey,
   loadRagModels,
-  subscribeFasterWhisperModelDownloadProgress,
-  subscribeRagModelDownloadProgress,
   testAsrSettings,
   testProviderSettings,
   updateProviderSettings,
   updateWorkspaceSettings,
   scheduleApplicationUpdate,
 } from "../../../local-features/api/localWorkspaceApi";
+import { subscribeDurableJobProgress } from "./workspaceApi";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
 import { normalizeUiSettings, resetUiSettings } from "./workspaceState";
 
@@ -405,8 +404,8 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         modelId,
       });
     };
-    const downloadCompleted = new Promise((resolve, reject) => {
-      unsubscribe = subscribeFasterWhisperModelDownloadProgress(currentAsrProvider(), modelId, (snapshot) => {
+    const waitForJob = (jobId) => new Promise((resolve, reject) => {
+      unsubscribe = subscribeDurableJobProgress(jobId, (snapshot) => {
         if (
           snapshot.status === "running" ||
           snapshot.status === "cancelling" ||
@@ -437,27 +436,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     });
     try {
       const started = await downloadFasterWhisperModel(currentAsrProvider(), modelId);
-      if (isFailedDownloadStatus(started)) {
-        throw new Error(started.error || MODEL_DOWNLOAD_FAILED_MESSAGE);
-      }
-      if (isCompletedDownloadStatus(started)) {
-        dispatch({
-          type: "faster_whisper_model_download_progress_updated",
-          modelId,
-          status: "completed",
-          progress: 100,
-        });
-      } else if (isCancelledDownloadStatus(started)) {
-        cancelled = true;
-        dispatch({
-          type: "faster_whisper_model_download_progress_updated",
-          modelId,
-          status: "cancelled",
-          progress: null,
-        });
-      } else {
-        await downloadCompleted;
-      }
+      await waitForJob(started.jobId);
       if (!cancelled && state.ui.asrModelQuality === modelId) {
         const savedSettings = await updateWorkspaceSettings({
           ...state.ui,
@@ -518,8 +497,8 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
         modelKey,
       });
     };
-    const downloadCompleted = new Promise((resolve, reject) => {
-      unsubscribe = subscribeRagModelDownloadProgress(modelKey, (snapshot) => {
+    const waitForJob = (jobId) => new Promise((resolve, reject) => {
+      unsubscribe = subscribeDurableJobProgress(jobId, (snapshot) => {
         if (
           snapshot.status === "running" ||
           snapshot.status === "cancelling" ||
@@ -551,30 +530,7 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     });
     try {
       const started = await downloadRagModel(modelKey);
-      if (isFailedDownloadStatus(started)) {
-        throw new Error(started.error || MODEL_DOWNLOAD_FAILED_MESSAGE);
-      }
-      if (isCompletedDownloadStatus(started)) {
-        dispatch({
-          type: "rag_model_download_progress_updated",
-          modelKey,
-          status: "completed",
-          progress: 100,
-          detail: started.detail,
-          error: started.error,
-        });
-      } else if (isCancelledDownloadStatus(started)) {
-        dispatch({
-          type: "rag_model_download_progress_updated",
-          modelKey,
-          status: "cancelled",
-          progress: null,
-          detail: started.detail,
-          error: null,
-        });
-      } else {
-        await downloadCompleted;
-      }
+      await waitForJob(started.jobId);
       const models = await loadRagModels();
       dispatch({ type: "rag_models_loaded", models });
     } catch (error) {

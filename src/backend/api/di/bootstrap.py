@@ -468,6 +468,26 @@ def build_api_container(
         workspace_index_invalidator.invalidate()
 
     operation_handlers["import_chaoxing_course"] = run_chaoxing_course_import_job
+
+    async def run_asr_model_prepare_job(claim, reporter) -> None:
+        payload = claim.request_payload
+        provider = payload.get("provider")
+        model_id = payload.get("model_id")
+        if not isinstance(provider, str) or not isinstance(model_id, str):
+            raise ValueError("ASR model job requires provider and model_id.")
+        manager = {"faster_whisper": model_manager, "whisper_cpp": whisper_cpp_manager}.get(provider)
+        if manager is None or not manager.is_supported(model_id):
+            raise ValueError(f"unsupported {provider} model '{model_id}'")
+        await asyncio.to_thread(manager.download, model_id, progress_reporter=reporter)
+
+    async def run_rag_model_prepare_job(claim, reporter) -> None:
+        model_key = claim.request_payload.get("model_key")
+        if not isinstance(model_key, str) or not model_key.strip():
+            raise ValueError("RAG model job requires model_key.")
+        await asyncio.to_thread(rag_model_manager.download, model_key, progress_reporter=reporter)
+
+    operation_handlers["prepare_asr_model"] = run_asr_model_prepare_job
+    operation_handlers["prepare_rag_model"] = run_rag_model_prepare_job
     return ApiContainer(
         config_path=config_path,
         root_dir=root_dir,

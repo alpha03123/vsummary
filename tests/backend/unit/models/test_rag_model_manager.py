@@ -327,47 +327,6 @@ class RagModelManagerTests(unittest.TestCase):
             self.assertEqual(blob.read_bytes(), b"partial-bytes")
             self.assertFalse(manager.is_downloaded("embedding"))
 
-    def test_cancel_route_drives_real_cancel_chain_to_cancelled_status(self) -> None:
-        """端到端串起真实取消链路，不靠替身直接抛异常。
-
-        覆盖 `POST /api/rag/models/{key}/download/cancel` →
-        `tracker.request_cancel` → `reporter.is_cancel_requested` →
-        `_raise_if_download_cancelled` → `_run_download` 上报 `cancelled`。
-        上面那个用例是替身直接抛 `HuggingFaceDownloadCancelled`，
-        并不能证明取消标志真的能传导进下载循环。
-        """
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root_dir = Path(temp_dir)
-            entered = threading.Event()
-
-            class _BlockingDownloader:
-                def warm_cache(self, spec, reporter) -> Path:
-                    del spec
-                    entered.set()
-                    # 模拟"逐文件下载"循环：每轮用生产代码的取消点检做检查。
-                    for _ in range(200):
-                        _raise_if_download_cancelled(reporter)
-                        time.sleep(0.01)
-                    raise AssertionError("cancel flag never reached the download loop")
-
-            manager = RagModelManager(
-                root_dir=root_dir,
-                progress_tracker=InMemoryProgressTracker(),
-                model_downloader=_BlockingDownloader(),
-            )
-            client = TestClient(create_app(FakeContainer(rag_model_manager=manager)))
-
-            manager.start_download("embedding")
-            self.assertTrue(entered.wait(2.0), "downloader never started")
-
-            response = client.post("/api/rag/models/embedding/download/cancel")
-
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["status"], "cancelling")
-            _wait_until(lambda: not manager.has_active_download())
-            snapshot = manager.progress_tracker.get_snapshot(manager.stream_task_id("embedding"))
-            self.assertEqual(snapshot.status, "cancelled", snapshot.error)
-
     def test_cancel_route_rejects_unknown_model_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             manager = RagModelManager(

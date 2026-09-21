@@ -36,7 +36,7 @@ class WorkerOptions:
     def local(cls) -> "WorkerOptions":
         return cls(
             worker_id=f"local-{uuid4().hex}",
-            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap", "generate_series_mindmap", "generate_video_knowledge_cards", "generate_video_ai_summary", "download_linked_video", "import_chaoxing_course"}),
+            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_video_mindmap", "generate_series_mindmap", "generate_video_knowledge_cards", "generate_video_ai_summary", "download_linked_video", "import_chaoxing_course", "prepare_asr_model", "prepare_rag_model"}),
             resource_class="local-cpu",
             lease_seconds=120,
             heartbeat_seconds=20,
@@ -173,6 +173,9 @@ class SqlJobWorker:
         except JobLeaseLostError:
             raise
         except Exception as error:
+            if reporter.is_cancel_requested():
+                self._repository.mark_cancelled(claim, detail="任务已取消")
+                return
             self._repository.fail(
                 claim,
                 failure_code=_failure_code(error),
