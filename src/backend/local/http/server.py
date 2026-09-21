@@ -35,6 +35,7 @@ def main() -> None:
         raise RuntimeError("Local server requires --managed-mysql-home.")
 
     from backend.local.persistence.file_blob_store import FileBlobStore
+    from backend.local.persistence.local_workspace_bootstrap import ensure_local_workspace_before_migration
     from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
     from backend.video_summary.infrastructure.persistence.database import create_session_factory
     from backend.local.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
@@ -43,7 +44,11 @@ def main() -> None:
 
     managed_mysql = ManagedLocalMySql(mysql_home=args.managed_mysql_home, data_root=args.managed_data_root)
     try:
-        database_options = managed_mysql.start_and_migrate()
+        database_options = managed_mysql.start_and_migrate(
+            before_migrate=lambda options: ensure_local_workspace_before_migration(
+                create_session_factory(options)
+            )
+        )
         data_root = managed_mysql.paths.root
         sessions = create_session_factory(database_options)
         workspace_id = SqlVideoWorkspace.get_local_workspace_id(sessions)
@@ -72,7 +77,7 @@ def main() -> None:
 
 
 def _repository_root() -> Path:
-    return Path(__file__).resolve().parents[5]
+    return Path(__file__).resolve().parents[4]
 
 
 if __name__ == "__main__":

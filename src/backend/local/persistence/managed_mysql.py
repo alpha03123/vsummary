@@ -18,7 +18,7 @@ import ctypes
 import msvcrt
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Callable, Final
 
 from sqlalchemy import text
 
@@ -101,7 +101,7 @@ class ManagedLocalMySql:
     def paths(self) -> ManagedLocalMySqlPaths:
         return self._paths
 
-    def start_and_migrate(self) -> DatabaseOptions:
+    def start_and_migrate(self, *, before_migrate: Callable[[DatabaseOptions], None] | None = None) -> DatabaseOptions:
         """确保 MySQL 运行并升级 Schema，返回应用使用的连接参数。"""
 
         self._require_database_driver()
@@ -120,6 +120,8 @@ class ManagedLocalMySql:
                 options = self._options_from_state(state)
                 self._start_existing_instance(options)
             self._wait_for_database(options)
+            if before_migrate is not None:
+                before_migrate(options)
             upgrade_to_head(options)
         except Exception as error:
             self.stop()
