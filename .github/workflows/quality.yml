@@ -32,4 +32,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run verify:workspace-ui-boundary
       - run: npm run build:workspace-ui
