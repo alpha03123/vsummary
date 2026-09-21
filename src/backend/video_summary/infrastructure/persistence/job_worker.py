@@ -188,6 +188,7 @@ class SqlJobWorker:
                 retry_delay_seconds=_retry_delay_seconds(error),
             )
         finally:
+            self._repository.finalize_accounting(claim.id, workspace_id=claim.workspace_id)
             heartbeat.cancel()
             try:
                 await heartbeat

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -19,6 +19,7 @@ from backend.api.routes.health import router as health_router
 from backend.api.routes.jobs import router as jobs_router
 from backend.api.routes.linked import router as linked_router
 from backend.api.routes.videos import router as videos_router
+from backend.core.request_context import bind_workspace_context
 from backend.shared.observability import bind_request_id, close_application_logging, configure_application_logging
 
 
@@ -77,8 +78,22 @@ def create_app(container: ApiContainer) -> FastAPI:
     @application.middleware("http")
     async def log_request(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        request.state.request_id = request_id
+        container = getattr(request.app.state, "container", None)
+        context_provider = getattr(container, "context_provider", None)
+        sql_workspace = getattr(container, "sql_workspace", None)
+        context = context_provider.get_context(request_id=request_id) if context_provider is not None else None
+        if context is not None:
+            configured_workspace_id = getattr(sql_workspace, "workspace_id", None)
+            if configured_workspace_id is not None and context.workspace_id != configured_workspace_id:
+                LOGGER.error(
+                    "request workspace does not match the configured workspace",
+                    extra={"request_workspace_id": context.workspace_id, "configured_workspace_id": configured_workspace_id},
+                )
+                return JSONResponse(status_code=503, content={"detail": "请求工作区与当前服务实例不匹配。"})
+            request.state.workspace_context = context
         started_at = time.perf_counter()
-        with bind_request_id(request_id):
+        with bind_request_id(request_id), bind_workspace_context(context) if context is not None else _null_context():
             try:
                 response = await call_next(request)
             except Exception:
@@ -101,3 +116,8 @@ def create_app(container: ApiContainer) -> FastAPI:
             return response
 
     return application
+
+
+@contextmanager
+def _null_context():
+    yield

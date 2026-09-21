@@ -17,7 +17,7 @@ def get_workspace_context(
     context = getattr(request.state, "workspace_context", None)
     if isinstance(context, WorkspaceContext):
         return context
-    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID") or uuid4().hex
     return container.context_provider.get_context(request_id=request_id)
 
 

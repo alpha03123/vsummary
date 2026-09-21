@@ -16,6 +16,9 @@ from backend.video_summary.infrastructure.persistence.control_plane_repository i
     SubmittedJob,
 )
 from backend.core.ids import new_ulid
+from backend.core.quota import QuotaGuard, QuotaReservation, UsageEstimate, UsageMeter, UsageRecord
+from backend.core.context import WorkspaceContext
+from backend.core.request_context import get_workspace_context
 from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent
 
 
@@ -67,9 +70,17 @@ class JobEventSnapshot:
 class SqlJobRepository:
     """MySQL-backed job protocol used by both local and cloud worker hosts."""
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        quota_guard: QuotaGuard | None = None,
+        usage_meter: UsageMeter | None = None,
+    ) -> None:
         self._session_factory = session_factory
         self._control = SqlControlPlaneRepository(session_factory)
+        self._quota_guard = quota_guard
+        self._usage_meter = usage_meter
 
     def submit(
         self,
@@ -84,17 +95,42 @@ class SqlJobRepository:
         idempotency_key: str | None,
         parent_job_id: str | None = None,
     ) -> SubmittedJob:
-        submitted = self._control.submit_job(
-            workspace_id=workspace_id,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            operation=operation,
-            request_payload=request_payload,
-            active_key=active_key,
-            idempotency_scope_id=idempotency_scope_id,
-            idempotency_key=idempotency_key,
-            parent_job_id=parent_job_id,
-        )
+        context = get_workspace_context()
+        reservation: QuotaReservation | None = None
+        payload = dict(request_payload)
+        if context is not None:
+            if context.workspace_id != workspace_id:
+                raise ValueError("request WorkspaceContext does not own the submitted Job.")
+            if self._quota_guard is not None and parent_job_id is None:
+                reservation = self._quota_guard.reserve_job(
+                    context,
+                    operation,
+                    UsageEstimate(units=1),
+                    idempotency_key or active_key,
+                )
+                payload["_quota_reservation"] = {
+                    "id": reservation.id,
+                    "workspace_id": context.workspace_id,
+                    "actor_id": context.actor_id,
+                    "request_id": context.request_id,
+                }
+        try:
+            submitted = self._control.submit_job(
+                workspace_id=workspace_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                operation=operation,
+                request_payload=payload,
+                active_key=active_key,
+                idempotency_scope_id=idempotency_scope_id,
+                idempotency_key=idempotency_key,
+                parent_job_id=parent_job_id,
+            )
+        except Exception:
+            self._release_reservation(reservation, "job submission failed")
+            raise
+        if not submitted.created:
+            self._release_reservation(reservation, "existing job reused")
         return submitted
 
     def claim(
@@ -208,7 +244,40 @@ class SqlJobRepository:
             job = session.scalar(statement.with_for_update())
             if job is None:
                 return None
-            return self._request_cancel_locked(session, job, now)
+            snapshot = self._request_cancel_locked(session, job, now)
+        self.finalize_accounting(job_id, workspace_id=workspace_id)
+        return snapshot
+
+    def finalize_accounting(self, job_id: str, *, workspace_id: str) -> None:
+        """Settle or release the reservation recorded with a terminal Job once."""
+
+        action: tuple[str, QuotaReservation, WorkspaceContext] | None = None
+        with self._session_factory.begin() as session:
+            statement = select(Job).where(Job.id == job_id, Job.workspace_id == workspace_id)
+            job = session.scalar(statement.with_for_update())
+            if job is None or job.status not in {"succeeded", "failed", "cancelled"}:
+                return
+            payload = dict(job.request_payload)
+            reservation_payload = payload.get("_quota_reservation")
+            if not isinstance(reservation_payload, dict) or reservation_payload.get("finalized") is True:
+                return
+            reservation_id = reservation_payload.get("id")
+            context = _context_from_reservation(reservation_payload)
+            if not isinstance(reservation_id, str) or context is None:
+                return
+            reservation_payload["finalized"] = True
+            payload["_quota_reservation"] = reservation_payload
+            job.request_payload = payload
+            action = (job.status, QuotaReservation(reservation_id), context)
+        if action is None or self._quota_guard is None:
+            return
+        status, reservation, context = action
+        if status == "succeeded":
+            self._quota_guard.settle(reservation.id, UsageRecord(units=1))
+            if self._usage_meter is not None:
+                self._usage_meter.record(context, UsageRecord(units=1))
+        else:
+            self._quota_guard.release(reservation.id, f"job {status}")
 
     def request_cancel_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
@@ -363,6 +432,10 @@ class SqlJobRepository:
             job.status = "cancelling"
             self._append_event(session, job.id, "cancelling", "cancelling", None, "已请求取消任务")
         return _snapshot(job)
+
+    def _release_reservation(self, reservation: QuotaReservation | None, reason: str) -> None:
+        if reservation is not None and self._quota_guard is not None:
+            self._quota_guard.release(reservation.id, reason)
 
     def latest_event(self, job_id: str, *, workspace_id: str) -> JobEventSnapshot | None:
         with self._session_factory() as session:
@@ -524,3 +597,10 @@ def _database_now(session: Session) -> datetime:
     """Use the database clock for every value compared with MySQL DATETIME."""
 
     return session.scalar(select(func.now()))
+
+
+def _context_from_reservation(payload: dict[str, object]) -> WorkspaceContext | None:
+    workspace_id, actor_id, request_id = payload.get("workspace_id"), payload.get("actor_id"), payload.get("request_id")
+    if not all(isinstance(value, str) and value.strip() for value in (workspace_id, actor_id, request_id)):
+        return None
+    return WorkspaceContext(workspace_id=workspace_id, actor_id=actor_id, request_id=request_id)

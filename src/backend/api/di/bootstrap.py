@@ -232,7 +232,11 @@ def build_api_container(
     )
     if not isinstance(resolved_generator, SqlBackedVideoSummaryGenerator):
         raise RuntimeError("SQL job execution requires SqlBackedVideoSummaryGenerator.")
-    job_repository = SqlJobRepository(workspace.session_factory)
+    job_repository = SqlJobRepository(
+        workspace.session_factory,
+        quota_guard=quota_guard,
+        usage_meter=usage_meter,
+    )
     resolved_mindmap_generator = mindmap_generator or SqlBackedVideoMindmapGenerator(
         workspace=workspace,
         workflow=ConfiguredMindmapWorkflow(root_dir, usage_recorder=usage_store),

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from backend.api.common.app import create_app as create_common_app
+from backend.core.context import WorkspaceContext
 from backend.local.http.app import create_app as create_local_app
 
 
@@ -38,3 +39,16 @@ class ProductAppBoundaryTests(unittest.TestCase):
         self.assertIn("/api/linked/bilibili/cookie/init", schema["paths"])
         self.assertIn("/api/application-update", schema["paths"])
         self.assertIn("/mcp", {getattr(route, "path", None) for route in client.app.routes})
+
+    def test_common_app_rejects_a_request_context_for_another_workspace(self) -> None:
+        container = SimpleNamespace(
+            root_dir=None,
+            context_provider=SimpleNamespace(
+                get_context=lambda **_kwargs: WorkspaceContext("cloud-workspace", "cloud-user", "request-1")
+            ),
+            sql_workspace=SimpleNamespace(workspace_id="local-workspace"),
+        )
+
+        response = TestClient(create_common_app(container)).get("/api/health")
+
+        self.assertEqual(response.status_code, 503)

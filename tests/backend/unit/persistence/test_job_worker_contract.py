@@ -29,6 +29,9 @@ class _Repository:
     def mark_cancelled(self, _claim, *, detail: str) -> None:
         self.cancelled_details.append(detail)
 
+    def finalize_accounting(self, _job_id, *, workspace_id: str) -> None:
+        self.accounting_workspaces.append(workspace_id)
+
     def __init__(self, *, cancelled: bool = False, cancel_on_check: int = 1) -> None:
         self.succeeded: list[str] = []
         self.failed: list[str] = []
@@ -36,6 +39,7 @@ class _Repository:
         self.cancel_on_check = cancel_on_check
         self.cancel_checks = 0
         self.cancelled_details: list[str] = []
+        self.accounting_workspaces: list[str] = []
 
 
 class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
@@ -63,6 +67,7 @@ class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(called, ["custom"])
         self.assertEqual(repository.succeeded, ["任务已完成"])
         self.assertEqual(repository.failed, [])
+        self.assertEqual(repository.accounting_workspaces, ["workspace"])
 
     async def test_custom_handler_exception_becomes_cancelled_when_job_was_cancelled(self) -> None:
         repository = _Repository(cancelled=True, cancel_on_check=2)
