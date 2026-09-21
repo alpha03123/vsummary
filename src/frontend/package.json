@@ -7,6 +7,7 @@
     "dev": "vite",
     "test": "vitest run",
     "build": "vite build",
+    "build:workspace-ui": "npm --prefix packages/workspace-ui run build",
     "audit:references": "knip --config knip.json",
     "preview": "vite preview",
     "test:e2e": "playwright test",
