@@ -18,9 +18,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { LocalBrowserApi, TemporarySeriesScope } from "./e2e_support/browser_api.mjs";
 
 const frontendUrl = (process.argv[2] ?? "http://127.0.0.1:4173").replace(/\/$/, "");
 const apiUrl = new URL("/api/", frontendUrl).toString().replace(/\/$/, "");
+const api = new LocalBrowserApi(apiUrl);
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const reportDirectory = join(root, "temp", "real-llm-browser-e2e");
 const reportPath = join(reportDirectory, "latest.json");
@@ -28,13 +30,13 @@ const frontendRoot = new URL("../src/frontend/package.json", import.meta.url);
 const require = createRequire(frontendRoot);
 const { chromium } = require("playwright");
 
-const timeoutMs = 300_000;
 const chromePath = process.env.VSUMMARY_E2E_CHROME ?? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 
 let browser;
 let temporaryDirectory;
 let temporarySeriesId;
 let testVideoId;
+const resources = new TemporarySeriesScope(api);
 let capturedStatusRouteRelease;
 let primaryError;
 let resultReport;
@@ -46,27 +48,20 @@ try {
   temporaryDirectory = await mkdtemp(join(reportDirectory, "run-"));
 
   phase = "loading source library";
-  const library = await fetchJson("/videos", "load library");
+  const library = await api.library();
   const source = selectSourceVideo(library);
   const sourcePath = join(temporaryDirectory, "source.mp4");
   phase = "copying source media";
   await copyPreview(source.series.id, source.video.id, sourcePath);
 
   phase = "importing temporary series";
-  const imported = await fetchJson("/import/local/series/from-paths", "import test media", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      series_title: `E2E Browser Real LLM ${new Date().toISOString().replace(/[:.]/g, "-")}`,
-      source_paths: [sourcePath],
-      storage_mode: "copy",
-    }),
-  });
+  const imported = await api.importLocalSeries(`E2E Browser Real LLM ${new Date().toISOString().replace(/[:.]/g, "-")}`, sourcePath);
   temporarySeriesId = imported.id;
   testVideoId = imported.videos?.[0]?.id;
   if (typeof temporarySeriesId !== "string" || typeof testVideoId !== "string") {
     throw new Error("Temporary series import did not return one video.");
   }
+  resources.trackSeries(temporarySeriesId, testVideoId);
 
   phase = "launching browser";
   browser = await chromium.launch({ headless: true, executablePath: chromePath });
@@ -108,6 +103,7 @@ try {
   phase = "waiting for prior idle status";
   await withTimeout(oldStatusCaptured.promise, 15_000, "The selected video did not request generation status.");
 
+  const eventsRequest = page.waitForRequest((request) => request.url().includes(`/api/jobs/`) && request.url().endsWith("/events"));
   const submittedResponse = page.waitForResponse((response) => (
     response.url().includes(`/api/videos/${temporarySeriesId}/${testVideoId}/generate`)
     && response.request().method() === "POST"
@@ -119,10 +115,13 @@ try {
   if (!submission?.job_id || !["queued", "running", "retrying"].includes(submission.status)) {
     throw new Error(`Generation submission did not return a durable active job: ${JSON.stringify(submission)}`);
   }
+  resources.trackJob(submission.job_id);
 
-  const eventsRequest = page.waitForRequest((request) => request.url().includes(`/api/jobs/${submission.job_id}/events`));
   releaseOldStatus.resolve();
-  await withTimeout(eventsRequest, 20_000, "The browser did not subscribe to the durable job event stream.");
+  const eventsRequestUrl = (await withTimeout(eventsRequest, 20_000, "The browser did not subscribe to the durable job event stream.")).url();
+  if (!eventsRequestUrl.includes(`/api/jobs/${submission.job_id}/events`)) {
+    throw new Error(`The browser subscribed to the wrong durable event stream: ${eventsRequestUrl}`);
+  }
 
   await page.waitForTimeout(1_200);
   if (!await page.getByText("正在生成 AI 概况", { exact: true }).isVisible()) {
@@ -145,7 +144,7 @@ try {
   }
 
   phase = "waiting for real generation";
-  const completedJob = await waitForJob(submission.job_id);
+  const completedJob = await api.waitForJob(submission.job_id);
   if (completedJob.status !== "succeeded") {
     throw new Error(`Real browser generation job did not succeed: ${JSON.stringify(completedJob)}`);
   }
@@ -154,8 +153,8 @@ try {
 
   phase = "verifying published browser results";
   const [summary, tools] = await Promise.all([
-    fetchJson(`/videos/${temporarySeriesId}/${testVideoId}/summary`, "read generated summary"),
-    fetchJson(`/videos/${temporarySeriesId}/${testVideoId}/tools`, "read generated tool state"),
+    api.json(`/videos/${temporarySeriesId}/${testVideoId}/summary`, "read generated summary"),
+    api.json(`/videos/${temporarySeriesId}/${testVideoId}/tools`, "read generated tool state"),
   ]);
   if (!summary.chapters?.length || !tools.overview?.generated) {
     throw new Error("The completed browser generation did not publish a readable summary artifact.");
@@ -182,11 +181,7 @@ try {
   let cleanupError;
   try {
     if (temporarySeriesId) {
-      await requireSuccess(await fetch(`${apiUrl}/series/${temporarySeriesId}`, { method: "DELETE" }), "delete temporary browser E2E series");
-      const library = await fetchJson("/videos", "verify temporary series cleanup");
-      if (library.series?.some((series) => series.id === temporarySeriesId)) {
-        throw new Error(`Temporary browser E2E series remains: ${temporarySeriesId}`);
-      }
+      await resources.cleanup();
     }
     if (temporaryDirectory) {
       await rm(temporaryDirectory, { recursive: true, force: true });
@@ -237,16 +232,6 @@ async function copyPreview(seriesId, videoId, targetPath) {
   await pipeline(Readable.fromWeb(response.body), createWriteStream(targetPath));
 }
 
-async function fetchJson(path, action, options) {
-  const response = await fetch(`${apiUrl}${path}`, options);
-  await requireSuccess(response, action);
-  const payload = await response.json();
-  if (!payload || typeof payload !== "object") {
-    throw new Error(`${action} returned a non-object JSON payload.`);
-  }
-  return payload;
-}
-
 async function requireSuccess(response, action) {
   if (response.ok) {
     return response;
@@ -254,18 +239,6 @@ async function requireSuccess(response, action) {
   throw new Error(`${action} failed with HTTP ${response.status}: ${await response.text()}`);
 }
 
-async function waitForJob(jobId) {
-  const deadline = Date.now() + timeoutMs;
-  let job;
-  while (Date.now() < deadline) {
-    job = await fetchJson(`/jobs/${jobId}`, "read real browser E2E job");
-    if (["succeeded", "failed", "cancelled"].includes(job.status)) {
-      return job;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(`Timed out after ${timeoutMs / 1_000}s waiting for real browser E2E job: ${JSON.stringify(job)}`);
-}
 
 function deferred() {
   let resolve;
@@ -287,10 +260,6 @@ async function withTimeout(promise, milliseconds, message) {
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-function sleep(milliseconds) {
-  return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
 }
 
 function escapeRegExp(value) {
