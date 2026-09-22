@@ -43,31 +43,30 @@ jobs:
           $mysql = Get-ChildItem 'C:\Program Files\MySQL' -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if ($null -eq $mysql) { throw 'MySQL installation was not found.' }
           "VSUMMARY_MYSQL_HOME=$($mysql.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Start strict Mock Provider
+      - name: Run strict Mock Provider, backend, and E2E
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force temp | Out-Null
-          Start-Process python -ArgumentList 'tools/mock_openai_provider.py --port 8899' -RedirectStandardOutput temp/mock-provider.out.log -RedirectStandardError temp/mock-provider.err.log
-      - name: Start backend
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force temp/ci-mysql | Out-Null
+          New-Item -ItemType Directory -Force temp/ci-mysql, temp/mock-llm-e2e | Out-Null
           $env:PYTHONPATH = 'src;.'
+          $provider = Start-Process python -ArgumentList 'tools/mock_openai_provider.py --port 8899' -PassThru -RedirectStandardOutput temp/mock-provider.out.log -RedirectStandardError temp/mock-provider.err.log
           $dataRoot = (Resolve-Path temp/ci-mysql).Path
           $arguments = "-m backend.local.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home `"$env:VSUMMARY_MYSQL_HOME`" --managed-data-root `"$dataRoot`" --skip-legacy-import"
-          Start-Process python -ArgumentList $arguments -RedirectStandardOutput temp/backend.out.log -RedirectStandardError temp/backend.err.log
-          $deadline = (Get-Date).AddMinutes(3)
-          while ((Get-Date) -lt $deadline) {
-            try { if ((Invoke-WebRequest http://127.0.0.1:8001/api/health -UseBasicParsing).StatusCode -eq 200) { exit 0 } } catch {}
-            Start-Sleep -Seconds 2
+          $backend = Start-Process python -ArgumentList $arguments -PassThru -RedirectStandardOutput temp/backend.out.log -RedirectStandardError temp/backend.err.log
+          try {
+            $deadline = (Get-Date).AddMinutes(3)
+            while ((Get-Date) -lt $deadline) {
+              try { if ((Invoke-WebRequest http://127.0.0.1:8001/api/health -UseBasicParsing).StatusCode -eq 200) { break } } catch {}
+              Start-Sleep -Seconds 2
+            }
+            if ($backend.HasExited) { throw "Backend exited before becoming healthy with code $($backend.ExitCode)." }
+            if ((Invoke-WebRequest http://127.0.0.1:8001/api/health -UseBasicParsing).StatusCode -ne 200) { throw 'Backend did not become healthy.' }
+            ./tools/create_mock_llm_e2e_media.ps1 -OutputPath temp/mock-llm-e2e/fixture.mp4
+            python tools/mock_llm_e2e.py --source-path temp/mock-llm-e2e/fixture.mp4
+          } finally {
+            foreach ($process in @($backend, $provider)) {
+              if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+            }
           }
-          throw 'Backend did not become healthy.'
-      - name: Build fixture and run E2E
-        shell: pwsh
-        run: |
-          ./tools/create_mock_llm_e2e_media.ps1 -OutputPath temp/mock-llm-e2e/fixture.mp4
-          $env:PYTHONPATH = 'src;.'
-          python tools/mock_llm_e2e.py --source-path temp/mock-llm-e2e/fixture.mp4
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
