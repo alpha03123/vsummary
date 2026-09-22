@@ -152,6 +152,7 @@ class SqlCurrentContentRepository:
             session.add(
                 OutboxEvent(
                     id=new_ulid(),
+                    workspace_id=job.workspace_id,
                     aggregate_type="video_content",
                     aggregate_id=video.id,
                     event_type="content_published",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,8 +19,8 @@ from backend.local.persistence.managed_mysql import (
     ManagedLocalMySqlPaths,
 )
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import Base, Job, Series, Video
-from backend.video_summary.infrastructure.persistence.sql_video_workspace import _persisted_card_ids
+from backend.video_summary.infrastructure.persistence.models import Base, Job, OutboxEvent, Series, Video
+from backend.video_summary.infrastructure.persistence.sql_video_workspace import _enqueue_outbox_event, _persisted_card_ids
 from backend.video_summary.library.models import KnowledgeCardDTO
 
 
@@ -95,7 +96,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0012_job_parent_relationship")
+        self.assertEqual(script.get_current_head(), "0013_outbox_workspace_retry_policy")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -108,6 +109,9 @@ class AlembicConfigurationTests(unittest.TestCase):
         self.assertIn("CREATE TABLE workspaces", ddl)
         self.assertIn("CREATE TABLE jobs", ddl)
         self.assertIn("CREATE TABLE outbox_events", ddl)
+        self.assertIn("LEFT JOIN notes AS note", ddl)
+        self.assertIn("LEFT JOIN jobs AS job", ddl)
+        self.assertIn("COALESCE(content_video.series_id, note_video.series_id)", ddl)
         self.assertIn("DEFAULT CURRENT_TIMESTAMP", ddl)
         self.assertNotIn("CURRENT_TIMESTAMP(6)", ddl)
 
@@ -246,3 +250,46 @@ class KnowledgeCardPersistenceTests(unittest.TestCase):
         self.assertEqual(set(persisted), {"kc-1", "kc-2"})
         self.assertNotEqual(persisted["kc-1"], "kc-1")
         self.assertNotEqual(persisted["kc-1"], persisted["kc-2"])
+
+
+class OutboxWriteTests(unittest.TestCase):
+    def test_workspace_scoped_outbox_helper_records_note_event(self) -> None:
+        class SessionRecorder:
+            def __init__(self) -> None:
+                self.added: list[OutboxEvent] = []
+
+            def add(self, row: OutboxEvent) -> None:
+                self.added.append(row)
+
+        session = SessionRecorder()
+        occurred_at = datetime.now(timezone.utc)
+
+        _enqueue_outbox_event(
+            session,
+            workspace_id="workspace-1",
+            aggregate_type="note",
+            aggregate_id="note-1",
+            event_type="note_published",
+            payload={"video_id": "video-1"},
+            occurred_at=occurred_at,
+        )
+
+        self.assertEqual(len(session.added), 1)
+        event = session.added[0]
+        self.assertEqual(event.workspace_id, "workspace-1")
+        self.assertEqual(event.aggregate_type, "note")
+        self.assertEqual(event.aggregate_id, "note-1")
+        self.assertEqual(event.payload, {"video_id": "video-1"})
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_workspace_scoped_outbox_helper_rejects_missing_workspace(self) -> None:
+        with self.assertRaisesRegex(ValueError, "workspace_id"):
+            _enqueue_outbox_event(
+                object(),
+                workspace_id="",
+                aggregate_type="note",
+                aggregate_id="note-1",
+                event_type="note_published",
+                payload={"video_id": "video-1"},
+                occurred_at=datetime.now(timezone.utc),
+            )

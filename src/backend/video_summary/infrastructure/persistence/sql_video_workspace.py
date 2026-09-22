@@ -16,7 +16,7 @@ from backend.core.errors import ActiveJobConflictError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.current_content_repository import SqlCurrentContentRepository
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import MediaObject, Video
+from backend.video_summary.infrastructure.persistence.models import MediaObject, OutboxEvent, Video
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
@@ -538,7 +538,15 @@ class SqlVideoWorkspace:
         note_id, now = new_ulid(), datetime.now(timezone.utc)
         with self._sessions.begin() as session:
             session.execute(text("INSERT INTO notes (id,video_id,title,content,source,row_version,created_at,updated_at) VALUES (:id,:video,:title,:content,:source,1,:now,:now)"), {"id": note_id, "video": video_id, "title": title.strip(), "content": content.strip(), "source": source, "now": now})
-            session.execute(text("INSERT INTO outbox_events (id,aggregate_type,aggregate_id,event_type,payload,occurred_at,attempt_count) VALUES (:id,'note',:note,'note_published',JSON_OBJECT('video_id',:video),:now,0)"), {"id": new_ulid(), "note": note_id, "video": video_id, "now": now})
+            _enqueue_outbox_event(
+                session,
+                workspace_id=self._workspace_id,
+                aggregate_type="note",
+                aggregate_id=note_id,
+                event_type="note_published",
+                payload={"video_id": video_id},
+                occurred_at=now,
+            )
         self._refresh_rag(series_id, video_id)
         return VideoNoteDTO(id=note_id, title=title.strip(), content=content.strip(), source=source, created_at=now.isoformat(), updated_at=now.isoformat())
 
@@ -550,7 +558,15 @@ class SqlVideoWorkspace:
             result = session.execute(text("UPDATE notes SET title=:title,content=:content,row_version=row_version+1,updated_at=:now WHERE id=:id AND video_id=:video AND deleted_at IS NULL"), {"id": note_id, "video": video_id, "title": title.strip(), "content": content.strip(), "now": now})
             if result.rowcount != 1:
                 return None
-            session.execute(text("INSERT INTO outbox_events (id,aggregate_type,aggregate_id,event_type,payload,occurred_at,attempt_count) VALUES (:id,'note',:note,'note_published',JSON_OBJECT('video_id',:video),:now,0)"), {"id": new_ulid(), "note": note_id, "video": video_id, "now": now})
+            _enqueue_outbox_event(
+                session,
+                workspace_id=self._workspace_id,
+                aggregate_type="note",
+                aggregate_id=note_id,
+                event_type="note_published",
+                payload={"video_id": video_id},
+                occurred_at=now,
+            )
         self._refresh_rag(series_id, video_id)
         return VideoNoteDTO(id=note_id, title=title.strip(), content=content.strip(), source="manual", created_at="", updated_at=now.isoformat())
 
@@ -575,7 +591,15 @@ class SqlVideoWorkspace:
             session.execute(text("INSERT INTO knowledge_card_sets (video_id,content_version,title,status,created_at,updated_at) VALUES (:video,:version,:title,'ready',NOW(),NOW())"), {"video": video_id, "version": version, "title": title})
             for ordinal, card in enumerate(cards):
                 session.execute(text("INSERT INTO knowledge_cards (id,video_id,ordinal,title,kind,summary,details,tags,keywords,related_card_ids) VALUES (:id,:video,:ordinal,:title,:kind,:summary,:details,CAST(:tags AS JSON),CAST(:keywords AS JSON),CAST(:related AS JSON))"), {"id": persisted_ids[card.id], "video": video_id, "ordinal": ordinal, "title": card.title, "kind": card.kind, "summary": card.summary, "details": card.details, "tags": __import__('json').dumps(card.tags), "keywords": __import__('json').dumps(card.keywords), "related": __import__('json').dumps([persisted_ids[related_id] for related_id in card.related_card_ids if related_id in persisted_ids])})
-            session.execute(text("INSERT INTO outbox_events (id,aggregate_type,aggregate_id,event_type,payload,occurred_at,attempt_count) VALUES (:id,'video_content',:video,'knowledge_cards_published',JSON_OBJECT('video_id',:video),NOW(),0)"), {"id": new_ulid(), "video": video_id})
+            _enqueue_outbox_event(
+                session,
+                workspace_id=self._workspace_id,
+                aggregate_type="video_content",
+                aggregate_id=video_id,
+                event_type="knowledge_cards_published",
+                payload={"video_id": video_id},
+                occurred_at=datetime.now(timezone.utc),
+            )
         self._refresh_rag(series_id, video_id)
 
     def update_video_summary(self, series_id: str, video_id: str, *, markdown: str) -> VideoSummaryDTO | None:
@@ -690,6 +714,32 @@ def _chapters_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def _enqueue_outbox_event(
+    session: Session,
+    *,
+    workspace_id: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    event_type: str,
+    payload: dict[str, Any],
+    occurred_at: datetime,
+) -> None:
+    if not workspace_id.strip():
+        raise ValueError("Outbox events require a workspace_id.")
+    session.add(
+        OutboxEvent(
+            id=new_ulid(),
+            workspace_id=workspace_id,
+            aggregate_type=aggregate_type,
+            aggregate_id=aggregate_id,
+            event_type=event_type,
+            payload=payload,
+            occurred_at=occurred_at,
+            attempt_count=0,
+        )
+    )
 
 
 def _persisted_card_ids(cards: list[KnowledgeCardDTO]) -> dict[str, str]:
