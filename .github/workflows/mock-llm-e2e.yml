@@ -7,6 +7,7 @@ on:
 
 jobs:
   mock-llm-e2e:
+    name: Windows Local Mock LLM E2E
     runs-on: windows-2022
     timeout-minutes: 25
     steps:
@@ -52,7 +53,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force temp/ci-mysql | Out-Null
           $env:PYTHONPATH = 'src;.'
-          Start-Process python -ArgumentList '-m backend.local.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home', $env:VSUMMARY_MYSQL_HOME, '--managed-data-root', (Resolve-Path temp/ci-mysql), '--skip-legacy-import' -RedirectStandardOutput temp/backend.out.log -RedirectStandardError temp/backend.err.log
+          $dataRoot = (Resolve-Path temp/ci-mysql).Path
+          $arguments = "-m backend.local.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home `"$env:VSUMMARY_MYSQL_HOME`" --managed-data-root `"$dataRoot`" --skip-legacy-import"
+          Start-Process python -ArgumentList $arguments -RedirectStandardOutput temp/backend.out.log -RedirectStandardError temp/backend.err.log
           $deadline = (Get-Date).AddMinutes(3)
           while ((Get-Date) -lt $deadline) {
             try { if ((Invoke-WebRequest http://127.0.0.1:8001/api/health -UseBasicParsing).StatusCode -eq 200) { exit 0 } } catch {}

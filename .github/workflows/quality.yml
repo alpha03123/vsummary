@@ -37,3 +37,36 @@ jobs:
       - run: npm run build
       - run: npm run verify:workspace-ui-boundary
       - run: npm run build:workspace-ui
+
+  macos-core:
+    name: macOS Portable Core
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.cpu.txt -r requirements.dev.txt pytest
+      - run: >-
+          PYTHONPATH=src:. python -m pytest
+          tests/backend/unit/agent
+          tests/backend/unit/agent_graph
+          tests/backend/unit/agent_memory
+          tests/backend/unit/asr
+          tests/backend/unit/bilibili
+          tests/backend/unit/chaoxing
+          tests/backend/unit/external
+          tests/backend/unit/generation
+          tests/backend/unit/infrastructure
+          tests/backend/unit/library
+          tests/backend/unit/llm
+          tests/backend/unit/mcp
+          tests/backend/unit/mindmap
+          tests/backend/unit/settings
+          tests/backend/unit/shared
+          tests/backend/unit/updater
+          tests/backend/unit/workspace
+          tests/backend/unit/persistence/test_job_worker_contract.py
+          tests/backend/unit/persistence/test_outbox_worker.py
+          tests/backend/unit/persistence/test_sql_workspace_boundary.py
+          -q

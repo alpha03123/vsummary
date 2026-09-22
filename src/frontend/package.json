@@ -32,14 +32,15 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.9",
     "@playwright/test": "^1.61.0",
-    "knip": "^6.37.0",
     "@tailwindcss/container-queries": "^0.1.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.27",
     "jsdom": "^29.0.1",
+    "knip": "^6.37.0",
     "postcss": "^8.5.8",
     "postcss-import": "^17.0.0",
     "tailwindcss": "^3.4.19",
