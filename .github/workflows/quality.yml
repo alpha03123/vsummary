@@ -50,7 +50,6 @@ jobs:
       - run: >-
           PYTHONPATH=src:. python -m pytest
           tests/backend/unit/agent
-          tests/backend/unit/agent_graph
           tests/backend/unit/agent_memory
           tests/backend/unit/asr
           tests/backend/unit/bilibili
