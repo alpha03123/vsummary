@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from tests._workspace_scope import attach_workspace_scope
 
 from backend.local.http.app import create_app
 from backend.bilibili.ytdlp_bilibili import BILIBILI_COOKIE_REQUIRED_MESSAGE
@@ -323,7 +324,7 @@ def _build_container(
     linked_workspace = _FakeLinkedWorkspace(video)
     job_repository = _FakeJobRepository(download_calls)
 
-    container = SimpleNamespace(
+    container = attach_workspace_scope(SimpleNamespace(
         root_dir=None,
         list_video_library=SimpleNamespace(
             run=lambda: SimpleNamespace(
@@ -346,10 +347,9 @@ def _build_container(
         generation_progress_tracker=generation_progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
         linked_series_workspace=linked_workspace,
-        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         job_repository=job_repository,
         download_calls=download_calls,
-    )
+    ))
     return container
 
 

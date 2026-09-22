@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from backend.api.di.container import ApiContainerDep
+from backend.api.dependencies import JobRepositoryDep, WorkspaceServicesDep
 from backend.api.schemas.contracts import AgentSeriesCreateRequest, AgentSeriesProcessRequest
 from backend.api.schemas.responses import (
     ResolveBilibiliSeriesRequest,
@@ -28,7 +28,7 @@ router = APIRouter()
 
 
 @router.post("/api/agent/series", response_model=SeriesResponse)
-async def create_agent_series(request: AgentSeriesCreateRequest, container: ApiContainerDep) -> SeriesResponse:
+async def create_agent_series(request: AgentSeriesCreateRequest, container: WorkspaceServicesDep) -> SeriesResponse:
     """POST /api/agent/series — 创建一个供 Agent 编排的空链接型系列。"""
     try:
         series = container.create_agent_series.run(title=request.title)
@@ -41,7 +41,8 @@ async def create_agent_series(request: AgentSeriesCreateRequest, container: ApiC
 async def process_agent_series(
     series_id: str,
     request: AgentSeriesProcessRequest | None = None,
-    container: ApiContainerDep = None,
+    container: WorkspaceServicesDep = None,
+    job_repository: JobRepositoryDep = None,
 ) -> dict[str, object]:
     """提交 Agent 系列的视频处理 Job。"""
     payload = request or AgentSeriesProcessRequest()
@@ -61,6 +62,7 @@ async def process_agent_series(
             submissions.append(
                 _submit_agent_video_job(
                     container=container,
+                    job_repository=job_repository,
                     series_id=series_id,
                     video_id=video_id,
                     transcript_enhancement_enabled=payload.transcript_enhancement_enabled,
@@ -90,7 +92,7 @@ async def process_agent_series(
 
 
 @router.post("/api/linked/bilibili/resolve/series", response_model=SeriesResponse)
-async def resolve_bilibili_series(request: ResolveBilibiliSeriesRequest, container: ApiContainerDep) -> SeriesResponse:
+async def resolve_bilibili_series(request: ResolveBilibiliSeriesRequest, container: WorkspaceServicesDep) -> SeriesResponse:
     """POST /api/linked/bilibili/resolve/series — 解析 B 站合集/系列 URL。
 
     将 B 站链接解析为包含多视频的系列信息，用于后续导入预览；
@@ -141,14 +143,15 @@ def _find_video(container, series_id: str, video_id: str):
 def _submit_agent_video_job(
     *,
     container,
+    job_repository,
     series_id: str,
     video_id: str,
     transcript_enhancement_enabled: bool | None,
     processing_mode: str,
 ):
     try:
-        return container.job_repository.submit(
-            workspace_id=container.sql_workspace.workspace_id,
+        return job_repository.submit(
+            workspace_id=container.workspace_id,
             resource_type="video",
             resource_id=video_id,
             operation="process_agent_video",
@@ -163,8 +166,8 @@ def _submit_agent_video_job(
             idempotency_key=None,
         )
     except ControlPlaneConflictError:
-        active = container.job_repository.active_for_resource(
-            workspace_id=container.sql_workspace.workspace_id,
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
             resource_id=video_id,
             operation="process_agent_video",
         )
@@ -174,7 +177,7 @@ def _submit_agent_video_job(
 
 
 @router.post("/api/linked/bilibili/resolve/video", response_model=VideoCardResponse)
-async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container: ApiContainerDep) -> VideoCardResponse:
+async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container: WorkspaceServicesDep) -> VideoCardResponse:
     """POST /api/linked/bilibili/resolve/video — 解析 B 站单个视频 URL。
 
     将 B 站链接解析为单个视频信息卡片，支持指定目标系列 ID
@@ -212,7 +215,7 @@ async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container
 async def resolve_linked_series(
     provider: str,
     request: ResolveLinkedSeriesRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> SeriesResponse:
     """解析指定 yt-dlp 平台的系列或播放列表。"""
     try:
@@ -228,7 +231,7 @@ async def resolve_linked_series(
 async def resolve_linked_video(
     provider: str,
     request: ResolveLinkedVideoRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> VideoCardResponse:
     """解析指定 yt-dlp 平台的单视频并写入目标系列。"""
     try:
@@ -266,10 +269,15 @@ def _linked_resolution_http_error(provider: str, error: Exception) -> HTTPExcept
 
 
 @router.post("/api/videos/{series_id}/{video_id}/download")
-async def start_video_download(series_id: str, video_id: str, container: ApiContainerDep) -> JSONResponse:
+async def start_video_download(
+    series_id: str,
+    video_id: str,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+) -> JSONResponse:
     """提交外链下载的持久 Job。"""
     try:
-        submitted = _submit_linked_video_download_job(container, series_id, video_id)
+        submitted = _submit_linked_video_download_job(container, job_repository, series_id, video_id)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ControlPlaneConflictError as error:
@@ -287,7 +295,12 @@ async def start_video_download(series_id: str, video_id: str, container: ApiCont
 
 
 @router.post("/api/videos/{series_id}/{video_id}/download/cancel")
-async def cancel_video_download(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
+async def cancel_video_download(
+    series_id: str,
+    video_id: str,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+) -> dict[str, str]:
     """POST /api/videos/{series_id}/{video_id}/download/cancel — 取消正在进行的视频下载。
 
     Args:
@@ -298,27 +311,27 @@ async def cancel_video_download(series_id: str, video_id: str, container: ApiCon
     Returns:
         {"status": "cancelling"}
     """
-    active = container.job_repository.active_for_resource(
-        workspace_id=container.sql_workspace.workspace_id,
+    active = job_repository.active_for_resource(
+        workspace_id=container.workspace_id,
         resource_id=video_id,
         operation="download_linked_video",
     )
     if active is None:
         raise HTTPException(status_code=404, detail="no active download job found")
-    snapshot = container.job_repository.request_cancel(
+    snapshot = job_repository.request_cancel(
         active.id,
-        workspace_id=container.sql_workspace.workspace_id,
+        workspace_id=container.workspace_id,
     )
     return {"status": snapshot.status if snapshot is not None else "cancelling", "job_id": active.id}
 
 
-def _submit_linked_video_download_job(container, series_id: str, video_id: str):
+def _submit_linked_video_download_job(container, job_repository, series_id: str, video_id: str):
     workspace = container.linked_series_workspace
     if workspace.get_linked_video_for_download(series_id, video_id) is None:
         raise LookupError(f"linked video not found: {series_id}/{video_id}")
     try:
-        return container.job_repository.submit(
-            workspace_id=container.sql_workspace.workspace_id,
+        return job_repository.submit(
+            workspace_id=container.workspace_id,
             resource_type="video",
             resource_id=video_id,
             operation="download_linked_video",
@@ -328,8 +341,8 @@ def _submit_linked_video_download_job(container, series_id: str, video_id: str):
             idempotency_key=None,
         )
     except ControlPlaneConflictError:
-        active = container.job_repository.active_for_resource(
-            workspace_id=container.sql_workspace.workspace_id,
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
             resource_id=video_id,
             operation="download_linked_video",
         )

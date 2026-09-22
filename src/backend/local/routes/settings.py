@@ -10,6 +10,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.api.di.container import ApiContainerDep
+from backend.api.dependencies import WorkspaceContextDep, WorkspaceServicesDep
+from backend.core.context import WorkspaceContext
 from backend.local.application_update import ApplicationUpdateError, get_update_status, schedule_update
 from backend.api.schemas.contracts import (
     ApplicationUpdateScheduleResponse,
@@ -145,6 +147,7 @@ def _to_workspace_settings_response(settings) -> WorkspaceSettingsResponse:
 async def update_workspace_settings(
     request: UpdateWorkspaceSettingsRequest,
     container: ApiContainerDep,
+    services: WorkspaceServicesDep,
 ) -> WorkspaceSettingsResponse:
     """PUT /api/settings — 更新工作区设置。
 
@@ -197,7 +200,7 @@ async def update_workspace_settings(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    container.generate_video_summary.update_video_generation_concurrency(
+    services.generate_video_summary.update_video_generation_concurrency(
         settings.video_generation_concurrency
     )
     container.chaoxing_importer.configure_delays(
@@ -475,7 +478,12 @@ def list_asr_models(provider: str, container: ApiContainerDep) -> list[FasterWhi
 
 
 @router.post("/api/asr/{provider}/models/{model_id}/download")
-def download_asr_model(provider: str, model_id: str, container: ApiContainerDep) -> JSONResponse:
+def download_asr_model(
+    provider: str,
+    model_id: str,
+    container: ApiContainerDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> JSONResponse:
     """POST /api/asr/{provider}/models/{model_id}/download — 触发 ASR 模型下载。
 
     在后台线程启动模型下载，同一模型同时只允许一个下载任务；
@@ -498,7 +506,7 @@ def download_asr_model(provider: str, model_id: str, container: ApiContainerDep)
     resource_id = f"asr:{provider}:{model_id}"
     try:
         submitted = container.job_repository.submit(
-            workspace_id=container.sql_workspace.workspace_id,
+            workspace_id=context.workspace_id,
             resource_type="model",
             resource_id=resource_id,
             operation="prepare_asr_model",
@@ -509,7 +517,7 @@ def download_asr_model(provider: str, model_id: str, container: ApiContainerDep)
         )
     except ControlPlaneConflictError as error:
         active = container.job_repository.active_for_resource(
-            workspace_id=container.sql_workspace.workspace_id,
+            workspace_id=context.workspace_id,
             resource_id=resource_id,
             operation="prepare_asr_model",
         )
@@ -520,7 +528,12 @@ def download_asr_model(provider: str, model_id: str, container: ApiContainerDep)
 
 
 @router.post("/api/asr/{provider}/models/{model_id}/download/cancel")
-def cancel_asr_model_download(provider: str, model_id: str, container: ApiContainerDep) -> dict[str, str]:
+def cancel_asr_model_download(
+    provider: str,
+    model_id: str,
+    container: ApiContainerDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> dict[str, str]:
     """POST /api/asr/faster-whisper/models/{model_id}/download/cancel — 请求取消 ASR 模型下载。"""
     manager = _get_asr_model_manager(provider, container)
     if not manager.is_supported(model_id):
@@ -528,7 +541,7 @@ def cancel_asr_model_download(provider: str, model_id: str, container: ApiContai
 
     resource_id = f"asr:{provider}:{model_id}"
     snapshot = container.job_repository.request_cancel_for_resource(
-        workspace_id=container.sql_workspace.workspace_id,
+        workspace_id=context.workspace_id,
         resource_id=resource_id,
         operation="prepare_asr_model",
     )
@@ -586,7 +599,11 @@ def list_rag_models(container: ApiContainerDep) -> list[RagModelResponse]:
 
 
 @router.post("/api/rag/models/{model_key}/download")
-def download_rag_model(model_key: str, container: ApiContainerDep) -> JSONResponse:
+def download_rag_model(
+    model_key: str,
+    container: ApiContainerDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> JSONResponse:
     """POST /api/rag/models/{model_key}/download — 触发 RAG 模型下载。
 
     启动指定 RAG 模型的下载任务；若已在下载则返回当前进度。
@@ -608,7 +625,7 @@ def download_rag_model(model_key: str, container: ApiContainerDep) -> JSONRespon
     resource_id = f"rag:{model_key}"
     try:
         submitted = container.job_repository.submit(
-            workspace_id=container.sql_workspace.workspace_id,
+            workspace_id=context.workspace_id,
             resource_type="model",
             resource_id=resource_id,
             operation="prepare_rag_model",
@@ -619,7 +636,7 @@ def download_rag_model(model_key: str, container: ApiContainerDep) -> JSONRespon
         )
     except ControlPlaneConflictError as error:
         active = container.job_repository.active_for_resource(
-            workspace_id=container.sql_workspace.workspace_id,
+            workspace_id=context.workspace_id,
             resource_id=resource_id,
             operation="prepare_rag_model",
         )
@@ -630,7 +647,11 @@ def download_rag_model(model_key: str, container: ApiContainerDep) -> JSONRespon
 
 
 @router.post("/api/rag/models/{model_key}/download/cancel")
-def cancel_rag_model_download(model_key: str, container: ApiContainerDep) -> dict[str, str]:
+def cancel_rag_model_download(
+    model_key: str,
+    container: ApiContainerDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> dict[str, str]:
     """POST /api/rag/models/{model_key}/download/cancel — 请求取消 RAG 模型下载。
 
     取消在文件边界生效：`warm_cache()` 每下完一个文件检查一次取消标志。已下载的
@@ -651,7 +672,7 @@ def cancel_rag_model_download(model_key: str, container: ApiContainerDep) -> dic
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     snapshot = container.job_repository.request_cancel_for_resource(
-        workspace_id=container.sql_workspace.workspace_id,
+        workspace_id=context.workspace_id,
         resource_id=f"rag:{model_key}",
         operation="prepare_rag_model",
     )

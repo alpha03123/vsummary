@@ -1,6 +1,6 @@
 """Public product-neutral contracts shared by Local and Cloud compositions."""
 
-from backend.core.context import WorkspaceContext, WorkspaceContextProvider
+from backend.core.context import WorkspaceContext, WorkspaceContextProvider, WorkspaceServicesProvider
 from backend.core.quota import LocalUnlimitedQuotaGuard, LocalUsageMeter, QuotaGuard, UsageMeter
 
 __all__ = [
@@ -10,4 +10,5 @@ __all__ = [
     "UsageMeter",
     "WorkspaceContext",
     "WorkspaceContextProvider",
+    "WorkspaceServicesProvider",
 ]

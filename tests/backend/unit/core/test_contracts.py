@@ -4,7 +4,7 @@ import unittest
 
 from backend.core.context import WorkspaceContext
 from backend.core.quota import LocalUnlimitedQuotaGuard, UsageEstimate
-from backend.local.composition import LocalWorkspaceContextProvider
+from backend.local.composition import LocalWorkspaceContextProvider, LocalWorkspaceServicesProvider
 
 
 class WorkspaceContextTests(unittest.TestCase):
@@ -18,6 +18,16 @@ class WorkspaceContextTests(unittest.TestCase):
         self.assertEqual(context.workspace_id, "workspace-1")
         self.assertEqual(context.actor_id, "local-user")
         self.assertEqual(context.request_id, "request-1")
+
+    def test_local_services_are_selected_by_workspace_context(self) -> None:
+        expected = type("Scope", (), {"workspace_id": "workspace-1"})()
+        provider = LocalWorkspaceServicesProvider(workspace_id="workspace-1")
+        provider.install_services(expected)
+        context = WorkspaceContext(workspace_id="workspace-1", actor_id="local-user", request_id="request-1")
+
+        self.assertIs(provider.get_services(context), expected)
+        with self.assertRaisesRegex(LookupError, "not available"):
+            provider.get_services(WorkspaceContext(workspace_id="workspace-2", actor_id="local-user", request_id="request-1"))
 
 
 class LocalQuotaTests(unittest.TestCase):

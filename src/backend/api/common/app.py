@@ -81,16 +81,8 @@ def create_app(container: ApiContainer) -> FastAPI:
         request.state.request_id = request_id
         container = getattr(request.app.state, "container", None)
         context_provider = getattr(container, "context_provider", None)
-        sql_workspace = getattr(container, "sql_workspace", None)
         context = context_provider.get_context(request_id=request_id) if context_provider is not None else None
         if context is not None:
-            configured_workspace_id = getattr(sql_workspace, "workspace_id", None)
-            if configured_workspace_id is not None and context.workspace_id != configured_workspace_id:
-                LOGGER.error(
-                    "request workspace does not match the configured workspace",
-                    extra={"request_workspace_id": context.workspace_id, "configured_workspace_id": configured_workspace_id},
-                )
-                return JSONResponse(status_code=503, content={"detail": "请求工作区与当前服务实例不匹配。"})
             request.state.workspace_context = context
         started_at = time.perf_counter()
         with bind_request_id(request_id), bind_workspace_context(context) if context is not None else _null_context():

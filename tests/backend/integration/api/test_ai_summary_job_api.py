@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from tests._workspace_scope import attach_workspace_scope
 from backend.local.http.app import create_app
 from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 
@@ -25,11 +26,10 @@ class _Jobs:
 
 
 def _container(*, conflict: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(
+    return attach_workspace_scope(SimpleNamespace(
         root_dir=None,
-        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         job_repository=_Jobs(conflict=conflict),
-    )
+    ))
 
 
 class DurableAiSummaryJobApiTests(unittest.TestCase):

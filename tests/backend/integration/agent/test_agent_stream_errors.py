@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from tests import _path_setup  # noqa: F401
+from tests._workspace_scope import attach_workspace_scope
 
 from backend.local.http.app import create_app
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
@@ -113,6 +114,8 @@ class FakeContainer:
         self.rag_model_manager = None
         self._error = error
         self.get_video_summary = FakeVideoSummaryQuery()
+        self.debug_mode = False
+        attach_workspace_scope(self)
 
     def get_agent_graph_service(self):
         return FakeAgentGraphService(self._error)

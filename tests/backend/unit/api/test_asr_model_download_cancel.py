@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from backend.core.context import WorkspaceContext
 from backend.local.routes.settings import cancel_asr_model_download
 
 
@@ -20,11 +21,11 @@ def test_cancel_asr_model_download_requests_durable_job_cancellation() -> None:
     )
     container = SimpleNamespace(
         faster_whisper_model_manager=_ModelManager(),
-        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         job_repository=job_repository,
     )
+    context = WorkspaceContext(workspace_id="workspace-1", actor_id="local-user", request_id="request-1")
 
-    response = cancel_asr_model_download("faster_whisper", "large-v3-turbo", container)
+    response = cancel_asr_model_download("faster_whisper", "large-v3-turbo", container, context)
 
     assert response == {"status": "cancelled", "job_id": "job-1"}
 

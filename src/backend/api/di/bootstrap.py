@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from backend.core.context import WorkspaceContextProvider
+from backend.core.context import WorkspaceContext, WorkspaceContextProvider, WorkspaceServicesProvider
 from backend.core.capabilities import CapabilitySet
 from backend.core.quota import QuotaGuard, UsageMeter
 from backend.agent import AgentContextBudgetService
 from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 from backend.api.adapters.linked_video_downloader import ProviderLinkedVideoDownloader
+from backend.api.di.workspace_services import WorkspaceServices
 from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator
 from backend.api.adapters.durable_workspace_index_refresher import DurableWorkspaceIndexRefresher, submit_workspace_index_refresh
 from backend.bilibili import (
@@ -100,8 +101,8 @@ from backend.video_summary.library.usecases import (
 class ApiContainer:
     config_path: Path
     root_dir: Path
-    sql_workspace: SqlVideoWorkspace
     context_provider: WorkspaceContextProvider
+    workspace_services_provider: WorkspaceServicesProvider[WorkspaceServices]
     quota_guard: QuotaGuard
     usage_meter: UsageMeter
     capabilities: CapabilitySet
@@ -110,62 +111,13 @@ class ApiContainer:
     outbox_worker: SqlOutboxWorker
     faster_whisper_model_manager: FasterWhisperModelManager
     whisper_cpp_model_manager: WhisperCppModelManager
-    list_video_library: ListVideoLibrary
-    get_video_source: GetVideoSource
-    get_video_summary: GetVideoSummary
-    get_video_transcript: GetVideoTranscript
-    get_video_mindmap: GetVideoMindmap
-    get_video_chapter_cards: GetVideoChapterCards
-    get_video_cards: GetVideoKnowledgeCards
-    generate_video_cards: GenerateVideoKnowledgeCards
-    generate_video_ai_summary: GenerateVideoAiSummary
-    get_video_ai_summary: GetVideoAiSummary
-    get_video_notes: GetVideoNotes
-    create_video_note: CreateVideoNote
-    update_video_note: UpdateVideoNote
-    update_video_ai_summary: UpdateVideoAiSummary
-    update_video_summary: UpdateVideoSummary
-    update_video_transcript: UpdateVideoTranscript
-    delete_video_note: DeleteVideoNote
-    get_video_workspace_tools: GetVideoWorkspaceTools
-    generate_video_summary: GenerateVideoSummaryFromLibrary
-    generate_series_summaries: GenerateSeriesSummaryFromLibrary
-    generate_video_mindmap: GenerateVideoMindmapFromLibrary
-    generate_series_mindmap: GenerateSeriesMindmapFromLibrary
-    get_series_mindmap: GetSeriesMindmap
-    delete_series: DeleteSeries
-    delete_video_source: DeleteVideoSource
-    rename_series: RenameSeries
-    rename_video: RenameVideo
-    export_series_archive: ExportSeriesArchive
-    import_local_series: ImportLocalSeries
-    import_local_playground_videos: ImportLocalPlaygroundVideos
-    import_local_series_videos: ImportLocalSeriesVideos
-    create_agent_series: CreateAgentLinkedSeries
-    resolve_bilibili_series: ResolveBilibiliSeries
-    resolve_bilibili_video: ResolveBilibiliVideo
-    resolve_linked_series: ResolveLinkedSeries
-    resolve_linked_video: ResolveLinkedVideo
-    bilibili_cookie_initializer: DrissionBilibiliCookieInitializer
-    external_cookie_initializers: dict[str, DrissionCookieInitializer]
-    generation_progress_tracker: InMemoryProgressTracker
-    mindmap_progress_tracker: InMemoryProgressTracker
-    video_download_progress_tracker: InMemoryProgressTracker
     model_download_progress_tracker: InMemoryProgressTracker
     chaoxing_import_progress_tracker: InMemoryProgressTracker
     knowledge_memory_progress_tracker: InMemoryProgressTracker
     rag_model_manager: RagModelManager
     chaoxing_importer: ChaoxingCourseImporter
-    linked_series_workspace: object
-    workspace_index_invalidator: object
     settings_service: SettingsServicePort
     usage_store: MySqlLlmUsageStore
-    get_agent_graph_service: Callable[[], AgentGraphService]
-    get_agent_context_usage: Callable[[], AgentContextBudgetService]
-    agent_session_store: object
-    invalidate_agent_graph_service: Callable[[], None]
-    invalidate_agent_workspace_indexes: Callable[[], None]
-    refresh_agent_workspace_indexes: Callable[[], None]
 
 
 def build_api_container(
@@ -177,10 +129,11 @@ def build_api_container(
     whisper_cpp_model_manager: WhisperCppModelManager | None = None,
     workspace_override: object | None = None,
     context_provider: WorkspaceContextProvider | None = None,
+    workspace_services_provider: WorkspaceServicesProvider[WorkspaceServices] | None = None,
     quota_guard: QuotaGuard | None = None,
     usage_meter: UsageMeter | None = None,
     capabilities: CapabilitySet | None = None,
-) -> ApiContainer:
+) -> tuple[ApiContainer, WorkspaceServices]:
     config_path = root_dir / "config" / "settings.toml"
     settings = load_settings(config_path, root_dir)
     if workspace_override is None:
@@ -195,8 +148,8 @@ def build_api_container(
     rag_model_progress_tracker = InMemoryProgressTracker()
     if not isinstance(workspace, SqlVideoWorkspace):
         raise RuntimeError("build_api_container requires SqlVideoWorkspace.")
-    if context_provider is None or quota_guard is None or usage_meter is None or capabilities is None:
-        raise RuntimeError("build_api_container requires explicit context, quota, usage, and capability adapters.")
+    if context_provider is None or workspace_services_provider is None or quota_guard is None or usage_meter is None or capabilities is None:
+        raise RuntimeError("build_api_container requires explicit context, workspace services, quota, usage, and capability adapters.")
     usage_store = MySqlLlmUsageStore(workspace.session_factory)
     agent_session_store = SqlAgentSessionStore(workspace.session_factory, workspace_id=workspace.workspace_id)
     index_refresher_ref: dict[str, DurableWorkspaceIndexRefresher | None] = {"value": None}
@@ -287,10 +240,14 @@ def build_api_container(
         "generate_video_mindmap": run_video_mindmap_job,
         "generate_series_mindmap": run_series_mindmap_job,
     }
+    def get_job_execution_services(workspace_id: str):
+        return workspace_services_provider.get_services(
+            WorkspaceContext(workspace_id=workspace_id, actor_id="system-worker", request_id=f"job:{workspace_id}")
+        )
+
     job_worker = SqlJobWorker(
         repository=job_repository,
-        summary_generator=resolved_generator,
-        operation_handlers=operation_handlers,
+        get_execution_services=get_job_execution_services,
         options=WorkerOptions.local(),
     )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
@@ -319,6 +276,7 @@ def build_api_container(
 
     outbox_worker = SqlOutboxWorker(
         repository=SqlOutboxRepository(workspace.session_factory),
+        workspace_id=workspace.workspace_id,
         handlers={
             "content_published": invalidate_workspace_indexes_from_outbox,
             "note_published": invalidate_workspace_indexes_from_outbox,
@@ -573,19 +531,11 @@ def build_api_container(
         reporter.update("index", 100.0, "工作区 RAG 索引已更新")
 
     operation_handlers["refresh_rag_index"] = run_rag_index_refresh_job
-    return ApiContainer(
-        config_path=config_path,
-        root_dir=root_dir,
-        sql_workspace=workspace,
-        context_provider=context_provider,
-        quota_guard=quota_guard,
-        usage_meter=usage_meter,
-        capabilities=capabilities,
-        job_repository=job_repository,
-        job_worker=job_worker,
-        outbox_worker=outbox_worker,
-        faster_whisper_model_manager=model_manager,
-        whisper_cpp_model_manager=whisper_cpp_manager,
+    workspace_services = WorkspaceServices(
+        workspace_id=workspace.workspace_id,
+        check_health=workspace.get_workspace,
+        job_summary_generator=resolved_generator,
+        job_operation_handlers=operation_handlers,
         list_video_library=ListVideoLibrary(workspace),
         get_video_source=GetVideoSource(workspace),
         get_video_summary=GetVideoSummary(workspace),
@@ -640,13 +590,36 @@ def build_api_container(
         generation_progress_tracker=progress_tracker,
         mindmap_progress_tracker=mindmap_progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
+        knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
+        rag_model_manager=rag_model_manager,
+        linked_series_workspace=workspace,
+        workspace_index_invalidator=workspace_index_invalidator,
+        get_agent_graph_service=agent_runtime.get_agent_graph_service,
+        get_agent_context_usage=agent_runtime.get_context_budget_service,
+        agent_session_store=agent_session_store,
+        invalidate_agent_graph_service=agent_runtime.invalidate_agent_graph_service,
+        invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
+        refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
+        debug_mode=settings.debug.mode,
+    )
+    container = ApiContainer(
+        config_path=config_path,
+        root_dir=root_dir,
+        context_provider=context_provider,
+        workspace_services_provider=workspace_services_provider,
+        quota_guard=quota_guard,
+        usage_meter=usage_meter,
+        capabilities=capabilities,
+        job_repository=job_repository,
+        job_worker=job_worker,
+        outbox_worker=outbox_worker,
+        faster_whisper_model_manager=model_manager,
+        whisper_cpp_model_manager=whisper_cpp_manager,
         model_download_progress_tracker=model_download_progress_tracker,
         chaoxing_import_progress_tracker=chaoxing_import_progress_tracker,
         knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
         rag_model_manager=rag_model_manager,
         chaoxing_importer=chaoxing_importer,
-        linked_series_workspace=workspace,
-        workspace_index_invalidator=workspace_index_invalidator,
         settings_service=SettingsService(
             config_path=config_path,
             root_dir=root_dir,
@@ -655,10 +628,5 @@ def build_api_container(
             rag_model_manager=rag_model_manager,
         ),
         usage_store=usage_store,
-        get_agent_graph_service=agent_runtime.get_agent_graph_service,
-        get_agent_context_usage=agent_runtime.get_context_budget_service,
-        agent_session_store=agent_session_store,
-        invalidate_agent_graph_service=agent_runtime.invalidate_agent_graph_service,
-        invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
-        refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
     )
+    return container, workspace_services

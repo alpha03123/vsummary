@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from tests._workspace_scope import attach_workspace_scope
 from backend.local.http.app import create_app
 from backend.video_summary.library.models import TranscriptSegmentDTO, VideoTranscriptDTO
 
@@ -46,11 +47,11 @@ def _transcript() -> VideoTranscriptDTO:
 
 def _build_container(transcript: VideoTranscriptDTO | None):
     source = SimpleNamespace(title="第一讲", output_dir=None)
-    return SimpleNamespace(
+    return attach_workspace_scope(SimpleNamespace(
         root_dir=None,
         get_video_source=SimpleNamespace(run=lambda series_id, video_id: source),
         get_video_transcript=SimpleNamespace(run=lambda series_id, video_id: transcript),
-    )
+    ))
 
 
 if __name__ == "__main__":

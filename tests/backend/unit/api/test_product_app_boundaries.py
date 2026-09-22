@@ -40,15 +40,35 @@ class ProductAppBoundaryTests(unittest.TestCase):
         self.assertIn("/api/application-update", schema["paths"])
         self.assertIn("/mcp", {getattr(route, "path", None) for route in client.app.routes})
 
-    def test_common_app_rejects_a_request_context_for_another_workspace(self) -> None:
+    def test_common_app_rejects_a_request_context_without_a_matching_service_scope(self) -> None:
         container = SimpleNamespace(
             root_dir=None,
             context_provider=SimpleNamespace(
                 get_context=lambda **_kwargs: WorkspaceContext("cloud-workspace", "cloud-user", "request-1")
             ),
-            sql_workspace=SimpleNamespace(workspace_id="local-workspace"),
+            workspace_services_provider=SimpleNamespace(
+                get_services=lambda _context: (_ for _ in ()).throw(LookupError("workspace missing"))
+            ),
+        )
+
+        response = TestClient(create_common_app(container)).get("/api/videos")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_common_route_executes_the_scope_selected_by_request_context(self) -> None:
+        selected_workspace_ids: list[str] = []
+        scope = SimpleNamespace(check_health=lambda: object())
+        container = SimpleNamespace(
+            root_dir=None,
+            context_provider=SimpleNamespace(
+                get_context=lambda **_kwargs: WorkspaceContext("cloud-workspace", "cloud-user", "request-1")
+            ),
+            workspace_services_provider=SimpleNamespace(
+                get_services=lambda context: selected_workspace_ids.append(context.workspace_id) or scope
+            ),
         )
 
         response = TestClient(create_common_app(container)).get("/api/health")
 
-        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(selected_workspace_ids, ["cloud-workspace"])

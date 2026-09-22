@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 
 @dataclass(frozen=True)
@@ -27,3 +27,16 @@ class WorkspaceContextProvider(Protocol):
     """Resolves a complete context at an application boundary."""
 
     def get_context(self, *, request_id: str) -> WorkspaceContext: ...
+
+
+WorkspaceServicesT = TypeVar("WorkspaceServicesT", covariant=True)
+
+
+class WorkspaceServicesProvider(Protocol[WorkspaceServicesT]):
+    """Resolves the application services owned by one WorkspaceContext.
+
+    Core owns this selection contract. Local and Cloud own the concrete service
+    lifetime, caching, and storage topology behind it.
+    """
+
+    def get_services(self, context: WorkspaceContext) -> WorkspaceServicesT: ...

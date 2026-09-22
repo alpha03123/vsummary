@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from tests._workspace_scope import attach_workspace_scope
 from backend.chaoxing.chaoxing_api import ChaoxingInitCancelled
 from backend.local.http.app import create_app
 from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
@@ -100,9 +101,8 @@ class _JobRepository:
 
 
 def _build_container(*, conflict: bool = False):
-    container = SimpleNamespace(
+    container = attach_workspace_scope(SimpleNamespace(
         root_dir=None,
-        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         job_repository=_JobRepository(conflict=conflict),
         chaoxing_importer=SimpleNamespace(
             is_initialized=lambda: True,
@@ -111,7 +111,7 @@ def _build_container(*, conflict: bool = False):
             list_chapters=lambda course_key: [SimpleNamespace(chapter_key="chapter-1", title="第一章", order="1")],
             list_videos=lambda chapter_key: [SimpleNamespace(video_key="video-1", chapter_key=chapter_key, title="第一讲", duration=123, filename="")],
         ),
-    )
+    ))
     container.cancel_init_calls = 0
     container.chaoxing_importer.cancel_init = lambda: setattr(container, "cancel_init_calls", container.cancel_init_calls + 1)
     return container

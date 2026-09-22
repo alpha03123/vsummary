@@ -332,11 +332,16 @@ class SqlJobRepository:
             self._finish_attempt(session, claim, now, outcome="cancelled")
             self._append_event(session, job.id, "cancelled", "cancelled", None, detail)
 
-    def succeed(self, claim: ClaimedJob, *, detail: str) -> None:
-        """Finish a worker-owned Job whose handler committed its own result."""
+    def succeed(self, claim: ClaimedJob, *, detail: str) -> bool:
+        """Atomically finish a worker-owned Job, unless its handler already finished it."""
 
         with self._session_factory.begin() as session:
             now = _database_now(session)
+            current = session.scalar(select(Job).where(Job.id == claim.id).with_for_update())
+            if current is None:
+                raise JobLeaseLostError("Job no longer exists.")
+            if current.status in {"succeeded", "cancelled"}:
+                return False
             job = self._owned_job(session, claim, now, allow_cancelling=True)
             if job.cancel_requested_at is not None:
                 job.status = "cancelled"
@@ -347,7 +352,7 @@ class SqlJobRepository:
                 job.finished_at = now
                 self._finish_attempt(session, claim, now, outcome="cancelled")
                 self._append_event(session, job.id, "cancelled", "cancelled", None, "任务已取消")
-                return
+                return True
             job.status = "succeeded"
             job.active_key = None
             job.claimed_by = None
@@ -356,6 +361,7 @@ class SqlJobRepository:
             job.finished_at = now
             self._finish_attempt(session, claim, now, outcome="succeeded")
             self._append_event(session, job.id, "succeeded", "succeeded", 100.0, detail)
+            return True
 
     def fail(self, claim: ClaimedJob, *, failure_code: str, failure_detail: str, retry_delay_seconds: int | None) -> None:
         with self._session_factory.begin() as session:

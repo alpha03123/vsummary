@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from tests._workspace_scope import attach_workspace_scope
 
 from backend.local.http.app import create_app
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
@@ -125,12 +126,11 @@ def _build_container():
             ),
         ],
     )
-    return SimpleNamespace(
+    return attach_workspace_scope(SimpleNamespace(
         root_dir=None,
-        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         list_video_library=SimpleNamespace(run=lambda: library),
         get_video_source=source_runner,
-    )
+    ))
 
 
 class _FakeJobRepository:

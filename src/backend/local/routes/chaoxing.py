@@ -8,8 +8,9 @@ import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from backend.api.di.container import ApiContainerDep
+from backend.api.dependencies import ChaoxingImporterDep, JobRepositoryDep, WorkspaceContextDep
 from backend.chaoxing.chaoxing_api import ChaoxingInitCancelled
+from backend.core.context import WorkspaceContext
 from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 
 
@@ -52,62 +53,66 @@ class ImportChaoxingCourseResponse(BaseModel):
 
 
 @router.get("/api/linked/chaoxing/status", response_model=ChaoxingStatusResponse)
-async def get_chaoxing_status(container: ApiContainerDep) -> ChaoxingStatusResponse:
+async def get_chaoxing_status(chaoxing_importer: ChaoxingImporterDep) -> ChaoxingStatusResponse:
     try:
-        initialized = await asyncio.to_thread(container.chaoxing_importer.is_initialized)
+        initialized = await asyncio.to_thread(chaoxing_importer.is_initialized)
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return ChaoxingStatusResponse(initialized=initialized)
 
 
 @router.post("/api/linked/chaoxing/init", response_model=ChaoxingStatusResponse)
-async def init_chaoxing(container: ApiContainerDep) -> ChaoxingStatusResponse:
+async def init_chaoxing(chaoxing_importer: ChaoxingImporterDep) -> ChaoxingStatusResponse:
     try:
-        await asyncio.to_thread(container.chaoxing_importer.init)
+        await asyncio.to_thread(chaoxing_importer.init)
     except (ChaoxingInitCancelled, RuntimeError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
-    return ChaoxingStatusResponse(initialized=await asyncio.to_thread(container.chaoxing_importer.is_initialized))
+    return ChaoxingStatusResponse(initialized=await asyncio.to_thread(chaoxing_importer.is_initialized))
 
 
 @router.post("/api/linked/chaoxing/init/cancel")
-async def cancel_chaoxing_init(container: ApiContainerDep) -> dict[str, str]:
-    container.chaoxing_importer.cancel_init()
+async def cancel_chaoxing_init(chaoxing_importer: ChaoxingImporterDep) -> dict[str, str]:
+    chaoxing_importer.cancel_init()
     return {"status": "cancelled"}
 
 
 @router.get("/api/linked/chaoxing/courses", response_model=list[ChaoxingCourseResponse])
-async def list_chaoxing_courses(container: ApiContainerDep) -> list[ChaoxingCourseResponse]:
+async def list_chaoxing_courses(chaoxing_importer: ChaoxingImporterDep) -> list[ChaoxingCourseResponse]:
     try:
-        courses = await asyncio.to_thread(container.chaoxing_importer.list_courses)
+        courses = await asyncio.to_thread(chaoxing_importer.list_courses)
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return [ChaoxingCourseResponse(**course.__dict__) for course in courses]
 
 
 @router.get("/api/linked/chaoxing/courses/{course_key}/chapters", response_model=list[ChaoxingChapterResponse])
-async def list_chaoxing_chapters(course_key: str, container: ApiContainerDep) -> list[ChaoxingChapterResponse]:
+async def list_chaoxing_chapters(course_key: str, chaoxing_importer: ChaoxingImporterDep) -> list[ChaoxingChapterResponse]:
     try:
-        chapters = await asyncio.to_thread(container.chaoxing_importer.list_chapters, course_key)
+        chapters = await asyncio.to_thread(chaoxing_importer.list_chapters, course_key)
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return [ChaoxingChapterResponse(**chapter.__dict__) for chapter in chapters]
 
 
 @router.get("/api/linked/chaoxing/chapters/{chapter_key}/videos", response_model=list[ChaoxingVideoResponse])
-async def list_chaoxing_videos(chapter_key: str, container: ApiContainerDep) -> list[ChaoxingVideoResponse]:
+async def list_chaoxing_videos(chapter_key: str, chaoxing_importer: ChaoxingImporterDep) -> list[ChaoxingVideoResponse]:
     try:
-        videos = await asyncio.to_thread(container.chaoxing_importer.list_videos, chapter_key)
+        videos = await asyncio.to_thread(chaoxing_importer.list_videos, chapter_key)
     except RuntimeError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return [ChaoxingVideoResponse(**video.__dict__) for video in videos]
 
 
 @router.post("/api/linked/chaoxing/import/course", response_model=ImportChaoxingCourseResponse, status_code=202)
-async def import_chaoxing_course(request: ImportChaoxingCourseRequest, container: ApiContainerDep) -> ImportChaoxingCourseResponse:
+async def import_chaoxing_course(
+    request: ImportChaoxingCourseRequest,
+    job_repository: JobRepositoryDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> ImportChaoxingCourseResponse:
     series_id = f"chaoxing-{_safe_key(request.course_key)}"
     try:
-        submitted = container.job_repository.submit(
-            workspace_id=container.sql_workspace.workspace_id,
+        submitted = job_repository.submit(
+            workspace_id=context.workspace_id,
             resource_type="series",
             resource_id=series_id,
             operation="import_chaoxing_course",
@@ -117,8 +122,8 @@ async def import_chaoxing_course(request: ImportChaoxingCourseRequest, container
             idempotency_key=None,
         )
     except ControlPlaneConflictError as error:
-        active = container.job_repository.active_for_resource(
-            workspace_id=container.sql_workspace.workspace_id,
+        active = job_repository.active_for_resource(
+            workspace_id=context.workspace_id,
             resource_id=series_id,
             operation="import_chaoxing_course",
         )
@@ -129,8 +134,12 @@ async def import_chaoxing_course(request: ImportChaoxingCourseRequest, container
 
 
 @router.post("/api/linked/chaoxing/import/course/{job_id}/cancel")
-async def cancel_chaoxing_course_import(job_id: str, container: ApiContainerDep) -> dict[str, str]:
-    snapshot = container.job_repository.request_cancel(job_id, workspace_id=container.sql_workspace.workspace_id)
+async def cancel_chaoxing_course_import(
+    job_id: str,
+    job_repository: JobRepositoryDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> dict[str, str]:
+    snapshot = job_repository.request_cancel(job_id, workspace_id=context.workspace_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="job not found")
     return {"status": snapshot.status, "job_id": snapshot.id}

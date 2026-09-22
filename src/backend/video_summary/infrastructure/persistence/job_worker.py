@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from threading import Event, Thread
+from typing import Protocol
 from uuid import uuid4
 
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
@@ -21,6 +22,13 @@ from backend.video_summary.infrastructure.persistence.sql_generation_adapters im
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class JobExecutionServices(Protocol):
+    """Workspace-owned dependencies used after a durable Job is claimed."""
+
+    job_summary_generator: SqlBackedVideoSummaryGenerator
+    job_operation_handlers: Mapping[str, Callable[[ClaimedJob, "SqlJobProgressReporter"], Awaitable[None]]]
 
 
 @dataclass(frozen=True)
@@ -77,13 +85,11 @@ class SqlJobWorker:
         self,
         *,
         repository: SqlJobRepository,
-        summary_generator: SqlBackedVideoSummaryGenerator,
-        operation_handlers: dict[str, Callable[[ClaimedJob, SqlJobProgressReporter], Awaitable[None]]] | None = None,
+        get_execution_services: Callable[[str], JobExecutionServices],
         options: WorkerOptions,
     ) -> None:
         self._repository = repository
-        self._summary_generator = summary_generator
-        self._operation_handlers = operation_handlers or {}
+        self._get_execution_services = get_execution_services
         self._options = options
         self._stop = Event()
         self._thread: Thread | None = None
@@ -129,14 +135,10 @@ class SqlJobWorker:
         heartbeat = asyncio.create_task(self._heartbeat(claim))
         try:
             reporter.raise_if_cancelled()
-            handler = self._operation_handlers.get(claim.operation)
+            services = self._get_execution_services(claim.workspace_id)
+            handler = services.job_operation_handlers.get(claim.operation)
             if handler is not None:
                 await handler(claim, reporter)
-                snapshot = self._repository.get(claim.id, workspace_id=claim.workspace_id)
-                if snapshot is None:
-                    raise JobLeaseLostError("Job disappeared after custom handler execution.")
-                if snapshot.status in {"succeeded", "cancelled"}:
-                    return
                 self._repository.succeed(claim, detail="任务已完成")
                 return
             if claim.operation not in {"generate_summary", "generate_transcript"}:
@@ -148,7 +150,7 @@ class SqlJobWorker:
                 )
                 return
             manual_transcript = _manual_transcript_from_payload(claim.request_payload)
-            await self._summary_generator.run(
+            await services.job_summary_generator.run(
                 series_id=str(claim.request_payload["series_id"]),
                 video_id=claim.resource_id,
                 processing_mode=str(claim.request_payload["processing_mode"]),

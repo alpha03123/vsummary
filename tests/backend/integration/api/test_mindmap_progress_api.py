@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from tests._workspace_scope import attach_workspace_scope
 from backend.local.http.app import create_app
 from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
@@ -35,13 +36,12 @@ def _container(*, conflict: bool = False) -> SimpleNamespace:
             )
         ]
     )
-    return SimpleNamespace(
+    return attach_workspace_scope(SimpleNamespace(
         root_dir=None,
-        sql_workspace=SimpleNamespace(workspace_id="workspace-1"),
         job_repository=_Jobs(conflict=conflict),
         list_video_library=SimpleNamespace(run=lambda: library),
         get_video_source=SimpleNamespace(run=lambda _series, _video: None),
-    )
+    ))
 
 
 class DurableMindmapJobApiTests(unittest.TestCase):
