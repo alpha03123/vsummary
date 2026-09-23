@@ -90,6 +90,12 @@ class ControlPlaneSchemaTests(unittest.TestCase):
         self.assertIn("uq_jobs_active_key", job_constraint_names)
         self.assertIn("uq_videos_series_external_source", video_constraint_names)
 
+    def test_job_resource_id_fits_supported_asr_model_keys(self) -> None:
+        from backend.video_summary.infrastructure.asr.whisper_cpp_models import SUPPORTED_WHISPER_CPP_MODELS
+
+        resource_ids = [f"asr:whisper_cpp:{model.id}" for model in SUPPORTED_WHISPER_CPP_MODELS]
+        self.assertGreaterEqual(Job.__table__.c.resource_id.type.length, max(map(len, resource_ids)))
+
     def test_series_position_is_unique_within_a_workspace(self) -> None:
         constraint_names = {constraint.name for constraint in Series.__table__.constraints}
 
@@ -100,7 +106,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0015_manual_legacy_migration")
+        self.assertEqual(script.get_current_head(), "0016_model_job_resource_id")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -120,6 +126,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         self.assertIn("LEFT JOIN jobs AS job", ddl)
         self.assertIn("COALESCE(content_video.series_id, note_video.series_id)", ddl)
         self.assertIn("DEFAULT CURRENT_TIMESTAMP", ddl)
+        self.assertIn("ALTER TABLE jobs MODIFY resource_id VARCHAR(128) NOT NULL", ddl)
         self.assertNotIn("CURRENT_TIMESTAMP(6)", ddl)
 
 
