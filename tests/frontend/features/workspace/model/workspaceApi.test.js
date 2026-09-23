@@ -3,11 +3,12 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   generateVideoSummary,
   loadAgentSessionRecovery,
-  loadProviderUsage,
-  relinkExternalVideo,
   loadSeriesMindmap,
   generateVideoMindmap,
+  generateVideoKnowledgeCards,
+  generateVideoAiSummary,
 } from "@src/features/workspace/model/workspaceApi";
+import { loadProviderUsage, relinkExternalVideo } from "@src/local-features/api/localWorkspaceApi";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -155,11 +156,11 @@ describe("generateVideoMindmap", () => {
   test("sends the selected maximum depth", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ id: "root", title: "导图", children: [] }),
+      json: async () => ({ job_id: "job-mindmap", status: "queued" }),
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await generateVideoMindmap("series-1", "video-1", 4);
+    await expect(generateVideoMindmap("series-1", "video-1", 4)).resolves.toEqual({ jobId: "job-mindmap", status: "queued" });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/videos/series-1/video-1/mindmap/generate",
@@ -167,6 +168,27 @@ describe("generateVideoMindmap", () => {
         method: "POST",
         body: JSON.stringify({ max_depth: 4 }),
       }),
+    );
+  });
+});
+
+describe("generateVideoKnowledgeCards", () => {
+  test("submits a durable knowledge-card job", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ job_id: "job-cards", status: "queued" }) })));
+
+    await expect(generateVideoKnowledgeCards("series-1", "video-1")).resolves.toEqual({ jobId: "job-cards", status: "queued" });
+  });
+});
+
+describe("generateVideoAiSummary", () => {
+  test("submits a durable AI-summary job with the selected template", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ job_id: "job-ai-summary", status: "queued" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateVideoAiSummary("series-1", "video-1", "tutorial")).resolves.toEqual({ jobId: "job-ai-summary", status: "queued" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/videos/series-1/video-1/ai-summary/generate",
+      expect.objectContaining({ body: JSON.stringify({ template: "tutorial" }) }),
     );
   });
 });

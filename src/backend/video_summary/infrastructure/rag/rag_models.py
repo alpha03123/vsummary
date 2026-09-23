@@ -200,6 +200,23 @@ class RagModelManager:
         Thread(target=self._run_download, args=(spec, reporter), daemon=True).start()
         return self.get_status(spec.key)
 
+    def download(self, key: str, *, progress_reporter: ProgressReporter) -> None:
+        """在调用方持有的 Job 租约内执行一次模型准备。
+
+        生命周期、重试和取消权属于持久 Job；该方法只做文件下载、校验与完成后的
+        索引失效通知，因此不创建线程也不写进程内进度 tracker。
+        """
+        spec = self._get_spec(key)
+        if self.is_downloaded(spec.key):
+            progress_reporter.update("download", 100.0, "模型已存在于项目目录")
+            return
+        self._cleanup_incomplete_model_cache(spec)
+        self._downloader(spec, progress_reporter)
+        if not self.is_downloaded(spec.key):
+            raise RuntimeError(f"RAG 模型下载后校验失败：{spec.label}")
+        if self._on_download_completed is not None:
+            self._on_download_completed(spec.key)
+
     def has_active_download(self) -> bool:
         """判断是否存在进行中的下载（同时检查本地活动集合与 tracker 状态）。"""
         with self._lock:

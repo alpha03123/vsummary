@@ -253,9 +253,9 @@ export function WorkspaceImportModal({
   }
 
   function requestChaoxingImportCancel() {
-    const taskId = chaoxingImportTaskRef.current?.taskId;
-    if (taskId) {
-      cancelChaoxingImportRef.current?.(taskId);
+    const jobId = chaoxingImportTaskRef.current?.jobId;
+    if (jobId) {
+      cancelChaoxingImportRef.current?.(jobId);
       chaoxingImportTaskRef.current = null;
     }
   }

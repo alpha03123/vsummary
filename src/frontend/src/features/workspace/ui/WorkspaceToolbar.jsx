@@ -7,7 +7,7 @@ import {
   BarChart3
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { loadApplicationUpdateStatus } from "../model/workspaceApi";
+import { loadApplicationUpdateStatus } from "../../../local-features/api/localWorkspaceApi";
 import { WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
 
 export function WorkspaceToolbar({

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -71,7 +72,7 @@ def configure_application_logging(root_dir: Path) -> Path:
 
     for handler in list(logger.handlers):
         if getattr(handler, "name", None) == _HANDLER_NAME:
-            if getattr(handler, "baseFilename", None) == str(log_path.resolve()):
+            if _same_log_file(getattr(handler, "baseFilename", None), log_path):
                 return log_path
             logger.removeHandler(handler)
             handler.close()
@@ -91,12 +92,22 @@ def configure_application_logging(root_dir: Path) -> Path:
 
 def close_application_logging(root_dir: Path) -> None:
     """关闭指定应用根目录的文件 handler，释放 Windows 文件句柄。"""
-    expected_path = str((root_dir / "logs" / "app.jsonl").resolve())
+    expected_path = root_dir / "logs" / "app.jsonl"
     logger = logging.getLogger("backend")
     for handler in list(logger.handlers):
-        if getattr(handler, "baseFilename", None) == expected_path:
+        if _same_log_file(getattr(handler, "baseFilename", None), expected_path):
             logger.removeHandler(handler)
             handler.close()
+
+
+def _same_log_file(handler_path: object, expected_path: Path) -> bool:
+    if not isinstance(handler_path, str):
+        return False
+    candidate = Path(handler_path)
+    try:
+        return candidate.samefile(expected_path)
+    except OSError:
+        return os.path.normcase(os.path.abspath(candidate)) == os.path.normcase(os.path.abspath(expected_path))
 
 
 @contextmanager

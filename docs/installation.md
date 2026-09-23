@@ -137,7 +137,7 @@ MySQL 默认从 `brew --prefix mysql@8.4` 查找。可用环境变量调整启�
 ```bash
 VSUMMARY_MYSQL_HOME=/path/to/mysql VSUMMARY_PORT=4174 ./start.command
 # 为开发/测试隔离用户数据：
-VSUMMARY_DATA_ROOT="$PWD/data/mac-test" ./start.command
+VSUMMARY_DATA="$PWD/data/mac-test" ./start.command
 ```
 
 ### 模型与首次配置
@@ -166,7 +166,9 @@ embedding_device = "cpu"
 
 ### 数据与凭据
 
-- 数据库、导入媒体和处理缓存默认位于 `~/Library/Application Support/VSummary/`。
+- 从源码启动时，数据库、导入媒体和处理缓存默认位于项目的 `.vsummary/`；
+  设置 `VSUMMARY_DATA` 可指定其他绝对路径。直接调用后端且未设置该变量时，
+  macOS 默认使用 `~/Library/Application Support/VSummary/`。
 - 本地 MySQL 密码保存在当前用户的 macOS 登录钥匙串，服务名为 `VSummary MySQL`；
   数据目录中的 `.keychain` 文件只是引用，不含密码。首次访问如有系统提示，请允许
   本次安装的 Python 访问该条目；钥匙串锁定时需先解锁。

@@ -179,7 +179,7 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("/api/import/local/series/from-paths", seen_request["path"])
         self.assertIn("application/json", seen_request["content_type"])
         self.assertIn("Audio Course", seen_request["body"])
-        self.assertIn('"storage_mode": "copy"', seen_request["body"])
+        self.assertEqual("copy", json.loads(seen_request["body"])["storage_mode"])
         self.assertIn("lesson-1.mp3", seen_request["body"])
         self.assertEqual("audio-course", result["series_id"])
         self.assertEqual("Audio Course", result["title"])
@@ -395,7 +395,7 @@ class VideoSeriesBackendClientTests(unittest.IsolatedAsyncioTestCase):
             )
 
             self.assertEqual("file", result["delivery"])
-            self.assertEqual(str(requested_path), result["output_path"])
+            self.assertTrue(Path(result["output_path"]).samefile(requested_path))
             self.assertEqual("", result["resource_uri"])
             self.assertNotIn("resource_link", result)
             self.assertTrue(requested_path.is_file())

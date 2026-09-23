@@ -9,15 +9,8 @@ from backend.video_summary.infrastructure.persistence.database import (
     create_database_engine,
     create_session_factory,
 )
-from backend.video_summary.infrastructure.persistence.local_credentials import (
-    load_local_mysql_password,
-    save_local_mysql_password,
-)
-
 __all__ = [
     "DatabaseOptions",
     "create_database_engine",
     "create_session_factory",
-    "load_local_mysql_password",
-    "save_local_mysql_password",
 ]

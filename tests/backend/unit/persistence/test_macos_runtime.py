@@ -7,8 +7,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-from backend.video_summary.infrastructure.persistence import local_credentials as credentials
-from backend.video_summary.infrastructure.persistence import managed_local_mysql as mysql
+from backend.local.persistence import local_credentials as credentials
+from backend.local.persistence import managed_mysql as mysql
 
 
 class PlatformRuntimeTests(unittest.TestCase):
@@ -77,7 +77,9 @@ class PlatformRuntimeTests(unittest.TestCase):
         probe.assert_not_called()
 
     def test_macos_data_root_does_not_need_localappdata(self):
-        with patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {}, clear=True):
+        with patch.object(sys, "platform", "darwin"), patch.dict(
+            os.environ, {"VSUMMARY_DATA": "", "LOCALAPPDATA": ""}
+        ):
             self.assertEqual(mysql._default_data_root(), Path.home() / "Library/Application Support/VSummary")
 
     def test_windows_binary_names_are_preserved(self):

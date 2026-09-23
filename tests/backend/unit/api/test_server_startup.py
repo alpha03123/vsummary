@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from backend.api.http.server import configure_event_loop_policy
+from backend.local.http.server import _exit_for_mysql_path_error
 
 
 class ServerStartupTests(unittest.TestCase):
@@ -32,6 +33,12 @@ class ServerStartupTests(unittest.TestCase):
             configure_event_loop_policy()
 
         set_policy.assert_not_called()
+
+    def test_path_error_is_rendered_without_a_traceback(self) -> None:
+        with self.assertRaises(SystemExit) as context:
+            _exit_for_mysql_path_error(RuntimeError("请将完整安装包移动到纯英文路径后重新启动。"))
+
+        self.assertEqual(str(context.exception), "启动失败：请将完整安装包移动到纯英文路径后重新启动。")
 
 
 if __name__ == "__main__":

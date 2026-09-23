@@ -9,7 +9,7 @@ citation 构造入口：读取图节点结果里的 `evidence_items`（或旧字
 
 from __future__ import annotations
 
-from backend.agent.schemas.action_plan import CitationReference, CitationSlot, CitationSlotCandidate
+from backend.core.citations import CitationReference, CitationSlot, CitationSlotCandidate
 
 
 def build_citations_from_graph_result(result: dict[str, object]) -> list[CitationReference]:

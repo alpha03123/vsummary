@@ -1,0 +1,37 @@
+name: Quality
+
+on:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - shell: pwsh
+        run: python -m pip install -r requirements.cpu.txt -r requirements.dev.txt import-linter pytest
+      - shell: pwsh
+        run: $env:PYTHONPATH = 'src;.'; lint-imports
+      - shell: pwsh
+        run: $env:PYTHONPATH = 'src;.'; python -m pytest tests/backend -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run verify:workspace-ui-boundary
+      - run: npm run build:workspace-ui

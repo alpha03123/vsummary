@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from backend.core.errors import ActiveJobConflictError
 from backend.video_summary.library.ports import (
     GenerationActivityChecker,
     VideoMutationStore,
@@ -141,7 +142,10 @@ class DeleteSeries:
             raise GenerationInProgressError(f"系列 '{series_id}' 正在生成，请先取消生成后再删除。")
         series = next((item for item in self._workspace.list_series() if item.id == series_id), None)
         processed_exists = bool(series and any(video.processed for video in series.videos))
-        deleted = self._workspace.delete_series(series_id)
+        try:
+            deleted = self._workspace.delete_series(series_id)
+        except ActiveJobConflictError as error:
+            raise GenerationInProgressError(str(error)) from error
         if not deleted:
             raise LookupError(f"series not found '{series_id}'")
         if processed_exists:
@@ -198,7 +202,10 @@ class DeleteVideoSource:
             raise GenerationInProgressError(f"视频 '{series_id}/{video_id}' 正在生成，请先取消生成后再删除。")
         source = self._workspace.get_video_source(series_id, video_id)
         processed = bool(source and source.processed)
-        deleted = self._workspace.delete_video(series_id, video_id)
+        try:
+            deleted = self._workspace.delete_video(series_id, video_id)
+        except ActiveJobConflictError as error:
+            raise GenerationInProgressError(str(error)) from error
         if not deleted:
             raise LookupError(f"video not found '{series_id}/{video_id}'")
         if processed:

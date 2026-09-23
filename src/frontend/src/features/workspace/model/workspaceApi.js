@@ -23,314 +23,6 @@ export async function checkBackendHealth() {
   return response.json();
 }
 
-export async function loadApplicationUpdateStatus() {
-  const payload = await fetchJson("/api/application-update");
-  return {
-    installationKind: payload.installation_kind,
-    currentVersion: payload.current_version,
-    variant: payload.variant,
-    updateAvailable: Boolean(payload.update_available),
-    canApply: Boolean(payload.can_apply),
-    requiresFullPackage: Boolean(payload.requires_full_package),
-    latestVersion: payload.latest_version,
-    fullPackageUrl: payload.full_package_url,
-    message: typeof payload.message === "string" ? payload.message : "",
-  };
-}
-
-export async function scheduleApplicationUpdate() {
-  const payload = await fetchJson("/api/application-update/apply", { method: "POST" });
-  return {
-    targetVersion: payload.target_version,
-    restartAfterSeconds: payload.restart_after_seconds,
-  };
-}
-
-export async function loadWorkspaceSettings() {
-  const payload = await fetchJson("/api/settings");
-  return toWorkspaceSettings(payload);
-}
-
-function toWorkspaceSettings(payload) {
-  return {
-    theme: payload.theme,
-    showTakeaways: payload.show_takeaways,
-    transcriptEnhancementEnabled: payload.transcript_enhancement_enabled,
-    asrProvider: payload.asr_provider,
-    asrModelQuality: payload.asr_model_quality,
-    transcriptionMode: payload.transcription_mode,
-    asrCloudModel: payload.asr_cloud_model,
-    asrBaseUrl: payload.asr_base_url,
-    hasAsrApiKey: payload.has_asr_api_key,
-    asrApiKeyMasked: payload.asr_api_key_masked,
-    asrApiKey: "",
-    ragEmbeddingDevice: payload.rag_embedding_device,
-    ragMaxHits: payload.rag_max_hits,
-    ragRerankEnabled: payload.rag_rerank_enabled,
-    webSearchEnabled: payload.web_search_enabled,
-    windowTokens: payload.window_tokens,
-    answerDetailLevel: payload.answer_detail_level,
-    reasoningEffort: payload.reasoning_effort,
-    talkCustomPrompt: payload.talk_custom_prompt,
-    videoGenerationConcurrency: payload.video_generation_concurrency,
-    chapterVisualMode: payload.chapter_visual_mode,
-    maxVisualInputImages: payload.max_visual_input_images,
-    noteVisualMode: payload.note_visual_mode,
-    aiSummaryMultimodalEnabled: payload.ai_summary_multimodal_enabled === true,
-    mindmapVisualInput: payload.mindmap_visual_input,
-    cardsVisualInput: payload.cards_visual_input,
-    noteMaxImages: payload.note_max_images,
-    autoGenerateArtifacts: Array.isArray(payload.auto_generate_artifacts) ? payload.auto_generate_artifacts : [],
-    chaoxingRequestDelaySeconds: payload.chaoxing_request_delay_seconds,
-    chaoxingInitCourseDelaySeconds: payload.chaoxing_init_course_delay_seconds,
-    runtimeCapabilities: payload.runtime_capabilities,
-  };
-}
-
-export async function loadProviderSettings() {
-  const payload = await fetchJson("/api/provider-settings");
-  return {
-    llmProvider: payload.llm_provider,
-    openaiBaseUrl: payload.openai_base_url,
-    openaiModel: payload.openai_model,
-    hasOpenaiApiKey: payload.has_openai_api_key,
-    openaiApiKeyMasked: payload.openai_api_key_masked,
-    hfEndpoint: payload.hf_endpoint,
-    openaiApiKey: "",
-  };
-}
-
-export async function loadProviderUsage(range = "7d") {
-  const payload = await fetchJson(`/api/provider-settings/usage?range=${encodeURIComponent(range)}`);
-  return toProviderUsage(payload);
-}
-
-export async function loadOpenaiApiKey() {
-  const payload = await fetchJson("/api/provider-settings/openai-api-key");
-  return typeof payload.openai_api_key === "string" ? payload.openai_api_key : "";
-}
-
-export async function loadAsrApiKey() {
-  const payload = await fetchJson("/api/settings/asr-api-key");
-  return typeof payload.asr_api_key === "string" ? payload.asr_api_key : "";
-}
-
-export async function updateWorkspaceSettings(settings) {
-  const payload = await fetchJson("/api/settings", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      theme: settings.theme,
-      show_takeaways: settings.showTakeaways,
-      transcript_enhancement_enabled: settings.transcriptEnhancementEnabled,
-      asr_provider: settings.asrProvider,
-      asr_model_quality: settings.asrModelQuality,
-      transcription_mode: settings.transcriptionMode,
-      asr_cloud_model: settings.asrCloudModel,
-      asr_base_url: settings.asrBaseUrl,
-      asr_api_key: settings.asrApiKey && settings.asrApiKey.trim() ? settings.asrApiKey : null,
-      rag_embedding_device: settings.ragEmbeddingDevice,
-      rag_max_hits: settings.ragMaxHits,
-      rag_rerank_enabled: settings.ragRerankEnabled,
-      web_search_enabled: settings.webSearchEnabled,
-      window_tokens: settings.windowTokens,
-      answer_detail_level: settings.answerDetailLevel,
-      reasoning_effort: settings.reasoningEffort,
-      talk_custom_prompt: settings.talkCustomPrompt,
-      video_generation_concurrency: settings.videoGenerationConcurrency,
-      chapter_visual_mode: settings.chapterVisualMode,
-      max_visual_input_images: settings.maxVisualInputImages,
-      note_visual_mode: settings.noteVisualMode,
-      ai_summary_multimodal_enabled: settings.aiSummaryMultimodalEnabled,
-      mindmap_visual_input: settings.mindmapVisualInput,
-      cards_visual_input: settings.cardsVisualInput,
-      note_max_images: settings.noteMaxImages,
-      auto_generate_artifacts: settings.autoGenerateArtifacts,
-      chaoxing_request_delay_seconds: settings.chaoxingRequestDelaySeconds,
-      chaoxing_init_course_delay_seconds: settings.chaoxingInitCourseDelaySeconds,
-    }),
-  });
-  return toWorkspaceSettings(payload);
-}
-
-export async function updateProviderSettings(settings) {
-  const payload = await fetchJson("/api/provider-settings", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      llm_provider: settings.llmProvider,
-      openai_base_url: settings.openaiBaseUrl,
-      openai_model: settings.openaiModel,
-      openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
-      hf_endpoint: settings.hfEndpoint,
-    }),
-  });
-  return {
-    llmProvider: payload.llm_provider,
-    openaiBaseUrl: payload.openai_base_url,
-    openaiModel: payload.openai_model,
-    hasOpenaiApiKey: payload.has_openai_api_key,
-    openaiApiKeyMasked: payload.openai_api_key_masked,
-    hfEndpoint: payload.hf_endpoint,
-    openaiApiKey: "",
-  };
-}
-
-export async function testProviderSettings(settings) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 45000);
-  try {
-    return await fetchJson("/api/provider-settings/test", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        llm_provider: settings.llmProvider,
-        openai_base_url: settings.openaiBaseUrl,
-        openai_model: settings.openaiModel,
-        openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
-        hf_endpoint: settings.hfEndpoint,
-      }),
-    });
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
-export async function discoverProviderModels(settings) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 20000);
-  try {
-    const payload = await fetchJson("/api/provider-settings/models", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        llm_provider: settings.llmProvider,
-        openai_base_url: settings.openaiBaseUrl,
-        openai_api_key: settings.openaiApiKey.trim() ? settings.openaiApiKey : null,
-      }),
-    });
-    if (!Array.isArray(payload.models)) {
-      throw new Error("模型探测响应无效");
-    }
-    return payload.models.filter((model) => typeof model === "string" && model.trim());
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
-export async function testAsrSettings(settings) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 10000);
-  try {
-    return await fetchJson("/api/settings/asr/test", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        asr_provider: settings.asrProvider,
-        asr_cloud_model: settings.asrCloudModel,
-        asr_base_url: settings.asrBaseUrl,
-        asr_api_key: settings.asrApiKey.trim() ? settings.asrApiKey : null,
-      }),
-    });
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
-export async function loadFasterWhisperModels(provider = "faster_whisper") {
-  return fetchJson(`/api/asr/${encodeURIComponent(provider)}/models`);
-}
-
-export async function loadRagModels() {
-  return fetchJson("/api/rag/models");
-}
-
-export async function downloadRagModel(modelKey) {
-  return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download`, {
-    method: "POST",
-  });
-}
-
-export async function cancelRagModelDownload(modelKey) {
-  return fetchJson(`/api/rag/models/${encodeURIComponent(modelKey)}/download/cancel`, {
-    method: "POST",
-  });
-}
-
-export function subscribeRagModelDownloadProgress(modelKey, listener) {
-  return subscribeProgress(
-    `/api/rag/models/${encodeURIComponent(modelKey)}/download/progress`,
-    listener,
-    "RAG 模型下载进度连接已中断",
-  );
-}
-
-export async function downloadFasterWhisperModel(provider, modelId) {
-  return fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download`, {
-    method: "POST",
-  });
-}
-
-export async function cancelFasterWhisperModelDownload(provider, modelId) {
-  return fetchJson(`/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download/cancel`, {
-    method: "POST",
-  });
-}
-
-export function subscribeFasterWhisperModelDownloadProgress(provider, modelId, listener) {
-  return subscribeProgress(
-    `/api/asr/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}/download/progress`,
-    listener,
-    "模型下载进度连接已中断",
-  );
-}
-
-function subscribeProgress(path, listener, connectionErrorMessage) {
-  const eventSource = new EventSource(path);
-  let terminal = false;
-
-  eventSource.onmessage = (event) => {
-    const snapshot = parseProgressMessage(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      eventSource.close();
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (terminal) {
-      return;
-    }
-    listener({
-      status: "failed",
-      stage: "failed",
-      progress: null,
-      detail: null,
-      error: connectionErrorMessage,
-    });
-    eventSource.close();
-  };
-
-  return () => {
-    terminal = true;
-    eventSource.close();
-  };
-}
-
 export async function loadVideoSummary(seriesId, videoId) {
   return toWorkspaceSummary(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/summary`));
 }
@@ -384,11 +76,13 @@ export async function loadVideoKnowledgeCards(seriesId, videoId) {
 }
 
 export async function generateVideoKnowledgeCards(seriesId, videoId) {
-  return toWorkspaceKnowledgeCards(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards/generate`, {
-      method: "POST",
-    }),
-  );
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/knowledge-cards/generate`, {
+    method: "POST",
+  });
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("知识卡片任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function loadVideoNotes(seriesId, videoId) {
@@ -418,13 +112,15 @@ export async function loadVideoAiSummary(seriesId, videoId) {
 }
 
 export async function generateVideoAiSummary(seriesId, videoId, template = "general") {
-  return toWorkspaceAiSummary(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ template }),
-    }),
-  );
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/ai-summary/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ template }),
+  });
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("AI 概括任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function updateVideoAiSummary(seriesId, videoId, summary) {
@@ -475,7 +171,7 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
 }
 
 export async function processAgentVideo(seriesId, videoId, options = {}) {
-  return fetchJson(`/api/agent/series/${encodeURIComponent(seriesId)}/process`, {
+  const payload = await fetchJson(`/api/agent/series/${encodeURIComponent(seriesId)}/process`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -503,7 +199,7 @@ export async function loadVideoGenerationStatus(seriesId, videoId) {
 }
 
 export async function generateSeriesSummaries(seriesId, options = {}) {
-  return fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
+  const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -540,13 +236,15 @@ export async function loadSeriesGenerationStatus(seriesId) {
 }
 
 export async function generateVideoMindmap(seriesId, videoId, maxDepth = null) {
-  return toWorkspaceMindmap(
-    await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ max_depth: maxDepth }),
-    }),
-  );
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ max_depth: maxDepth }),
+  });
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("思维导图任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function loadAgentContextUsage(sessionId, context) {
@@ -825,7 +523,7 @@ export function getVideoPreviewUrl(seriesId, videoId) {
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/preview`;
 }
 
-async function fetchJson(path, init, options = {}) {
+export async function fetchJson(path, init, options = {}) {
   const response = await fetch(path, init);
   if (response.status === 404 && Object.prototype.hasOwnProperty.call(options, "notFoundValue")) {
     return options.notFoundValue;
@@ -875,7 +573,7 @@ function parseProgressMessage(rawValue) {
   return toProgressSnapshot(JSON.parse(rawValue));
 }
 
-function toProviderUsage(payload) {
+export function toProviderUsage(payload) {
   const record = payload && typeof payload === "object" ? payload : {};
   return {
     range: typeof record.range === "string" ? record.range : "7d",
@@ -945,7 +643,7 @@ function toTokenTotals(record) {
   };
 }
 
-function toProgressSnapshot(payload) {
+export function toProgressSnapshot(payload) {
   return {
     status: typeof payload.status === "string" ? payload.status : "idle",
     stage: typeof payload.stage === "string" ? payload.stage : null,
@@ -998,43 +696,20 @@ function buildRecoveredMeta(role, createdAt) {
   return `${actor} • ${suffix}`;
 }
 
-export async function selectLocalMedia() {
-  const payload = await fetchJson("/api/import/local/select", {
-    method: "POST",
-  });
-  const sourcePaths = Array.isArray(payload.source_paths)
-    ? payload.source_paths.filter((path) => typeof path === "string" && path)
-    : [];
-  return {
-    sourcePaths,
-    hardlinkAvailable: payload.hardlink_available !== false,
-  };
-}
-
-export async function relinkExternalVideo(seriesId, videoId) {
-  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/relink`, {
-    method: "POST",
-  });
-}
-
-export async function importLocalSeries(seriesTitle, sourcePaths, storageMode) {
-  return fetchJson("/api/import/local/series/from-paths", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      series_title: seriesTitle,
-      source_paths: sourcePaths,
-      storage_mode: storageMode,
-    }),
-  });
-}
-
 export async function resolveLinkedSeries(provider, url) {
   return fetchJson(`/api/linked/${encodeURIComponent(provider)}/resolve/series`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
   });
+  const job = Array.isArray(payload?.jobs)
+    ? payload.jobs.find((item) => item?.resource?.id === videoId)
+    : null;
+  const jobId = typeof job?.job_id === "string" ? job.job_id.trim() : "";
+  if (!jobId) {
+    throw new Error("Agent 视频处理任务未返回 job_id。");
+  }
+  return { jobId, status: typeof job.status === "string" ? job.status : "queued" };
 }
 
 export async function resolveLinkedVideo(provider, url, targetSeriesId = null) {
@@ -1043,92 +718,10 @@ export async function resolveLinkedVideo(provider, url, targetSeriesId = null) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, target_series_id: targetSeriesId }),
   });
+  const jobId = typeof payload?.job_id === "string" ? payload.job_id.trim() : "";
+  if (!jobId) throw new Error("系列任务未返回 job_id。");
+  return { jobId, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
-
-export async function initExternalCookie(provider, options = {}) {
-  const payload = await fetchJson(`/api/linked/${encodeURIComponent(provider)}/cookie/init`, {
-    method: "POST",
-    signal: options.signal,
-  });
-  return { configured: payload.configured === true };
-}
-export async function loadChaoxingStatus() {
-  const payload = await fetchJson("/api/linked/chaoxing/status");
-  return {
-    initialized: payload.initialized === true,
-  };
-}
-
-export async function initChaoxing(options = {}) {
-  const payload = await fetchJson("/api/linked/chaoxing/init", {
-    method: "POST",
-    signal: options.signal,
-  });
-  return {
-    initialized: payload.initialized === true,
-  };
-}
-
-export async function cancelChaoxingInit() {
-  return fetchJson("/api/linked/chaoxing/init/cancel", {
-    method: "POST",
-  });
-}
-
-export async function loadChaoxingCourses() {
-  const payload = await fetchJson("/api/linked/chaoxing/courses");
-  return Array.isArray(payload)
-    ? payload.map((course) => ({
-      courseKey: typeof course.course_key === "string" ? course.course_key : "",
-      title: typeof course.title === "string" ? course.title : "",
-      teacher: typeof course.teacher === "string" ? course.teacher : "",
-      openTime: typeof course.open_time === "string" ? course.open_time : "",
-    })).filter((course) => course.courseKey && course.title)
-    : [];
-}
-
-export async function importChaoxingCourse(courseKey) {
-  const payload = await fetchJson("/api/linked/chaoxing/import/course", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ course_key: courseKey }),
-  });
-  return {
-    taskId: typeof payload.task_id === "string" ? payload.task_id : "",
-    seriesId: typeof payload.series_id === "string" ? payload.series_id : "",
-  };
-}
-
-export async function cancelChaoxingImport(taskId) {
-  return fetchJson(`/api/linked/chaoxing/import/course/${encodeURIComponent(taskId)}/cancel`, {
-    method: "POST",
-  });
-}
-
-export function subscribeChaoxingImportProgress(taskId, listener) {
-  return subscribeProgress(
-    `/api/linked/chaoxing/import/course/${encodeURIComponent(taskId)}/progress`,
-    listener,
-    "超星课程导入进度连接已中断",
-  );
-}
-
-export async function importLocalPlaygroundVideos(sourcePaths) {
-  return fetchJson("/api/import/local/playground/from-paths", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source_paths: sourcePaths }),
-  });
-}
-
-export async function importLocalSeriesVideos(seriesId, sourcePaths) {
-  return fetchJson(`/api/import/local/series/${encodeURIComponent(seriesId)}/from-paths`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source_paths: sourcePaths }),
-  });
-}
-
 
 export async function deleteSeries(seriesId) {
   return fetchJson(`/api/series/${encodeURIComponent(seriesId)}`, {
@@ -1159,23 +752,20 @@ export async function renameVideoSource(seriesId, videoId, title) {
 }
 
 export async function startVideoDownload(seriesId, videoId) {
-  return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
+  const payload = await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download`, {
     method: "POST",
   });
+  const jobId = typeof payload?.job_id === "string" ? payload.job_id.trim() : "";
+  if (!jobId) {
+    throw new Error("视频下载任务未返回 job_id。");
+  }
+  return { jobId, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
 export async function cancelVideoDownload(seriesId, videoId) {
   return fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/cancel`, {
     method: "POST",
   });
-}
-
-export function subscribeVideoDownloadProgress(seriesId, videoId, listener) {
-  return subscribeProgress(
-    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/download/progress`,
-    listener,
-    "视频下载进度连接已中断",
-  );
 }
 
 export async function loadSeriesMindmap(seriesId) {
@@ -1196,59 +786,8 @@ export async function generateSeriesMindmap(seriesId, maxDepth = null) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ max_depth: maxDepth }),
   });
-  return toWorkspaceMindmap(payload);
-}
-
-export function subscribeMindmapGenerationProgress(seriesId, videoId, listener) {
-  const eventSource = new EventSource(
-    `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/mindmap/generate/progress`
-  );
-  let terminal = false;
-
-  eventSource.onmessage = (event) => {
-    const snapshot = JSON.parse(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      eventSource.close();
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (terminal) return;
-    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
-    eventSource.close();
-  };
-
-  return () => {
-    terminal = true;
-    eventSource.close();
-  };
-}
-
-export function subscribeSeriesMindmapGenerationProgress(seriesId, listener) {
-  const eventSource = new EventSource(
-    `/api/series/${encodeURIComponent(seriesId)}/mindmap/generate/progress`
-  );
-  let terminal = false;
-
-  eventSource.onmessage = (event) => {
-    const snapshot = JSON.parse(event.data);
-    listener(snapshot);
-    if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
-      terminal = true;
-      eventSource.close();
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (terminal) return;
-    listener({ status: "failed", stage: "failed", progress: null, detail: "进度连接已中断", error: "进度连接已中断" });
-    eventSource.close();
-  };
-
-  return () => {
-    terminal = true;
-    eventSource.close();
-  };
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("系列思维导图任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }

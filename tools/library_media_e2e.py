@@ -15,10 +15,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
-
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from tools.e2e_support.api_client import LocalApiClient
+
+
 DEFAULT_REPORT = ROOT / "temp" / "library-media-e2e.json"
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -43,9 +45,10 @@ def run(base_url: str, *, max_videos: int = 0) -> dict[str, Any]:
     if max_videos < 0:
         raise ValueError("max_videos cannot be negative.")
 
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(90.0)) as client:
-        _require_success(client.get("/api/health"), "health")
-        library = _require_success(client.get("/api/videos"), "library").json()
+    client = LocalApiClient(base_url, timeout_seconds=90.0)
+    try:
+        client.health()
+        library = client.library()
         candidates = [
             (series, video)
             for series in library.get("series", [])
@@ -63,14 +66,11 @@ def run(base_url: str, *, max_videos: int = 0) -> dict[str, Any]:
             label = f"{series_id}/{video_id}"
             endpoints: list[str] = []
             try:
-                tools = _json_success(client.get(f"/api/videos/{series_id}/{video_id}/tools"), f"{label} tools")
+                tools = client.get_tools(series_id, video_id)
                 endpoints.append("tools")
-                _json_success(client.get(f"/api/videos/{series_id}/{video_id}/notes"), f"{label} notes")
+                client.get_notes(series_id, video_id)
                 endpoints.append("notes")
-                preview = client.get(
-                    f"/api/videos/{series_id}/{video_id}/preview",
-                    headers={"Range": "bytes=0-0"},
-                )
+                preview = client.get_preview(series_id, video_id, byte_range="bytes=0-0")
                 if preview.status_code not in {200, 206}:
                     raise RuntimeError(f"{label} preview returned HTTP {preview.status_code}: {preview.text}")
                 if not preview.headers.get("content-type", "").startswith(("video/", "audio/", "application/octet-stream")):
@@ -78,23 +78,20 @@ def run(base_url: str, *, max_videos: int = 0) -> dict[str, Any]:
                 endpoints.append("preview")
 
                 if video.get("processed") is True:
-                    _json_success(client.get(f"/api/videos/{series_id}/{video_id}/summary"), f"{label} summary")
-                    _json_success(client.get(f"/api/videos/{series_id}/{video_id}/transcript"), f"{label} transcript")
-                    _require_success(client.get(f"/api/videos/{series_id}/{video_id}/subtitles.vtt"), f"{label} subtitles")
+                    client.get_summary(series_id, video_id)
+                    client.get_transcript(series_id, video_id)
+                    client.get_subtitles(series_id, video_id)
                     endpoints.extend(("summary", "transcript", "subtitles"))
 
-                artifact_endpoints = (
-                    ("ai_summary", "ai-summary"),
-                    ("knowledge_cards", "knowledge-cards"),
-                    ("mindmap", "mindmap"),
+                artifact_readers = (
+                    ("ai_summary", client.get_ai_summary),
+                    ("knowledge_cards", client.get_knowledge_cards),
+                    ("mindmap", client.get_mindmap),
                 )
-                for tool_key, endpoint in artifact_endpoints:
+                for tool_key, read_artifact in artifact_readers:
                     if tools.get(tool_key, {}).get("generated") is True:
-                        _json_success(
-                            client.get(f"/api/videos/{series_id}/{video_id}/{endpoint}"),
-                            f"{label} {endpoint}",
-                        )
-                        endpoints.append(endpoint)
+                        read_artifact(series_id, video_id)
+                        endpoints.append(tool_key)
                 checked.append({"series_id": series_id, "video_id": video_id, "endpoints": endpoints})
             except Exception as error:
                 failures.append(
@@ -106,6 +103,9 @@ def run(base_url: str, *, max_videos: int = 0) -> dict[str, Any]:
                     }
                 )
 
+    finally:
+        client.close()
+
     return {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "checked_video_count": len(checked) + len(failures),
@@ -113,21 +113,5 @@ def run(base_url: str, *, max_videos: int = 0) -> dict[str, Any]:
         "failures": failures,
         "checked": checked,
     }
-
-
-def _json_success(response: httpx.Response, action: str) -> dict[str, Any]:
-    _require_success(response, action)
-    payload = response.json()
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"{action} returned a non-object JSON payload.")
-    return payload
-
-
-def _require_success(response: httpx.Response, action: str) -> httpx.Response:
-    if response.is_success:
-        return response
-    raise RuntimeError(f"{action} failed with HTTP {response.status_code}: {response.text}")
-
-
 if __name__ == "__main__":
     main()

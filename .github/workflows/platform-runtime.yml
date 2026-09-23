@@ -3,7 +3,7 @@ name: Platform runtime
 on:
   pull_request:
     paths:
-      - 'src/backend/api/local_media_picker.py'
+      - 'src/backend/local/**'
       - 'src/backend/video_summary/infrastructure/persistence/**'
       - 'src/backend/video_summary/infrastructure/config/settings.py'
       - 'src/backend/video_summary/infrastructure/asr/whisper_cpp_transcriber.py'

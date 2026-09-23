@@ -8,6 +8,7 @@ CONDA_BIN="${CONDA_EXE:-}"
 # Finder does not inherit the interactive shell's Homebrew PATH.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 cd "$ROOT"
+export VSUMMARY_DATA="${VSUMMARY_DATA:-$ROOT/.vsummary}"
 
 if [ -x "$ROOT/.venv/bin/python" ]; then
   PYTHON="$ROOT/.venv/bin/python"
@@ -63,12 +64,9 @@ export PYTHONPATH="$ROOT/src"
 export HF_HOME="$ROOT/data/huggingface"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
 ARGS=(--host 127.0.0.1 --port "$PORT" --managed-mysql-home "$MYSQL_HOME")
-if [ -n "${VSUMMARY_DATA_ROOT:-}" ]; then
-  ARGS+=(--managed-data-root "$VSUMMARY_DATA_ROOT")
-fi
 
 # Keep the server attached to this terminal; Ctrl+C also shuts down private MySQL.
-"$PYTHON" -m backend.api.http.server "${ARGS[@]}" &
+"$PYTHON" -m backend.local.http.server "${ARGS[@]}" &
 SERVER_PID=$!
 cleanup() {
   kill -INT "$SERVER_PID" 2>/dev/null || true

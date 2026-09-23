@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from backend.agent.schemas.action_plan import AgentTurnResult, CitationReference, CitationSlot, CitationSlotCandidate
+from backend.agent.schemas.action_plan import AgentTurnResult
+from backend.core.citations import CitationReference, CitationSlot, CitationSlotCandidate
 from backend.video_summary.library.models import (
     ChapterCardDTO,
     KnowledgeCardDTO,

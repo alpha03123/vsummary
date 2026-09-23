@@ -32,7 +32,7 @@ from backend.video_summary.library.usecases.linked_videos import (
     ResolveLinkedVideo,
     ResolveBilibiliSeries,
     ResolveBilibiliVideo,
-    StartLinkedVideoDownload,
+    DownloadLinkedVideo,
 )
 from backend.video_summary.library.usecases.mutations import (
     DeleteSeries,
@@ -54,6 +54,7 @@ __all__ = [
     "DeleteVideoNote",
     "DeleteSeries",
     "DeleteVideoSource",
+    "DownloadLinkedVideo",
     "RenameSeries",
     "RenameVideo",
     "GenerateVideoKnowledgeCards",
@@ -83,7 +84,6 @@ __all__ = [
     "ResolveLinkedSeries",
     "ResolveLinkedVideo",
     "RefreshSeriesKnowledgeMemory",
-    "StartLinkedVideoDownload",
     "UpdateVideoNote",
     "UpdateVideoSummary",
     "UpdateVideoTranscript",

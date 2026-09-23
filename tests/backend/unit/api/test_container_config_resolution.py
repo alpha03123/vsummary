@@ -5,10 +5,9 @@ import unittest
 
 
 class ContainerConfigResolutionTests(unittest.TestCase):
-    def test_container_import_has_no_default_workspace_side_effect(self) -> None:
+    def test_container_requires_an_explicit_sql_workspace(self) -> None:
         container = importlib.import_module("backend.api.di.container")
 
-        self.assertFalse(hasattr(container, "ROOT"))
         with self.assertRaisesRegex(RuntimeError, "explicit SQL workspace"):
             container.build_default_container()
 

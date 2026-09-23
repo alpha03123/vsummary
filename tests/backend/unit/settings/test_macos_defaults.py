@@ -16,7 +16,7 @@ class MacDefaultsTests(unittest.TestCase):
             path = Path(directory) / "settings.toml"
             path.with_suffix(".toml.example").write_bytes(template.read_bytes())
             ensure_settings_file(path)
-            config = tomllib.loads(path.read_text())
+            config = tomllib.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(config["asr"]["provider"], "whisper_cpp")
             self.assertEqual(config["agent_retrieval"]["embedding_device"], "cpu")
             path.write_text('[asr]\nprovider = "aliyun_bailian"\n')

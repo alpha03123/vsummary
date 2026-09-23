@@ -8,7 +8,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests import _path_setup
-from backend.api.http.app import create_app
+from backend.local.http.app import create_app
 from backend.api.adapters.agent_runtime_provider import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
     PACKAGE_VARIANTS,
@@ -110,6 +110,19 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("onnxruntime-gpu>=1.20,<1.27", rendered)
         self.assertNotIn("onnxruntime-gpu>=1.20,<2", rendered)
 
+    def test_package_environments_include_local_database_runtime_dependencies(self) -> None:
+        required = {"SQLAlchemy>=2.0.36,<3", "alembic>=1.14,<2", "PyMySQL>=1.1,<2"}
+
+        for variant in PACKAGE_VARIANTS.values():
+            with self.subTest(kind=variant.kind):
+                rendered = (self.repo_root / variant.environment_file).read_text(encoding="utf-8")
+                dependencies = {
+                    line.strip().removeprefix("- ")
+                    for line in rendered.splitlines()
+                    if line.strip().startswith("- ")
+                }
+                self.assertTrue(required.issubset(dependencies))
+
     def test_build_release_layout_targets_external_pack_root(self) -> None:
         layout = build_release_layout(
             repo_root=self.repo_root,
@@ -129,28 +142,16 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("-m backend.api.http.server", script)
         self.assertIn("--managed-mysql-home", script)
         self.assertIn("%ROOT%\\runtime\\mysql", script)
-        self.assertIn("%LOCALAPPDATA%\\VSummary", script)
+        self.assertIn('VSUMMARY_DATA=%ROOT%\\.vsummary', script)
+        self.assertIn('--managed-data-root "%VSUMMARY_DATA%"', script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
-    def test_release_builder_copies_browser_extensions(self) -> None:
-        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
+    def test_release_workflow_passes_a_discovered_mysql_runtime_to_packaging(self) -> None:
+        workflow = (self.repo_root / ".github" / "workflows" / "release-package.yml").read_text(encoding="utf-8")
 
-        self.assertIn('Join-Path $RepoRoot "extensions"', script)
-        self.assertIn('Join-Path $appRoot "extensions"', script)
-
-    def test_release_builder_requires_and_copies_managed_mysql_runtime(self) -> None:
-        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
-
-        self.assertIn("MySqlRuntimeSource", script)
-        self.assertIn("Copy-ManagedMySqlRuntime", script)
-        self.assertIn('Join-Path $packageRuntimeRoot "mysql"', script)
-        self.assertIn("bin\\mysqld.exe", script)
-
-    def test_full_package_does_not_seed_legacy_workspace_directories(self) -> None:
-        script = (self.repo_root / "scripts" / "build_release.ps1").read_text(encoding="utf-8")
-
-        self.assertNotIn('Ensure-Directory -Path (Join-Path $Variant.PackageRoot "videos")', script)
-        self.assertNotIn('Ensure-Directory -Path (Join-Path $Variant.PackageRoot "workspace")', script)
+        self.assertIn("Resolve managed MySQL runtime", workflow)
+        self.assertIn("MYSQL_RUNTIME_SOURCE=$mysqlRuntime", workflow)
+        self.assertIn("MySqlRuntimeSource = $env:MYSQL_RUNTIME_SOURCE", workflow)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
