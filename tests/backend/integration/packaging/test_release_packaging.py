@@ -133,6 +133,13 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn('--managed-data-root "%VSUMMARY_DATA%"', script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
+    def test_release_workflow_passes_a_discovered_mysql_runtime_to_packaging(self) -> None:
+        workflow = (self.repo_root / ".github" / "workflows" / "release-package.yml").read_text(encoding="utf-8")
+
+        self.assertIn("Resolve managed MySQL runtime", workflow)
+        self.assertIn("MYSQL_RUNTIME_SOURCE=$mysqlRuntime", workflow)
+        self.assertIn("MySqlRuntimeSource = $env:MYSQL_RUNTIME_SOURCE", workflow)
+
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)

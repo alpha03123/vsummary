@@ -34,6 +34,25 @@ jobs:
           & $env:CONDA_EXE run -n base python -m pip install --upgrade pip conda-pack
           Add-Content -Path $env:GITHUB_PATH -Value 'C:\Miniconda\Scripts'
 
+      - name: Resolve managed MySQL runtime
+        shell: pwsh
+        run: |
+          $candidates = @(
+            Get-ChildItem 'C:\Program Files\MySQL' -Directory -ErrorAction Stop |
+              Where-Object {
+                (Test-Path -LiteralPath (Join-Path $_.FullName 'bin\mysqld.exe') -PathType Leaf) -and
+                (Test-Path -LiteralPath (Join-Path $_.FullName 'lib') -PathType Container) -and
+                (Test-Path -LiteralPath (Join-Path $_.FullName 'share') -PathType Container)
+              } |
+              Sort-Object Name -Descending
+          )
+          if ($candidates.Count -eq 0) {
+            throw 'No MySQL runtime with bin\mysqld.exe, lib, and share was found.'
+          }
+          $mysqlRuntime = $candidates[0].FullName
+          Write-Host "Using managed MySQL runtime: $mysqlRuntime"
+          Add-Content -Path $env:GITHUB_ENV -Value "MYSQL_RUNTIME_SOURCE=$mysqlRuntime"
+
       - name: Download previous release packages
         shell: pwsh
         run: |
@@ -85,6 +104,7 @@ jobs:
             ForceRuntime = $true
             CleanNodeModules = $true
             CleanBuildArtifacts = $true
+            MySqlRuntimeSource = $env:MYSQL_RUNTIME_SOURCE
           }
           if ($env:PREVIOUS_VERSION) {
             $arguments.PreviousVersion = $env:PREVIOUS_VERSION
