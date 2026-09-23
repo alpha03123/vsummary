@@ -69,7 +69,7 @@ ARGS=(--host 127.0.0.1 --port "$PORT" --managed-mysql-home "$MYSQL_HOME")
 "$PYTHON" -m backend.local.http.server "${ARGS[@]}" &
 SERVER_PID=$!
 cleanup() {
-  kill -INT "$SERVER_PID" 2>/dev/null || true
+  kill -TERM "$SERVER_PID" 2>/dev/null || true
   wait "$SERVER_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
