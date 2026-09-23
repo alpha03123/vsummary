@@ -21,6 +21,15 @@ from backend.video_summary.infrastructure.config.settings import (
 
 
 class WorkspaceSettingsServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # These are settings-validation tests, not hardware-detection tests.
+        capabilities = patch(
+            "backend.video_summary.infrastructure.config.settings_service.detect_runtime_capabilities",
+            return_value=types.SimpleNamespace(faster_whisper_available=True, gpu_embedding_available=True),
+        )
+        capabilities.start()
+        self.addCleanup(capabilities.stop)
+
     def test_runtime_env_overrides_keep_existing_env_when_dotenv_value_is_empty(self) -> None:
         """`.env` 里的空值表示"本文件不表态"，不得覆盖 shell 里已设好的值。
 
@@ -357,7 +366,12 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
             settings = load_settings(config_path, root_dir)
 
             self.assertTrue(config_path.exists())
-            self.assertEqual(config_path.read_text(encoding="utf-8"), _sample_settings_toml())
+            expected = _sample_settings_toml()
+            if sys.platform == "darwin":
+                expected = expected.replace('provider = "faster_whisper"', 'provider = "whisper_cpp"', 1)
+                expected = expected.replace('device = "gpu"', 'device = "cpu"')
+                expected = expected.replace('compute_type = "float16"', 'compute_type = "int8"')
+            self.assertEqual(config_path.read_text(encoding="utf-8"), expected)
 
     def test_load_settings_uses_example_values_for_new_fields_in_existing_config(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

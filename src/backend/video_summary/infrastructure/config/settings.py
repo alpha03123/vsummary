@@ -704,7 +704,14 @@ def ensure_settings_file(config_path: Path) -> None:
     if not example_path.exists():
         raise FileNotFoundError(f"settings file not found: {config_path}")
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(example_path, config_path)
+    if sys.platform == "darwin":
+        template = example_path.read_text(encoding="utf-8")
+        template = template.replace('provider = "faster_whisper"', 'provider = "whisper_cpp"', 1)
+        template = template.replace('device = "gpu"', 'device = "cpu"')
+        template = template.replace('compute_type = "float16"', 'compute_type = "int8"')
+        atomic_write_text(config_path, template)
+    else:
+        shutil.copyfile(example_path, config_path)
 
 
 def _load_settings_payload(config_path: Path) -> dict[str, object]:

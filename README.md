@@ -90,6 +90,8 @@ setx VSUMMARY_MYSQL_HOME "D:\tools\mysql-8.4.9-winx64"
 
 新终端生效。数据库数据和应用凭据位于 `%LOCALAPPDATA%\VSummary\mysql`。
 
+macOS / Apple Silicon 可按[安装说明](docs/installation.md#macos--apple-silicon)从源码运行，使用 whisper.cpp / Metal 转写；通过 `start.command` 启动本地网页和专用 MySQL。
+
 ## 浏览器插件
 
 VSummary 提供 Chrome 浏览器插件。观看 Bilibili 视频时，可以直接在浏览器侧边栏中查看 AI 概况、章节、思维导图、知识卡片和笔记，并围绕当前视频提问。

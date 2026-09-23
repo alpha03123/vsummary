@@ -1,0 +1,44 @@
+name: Platform runtime
+
+on:
+  pull_request:
+    paths:
+      - 'src/backend/local/**'
+      - 'src/backend/video_summary/infrastructure/persistence/**'
+      - 'src/backend/video_summary/infrastructure/config/settings.py'
+      - 'src/backend/video_summary/infrastructure/asr/whisper_cpp_transcriber.py'
+      - 'start.command'
+      - 'tests/backend/unit/**'
+      - '.github/workflows/platform-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    strategy:
+      matrix:
+        os: [macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: 'requirements*.txt'
+      - run: python -m pip install -r requirements.cpu.txt pytest
+      - name: Check platform runtime contracts
+        env:
+          PYTHONPATH: src
+        run: >-
+          python -m pytest -q
+          tests/backend/unit/persistence/test_mysql_persistence_foundation.py
+          tests/backend/unit/persistence/test_macos_runtime.py
+          tests/backend/unit/api/test_macos_media_picker.py
+          tests/backend/unit/api/test_server_startup.py
+          tests/backend/unit/settings/test_macos_defaults.py
+          tests/backend/unit/settings/test_workspace_settings_service.py
+          tests/backend/unit/generation/test_whisper_cpp.py

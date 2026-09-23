@@ -27,6 +27,7 @@ def test_whisper_cpp_transcriber_parses_cli_json(tmp_path: Path) -> None:
 
     def fake_run(command, **kwargs):
         del kwargs
+        assert command[command.index("-l") + 1] == "auto"
         output_base = Path(command[command.index("-of") + 1])
         Path(f"{output_base}.json").write_text(
             json.dumps(

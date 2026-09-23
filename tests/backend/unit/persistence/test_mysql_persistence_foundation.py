@@ -13,6 +13,7 @@ from alembic.script import ScriptDirectory
 from backend.video_summary.infrastructure.persistence.database import DatabaseDriverError, DatabaseOptions, _require_pymysql
 from backend.video_summary.infrastructure.persistence.migrate import build_alembic_config
 from backend.local.persistence.managed_mysql import (
+    CREDENTIAL_FILE,
     LOCAL_DATABASE_NAME,
     LOCAL_DATABASE_USER,
     ManagedLocalMySql,
@@ -123,16 +124,17 @@ class ManagedLocalMySqlTests(unittest.TestCase):
     def test_uses_explicit_runtime_directory_from_environment(self) -> None:
         from unittest.mock import patch
 
-        with patch.dict(os.environ, {"VSUMMARY_DATA": r"E:\\project\\.vsummary"}, clear=False):
-            self.assertEqual(_default_data_root(), Path(r"E:\\project\\.vsummary"))
+        with TemporaryDirectory() as temp_dir, patch.dict(os.environ, {"VSUMMARY_DATA": temp_dir}):
+            self.assertEqual(_default_data_root(), Path(temp_dir))
 
     def test_data_paths_are_separate_from_the_installation_directory(self) -> None:
         paths = ManagedLocalMySqlPaths(Path("C:/Users/example/AppData/Local/VSummary"))
 
         self.assertEqual(paths.data_dir, paths.root / "mysql" / "data")
-        self.assertEqual(paths.credential_path, paths.root / "mysql" / "vsummary_app.dpapi")
+        self.assertEqual(paths.credential_path, paths.root / "mysql" / CREDENTIAL_FILE)
         self.assertEqual(paths.runtime_state_path, paths.root / "mysql" / "runtime.json")
 
+    @unittest.skipUnless(os.name == "nt", "Windows MySQL path limitation")
     def test_rejects_non_ascii_mysql_paths_before_creating_data_directory(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "测试" / "VSummary"

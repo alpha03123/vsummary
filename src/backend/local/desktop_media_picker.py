@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 from threading import Lock
 
 
@@ -19,6 +21,10 @@ def select_local_media_paths(
     allow_multiple: bool = True,
 ) -> list[str]:
     """打开系统文件选择框，返回用户确认的绝对媒体路径。"""
+    if sys.platform == "darwin":
+        # AppKit/Tk cannot create windows on FastAPI's worker thread. Let a
+        # separate macOS process own the native file dialog instead.
+        return _select_macos_media(initial_directory, allow_multiple)
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -43,3 +49,36 @@ def select_local_media_paths(
     if isinstance(selected_paths, str):
         selected_paths = [selected_paths] if selected_paths else []
     return [str(Path(path).resolve()) for path in selected_paths]
+
+
+def _select_macos_media(initial_directory: Path | None, allow_multiple: bool) -> list[str]:
+    script = '''
+on run argv
+    try
+        set folderPath to item 1 of argv
+        set multipleFiles to (item 2 of argv is "true")
+        if folderPath is "" then
+            set selectedFiles to choose file with prompt "选择媒体文件" multiple selections allowed multipleFiles
+        else
+            set selectedFiles to choose file with prompt "选择媒体文件" default location (POSIX file folderPath) multiple selections allowed multipleFiles
+        end if
+        if class of selectedFiles is not list then set selectedFiles to {selectedFiles}
+        set paths to {}
+        repeat with selectedFile in selectedFiles
+            set end of paths to POSIX path of selectedFile
+        end repeat
+        set AppleScript's text item delimiters to linefeed
+        return paths as text
+    on error number -128
+        return ""
+    end try
+end run
+'''
+    with _PICKER_LOCK:
+        result = subprocess.run(
+            ["/usr/bin/osascript", "-e", script, str(initial_directory or ""), str(allow_multiple).lower()],
+            capture_output=True, text=True, check=False,
+        )
+    if result.returncode != 0:
+        raise RuntimeError("macOS 无法打开媒体文件选择框。")
+    return result.stdout.rstrip("\n").splitlines()
