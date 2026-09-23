@@ -450,6 +450,12 @@ class ManagedLocalMySql:
 
 
 def _default_data_root() -> Path:
+    configured_root = os.environ.get("VSUMMARY_DATA")
+    if configured_root:
+        root = Path(configured_root).expanduser()
+        if not root.is_absolute():
+            raise ManagedLocalMySqlError("VSUMMARY_DATA must be an absolute path.")
+        return root
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
         raise ManagedLocalMySqlError("LOCALAPPDATA is required for managed local MySQL.")

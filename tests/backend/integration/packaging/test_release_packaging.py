@@ -129,7 +129,8 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("-m backend.api.http.server", script)
         self.assertIn("--managed-mysql-home", script)
         self.assertIn("%ROOT%\\runtime\\mysql", script)
-        self.assertIn("%LOCALAPPDATA%\\VSummary", script)
+        self.assertIn('VSUMMARY_DATA=%ROOT%\\.vsummary', script)
+        self.assertIn('--managed-data-root "%VSUMMARY_DATA%"', script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:

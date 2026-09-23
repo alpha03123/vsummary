@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from datetime import datetime, timezone
 from io import StringIO
@@ -17,6 +18,7 @@ from backend.local.persistence.managed_mysql import (
     ManagedLocalMySql,
     ManagedLocalMySqlError,
     ManagedLocalMySqlPaths,
+    _default_data_root,
 )
 from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import Base, Job, OutboxEvent, Series, Video
@@ -117,6 +119,12 @@ class AlembicConfigurationTests(unittest.TestCase):
 
 
 class ManagedLocalMySqlTests(unittest.TestCase):
+    def test_uses_explicit_runtime_directory_from_environment(self) -> None:
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"VSUMMARY_DATA": r"E:\\project\\.vsummary"}, clear=False):
+            self.assertEqual(_default_data_root(), Path(r"E:\\project\\.vsummary"))
+
     def test_data_paths_are_separate_from_the_installation_directory(self) -> None:
         paths = ManagedLocalMySqlPaths(Path("C:/Users/example/AppData/Local/VSummary"))
 

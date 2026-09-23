@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,9 @@ from backend.video_summary.library.models import (
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.core.citations import CitationReference
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SqlVideoWorkspace:
@@ -125,6 +129,10 @@ class SqlVideoWorkspace:
         try:
             source_path = self._blobs.materialize(reference, task_dir=self._cache_root / "media" / video_id, filename=filename)
         except BlobStoreError:
+            LOGGER.exception(
+                "failed to materialize video source",
+                extra={"series_id": series_id, "video_id": video_id, "blob_key": row["blob_key"]},
+            )
             return None
         return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=filename, source_type=row["source_kind"], source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0)
 

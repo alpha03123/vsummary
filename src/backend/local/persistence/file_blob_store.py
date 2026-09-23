@@ -89,7 +89,7 @@ class FileBlobStore:
 
         path = self._object_path(reference.key)
         if not path.is_file():
-            raise BlobStoreError("Committed blob does not exist.")
+            raise BlobStoreError(f"Committed blob does not exist: {path}")
         return path.open("rb")
 
     def materialize(self, reference: BlobReference, *, task_dir: Path, filename: str) -> Path:
@@ -98,7 +98,7 @@ class FileBlobStore:
         _validate_filename(filename)
         source = self._object_path(reference.key)
         if not source.is_file():
-            raise BlobStoreError("Committed blob does not exist.")
+            raise BlobStoreError(f"Committed blob does not exist: {source}")
         target = task_dir / filename
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
@@ -120,7 +120,7 @@ class FileBlobStore:
 
         path = self._object_path(reference.key)
         if not path.is_file():
-            raise BlobStoreError("Committed blob does not exist.")
+            raise BlobStoreError(f"Committed blob does not exist: {path}")
         return _stat_file(path, reference.content_type, key=reference.key)
 
     def delete(self, reference: BlobReference) -> None:

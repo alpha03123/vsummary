@@ -37,6 +37,7 @@ tmp/
 /videos/
 /workspace/
 /data/
+/.vsummary/
 .worktrees/
 .workbuddy/
 
