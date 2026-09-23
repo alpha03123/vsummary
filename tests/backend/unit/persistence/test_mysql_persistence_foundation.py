@@ -17,6 +17,7 @@ from backend.local.persistence.managed_mysql import (
     LOCAL_DATABASE_USER,
     ManagedLocalMySql,
     ManagedLocalMySqlError,
+    ManagedLocalMySqlPathError,
     ManagedLocalMySqlPaths,
     _default_data_root,
 )
@@ -131,6 +132,20 @@ class ManagedLocalMySqlTests(unittest.TestCase):
         self.assertEqual(paths.data_dir, paths.root / "mysql" / "data")
         self.assertEqual(paths.credential_path, paths.root / "mysql" / "vsummary_app.dpapi")
         self.assertEqual(paths.runtime_state_path, paths.root / "mysql" / "runtime.json")
+
+    def test_rejects_non_ascii_mysql_paths_before_creating_data_directory(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "测试" / "VSummary"
+            mysql_home = root / "runtime" / "mysql"
+            (mysql_home / "bin").mkdir(parents=True)
+            (mysql_home / "bin" / "mysqld.exe").write_text("stub", encoding="utf-8")
+            data_root = root / ".vsummary"
+            runtime = ManagedLocalMySql(mysql_home=mysql_home, data_root=data_root)
+
+            with self.assertRaisesRegex(ManagedLocalMySqlPathError, "纯英文路径"):
+                runtime.start_and_migrate()
+
+            self.assertFalse((data_root / "mysql").exists())
 
     def test_missing_packaged_runtime_fails_before_creating_user_data(self) -> None:
         with TemporaryDirectory() as temp_dir:

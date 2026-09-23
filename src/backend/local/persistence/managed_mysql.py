@@ -48,6 +48,10 @@ class ManagedLocalMySqlError(RuntimeError):
     """受管 MySQL 不能安全初始化、启动或连接。"""
 
 
+class ManagedLocalMySqlPathError(ManagedLocalMySqlError):
+    """内置 MySQL 无法安全处理当前安装或数据路径。"""
+
+
 @dataclass(frozen=True)
 class ManagedLocalMySqlPaths:
     """本地数据库数据根目录的稳定布局。"""
@@ -106,6 +110,7 @@ class ManagedLocalMySql:
 
         self._require_database_driver()
         self._validate_runtime_binary()
+        self._validate_mysql_paths()
         self._ensure_directories()
         self._acquire_instance_lock()
         try:
@@ -429,6 +434,15 @@ class ManagedLocalMySql:
             raise ManagedLocalMySqlError(
                 "Managed MySQL runtime is missing from the VSummary installation. Reinstall the full package."
             )
+
+    def _validate_mysql_paths(self) -> None:
+        mysql_paths = (self._mysql_home, self._paths.root)
+        if all(str(path).isascii() for path in mysql_paths):
+            return
+        raise ManagedLocalMySqlPathError(
+            "当前安装目录或数据目录包含中文或特殊字符，内置 MySQL 无法启动。"
+            "请将完整安装包移动到纯英文路径后重新启动，例如 E:\\Apps\\VSummary。"
+        )
 
     def _mysqld_path(self) -> Path:
         return self._mysql_home / "bin" / "mysqld.exe"

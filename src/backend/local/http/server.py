@@ -21,6 +21,10 @@ def configure_event_loop_policy() -> None:
         asyncio.set_event_loop_policy(selector_policy())
 
 
+def _exit_for_mysql_path_error(error: Exception) -> None:
+    raise SystemExit(f"启动失败：{error}") from None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -39,7 +43,7 @@ def main() -> None:
     from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
     from backend.video_summary.infrastructure.persistence.database import create_session_factory
     from backend.local.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
-    from backend.local.persistence.managed_mysql import ManagedLocalMySql
+    from backend.local.persistence.managed_mysql import ManagedLocalMySql, ManagedLocalMySqlPathError
     from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 
     managed_mysql = ManagedLocalMySql(mysql_home=args.managed_mysql_home, data_root=args.managed_data_root)
@@ -72,6 +76,8 @@ def main() -> None:
         )
         container = build_local_container(_repository_root(), workspace=workspace)
         uvicorn.run(create_app(container), host=args.host, port=args.port)
+    except ManagedLocalMySqlPathError as error:
+        _exit_for_mysql_path_error(error)
     finally:
         managed_mysql.stop()
 
