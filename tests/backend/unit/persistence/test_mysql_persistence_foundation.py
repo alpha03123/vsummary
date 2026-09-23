@@ -175,7 +175,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             self.assertNotIn("'%'", sql)
             self.assertNotIn("ALTER USER 'root'", sql)
 
-    def test_missing_runtime_state_is_rebuilt_from_existing_credentials(self) -> None:
+    def test_missing_runtime_state_reboots_application_account_before_writing_state(self) -> None:
         from unittest.mock import patch
 
         with TemporaryDirectory() as temp_dir:
@@ -187,15 +187,50 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             runtime._ensure_directories()
             (runtime.paths.data_dir / "auto.cnf").write_text("[auto]", encoding="utf-8")
 
+            def complete_bootstrap(options: DatabaseOptions) -> None:
+                runtime._write_runtime_state(options.parsed_url.port or 0)
+
             with (
                 patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
                 patch("backend.local.persistence.managed_mysql._select_loopback_port", return_value=25331),
+                patch.object(runtime, "_bootstrap_application_account", side_effect=complete_bootstrap) as bootstrap,
+                patch.object(runtime, "_require_database_driver"),
+                patch.object(runtime, "_validate_runtime_binary"),
+                patch.object(runtime, "_acquire_instance_lock"),
+                patch.object(runtime, "_release_instance_lock"),
+                patch("backend.local.persistence.managed_mysql.upgrade_to_head"),
             ):
-                options = runtime._recover_runtime_state()
+                options = runtime.start_and_migrate()
 
             self.assertEqual(options.parsed_url.port, 25331)
             self.assertEqual(options.parsed_url.password, "secret")
+            bootstrap.assert_called_once_with(options)
             self.assertTrue(runtime.paths.runtime_state_path.is_file())
+
+    def test_application_account_state_is_written_only_after_connection_verifies(self) -> None:
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mysql_home = root / "mysql-runtime"
+            (mysql_home / "bin").mkdir(parents=True)
+            (mysql_home / "bin" / "mysqld.exe").write_text("stub", encoding="utf-8")
+            runtime = ManagedLocalMySql(mysql_home=mysql_home, data_root=root / "user-data")
+            runtime._ensure_directories()
+            options = DatabaseOptions(url="mysql+pymysql://vsummary_app:secret@127.0.0.1:25331/vsummary")
+
+            with (
+                patch.object(runtime, "_write_bootstrap_sql") as write_bootstrap,
+                patch.object(runtime, "_start_server") as start_server,
+                patch.object(runtime, "_wait_for_database") as wait_for_database,
+                patch.object(runtime, "_write_runtime_state") as write_state,
+            ):
+                runtime._bootstrap_application_account(options)
+
+            write_bootstrap.assert_called_once_with("secret")
+            start_server.assert_called_once_with(port=25331, init_file=runtime.paths.bootstrap_sql_path)
+            wait_for_database.assert_called_once_with(options)
+            write_state.assert_called_once_with(25331)
 
     def test_stop_does_not_shutdown_an_adopted_instance(self) -> None:
         from unittest.mock import patch

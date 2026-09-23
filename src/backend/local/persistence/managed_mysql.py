@@ -115,16 +115,20 @@ class ManagedLocalMySql:
         self._acquire_instance_lock()
         try:
             state = self._read_runtime_state()
+            database_ready = False
             if state is None:
                 if self._is_initialized():
                     options = self._recover_runtime_state()
-                    self._start_existing_instance(options)
+                    self._bootstrap_application_account(options)
+                    database_ready = True
                 else:
                     options = self._bootstrap_new_instance()
+                    database_ready = True
             else:
                 options = self._options_from_state(state)
                 self._start_existing_instance(options)
-            self._wait_for_database(options)
+            if not database_ready:
+                self._wait_for_database(options)
             if before_migrate is not None:
                 before_migrate(options)
             upgrade_to_head(options)
@@ -177,24 +181,27 @@ class ManagedLocalMySql:
         )
         self._initialize_data_directory()
         save_local_mysql_password(self._paths.credential_path, password)
+        self._bootstrap_application_account(options)
+        return options
+
+    def _bootstrap_application_account(self, options: DatabaseOptions) -> None:
+        password = options.parsed_url.password
+        port = options.parsed_url.port
+        if password is None or port is None:
+            raise ManagedLocalMySqlError("Managed MySQL bootstrap requires complete connection options.")
         self._write_bootstrap_sql(password)
         try:
             self._start_server(port=port, init_file=self._paths.bootstrap_sql_path)
             self._wait_for_database(options)
-        except Exception:
-            # Credentials alone are not sufficient to recover a failed bootstrap; preserve
-            # the initialized directory and make the failure explicit for recovery tooling.
-            raise
         finally:
             self._paths.bootstrap_sql_path.unlink(missing_ok=True)
         self._write_runtime_state(port)
-        return options
 
     def _recover_runtime_state(self) -> DatabaseOptions:
         """为已初始化、但丢失运行元数据的本地实例重建连接状态。
 
-        `runtime.json` 只保存 loopback 端口，不是数据库身份或数据本身。凭据仍可由
-        DPAPI 读取时，为停机实例分配新的空闲端口是可恢复且不会改写任何 InnoDB 数据。
+        `runtime.json` 缺失意味着上一次初始化可能在创建应用账号前中断。调用方必须
+        使用返回的连接参数重新执行 bootstrap SQL，并且仅在连接验证成功后写入状态。
         """
 
         try:
@@ -204,7 +211,6 @@ class ManagedLocalMySql:
                 "Managed MySQL data exists but its runtime state and credentials are unavailable. Restore a backup."
             ) from error
         port = _select_loopback_port()
-        self._write_runtime_state(port)
         return DatabaseOptions(
             url=f"mysql+pymysql://{LOCAL_DATABASE_USER}:{password}@127.0.0.1:{port}/{LOCAL_DATABASE_NAME}"
         )
