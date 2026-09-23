@@ -275,7 +275,7 @@ class UpdaterTests(unittest.TestCase):
 
             def fail_second_target(source: str | Path, destination: str | Path, *args: object, **kwargs: object) -> str:
                 target = Path(destination)
-                if target.parent == root / "src":
+                if target.parent.samefile(root / "src"):
                     copied_targets.append(target)
                     if len(copied_targets) == 2:
                         raise OSError("simulated write failure")

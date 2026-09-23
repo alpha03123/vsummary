@@ -111,14 +111,14 @@ def render_start_bat() -> str:
             'if "%ROOT:~-1%"=="\\" set "ROOT=%ROOT:~0,-1%"',
             'cd /d "%ROOT%"',
             'if not exist "%ROOT%\\.env" copy /y "%ROOT%\\.env.example" "%ROOT%\\.env" >nul',
-            'set "VSUMMARY_DATA=%LOCALAPPDATA%\\VSummary"',
+            'set "VSUMMARY_DATA=%ROOT%\\.vsummary"',
             'set "HF_HOME=%VSUMMARY_DATA%\\cache\\huggingface"',
             'set "HUGGINGFACE_HUB_CACHE=%VSUMMARY_DATA%\\cache\\huggingface\\hub"',
             'set "PATH=%ROOT%\\runtime;%ROOT%\\runtime\\Library\\bin;%ROOT%\\runtime\\Scripts;%PATH%"',
             'set "PYTHONPATH=%ROOT%\\src"',
             "",
             "start \"\" http://127.0.0.1:4173",
-            'call "%ROOT%\\runtime\\python.exe" -m backend.api.http.server --host 127.0.0.1 --port 4173 --managed-mysql-home "%ROOT%\\runtime\\mysql"',
+            'call "%ROOT%\\runtime\\python.exe" -m backend.api.http.server --host 127.0.0.1 --port 4173 --managed-mysql-home "%ROOT%\\runtime\\mysql" --managed-data-root "%VSUMMARY_DATA%"',
             "if errorlevel 1 pause",
         ]
     )

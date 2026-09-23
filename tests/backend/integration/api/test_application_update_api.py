@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from backend.api.http.app import create_app
+from backend.local.http.app import create_app
 
 
 class ApplicationUpdateApiTests(unittest.TestCase):
@@ -36,7 +36,7 @@ class ApplicationUpdateApiTests(unittest.TestCase):
                 self.assertTrue(status_response.json()["update_available"])
                 self.assertTrue(status_response.json()["can_apply"])
 
-                with patch("backend.api.routes.settings.schedule_update", return_value=10) as schedule:
+                with patch("backend.local.routes.settings.schedule_update", return_value=10) as schedule:
                     apply_response = client.post("/api/application-update/apply")
 
                 self.assertEqual(apply_response.status_code, 200)

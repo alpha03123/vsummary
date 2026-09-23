@@ -608,6 +608,7 @@ export function WorkspacePage({ page }) {
                 <WorkspaceGenerationOverlay
                   generationProgress={generation.progress}
                   generationSnapshot={generation.snapshot}
+                  mode={shell.processingMode}
                   title={shell.processingMode === "transcript" ? "正在获取字幕" : generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
                   onCancel={actions.cancelGeneration}
                   cancelLabel={generation.isGeneratingSeries ? "取消整个系列" : "取消本次生成"}

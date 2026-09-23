@@ -15,7 +15,10 @@ from backend.video_summary.infrastructure.persistence.control_plane_repository i
     SqlControlPlaneRepository,
     SubmittedJob,
 )
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
+from backend.core.quota import QuotaGuard, QuotaReservation, UsageEstimate, UsageMeter, UsageRecord
+from backend.core.context import WorkspaceContext
+from backend.core.request_context import get_workspace_context
 from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent
 
 
@@ -27,6 +30,7 @@ class JobLeaseLostError(RuntimeError):
 class JobSnapshot:
     id: str
     workspace_id: str
+    parent_job_id: str | None
     resource_type: str
     resource_id: str
     operation: str
@@ -66,9 +70,17 @@ class JobEventSnapshot:
 class SqlJobRepository:
     """MySQL-backed job protocol used by both local and cloud worker hosts."""
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        *,
+        quota_guard: QuotaGuard | None = None,
+        usage_meter: UsageMeter | None = None,
+    ) -> None:
         self._session_factory = session_factory
         self._control = SqlControlPlaneRepository(session_factory)
+        self._quota_guard = quota_guard
+        self._usage_meter = usage_meter
 
     def submit(
         self,
@@ -81,35 +93,69 @@ class SqlJobRepository:
         active_key: str,
         idempotency_scope_id: str | None,
         idempotency_key: str | None,
+        parent_job_id: str | None = None,
     ) -> SubmittedJob:
-        submitted = self._control.submit_job(
-            workspace_id=workspace_id,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            operation=operation,
-            request_payload=request_payload,
-            active_key=active_key,
-            idempotency_scope_id=idempotency_scope_id,
-            idempotency_key=idempotency_key,
-        )
-        if submitted.created:
-            with self._session_factory.begin() as session:
-                self._append_event(session, submitted.id, "queued", "queued", 0.0, "任务已进入队列")
+        context = get_workspace_context()
+        reservation: QuotaReservation | None = None
+        payload = dict(request_payload)
+        if context is not None:
+            if context.workspace_id != workspace_id:
+                raise ValueError("request WorkspaceContext does not own the submitted Job.")
+            if self._quota_guard is not None and parent_job_id is None:
+                reservation = self._quota_guard.reserve_job(
+                    context,
+                    operation,
+                    UsageEstimate(units=1),
+                    idempotency_key or active_key,
+                )
+                payload["_quota_reservation"] = {
+                    "id": reservation.id,
+                    "workspace_id": context.workspace_id,
+                    "actor_id": context.actor_id,
+                    "request_id": context.request_id,
+                }
+        try:
+            submitted = self._control.submit_job(
+                workspace_id=workspace_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                operation=operation,
+                request_payload=payload,
+                active_key=active_key,
+                idempotency_scope_id=idempotency_scope_id,
+                idempotency_key=idempotency_key,
+                parent_job_id=parent_job_id,
+            )
+        except Exception:
+            self._release_reservation(reservation, "job submission failed")
+            raise
+        if not submitted.created:
+            self._release_reservation(reservation, "existing job reused")
         return submitted
 
-    def claim(self, *, worker_id: str, lease_seconds: int) -> ClaimedJob | None:
+    def claim(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int,
+        operations: frozenset[str] | None = None,
+    ) -> ClaimedJob | None:
         if not worker_id.strip() or lease_seconds < 1:
             raise ValueError("worker_id and a positive lease_seconds are required.")
+        if operations is not None and not operations:
+            raise ValueError("operations must be non-empty when supplied.")
         with self._session_factory.begin() as session:
             now = _database_now(session)
             self._recover_expired_leases(session, now)
+            statement = select(Job).where(
+                Job.status.in_(("queued", "retrying")),
+                Job.available_at <= now,
+                Job.cancel_requested_at.is_(None),
+            )
+            if operations is not None:
+                statement = statement.where(Job.operation.in_(operations))
             job = session.scalar(
-                select(Job)
-                .where(
-                    Job.status.in_(("queued", "retrying")),
-                    Job.available_at <= now,
-                    Job.cancel_requested_at.is_(None),
-                )
+                statement
                 .order_by(Job.available_at, Job.created_at)
                 .with_for_update(skip_locked=True)
                 .limit(1)
@@ -189,34 +235,91 @@ class SqlJobRepository:
                 raise JobLeaseLostError("Job lease was replaced.")
             return job.cancel_requested_at is not None or job.status in {"cancelling", "cancelled"}
 
-    def request_cancel(self, job_id: str) -> JobSnapshot | None:
+    def request_cancel(self, job_id: str, *, workspace_id: str | None = None) -> JobSnapshot | None:
         with self._session_factory.begin() as session:
             now = _database_now(session)
-            job = session.scalar(select(Job).where(Job.id == job_id).with_for_update())
+            statement = select(Job).where(Job.id == job_id)
+            if workspace_id is not None:
+                statement = statement.where(Job.workspace_id == workspace_id)
+            job = session.scalar(statement.with_for_update())
             if job is None:
                 return None
-            if job.status in {"succeeded", "failed", "cancelled"}:
-                return _snapshot(job)
-            job.cancel_requested_at = now
-            if job.status in {"queued", "retrying"}:
-                job.status = "cancelled"
-                job.active_key = None
-                job.finished_at = now
-                self._append_event(session, job.id, "cancelled", "cancelled", None, "任务在执行前被取消")
-            else:
-                job.status = "cancelling"
-                self._append_event(session, job.id, "cancelling", "cancelling", None, "已请求取消任务")
-            return _snapshot(job)
+            snapshot = self._request_cancel_locked(session, job, now)
+        self.finalize_accounting(job_id, workspace_id=workspace_id)
+        return snapshot
 
-    def request_cancel_for_resource(self, *, resource_id: str, operation: str) -> JobSnapshot | None:
+    def finalize_accounting(self, job_id: str, *, workspace_id: str) -> None:
+        """Settle or release the reservation recorded with a terminal Job once."""
+
+        action: tuple[str, QuotaReservation, WorkspaceContext] | None = None
+        with self._session_factory.begin() as session:
+            statement = select(Job).where(Job.id == job_id, Job.workspace_id == workspace_id)
+            job = session.scalar(statement.with_for_update())
+            if job is None or job.status not in {"succeeded", "failed", "cancelled"}:
+                return
+            payload = dict(job.request_payload)
+            reservation_payload = payload.get("_quota_reservation")
+            if not isinstance(reservation_payload, dict) or reservation_payload.get("finalized") is True:
+                return
+            reservation_id = reservation_payload.get("id")
+            context = _context_from_reservation(reservation_payload)
+            if not isinstance(reservation_id, str) or context is None:
+                return
+            reservation_payload["finalized"] = True
+            payload["_quota_reservation"] = reservation_payload
+            job.request_payload = payload
+            action = (job.status, QuotaReservation(reservation_id), context)
+        if action is None or self._quota_guard is None:
+            return
+        status, reservation, context = action
+        if status == "succeeded":
+            self._quota_guard.settle(reservation.id, UsageRecord(units=1))
+            if self._usage_meter is not None:
+                self._usage_meter.record(context, UsageRecord(units=1))
+        else:
+            self._quota_guard.release(reservation.id, f"job {status}")
+
+    def request_cancel_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
             job_id = session.scalar(
                 select(Job.id)
-                .where(Job.resource_id == resource_id, Job.operation == operation, Job.status.in_(("queued", "retrying", "running", "cancelling")))
+                .where(Job.workspace_id == workspace_id, Job.resource_id == resource_id, Job.operation == operation, Job.status.in_(("queued", "retrying", "running", "cancelling")))
                 .order_by(Job.created_at.desc())
                 .limit(1)
             )
-        return self.request_cancel(job_id) if job_id is not None else None
+        return self.request_cancel(job_id, workspace_id=workspace_id) if job_id is not None else None
+
+    def request_cancel_series_generation(self, *, workspace_id: str, series_id: str) -> list[JobSnapshot]:
+        """Cancel an active series batch and every generation child it owns."""
+
+        active_statuses = ("queued", "retrying", "running", "cancelling")
+        with self._session_factory.begin() as session:
+            parent = session.scalar(
+                select(Job)
+                .where(
+                    Job.workspace_id == workspace_id,
+                    Job.resource_id == series_id,
+                    Job.operation == "generate_series_batch",
+                )
+                .order_by(Job.created_at.desc())
+                .with_for_update()
+                .limit(1)
+            )
+            if parent is None:
+                return []
+            jobs = list(
+                session.scalars(
+                    select(Job)
+                    .where(
+                        Job.workspace_id == workspace_id,
+                        Job.status.in_(active_statuses),
+                        (Job.id == parent.id) | (Job.parent_job_id == parent.id),
+                    )
+                    .with_for_update()
+                )
+            )
+            now = _database_now(session)
+            return [self._request_cancel_locked(session, job, now) for job in jobs]
 
     def mark_cancelled(self, claim: ClaimedJob, *, detail: str) -> None:
         with self._session_factory.begin() as session:
@@ -228,6 +331,37 @@ class SqlJobRepository:
             job.lease_expires_at = None
             self._finish_attempt(session, claim, now, outcome="cancelled")
             self._append_event(session, job.id, "cancelled", "cancelled", None, detail)
+
+    def succeed(self, claim: ClaimedJob, *, detail: str) -> bool:
+        """Atomically finish a worker-owned Job, unless its handler already finished it."""
+
+        with self._session_factory.begin() as session:
+            now = _database_now(session)
+            current = session.scalar(select(Job).where(Job.id == claim.id).with_for_update())
+            if current is None:
+                raise JobLeaseLostError("Job no longer exists.")
+            if current.status in {"succeeded", "cancelled"}:
+                return False
+            job = self._owned_job(session, claim, now, allow_cancelling=True)
+            if job.cancel_requested_at is not None:
+                job.status = "cancelled"
+                job.active_key = None
+                job.claimed_by = None
+                job.lease_token = None
+                job.lease_expires_at = None
+                job.finished_at = now
+                self._finish_attempt(session, claim, now, outcome="cancelled")
+                self._append_event(session, job.id, "cancelled", "cancelled", None, "任务已取消")
+                return True
+            job.status = "succeeded"
+            job.active_key = None
+            job.claimed_by = None
+            job.lease_token = None
+            job.lease_expires_at = None
+            job.finished_at = now
+            self._finish_attempt(session, claim, now, outcome="succeeded")
+            self._append_event(session, job.id, "succeeded", "succeeded", 100.0, detail)
+            return True
 
     def fail(self, claim: ClaimedJob, *, failure_code: str, failure_detail: str, retry_delay_seconds: int | None) -> None:
         with self._session_factory.begin() as session:
@@ -256,28 +390,32 @@ class SqlJobRepository:
                 job.finished_at = now
                 self._append_event(session, job.id, "failed", "failed", None, failure_detail)
 
-    def get(self, job_id: str) -> JobSnapshot | None:
+    def get(self, job_id: str, *, workspace_id: str | None = None) -> JobSnapshot | None:
         with self._session_factory() as session:
-            job = session.get(Job, job_id)
+            statement = select(Job).where(Job.id == job_id)
+            if workspace_id is not None:
+                statement = statement.where(Job.workspace_id == workspace_id)
+            job = session.scalar(statement)
             return _snapshot(job) if job is not None else None
 
-    def latest_for_resource(self, *, resource_id: str, operations: tuple[str, ...]) -> JobSnapshot | None:
-        if not resource_id or not operations:
-            raise ValueError("resource_id and operations are required.")
+    def latest_for_resource(self, *, workspace_id: str, resource_id: str, operations: tuple[str, ...]) -> JobSnapshot | None:
+        if not workspace_id or not resource_id or not operations:
+            raise ValueError("workspace_id, resource_id and operations are required.")
         with self._session_factory() as session:
             job = session.scalar(
                 select(Job)
-                .where(Job.resource_id == resource_id, Job.operation.in_(operations))
+                .where(Job.workspace_id == workspace_id, Job.resource_id == resource_id, Job.operation.in_(operations))
                 .order_by(Job.created_at.desc())
                 .limit(1)
             )
             return _snapshot(job) if job is not None else None
 
-    def active_for_resource(self, *, resource_id: str, operation: str) -> JobSnapshot | None:
+    def active_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
             job = session.scalar(
                 select(Job)
                 .where(
+                    Job.workspace_id == workspace_id,
                     Job.resource_id == resource_id,
                     Job.operation == operation,
                     Job.status.in_(("queued", "retrying", "running", "cancelling")),
@@ -287,9 +425,27 @@ class SqlJobRepository:
             )
             return _snapshot(job) if job is not None else None
 
-    def latest_event(self, job_id: str) -> JobEventSnapshot | None:
+    def _request_cancel_locked(self, session: Session, job: Job, now: datetime) -> JobSnapshot:
+        if job.status in {"succeeded", "failed", "cancelled"}:
+            return _snapshot(job)
+        job.cancel_requested_at = now
+        if job.status in {"queued", "retrying"}:
+            job.status = "cancelled"
+            job.active_key = None
+            job.finished_at = now
+            self._append_event(session, job.id, "cancelled", "cancelled", None, "任务在执行前被取消")
+        else:
+            job.status = "cancelling"
+            self._append_event(session, job.id, "cancelling", "cancelling", None, "已请求取消任务")
+        return _snapshot(job)
+
+    def _release_reservation(self, reservation: QuotaReservation | None, reason: str) -> None:
+        if reservation is not None and self._quota_guard is not None:
+            self._quota_guard.release(reservation.id, reason)
+
+    def latest_event(self, job_id: str, *, workspace_id: str) -> JobEventSnapshot | None:
         with self._session_factory() as session:
-            job = session.get(Job, job_id)
+            job = session.scalar(select(Job).where(Job.id == job_id, Job.workspace_id == workspace_id))
             event = session.scalar(
                 select(JobEvent)
                 .where(JobEvent.job_id == job_id)
@@ -307,14 +463,19 @@ class SqlJobRepository:
             occurred_at=event.created_at,
         )
 
-    def events(self, job_id: str, *, after_sequence: int) -> list[JobEventSnapshot]:
+    def events(self, job_id: str, *, after_sequence: int, workspace_id: str | None = None) -> list[JobEventSnapshot]:
         with self._session_factory() as session:
+            job_statement = select(Job).where(Job.id == job_id)
+            if workspace_id is not None:
+                job_statement = job_statement.where(Job.workspace_id == workspace_id)
+            status = session.scalar(job_statement)
+            if status is None:
+                return []
             rows = session.scalars(
                 select(JobEvent)
                 .where(JobEvent.job_id == job_id, JobEvent.sequence > after_sequence)
                 .order_by(JobEvent.sequence)
             ).all()
-            status = session.get(Job, job_id)
         current_status = status.status if status is not None else "missing"
         return [
             JobEventSnapshot(
@@ -424,6 +585,7 @@ def _snapshot(job: Job) -> JobSnapshot:
     return JobSnapshot(
         id=job.id,
         workspace_id=job.workspace_id,
+        parent_job_id=job.parent_job_id,
         resource_type=job.resource_type,
         resource_id=job.resource_id,
         operation=job.operation,
@@ -441,3 +603,10 @@ def _database_now(session: Session) -> datetime:
     """Use the database clock for every value compared with MySQL DATETIME."""
 
     return session.scalar(select(func.now()))
+
+
+def _context_from_reservation(payload: dict[str, object]) -> WorkspaceContext | None:
+    workspace_id, actor_id, request_id = payload.get("workspace_id"), payload.get("actor_id"), payload.get("request_id")
+    if not all(isinstance(value, str) and value.strip() for value in (workspace_id, actor_id, request_id)):
+        return None
+    return WorkspaceContext(workspace_id=workspace_id, actor_id=actor_id, request_id=request_id)

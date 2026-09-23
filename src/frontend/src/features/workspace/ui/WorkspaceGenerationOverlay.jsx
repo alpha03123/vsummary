@@ -2,24 +2,64 @@ import { LoaderCircle, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { WorkspaceMetricCard } from "./shared/WorkspaceMetricCard";
 
+/**
+ * 进度浮层展示给用户的阶段清单（顺序即真实流水线顺序，`isDone` 判定依赖它）。
+ *
+ * 这里刻意只保留「用户能感知的 5 个阶段」：后端还有 `prepare`、`extract_screenshots`、
+ * `load_manual_srt`、`probe_subtitles`、`cancelling` 等细分阶段，它们都通过下面的
+ * `STAGE_ALIASES` 归并到相邻阶段，不再各占一行——否则浮层会出现十几行「等待中」，
+ * 用户既读不完也看不懂。
+ */
 const GENERATION_STAGE_ITEMS = [
-  { id: "queued", label: "等待处理" },
-  { id: "batch", label: "批量处理" },
-  { id: "download", label: "下载视频" },
-  { id: "probe", label: "分析视频" },
-  { id: "extract_audio", label: "MP4 转音频" },
+  { id: "preparing", label: "准备素材" },
   { id: "transcribe", label: "语音转写" },
-  { id: "enhance_transcript", label: "AI 修正文本" },
-  { id: "summarize", label: "AI 生成概况" },
-  { id: "enrich_visual_summary", label: "视觉增强概况" },
-  { id: "finalize_ai_summary", label: "整理 AI 概括" },
-  { id: "publish", label: "保存生成结果" },
+  { id: "organize", label: "整理文字稿" },
+  { id: "summarize", label: "生成概况" },
+  { id: "publish", label: "整理并保存" },
   { id: "completed", label: "完成" },
 ];
 
+/** 后端细分阶段 → 浮层阶段的归并映射（键为后端 `stage` 原文）。 */
+const STAGE_ALIASES = {
+  prepare: "preparing",
+  queued: "preparing",
+  batch: "preparing",
+  queue: "preparing",
+  download: "preparing",
+  probe: "preparing",
+  probe_subtitles: "preparing",
+  extract_audio: "preparing",
+  extract_subtitles: "preparing",
+  load_manual_srt: "transcribe",
+  load_transcript: "transcribe",
+  enhance_transcript: "organize",
+  extract_screenshots: "summarize",
+  enrich_visual_summary: "summarize",
+  finalize_ai_summary: "summarize",
+};
+
+/** 不落在阶段清单里、但需要单独文案的瞬态阶段。 */
 const TRANSIENT_STAGE_LABELS = {
   reconnecting: "同步进度",
+  cancelling: "正在取消",
 };
+
+/** 字幕模式下「整理文字稿 / 生成概况」不适用，直接隐藏。 */
+const TRANSCRIPT_MODE_HIDDEN_STAGES = new Set(["organize", "summarize"]);
+
+/** 把后端 stage 归一化成阶段清单里的 id；无法归类时返回 `null`。 */
+const STAGE_IDS = new Set(GENERATION_STAGE_ITEMS.map((item) => item.id));
+
+function resolveStageId(stage) {
+  if (typeof stage !== "string" || !stage) {
+    return null;
+  }
+  if (STAGE_IDS.has(stage)) {
+    return stage;
+  }
+  const alias = STAGE_ALIASES[stage];
+  return typeof alias === "string" && STAGE_IDS.has(alias) ? alias : null;
+}
 
 function formatDurationLabel(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -43,14 +83,17 @@ export function WorkspaceGenerationOverlay({
   generationProgress,
   generationSnapshot,
   title = "正在生成 AI 概况",
+  mode = "summary",
   onCancel,
   cancelLabel = "取消",
 }) {
+  const isTranscriptMode = mode === "transcript";
   const hasRealGenerationProgress = typeof generationProgress === "number";
   const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : "处理中";
-  const activeStageId = generationSnapshot?.status === "completed" ? "completed" : generationSnapshot?.stage;
+  const rawStageId = generationSnapshot?.status === "completed" ? "completed" : generationSnapshot?.stage;
+  const activeStageId = resolveStageId(rawStageId);
   const activeStageLabel =
-    GENERATION_STAGE_ITEMS.find((item) => item.id === activeStageId)?.label ?? TRANSIENT_STAGE_LABELS[activeStageId] ?? "处理中";
+    GENERATION_STAGE_ITEMS.find((item) => item.id === activeStageId)?.label ?? TRANSIENT_STAGE_LABELS[rawStageId] ?? "处理中";
   const elapsedLabel = formatDurationLabel(generationSnapshot?.elapsedSeconds);
   const estimatedTotalLabel = formatDurationLabel(generationSnapshot?.estimatedTotalSeconds);
   const remainingLabel = formatDurationLabel(generationSnapshot?.remainingSeconds);
@@ -102,11 +145,21 @@ export function WorkspaceGenerationOverlay({
             <WorkspaceMetricCard label="预计剩余" value={remainingLabel} className="rounded-2xl px-3 py-2" labelClassName="text-[10px] text-stone-500 dark:text-stone-500" valueClassName="mt-1 text-sm" />
           </div>
           <div className="mt-4 flex flex-col gap-2">
-            {GENERATION_STAGE_ITEMS.filter((item) => item.id !== "completed" || generationSnapshot?.status === "completed").map((item) => {
+            {GENERATION_STAGE_ITEMS.filter((item) => {
+              if (item.id === "completed") {
+                return generationSnapshot?.status === "completed";
+              }
+              if (isTranscriptMode && TRANSCRIPT_MODE_HIDDEN_STAGES.has(item.id)) {
+                return false;
+              }
+              return true;
+            }).map((item) => {
               const activeIndex = GENERATION_STAGE_ITEMS.findIndex((stage) => stage.id === activeStageId);
               const itemIndex = GENERATION_STAGE_ITEMS.findIndex((stage) => stage.id === item.id);
               const isCurrent = item.id === activeStageId;
               const isDone = activeIndex > -1 && itemIndex < activeIndex;
+              // 未开始的阶段只留一个中性的等待点，不再逐行重复「等待中」。
+              const statusLabel = isCurrent ? "进行中" : isDone ? "已完成" : "等待";
               return (
                 <div
                   key={item.id}
@@ -119,8 +172,16 @@ export function WorkspaceGenerationOverlay({
                   }`}
                 >
                   <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{item.label}</span>
-                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-500">
-                    {isCurrent ? "进行中" : isDone ? "已完成" : "等待中"}
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      isCurrent
+                        ? "text-accent"
+                        : isDone
+                          ? "text-success"
+                          : "text-stone-400 dark:text-stone-600"
+                    }`}
+                  >
+                    {statusLabel}
                   </span>
                 </div>
               );

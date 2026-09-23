@@ -5,68 +5,60 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend.api.http.app import create_app
+from tests._workspace_scope import attach_workspace_scope
+from backend.local.http.app import create_app
+from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
+
+
+class _Jobs:
+    def __init__(self, *, conflict: bool = False) -> None:
+        self.calls: list[dict[str, object]] = []
+        self.conflict = conflict
+
+    def submit(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.conflict:
+            raise ControlPlaneConflictError("active job")
+        return SimpleNamespace(id="job-series-mindmap", status="queued")
+
+    def active_for_resource(self, **_kwargs):
+        return SimpleNamespace(id="job-active", status="running") if self.conflict else None
+
+
+def _container(*, mindmap_node: dict | None = None, conflict: bool = False) -> SimpleNamespace:
+    mindmap = (
+        SimpleNamespace(series_id="s1", video_id="", title="Series", mindmap=mindmap_node)
+        if mindmap_node is not None
+        else None
+    )
+    return attach_workspace_scope(SimpleNamespace(
+        root_dir=None,
+        job_repository=_Jobs(conflict=conflict),
+        get_series_mindmap=SimpleNamespace(run=lambda _series: mindmap),
+    ))
 
 
 class SeriesMindmapApiTests(unittest.TestCase):
-    """Integration tests for series mindmap endpoints."""
-
     def test_get_series_mindmap_returns_tree(self) -> None:
-        mindmap_node = {"id": "root", "title": "测试系列", "summary": "", "children": [
-            {"id": "t1", "title": "主题1", "summary": "", "children": []},
-        ]}
-        container = _build_series_container(mindmap_node=mindmap_node)
-        client = TestClient(create_app(container))
-        response = client.get("/api/series/s1/mindmap")
+        response = TestClient(create_app(_container(mindmap_node={"id": "root", "title": "T", "children": []}))).get("/api/series/s1/mindmap")
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["title"], "测试系列")
+        self.assertEqual(response.json()["title"], "T")
 
-    def test_get_series_mindmap_404_when_not_generated(self) -> None:
-        container = _build_series_container(mindmap_node=None)
-        client = TestClient(create_app(container))
-        response = client.get("/api/series/s1/mindmap")
+    def test_submit_series_mindmap_returns_durable_job(self) -> None:
+        container = _container()
+        response = TestClient(create_app(container)).post("/api/series/s1/mindmap/generate", json={"max_depth": 3})
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-series-mindmap")
+        self.assertEqual(container.job_repository.calls[0]["workspace_id"], "workspace-1")
+        self.assertEqual(container.job_repository.calls[0]["operation"], "generate_series_mindmap")
+        self.assertEqual(container.job_repository.calls[0]["request_payload"], {"series_id": "s1", "max_depth": 3})
+
+    def test_duplicate_submit_returns_active_job(self) -> None:
+        response = TestClient(create_app(_container(conflict=True))).post("/api/series/s1/mindmap/generate")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-active")
+
+    def test_legacy_tracker_endpoint_is_not_registered(self) -> None:
+        response = TestClient(create_app(_container())).get("/api/series/s1/mindmap/generate/progress")
         self.assertEqual(response.status_code, 404)
-
-    def test_export_series_mindmap_returns_markdown(self) -> None:
-        mindmap_node = {"id": "root", "title": "测试系列", "summary": "", "children": []}
-        container = _build_series_container(mindmap_node=mindmap_node)
-        client = TestClient(create_app(container))
-        response = client.get("/api/series/s1/mindmap/export?format=md")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("text/markdown", response.headers["content-type"])
-
-    def test_export_series_mindmap_returns_400_for_unsupported_format(self) -> None:
-        mindmap_node = {"id": "root", "title": "测试系列", "summary": "", "children": []}
-        container = _build_series_container(mindmap_node=mindmap_node)
-        client = TestClient(create_app(container))
-        response = client.get("/api/series/s1/mindmap/export?format=pdf")
-        self.assertEqual(response.status_code, 400)
-
-    def test_concurrent_generation_lock_mechanism(self) -> None:
-        from backend.api.routes.videos import _acquire_series_mindmap_lock, _release_series_mindmap_lock
-        acquired = _acquire_series_mindmap_lock("test-series")
-        self.assertTrue(acquired)
-        second = _acquire_series_mindmap_lock("test-series")
-        self.assertFalse(second)
-        _release_series_mindmap_lock("test-series")
-        reacquired = _acquire_series_mindmap_lock("test-series")
-        self.assertTrue(reacquired)
-        _release_series_mindmap_lock("test-series")
-
-
-def _build_series_container(
-    *, mindmap_node: dict | None = None, series_id: str = "s1", title: str = "测试系列"
-) -> SimpleNamespace:
-    mindmap_dto = None
-    if mindmap_node is not None:
-        mindmap_dto = SimpleNamespace(
-            series_id=series_id, video_id="", title=title, mindmap=mindmap_node,
-        )
-    return SimpleNamespace(
-        get_series_mindmap=SimpleNamespace(run=lambda sid: mindmap_dto),
-    )
-
-
-if __name__ == "__main__":
-    unittest.main()

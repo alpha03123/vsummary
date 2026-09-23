@@ -11,7 +11,7 @@ from backend.api.routes.health import health
 
 class HealthRouteTests(unittest.TestCase):
     def test_returns_ok_when_sql_workspace_is_readable(self) -> None:
-        container = SimpleNamespace(sql_workspace=SimpleNamespace(get_workspace=lambda: object()))
+        container = SimpleNamespace(check_health=lambda: object())
 
         self.assertEqual(health(container).status, "ok")
 
@@ -19,7 +19,7 @@ class HealthRouteTests(unittest.TestCase):
         def raise_disconnect():
             raise OperationalError("SELECT 1", {}, ConnectionError("connection refused"))
 
-        container = SimpleNamespace(sql_workspace=SimpleNamespace(get_workspace=raise_disconnect))
+        container = SimpleNamespace(check_health=raise_disconnect)
 
         with self.assertRaises(HTTPException) as caught:
             health(container)

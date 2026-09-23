@@ -5,7 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from backend.video_summary.infrastructure.persistence.blob_store import BlobStoreError, FileBlobStore
+from backend.core.blob_store import BlobStoreError
+from backend.local.persistence.file_blob_store import FileBlobStore
 
 
 class FileBlobStoreTests(unittest.TestCase):

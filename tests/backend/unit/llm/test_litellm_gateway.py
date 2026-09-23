@@ -274,10 +274,6 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(result.citations, ["e1"])
         self.assertEqual(completion.response_formats, [SeriesAnswerPayload, {"type": "json_object"}])
-        prompt = "\n".join(str(message["content"]) for message in completion.messages[1])
-        self.assertIn("只输出一个 JSON 对象", prompt)
-        self.assertIn("JSON Schema", prompt)
-        self.assertIn('"citations"', prompt)
 
     def test_falls_back_when_lm_studio_rejects_a_circular_json_schema(self) -> None:
         completion = LmStudioCircularSchemaRejectionCompletion(

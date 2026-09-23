@@ -9,6 +9,7 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/
@@ -36,6 +37,7 @@ tmp/
 /videos/
 /workspace/
 /data/
+/.vsummary/
 .worktrees/
 .workbuddy/
 
@@ -45,6 +47,10 @@ docs/superpowers/
 # Local dev scripts (environment-specific)
 /scripts/*
 !/scripts/build_release.ps1
+!/scripts/bili_downloader.py
+!/scripts/analysis/
+/scripts/analysis/*
+!/scripts/analysis/run_speed_profile.py
 !/scripts/package/
 !/scripts/package/**
 

@@ -13,7 +13,7 @@ export function buildWorkspacePageModel(controller) {
   const seriesQueueSnapshot = seriesQueueActive
     ? {
         status: seriesQueue.status,
-        stage: "batch",
+        stage: "preparing",
         progress: seriesQueueProgress,
         detail: seriesQueue.detail ?? `已完成 ${seriesQueue.completed}/${seriesQueue.total}`,
         error: null,

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from backend.video_summary.infrastructure.asr.aliyun_bailian_transcriber import AliyunBailianTranscriber
 from backend.video_summary.infrastructure.asr.faster_whisper_transcriber import FasterWhisperTranscriber
@@ -28,6 +29,7 @@ from backend.shared.llm import LiteLLMCompletionGateway
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.llm.litellm_summarizer import LiteLLMCompletionSummarizer
 from backend.video_summary.infrastructure.config.settings import AppSettings
+from backend.video_summary.domain.models import Transcript
 from backend.video_summary.generation.ports import Summarizer, Transcriber
 
 
@@ -73,6 +75,22 @@ class AsrModelNotReadyError(RuntimeError):
     """
 
 
+class _UnavailableTranscriber:
+    """Defers a missing local ASR model error until ASR is actually required."""
+
+    def __init__(self, message: str) -> None:
+        self._message = message
+
+    def transcribe(
+        self,
+        audio_path: Path,
+        output_stem: Path,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> Transcript:
+        del audio_path, output_stem, on_progress
+        raise AsrModelNotReadyError(self._message)
+
+
 def build_litellm_completion_gateway(
     settings: AppSettings,
     *,
@@ -109,7 +127,6 @@ def build_video_summary_runtime(
         包含转写器、总结器、LLM 网关、ASR 元信息的 `VideoSummaryRuntime`。
 
     Raises:
-        AsrModelNotReadyError: 选定的 faster-whisper 模型尚未下载。
         ValueError: 选定的 ASR provider 不受支持。
     """
     transcriber, asr = _build_transcriber(settings)
@@ -138,15 +155,20 @@ def build_video_summary_runtime(
 def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeInfo]:
     """根据 `settings.asr.provider` 分发到对应的转写器实现。
 
-    本地 provider 会先校验模型是否已下载；`aliyun_bailian` 使用 DashScope
-    SDK 临时上传音频并调用云端 Paraformer。
+    本地 provider 缺少模型时返回延迟报错的转写器，让内嵌字幕和人工字幕
+    可以绕过 ASR；真正需要 ASR 时才返回明确的模型未下载错误。
     """
     provider = settings.asr.provider
     if provider == "faster_whisper":
         model_manager = FasterWhisperModelManager(settings.asr.faster_whisper.models_dir)
         if not model_manager.is_downloaded(settings.asr.faster_whisper.model_size):
-            raise AsrModelNotReadyError(
-                "当前语音模型尚未下载，请先到设置中下载后再生成 AI 概况。"
+            return (
+                _UnavailableTranscriber("当前语音模型尚未下载，请先到设置中下载后再生成 AI 概况。"),
+                AsrRuntimeInfo(
+                    provider=provider,
+                    device=settings.asr.faster_whisper.device,
+                    model_label=settings.asr.faster_whisper.model_size,
+                ),
             )
         return (
             FasterWhisperTranscriber(
@@ -166,7 +188,14 @@ def _build_transcriber(settings: AppSettings) -> tuple[Transcriber, AsrRuntimeIn
     if provider == "whisper_cpp":
         model_manager = WhisperCppModelManager(settings.asr.whisper_cpp.models_dir)
         if not model_manager.is_downloaded(settings.asr.whisper_cpp.model):
-            raise AsrModelNotReadyError("当前 whisper.cpp 模型尚未下载，请先到设置中下载后再生成 AI 概况。")
+            return (
+                _UnavailableTranscriber("当前 whisper.cpp 模型尚未下载，请先到设置中下载后再生成 AI 概况。"),
+                AsrRuntimeInfo(
+                    provider=provider,
+                    device="external",
+                    model_label=settings.asr.whisper_cpp.model,
+                ),
+            )
         return (
             WhisperCppTranscriber(
                 binary_path=settings.asr.whisper_cpp.binary_path,

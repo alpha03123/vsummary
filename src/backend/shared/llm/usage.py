@@ -82,7 +82,7 @@ class MySqlLlmUsageStore:
         self._sessions = session_factory
 
     def record(self, record: LlmUsageRecord) -> None:
-        from backend.video_summary.infrastructure.persistence.ids import new_ulid
+        from backend.core.ids import new_ulid
         with self._sessions.begin() as session:
             session.execute(text("INSERT INTO llm_usage (id,created_at,category,provider,base_url,model,prompt_tokens,completion_tokens,total_tokens) VALUES (:id,:created,:category,:provider,:base,:model,:prompt,:completion,:total)"), {"id": new_ulid(), "created": record.created_at, "category": str(record.category), "provider": record.provider, "base": record.base_url, "model": record.model, "prompt": record.prompt_tokens, "completion": record.completion_tokens, "total": record.total_tokens})
 
