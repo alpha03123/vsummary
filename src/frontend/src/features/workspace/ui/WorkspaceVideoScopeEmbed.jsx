@@ -192,6 +192,7 @@ export function WorkspaceVideoScopeEmbed() {
         <WorkspaceGenerationOverlay
           generationProgress={page.generation.progress}
           generationSnapshot={page.generation.snapshot}
+          mode={page.shell.processingMode}
           onCancel={controller.onCancelGeneration}
         />
       ) : null}

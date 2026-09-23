@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backend.api import application_update
+from backend.local import application_update
 from updater import apply_and_restart
 
 

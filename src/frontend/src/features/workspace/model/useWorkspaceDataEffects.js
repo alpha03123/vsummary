@@ -5,12 +5,8 @@ import {
   loadAgentContextUsage,
   loadAgentMemoryStatus,
   loadAgentSessionRecovery,
-  loadFasterWhisperModels,
-  loadRagModels,
   loadSeriesGenerationStatus,
   loadSeriesMindmap,
-  loadProviderSettings,
-  loadProviderUsage,
   loadVideoKnowledgeCards,
   loadVideoAiSummary,
   loadVideoGenerationStatus,
@@ -19,10 +15,16 @@ import {
   loadVideoSummary,
   loadVideoTools,
   loadWorkspaceLibrary,
-  loadWorkspaceSettings,
   subscribeSeriesGenerationProgress,
   subscribeDurableJobProgress,
 } from "./workspaceApi";
+import {
+  loadFasterWhisperModels,
+  loadProviderSettings,
+  loadProviderUsage,
+  loadRagModels,
+  loadWorkspaceSettings,
+} from "../../../local-features/api/localWorkspaceApi";
 import { buildAgentChatContextPayload } from "./workspaceChatRuntime";
 import { BACKEND_HEALTH_RETRY_DELAY_MS } from "./workspaceControllerConstants";
 import {

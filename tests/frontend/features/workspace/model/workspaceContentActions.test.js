@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 describe("workspaceContentActions media links", () => {
   it("uses the agent processing route for a linked video", async () => {
     vi.resetModules();
-    const processAgentVideo = vi.fn(() => Promise.resolve({ status: "scheduled" }));
+    const processAgentVideo = vi.fn(() => Promise.resolve({ jobId: "job-agent-1", status: "queued" }));
+    const subscribeDurableJobProgress = vi.fn(() => () => {});
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
       processAgentVideo,
+      subscribeDurableJobProgress,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -26,6 +28,7 @@ describe("workspaceContentActions media links", () => {
     expect(processAgentVideo).toHaveBeenCalledWith("bilibili", "BV1example", {
       processingMode: undefined,
     });
+    expect(subscribeDurableJobProgress).toHaveBeenCalledWith("job-agent-1", expect.any(Function));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "generation_status_loaded",
       snapshot: expect.objectContaining({ status: "queued", stage: "queued" }),
@@ -129,111 +132,7 @@ describe("workspaceContentActions media links", () => {
   });
 });
 
-describe("workspaceContentActions video cancellation", () => {
-  it("moves the task to cancelled as soon as the cancel request succeeds", async () => {
-    vi.resetModules();
-    const cancelVideoSummary = vi.fn(() => Promise.resolve({ status: "cancelled" }));
-    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
-      ...createWorkspaceApiMock(),
-      cancelVideoSummary,
-    }));
-    const { createWorkspaceContentActions } = await import(
-      "@src/features/workspace/model/workspaceContentActions"
-    );
-    const dispatch = vi.fn();
-    const actions = createWorkspaceContentActions({
-      state: {
-        selectedSeriesId: "series-a",
-        selectedVideoId: "video-a",
-        selectedContextType: "video",
-        generationTasksByKey: {
-          "video:series-a/video-a": {
-            taskKey: "video:series-a/video-a",
-            mode: "video",
-            seriesId: "series-a",
-            videoId: "video-a",
-            snapshot: { status: "running", stage: "summarize", progress: 88 },
-          },
-        },
-      },
-      dispatch,
-      selectedVideo: { id: "video-a", status: "pending" },
-    });
-
-    await actions.onCancelGeneration();
-
-    expect(cancelVideoSummary).toHaveBeenCalledWith("series-a", "video-a");
-    expect(dispatch).toHaveBeenNthCalledWith(1, {
-      type: "video_generation_cancelling",
-      seriesId: "series-a",
-      videoId: "video-a",
-    });
-    expect(dispatch).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      type: "generation_cancelled",
-      taskKey: "video:series-a/video-a",
-      snapshot: expect.objectContaining({ status: "cancelled", stage: "cancelled" }),
-    }));
-  });
-});
-
 describe("workspaceContentActions series cancellation", () => {
-  it("keeps the series queue cancelling until backend cancellation finishes", async () => {
-    vi.resetModules();
-    let resolveDownloadCancel;
-    const cancelVideoDownload = vi.fn(() => new Promise((resolve) => {
-      resolveDownloadCancel = resolve;
-    }));
-    const cancelSeriesSummaries = vi.fn(() => Promise.resolve({ status: "cancelled" }));
-    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
-      ...createWorkspaceApiMock(),
-      cancelVideoDownload,
-      cancelSeriesSummaries,
-    }));
-    const { createWorkspaceContentActions } = await import(
-      "@src/features/workspace/model/workspaceContentActions"
-    );
-    const dispatch = vi.fn();
-    const actions = createWorkspaceContentActions({
-      state: {
-        selectedSeriesId: "series-a",
-        selectedVideoId: null,
-        selectedContextType: "series",
-        seriesGenerationQueue: {
-          seriesId: "series-a",
-          status: "running",
-          downloadVideoId: "video-1",
-        },
-      },
-      dispatch,
-      selectedVideo: null,
-    });
-
-    const cancelTask = actions.onCancelGeneration();
-    await Promise.resolve();
-
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "series_generation_queue_cancelling",
-      seriesId: "series-a",
-    });
-    expect(dispatch).not.toHaveBeenCalledWith({
-      type: "series_generation_queue_finished",
-      seriesId: "series-a",
-      status: "cancelled",
-    });
-    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: undefined });
-
-    resolveDownloadCancel({});
-    await cancelTask;
-
-    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "video-1");
-    expect(cancelSeriesSummaries).toHaveBeenCalledWith("series-a", { runId: undefined });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "series_generation_queue_finished",
-      seriesId: "series-a",
-      status: "cancelled",
-    });
-  });
-
   it("does not let an old cancel completion finish a newer series run", async () => {
     vi.resetModules();
     let resolveSeriesCancel;
@@ -406,27 +305,15 @@ describe("workspaceContentActions series cancellation", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "workspace_loaded", library: refreshedLibrary });
   });
 
-  it("skips failed linked video downloads and continues the series run", async () => {
+  it("submits one durable parent job for the series", async () => {
     vi.resetModules();
-    const startVideoDownload = vi.fn(() => Promise.resolve({ taskId: "download-task" }));
-    const subscribeVideoDownloadProgress = vi.fn((seriesId, videoId, listener) => {
+    const subscribeDurableJobProgress = vi.fn((jobId, listener) => {
       queueMicrotask(() => {
-        listener(
-          videoId === "linked-1"
-            ? { status: "failed", error: "yt-dlp 退出码 1：HTTP Error 403" }
-            : { status: "completed", progress: 100 },
-        );
+        listener({ status: "completed", progress: 100, detail: "视频子任务已入队" });
       });
       return vi.fn();
     });
-    const generateSeriesSummaries = vi.fn(() => Promise.resolve({
-      completed_videos: ["linked-2"],
-      skipped_videos: ["linked-1"],
-      skipped_video_errors: [
-        { video_id: "linked-1", title: "Linked 1", error: "源文件不存在" },
-      ],
-      cancelled_videos: [],
-    }));
+    const generateSeriesSummaries = vi.fn(() => Promise.resolve({ jobId: "series-job", status: "queued" }));
     const loadWorkspaceLibrary = vi.fn(() => Promise.resolve({
       series: [
         {
@@ -442,8 +329,7 @@ describe("workspaceContentActions series cancellation", () => {
       ...createWorkspaceApiMock(),
       generateSeriesSummaries,
       loadWorkspaceLibrary,
-      startVideoDownload,
-      subscribeVideoDownloadProgress,
+      subscribeDurableJobProgress,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -474,52 +360,18 @@ describe("workspaceContentActions series cancellation", () => {
     });
 
     await actions.onGenerateSeries();
+    await new Promise((resolve) => queueMicrotask(resolve));
 
-    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
-    expect(startVideoDownload).toHaveBeenCalledWith("series-a", "linked-2");
     expect(generateSeriesSummaries).toHaveBeenCalledWith("series-a", {
       transcriptEnhancementEnabled: true,
       runId: expect.any(String),
     });
-    const completedSnapshot = dispatch.mock.calls.find(([action]) => action.type === "generation_status_loaded")?.[0]?.snapshot;
-    expect(completedSnapshot?.detail).toContain("跳过 1 个");
-    expect(completedSnapshot?.detail).toContain("HTTP Error 403");
-    expect(completedSnapshot?.detail).toContain("源文件不存在");
+    expect(subscribeDurableJobProgress).toHaveBeenCalledWith("series-job", expect.any(Function));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "series_generation_queue_finished",
       seriesId: "series-a",
       status: "completed",
     }));
-  });
-
-  it("clears local video download state immediately after cancelling a selected download", async () => {
-    vi.resetModules();
-    const cancelVideoDownload = vi.fn(() => Promise.resolve({ status: "cancelling" }));
-    vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
-      ...createWorkspaceApiMock(),
-      cancelVideoDownload,
-    }));
-    const { createWorkspaceContentActions } = await import(
-      "@src/features/workspace/model/workspaceContentActions"
-    );
-    const dispatch = vi.fn();
-    const actions = createWorkspaceContentActions({
-      state: {
-        selectedSeriesId: "series-a",
-        downloadingVideoKey: "series-a/linked-1",
-      },
-      dispatch,
-      selectedVideo: null,
-    });
-
-    await actions.onDownloadVideo({ id: "linked-1" });
-
-    expect(cancelVideoDownload).toHaveBeenCalledWith("series-a", "linked-1");
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "video_download_cancel_requested",
-      seriesId: "series-a",
-      videoId: "linked-1",
-    });
   });
 
   it("keeps a cancellation failure on the linked video instead of using the transient page error", async () => {
@@ -554,19 +406,22 @@ describe("workspaceContentActions series cancellation", () => {
     vi.resetModules();
     let progressListener;
     const importChaoxingCourse = vi.fn(() => Promise.resolve({
-      taskId: "chaoxing-import-1",
+      jobId: "chaoxing-import-1",
       seriesId: "chaoxing-course-1",
     }));
     const cancelChaoxingImport = vi.fn(() => Promise.resolve({ status: "cancelling" }));
-    const subscribeChaoxingImportProgress = vi.fn((taskId, listener) => {
+    const subscribeDurableJobProgress = vi.fn((jobId, listener) => {
       progressListener = listener;
       return vi.fn();
     });
     vi.doMock("@src/features/workspace/model/workspaceApi", () => ({
       ...createWorkspaceApiMock(),
+      subscribeDurableJobProgress,
+    }));
+    vi.doMock("@src/local-features/api/localWorkspaceApi", () => ({
+      ...createWorkspaceApiMock(),
       cancelChaoxingImport,
       importChaoxingCourse,
-      subscribeChaoxingImportProgress,
     }));
     const { createWorkspaceContentActions } = await import(
       "@src/features/workspace/model/workspaceContentActions"
@@ -585,7 +440,7 @@ describe("workspaceContentActions series cancellation", () => {
 
     await expect(importTask).rejects.toThrow("超星课程导入已取消");
     expect(onTaskStarted).toHaveBeenCalledWith({
-      taskId: "chaoxing-import-1",
+      jobId: "chaoxing-import-1",
       seriesId: "chaoxing-course-1",
     });
     expect(cancelChaoxingImport).toHaveBeenCalledWith("chaoxing-import-1");
@@ -619,7 +474,7 @@ function createWorkspaceApiMock() {
     relinkExternalVideo: vi.fn(),
     startVideoDownload: vi.fn(),
     subscribeChaoxingImportProgress: vi.fn(),
-    subscribeVideoDownloadProgress: vi.fn(),
+    subscribeDurableJobProgress: vi.fn(),
     updateVideoNote: vi.fn(),
   };
 }

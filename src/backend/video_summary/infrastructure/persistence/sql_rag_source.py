@@ -8,7 +8,7 @@ import json
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 
 
 class SqlRagSourceRepository:

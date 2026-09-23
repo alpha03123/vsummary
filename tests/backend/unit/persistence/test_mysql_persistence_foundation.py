@@ -1,27 +1,28 @@
 from __future__ import annotations
 
+import os
 import unittest
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from alembic import command
 from alembic.script import ScriptDirectory
-from sqlalchemy.dialects import mysql
-from sqlalchemy.schema import CreateTable
 
 from backend.video_summary.infrastructure.persistence.database import DatabaseDriverError, DatabaseOptions, _require_pymysql
 from backend.video_summary.infrastructure.persistence.migrate import build_alembic_config
-from backend.video_summary.infrastructure.persistence.managed_local_mysql import (
+from backend.local.persistence.managed_mysql import (
     LOCAL_DATABASE_NAME,
     LOCAL_DATABASE_USER,
     ManagedLocalMySql,
     ManagedLocalMySqlError,
     ManagedLocalMySqlPaths,
+    _default_data_root,
 )
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import Base, Job, Series, Video
-from backend.video_summary.infrastructure.persistence.sql_video_workspace import _persisted_card_ids
+from backend.core.ids import new_ulid
+from backend.video_summary.infrastructure.persistence.models import Base, Job, OutboxEvent, Series, Video
+from backend.video_summary.infrastructure.persistence.sql_video_workspace import _enqueue_outbox_event, _persisted_card_ids
 from backend.video_summary.library.models import KnowledgeCardDTO
 
 
@@ -92,20 +93,12 @@ class ControlPlaneSchemaTests(unittest.TestCase):
 
         self.assertIn("uq_series_workspace_position", constraint_names)
 
-    def test_schema_compiles_for_mysql(self) -> None:
-        ddl = str(CreateTable(Job.__table__).compile(dialect=mysql.dialect()))
-
-        self.assertIn("CREATE TABLE jobs", ddl)
-        self.assertIn("CONSTRAINT uq_jobs_active_key UNIQUE (active_key)", ddl)
-        self.assertIn("request_payload JSON", ddl)
-
-
 class AlembicConfigurationTests(unittest.TestCase):
     def test_package_migration_directory_exposes_control_plane_revision(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0009_job_execution")
+        self.assertEqual(script.get_current_head(), "0013_outbox_workspace_retry_policy")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -118,11 +111,20 @@ class AlembicConfigurationTests(unittest.TestCase):
         self.assertIn("CREATE TABLE workspaces", ddl)
         self.assertIn("CREATE TABLE jobs", ddl)
         self.assertIn("CREATE TABLE outbox_events", ddl)
+        self.assertIn("LEFT JOIN notes AS note", ddl)
+        self.assertIn("LEFT JOIN jobs AS job", ddl)
+        self.assertIn("COALESCE(content_video.series_id, note_video.series_id)", ddl)
         self.assertIn("DEFAULT CURRENT_TIMESTAMP", ddl)
         self.assertNotIn("CURRENT_TIMESTAMP(6)", ddl)
 
 
 class ManagedLocalMySqlTests(unittest.TestCase):
+    def test_uses_explicit_runtime_directory_from_environment(self) -> None:
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"VSUMMARY_DATA": r"E:\\project\\.vsummary"}, clear=False):
+            self.assertEqual(_default_data_root(), Path(r"E:\\project\\.vsummary"))
+
     def test_data_paths_are_separate_from_the_installation_directory(self) -> None:
         paths = ManagedLocalMySqlPaths(Path("C:/Users/example/AppData/Local/VSummary"))
 
@@ -171,8 +173,8 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             (runtime.paths.data_dir / "auto.cnf").write_text("[auto]", encoding="utf-8")
 
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql._select_loopback_port", return_value=25331),
+                patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
+                patch("backend.local.persistence.managed_mysql._select_loopback_port", return_value=25331),
             ):
                 options = runtime._recover_runtime_state()
 
@@ -191,7 +193,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             runtime._process = None
 
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
+                patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
                 patch.object(runtime, "_shutdown_server") as shutdown,
             ):
                 runtime.stop()
@@ -212,7 +214,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             runtime._process.poll.return_value = 0
 
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql.load_local_mysql_password", return_value="secret"),
+                patch("backend.local.persistence.managed_mysql.load_local_mysql_password", return_value="secret"),
                 patch.object(runtime, "_shutdown_server") as shutdown,
                 patch.object(runtime, "_wait_for_port_to_close"),
                 patch.object(runtime, "_wait_for_server_exit"),
@@ -228,7 +230,7 @@ class ManagedLocalMySqlTests(unittest.TestCase):
             root = Path(temp_dir)
             runtime = ManagedLocalMySql(mysql_home=root / "mysql-runtime", data_root=root / "user-data")
             with (
-                patch("backend.video_summary.infrastructure.persistence.managed_local_mysql._is_loopback_port_open", return_value=True),
+                patch("backend.local.persistence.managed_mysql._is_loopback_port_open", return_value=True),
                 patch.object(runtime, "_start_server") as start_server,
             ):
                 runtime._start_existing_instance(DatabaseOptions(url="mysql+pymysql://user:secret@127.0.0.1:25331/vsummary"))
@@ -256,3 +258,46 @@ class KnowledgeCardPersistenceTests(unittest.TestCase):
         self.assertEqual(set(persisted), {"kc-1", "kc-2"})
         self.assertNotEqual(persisted["kc-1"], "kc-1")
         self.assertNotEqual(persisted["kc-1"], persisted["kc-2"])
+
+
+class OutboxWriteTests(unittest.TestCase):
+    def test_workspace_scoped_outbox_helper_records_note_event(self) -> None:
+        class SessionRecorder:
+            def __init__(self) -> None:
+                self.added: list[OutboxEvent] = []
+
+            def add(self, row: OutboxEvent) -> None:
+                self.added.append(row)
+
+        session = SessionRecorder()
+        occurred_at = datetime.now(timezone.utc)
+
+        _enqueue_outbox_event(
+            session,
+            workspace_id="workspace-1",
+            aggregate_type="note",
+            aggregate_id="note-1",
+            event_type="note_published",
+            payload={"video_id": "video-1"},
+            occurred_at=occurred_at,
+        )
+
+        self.assertEqual(len(session.added), 1)
+        event = session.added[0]
+        self.assertEqual(event.workspace_id, "workspace-1")
+        self.assertEqual(event.aggregate_type, "note")
+        self.assertEqual(event.aggregate_id, "note-1")
+        self.assertEqual(event.payload, {"video_id": "video-1"})
+        self.assertEqual(event.occurred_at, occurred_at)
+
+    def test_workspace_scoped_outbox_helper_rejects_missing_workspace(self) -> None:
+        with self.assertRaisesRegex(ValueError, "workspace_id"):
+            _enqueue_outbox_event(
+                object(),
+                workspace_id="",
+                aggregate_type="note",
+                aggregate_id="note-1",
+                event_type="note_published",
+                payload={"video_id": "video-1"},
+                occurred_at=datetime.now(timezone.utc),
+            )

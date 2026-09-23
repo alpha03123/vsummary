@@ -13,6 +13,19 @@ ancestors =
     backend
 depth = 1
 
+[importlinter:contract:core_must_not_depend_on_local]
+name = core must not depend on local
+type = forbidden
+source_modules =
+    backend.core
+    backend.agent
+    backend.agent_graph
+    backend.video_summary.domain
+    backend.video_summary.generation
+    backend.video_summary.library
+forbidden_modules =
+    backend.local
+
 [importlinter:contract:agent_graph_must_not_read_video_summary_infra]
 name = agent_graph must not depend on video_summary infrastructure
 type = forbidden

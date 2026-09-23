@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from threading import Event, Thread
+from typing import Protocol
 from uuid import uuid4
 
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
@@ -22,16 +24,31 @@ from backend.video_summary.infrastructure.persistence.sql_generation_adapters im
 LOGGER = logging.getLogger(__name__)
 
 
+class JobExecutionServices(Protocol):
+    """Workspace-owned dependencies used after a durable Job is claimed."""
+
+    job_summary_generator: SqlBackedVideoSummaryGenerator
+    job_operation_handlers: Mapping[str, Callable[[ClaimedJob, "SqlJobProgressReporter"], Awaitable[None]]]
+
+
 @dataclass(frozen=True)
 class WorkerOptions:
     worker_id: str
+    operation_filter: frozenset[str] | None = None
+    resource_class: str = "general"
     lease_seconds: int = 60
     heartbeat_seconds: int = 15
     poll_seconds: float = 0.25
 
     @classmethod
     def local(cls) -> "WorkerOptions":
-        return cls(worker_id=f"local-{uuid4().hex}", lease_seconds=120, heartbeat_seconds=20)
+        return cls(
+            worker_id=f"local-{uuid4().hex}",
+            operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_series_batch", "generate_video_mindmap", "generate_series_mindmap", "generate_video_knowledge_cards", "generate_video_ai_summary", "download_linked_video", "process_agent_video", "import_chaoxing_course", "prepare_asr_model", "prepare_rag_model", "refresh_rag_index"}),
+            resource_class="local-cpu",
+            lease_seconds=120,
+            heartbeat_seconds=20,
+        )
 
 
 class SqlJobProgressReporter:
@@ -68,11 +85,11 @@ class SqlJobWorker:
         self,
         *,
         repository: SqlJobRepository,
-        summary_generator: SqlBackedVideoSummaryGenerator,
+        get_execution_services: Callable[[str], JobExecutionServices],
         options: WorkerOptions,
     ) -> None:
         self._repository = repository
-        self._summary_generator = summary_generator
+        self._get_execution_services = get_execution_services
         self._options = options
         self._stop = Event()
         self._thread: Thread | None = None
@@ -97,6 +114,7 @@ class SqlJobWorker:
                 claim = self._repository.claim(
                     worker_id=self._options.worker_id,
                     lease_seconds=self._options.lease_seconds,
+                    operations=self._options.operation_filter,
                 )
             except Exception:
                 LOGGER.exception("job claim failed")
@@ -117,6 +135,12 @@ class SqlJobWorker:
         heartbeat = asyncio.create_task(self._heartbeat(claim))
         try:
             reporter.raise_if_cancelled()
+            services = self._get_execution_services(claim.workspace_id)
+            handler = services.job_operation_handlers.get(claim.operation)
+            if handler is not None:
+                await handler(claim, reporter)
+                self._repository.succeed(claim, detail="任务已完成")
+                return
             if claim.operation not in {"generate_summary", "generate_transcript"}:
                 self._repository.fail(
                     claim,
@@ -126,7 +150,7 @@ class SqlJobWorker:
                 )
                 return
             manual_transcript = _manual_transcript_from_payload(claim.request_payload)
-            await self._summary_generator.run(
+            await services.job_summary_generator.run(
                 series_id=str(claim.request_payload["series_id"]),
                 video_id=claim.resource_id,
                 processing_mode=str(claim.request_payload["processing_mode"]),
@@ -156,6 +180,9 @@ class SqlJobWorker:
         except JobLeaseLostError:
             raise
         except Exception as error:
+            if reporter.is_cancel_requested():
+                self._repository.mark_cancelled(claim, detail="任务已取消")
+                return
             self._repository.fail(
                 claim,
                 failure_code=_failure_code(error),
@@ -163,6 +190,7 @@ class SqlJobWorker:
                 retry_delay_seconds=_retry_delay_seconds(error),
             )
         finally:
+            self._repository.finalize_accounting(claim.id, workspace_id=claim.workspace_id)
             heartbeat.cancel()
             try:
                 await heartbeat

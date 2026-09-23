@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.agent.memory.context import AgentContext
 from backend.agent.schemas.action_plan import AgentActionPlan, AgentTurnResult, ScopeType
-from backend.api.di.container import ApiContainerDep
+from backend.api.dependencies import WorkspaceServicesDep
 from backend.api.schemas.responses import (
     AgentChatRequest,
     AgentChatResponse,
@@ -30,14 +30,13 @@ from backend.video_summary.infrastructure.rag.rag_models import (
     RAG_EMBEDDING_REQUIRED_MESSAGE,
     RAG_MODEL_DOWNLOAD_MESSAGE,
 )
-from backend.video_summary.infrastructure.config.settings import load_settings
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/api/agent/chat", response_model=AgentChatResponse)
-def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentChatResponse:
+def agent_chat(request: AgentChatRequest, container: WorkspaceServicesDep) -> AgentChatResponse:
     """POST /api/agent/chat — 非流式 Agent 对话。
 
     将用户消息送入 LangGraph Agent 图执行完整的一次推理回合，
@@ -75,7 +74,7 @@ def agent_chat(request: AgentChatRequest, container: ApiContainerDep) -> AgentCh
 
 
 @router.post("/api/agent/chat/stream")
-def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> StreamingResponse:
+def agent_chat_stream(request: AgentChatRequest, container: WorkspaceServicesDep) -> StreamingResponse:
     """POST /api/agent/chat/stream — 流式 Agent 对话（SSE）。
 
     与 `/api/agent/chat` 共享同一请求体，但以 Server-Sent Events 流
@@ -130,7 +129,7 @@ def agent_chat_stream(request: AgentChatRequest, container: ApiContainerDep) -> 
 
 
 @router.post("/api/agent/context/usage", response_model=AgentContextUsageResponse)
-def get_agent_context_usage(request: AgentContextUsageRequest, container: ApiContainerDep) -> AgentContextUsageResponse:
+def get_agent_context_usage(request: AgentContextUsageRequest, container: WorkspaceServicesDep) -> AgentContextUsageResponse:
     """POST /api/agent/context/usage — 查询上下文预算使用情况。
 
     返回当前 session 的 token 预算快照，包括各来源（system prompt、
@@ -174,7 +173,7 @@ def get_agent_context_usage(request: AgentContextUsageRequest, container: ApiCon
 
 
 @router.get("/api/agent/memory/status")
-def get_agent_memory_status(container: ApiContainerDep) -> dict[str, object]:
+def get_agent_memory_status(container: WorkspaceServicesDep) -> dict[str, object]:
     """GET /api/agent/memory/status — 查询知识记忆刷新进度。
 
     返回后台知识记忆刷新任务的状态快照（进度百分比、状态、详情），
@@ -190,7 +189,7 @@ def get_agent_memory_status(container: ApiContainerDep) -> dict[str, object]:
 
 
 @router.post("/api/agent/session/recover", response_model=AgentSessionRecoveryResponse)
-def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiContainerDep) -> AgentSessionRecoveryResponse:
+def recover_agent_session(request: AgentSessionRecoveryRequest, container: WorkspaceServicesDep) -> AgentSessionRecoveryResponse:
     """POST /api/agent/session/recover — 恢复 Agent Session。
 
     从 session 持久化存储中取出指定 session 的历史消息快照，
@@ -229,7 +228,7 @@ def recover_agent_session(request: AgentSessionRecoveryRequest, container: ApiCo
 
 
 @router.post("/api/agent/session/clear")
-def clear_agent_session(request: AgentSessionClearRequest, container: ApiContainerDep) -> dict[str, object]:
+def clear_agent_session(request: AgentSessionClearRequest, container: WorkspaceServicesDep) -> dict[str, object]:
     """POST /api/agent/session/clear — 清除 Agent Session。
 
     删除指定 session 的所有持久化消息记录，
@@ -242,9 +241,7 @@ def clear_agent_session(request: AgentSessionClearRequest, container: ApiContain
     Returns:
         {"status": "cleared", "session_id": ...}
     """
-    session_store = getattr(container, "agent_session_store", None)
-    if session_store is not None:
-        session_store.clear_snapshot(request.session_id)
+    container.agent_session_store.clear_snapshot(request.session_id)
     return {"status": "cleared", "session_id": request.session_id}
 
 
@@ -282,9 +279,7 @@ def _resolve_rag_block_message(context: AgentContext | None, container) -> str |
     """
     if context is None or context.scope_type != ScopeType.SERIES.value:
         return None
-    rag_model_manager = getattr(container, "rag_model_manager", None)
-    if rag_model_manager is None:
-        return None
+    rag_model_manager = container.rag_model_manager
     if rag_model_manager.has_active_download():
         return RAG_MODEL_DOWNLOAD_MESSAGE
     if not rag_model_manager.is_downloaded("embedding"):
@@ -300,10 +295,7 @@ def _resolve_summary_block_message(context: AgentContext | None, container) -> s
         if not context.video_id or container.get_video_summary.run(context.series_id, context.video_id) is None:
             return "当前视频尚未生成 AI 概况，请先生成概况后再进行对话。"
         return None
-    library_query = getattr(container, "list_video_library", None)
-    if library_query is None:
-        return None
-    library = library_query.run()
+    library = container.list_video_library.run()
     series = next((item for item in library.series if item.id == context.series_id), None)
     if series is None or not any(video.processed for video in series.videos):
         return "当前系列尚未生成 AI 概况，请先生成至少一个视频概况后再进行对话。"
@@ -432,10 +424,7 @@ def _is_model_url_connection_error(message: str) -> bool:
 
 def _is_agent_debug_enabled(container) -> bool:
     """检查配置中是否启用了 Agent 调试模式。"""
-    try:
-        return bool(load_settings(container.config_path, container.root_dir).debug.mode)
-    except Exception:
-        return False
+    return container.debug_mode
 
 
 def _log_agent_debug_trace(request: AgentChatRequest, debug_trace: dict[str, object] | None) -> None:

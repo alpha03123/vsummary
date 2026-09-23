@@ -6,7 +6,8 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend.api.http.app import create_app
+from tests._workspace_scope import attach_workspace_scope
+from backend.local.http.app import create_app
 
 
 class MindmapExportApiTests(unittest.TestCase):
@@ -112,11 +113,11 @@ def _build_container(
         title=title,
     )
 
-    return SimpleNamespace(
+    return attach_workspace_scope(SimpleNamespace(
         root_dir=resolved_root,
         get_video_source=SimpleNamespace(run=lambda series_id, video_id: video_source),
         get_video_mindmap=SimpleNamespace(run=lambda series_id, video_id: mindmap_dto),
-    )
+    ))
 
 
 if __name__ == "__main__":

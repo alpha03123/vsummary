@@ -6,6 +6,7 @@ ENV_NAME="vsummary"
 CONDA_BIN="${CONDA_EXE:-}"
 
 cd "$ROOT"
+export VSUMMARY_DATA="$ROOT/.vsummary"
 
 if [ -z "$CONDA_BIN" ] || [ ! -x "$CONDA_BIN" ]; then
   if command -v conda >/dev/null 2>&1; then
@@ -40,7 +41,7 @@ fi
 
 mkdir -p "$ROOT/data/logs"
 if ! lsof -iTCP:8001 -sTCP:LISTEN >/dev/null 2>&1; then
-  nohup "$PYTHON" -m backend.api.http.server --host 127.0.0.1 --port 8001 \
+  nohup "$PYTHON" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-data-root "$VSUMMARY_DATA" \
     >"$ROOT/data/logs/backend.log" 2>&1 &
 fi
 if ! lsof -iTCP:4173 -sTCP:LISTEN >/dev/null 2>&1; then

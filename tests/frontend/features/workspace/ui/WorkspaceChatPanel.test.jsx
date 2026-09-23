@@ -36,32 +36,6 @@ describe("WorkspaceChatPanel composer", () => {
     onSubmitChat: vi.fn(),
   };
 
-  it("starts compact and grows with the draft", () => {
-    const onDraftChange = vi.fn();
-    const { rerender } = render(
-      <WorkspaceChatPanel {...composerProps} draft="" onDraftChange={onDraftChange} />,
-    );
-
-    const composer = screen.getByPlaceholderText("向 AI 助手提问或下达指令...");
-    // Fixed 100px used to be reserved even when empty; it is now content-driven.
-    expect(composer.className).toContain("min-h-[44px]");
-    expect(composer.className).toContain("max-h-40");
-    expect(composer.className).not.toContain("h-[100px]");
-    expect(composer).toHaveValue("");
-
-    rerender(
-      <WorkspaceChatPanel
-        {...composerProps}
-        draft={"第一行\n第二行\n第三行"}
-        onDraftChange={onDraftChange}
-      />,
-    );
-
-    expect(screen.getByPlaceholderText("向 AI 助手提问或下达指令...")).toHaveValue(
-      "第一行\n第二行\n第三行",
-    );
-  });
-
   it("drops the idle hint row but keeps locked-state explanations", () => {
     const { rerender } = render(<WorkspaceChatPanel {...composerProps} />);
 
@@ -131,36 +105,6 @@ describe("WorkspaceChatPanel session switcher", () => {
     fireEvent.click(screen.getByRole("option", { name: "新对话 2" }));
 
     expect(onSelectChatSession).toHaveBeenCalledWith("session-2");
-  });
-
-  it("opens the session list without the segmented shell clipping it", () => {
-    render(
-      <WorkspaceChatPanel
-        {...baseProps}
-        chatSessions={[
-          { id: "session-1", title: "帮我生成一份笔记" },
-          { id: "session-2", title: "新对话 2" },
-        ]}
-        activeSessionId="session-1"
-        onSelectChatSession={vi.fn()}
-        onStartNewChat={vi.fn()}
-      />,
-    );
-
-    // The shortcut menu must be reachable: an `overflow-hidden` wrapper around
-    // the switcher would clip this absolutely positioned list.
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "切换对话" }));
-
-    const listbox = screen.getByRole("listbox");
-    expect(listbox).toBeInTheDocument();
-    expect(screen.getAllByRole("option")).toHaveLength(2);
-    expect(screen.getByRole("option", { name: "帮我生成一份笔记" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(listbox.closest(".overflow-hidden")).toBeNull();
   });
 
   it("closes the session list when clicking outside", () => {

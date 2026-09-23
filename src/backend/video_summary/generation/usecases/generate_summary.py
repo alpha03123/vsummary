@@ -273,7 +273,7 @@ class GenerateVideoSummary:
             )
             transcript_source_identity = "manual-srt-v1"
             if progress_reporter is not None:
-                progress_reporter.update("load_manual_srt", 20.0, "已读取人工 SRT，跳过字幕探测和语音识别")
+                progress_reporter.update("load_manual_srt", 20.0, "已读取人工字幕，跳过字幕识别")
         elif saved_transcript is not None:
             transcript = saved_transcript
             video = VideoAsset(
@@ -283,7 +283,7 @@ class GenerateVideoSummary:
             )
             transcript_source_identity = "saved-transcript-v1"
             if progress_reporter is not None:
-                progress_reporter.update("load_transcript", 80.0, "已读取现有字幕，跳过字幕获取和语音识别")
+                progress_reporter.update("load_transcript", 80.0, "已读取现有字幕，跳过语音识别")
         elif self._subtitle_provider is not None:
             if progress_reporter is not None:
                 progress_reporter.update("probe_subtitles", 5.0, "正在检查中文字幕")
@@ -315,7 +315,7 @@ class GenerateVideoSummary:
             transcriber_identity = _cache_identity(self._transcriber)
             transcript_source_identity = f"whisper:{transcriber_identity}"
             if progress_reporter is not None:
-                progress_reporter.update("probe", 5.0, "未找到可用中文字幕，正在分析视频信息")
+                progress_reporter.update("probe", 5.0, "正在读取视频信息")
             video = VideoAsset(
                 source_path=video_path,
                 title=video_path.stem,
@@ -324,7 +324,7 @@ class GenerateVideoSummary:
             _raise_if_cancelled(progress_reporter, cancellation)
 
             if progress_reporter is not None:
-                progress_reporter.update("extract_audio", 15.0, "正在将视频转换为音频")
+                progress_reporter.update("extract_audio", 15.0, "正在从视频中提取音频")
             try:
                 audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
                 if not audio_restored:
@@ -454,7 +454,7 @@ class GenerateVideoSummary:
             summary_document = _build_no_transcribable_audio_summary(video, unavailable_reason)
         else:
             if progress_reporter is not None:
-                progress_reporter.update("summarize", 88.0, "正在整理逐字稿")
+                progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
             _raise_if_cancelled(progress_reporter, cancellation)
             try:
                 summary_document = await self._summarizer.summarize(video, transcript, cancellation)
@@ -479,7 +479,7 @@ class GenerateVideoSummary:
             if self._visual_summary_enricher is None:
                 raise RuntimeError("多模态视觉增强未配置模型适配器。")
             if progress_reporter is not None:
-                progress_reporter.update("enrich_visual_summary", 98.0, "正在结合截图生成最终概况")
+                progress_reporter.update("enrich_visual_summary", 98.0, "正在结合画面完善概况")
             _raise_if_cancelled(progress_reporter, cancellation)
             try:
                 summary_document, visual_evidence = await self._visual_summary_enricher.enrich(
@@ -495,13 +495,13 @@ class GenerateVideoSummary:
             except Exception:
                 LOGGER.exception("多模态视觉增强失败，保留文本概况和章节截图")
                 if progress_reporter is not None:
-                    progress_reporter.update("enrich_visual_summary", 99.0, "文本概况已完成；本次未能解析画面")
+                    progress_reporter.update("enrich_visual_summary", 99.0, "文本概况已生成；本次未能读取画面")
             else:
                 _raise_if_cancelled(progress_reporter, cancellation)
                 await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
         if ai_summary_task is not None:
             if progress_reporter is not None:
-                progress_reporter.update("finalize_ai_summary", 98.0, "正在整理 AI 概括")
+                progress_reporter.update("finalize_ai_summary", 98.0, "正在收尾 AI 概况")
             await ai_summary_task
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)

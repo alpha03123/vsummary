@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.video_summary.infrastructure.persistence.ids import new_ulid
+from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.models import (
     Job,
     JobAttempt,
@@ -152,6 +152,7 @@ class SqlCurrentContentRepository:
             session.add(
                 OutboxEvent(
                     id=new_ulid(),
+                    workspace_id=job.workspace_id,
                     aggregate_type="video_content",
                     aggregate_id=video.id,
                     event_type="content_published",

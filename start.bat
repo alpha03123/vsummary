@@ -47,7 +47,7 @@ if not defined ENV_PATH (
 set "PYTHON=%ENV_PATH%\python.exe"
 set "MYSQL_RUNTIME="
 set "MYSQL_RUNTIME_SOURCE="
-set "VSUMMARY_DATA=%LOCALAPPDATA%\VSummary"
+set "VSUMMARY_DATA=%ROOT%\.vsummary"
 set "HF_HOME=%VSUMMARY_DATA%\cache\huggingface"
 set "HUGGINGFACE_HUB_CACHE=%VSUMMARY_DATA%\cache\huggingface\hub"
 
@@ -110,7 +110,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home "%MYSQL_RUNTIME%"
+start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home "%MYSQL_RUNTIME%" --managed-data-root "%VSUMMARY_DATA%"
 start "vsummary-frontend" cmd /k cd /d "%FRONTEND%" ^&^& npm run dev
 
 echo MySQL runtime: %MYSQL_RUNTIME% ^(%MYSQL_RUNTIME_SOURCE%^)

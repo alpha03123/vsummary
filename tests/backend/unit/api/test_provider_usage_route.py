@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import unittest
 
-from backend.api.routes.settings import get_provider_usage
+from backend.local.routes.settings import get_provider_usage
 from backend.shared.llm.usage import (
     LlmUsageCategorySummary,
     LlmUsageProviderSummary,

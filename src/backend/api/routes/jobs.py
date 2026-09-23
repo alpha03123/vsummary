@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from backend.api.di.container import ApiContainerDep
+from backend.api.dependencies import JobRepositoryDep, get_workspace_context
+from backend.core.context import WorkspaceContext
 
 
 router = APIRouter()
@@ -16,16 +17,16 @@ _TERMINAL_STATUSES = {"succeeded", "failed", "cancelled"}
 
 
 @router.get("/api/jobs/{job_id}")
-def get_job(job_id: str, container: ApiContainerDep) -> dict[str, object]:
-    snapshot = container.job_repository.get(job_id)
+def get_job(job_id: str, job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context)) -> dict[str, object]:
+    snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="job not found")
     return _snapshot_payload(snapshot)
 
 
 @router.post("/api/jobs/{job_id}/cancel")
-def cancel_job(job_id: str, container: ApiContainerDep) -> dict[str, object]:
-    snapshot = container.job_repository.request_cancel(job_id)
+def cancel_job(job_id: str, job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context)) -> dict[str, object]:
+    snapshot = job_repository.request_cancel(job_id, workspace_id=context.workspace_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="job not found")
     return _snapshot_payload(snapshot)
@@ -34,18 +35,19 @@ def cancel_job(job_id: str, container: ApiContainerDep) -> dict[str, object]:
 @router.get("/api/jobs/{job_id}/events")
 async def stream_job_events(
     job_id: str,
-    container: ApiContainerDep,
+    job_repository: JobRepositoryDep,
+    context: WorkspaceContext = Depends(get_workspace_context),
     after_sequence: int = 0,
 ) -> StreamingResponse:
     if after_sequence < 0:
         raise HTTPException(status_code=400, detail="after_sequence cannot be negative")
-    if container.job_repository.get(job_id) is None:
+    if job_repository.get(job_id, workspace_id=context.workspace_id) is None:
         raise HTTPException(status_code=404, detail="job not found")
 
     async def event_stream():
         sequence = after_sequence
         while True:
-            events = container.job_repository.events(job_id, after_sequence=sequence)
+            events = job_repository.events(job_id, after_sequence=sequence, workspace_id=context.workspace_id)
             for event in events:
                 sequence = event.sequence
                 payload = {
@@ -58,7 +60,7 @@ async def stream_job_events(
                     "occurred_at": event.occurred_at.isoformat(),
                 }
                 yield f"id: {event.sequence}\nevent: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            snapshot = container.job_repository.get(job_id)
+            snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
             if snapshot is None or snapshot.status in _TERMINAL_STATUSES:
                 break
             await asyncio.sleep(0.25)

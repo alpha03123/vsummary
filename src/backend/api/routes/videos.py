@@ -1,7 +1,7 @@
 """视频库管理路由。
 
-提供视频库的增删查改、视频总结/思维导图/知识卡的生成与导出、
-本地文件导入、以及生成进度 SSE 流的 HTTP 端点。
+提供视频库的增删查改、视频总结/思维导图/知识卡的生成与导出，
+以及生成进度 SSE 流的 HTTP 端点。
 """
 
 from __future__ import annotations
@@ -12,15 +12,13 @@ import logging
 import json
 import mimetypes
 from pathlib import Path
-from threading import Lock
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
-from backend.api.di.container import ApiContainerDep
-from backend.api.local_media_picker import select_local_media_paths
+from backend.api.dependencies import JobRepositoryDep, WorkspaceServicesDep
 from backend.api.schemas.contracts import (
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
@@ -29,16 +27,12 @@ from backend.api.schemas.contracts import (
     GenerateMindmapRequest,
     GenerateSeriesSummariesRequest,
     GenerateVideoSummaryRequest,
-    LocalMediaPathImportRequest,
-    LocalMediaSeriesPathImportRequest,
     RenameTitleRequest,
     UpdateVideoNoteRequest,
     UpdateVideoSummaryRequest,
     UpdateVideoTranscriptRequest,
 )
 from backend.api.schemas.responses import (
-    SeriesResponse,
-    VideoCardResponse,
     VideoChapterCardsResponse,
     VideoKnowledgeCardsResponse,
     VideoLibraryResponse,
@@ -68,23 +62,9 @@ from backend.video_summary.infrastructure.storage.mindmap_export import render_m
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
 
-_series_mindmap_locks: dict[str, Lock] = {}
-_series_mindmap_locks_guard = Lock()
-
-def _acquire_series_mindmap_lock(series_id: str) -> bool:
-    with _series_mindmap_locks_guard:
-        if series_id in _series_mindmap_locks:
-            return False
-        _series_mindmap_locks[series_id] = Lock()
-        return True
-
-def _release_series_mindmap_lock(series_id: str) -> None:
-    with _series_mindmap_locks_guard:
-        _series_mindmap_locks.pop(series_id, None)
-
 
 @router.get("/api/videos", response_model=VideoLibraryResponse)
-def list_videos(container: ApiContainerDep) -> VideoLibraryResponse:
+def list_videos(container: WorkspaceServicesDep) -> VideoLibraryResponse:
     """GET /api/videos — 列出整个视频库（全部系列与视频）。
 
     返回工作区下所有系列及其视频卡片的扁平列表，
@@ -101,7 +81,7 @@ def list_videos(container: ApiContainerDep) -> VideoLibraryResponse:
 
 
 @router.get("/api/videos/{series_id}/{video_id}/summary")
-def get_video_summary(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
+def get_video_summary(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
     """GET /api/videos/{series_id}/{video_id}/summary — 获取视频的结构化总结 JSON。
 
     Args:
@@ -127,7 +107,7 @@ def update_video_summary(
     series_id: str,
     video_id: str,
     request: UpdateVideoSummaryRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> dict[str, object]:
     """保存用户修订后的结构化总结。"""
     try:
@@ -144,7 +124,7 @@ def update_video_summary(
 
 
 @router.get("/api/videos/{series_id}/{video_id}/summary/markdown")
-def get_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
+def get_video_summary_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, str]:
     """获取可直接编辑的原始 ``summary.md``。"""
     _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_summary.run(series_id, video_id)
@@ -154,7 +134,7 @@ def get_video_summary_markdown(series_id: str, video_id: str, container: ApiCont
 
 
 @router.get("/api/videos/{series_id}/{video_id}/transcript")
-def get_video_transcript(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
+def get_video_transcript(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
     """获取可编辑的完整转写分段。"""
     _ensure_video_exists(container, series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
@@ -175,7 +155,7 @@ def get_video_transcript(series_id: str, video_id: str, container: ApiContainerD
 
 
 @router.get("/api/videos/{series_id}/{video_id}/transcript/markdown")
-def get_video_transcript_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, str]:
+def get_video_transcript_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, str]:
     """获取可直接编辑的原始 Markdown 转写。"""
     _ensure_video_exists(container, series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
@@ -192,7 +172,7 @@ def get_video_transcript_markdown(series_id: str, video_id: str, container: ApiC
 
 
 @router.get("/api/videos/{series_id}/{video_id}/subtitles.vtt")
-def get_video_subtitles_webvtt(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def get_video_subtitles_webvtt(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """将当前工作区转写作为浏览器可加载的 WebVTT 字幕轨道返回。"""
     _ensure_video_exists(container, series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
@@ -210,7 +190,7 @@ def update_video_transcript(
     series_id: str,
     video_id: str,
     request: UpdateVideoTranscriptRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> dict[str, object]:
     """保存用户修订后的完整转写分段。"""
     try:
@@ -238,7 +218,7 @@ def update_video_transcript(
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary.md")
-def export_video_summary_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_summary_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/summary.md — 导出总结 Markdown 文件。
 
     返回视频总结的 summary.md 文件下载；文件由生成阶段落盘。
@@ -262,7 +242,7 @@ def export_video_summary_markdown(series_id: str, video_id: str, container: ApiC
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary-with-screenshots.zip")
-def export_video_summary_with_screenshots(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_summary_with_screenshots(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """导出概况 Markdown 与章节截图，保持相对图片链接可离线读取。"""
     _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_summary.run(series_id, video_id)
@@ -282,7 +262,7 @@ def get_video_summary_screenshot(
     series_id: str,
     video_id: str,
     filename: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> FileResponse:
     """返回已随概况成功提交的章节截图。"""
     if Path(filename).name != filename or Path(filename).suffix.lower() != ".jpg":
@@ -299,7 +279,7 @@ def get_video_note_frame(
     series_id: str,
     video_id: str,
     filename: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> FileResponse:
     """返回由笔记图片标记按时间抽取的共享视频帧。"""
     if Path(filename).name != filename or Path(filename).suffix.lower() != ".jpg":
@@ -312,7 +292,7 @@ def get_video_note_frame(
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/video")
-def export_video_source(series_id: str, video_id: str, container: ApiContainerDep) -> FileResponse:
+def export_video_source(series_id: str, video_id: str, container: WorkspaceServicesDep) -> FileResponse:
     """GET /api/videos/{series_id}/{video_id}/exports/video — 下载原始视频文件。
 
     Args:
@@ -337,7 +317,7 @@ def export_video_source(series_id: str, video_id: str, container: ApiContainerDe
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/transcript.md")
-def export_video_transcript_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_transcript_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/transcript.md — 导出转写 Markdown 文件。
 
     将转写 JSON 渲染为带时间戳的 Markdown 文本后返回下载。
@@ -362,7 +342,7 @@ def export_video_transcript_markdown(series_id: str, video_id: str, container: A
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/subtitles.srt")
-def export_video_subtitles_srt(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_subtitles_srt(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/subtitles.srt — 导出标准 SRT 字幕。"""
     _ensure_video_exists(container, series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
@@ -376,7 +356,7 @@ def export_video_subtitles_srt(series_id: str, video_id: str, container: ApiCont
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/mixed.md")
-def export_video_mixed_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_mixed_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/mixed.md — 导出混合综述 Markdown。
 
     将总结 JSON 与转写 JSON 合并渲染为一份完整 Markdown 后返回下载。
@@ -404,7 +384,7 @@ def export_video_mixed_markdown(series_id: str, video_id: str, container: ApiCon
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/knowledge-cards.md")
-def export_video_knowledge_cards_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_knowledge_cards_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/knowledge-cards.md — 导出知识卡 Markdown。
 
     将知识卡 JSON 渲染为 Markdown 文本后返回下载。
@@ -429,7 +409,7 @@ def export_video_knowledge_cards_markdown(series_id: str, video_id: str, contain
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/notes.md")
-def export_video_notes_markdown(series_id: str, video_id: str, container: ApiContainerDep) -> Response:
+def export_video_notes_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/notes.md — 导出笔记 Markdown。
 
     将用户/AI 笔记渲染为 Markdown 文本后返回下载。
@@ -454,7 +434,7 @@ def export_video_notes_markdown(series_id: str, video_id: str, container: ApiCon
 
 
 @router.get("/api/videos/{series_id}/{video_id}/mindmap")
-def get_video_mindmap(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
+def get_video_mindmap(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
     """GET /api/videos/{series_id}/{video_id}/mindmap — 获取视频的思维导图 JSON。
 
     Args:
@@ -476,7 +456,7 @@ def get_video_mindmap(series_id: str, video_id: str, container: ApiContainerDep)
 
 
 @router.get("/api/videos/{series_id}/{video_id}/mindmap/export")
-def export_video_mindmap(series_id: str, video_id: str, format: str = "md", container: ApiContainerDep = None):
+def export_video_mindmap(series_id: str, video_id: str, format: str = "md", container: WorkspaceServicesDep = None):
     """GET /api/videos/{series_id}/{video_id}/mindmap/export?format=md|html — 导出思维导图。"""
     if format not in ("md", "html"):
         raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md / html")
@@ -494,7 +474,7 @@ def export_video_mindmap(series_id: str, video_id: str, format: str = "md", cont
 
 
 @router.get("/api/videos/{series_id}/{video_id}/cards", response_model=VideoChapterCardsResponse)
-def get_video_cards(series_id: str, video_id: str, container: ApiContainerDep) -> VideoChapterCardsResponse:
+def get_video_cards(series_id: str, video_id: str, container: WorkspaceServicesDep) -> VideoChapterCardsResponse:
     """GET /api/videos/{series_id}/{video_id}/cards — 获取视频的章节卡集合。
 
     Args:
@@ -519,7 +499,7 @@ def get_video_cards(series_id: str, video_id: str, container: ApiContainerDep) -
 def get_video_knowledge_cards(
     series_id: str,
     video_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> VideoKnowledgeCardsResponse:
     """GET /api/videos/{series_id}/{video_id}/knowledge-cards — 获取视频的知识卡集合。
 
@@ -541,12 +521,13 @@ def get_video_knowledge_cards(
     return VideoKnowledgeCardsResponse.from_model(video_cards)
 
 
-@router.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate", response_model=VideoKnowledgeCardsResponse)
+@router.post("/api/videos/{series_id}/{video_id}/knowledge-cards/generate")
 def generate_video_knowledge_cards(
     series_id: str,
     video_id: str,
-    container: ApiContainerDep,
-) -> VideoKnowledgeCardsResponse:
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+) -> JSONResponse:
     """POST /api/videos/{series_id}/{video_id}/knowledge-cards/generate — 生成视频知识卡。
 
     基于已有总结调用 LLM 生成知识卡列表并落盘；
@@ -567,18 +548,39 @@ def generate_video_knowledge_cards(
     """
     _ensure_video_exists(container, series_id, video_id)
     try:
-        video_cards = container.generate_video_cards.run(series_id, video_id)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    if video_cards is None:
-        raise HTTPException(status_code=404, detail=f"summary not found for video '{series_id}/{video_id}'")
-    return VideoKnowledgeCardsResponse.from_model(video_cards)
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="generate_video_knowledge_cards",
+            request_payload={"series_id": series_id, "video_id": video_id},
+            active_key=f"video:{video_id}:generate_video_knowledge_cards",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
+            resource_id=video_id,
+            operation="generate_video_knowledge_cards",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.get("/api/videos/{series_id}/{video_id}/notes", response_model=VideoNotesResponse)
-def get_video_notes(series_id: str, video_id: str, container: ApiContainerDep) -> VideoNotesResponse:
+def get_video_notes(series_id: str, video_id: str, container: WorkspaceServicesDep) -> VideoNotesResponse:
     """GET /api/videos/{series_id}/{video_id}/notes — 获取视频的所有笔记。
 
     Args:
@@ -599,29 +601,51 @@ def get_video_notes(series_id: str, video_id: str, container: ApiContainerDep) -
 
 
 @router.get("/api/videos/{series_id}/{video_id}/ai-summary", response_model=VideoAiSummaryResponse)
-def get_video_ai_summary(series_id: str, video_id: str, container: ApiContainerDep) -> VideoAiSummaryResponse:
+def get_video_ai_summary(series_id: str, video_id: str, container: WorkspaceServicesDep) -> VideoAiSummaryResponse:
     summary = container.get_video_ai_summary.run(series_id, video_id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"ai summary not found for video '{series_id}/{video_id}'")
     return VideoAiSummaryResponse.from_model(summary)
 
 
-@router.post("/api/videos/{series_id}/{video_id}/ai-summary/generate", response_model=VideoAiSummaryResponse)
+@router.post("/api/videos/{series_id}/{video_id}/ai-summary/generate")
 def generate_video_ai_summary(
     series_id: str,
     video_id: str,
-    request: GenerateVideoAiSummaryRequest,
-    container: ApiContainerDep,
-) -> VideoAiSummaryResponse:
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+    request: GenerateVideoAiSummaryRequest = Body(default_factory=GenerateVideoAiSummaryRequest),
+) -> JSONResponse:
     try:
-        summary = container.generate_video_ai_summary.run(series_id, video_id, template=request.template)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    if summary is None:
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return VideoAiSummaryResponse.from_model(summary)
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="generate_video_ai_summary",
+            request_payload={"series_id": series_id, "video_id": video_id, "template": request.template},
+            active_key=f"video:{video_id}:generate_video_ai_summary",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
+            resource_id=video_id,
+            operation="generate_video_ai_summary",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.put("/api/videos/{series_id}/{video_id}/ai-summary", response_model=VideoAiSummaryResponse)
@@ -629,7 +653,7 @@ def update_video_ai_summary(
     series_id: str,
     video_id: str,
     request: UpdateVideoAiSummaryRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> VideoAiSummaryResponse:
     try:
         summary = container.update_video_ai_summary.run(
@@ -650,7 +674,7 @@ def create_video_note(
     series_id: str,
     video_id: str,
     request: CreateVideoNoteRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> VideoNoteResponse:
     """POST /api/videos/{series_id}/{video_id}/notes — 为视频新增一条笔记。
 
@@ -693,7 +717,7 @@ def update_video_note(
     video_id: str,
     note_id: str,
     request: UpdateVideoNoteRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> VideoNoteResponse:
     """PUT /api/videos/{series_id}/{video_id}/notes/{note_id} — 更新指定笔记的标题和内容。
 
@@ -734,7 +758,7 @@ def delete_video_note(
     series_id: str,
     video_id: str,
     note_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> dict[str, object]:
     """DELETE /api/videos/{series_id}/{video_id}/notes/{note_id} — 删除指定笔记。
 
@@ -759,7 +783,7 @@ def delete_video_note(
 
 
 @router.get("/api/videos/{series_id}/{video_id}/tools", response_model=VideoWorkspaceToolsResponse)
-def get_video_tools(series_id: str, video_id: str, container: ApiContainerDep) -> VideoWorkspaceToolsResponse:
+def get_video_tools(series_id: str, video_id: str, container: WorkspaceServicesDep) -> VideoWorkspaceToolsResponse:
     """GET /api/videos/{series_id}/{video_id}/tools — 获取视频工作区工具栏的完整状态。
 
     Args:
@@ -780,7 +804,7 @@ def get_video_tools(series_id: str, video_id: str, container: ApiContainerDep) -
 
 
 @router.get("/api/videos/{series_id}/{video_id}/preview")
-def preview_video(series_id: str, video_id: str, container: ApiContainerDep) -> FileResponse:
+def preview_video(series_id: str, video_id: str, container: WorkspaceServicesDep) -> FileResponse:
     """GET /api/videos/{series_id}/{video_id}/preview — 获取视频源文件用于浏览器预览。
 
     Args:
@@ -807,7 +831,8 @@ async def generate_video_summary(
     video_id: str,
     http_request: Request,
     request: GenerateVideoSummaryRequest | None = None,
-    container: ApiContainerDep = None,
+    container: WorkspaceServicesDep = None,
+    job_repository: JobRepositoryDep = None,
 ) -> JSONResponse:
     """POST /api/videos/{series_id}/{video_id}/generate — 触发单个视频的总结生成。
 
@@ -833,6 +858,7 @@ async def generate_video_summary(
     processing_mode = "summary" if request is None else request.processing_mode
     return _submit_video_generation_job(
         container=container,
+        job_repository=job_repository,
         series_id=series_id,
         video_id=video_id,
         processing_mode=processing_mode,
@@ -844,6 +870,7 @@ async def generate_video_summary(
 def _submit_video_generation_job(
     *,
     container,
+    job_repository,
     series_id: str,
     video_id: str,
     processing_mode: str,
@@ -862,22 +889,21 @@ def _submit_video_generation_job(
     }
     if manual_transcript is not None:
         request_payload["manual_transcript"] = manual_transcript
+    workspace_id = container.workspace_id
     try:
-        workspace = container.sql_workspace.get_workspace()
-        if not workspace.id:
-            raise RuntimeError("No SQL workspace is available for job submission.")
-        submitted = container.job_repository.submit(
-            workspace_id=workspace.id,
+        submitted = job_repository.submit(
+            workspace_id=workspace_id,
             resource_type="video",
             resource_id=video_id,
             operation=operation,
             request_payload=request_payload,
             active_key=f"video:{video_id}:{operation}",
-            idempotency_scope_id=workspace.id if idempotency_key else None,
+            idempotency_scope_id=workspace_id if idempotency_key else None,
             idempotency_key=idempotency_key,
         )
     except ControlPlaneConflictError as error:
-        active = container.job_repository.active_for_resource(
+        active = job_repository.active_for_resource(
+            workspace_id=workspace_id,
             resource_id=video_id,
             operation=operation,
         )
@@ -906,7 +932,8 @@ async def upload_srt_and_generate_video_summary(
     video_id: str,
     file: UploadFile = File(...),
     http_request: Request = None,
-    container: ApiContainerDep = None,
+    container: WorkspaceServicesDep = None,
+    job_repository: JobRepositoryDep = None,
 ) -> JSONResponse:
     """上传人工 SRT，并在同一原子生成任务中产出新的 AI 概况。"""
     filename = Path(file.filename or "").name
@@ -924,6 +951,7 @@ async def upload_srt_and_generate_video_summary(
     _ensure_source_media_available(_require_video_source(container, series_id, video_id))
     return _submit_video_generation_job(
         container=container,
+        job_repository=job_repository,
         series_id=series_id,
         video_id=video_id,
         processing_mode="summary",
@@ -938,12 +966,14 @@ async def restore_automatic_transcript_and_generate_video_summary(
     series_id: str,
     video_id: str,
     http_request: Request,
-    container: ApiContainerDep = None,
+    container: WorkspaceServicesDep = None,
+    job_repository: JobRepositoryDep = None,
 ) -> JSONResponse:
     """改用自动字幕/ASR 重新生成，成功后才移除当前人工 SRT。"""
     _ensure_source_media_available(_require_video_source(container, series_id, video_id))
     return _submit_video_generation_job(
         container=container,
+        job_repository=job_repository,
         series_id=series_id,
         video_id=video_id,
         processing_mode="summary",
@@ -957,7 +987,8 @@ async def restore_automatic_transcript_and_generate_video_summary(
 async def cancel_video_summary_generation(
     series_id: str,
     video_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
 ) -> dict[str, object]:
     """POST /api/videos/{series_id}/{video_id}/generate/cancel — 取消正在进行的视频总结生成。
 
@@ -969,83 +1000,72 @@ async def cancel_video_summary_generation(
     Returns:
         {"status": "cancelled", "task_id": ...}
     """
-    job_repository = getattr(container, "job_repository", None)
-    if job_repository is not None:
-        snapshot = job_repository.request_cancel_for_resource(resource_id=video_id, operation="generate_summary")
-        if snapshot is None:
-            raise HTTPException(status_code=404, detail="no active generation job found")
-        return {"status": snapshot.status, "job_id": snapshot.id}
-    task_id = _build_task_id(series_id, video_id)
-    container.generation_progress_tracker.request_cancel(task_id)
-    container.video_download_progress_tracker.request_cancel(build_video_download_task_id(series_id, video_id))
-
-    cancel_generation = getattr(container.generate_video_summary, "cancel", None)
-    if callable(cancel_generation):
-        await cancel_generation(series_id, video_id)
-
-    finalize_cancel = getattr(container.generation_progress_tracker, "cancel", None)
-    if callable(finalize_cancel):
-        finalize_cancel(task_id, "任务已取消")
-    return {"status": "cancelled", "task_id": task_id}
+    snapshot = job_repository.request_cancel_for_resource(
+        workspace_id=container.workspace_id,
+        resource_id=video_id,
+        operation="generate_summary",
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="no active generation job found")
+    return {"status": snapshot.status, "job_id": snapshot.id}
 
 
 @router.post("/api/series/{series_id}/generate")
-async def generate_series_summaries(
+def generate_series_summaries(
     series_id: str,
     request: GenerateSeriesSummariesRequest | None = None,
-    container: ApiContainerDep = None,
-) -> dict[str, object]:
-    """POST /api/series/{series_id}/generate — 触发系列下所有未处理视频的批量总结生成。
-
-    按队列调度串联每个视频的生成流程；前端通过系列级 SSE 进度端点订阅进度。
-
-    Args:
-        series_id: 系列 ID。
-        request: 可选的批次参数（如 transcript_enhancement_enabled 和 run_id）。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        {"series_id": ..., "completed_videos": ..., "skipped_videos": ..., "cancelled_videos": ..., "cancelled_video_id": ...}
-
-    Raises:
-        HTTPException(400): 参数无效。
-        HTTPException(404): 系列不存在。
-        HTTPException(409): 重复触发或 scope 忙碌。
-        HTTPException(503): 生成过程发生运行时错误。
-    """
+    container: WorkspaceServicesDep = None,
+    job_repository: JobRepositoryDep = None,
+) -> JSONResponse:
+    """提交系列父 Job，由 Worker 创建每个视频的持久子 Job。"""
     processing_mode = "summary" if request is None else request.processing_mode
-    arguments = {
-        "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
-        "run_id": None if request is None else request.run_id,
-    }
-    if processing_mode != "summary":
-        arguments["processing_mode"] = processing_mode
     try:
-        result = await container.generate_series_summaries.run(series_id, **arguments)
+        series = next((item for item in container.list_video_library.run().series if item.id == series_id), None)
+        if series is None:
+            raise LookupError(f"series not found '{series_id}'")
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id,
+            resource_type="series",
+            resource_id=series_id,
+            operation="generate_series_batch",
+            request_payload={
+                "series_id": series_id,
+                "processing_mode": processing_mode,
+                "transcript_enhancement_enabled": None if request is None else request.transcript_enhancement_enabled,
+                "run_id": None if request is None else request.run_id,
+            },
+            active_key=f"series:{series_id}:generate_series_batch",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    except DuplicateSeriesGenerationError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except GenerationScopeBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    return {
-        "series_id": result.series_id,
-        "completed_videos": result.completed_videos,
-        "skipped_videos": result.skipped_videos,
-        "skipped_video_errors": result.skipped_video_errors,
-        "cancelled_videos": result.cancelled_videos,
-        "cancelled_video_id": result.cancelled_video_id,
-    }
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
+            resource_id=series_id,
+            operation="generate_series_batch",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "series", "id": series_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
 
 
 @router.post("/api/series/{series_id}/generate/cancel")
 async def cancel_series_summaries_generation(
     series_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
     request: CancelSeriesSummariesRequest | None = None,
 ) -> dict[str, object]:
     """POST /api/series/{series_id}/generate/cancel — 取消系列级批量生成。
@@ -1062,66 +1082,33 @@ async def cancel_series_summaries_generation(
         {"status": "cancelled"/"stale", "task_id": ..., "cancelled_video_ids": [...]}
     """
     series_task_id = _build_series_task_id(series_id)
-    requested_run_id = None if request is None else request.run_id
-    get_active_run_id = getattr(container.generate_series_summaries, "get_active_run_id", None)
-    active_run_id = get_active_run_id(series_id) if callable(get_active_run_id) else None
-    if requested_run_id is not None and active_run_id is not None and requested_run_id != active_run_id:
-        LOGGER.info(
-            "Ignoring stale series cancel: series_id=%s requested_run_id=%s active_run_id=%s",
-            series_id,
-            requested_run_id,
-            active_run_id,
-        )
-        return {
-            "status": "stale",
-            "task_id": series_task_id,
-            "active_run_id": active_run_id,
-            "cancelled_video_ids": [],
-        }
-    pending_videos = _get_pending_series_videos(container, series_id)
-    active_video_ids = container.generate_series_summaries.get_active_video_ids(series_id)
-    linked_video_ids = {video.id for video in pending_videos if video.is_linked or video.status == "linked"}
-    cancelled_video_ids = list(dict.fromkeys([*active_video_ids, *linked_video_ids]))
-    LOGGER.info(
-        "Cancelling series generation: series_id=%s requested_run_id=%s active_run_id=%s "
-        "pending_video_ids=%s active_video_ids=%s linked_video_ids=%s cancelled_video_ids=%s",
-        series_id,
-        requested_run_id,
-        active_run_id,
-        [video.id for video in pending_videos],
-        active_video_ids,
-        sorted(linked_video_ids),
-        cancelled_video_ids,
+    cancelled_jobs = job_repository.request_cancel_series_generation(
+        workspace_id=container.workspace_id,
+        series_id=series_id,
     )
-    for video_id in active_video_ids:
-        task_id = _build_task_id(series_id, video_id)
-        container.generation_progress_tracker.request_cancel(task_id)
-        cancel_generation = getattr(container.generate_video_summary, "cancel", None)
-        if callable(cancel_generation):
-            await cancel_generation(series_id, video_id)
-        finalize_cancel = getattr(container.generation_progress_tracker, "cancel", None)
-        if callable(finalize_cancel):
-            finalize_cancel(task_id, "任务已取消")
-    for video_id in linked_video_ids:
-        container.video_download_progress_tracker.request_cancel(build_video_download_task_id(series_id, video_id))
-    container.generation_progress_tracker.request_cancel(series_task_id)
-    finalize_series_cancel = getattr(container.generation_progress_tracker, "cancel", None)
-    if callable(finalize_series_cancel):
-        finalize_series_cancel(series_task_id, "任务已取消")
+    if not cancelled_jobs:
+        raise HTTPException(status_code=404, detail="no active series batch job found")
+    snapshot = next(
+        (job for job in cancelled_jobs if job.resource_id == series_id and job.operation == "generate_series_batch"),
+        cancelled_jobs[0],
+    )
     return {
-        "status": "cancelled",
+        "status": snapshot.status,
+        "job_id": snapshot.id,
         "task_id": series_task_id,
-        "cancelled_video_ids": cancelled_video_ids,
+        "cancelled_video_ids": [job.resource_id for job in cancelled_jobs if job.resource_type == "video"],
+        "cancelled_job_ids": [job.id for job in cancelled_jobs],
     }
 
 
 @router.post("/api/videos/{series_id}/{video_id}/mindmap/generate")
-async def generate_video_mindmap(
+def generate_video_mindmap(
     series_id: str,
     video_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
     request: GenerateMindmapRequest = Body(default_factory=GenerateMindmapRequest),
-) -> dict[str, object]:
+) -> JSONResponse:
     """POST /api/videos/{series_id}/{video_id}/mindmap/generate — 生成视频思维导图。
 
     基于已有总结调用 LLM 生成思维导图节点树并落盘；通过 SSE 进度端点订阅实时状态。
@@ -1137,66 +1124,41 @@ async def generate_video_mindmap(
     Raises:
         HTTPException(404): 总结未生成。
     """
-    import sys
-    task_id = _build_mindmap_task_id(series_id, video_id)
-    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
+    _ensure_video_exists(container, series_id, video_id)
     try:
-        reporter.update("generate", 0.0, "正在生成思维导图")
-        video_mindmap = await container.generate_video_mindmap.run(
-            series_id,
-            video_id,
-            progress_reporter=reporter,
-            max_depth=request.max_depth,
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation="generate_video_mindmap",
+            request_payload={"series_id": series_id, "video_id": video_id, "max_depth": request.max_depth},
+            active_key=f"video:{video_id}:generate_video_mindmap",
+            idempotency_scope_id=None,
+            idempotency_key=None,
         )
-    except Exception:
-        reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "思维导图生成失败")
-        raise
-    if video_mindmap is None:
-        reporter.failed("总结不存在，无法生成思维导图")
-        raise HTTPException(
-            status_code=404,
-            detail=f"summary not found for video '{series_id}/{video_id}'",
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
+            resource_id=video_id,
+            operation="generate_video_mindmap",
         )
-    reporter.completed("思维导图已生成")
-    return video_mindmap.mindmap
-
-
-@router.get("/api/videos/{series_id}/{video_id}/mindmap/generate/progress")
-async def stream_mindmap_generation_progress(
-    series_id: str,
-    video_id: str,
-    container: ApiContainerDep,
-) -> StreamingResponse:
-    """GET /api/videos/{series_id}/{video_id}/mindmap/generate/progress — 订阅单视频思维导图生成进度流（SSE）。
-
-    以 SSE 推送思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
-
-    Args:
-        series_id: 系列 ID。
-        video_id: 视频 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        StreamingResponse（`text/event-stream`）。
-    """
-    task_id = _build_mindmap_task_id(series_id, video_id)
-    return StreamingResponse(
-        stream_progress_events(
-            tracker=container.mindmap_progress_tracker,
-            task_id=task_id,
-            terminal_statuses={"idle", "completed", "failed", "cancelled"},
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
         },
     )
 
 
 @router.get("/api/series/{series_id}/mindmap")
-def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+def get_series_mindmap(series_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
     mindmap = container.get_series_mindmap.run(series_id)
     if mindmap is None:
         raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
@@ -1204,11 +1166,12 @@ def get_series_mindmap(series_id: str, container: ApiContainerDep) -> dict[str, 
 
 
 @router.post("/api/series/{series_id}/mindmap/generate")
-async def generate_series_mindmap(
+def generate_series_mindmap(
     series_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
     request: GenerateMindmapRequest = Body(default_factory=GenerateMindmapRequest),
-) -> dict[str, object]:
+) -> JSONResponse:
     """POST /api/series/{series_id}/mindmap/generate — 触发系列思维导图生成。
 
     基于系列下已生成概况的视频聚合生成思维导图；通过 SSE 进度端点订阅实时状态。
@@ -1225,65 +1188,40 @@ async def generate_series_mindmap(
         HTTPException(400): 系列下没有已生成概况的视频。
         HTTPException(409): 该系列思维导图正在生成中。
     """
-    import sys
-    if not _acquire_series_mindmap_lock(series_id):
-        raise HTTPException(status_code=409, detail="该系列导图正在生成中，请稍后再试")
-    task_id = _build_series_mindmap_task_id(series_id)
-    reporter = container.mindmap_progress_tracker.create_reporter(task_id)
     try:
-        reporter.update("generate", 0.0, "正在生成系列思维导图")
-        try:
-            mindmap = await container.generate_series_mindmap.run(
-                series_id,
-                progress_reporter=reporter,
-                max_depth=request.max_depth,
-            )
-        except Exception:
-            reporter.failed(str(sys.exc_info()[1]) if sys.exc_info()[1] else "系列思维导图生成失败")
-            raise
-        if mindmap is None:
-            reporter.failed("系列下没有已生成概况的视频")
-            raise HTTPException(status_code=400, detail="系列下没有已生成概况的视频")
-        reporter.completed("系列思维导图已生成")
-        return mindmap.mindmap
-    finally:
-        _release_series_mindmap_lock(series_id)
-
-
-@router.get("/api/series/{series_id}/mindmap/generate/progress")
-async def stream_series_mindmap_generation_progress(
-    series_id: str,
-    container: ApiContainerDep,
-) -> StreamingResponse:
-    """GET /api/series/{series_id}/mindmap/generate/progress — 订阅系列思维导图生成进度流（SSE）。
-
-    以 SSE 推送系列思维导图生成的状态变化、进度百分比与详情；到达 terminal 状态后自动关闭。
-
-    Args:
-        series_id: 系列 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        StreamingResponse（`text/event-stream`）。
-    """
-    task_id = _build_series_mindmap_task_id(series_id)
-    return StreamingResponse(
-        stream_progress_events(
-            tracker=container.mindmap_progress_tracker,
-            task_id=task_id,
-            terminal_statuses={"idle", "completed", "failed", "cancelled"},
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id,
+            resource_type="series",
+            resource_id=series_id,
+            operation="generate_series_mindmap",
+            request_payload={"series_id": series_id, "max_depth": request.max_depth},
+            active_key=f"series:{series_id}:generate_series_mindmap",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
+            resource_id=series_id,
+            operation="generate_series_mindmap",
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "series", "id": series_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
         },
     )
 
 
 @router.get("/api/series/{series_id}/mindmap/export")
-def export_series_mindmap(series_id: str, format: str = "md", container: ApiContainerDep = None):
+def export_series_mindmap(series_id: str, format: str = "md", container: WorkspaceServicesDep = None):
     if format not in ("md", "html"):
         raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}，仅支持 md / html")
     mindmap = container.get_series_mindmap.run(series_id)
@@ -1302,7 +1240,7 @@ def export_series_mindmap(series_id: str, format: str = "md", container: ApiCont
 def export_series_archive(
     series_id: str,
     export_kind: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
     video_ids: str = "",
 ) -> Response:
     """GET /api/series/{series_id}/exports/{kind}.zip — 批量导出系列制品压缩包。"""
@@ -1321,7 +1259,7 @@ def export_series_archive(
 
 
 @router.delete("/api/series/{series_id}")
-def delete_series(series_id: str, container: ApiContainerDep) -> dict[str, object]:
+def delete_series(series_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
     """DELETE /api/series/{series_id} — 删除整个系列及其全部制品。
 
     级联删除系列下的所有视频制品文件和 RAG 索引条目。
@@ -1353,7 +1291,7 @@ def delete_series(series_id: str, container: ApiContainerDep) -> dict[str, objec
 def rename_series(
     series_id: str,
     request: RenameTitleRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> dict[str, str]:
     """更新系列展示名称，不改变文件夹名称或系列 ID。"""
     try:
@@ -1366,7 +1304,7 @@ def rename_series(
 
 
 @router.delete("/api/videos/{series_id}/{video_id}")
-def delete_video_source(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, object]:
+def delete_video_source(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
     """DELETE /api/videos/{series_id}/{video_id} — 删除单个视频及其全部制品。
 
     级联删除视频的制品文件（总结、转写、思维导图等）和 RAG 索引条目。
@@ -1397,7 +1335,7 @@ def rename_video(
     series_id: str,
     video_id: str,
     request: RenameTitleRequest,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> dict[str, str]:
     """更新视频展示名称，不重命名原媒体文件或视频 ID。"""
     try:
@@ -1409,103 +1347,11 @@ def rename_video(
     return {"series_id": renamed.series_id, "video_id": renamed.video_id, "title": renamed.title}
 
 
-@router.post("/api/import/local/select")
-def select_local_media(container: ApiContainerDep) -> dict[str, object]:
-    """POST /api/import/local/select — 由本机后端打开媒体文件选择框。"""
-    try:
-        source_paths = select_local_media_paths()
-        workspace_device = container.root_dir.stat().st_dev
-        incompatible_paths = [
-            Path(path).name
-            for path in source_paths
-            if Path(path).stat().st_dev != workspace_device
-        ]
-        return {
-            "source_paths": source_paths,
-            "hardlink_available": not incompatible_paths,
-            "incompatible_source_names": incompatible_paths,
-        }
-    except Exception as error:
-        raise HTTPException(status_code=503, detail=f"无法打开本机文件选择框：{error}") from error
-
-
-@router.post("/api/videos/{series_id}/{video_id}/relink")
-def relink_external_video(series_id: str, video_id: str, container: ApiContainerDep) -> dict[str, bool]:
-    """打开旧目录并将失效的外部媒体引用重新绑定到用户选定的文件。"""
-    source = _require_video_source(container, series_id, video_id)
-    selected_paths = select_local_media_paths(
-        initial_directory=source.source_path.parent,
-        allow_multiple=False,
-    )
-    if not selected_paths:
-        return {"relinked": False}
-    try:
-        container.linked_series_workspace.relink_external_video(
-            series_id=series_id,
-            video_id=video_id,
-            source_path=Path(selected_paths[0]),
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return {"relinked": True}
-
-
-@router.post("/api/import/local/series/from-paths", response_model=SeriesResponse)
-def import_local_series_from_paths(
-    request: LocalMediaSeriesPathImportRequest,
-    container: ApiContainerDep,
-) -> SeriesResponse:
-    """POST /api/import/local/series/from-paths — 从本机路径新建系列。"""
-    if request.storage_mode is None:
-        raise HTTPException(status_code=400, detail="storage_mode 不能为空。")
-    try:
-        series = container.import_local_series.run_from_paths(
-            title=request.series_title,
-            source_paths=[Path(path) for path in request.source_paths],
-            storage_mode=request.storage_mode,
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return SeriesResponse.from_model(series)
-
-
-@router.post("/api/import/local/playground/from-paths", response_model=list[VideoCardResponse])
-def import_local_playground_videos_from_paths(
-    request: LocalMediaPathImportRequest,
-    container: ApiContainerDep,
-) -> list[VideoCardResponse]:
-    """POST /api/import/local/playground/from-paths — 从本机路径复制到 Playground。"""
-    try:
-        videos = container.import_local_playground_videos.run_from_paths(
-            source_paths=[Path(path) for path in request.source_paths],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return [VideoCardResponse.from_model(video) for video in videos]
-
-
-@router.post("/api/import/local/series/{series_id}/from-paths", response_model=list[VideoCardResponse])
-def import_local_series_videos_from_paths(
-    series_id: str,
-    request: LocalMediaPathImportRequest,
-    container: ApiContainerDep,
-) -> list[VideoCardResponse]:
-    """POST /api/import/local/series/{series_id}/from-paths — 按系列模式追加本机媒体。"""
-    try:
-        videos = container.import_local_series_videos.run_from_paths(
-            series_id=series_id,
-            source_paths=[Path(path) for path in request.source_paths],
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
-    return [VideoCardResponse.from_model(video) for video in videos]
-
-
 @router.get("/api/videos/{series_id}/{video_id}/generate/progress")
 async def stream_video_generation_progress(
     series_id: str,
     video_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> StreamingResponse:
     """GET /api/videos/{series_id}/{video_id}/generate/progress — 订阅单视频生成进度流（SSE）。
 
@@ -1539,7 +1385,8 @@ async def stream_video_generation_progress(
 def get_video_generation_status(
     series_id: str,
     video_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
 ) -> dict[str, object]:
     """GET /api/videos/{series_id}/{video_id}/generate/status — 查询单视频生成任务的当前状态（一次性快照）。
 
@@ -1552,25 +1399,24 @@ def get_video_generation_status(
         {"task_id": ..., "snapshot": {status, progress, detail, ...}}
     """
     task_id = _build_task_id(series_id, video_id)
-    job_repository = getattr(container, "job_repository", None)
-    if job_repository is not None:
-        snapshot = job_repository.latest_for_resource(
-            resource_id=video_id,
-            operations=("generate_summary", "generate_transcript"),
-        )
-        if snapshot is not None:
-            event = job_repository.latest_event(snapshot.id)
-            return {
-                "task_id": task_id,
-                "job_id": snapshot.id,
-                "snapshot": {
-                    "status": snapshot.status,
-                    "stage": event.stage if event is not None else snapshot.status,
-                    "progress": event.progress if event is not None else (100.0 if snapshot.status == "succeeded" else 0.0),
-                    "detail": snapshot.failure_detail or (event.detail if event is not None else None),
-                    "error": snapshot.failure_detail if snapshot.status == "failed" else None,
-                },
-            }
+    snapshot = job_repository.latest_for_resource(
+        workspace_id=container.workspace_id,
+        resource_id=video_id,
+        operations=("generate_summary", "generate_transcript"),
+    )
+    if snapshot is not None:
+        event = job_repository.latest_event(snapshot.id, workspace_id=container.workspace_id)
+        return {
+            "task_id": task_id,
+            "job_id": snapshot.id,
+            "snapshot": {
+                "status": snapshot.status,
+                "stage": event.stage if event is not None else snapshot.status,
+                "progress": event.progress if event is not None else (100.0 if snapshot.status == "succeeded" else 0.0),
+                "detail": snapshot.failure_detail or (event.detail if event is not None else None),
+                "error": snapshot.failure_detail if snapshot.status == "failed" else None,
+            },
+        }
     return {
         "task_id": task_id,
         "snapshot": container.generation_progress_tracker.get_snapshot(task_id).to_dict(),
@@ -1580,7 +1426,7 @@ def get_video_generation_status(
 @router.get("/api/series/{series_id}/generate/progress")
 async def stream_series_generation_progress(
     series_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> StreamingResponse:
     """GET /api/series/{series_id}/generate/progress — 订阅系列级批量生成进度流（SSE）。
 
@@ -1611,7 +1457,7 @@ async def stream_series_generation_progress(
 @router.get("/api/series/{series_id}/generate/status")
 def get_series_generation_status(
     series_id: str,
-    container: ApiContainerDep,
+    container: WorkspaceServicesDep,
 ) -> dict[str, object]:
     """GET /api/series/{series_id}/generate/status — 查询系列级生成任务的当前状态（一次性快照）。
 
@@ -1667,18 +1513,6 @@ def _build_mindmap_task_id(series_id: str, video_id: str) -> str:
     return f"mindmap|{series_id}|{video_id}"
 
 
-def _build_series_mindmap_task_id(series_id: str) -> str:
-    """构建系列思维导图生成的进度跟踪任务 ID。
-
-    Args:
-        series_id: 系列 ID。
-
-    Returns:
-        格式为 `series-mindmap|{series_id}` 的任务 ID。
-    """
-    return f"series-mindmap|{series_id}"
-
-
 def _get_pending_series_videos(container, series_id: str) -> list[object]:
     """获取系列下所有未处理（processed=False）的视频列表。
 
@@ -1713,20 +1547,14 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     Raises:
         HTTPException(404): 视频不存在。
     """
-    source_query = getattr(container, "get_video_source", None)
-    if source_query is not None and source_query.run(series_id, video_id) is not None:
-        return source_query.run(series_id, video_id)
-    library_query = getattr(container, "list_video_library", None)
-    if library_query is None:
-        # Minimal embedded/test containers can expose artifact query use cases
-        # without a full library projection. Production SQL containers always
-        # provide list_video_library and retain the stronger membership check.
-        return None
-    library = library_query.run()
+    source = container.get_video_source.run(series_id, video_id)
+    if source is not None:
+        return source
+    library = container.list_video_library.run()
     series = next((item for item in library.series if item.id == series_id), None)
     if series is None or not any(video.id == video_id for video in series.videos):
         raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return source_query.run(series_id, video_id) if source_query is not None else None
+    return None
 
 
 def _ensure_source_media_available(source) -> None:

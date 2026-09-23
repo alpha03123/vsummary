@@ -319,6 +319,7 @@ def test_bilibili_cookie_initializer_writes_dotenv_and_process_env(monkeypatch, 
     assert os.environ["BILIBILI_COOKIE"] == "SESSDATA=session-value; bili_jct=csrf-value"
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows browser installation paths are Windows-specific.")
 def test_resolve_default_browser_path_falls_back_to_edge_when_chrome_is_missing(monkeypatch) -> None:
     monkeypatch.setenv("PROGRAMFILES", r"C:\Program Files")
     monkeypatch.setenv("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
@@ -330,6 +331,7 @@ def test_resolve_default_browser_path_falls_back_to_edge_when_chrome_is_missing(
     assert _resolve_default_browser_path(exists=exists) == str(edge_path)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows browser installation paths are Windows-specific.")
 def test_resolve_default_browser_path_prefers_chrome_before_edge(monkeypatch) -> None:
     monkeypatch.setenv("PROGRAMFILES", r"C:\Program Files")
     monkeypatch.setenv("PROGRAMFILES(X86)", r"C:\Program Files (x86)")

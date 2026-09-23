@@ -35,7 +35,9 @@ def detect_runtime_capabilities() -> RuntimeCapabilities:
         platform=system_name,
         accelerator=accelerator,
         nvidia_cuda_available=nvidia_cuda_available,
-        faster_whisper_available=local_cuda_available,
+        # faster-whisper supports CPU execution. CUDA controls acceleration, not
+        # whether the Local CPU product may select the ASR provider at all.
+        faster_whisper_available=True,
         gpu_embedding_available=local_cuda_available,
         unavailable_reason=unavailable_reason,
     )
