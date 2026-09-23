@@ -2,8 +2,6 @@ name: Quality
 
 on:
   pull_request:
-  push:
-    branches: [main, feature/**, fix/**]
 
 jobs:
   backend:

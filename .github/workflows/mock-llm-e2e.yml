@@ -2,8 +2,6 @@ name: Mock LLM E2E
 
 on:
   pull_request:
-  push:
-    branches: [main, feature/**, fix/**]
 
 jobs:
   mock-llm-e2e:
