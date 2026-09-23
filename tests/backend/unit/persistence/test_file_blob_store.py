@@ -30,6 +30,40 @@ class FileBlobStoreTests(unittest.TestCase):
             with store.open(reference) as source:
                 self.assertEqual(source.read(), payload)
 
+    def test_hardlink_import_shares_source_and_blob_without_deleting_source(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "source.mp4"
+            source_path.write_bytes(b"video source bytes")
+            store = FileBlobStore(root / "blobs")
+
+            staged = store.put_staging_hardlink(
+                job_id="job_123", source_path=source_path, content_type="video/mp4"
+            )
+            reference = store.commit(staged, object_key="media/video-1/source.mp4")
+            blob_path = root / "blobs" / "objects" / "media" / "video-1" / "source.mp4"
+
+            self.assertTrue(source_path.samefile(blob_path))
+            store.delete(reference)
+            self.assertEqual(source_path.read_bytes(), b"video source bytes")
+            self.assertFalse(blob_path.exists())
+
+    def test_removing_legacy_source_keeps_hardlinked_blob(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "legacy.mp4"
+            source_path.write_bytes(b"legacy video")
+            store = FileBlobStore(root / "blobs")
+
+            staged = store.put_staging_hardlink(
+                job_id="legacy_123", source_path=source_path, content_type="video/mp4"
+            )
+            reference = store.commit(staged, object_key="media/video-1/source.mp4")
+            source_path.unlink()
+
+            with store.open(reference) as blob:
+                self.assertEqual(blob.read(), b"legacy video")
+
     def test_repeating_same_commit_key_with_same_content_is_idempotent(self) -> None:
         with TemporaryDirectory() as temp_dir:
             store = FileBlobStore(Path(temp_dir) / "blobs")

@@ -89,20 +89,21 @@ export function WorkspaceImportModal({
     {
       id: "hardlink",
       label: "硬链接",
-      description: "建立文件之间的引用，仅可用于同物理磁盘",
+      description: "同一分区共享文件内容；修改源文件也会影响库中视频",
       disabled: status === "loading" || status === "selecting" || hardlinkUnavailable,
-      disabledReason: hardlinkUnavailable ? "所选文件与工作区不在同一磁盘分区。" : undefined,
+      disabledReason: hardlinkUnavailable ? "所选文件与 Blob 存储不在同一磁盘分区。" : undefined,
     },
     {
       id: "external_reference",
       label: "软链接",
-      description: "记录文件路径，如果文件位置改变需要重复链接",
-      disabled: status === "loading" || status === "selecting",
+      description: "当前版本尚未实现",
+      disabled: true,
+      disabledReason: "当前版本尚未实现外部文件引用。",
     },
     {
       id: "copy",
       label: "复制",
-      description: "复制一份副本到本地文件夹，最消耗空间",
+      description: "复制到应用 Blob 存储，原文件保留",
       disabled: status === "loading" || status === "selecting",
     },
   ];
@@ -279,9 +280,9 @@ export function WorkspaceImportModal({
         setHardlinkAvailable(selection.hardlinkAvailable);
         if (selection.sourcePaths.length) {
           if (!selection.hardlinkAvailable && storageMode === "hardlink") {
-            setStorageMode("external_reference");
+            setStorageMode("copy");
           } else if (!storageModeCustomized) {
-            setStorageMode(selection.hardlinkAvailable ? "hardlink" : "external_reference");
+            setStorageMode(selection.hardlinkAvailable ? "hardlink" : "copy");
           }
         }
         setStatus("idle");
@@ -635,7 +636,7 @@ export function WorkspaceImportModal({
                   />
                   {hasLocalMedia && !hardlinkAvailable ? (
                     <p className="mt-2 text-xs font-medium text-warning">
-                      所选文件与工作区不在同一磁盘分区，已默认选择软链接。
+                      所选文件与 Blob 存储不在同一磁盘分区，已默认选择复制。
                     </p>
                   ) : null}
                 </div>

@@ -416,13 +416,17 @@ class SqlVideoWorkspace:
         workspace_id = self._workspace_id
         if not title.strip() or not source_paths:
             raise ValueError("A workspace, non-empty title, and media files are required.")
+        self._validate_import_paths(source_paths, storage_mode)
         series_id = self._control.create_series_at_next_position(
             workspace_id=workspace_id,
             title=title.strip(),
             source_kind="local",
         )
-        self._import_paths(series_id, source_paths)
+        self._import_paths(series_id, source_paths, storage_mode=storage_mode)
         return next(item for item in self.list_series() if item.id == series_id)
+
+    def can_hardlink(self, source_path: Path) -> bool:
+        return self._blobs.can_hardlink(source_path)
 
     def import_local_series_videos_from_paths(self, *, series_id: str, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
         self._import_paths(series_id, source_paths)
@@ -504,18 +508,29 @@ class SqlVideoWorkspace:
             self._blobs.delete(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]))
         return result.rowcount == 1
 
-    def _import_paths(self, series_id: str, source_paths: list[Path]) -> None:
+    def _validate_import_paths(self, source_paths: list[Path], storage_mode: str) -> None:
+        if storage_mode not in {"copy", "hardlink"}:
+            raise ValueError(f"Unsupported media storage mode: {storage_mode}")
+        for source_path in source_paths:
+            if not source_path.is_absolute() or not source_path.is_file():
+                raise ValueError(f"Media path is invalid: {source_path}")
+            if storage_mode == "hardlink" and not self._blobs.can_hardlink(source_path):
+                raise ValueError(f"Hard links require source and Blob storage on the same volume: {source_path}")
+
+    def _import_paths(self, series_id: str, source_paths: list[Path], storage_mode: str = "copy") -> None:
+        self._validate_import_paths(source_paths, storage_mode)
         with self._sessions() as session:
             exists = session.execute(text("SELECT 1 FROM series WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL"), {"series": series_id, "workspace": self._workspace_id}).scalar()
         if exists is None:
             raise LookupError("Series does not exist.")
         for source_path in source_paths:
-            if not source_path.is_absolute() or not source_path.is_file():
-                raise ValueError(f"Media path is invalid: {source_path}")
             digest = _sha256_path(source_path)
             video_id = self._control.create_video(series_id=series_id, title=source_path.stem, source_kind="audio" if source_path.suffix.lower() in {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"} else "video", external_source_id=digest)
-            with source_path.open("rb") as stream:
-                staged = self._blobs.put_staging(job_id=f"import{video_id}", source=stream, content_type="application/octet-stream")
+            if storage_mode == "hardlink":
+                staged = self._blobs.put_staging_hardlink(job_id=f"import{video_id}", source_path=source_path, content_type="application/octet-stream")
+            else:
+                with source_path.open("rb") as stream:
+                    staged = self._blobs.put_staging(job_id=f"import{video_id}", source=stream, content_type="application/octet-stream")
             reference = self._blobs.commit(staged, object_key=f"media/{video_id}/source{source_path.suffix.lower()}")
             with self._sessions.begin() as session:
                 session.add(MediaObject(id=new_ulid(), video_id=video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))

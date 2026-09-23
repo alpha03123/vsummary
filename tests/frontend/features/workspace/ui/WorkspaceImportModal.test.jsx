@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspaceImportModal } from "@src/features/workspace/ui/WorkspaceImportModal";
 
 describe("WorkspaceImportModal", () => {
-  it("defaults to a soft link for media outside the workspace disk", async () => {
+  it("defaults to a copy for media outside the Blob storage disk", async () => {
     const onSelectLocalMedia = vi.fn().mockResolvedValue({
       sourcePaths: ["\\\\nas\\videos\\lesson.mp4"],
       hardlinkAvailable: false,
@@ -26,7 +26,7 @@ describe("WorkspaceImportModal", () => {
     await screen.findByText("lesson.mp4");
     fireEvent.click(screen.getByRole("button", { name: "导入" }));
 
-    expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["\\\\nas\\videos\\lesson.mp4"], "external_reference");
+    expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["\\\\nas\\videos\\lesson.mp4"], "copy");
   });
 
   it("defaults to a hard link for media on the workspace disk", async () => {

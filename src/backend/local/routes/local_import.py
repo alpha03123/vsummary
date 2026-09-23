@@ -6,7 +6,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from backend.api.di.container import ApiContainerDep
 from backend.api.dependencies import WorkspaceServicesDep
 from backend.local.desktop_media_picker import select_local_media_paths
 from backend.api.schemas.contracts import LocalMediaPathImportRequest, LocalMediaSeriesPathImportRequest
@@ -17,12 +16,11 @@ router = APIRouter()
 
 
 @router.post("/api/import/local/select")
-def select_local_media(container: ApiContainerDep) -> dict[str, object]:
+def select_local_media(services: WorkspaceServicesDep) -> dict[str, object]:
     try:
         source_paths = select_local_media_paths()
-        workspace_device = container.root_dir.stat().st_dev
         incompatible_paths = [
-            Path(path).name for path in source_paths if Path(path).stat().st_dev != workspace_device
+            Path(path).name for path in source_paths if not services.linked_series_workspace.can_hardlink(Path(path))
         ]
         return {
             "source_paths": source_paths,

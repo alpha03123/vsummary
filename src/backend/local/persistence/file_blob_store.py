@@ -64,6 +64,33 @@ class FileBlobStore:
             content_type=content_type.strip(),
         )
 
+    def can_hardlink(self, source_path: Path) -> bool:
+        """Hard links require the source and the Blob directory to share a volume."""
+
+        self._root.mkdir(parents=True, exist_ok=True)
+        return source_path.stat().st_dev == self._root.stat().st_dev
+
+    def put_staging_hardlink(self, *, job_id: str, source_path: Path, content_type: str) -> StagedBlob:
+        """Stage a second directory entry for the source file without copying its bytes."""
+
+        _validate_identifier(job_id, field_name="job_id")
+        if not content_type.strip():
+            raise BlobStoreError("Blob content type is required.")
+        if not source_path.is_absolute() or not source_path.is_file():
+            raise ValueError(f"Hard-link source is not an existing absolute file: {source_path}")
+        if not self.can_hardlink(source_path):
+            raise ValueError("Hard links require the source and Blob storage on the same volume.")
+        token = uuid4().hex
+        target = self._staging_path(job_id, token)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(source_path, target)
+            reference = _stat_file(target, content_type.strip())
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+        return StagedBlob(job_id, token, reference.sha256, reference.byte_size, reference.content_type)
+
     def commit(self, staged: StagedBlob, *, object_key: str) -> BlobReference:
         """校验 staging 对象后原子发布到服务端生成的对象键。"""
 

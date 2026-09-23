@@ -267,8 +267,13 @@ class LegacyWorkspaceImporter:
                     return
                 except BlobStoreError:
                     pass
-        with media_path.open("rb") as source:
-            staged = self._blob_store.put_staging(job_id=f"legacy{video_id}", source=source, content_type="application/octet-stream")
+        if self._blob_store.can_hardlink(media_path):
+            staged = self._blob_store.put_staging_hardlink(
+                job_id=f"legacy{video_id}", source_path=media_path, content_type="application/octet-stream"
+            )
+        else:
+            with media_path.open("rb") as source:
+                staged = self._blob_store.put_staging(job_id=f"legacy{video_id}", source=source, content_type="application/octet-stream")
         reference = self._blob_store.commit(staged, object_key=key)
         with self._session_factory.begin() as session:
             if existing is None:
