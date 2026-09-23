@@ -110,6 +110,19 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn("onnxruntime-gpu>=1.20,<1.27", rendered)
         self.assertNotIn("onnxruntime-gpu>=1.20,<2", rendered)
 
+    def test_package_environments_include_local_database_runtime_dependencies(self) -> None:
+        required = {"SQLAlchemy>=2.0.36,<3", "alembic>=1.14,<2", "PyMySQL>=1.1,<2"}
+
+        for variant in PACKAGE_VARIANTS.values():
+            with self.subTest(kind=variant.kind):
+                rendered = (self.repo_root / variant.environment_file).read_text(encoding="utf-8")
+                dependencies = {
+                    line.strip().removeprefix("- ")
+                    for line in rendered.splitlines()
+                    if line.strip().startswith("- ")
+                }
+                self.assertTrue(required.issubset(dependencies))
+
     def test_build_release_layout_targets_external_pack_root(self) -> None:
         layout = build_release_layout(
             repo_root=self.repo_root,

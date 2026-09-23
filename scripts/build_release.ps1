@@ -665,6 +665,7 @@ def forbid(names):
         raise SystemExit(f"{kind} package contains forbidden dependencies: {', '.join(conflicts)}")
 
 forbid(legacy_forbidden)
+require({"sqlalchemy", "alembic", "pymysql"})
 if kind == "cpu":
     require({"faster-whisper", "opencc-python-reimplemented", "dashscope", "fastembed", "onnxruntime", "pandas", "yt-dlp", "drissionpage", "chaoxing-downloader"})
     forbid({"fastembed-gpu", "onnxruntime-gpu"})
