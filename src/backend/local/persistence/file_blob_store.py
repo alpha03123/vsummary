@@ -70,6 +70,9 @@ class FileBlobStore:
         self._root.mkdir(parents=True, exist_ok=True)
         return source_path.stat().st_dev == self._root.stat().st_dev
 
+    def shares_file(self, reference: BlobReference, source_path: Path) -> bool:
+        return self._object_path(reference.key).samefile(source_path)
+
     def put_staging_hardlink(self, *, job_id: str, source_path: Path, content_type: str) -> StagedBlob:
         """Stage a second directory entry for the source file without copying its bytes."""
 
@@ -110,6 +113,20 @@ class FileBlobStore:
             return BlobReference(object_key, existing.sha256, existing.byte_size, staged.content_type)
         os.replace(source, target)
         return BlobReference(object_key, actual.sha256, actual.byte_size, staged.content_type)
+
+    def replace(self, staged: StagedBlob, existing: BlobReference) -> BlobReference:
+        """Atomically change a committed object's storage layout without changing its bytes."""
+
+        source = self._staging_path(staged.job_id, staged.token)
+        target = self._object_path(existing.key)
+        actual = _stat_file(source, staged.content_type)
+        current = _stat_file(target, existing.content_type)
+        if (actual.sha256, actual.byte_size) != (existing.sha256, existing.byte_size):
+            raise BlobStoreError("Replacement blob content differs from the recorded object.")
+        if (current.sha256, current.byte_size) != (existing.sha256, existing.byte_size):
+            raise BlobStoreError("Committed blob content changed before replacement.")
+        os.replace(source, target)
+        return existing
 
     def open(self, reference: BlobReference) -> BinaryIO:
         """以只读二进制流打开已提交对象。"""

@@ -59,6 +59,7 @@ class SqlControlPlaneRepository:
         title: str,
         position: int,
         source_kind: str = "local",
+        storage_mode: str = "copy",
         external_source_url: str | None = None,
     ) -> str:
         _require_text(workspace_id, field_name="workspace_id")
@@ -74,6 +75,7 @@ class SqlControlPlaneRepository:
                     title=title.strip(),
                     position=position,
                     source_kind=source_kind,
+                    storage_mode=storage_mode,
                     external_source_url=external_source_url,
                 )
             )
@@ -85,6 +87,7 @@ class SqlControlPlaneRepository:
         workspace_id: str,
         title: str,
         source_kind: str = "local",
+        storage_mode: str = "copy",
         external_source_url: str | None = None,
     ) -> str:
         """Create a series after serializing position allocation for one workspace."""
@@ -110,6 +113,7 @@ class SqlControlPlaneRepository:
                     title=title.strip(),
                     position=position,
                     source_kind=source_kind,
+                    storage_mode=storage_mode,
                     external_source_url=external_source_url,
                 )
             )

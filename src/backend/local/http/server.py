@@ -63,11 +63,13 @@ def main() -> None:
             )
         blob_store = FileBlobStore(data_root / "blobs")
         if not args.skip_legacy_import:
-            LegacyWorkspaceImporter(
+            report = LegacyWorkspaceImporter(
                 root_dir=_repository_root(),
                 session_factory=sessions,
                 blob_store=blob_store,
             ).import_local_workspace()
+            if report.failures:
+                raise RuntimeError("Legacy workspace import failed: " + "; ".join(report.failures))
         workspace = SqlVideoWorkspace(
             session_factory=sessions,
             blob_store=blob_store,

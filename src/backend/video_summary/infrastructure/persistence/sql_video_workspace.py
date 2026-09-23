@@ -17,7 +17,7 @@ from backend.core.errors import ActiveJobConflictError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.current_content_repository import SqlCurrentContentRepository
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import MediaObject, OutboxEvent, Video
+from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, MediaObject, OutboxEvent, Video
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
@@ -27,7 +27,7 @@ from backend.video_summary.library.models import (
     VideoAiSummaryDTO, VideoAiSummaryVisualEvidenceDTO, VideoNotesDTO, VideoSourceDTO, VideoSummaryDTO, VideoTranscriptDTO, VideoWorkspaceToolsDTO, WorkspaceDTO, WorkspaceToolDTO,
 )
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
-from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.library.constants import AUDIO_SUFFIXES, MEDIA_STORAGE_MODES, MEDIA_SUFFIXES, PLAYGROUND_SERIES_ID
 from backend.core.citations import CitationReference
 
 
@@ -91,17 +91,20 @@ class SqlVideoWorkspace:
             series = session.execute(text("""SELECT s.id,s.title,s.source_kind,s.external_source_url,m.payload AS linked_payload
                 FROM series s LEFT JOIN linked_series_metadata m ON m.series_id=s.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL ORDER BY s.position,s.created_at"""), {"workspace": self._workspace_id}).mappings().all()
-            videos = session.execute(text("""SELECT v.id,v.series_id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key,t.video_id AS transcript_video_id
+            videos = session.execute(text("""SELECT v.id,v.series_id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key,e.source_path AS external_path,t.video_id AS transcript_video_id
                 FROM videos v JOIN series s ON s.id=v.series_id LEFT JOIN media_objects m ON m.video_id=v.id AND m.state='ready'
+                LEFT JOIN external_media_references e ON e.video_id=v.id
                 LEFT JOIN transcripts t ON t.video_id=v.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL AND v.deleted_at IS NULL ORDER BY v.created_at"""), {"workspace": self._workspace_id}).mappings().all()
         by_series: dict[str, list[LibraryVideoCardDTO]] = {row["id"]: [] for row in series}
         for video in videos:
-            linked = video["source_kind"] not in {"video", "audio", "local"} and video["blob_key"] is None
+            linked = video["source_kind"] not in {"video", "audio", "local"} and video["blob_key"] is None and video["external_path"] is None
+            missing_external = video["external_path"] is not None and not Path(video["external_path"]).is_file()
+            source_type = ("audio" if Path(video["external_path"]).suffix.lower() in AUDIO_SUFFIXES else "video") if video["external_path"] is not None else ("video" if linked else video["source_kind"])
             by_series.setdefault(video["series_id"], []).append(LibraryVideoCardDTO(
-                id=video["id"], title=video["title"], source_name=Path(video["blob_key"] or "media").name,
-                processed=video["content_version"] > 0, status="ready" if video["content_version"] > 0 else ("linked" if linked else "pending"),
-                has_transcript=video["transcript_video_id"] is not None, source_type="video" if linked else video["source_kind"],
+                id=video["id"], title=video["title"], source_name=Path(video["external_path"] or video["blob_key"] or "media").name,
+                processed=video["content_version"] > 0, status="source_missing" if missing_external else ("ready" if video["content_version"] > 0 else ("linked" if linked else "pending")),
+                has_transcript=video["transcript_video_id"] is not None, source_type=source_type,
                 is_linked=linked, source_id=video["external_source_id"] or "", provider=video["source_kind"] if linked else "",
             ))
         return [
@@ -119,10 +122,19 @@ class SqlVideoWorkspace:
 
     def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         with self._sessions() as session:
-            row = session.execute(text("""SELECT v.id,v.title,v.source_kind,v.content_version,m.blob_key,m.sha256,m.byte_size,m.media_type
+            row = session.execute(text("""SELECT v.id,v.title,v.source_kind,v.content_version,m.blob_key,m.sha256,m.byte_size,m.media_type,e.source_path AS external_path
                 FROM videos v JOIN series s ON s.id=v.series_id LEFT JOIN media_objects m ON m.video_id=v.id AND m.state='ready'
+                LEFT JOIN external_media_references e ON e.video_id=v.id
                 WHERE v.id=:video AND s.id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
-        if row is None or row["blob_key"] is None:
+        if row is None:
+            return None
+        if row["external_path"] is not None:
+            source_path = Path(row["external_path"])
+            if not source_path.is_absolute() or not source_path.is_file():
+                return None
+            source_type = "audio" if source_path.suffix.lower() in AUDIO_SUFFIXES else "video"
+            return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=source_path.name, source_type=source_type, source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0)
+        if row["blob_key"] is None:
             return None
         filename = Path(row["blob_key"]).name
         reference = BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"])
@@ -373,7 +385,7 @@ class SqlVideoWorkspace:
         return self.delete_series(series_id)
 
     def relink_external_video(self, *, series_id: str, video_id: str, source_path: Path) -> None:
-        if not source_path.is_absolute() or not source_path.is_file():
+        if not source_path.is_absolute() or not source_path.is_file() or source_path.suffix.lower() not in MEDIA_SUFFIXES:
             raise ValueError("Relink source must be an existing absolute media file.")
         with self._sessions() as session:
             resolved_video_id = session.execute(
@@ -389,6 +401,11 @@ class SqlVideoWorkspace:
                 ).scalar()
         if resolved_video_id is None:
             raise LookupError("Linked video does not exist.")
+        with self._sessions.begin() as session:
+            external = session.get(ExternalMediaReference, resolved_video_id)
+            if external is not None:
+                external.source_path = str(source_path)
+                return
         with source_path.open("rb") as stream:
             staged = self._blobs.put_staging(job_id=f"relink{resolved_video_id}", source=stream, content_type="application/octet-stream")
         reference = self._blobs.commit(staged, object_key=f"media/{resolved_video_id}/source{source_path.suffix.lower()}")
@@ -421,6 +438,7 @@ class SqlVideoWorkspace:
             workspace_id=workspace_id,
             title=title.strip(),
             source_kind="local",
+            storage_mode=storage_mode,
         )
         self._import_paths(series_id, source_paths, storage_mode=storage_mode)
         return next(item for item in self.list_series() if item.id == series_id)
@@ -429,7 +447,11 @@ class SqlVideoWorkspace:
         return self._blobs.can_hardlink(source_path)
 
     def import_local_series_videos_from_paths(self, *, series_id: str, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
-        self._import_paths(series_id, source_paths)
+        with self._sessions() as session:
+            storage_mode = session.execute(text("SELECT storage_mode FROM series WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL"), {"series": series_id, "workspace": self._workspace_id}).scalar()
+        if storage_mode is None:
+            raise LookupError("Series does not exist.")
+        self._import_paths(series_id, source_paths, storage_mode=storage_mode)
         return next(item.videos for item in self.list_series() if item.id == series_id)
 
     def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
@@ -509,10 +531,10 @@ class SqlVideoWorkspace:
         return result.rowcount == 1
 
     def _validate_import_paths(self, source_paths: list[Path], storage_mode: str) -> None:
-        if storage_mode not in {"copy", "hardlink"}:
+        if storage_mode not in MEDIA_STORAGE_MODES:
             raise ValueError(f"Unsupported media storage mode: {storage_mode}")
         for source_path in source_paths:
-            if not source_path.is_absolute() or not source_path.is_file():
+            if not source_path.is_absolute() or not source_path.is_file() or source_path.suffix.lower() not in MEDIA_SUFFIXES:
                 raise ValueError(f"Media path is invalid: {source_path}")
             if storage_mode == "hardlink" and not self._blobs.can_hardlink(source_path):
                 raise ValueError(f"Hard links require source and Blob storage on the same volume: {source_path}")
@@ -525,7 +547,11 @@ class SqlVideoWorkspace:
             raise LookupError("Series does not exist.")
         for source_path in source_paths:
             digest = _sha256_path(source_path)
-            video_id = self._control.create_video(series_id=series_id, title=source_path.stem, source_kind="audio" if source_path.suffix.lower() in {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"} else "video", external_source_id=digest)
+            video_id = self._control.create_video(series_id=series_id, title=source_path.stem, source_kind="audio" if source_path.suffix.lower() in AUDIO_SUFFIXES else "video", external_source_id=digest)
+            if storage_mode == "external_reference":
+                with self._sessions.begin() as session:
+                    session.add(ExternalMediaReference(video_id=video_id, source_path=str(source_path)))
+                continue
             if storage_mode == "hardlink":
                 staged = self._blobs.put_staging_hardlink(job_id=f"import{video_id}", source_path=source_path, content_type="application/octet-stream")
             else:

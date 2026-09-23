@@ -96,9 +96,8 @@ export function WorkspaceImportModal({
     {
       id: "external_reference",
       label: "软链接",
-      description: "当前版本尚未实现",
-      disabled: true,
-      disabledReason: "当前版本尚未实现外部文件引用。",
+      description: "只记录外部文件路径，移动文件后需要重新关联",
+      disabled: status === "loading" || status === "selecting",
     },
     {
       id: "copy",
@@ -280,9 +279,9 @@ export function WorkspaceImportModal({
         setHardlinkAvailable(selection.hardlinkAvailable);
         if (selection.sourcePaths.length) {
           if (!selection.hardlinkAvailable && storageMode === "hardlink") {
-            setStorageMode("copy");
+            setStorageMode("external_reference");
           } else if (!storageModeCustomized) {
-            setStorageMode(selection.hardlinkAvailable ? "hardlink" : "copy");
+            setStorageMode(selection.hardlinkAvailable ? "hardlink" : "external_reference");
           }
         }
         setStatus("idle");
@@ -636,7 +635,7 @@ export function WorkspaceImportModal({
                   />
                   {hasLocalMedia && !hardlinkAvailable ? (
                     <p className="mt-2 text-xs font-medium text-warning">
-                      所选文件与 Blob 存储不在同一磁盘分区，已默认选择复制。
+                      所选文件与 Blob 存储不在同一磁盘分区，已默认选择软链接。
                     </p>
                   ) : null}
                 </div>

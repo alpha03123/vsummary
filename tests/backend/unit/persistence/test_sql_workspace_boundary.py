@@ -60,6 +60,7 @@ class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
             "sha256": "a" * 64,
             "byte_size": 1,
             "media_type": "video/mp4",
+            "external_path": None,
         }
         blobs = Mock()
         blobs.materialize.side_effect = BlobStoreError("Committed blob does not exist.")
@@ -77,3 +78,32 @@ class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
 
         self.assertIn("failed to materialize video source", logs.output[0])
         self.assertIn("BlobStoreError: Committed blob does not exist.", logs.output[0])
+
+    def test_external_video_source_uses_the_original_path_without_materializing(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "lesson.mp4"
+            source_path.write_bytes(b"video")
+            sessions = MagicMock()
+            session = sessions.return_value.__enter__.return_value
+            session.execute.return_value.mappings.return_value.first.return_value = {
+                "id": "video-1",
+                "title": "Lesson",
+                "source_kind": "video",
+                "content_version": 0,
+                "blob_key": None,
+                "external_path": str(source_path),
+            }
+            blobs = Mock()
+            workspace = SqlVideoWorkspace(
+                session_factory=sessions,
+                blob_store=blobs,
+                cache_root=Path(temp_dir) / "cache",
+                workspace_id="workspace-1",
+            )
+
+            source = workspace.get_video_source("series-1", "video-1")
+
+            self.assertEqual(source.source_path, source_path)
+            blobs.materialize.assert_not_called()

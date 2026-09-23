@@ -54,6 +54,7 @@ class Series(TimestampedRow, Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     source_kind: Mapped[str] = mapped_column(String(64), nullable=False, default="local")
+    storage_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="copy")
     external_source_url: Mapped[str | None] = mapped_column(String(2_048), nullable=True)
     row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -88,6 +89,13 @@ class MediaObject(TimestampedRow, Base):
     byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class ExternalMediaReference(TimestampedRow, Base):
+    __tablename__ = "external_media_references"
+
+    video_id: Mapped[str] = mapped_column(ForeignKey("videos.id", ondelete="RESTRICT"), primary_key=True)
+    source_path: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class Artifact(TimestampedRow, Base):

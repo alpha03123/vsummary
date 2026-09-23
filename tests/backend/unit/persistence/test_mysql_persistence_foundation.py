@@ -100,7 +100,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0013_outbox_workspace_retry_policy")
+        self.assertEqual(script.get_current_head(), "0014_media_storage_modes")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -113,6 +113,8 @@ class AlembicConfigurationTests(unittest.TestCase):
         self.assertIn("CREATE TABLE workspaces", ddl)
         self.assertIn("CREATE TABLE jobs", ddl)
         self.assertIn("CREATE TABLE outbox_events", ddl)
+        self.assertIn("CREATE TABLE external_media_references", ddl)
+        self.assertIn("storage_mode", ddl)
         self.assertIn("LEFT JOIN notes AS note", ddl)
         self.assertIn("LEFT JOIN jobs AS job", ddl)
         self.assertIn("COALESCE(content_video.series_id, note_video.series_id)", ddl)

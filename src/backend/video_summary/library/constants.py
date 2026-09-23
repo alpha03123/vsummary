@@ -15,3 +15,10 @@ PLAYGROUND_SERIES_ID = "__playground__"
 BILIBILI_INBOX_SERIES_ID = "bilibili"
 """浏览器扩展导入 Bilibili 视频的固定系列 ID。"""
 
+MEDIA_STORAGE_MODES = frozenset({"copy", "hardlink", "external_reference"})
+"""本地系列可选的视频存储方式。"""
+
+AUDIO_SUFFIXES = frozenset({".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"})
+VIDEO_SUFFIXES = frozenset({".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"})
+MEDIA_SUFFIXES = AUDIO_SUFFIXES | VIDEO_SUFFIXES
+

@@ -15,13 +15,12 @@ from backend.core.blob_store import BlobReference, BlobStore, BlobStoreError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.current_content_repository import SqlCurrentContentRepository
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import LegacyImportItem, MediaObject
+from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, LegacyImportItem, MediaObject
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
-from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
+from backend.video_summary.library.constants import AUDIO_SUFFIXES, MEDIA_STORAGE_MODES, MEDIA_SUFFIXES, PLAYGROUND_SERIES_ID
 
 
-MEDIA_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
-LEGACY_IMPORT_FORMAT_VERSION = 5
+LEGACY_IMPORT_FORMAT_VERSION = 6
 
 
 @dataclass(frozen=True)
@@ -33,7 +32,7 @@ class LegacyImportReport:
 
 
 class LegacyWorkspaceImporter:
-    """显式迁移工具；它不会被正常 API 启动路径自动调用。"""
+    """Local 启动时导入旧工作区，并按旧系列的存储模式恢复视频来源。"""
 
     def __init__(self, *, root_dir: Path, session_factory: sessionmaker[Session], blob_store: BlobStore) -> None:
         self._root_dir = root_dir
@@ -56,6 +55,7 @@ class LegacyWorkspaceImporter:
                 if metadata.is_file():
                     try:
                         self._import_linked_series(workspace_id, directory.name, metadata)
+                        imported_content += self._import_linked_external_sources(workspace_id, directory.name)
                     except Exception as error:
                         failures.append(f"{directory.name}: {error}")
         try:
@@ -64,28 +64,98 @@ class LegacyWorkspaceImporter:
         except Exception as error:
             failures.append(f"agent state: {error}")
         videos_root = self._root_dir / "videos"
-        if videos_root.is_dir():
-            for position, series_dir in enumerate(sorted(path for path in videos_root.iterdir() if path.is_dir())):
-                try:
-                    series_id, created = self._series_id(workspace_id, series_dir, position)
-                    imported_series += int(created)
-                    for media_path in sorted(path for path in series_dir.iterdir() if path.is_file() and path.suffix.lower() in MEDIA_SUFFIXES):
-                        video_id, created_video = self._video_id(series_id, series_dir.name, media_path)
+        series_names = {path.name for path in videos_root.iterdir() if path.is_dir()} if videos_root.is_dir() else set()
+        if linked_root.is_dir():
+            series_names.update(path.name for path in linked_root.iterdir() if path.is_dir() and (path / "series_meta.json").is_file())
+        for position, legacy_series_id in enumerate(sorted(series_names)):
+            try:
+                storage_mode = self._legacy_storage_mode(legacy_series_id)
+                series_dir = videos_root / legacy_series_id
+                if storage_mode == "external_reference":
+                    source_files = sorted((linked_root / legacy_series_id).glob("*/source.json"))
+                    if not source_files:
+                        raise ValueError("External-reference series has no source.json files.")
+                    for source_file in source_files:
+                        self._read_external_source(source_file)
+                else:
+                    if not series_dir.is_dir():
+                        if self._already_imported_without_legacy_files(legacy_series_id, storage_mode):
+                            continue
+                        raise FileNotFoundError(f"Legacy media directory is missing: {series_dir}")
+                    media_paths = sorted(path for path in series_dir.iterdir() if path.is_file() and path.suffix.lower() in MEDIA_SUFFIXES)
+                    if not media_paths and self._already_imported_without_legacy_files(legacy_series_id, storage_mode):
+                        continue
+                    if not media_paths and (linked_root / legacy_series_id / "linked_series.json").is_file():
+                        continue
+                    if not media_paths:
+                        raise ValueError(f"Legacy media directory contains no supported files: {series_dir}")
+                    if storage_mode == "hardlink":
+                        for media_path in media_paths:
+                            if not self._blob_store.can_hardlink(media_path):
+                                raise ValueError(f"Cannot preserve legacy hard link across volumes: {media_path}")
+                series_id, created = self._series_id(workspace_id, series_dir, position, storage_mode)
+                imported_series += int(created)
+                if storage_mode == "external_reference":
+                    for source_file in source_files:
+                        video_id, created_video = self._external_video_id(series_id, legacy_series_id, source_file)
                         imported_videos += int(created_video)
-                        self._import_media(video_id, media_path)
-                        if self._import_content(workspace_id, video_id, series_dir.name, media_path.stem):
-                            imported_content += 1
-                        elif self._import_transcript_only(video_id, series_dir.name, media_path.stem):
-                            imported_content += 1
-                        self._import_structured_artifacts(video_id, series_dir.name, media_path.stem)
-                        self._import_binary_artifacts(workspace_id, video_id, series_dir.name, media_path.stem)
-                        self._rag_source.refresh_video(workspace_id=workspace_id, series_id=series_id, video_id=video_id)
-                except Exception as error:
-                    failures.append(f"{series_dir.name}: {error}")
+                        self._import_external_media(video_id, source_file)
+                        imported_content += self._import_video_records(workspace_id, series_id, video_id, legacy_series_id, source_file.parent.name)
+                else:
+                    for media_path in media_paths:
+                        video_id, created_video = self._video_id(series_id, legacy_series_id, media_path)
+                        imported_videos += int(created_video)
+                        self._import_media(video_id, media_path, storage_mode=storage_mode)
+                        imported_content += self._import_video_records(workspace_id, series_id, video_id, legacy_series_id, media_path.stem)
+            except Exception as error:
+                failures.append(f"{legacy_series_id}: {error}")
         self._repair_titles_from_linked_metadata()
         if not failures:
             self._mark_completed()
         return LegacyImportReport(imported_series, imported_videos, imported_content, tuple(failures))
+
+    def _legacy_storage_mode(self, legacy_series_id: str) -> str:
+        path = self._root_dir / "workspace" / legacy_series_id / "series_meta.json"
+        if not path.is_file():
+            return "copy"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        mode = payload.get("storage_mode", "copy")
+        if mode not in MEDIA_STORAGE_MODES:
+            raise ValueError(f"Invalid legacy storage mode in {path}: {mode}")
+        return mode
+
+    def _already_imported_without_legacy_files(self, legacy_series_id: str, storage_mode: str) -> bool:
+        with self._session_factory() as session:
+            prior_state = session.execute(
+                __import__("sqlalchemy").text("SELECT legacy_import_state,data_format_version FROM app_installations ORDER BY created_at LIMIT 1")
+            ).first()
+        if prior_state is None or prior_state[0] != "completed" or prior_state[1] < 5:
+            return False
+        item = self._mapped("series", legacy_series_id)
+        if item is None or not item.target_id:
+            return False
+        with self._session_factory() as session:
+            row = session.execute(
+                __import__("sqlalchemy").text(
+                    "SELECT COUNT(DISTINCT v.id),COUNT(DISTINCT m.video_id) "
+                    "FROM videos v LEFT JOIN media_objects m ON m.video_id=v.id "
+                    "WHERE v.series_id=:series AND v.deleted_at IS NULL"
+                ),
+                {"series": item.target_id},
+            ).one()
+        if row[0] < 1 or row[0] != row[1]:
+            return False
+        self._set_series_storage_mode(item.target_id, storage_mode)
+        return True
+
+    def _import_video_records(self, workspace_id: str, series_id: str, video_id: str, legacy_series_id: str, legacy_video_id: str) -> int:
+        imported_content = int(self._import_content(workspace_id, video_id, legacy_series_id, legacy_video_id))
+        if not imported_content:
+            imported_content = int(self._import_transcript_only(video_id, legacy_series_id, legacy_video_id))
+        self._import_structured_artifacts(video_id, legacy_series_id, legacy_video_id)
+        self._import_binary_artifacts(workspace_id, video_id, legacy_series_id, legacy_video_id)
+        self._rag_source.refresh_video(workspace_id=workspace_id, series_id=series_id, video_id=video_id)
+        return imported_content
 
     def _import_agent_sessions(self, workspace_id: str) -> None:
         directory = self._root_dir / "data" / "agent_sessions"
@@ -163,6 +233,29 @@ class LegacyWorkspaceImporter:
                 self._control.create_video(series_id=series_id, title=str(item.get("title") or external_id), source_kind=str(item.get("provider") or "linked"), external_source_id=external_id, duration_ms=round(float(item.get("duration_seconds") or 0) * 1000))
         self._record("linked_series", source_key, "series", series_id, "imported", _sha256(metadata_path))
 
+    def _import_linked_external_sources(self, workspace_id: str, legacy_series_id: str) -> int:
+        mapped = self._mapped("linked_series", f"linked/{legacy_series_id}")
+        if mapped is None or not mapped.target_id:
+            raise ValueError(f"Linked series has no imported SQL series: {legacy_series_id}")
+        series_id = mapped.target_id
+        imported_content = 0
+        base = self._root_dir / "workspace" / legacy_series_id
+        media_dir = self._root_dir / "videos" / legacy_series_id
+        for source_file in sorted(base.glob("*/source.json")):
+            legacy_video_id = source_file.parent.name
+            if media_dir.is_dir() and any(path.stem == legacy_video_id and path.suffix.lower() in MEDIA_SUFFIXES for path in media_dir.iterdir() if path.is_file()):
+                continue
+            with self._session_factory() as session:
+                video_id = session.execute(
+                    __import__("sqlalchemy").text("SELECT id FROM videos WHERE series_id=:series AND external_source_id=:external"),
+                    {"series": series_id, "external": legacy_video_id},
+                ).scalar()
+            if video_id is None:
+                raise ValueError(f"Linked external video has no SQL record: {legacy_series_id}/{legacy_video_id}")
+            self._import_external_media(video_id, source_file)
+            imported_content += self._import_video_records(workspace_id, series_id, video_id, legacy_series_id, legacy_video_id)
+        return imported_content
+
     def _workspace_id(self) -> str:
         key = str(self._root_dir.resolve())
         item = self._mapped("workspace", key)
@@ -184,11 +277,12 @@ class LegacyWorkspaceImporter:
         self._record("workspace", key, "workspace", workspace_id, "imported")
         return workspace_id
 
-    def _series_id(self, workspace_id: str, series_dir: Path, position: int) -> tuple[str, bool]:
+    def _series_id(self, workspace_id: str, series_dir: Path, position: int, storage_mode: str) -> tuple[str, bool]:
         key = series_dir.name
         item = self._mapped("series", key)
         if item is not None and item.target_id:
             self._mark_playground_series(item.target_id, key)
+            self._set_series_storage_mode(item.target_id, storage_mode)
             return item.target_id, False
         title = _legacy_title(self._root_dir / "workspace" / key / "series_meta.json", fallback=key)
         with self._session_factory() as session:
@@ -214,6 +308,7 @@ class LegacyWorkspaceImporter:
             )
         if existing_series_id is not None:
             self._mark_playground_series(existing_series_id, key)
+            self._set_series_storage_mode(existing_series_id, storage_mode)
             self._record("series", key, "series", existing_series_id, "imported")
             return existing_series_id, False
         series_id = self._control.create_series(
@@ -221,9 +316,17 @@ class LegacyWorkspaceImporter:
             title=title,
             position=next_position if position_taken else position,
             source_kind="playground" if key == PLAYGROUND_SERIES_ID else "local",
+            storage_mode=storage_mode,
         )
         self._record("series", key, "series", series_id, "imported")
         return series_id, True
+
+    def _set_series_storage_mode(self, series_id: str, storage_mode: str) -> None:
+        with self._session_factory.begin() as session:
+            session.execute(
+                __import__("sqlalchemy").text("UPDATE series SET storage_mode=:mode WHERE id=:series"),
+                {"mode": storage_mode, "series": series_id},
+            )
 
     def _mark_playground_series(self, series_id: str, legacy_series_id: str) -> None:
         if legacy_series_id != PLAYGROUND_SERIES_ID:
@@ -251,7 +354,54 @@ class LegacyWorkspaceImporter:
         self._record("video", key, "video", video_id, "imported", _sha256(media_path))
         return video_id, True
 
-    def _import_media(self, video_id: str, media_path: Path) -> None:
+    def _external_video_id(self, series_id: str, legacy_series_id: str, source_file: Path) -> tuple[str, bool]:
+        legacy_video_id = source_file.parent.name
+        key = f"{legacy_series_id}/external/{legacy_video_id}"
+        item = self._mapped("video", key)
+        if item is not None and item.target_id:
+            return item.target_id, False
+        source_path = self._read_external_source(source_file)
+        title = _legacy_title(source_file.parent / "video_meta.json", fallback=legacy_video_id)
+        with self._session_factory() as session:
+            existing_video = session.execute(
+                __import__("sqlalchemy").text("SELECT id FROM videos WHERE series_id=:series AND external_source_id=:external"),
+                {"series": series_id, "external": legacy_video_id},
+            ).scalar()
+        if existing_video is None:
+            kind = "audio" if source_path.suffix.lower() in AUDIO_SUFFIXES else "video"
+            existing_video = self._control.create_video(series_id=series_id, title=title, source_kind=kind, external_source_id=legacy_video_id)
+            created = True
+        else:
+            created = False
+        self._record("video", key, "video", existing_video, "imported", _sha256(source_file))
+        return existing_video, created
+
+    @staticmethod
+    def _read_external_source(source_file: Path) -> Path:
+        payload = json.loads(source_file.read_text(encoding="utf-8"))
+        source_value = payload.get("source_path")
+        if not isinstance(source_value, str):
+            raise ValueError(f"Invalid external media reference: {source_file}")
+        source_path = Path(source_value)
+        if not source_path.is_absolute() or source_path.suffix.lower() not in MEDIA_SUFFIXES:
+            raise ValueError(f"Invalid external media path: {source_file}")
+        return source_path
+
+    def _import_external_media(self, video_id: str, source_file: Path) -> None:
+        source_path = self._read_external_source(source_file)
+        with self._session_factory.begin() as session:
+            if session.scalar(select(MediaObject).where(MediaObject.video_id == video_id)) is not None:
+                raise ValueError(f"Video already owns a Blob and cannot also be an external reference: {video_id}")
+            existing = session.get(ExternalMediaReference, video_id)
+            if existing is None:
+                session.add(ExternalMediaReference(video_id=video_id, source_path=str(source_path)))
+            else:
+                existing.source_path = str(source_path)
+        self._record("external_media", str(source_file.relative_to(self._root_dir)), "video", video_id, "imported", _sha256(source_file))
+
+    def _import_media(self, video_id: str, media_path: Path, *, storage_mode: str) -> None:
+        if storage_mode == "hardlink" and not self._blob_store.can_hardlink(media_path):
+            raise ValueError(f"Cannot preserve legacy hard link across volumes: {media_path}")
         key = f"media/{video_id}/source{media_path.suffix.lower()}"
         with self._session_factory() as session:
             existing = session.scalar(select(MediaObject).where(MediaObject.video_id == video_id))
@@ -264,16 +414,19 @@ class LegacyWorkspaceImporter:
                 )
                 try:
                     self._blob_store.stat(reference)
-                    return
                 except BlobStoreError:
                     pass
-        if self._blob_store.can_hardlink(media_path):
-            staged = self._blob_store.put_staging_hardlink(
-                job_id=f"legacy{video_id}", source_path=media_path, content_type="application/octet-stream"
-            )
-        else:
-            with media_path.open("rb") as source:
-                staged = self._blob_store.put_staging(job_id=f"legacy{video_id}", source=source, content_type="application/octet-stream")
+                else:
+                    shares_file = self._blob_store.shares_file(reference, media_path)
+                    if shares_file != (storage_mode == "hardlink"):
+                        staged = self._stage_legacy_media(video_id, media_path, storage_mode)
+                        try:
+                            self._blob_store.replace(staged, reference)
+                        except Exception:
+                            self._blob_store.discard_staging(staged)
+                            raise
+                    return
+        staged = self._stage_legacy_media(video_id, media_path, storage_mode)
         reference = self._blob_store.commit(staged, object_key=key)
         with self._session_factory.begin() as session:
             if existing is None:
@@ -285,6 +438,14 @@ class LegacyWorkspaceImporter:
                     ),
                     {"id": existing.id, "key": reference.key, "type": reference.content_type, "size": reference.byte_size, "sha": reference.sha256},
                 )
+
+    def _stage_legacy_media(self, video_id: str, media_path: Path, storage_mode: str):
+        if storage_mode == "hardlink":
+            return self._blob_store.put_staging_hardlink(
+                job_id=f"legacy{video_id}", source_path=media_path, content_type="application/octet-stream"
+            )
+        with media_path.open("rb") as source:
+            return self._blob_store.put_staging(job_id=f"legacy{video_id}", source=source, content_type="application/octet-stream")
 
     def _repair_titles_from_linked_metadata(self) -> None:
         """从旧链接元数据恢复被文件名退化覆盖的平台视频标题。"""

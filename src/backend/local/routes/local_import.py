@@ -34,9 +34,7 @@ def select_local_media(services: WorkspaceServicesDep) -> dict[str, object]:
 @router.post("/api/videos/{series_id}/{video_id}/relink")
 def relink_external_video(series_id: str, video_id: str, services: WorkspaceServicesDep) -> dict[str, bool]:
     source = services.get_video_source.run(series_id, video_id)
-    if source is None:
-        raise HTTPException(status_code=404, detail=f"未找到该视频：{series_id}/{video_id}")
-    selected_paths = select_local_media_paths(initial_directory=source.source_path.parent, allow_multiple=False)
+    selected_paths = select_local_media_paths(initial_directory=source.source_path.parent if source is not None else None, allow_multiple=False)
     if not selected_paths:
         return {"relinked": False}
     try:
@@ -45,6 +43,8 @@ def relink_external_video(series_id: str, video_id: str, services: WorkspaceServ
             video_id=video_id,
             source_path=Path(selected_paths[0]),
         )
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return {"relinked": True}
