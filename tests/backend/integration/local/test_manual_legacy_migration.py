@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from sqlalchemy import select
+from sqlalchemy import bindparam, select, text
 
 from tests import _path_setup  # noqa: F401
 from backend.local.legacy_migration import LegacyMigrationService
@@ -16,7 +16,7 @@ from backend.local.persistence.file_blob_store import FileBlobStore
 from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.database import DatabaseOptions, create_session_factory
-from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, MediaObject, Series, Video
+from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, KnowledgeCard, MediaObject, Series, Video
 
 
 @unittest.skipUnless(os.environ.get("VSUMMARY_TEST_MYSQL_URL"), "Disposable MySQL URL required")
@@ -29,6 +29,8 @@ class ManualLegacyMigrationE2ETests(unittest.TestCase):
             blob_store = FileBlobStore(target / "runtime" / "blobs")
             copy_source = self._series(old, "copied", "copy", b"copied video")
             hard_source = self._series(old, "linked", "hardlink", b"hardlinked video")
+            self._structured_artifacts(old, "copied")
+            self._structured_artifacts(old, "linked")
             original = root / "original.mp4"
             hard_source.replace(original)
             os.link(original, hard_source)
@@ -79,11 +81,23 @@ class ManualLegacyMigrationE2ETests(unittest.TestCase):
                 series_ids = [item.id for item in series]
                 media = session.scalars(select(MediaObject).join(Video, Video.id == MediaObject.video_id).where(Video.series_id.in_(series_ids))).all()
                 references = session.scalars(select(ExternalMediaReference).join(Video, Video.id == ExternalMediaReference.video_id).where(Video.series_id.in_(series_ids))).all()
+                cards = session.scalars(select(KnowledgeCard).join(Video, Video.id == KnowledgeCard.video_id).where(Video.series_id.in_(series_ids))).all()
+                notes = session.execute(
+                    text("SELECT n.id FROM notes n JOIN videos v ON v.id=n.video_id WHERE v.series_id IN :series_ids").bindparams(bindparam("series_ids", expanding=True)),
+                    {"series_ids": series_ids},
+                ).mappings().all()
                 agent_session = session.execute(__import__("sqlalchemy").text("SELECT session_id FROM agent_session_snapshots WHERE session_id=:id"), {"id": session_id}).scalar()
             self.assertEqual(len(series), 3)
             self.assertTrue(all(item.import_published for item in series))
             self.assertEqual(len(media), 2)
             self.assertEqual(len(references), 1)
+            self.assertEqual(len(cards), 4)
+            self.assertEqual(len({card.id for card in cards}), 4)
+            self.assertTrue(all(not card.id.startswith("kc-") for card in cards))
+            self.assertEqual(len(notes), 2)
+            self.assertEqual(len({note["id"] for note in notes}), 2)
+            self.assertTrue(all(not note["id"].startswith("note-") for note in notes))
+            self.assertTrue(all(set(card.related_card_ids).issubset({other.id for other in cards if other.video_id == card.video_id}) for card in cards))
             self.assertEqual(agent_session, session_id)
             self.assertTrue(any(path.samefile(original) for path in blob_store.root.glob("objects/media/*/source.mp4")))
             self.assertEqual(Path(references[0].source_path), external)
@@ -187,3 +201,24 @@ class ManualLegacyMigrationE2ETests(unittest.TestCase):
         workspace.mkdir(parents=True)
         (workspace / "series_meta.json").write_text(json.dumps({"title": name, "storage_mode": mode}), encoding="utf-8")
         return media
+
+    @staticmethod
+    def _structured_artifacts(root: Path, series: str) -> None:
+        video_root = root / "workspace" / series / "lesson"
+        video_root.mkdir()
+        (video_root / "knowledge_cards.json").write_text(
+            json.dumps(
+                {
+                    "title": "旧知识卡片",
+                    "cards": [
+                        {"id": "kc-1", "title": "第一张", "related_card_ids": ["kc-2"]},
+                        {"id": "kc-2", "title": "第二张", "related_card_ids": ["kc-1"]},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (video_root / "notes.json").write_text(
+            json.dumps({"notes": [{"id": "note-1", "title": "旧笔记", "content": "内容", "source": "manual"}]}),
+            encoding="utf-8",
+        )

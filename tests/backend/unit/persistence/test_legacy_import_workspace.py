@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import Mock
 
 from backend.local.persistence.legacy_workspace_importer import (
     LegacyWorkspaceImporter,
+    _legacy_knowledge_card_rows,
     _latest_agent_note_as_ai_summary,
     _legacy_transcript_payload,
 )
@@ -90,3 +92,38 @@ class LegacyPayloadConversionTests(unittest.TestCase):
         )
 
         self.assertEqual(summary, {"title": "新概括", "content": "新内容", "citations": "[]"})
+
+    def test_knowledge_cards_receive_global_ids_and_rewrite_local_relationships(self) -> None:
+        title, rows = _legacy_knowledge_card_rows(
+            {
+                "title": "旧版卡片",
+                "cards": [
+                    {"id": "kc-1", "title": "第一张", "related_card_ids": ["kc-2", "missing"]},
+                    {"id": "kc-2", "title": "第二张", "related_card_ids": ["kc-1"]},
+                ],
+            }
+        )
+
+        self.assertEqual(title, "旧版卡片")
+        self.assertTrue(all(len(row["id"]) == 26 for row in rows))
+        self.assertNotIn("kc-1", {row["id"] for row in rows})
+        self.assertEqual(json.loads(rows[0]["related"]), [rows[1]["id"]])
+        self.assertEqual(json.loads(rows[1]["related"]), [rows[0]["id"]])
+
+    def test_knowledge_cards_from_different_videos_do_not_reuse_legacy_ids(self) -> None:
+        payload = {"cards": [{"id": "kc-1", "title": "同名旧卡片"}]}
+
+        _, first_rows = _legacy_knowledge_card_rows(payload)
+        _, second_rows = _legacy_knowledge_card_rows(payload)
+
+        self.assertNotEqual(first_rows[0]["id"], second_rows[0]["id"])
+
+    def test_knowledge_cards_without_legacy_ids_receive_global_ids(self) -> None:
+        _, rows = _legacy_knowledge_card_rows({"cards": [{"title": "无旧 ID"}]})
+
+        self.assertEqual(len(rows[0]["id"]), 26)
+        self.assertEqual(json.loads(rows[0]["related"]), [])
+
+    def test_rejects_ambiguous_duplicate_legacy_knowledge_card_ids(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must be unique"):
+            _legacy_knowledge_card_rows({"cards": [{"id": "kc-1"}, {"id": "kc-1"}]})

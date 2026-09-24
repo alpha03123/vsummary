@@ -132,9 +132,11 @@ class ManagedLocalMySql:
                     database_ready = True
             else:
                 options = self._options_from_state(state)
-                self._start_existing_instance(options)
+                options, changed_port = self._start_existing_instance(options)
             if not database_ready:
                 self._wait_for_database(options)
+            if state is not None and changed_port:
+                self._write_runtime_state(options.parsed_url.port or 0)
             if before_migrate is not None:
                 before_migrate(options)
             upgrade_to_head(options)
@@ -226,11 +228,19 @@ class ManagedLocalMySql:
             url=f"mysql+pymysql://{LOCAL_DATABASE_USER}:{password}@127.0.0.1:{port}/{LOCAL_DATABASE_NAME}"
         )
 
-    def _start_existing_instance(self, options: DatabaseOptions) -> None:
+    def _start_existing_instance(self, options: DatabaseOptions) -> tuple[DatabaseOptions, bool]:
         port = options.parsed_url.port
         if port is not None and _is_loopback_port_open(port):
-            return
-        self._start_server(port=options.parsed_url.port or 3306, init_file=None)
+            return options, False
+        new_port = _select_loopback_port()
+        password = options.parsed_url.password
+        if password is None:
+            raise ManagedLocalMySqlError("Managed MySQL runtime state is missing credentials.")
+        restarted = DatabaseOptions(
+            url=f"mysql+pymysql://{LOCAL_DATABASE_USER}:{password}@127.0.0.1:{new_port}/{LOCAL_DATABASE_NAME}"
+        )
+        self._start_server(port=new_port, init_file=None)
+        return restarted, True
 
     def _start_server(self, *, port: int, init_file: Path | None) -> None:
         if self._process is not None and self._process.poll() is None:

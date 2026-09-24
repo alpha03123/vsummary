@@ -15,7 +15,7 @@ from backend.core.blob_store import BlobReference, BlobStore, BlobStoreError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.current_content_repository import SqlCurrentContentRepository
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, LegacyImportItem, MediaObject
+from backend.video_summary.infrastructure.persistence.models import Artifact, ExternalMediaReference, LegacyImportItem, MediaObject
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
 from backend.video_summary.library.constants import AUDIO_SUFFIXES, MEDIA_STORAGE_MODES, MEDIA_SUFFIXES, PLAYGROUND_SERIES_ID
 
@@ -537,12 +537,12 @@ class LegacyWorkspaceImporter:
                 if target == "notes":
                     for note in payload.get("notes", []):
                         if isinstance(note, dict):
-                            session.execute(__import__("sqlalchemy").text("INSERT INTO notes (id, video_id, title, content, source, row_version, created_at, updated_at) VALUES (:id,:video,:title,:content,:source,1,NOW(),NOW())"), {"id": str(note.get("id") or new_ulid())[:26], "video": video_id, "title": str(note.get("title") or "Untitled"), "content": str(note.get("content") or ""), "source": str(note.get("source") or "manual")})
+                            session.execute(__import__("sqlalchemy").text("INSERT INTO notes (id, video_id, title, content, source, row_version, created_at, updated_at) VALUES (:id,:video,:title,:content,:source,1,NOW(),NOW())"), {"id": new_ulid(), "video": video_id, "title": str(note.get("title") or "Untitled"), "content": str(note.get("content") or ""), "source": str(note.get("source") or "manual")})
                 elif target == "knowledge_cards":
-                    session.execute(__import__("sqlalchemy").text("INSERT INTO knowledge_card_sets (video_id, content_version, title, status, created_at, updated_at) VALUES (:video,1,:title,'ready',NOW(),NOW())"), {"video": video_id, "title": str(payload.get("title") or "")})
-                    for ordinal, card in enumerate(payload.get("cards", [])):
-                        if isinstance(card, dict):
-                            session.execute(__import__("sqlalchemy").text("INSERT INTO knowledge_cards (id,video_id,ordinal,title,kind,summary,details,tags,keywords,related_card_ids) VALUES (:id,:video,:ordinal,:title,:kind,:summary,:details,CAST(:tags AS JSON),CAST(:keywords AS JSON),CAST(:related AS JSON))"), {"id": str(card.get("id") or new_ulid())[:26], "video": video_id, "ordinal": ordinal, "title": str(card.get("title") or "Untitled"), "kind": str(card.get("kind") or "concept"), "summary": str(card.get("summary") or ""), "details": str(card.get("details") or ""), "tags": json.dumps(card.get("tags") or []), "keywords": json.dumps(card.get("keywords") or []), "related": json.dumps(card.get("related_card_ids") or [])})
+                    title, cards = _legacy_knowledge_card_rows(payload)
+                    session.execute(__import__("sqlalchemy").text("INSERT INTO knowledge_card_sets (video_id, content_version, title, status, created_at, updated_at) VALUES (:video,1,:title,'ready',NOW(),NOW())"), {"video": video_id, "title": title})
+                    for card in cards:
+                        session.execute(__import__("sqlalchemy").text("INSERT INTO knowledge_cards (id,video_id,ordinal,title,kind,summary,details,tags,keywords,related_card_ids) VALUES (:id,:video,:ordinal,:title,:kind,:summary,:details,CAST(:tags AS JSON),CAST(:keywords AS JSON),CAST(:related AS JSON))"), {"video": video_id, **card})
                 elif target == "mindmaps":
                     session.execute(__import__("sqlalchemy").text("INSERT INTO mindmaps (id,video_id,content_version,title,payload,row_version,created_at,updated_at) VALUES (:id,:video,1,:title,CAST(:payload AS JSON),1,NOW(),NOW())"), {"id": new_ulid(), "video": video_id, "title": legacy_video_id, "payload": json.dumps(payload, ensure_ascii=False)})
                 elif target == "ai_summaries":
@@ -551,7 +551,7 @@ class LegacyWorkspaceImporter:
                     for ordinal, frame in enumerate(payload.get("frames", [])):
                         if isinstance(frame, dict):
                             session.execute(__import__("sqlalchemy").text("INSERT INTO ai_summary_visual_evidence (id,video_id,ordinal,timestamp_ms,text) VALUES (:id,:video,:ordinal,:timestamp,:text)"), {"id": new_ulid(), "video": video_id, "ordinal": ordinal, "timestamp": round(float(frame.get("timestamp_seconds") or 0)*1000), "text": str(frame.get("text") or "")})
-            self._record(kind, f"{legacy_series_id}/{legacy_video_id}", target, video_id, "imported", _sha256(path))
+                self._record(kind, f"{legacy_series_id}/{legacy_video_id}", target, video_id, "imported", _sha256(path), session=session)
         self._import_latest_agent_note_as_ai_summary(video_id, legacy_series_id, legacy_video_id)
 
     def _import_latest_agent_note_as_ai_summary(self, video_id: str, legacy_series_id: str, legacy_video_id: str) -> None:
@@ -569,16 +569,15 @@ class LegacyWorkspaceImporter:
             return
         with self._session_factory.begin() as session:
             existing = session.execute(__import__("sqlalchemy").text("SELECT video_id FROM ai_summaries WHERE video_id=:video"), {"video": video_id}).scalar()
-            if existing is not None:
-                return
-            session.execute(
-                __import__("sqlalchemy").text(
-                    "INSERT INTO ai_summaries (video_id,title,content,citations,status,created_at,updated_at) "
-                    "VALUES (:video,:title,:content,CAST(:citations AS JSON),'ready',NOW(),NOW())"
-                ),
-                {"video": video_id, **summary},
-            )
-        self._record("agent_note_ai_summary", key, "ai_summaries", video_id, "imported", _sha256(notes_path))
+            if existing is None:
+                session.execute(
+                    __import__("sqlalchemy").text(
+                        "INSERT INTO ai_summaries (video_id,title,content,citations,status,created_at,updated_at) "
+                        "VALUES (:video,:title,:content,CAST(:citations AS JSON),'ready',NOW(),NOW())"
+                    ),
+                    {"video": video_id, **summary},
+                )
+            self._record("agent_note_ai_summary", key, "ai_summaries", video_id, "imported" if existing is None else "skipped", _sha256(notes_path), session=session)
 
     def _import_binary_artifacts(self, workspace_id: str, video_id: str, legacy_series_id: str, legacy_video_id: str) -> None:
         base = self._root_dir / "workspace" / legacy_series_id / legacy_video_id
@@ -594,20 +593,31 @@ class LegacyWorkspaceImporter:
                     staged = self._blob_store.put_staging(job_id=f"legacy{video_id}", source=stream, content_type="image/jpeg")
                 reference = self._blob_store.commit(staged, object_key=f"artifacts/{video_id}/{kind}/{source.name}")
                 with self._session_factory.begin() as session:
-                    session.execute(__import__("sqlalchemy").text("INSERT INTO artifacts (id,workspace_id,video_id,content_version,kind,blob_key,sha256,byte_size,media_type,created_at,updated_at) VALUES (:id,:workspace,:video,1,:kind,:key,:sha,:size,:type,NOW(),NOW())"), {"id": new_ulid(), "workspace": workspace_id, "video": video_id, "kind": kind, "key": reference.key, "sha": reference.sha256, "size": reference.byte_size, "type": reference.content_type})
-                self._record("binary_artifact", source_key, "artifact", video_id, "imported", reference.sha256)
+                    existing = session.scalar(select(Artifact).where(Artifact.blob_key == reference.key).with_for_update())
+                    if existing is None:
+                        session.add(Artifact(id=new_ulid(), workspace_id=workspace_id, video_id=video_id, content_version=1, kind=kind, blob_key=reference.key, sha256=reference.sha256, byte_size=reference.byte_size, media_type=reference.content_type))
+                    elif (existing.video_id, existing.kind, existing.sha256, existing.byte_size, existing.media_type) != (video_id, kind, reference.sha256, reference.byte_size, reference.content_type):
+                        raise ValueError(f"Legacy artifact conflicts with existing Blob: {reference.key}")
+                    self._record("binary_artifact", source_key, "artifact", video_id, "imported", reference.sha256, session=session)
 
     def _mapped(self, source_kind: str, source_key: str) -> LegacyImportItem | None:
         source_key = self._mapping_key(source_kind, source_key)
         with self._session_factory() as session:
             return session.scalar(select(LegacyImportItem).where(LegacyImportItem.source_kind == source_kind, LegacyImportItem.source_key == source_key))
 
-    def _record(self, source_kind: str, source_key: str, target_type: str, target_id: str, status: str, checksum: str | None = None) -> None:
+    def _record(self, source_kind: str, source_key: str, target_type: str, target_id: str, status: str, checksum: str | None = None, *, session: Session | None = None) -> None:
         source_key = self._mapping_key(source_kind, source_key)
+        if session is not None:
+            self._record_in_session(session, source_kind, source_key, target_type, target_id, status, checksum)
+            return
         with self._session_factory.begin() as session:
-            existing = session.scalar(select(LegacyImportItem).where(LegacyImportItem.source_kind == source_kind, LegacyImportItem.source_key == source_key).with_for_update())
-            if existing is None:
-                session.add(LegacyImportItem(id=new_ulid(), source_kind=source_kind, source_key=source_key, target_type=target_type, target_id=target_id, source_sha256=checksum, status=status))
+            self._record_in_session(session, source_kind, source_key, target_type, target_id, status, checksum)
+
+    @staticmethod
+    def _record_in_session(session: Session, source_kind: str, source_key: str, target_type: str, target_id: str, status: str, checksum: str | None) -> None:
+        existing = session.scalar(select(LegacyImportItem).where(LegacyImportItem.source_kind == source_kind, LegacyImportItem.source_key == source_key).with_for_update())
+        if existing is None:
+            session.add(LegacyImportItem(id=new_ulid(), source_kind=source_kind, source_key=source_key, target_type=target_type, target_id=target_id, source_sha256=checksum, status=status))
 
     def _mapping_key(self, source_kind: str, source_key: str) -> str:
         if self._source_namespace is None:
@@ -666,6 +676,43 @@ def _legacy_transcript_payload(payload: object) -> dict[str, object]:
         "duration_ms": round(duration * 1000) if isinstance(duration, (int, float)) else None,
         "segments": segments,
     }
+
+
+def _legacy_knowledge_card_rows(payload: object) -> tuple[str, list[dict[str, object]]]:
+    if not isinstance(payload, dict):
+        raise ValueError("legacy knowledge cards must be an object")
+    raw_cards = payload.get("cards", [])
+    if not isinstance(raw_cards, list):
+        raise ValueError("legacy knowledge cards must be a list")
+
+    cards = [(ordinal, card) for ordinal, card in enumerate(raw_cards) if isinstance(card, dict)]
+    source_ids = [str(card.get("id") or "").strip() for _, card in cards]
+    nonempty_source_ids = [source_id for source_id in source_ids if source_id]
+    if len(set(nonempty_source_ids)) != len(nonempty_source_ids):
+        raise ValueError("legacy knowledge card IDs must be unique within a video")
+    persisted_ids = {source_id: new_ulid() for source_id in nonempty_source_ids}
+
+    rows: list[dict[str, object]] = []
+    for (ordinal, card), source_id in zip(cards, source_ids, strict=True):
+        related = card.get("related_card_ids", [])
+        if not isinstance(related, list):
+            raise ValueError("legacy related_card_ids must be a list")
+        rows.append(
+            {
+                "id": persisted_ids[source_id] if source_id else new_ulid(),
+                "ordinal": ordinal,
+                "title": str(card.get("title") or "Untitled"),
+                "kind": str(card.get("kind") or "concept"),
+                "summary": str(card.get("summary") or ""),
+                "details": str(card.get("details") or ""),
+                "tags": json.dumps(card.get("tags") or []),
+                "keywords": json.dumps(card.get("keywords") or []),
+                "related": json.dumps(
+                    [persisted_ids[related_id] for related_id in related if isinstance(related_id, str) and related_id in persisted_ids]
+                ),
+            }
+        )
+    return str(payload.get("title") or ""), rows
 
 
 def _latest_agent_note_as_ai_summary(payload: object) -> dict[str, str] | None:
