@@ -23,7 +23,7 @@ const preview = {
 };
 
 test("migration update panel preview, progress, and completion", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 1440, height: 1300 });
+  await page.setViewportSize({ width: 1600, height: 1700 });
   const screenshotDir = process.env.VSUMMARY_SCREENSHOT_DIR || testInfo.outputDir;
   fs.mkdirSync(screenshotDir, { recursive: true });
   let polls = 0;
@@ -60,12 +60,12 @@ test("migration update panel preview, progress, and completion", async ({ page }
   await expect(panel).toContainText("课程视频·复制");
   await expect(panel).toContainText("访谈素材·硬链接");
   await expect(panel).toContainText("外部资料·路径引用");
-  await panel.screenshot({ path: path.join(screenshotDir, "vsummary-migration-preview.png") });
+  await panel.screenshot({ path: path.join(screenshotDir, "vsummary-migration-native-preview.png") });
 
-  await panel.getByRole("checkbox", { name: /我了解/ }).check();
+  await panel.getByRole("button", { name: /我了解/ }).click();
   await panel.getByRole("button", { name: "开始迁移" }).click();
   await expect(page.getByTestId("legacy-migration-status")).toContainText("迁移中");
-  await panel.screenshot({ path: path.join(screenshotDir, "vsummary-migration-running.png") });
+  await panel.screenshot({ path: path.join(screenshotDir, "vsummary-migration-native-running.png") });
   await expect(page.getByTestId("legacy-migration-status")).toContainText("已完成", { timeout: 5000 });
-  await panel.screenshot({ path: path.join(screenshotDir, "vsummary-migration-completed.png") });
+  await panel.screenshot({ path: path.join(screenshotDir, "vsummary-migration-native-completed.png") });
 });

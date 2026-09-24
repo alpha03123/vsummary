@@ -36,7 +36,7 @@ describe("WorkspaceLegacyMigrationPanel", () => {
     expect(screen.getByText("外部引用系列")).toBeTruthy();
     const start = screen.getByRole("button", { name: "开始迁移" });
     expect(start.disabled).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox", { name: /我了解/ }));
+    fireEvent.click(screen.getByRole("button", { name: /我了解/ }));
     fireEvent.click(start);
 
     await screen.findByText("迁移状态：迁移中");
