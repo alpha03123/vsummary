@@ -2,6 +2,7 @@ name: Quality
 
 on:
   pull_request:
+  push:
 
 jobs:
   backend:

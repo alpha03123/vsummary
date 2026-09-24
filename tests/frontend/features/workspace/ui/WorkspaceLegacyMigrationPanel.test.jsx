@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceLegacyMigrationPanel } from "@src/features/workspace/ui/WorkspaceLegacyMigrationPanel";
@@ -42,5 +42,38 @@ describe("WorkspaceLegacyMigrationPanel", () => {
     await screen.findByText("迁移状态：迁移中");
     expect(onCreateRun).toHaveBeenCalledWith("E:\\old-vsummary", ["models"], false);
     expect(onStartRun).toHaveBeenCalledWith("run-1");
+  });
+
+  it("does not restore a completed migration as the next migration form state", async () => {
+    const onInspect = vi.fn().mockResolvedValue({
+      source_root: "E:\\next-vsummary",
+      series: [],
+      total_videos: 0,
+      copy_bytes: 0,
+      target_free_bytes: 1024,
+      data: [],
+      warnings: [],
+    });
+    render(<WorkspaceLegacyMigrationPanel
+      onSelectSource={vi.fn().mockResolvedValue({ path: "E:\\next-vsummary" })}
+      onInspect={onInspect}
+      onCreateRun={vi.fn()}
+      onStartRun={vi.fn()}
+      onLoadRun={vi.fn()}
+      onLoadLatestRun={vi.fn().mockResolvedValue({
+        id: "completed-run",
+        status: "completed",
+        source_root: "E:\\old-vsummary",
+        manifest: { series: [] },
+        include_data: [],
+      })}
+      onCancelRun={vi.fn()}
+    />);
+
+    await waitFor(() => expect(screen.queryByText("迁移状态：已完成")).toBeNull());
+    expect(screen.queryByText("来源：E:\\old-vsummary")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "选择旧版目录" }));
+    await waitFor(() => expect(onInspect).toHaveBeenCalledWith("E:\\next-vsummary", false));
   });
 });

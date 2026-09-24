@@ -14,6 +14,7 @@ from tests import _path_setup  # noqa: F401
 from backend.local.legacy_migration import LegacyMigrationService
 from backend.local.persistence.file_blob_store import FileBlobStore
 from backend.core.ids import new_ulid
+from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.database import DatabaseOptions, create_session_factory
 from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, MediaObject, Series, Video
 
@@ -120,6 +121,53 @@ class ManualLegacyMigrationE2ETests(unittest.TestCase):
             self.assertEqual(completed["status"], "completed", completed["error"])
             self.assertEqual(completed["removed_videos"], 2)
             self.assertFalse(second.exists())
+
+    def test_completed_source_can_create_a_new_migration_run(self) -> None:
+        with TemporaryDirectory(dir=Path.cwd()) as temp_dir:
+            root = Path(temp_dir)
+            old = root / "old"
+            self._series(old, "first", "copy", b"first video")
+            sessions = create_session_factory(DatabaseOptions(url=os.environ["VSUMMARY_TEST_MYSQL_URL"]))
+            service = LegacyMigrationService(
+                session_factory=sessions,
+                blob_store=FileBlobStore(root / "new" / "runtime" / "blobs"),
+                installation_root=root / "new",
+            )
+            first_run = service.create_run(old, include_data=[])
+            service.start(first_run["id"])
+            self.assertEqual(self._wait(service, first_run["id"])["status"], "completed")
+
+            self._series(old, "second", "copy", b"second video")
+            second_run = service.create_run(old, include_data=[])
+
+            self.assertNotEqual(second_run["id"], first_run["id"])
+            self.assertEqual(second_run["status"], "ready")
+            self.assertEqual(second_run["total_videos"], 1)
+
+    def test_legacy_position_skips_soft_deleted_series_positions(self) -> None:
+        sessions = create_session_factory(DatabaseOptions(url=os.environ["VSUMMARY_TEST_MYSQL_URL"]))
+        control = SqlControlPlaneRepository(sessions)
+        workspace_id = control.create_workspace(owner_scope_id=f"migration-position-{new_ulid()}", title="Migration position test")
+        old_series_id = control.create_series(workspace_id=workspace_id, title="Old", position=4)
+        with sessions.begin() as session:
+            session.execute(
+                __import__("sqlalchemy").text("UPDATE series SET deleted_at=NOW() WHERE id=:series"),
+                {"series": old_series_id},
+            )
+
+        new_series_id = control.create_series_at_preferred_position(
+            workspace_id=workspace_id,
+            title="Migrated",
+            preferred_position=4,
+            migration_run_id=new_ulid(),
+        )
+
+        with sessions() as session:
+            position = session.execute(
+                __import__("sqlalchemy").text("SELECT position FROM series WHERE id=:series"),
+                {"series": new_series_id},
+            ).scalar_one()
+        self.assertEqual(position, 5)
 
     @staticmethod
     def _wait(service: LegacyMigrationService, run_id: str) -> dict:

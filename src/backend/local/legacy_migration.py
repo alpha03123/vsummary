@@ -187,11 +187,12 @@ class LegacyMigrationService:
             if existing is not None:
                 if existing.status == "running":
                     raise ValueError("这个目录已有运行中的迁移")
-                if existing.status != "completed" and existing.verified_videos == 0:
-                    existing.manifest = preview
-                    existing.include_data = include_data
-                    existing.total_videos = preview["total_videos"]
-                return self._summary(existing)
+                if existing.status != "completed":
+                    if existing.verified_videos == 0:
+                        existing.manifest = preview
+                        existing.include_data = include_data
+                        existing.total_videos = preview["total_videos"]
+                    return self._summary(existing)
             run = LegacyMigrationRun(id=new_ulid(), source_root=source_root, manifest=preview, include_data=include_data, status="ready", total_videos=preview["total_videos"])
             session.add(run)
             session.flush()

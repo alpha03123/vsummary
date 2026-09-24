@@ -33,7 +33,7 @@ export function WorkspaceLegacyMigrationPanel({ onSelectSource, onInspect, onCre
   useEffect(() => {
     let active = true;
     void onLoadLatestRun().then((latest) => {
-      if (active && latest) {
+      if (active && latest && latest.status !== "completed") {
         setRun(latest);
         setPath(latest.source_root);
         setPreview(latest.manifest);

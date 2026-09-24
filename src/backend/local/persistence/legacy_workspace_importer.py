@@ -295,29 +295,15 @@ class LegacyWorkspaceImporter:
                 ),
                 {"workspace": workspace_id, "title": title},
             ).scalar()
-            position_taken = session.execute(
-                __import__("sqlalchemy").text(
-                    "SELECT 1 FROM series WHERE workspace_id=:workspace AND position=:position AND deleted_at IS NULL"
-                ),
-                {"workspace": workspace_id, "position": position},
-            ).scalar() is not None
-            next_position = int(
-                session.execute(
-                    __import__("sqlalchemy").text(
-                        "SELECT COALESCE(MAX(position), -1) + 1 FROM series WHERE workspace_id=:workspace AND deleted_at IS NULL"
-                    ),
-                    {"workspace": workspace_id},
-                ).scalar_one()
-            )
         if existing_series_id is not None:
             self._mark_playground_series(existing_series_id, key)
             self._set_series_storage_mode(existing_series_id, storage_mode)
             self._record("series", key, "series", existing_series_id, "imported")
             return existing_series_id, False
-        series_id = self._control.create_series(
+        series_id = self._control.create_series_at_preferred_position(
             workspace_id=workspace_id,
             title=title,
-            position=next_position if position_taken else position,
+            preferred_position=position,
             source_kind="playground" if key == PLAYGROUND_SERIES_ID else "local",
             storage_mode=storage_mode,
             migration_run_id=self._source_namespace,

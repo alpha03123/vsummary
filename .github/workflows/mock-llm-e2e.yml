@@ -2,6 +2,7 @@ name: Mock LLM E2E
 
 on:
   pull_request:
+  push:
 
 jobs:
   mock-llm-e2e:

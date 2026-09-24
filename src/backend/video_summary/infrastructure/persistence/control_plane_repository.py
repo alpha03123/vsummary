@@ -125,6 +125,58 @@ class SqlControlPlaneRepository:
             )
         return series_id
 
+    def create_series_at_preferred_position(
+        self,
+        *,
+        workspace_id: str,
+        title: str,
+        preferred_position: int,
+        source_kind: str = "local",
+        storage_mode: str = "copy",
+        migration_run_id: str | None = None,
+        external_source_url: str | None = None,
+    ) -> str:
+        """Create a series at its legacy position unless a historical row owns it."""
+
+        _require_text(workspace_id, field_name="workspace_id")
+        _require_text(title, field_name="series title")
+        if preferred_position < 0:
+            raise ValueError("Series position cannot be negative.")
+        series_id = new_ulid()
+        with self._session_factory.begin() as session:
+            workspace = session.get(Workspace, workspace_id, with_for_update=True)
+            if workspace is None or workspace.deleted_at is not None:
+                raise LookupError(f"workspace not found '{workspace_id}'")
+            position_taken = session.scalar(
+                select(Series.id).where(
+                    Series.workspace_id == workspace_id,
+                    Series.position == preferred_position,
+                )
+            )
+            position = preferred_position
+            if position_taken is not None:
+                position = int(
+                    session.scalar(
+                        select(func.coalesce(func.max(Series.position), -1) + 1).where(
+                            Series.workspace_id == workspace_id
+                        )
+                    )
+                )
+            session.add(
+                Series(
+                    id=series_id,
+                    workspace_id=workspace_id,
+                    title=title.strip(),
+                    position=position,
+                    source_kind=source_kind,
+                    storage_mode=storage_mode,
+                    migration_run_id=migration_run_id,
+                    import_published=migration_run_id is None,
+                    external_source_url=external_source_url,
+                )
+            )
+        return series_id
+
     def create_video(
         self,
         *,
