@@ -13,7 +13,8 @@ import {
   updateWorkspaceSettings,
 } from "@src/local-features/api/localWorkspaceApi";
 
-vi.mock("@src/local-features/api/localWorkspaceApi", () => ({
+vi.mock("@src/local-features/api/localWorkspaceApi", async (importOriginal) => ({
+  ...(await importOriginal()),
   cancelRagModelDownload: vi.fn(),
   cancelFasterWhisperModelDownload: vi.fn(),
   discoverProviderModels: vi.fn(),

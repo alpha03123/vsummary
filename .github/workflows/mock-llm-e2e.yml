@@ -49,7 +49,7 @@ jobs:
           $env:PYTHONPATH = 'src;.'
           $provider = Start-Process python -ArgumentList 'tools/mock_openai_provider.py --port 8899' -PassThru -RedirectStandardOutput temp/mock-provider.out.log -RedirectStandardError temp/mock-provider.err.log
           $dataRoot = (Resolve-Path temp/ci-mysql).Path
-          $arguments = "-m backend.local.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home `"$env:VSUMMARY_MYSQL_HOME`" --managed-data-root `"$dataRoot`" --skip-legacy-import"
+          $arguments = "-m backend.local.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home `"$env:VSUMMARY_MYSQL_HOME`" --managed-data-root `"$dataRoot`""
           $backend = Start-Process python -ArgumentList $arguments -PassThru -RedirectStandardOutput temp/backend.out.log -RedirectStandardError temp/backend.err.log
           try {
             $deadline = (Get-Date).AddMinutes(3)
