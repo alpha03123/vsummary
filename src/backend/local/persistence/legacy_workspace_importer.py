@@ -34,10 +34,11 @@ class LegacyImportReport:
 class LegacyWorkspaceImporter:
     """Local 启动时导入旧工作区，并按旧系列的存储模式恢复视频来源。"""
 
-    def __init__(self, *, root_dir: Path, session_factory: sessionmaker[Session], blob_store: BlobStore) -> None:
+    def __init__(self, *, root_dir: Path, session_factory: sessionmaker[Session], blob_store: BlobStore, source_namespace: str | None = None) -> None:
         self._root_dir = root_dir
         self._session_factory = session_factory
         self._blob_store = blob_store
+        self._source_namespace = source_namespace
         self._control = SqlControlPlaneRepository(session_factory)
         self._content = SqlCurrentContentRepository(session_factory)
         self._rag_source = SqlRagSourceRepository(session_factory)
@@ -110,7 +111,7 @@ class LegacyWorkspaceImporter:
             except Exception as error:
                 failures.append(f"{legacy_series_id}: {error}")
         self._repair_titles_from_linked_metadata()
-        if not failures:
+        if not failures and self._source_namespace is None:
             self._mark_completed()
         return LegacyImportReport(imported_series, imported_videos, imported_content, tuple(failures))
 
@@ -190,6 +191,8 @@ class LegacyWorkspaceImporter:
         self._record("llm_usage", key, "llm_usage", "", "imported", _sha256(path))
 
     def is_completed(self) -> bool:
+        if self._source_namespace is not None:
+            return False
         with self._session_factory() as session:
             row = session.execute(__import__("sqlalchemy").text("SELECT data_format_version,legacy_import_state FROM app_installations ORDER BY created_at LIMIT 1")).first()
         return row is not None and row[1] == "completed" and row[0] >= LEGACY_IMPORT_FORMAT_VERSION
@@ -215,7 +218,7 @@ class LegacyWorkspaceImporter:
         else:
             with self._session_factory() as session:
                 position = int(session.execute(__import__("sqlalchemy").text("SELECT COALESCE(MAX(position),-1)+1 FROM series WHERE workspace_id=:workspace"), {"workspace": workspace_id}).scalar_one())
-            series_id = self._control.create_series(workspace_id=workspace_id, title=str(payload.get("title") or legacy_series_id), position=position, source_kind="linked", external_source_url=str(payload.get("source_url") or ""))
+            series_id = self._control.create_series(workspace_id=workspace_id, title=str(payload.get("title") or legacy_series_id), position=position, source_kind="linked", migration_run_id=self._source_namespace, external_source_url=str(payload.get("source_url") or ""))
             self._record("series", legacy_series_id, "series", series_id, "imported")
         with self._session_factory.begin() as session:
             session.execute(__import__("sqlalchemy").text("INSERT INTO linked_series_metadata (series_id,payload,created_at,updated_at) VALUES (:series,CAST(:payload AS JSON),NOW(),NOW())"), {"series": series_id, "payload": json.dumps(payload, ensure_ascii=False)})
@@ -286,7 +289,7 @@ class LegacyWorkspaceImporter:
             return item.target_id, False
         title = _legacy_title(self._root_dir / "workspace" / key / "series_meta.json", fallback=key)
         with self._session_factory() as session:
-            existing_series_id = session.execute(
+            existing_series_id = None if self._source_namespace else session.execute(
                 __import__("sqlalchemy").text(
                     "SELECT id FROM series WHERE workspace_id=:workspace AND title=:title AND deleted_at IS NULL"
                 ),
@@ -317,6 +320,7 @@ class LegacyWorkspaceImporter:
             position=next_position if position_taken else position,
             source_kind="playground" if key == PLAYGROUND_SERIES_ID else "local",
             storage_mode=storage_mode,
+            migration_run_id=self._source_namespace,
         )
         self._record("series", key, "series", series_id, "imported")
         return series_id, True
@@ -608,14 +612,22 @@ class LegacyWorkspaceImporter:
                 self._record("binary_artifact", source_key, "artifact", video_id, "imported", reference.sha256)
 
     def _mapped(self, source_kind: str, source_key: str) -> LegacyImportItem | None:
+        source_key = self._mapping_key(source_kind, source_key)
         with self._session_factory() as session:
             return session.scalar(select(LegacyImportItem).where(LegacyImportItem.source_kind == source_kind, LegacyImportItem.source_key == source_key))
 
     def _record(self, source_kind: str, source_key: str, target_type: str, target_id: str, status: str, checksum: str | None = None) -> None:
+        source_key = self._mapping_key(source_kind, source_key)
         with self._session_factory.begin() as session:
             existing = session.scalar(select(LegacyImportItem).where(LegacyImportItem.source_kind == source_kind, LegacyImportItem.source_key == source_key).with_for_update())
             if existing is None:
                 session.add(LegacyImportItem(id=new_ulid(), source_kind=source_kind, source_key=source_key, target_type=target_type, target_id=target_id, source_sha256=checksum, status=status))
+
+    def _mapping_key(self, source_kind: str, source_key: str) -> str:
+        if self._source_namespace is None:
+            return source_key
+        digest = hashlib.sha256(f"{source_kind}\0{source_key}".encode("utf-8")).hexdigest()
+        return f"{self._source_namespace}/{digest}"
 
 
 def _legacy_title(path: Path, *, fallback: str) -> str:

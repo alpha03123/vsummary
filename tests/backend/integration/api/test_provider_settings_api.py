@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -30,8 +31,9 @@ class ProviderSettingsApiTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(container.invalidate_agent_graph_service_calls, 1)
-        self.assertEqual(container.invalidate_agent_workspace_indexes_calls, 1)
+        self.assertEqual(container.services.invalidate_agent_graph_service_calls, 1)
+        self.assertEqual(container.services.invalidate_agent_workspace_indexes_calls, 1)
+        self.assertFalse(hasattr(container, "invalidate_agent_graph_service"))
 
     def test_provider_settings_test_returns_model_connection_error_without_agent_stage_label(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -75,8 +77,8 @@ class ProviderSettingsApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"models": ["gpt-5.4", "gpt-5.4-mini"]})
-        self.assertEqual(container.invalidate_agent_graph_service_calls, 0)
-        self.assertEqual(container.invalidate_agent_workspace_indexes_calls, 0)
+        self.assertEqual(container.services.invalidate_agent_graph_service_calls, 0)
+        self.assertEqual(container.services.invalidate_agent_workspace_indexes_calls, 0)
 
 
 class FakeContainer:
@@ -84,6 +86,13 @@ class FakeContainer:
         self.root_dir = None
         self.config_path = root_dir / "config" / "settings.toml"
         self.settings_service = settings_service or FakeSettingsService()
+        self.services = FakeWorkspaceServices()
+        self.context_provider = SimpleNamespace(get_context=lambda *, request_id: SimpleNamespace(workspace_id="workspace-1", request_id=request_id))
+        self.workspace_services_provider = SimpleNamespace(get_services=lambda _context: self.services)
+
+
+class FakeWorkspaceServices:
+    def __init__(self) -> None:
         self.invalidate_agent_graph_service_calls = 0
         self.invalidate_agent_workspace_indexes_calls = 0
 

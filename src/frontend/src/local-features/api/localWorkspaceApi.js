@@ -20,6 +20,25 @@ export async function scheduleApplicationUpdate() {
   return { targetVersion: payload.target_version, restartAfterSeconds: payload.restart_after_seconds };
 }
 
+export const selectLegacyMigrationSource = () => fetchJson("/api/legacy-migration/select-source", { method: "POST" });
+
+export const inspectLegacyMigration = (path, convertHardlinks = false) => fetchJson("/api/legacy-migration/inspect", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ path, convert_hardlinks: convertHardlinks }),
+});
+
+export const createLegacyMigrationRun = (path, includeData, convertHardlinks) => fetchJson("/api/legacy-migration/runs", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ path, include_data: includeData, convert_hardlinks: convertHardlinks, delete_verified_videos: true }),
+});
+
+export const startLegacyMigrationRun = (runId) => fetchJson(`/api/legacy-migration/runs/${encodeURIComponent(runId)}/start`, { method: "POST" });
+export const loadLegacyMigrationRun = (runId) => fetchJson(`/api/legacy-migration/runs/${encodeURIComponent(runId)}`);
+export const loadLatestLegacyMigrationRun = () => fetchJson("/api/legacy-migration/latest");
+export const cancelLegacyMigrationRun = (runId) => fetchJson(`/api/legacy-migration/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
+
 export async function loadWorkspaceSettings() {
   return toWorkspaceSettings(await fetchJson("/api/settings"));
 }

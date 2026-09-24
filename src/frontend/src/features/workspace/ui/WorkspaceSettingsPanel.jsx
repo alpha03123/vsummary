@@ -13,6 +13,7 @@ import {
   WorkspaceToggleSwitch,
 } from "./shared/WorkspaceSettingsControls";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "../model/modelDownloadMessages";
+import { WorkspaceLegacyMigrationPanel } from "./WorkspaceLegacyMigrationPanel";
 
 export function WorkspaceSettingsPanel({
   ui,
@@ -45,6 +46,13 @@ export function WorkspaceSettingsPanel({
   onCancelRagModelDownload,
   onCheckApplicationUpdate,
   onScheduleApplicationUpdate,
+  onSelectLegacyMigrationSource,
+  onInspectLegacyMigration,
+  onCreateLegacyMigrationRun,
+  onStartLegacyMigrationRun,
+  onLoadLegacyMigrationRun,
+  onLoadLatestLegacyMigrationRun,
+  onCancelLegacyMigrationRun,
   onResetSettings,
   onClose,
 }) {
@@ -1262,6 +1270,15 @@ export function WorkspaceSettingsPanel({
                     <span className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-4 py-2.5 text-sm font-bold text-success"><Check size={16} /> 已安排重启</span>
                   </WorkspaceSettingRow>
                 ) : null}
+                <WorkspaceLegacyMigrationPanel
+                  onSelectSource={onSelectLegacyMigrationSource}
+                  onInspect={onInspectLegacyMigration}
+                  onCreateRun={onCreateLegacyMigrationRun}
+                  onStartRun={onStartLegacyMigrationRun}
+                  onLoadRun={onLoadLegacyMigrationRun}
+                  onLoadLatestRun={onLoadLatestLegacyMigrationRun}
+                  onCancelRun={onCancelLegacyMigrationRun}
+                />
               </>
             )}
 

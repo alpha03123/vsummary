@@ -31,7 +31,6 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--managed-mysql-home", type=Path, default=None)
     parser.add_argument("--managed-data-root", type=Path, default=None)
-    parser.add_argument("--skip-legacy-import", action="store_true")
     args = parser.parse_args()
 
     configure_event_loop_policy()
@@ -42,7 +41,6 @@ def main() -> None:
     from backend.local.persistence.local_workspace_bootstrap import ensure_local_workspace_before_migration
     from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
     from backend.video_summary.infrastructure.persistence.database import create_session_factory
-    from backend.local.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
     from backend.local.persistence.managed_mysql import ManagedLocalMySql, ManagedLocalMySqlPathError
     from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 
@@ -62,14 +60,6 @@ def main() -> None:
                 title="VSummary",
             )
         blob_store = FileBlobStore(data_root / "blobs")
-        if not args.skip_legacy_import:
-            report = LegacyWorkspaceImporter(
-                root_dir=_repository_root(),
-                session_factory=sessions,
-                blob_store=blob_store,
-            ).import_local_workspace()
-            if report.failures:
-                raise RuntimeError("Legacy workspace import failed: " + "; ".join(report.failures))
         workspace = SqlVideoWorkspace(
             session_factory=sessions,
             blob_store=blob_store,

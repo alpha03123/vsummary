@@ -34,6 +34,10 @@ class FileBlobStore:
         self._objects_root = root / "objects"
         self._staging_root = root / "staging"
 
+    @property
+    def root(self) -> Path:
+        return self._root
+
     def put_staging(self, *, job_id: str, source: BinaryIO, content_type: str) -> StagedBlob:
         """把二进制流写入仅属于某个 job 的 staging 对象。"""
 

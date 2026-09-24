@@ -14,6 +14,13 @@ import {
   updateProviderSettings,
   updateWorkspaceSettings,
   scheduleApplicationUpdate,
+  selectLegacyMigrationSource,
+  inspectLegacyMigration,
+  createLegacyMigrationRun,
+  startLegacyMigrationRun,
+  loadLegacyMigrationRun,
+  loadLatestLegacyMigrationRun,
+  cancelLegacyMigrationRun,
 } from "../../../local-features/api/localWorkspaceApi";
 import { subscribeDurableJobProgress } from "./workspaceApi";
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "./modelDownloadMessages";
@@ -565,6 +572,13 @@ export function createWorkspaceSettingsActions({ state, dispatch }) {
     onCloseUsagePage,
     onCheckApplicationUpdate,
     onScheduleApplicationUpdate,
+    onSelectLegacyMigrationSource: selectLegacyMigrationSource,
+    onInspectLegacyMigration: inspectLegacyMigration,
+    onCreateLegacyMigrationRun: createLegacyMigrationRun,
+    onStartLegacyMigrationRun: startLegacyMigrationRun,
+    onLoadLegacyMigrationRun: loadLegacyMigrationRun,
+    onLoadLatestLegacyMigrationRun: loadLatestLegacyMigrationRun,
+    onCancelLegacyMigrationRun: cancelLegacyMigrationRun,
     onChangeSetting,
     onChangeProviderUsageRange,
     onSaveProviderSettings,

@@ -666,6 +666,13 @@ export function WorkspacePage({ page }) {
                   onCancelRagModelDownload={actions.cancelRagModelDownload}
                   onCheckApplicationUpdate={actions.checkApplicationUpdate}
                   onScheduleApplicationUpdate={actions.scheduleApplicationUpdate}
+                  onSelectLegacyMigrationSource={actions.selectLegacyMigrationSource}
+                  onInspectLegacyMigration={actions.inspectLegacyMigration}
+                  onCreateLegacyMigrationRun={actions.createLegacyMigrationRun}
+                  onStartLegacyMigrationRun={actions.startLegacyMigrationRun}
+                  onLoadLegacyMigrationRun={actions.loadLegacyMigrationRun}
+                  onLoadLatestLegacyMigrationRun={actions.loadLatestLegacyMigrationRun}
+                  onCancelLegacyMigrationRun={actions.cancelLegacyMigrationRun}
                   onResetSettings={actions.resetSettings}
                   onOpenUsagePage={() => {
                     actions.closeSettingsPanel();

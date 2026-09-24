@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.di.container import ApiContainerDep
@@ -53,9 +53,12 @@ def get_application_update(container: ApiContainerDep) -> ApplicationUpdateStatu
 
 
 @router.post("/api/application-update/apply", response_model=ApplicationUpdateScheduleResponse)
-def apply_application_update(container: ApiContainerDep) -> ApplicationUpdateScheduleResponse:
+def apply_application_update(request: Request, container: ApiContainerDep) -> ApplicationUpdateScheduleResponse:
     """在确认可用 delta 且没有活动任务时安排更新并重启。"""
     try:
+        migration = getattr(request.app.state, "legacy_migration_service", None)
+        if migration is not None and migration.is_active():
+            raise ApplicationUpdateError("旧版数据迁移正在进行，请完成或暂停后再更新。")
         status = get_update_status(container.root_dir)
         if status["installation_kind"] != "pack":
             raise ApplicationUpdateError("源码版不支持自动更新。")
@@ -195,8 +198,8 @@ async def update_workspace_settings(
             chaoxing_request_delay_seconds=request.chaoxing_request_delay_seconds,
             chaoxing_init_course_delay_seconds=request.chaoxing_init_course_delay_seconds,
         )
-        container.invalidate_agent_graph_service()
-        container.invalidate_agent_workspace_indexes()
+        services.invalidate_agent_graph_service()
+        services.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -351,6 +354,7 @@ def get_provider_openai_api_key(container: ApiContainerDep) -> ProviderApiKeyRes
 def update_provider_settings(
     request: UpdateProviderSettingsRequest,
     container: ApiContainerDep,
+    services: WorkspaceServicesDep,
 ) -> ProviderSettingsResponse:
     """PUT /api/provider-settings — 更新模型供应商配置。
 
@@ -375,8 +379,8 @@ def update_provider_settings(
             openai_api_key=request.openai_api_key,
             hf_endpoint=request.hf_endpoint,
         )
-        container.invalidate_agent_graph_service()
-        container.invalidate_agent_workspace_indexes()
+        services.invalidate_agent_graph_service()
+        services.invalidate_agent_workspace_indexes()
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

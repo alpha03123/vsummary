@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -55,6 +55,8 @@ class Series(TimestampedRow, Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     source_kind: Mapped[str] = mapped_column(String(64), nullable=False, default="local")
     storage_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="copy")
+    migration_run_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    import_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     external_source_url: Mapped[str | None] = mapped_column(String(2_048), nullable=True)
     row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -208,6 +210,21 @@ class LegacyImportItem(TimestampedRow, Base):
     source_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     failure_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class LegacyMigrationRun(TimestampedRow, Base):
+    __tablename__ = "legacy_migration_runs"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    source_root: Mapped[str] = mapped_column(Text, nullable=False)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    include_data: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_videos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    verified_videos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    removed_videos: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class KnowledgeCardSet(TimestampedRow, Base):

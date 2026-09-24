@@ -100,7 +100,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0014_media_storage_modes")
+        self.assertEqual(script.get_current_head(), "0015_manual_legacy_migration")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -114,6 +114,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         self.assertIn("CREATE TABLE jobs", ddl)
         self.assertIn("CREATE TABLE outbox_events", ddl)
         self.assertIn("CREATE TABLE external_media_references", ddl)
+        self.assertIn("CREATE TABLE legacy_migration_runs", ddl)
         self.assertIn("storage_mode", ddl)
         self.assertIn("LEFT JOIN notes AS note", ddl)
         self.assertIn("LEFT JOIN jobs AS job", ddl)
