@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock
 
 from backend.core.blob_store import BlobStoreError
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
+from backend.video_summary.library.models import VideoSourceDTO
 
 
 class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
@@ -107,3 +108,33 @@ class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
 
             self.assertEqual(source.source_path, source_path)
             blobs.materialize.assert_not_called()
+
+    def test_preview_source_uses_optimized_derivative_for_platform_video(self) -> None:
+        media_processor = Mock()
+        media_processor.needs_browser_playback_optimization.return_value = True
+        workspace = SqlVideoWorkspace(
+            session_factory=Mock(),
+            blob_store=Mock(),
+            cache_root=Path("cache"),
+            workspace_id="workspace-1",
+            media_processor=media_processor,
+        )
+        source = VideoSourceDTO(
+            series_id="series-1",
+            video_id="video-1",
+            title="Video",
+            source_name="source.mp4",
+            source_path=Path("media/source.mp4"),
+            output_dir=Path("cache/jobs/video-1"),
+            processed=False,
+            source_type="bilibili",
+        )
+        workspace.get_video_source = Mock(return_value=source)
+        workspace._materialize_browser_preview = Mock(return_value=None)
+        workspace._create_browser_preview = Mock(return_value=Path("cache/previews/video-1/preview.mp4"))
+
+        preview = workspace.get_video_preview_source("series-1", "video-1")
+
+        self.assertEqual(preview.source_path, Path("cache/previews/video-1/preview.mp4"))
+        media_processor.needs_browser_playback_optimization.assert_called_once_with(source.source_path)
+        workspace._create_browser_preview.assert_called_once_with("video-1", source.source_path)

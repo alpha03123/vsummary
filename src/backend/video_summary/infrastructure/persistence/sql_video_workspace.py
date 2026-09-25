@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
+import shutil
 from pathlib import Path
+from threading import Lock
 from typing import Any
+from uuid import uuid4
 
 from datetime import datetime, timezone
 import json
@@ -17,7 +21,8 @@ from backend.core.errors import ActiveJobConflictError
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.current_content_repository import SqlCurrentContentRepository
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, MediaObject, OutboxEvent, Video
+from backend.video_summary.infrastructure.persistence.models import Artifact, ExternalMediaReference, MediaObject, OutboxEvent, Video
+from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.persistence.sql_rag_source import SqlRagSourceRepository
 from backend.video_summary.generation.renderers import parse_markdown
 from backend.video_summary.library.markdown_exports import parse_transcript_markdown
@@ -33,6 +38,8 @@ from backend.core.citations import CitationReference
 
 LOGGER = logging.getLogger(__name__)
 
+_BROWSER_PREVIEW_KIND = "browser_preview"
+
 
 class SqlVideoWorkspace:
     """SQL 权威库的读取面；不读取旧 ``workspace`` 目录。"""
@@ -44,6 +51,7 @@ class SqlVideoWorkspace:
         blob_store: BlobStore,
         cache_root: Path,
         workspace_id: str,
+        media_processor: FfmpegMediaProcessor | None = None,
     ) -> None:
         if not workspace_id.strip():
             raise ValueError("SqlVideoWorkspace requires an explicit workspace_id.")
@@ -54,6 +62,9 @@ class SqlVideoWorkspace:
         self._control = SqlControlPlaneRepository(session_factory)
         self._content = SqlCurrentContentRepository(session_factory)
         self._rag_source = SqlRagSourceRepository(session_factory)
+        self._media_processor = media_processor or FfmpegMediaProcessor()
+        self._preview_locks: dict[str, Lock] = {}
+        self._preview_locks_guard = Lock()
 
     @property
     def cache_root(self) -> Path:
@@ -151,6 +162,30 @@ class SqlVideoWorkspace:
             )
             return None
         return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=filename, source_type=row["source_kind"], source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0)
+
+    def get_video_preview_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
+        """返回可快速起播的预览媒体，必要时为历史媒体补建派生 Blob。"""
+        source = self.get_video_source(series_id, video_id)
+        if source is None or source.source_path.suffix.lower() in AUDIO_SUFFIXES:
+            return source
+        if not self._media_processor.needs_browser_playback_optimization(source.source_path):
+            return source
+
+        with self._preview_lock(video_id):
+            preview_path = self._materialize_browser_preview(video_id)
+            if preview_path is None:
+                preview_path = self._create_browser_preview(video_id, source.source_path)
+        return VideoSourceDTO(
+            series_id=source.series_id,
+            video_id=source.video_id,
+            title=source.title,
+            source_name=preview_path.name,
+            source_type=source.source_type,
+            source_path=preview_path,
+            output_dir=source.output_dir,
+            processed=source.processed,
+            duration_seconds=source.duration_seconds,
+        )
 
     def materialize_artifact(self, *, video_id: str, kind: str, filename: str) -> Path | None:
         if Path(filename).name != filename:
@@ -405,17 +440,21 @@ class SqlVideoWorkspace:
                 ).scalar()
         if resolved_video_id is None:
             raise LookupError("Linked video does not exist.")
+        self._delete_browser_previews(resolved_video_id)
         with self._sessions.begin() as session:
             external = session.get(ExternalMediaReference, resolved_video_id)
             if external is not None:
                 external.source_path = str(source_path)
-                return
+        if external is not None:
+            self._prepare_browser_preview(resolved_video_id, source_path)
+            return
         with source_path.open("rb") as stream:
             staged = self._blobs.put_staging(job_id=f"relink{resolved_video_id}", source=stream, content_type="application/octet-stream")
         reference = self._blobs.commit(staged, object_key=f"media/{resolved_video_id}/source{source_path.suffix.lower()}")
         with self._sessions.begin() as session:
             session.execute(text("DELETE FROM media_objects WHERE video_id=:video"), {"video": resolved_video_id})
             session.add(MediaObject(id=new_ulid(), video_id=resolved_video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))
+        self._prepare_browser_preview(resolved_video_id, source_path)
 
     def attach_downloaded_file(self, series_id: str, video_id: str, source_path: Path) -> None:
         self.relink_external_video(series_id=series_id, video_id=video_id, source_path=source_path)
@@ -501,15 +540,19 @@ class SqlVideoWorkspace:
                 AND status IN ('queued','retrying','running','cancelling') LIMIT 1 FOR UPDATE"""), {"workspace": self._workspace_id, "video": video_id, "series": series_id}).scalar()
             if active_job is not None:
                 raise ActiveJobConflictError(f"视频 '{series_id}/{video_id}' 有活跃任务，不能删除。")
-            row = session.execute(text("""SELECT m.blob_key,m.sha256,m.byte_size,m.media_type FROM media_objects m
+            rows = session.execute(text("""SELECT m.blob_key,m.sha256,m.byte_size,m.media_type FROM media_objects m
                 JOIN videos v ON v.id=m.video_id JOIN series s ON s.id=v.series_id
-                WHERE m.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
+                WHERE m.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace
+                UNION ALL
+                SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
+                JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
+                WHERE a.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().all()
             result = session.execute(text("""UPDATE videos SET deleted_at=NOW(),row_version=row_version+1
                 WHERE id=:video AND series_id=:series AND deleted_at IS NULL AND EXISTS
                 (SELECT 1 FROM series s WHERE s.id=:series AND s.workspace_id=:workspace AND s.deleted_at IS NULL)"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id})
         if result.rowcount != 1:
             return False
-        if row is not None:
+        for row in rows:
             self._blobs.delete(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]))
         return True
 
@@ -526,6 +569,10 @@ class SqlVideoWorkspace:
                 raise ActiveJobConflictError(f"系列 '{series_id}' 有活跃任务，不能删除。")
             rows = session.execute(text("""SELECT m.blob_key,m.sha256,m.byte_size,m.media_type FROM media_objects m
                 JOIN videos v ON v.id=m.video_id JOIN series s ON s.id=v.series_id
+                WHERE v.series_id=:series AND s.workspace_id=:workspace
+                UNION ALL
+                SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
+                JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
                 WHERE v.series_id=:series AND s.workspace_id=:workspace"""), {"series": series_id, "workspace": self._workspace_id}).mappings().all()
             result = session.execute(text("UPDATE series SET deleted_at=NOW(),row_version=row_version+1 WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL"), {"series": series_id, "workspace": self._workspace_id})
             if result.rowcount == 1:
@@ -555,6 +602,7 @@ class SqlVideoWorkspace:
             if storage_mode == "external_reference":
                 with self._sessions.begin() as session:
                     session.add(ExternalMediaReference(video_id=video_id, source_path=str(source_path)))
+                self._prepare_browser_preview(video_id, source_path)
                 continue
             if storage_mode == "hardlink":
                 staged = self._blobs.put_staging_hardlink(job_id=f"import{video_id}", source_path=source_path, content_type="application/octet-stream")
@@ -564,6 +612,90 @@ class SqlVideoWorkspace:
             reference = self._blobs.commit(staged, object_key=f"media/{video_id}/source{source_path.suffix.lower()}")
             with self._sessions.begin() as session:
                 session.add(MediaObject(id=new_ulid(), video_id=video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))
+            self._prepare_browser_preview(video_id, source_path)
+
+    def _prepare_browser_preview(self, video_id: str, source_path: Path) -> None:
+        """在导入或下载期间预建有尾部索引或分片的 MP4 预览副本。"""
+        if not self._media_processor.needs_browser_playback_optimization(source_path):
+            return
+        with self._preview_lock(video_id):
+            self._create_browser_preview(video_id, source_path)
+
+    def _create_browser_preview(self, video_id: str, source_path: Path) -> Path:
+        """无损重封装独立副本，绝不改写原始媒体或硬链接源文件。"""
+        staging_dir = self._cache_root / "preview-staging" / video_id
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        preview_path = staging_dir / f".{uuid4().hex}.preview{source_path.suffix.lower()}"
+        try:
+            shutil.copyfile(source_path, preview_path)
+            self._media_processor.ensure_browser_playable_mp4(preview_path)
+            reference = self._commit_browser_preview(video_id, preview_path)
+            return self._blobs.materialize(
+                reference,
+                task_dir=self._cache_root / "previews" / video_id,
+                filename=Path(reference.key).name,
+            )
+        finally:
+            preview_path.unlink(missing_ok=True)
+
+    def _commit_browser_preview(self, video_id: str, preview_path: Path) -> BlobReference:
+        media_type, _ = mimetypes.guess_type(preview_path.name)
+        with preview_path.open("rb") as stream:
+            staged = self._blobs.put_staging(
+                job_id=f"preview{video_id}",
+                source=stream,
+                content_type=media_type or "video/mp4",
+            )
+        reference = self._blobs.commit(
+            staged,
+            object_key=f"artifacts/{video_id}/{_BROWSER_PREVIEW_KIND}/preview{preview_path.suffix.lower()}",
+        )
+        with self._sessions.begin() as session:
+            session.add(
+                Artifact(
+                    id=new_ulid(),
+                    workspace_id=self._workspace_id,
+                    video_id=video_id,
+                    content_version=None,
+                    kind=_BROWSER_PREVIEW_KIND,
+                    blob_key=reference.key,
+                    sha256=reference.sha256,
+                    byte_size=reference.byte_size,
+                    media_type=reference.content_type,
+                )
+            )
+        return reference
+
+    def _materialize_browser_preview(self, video_id: str) -> Path | None:
+        with self._sessions() as session:
+            row = session.execute(text("""SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
+                JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
+                WHERE a.video_id=:video AND a.kind=:kind AND s.workspace_id=:workspace
+                ORDER BY a.created_at DESC LIMIT 1"""), {"video": video_id, "kind": _BROWSER_PREVIEW_KIND, "workspace": self._workspace_id}).mappings().first()
+        if row is None:
+            return None
+        try:
+            return self._blobs.materialize(
+                BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]),
+                task_dir=self._cache_root / "previews" / video_id,
+                filename=Path(row["blob_key"]).name,
+            )
+        except BlobStoreError:
+            LOGGER.exception("failed to materialize browser preview", extra={"video_id": video_id})
+            return None
+
+    def _delete_browser_previews(self, video_id: str) -> None:
+        with self._sessions.begin() as session:
+            rows = session.execute(text("""SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
+                JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
+                WHERE a.video_id=:video AND a.kind=:kind AND s.workspace_id=:workspace"""), {"video": video_id, "kind": _BROWSER_PREVIEW_KIND, "workspace": self._workspace_id}).mappings().all()
+            session.execute(text("DELETE FROM artifacts WHERE video_id=:video AND kind=:kind"), {"video": video_id, "kind": _BROWSER_PREVIEW_KIND})
+        for row in rows:
+            self._blobs.delete(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]))
+
+    def _preview_lock(self, video_id: str) -> Lock:
+        with self._preview_locks_guard:
+            return self._preview_locks.setdefault(video_id, Lock())
 
     def get_video_knowledge_cards(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         with self._sessions() as session:

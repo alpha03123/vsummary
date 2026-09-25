@@ -25,6 +25,21 @@ class SqlWorkspaceStorageModeTests(unittest.TestCase):
         workspace._control.create_video.return_value = "video-1"
         return workspace, sessions
 
+    def _workspace_with_media_processor(self, root: Path) -> tuple[SqlVideoWorkspace, MagicMock, Mock]:
+        sessions = MagicMock()
+        sessions.return_value.__enter__.return_value.execute.return_value.scalar.return_value = "series-1"
+        media_processor = Mock()
+        workspace = SqlVideoWorkspace(
+            session_factory=sessions,
+            blob_store=FileBlobStore(root / "blobs"),
+            cache_root=root / "cache",
+            workspace_id="workspace-1",
+            media_processor=media_processor,
+        )
+        workspace._control = Mock()
+        workspace._control.create_video.return_value = "video-1"
+        return workspace, sessions, media_processor
+
     def test_external_reference_records_only_the_original_path(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -52,6 +67,29 @@ class SqlWorkspaceStorageModeTests(unittest.TestCase):
             self.assertIsInstance(row, MediaObject)
             blob_path = root / "blobs" / "objects" / "media" / "video-1" / "source.mp4"
             self.assertTrue(source_path.samefile(blob_path))
+
+    def test_hardlink_import_creates_a_separate_browser_preview_when_needed(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "lesson.mp4"
+            source_path.write_bytes(b"original video")
+            workspace, _, media_processor = self._workspace_with_media_processor(root)
+            media_processor.needs_browser_playback_optimization.return_value = True
+
+            def remux(preview_path: Path) -> Path:
+                preview_path.write_bytes(b"optimized preview")
+                return preview_path
+
+            media_processor.ensure_browser_playable_mp4.side_effect = remux
+
+            workspace._import_paths("series-1", [source_path], storage_mode="hardlink")
+
+            source_blob = root / "blobs" / "objects" / "media" / "video-1" / "source.mp4"
+            preview_blob = root / "blobs" / "objects" / "artifacts" / "video-1" / "browser_preview" / "preview.mp4"
+            self.assertTrue(source_path.samefile(source_blob))
+            self.assertEqual(source_path.read_bytes(), b"original video")
+            self.assertEqual(preview_blob.read_bytes(), b"optimized preview")
+            media_processor.ensure_browser_playable_mp4.assert_called_once()
 
     def test_relink_updates_external_path_without_copying_video(self) -> None:
         with TemporaryDirectory() as temp_dir:

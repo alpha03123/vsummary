@@ -813,12 +813,12 @@ def preview_video(series_id: str, video_id: str, container: WorkspaceServicesDep
         container: FastAPI 依赖注入的 API 容器。
 
     Returns:
-        FileResponse，直接返回已经在导入阶段完成播放优化的媒体文件。
+        FileResponse，优先返回无损重封装后的快速起播预览文件。
 
     Raises:
         HTTPException(404): 视频不存在。
     """
-    source = container.get_video_source.run(series_id, video_id)
+    source = container.linked_series_workspace.get_video_preview_source(series_id, video_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     _ensure_source_media_available(source)
