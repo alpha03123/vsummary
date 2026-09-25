@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Database, LoaderCircle, X } from "lucide-react";
+import { Captions, CheckCircle2, Database, LoaderCircle, X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceVideoScopePane } from "./WorkspaceVideoScopePane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
@@ -16,6 +16,7 @@ import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceBackButton } from "./shared/WorkspaceBackButton";
 import { WorkspaceExportMenu } from "./shared/WorkspaceToolHeader";
+import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "./WorkspaceNativeSubtitleSettings";
 import { clampChatDrawerWidth, clampSidebarWidth, createPanelId, getPanelType, getStudioPanelIds, isPanelAllowedForScope, loadWorkspaceLayout, persistWorkspaceLayout, removeStudioPanel, splitStudioPanel, STUDIO_PANEL_TYPES } from "./workspaceLayout";
 import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
 import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
@@ -83,6 +84,9 @@ export function WorkspacePage({ page }) {
   const [pendingRename, setPendingRename] = useState(null);
   const [renamePending, setRenamePending] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewSubtitlesEnabled, setPreviewSubtitlesEnabled] = useState(false);
+  const [previewSubtitleStyle, setPreviewSubtitleStyle] = useState(DEFAULT_SUBTITLE_STYLE);
   const [followOverviewPlayback, setFollowOverviewPlayback] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
   const [resumePosition, setResumePosition] = useState({ videoKey: null, seconds: null });
@@ -139,12 +143,17 @@ export function WorkspacePage({ page }) {
 
   useEffect(() => {
     setPlaybackTime(null);
+    setPreviewPlaying(false);
     setFollowOverviewPlayback(false);
     setResumePosition({
       videoKey: selectedVideoKey,
       seconds: selectedVideoKey ? playbackPositionsRef.current.get(selectedVideoKey) ?? null : null,
     });
   }, [selectedVideoKey]);
+
+  useEffect(() => {
+    setPreviewSubtitlesEnabled(Boolean(tools?.preview?.subtitleUrl));
+  }, [selectedVideoKey, tools?.preview?.subtitleUrl]);
 
   function beginResize(startEvent) {
     startEvent.preventDefault();
@@ -275,7 +284,11 @@ export function WorkspacePage({ page }) {
                 playbackPositionsRef.current.delete(selectedVideoKey);
               }
             }}
-            onFocusOverviewAtTime={tools?.overview?.generated === true ? onFocusOverviewAtTime : undefined}
+            subtitlesEnabled={previewSubtitlesEnabled}
+            onSubtitlesEnabledChange={setPreviewSubtitlesEnabled}
+            subtitleStyle={previewSubtitleStyle}
+            onSubtitleStyleChange={setPreviewSubtitleStyle}
+            onPlaybackStateChange={setPreviewPlaying}
             followOverviewPlayback={followOverviewPlayback}
             onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
           />
@@ -309,7 +322,19 @@ export function WorkspacePage({ page }) {
   }
 
   function renderPanelActions(panelId, toolId) {
-    if (toolId === "studio" || toolId === "preview" || toolId === "ai-chat") {
+    if (toolId === "preview") {
+      return tools?.preview?.subtitleUrl ? (
+        <WorkspaceNativeSubtitleSettings
+          subtitlesEnabled={previewSubtitlesEnabled}
+          onSubtitlesEnabledChange={setPreviewSubtitlesEnabled}
+          followOverviewPlayback={followOverviewPlayback}
+          onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
+          style={previewSubtitleStyle}
+          onStyleChange={setPreviewSubtitleStyle}
+        />
+      ) : null;
+    }
+    if (toolId === "studio" || toolId === "ai-chat") {
       return null;
     }
     const exportActions = buildWorkspaceToolExportActions({
@@ -321,6 +346,33 @@ export function WorkspacePage({ page }) {
       tools,
     });
     return exportActions.length ? <WorkspaceExportMenu exportActions={exportActions} /> : null;
+  }
+
+  function renderPanelTrailingActions(panelId, toolId) {
+    if (toolId !== "preview") {
+      return null;
+    }
+    return (
+      <AnimatePresence initial={false}>
+        {previewPlaying && tools?.overview?.generated === true ? (
+          <motion.div
+            initial={{ opacity: 0, x: 6, scale: 0.96 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 6, scale: 0.96 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <button
+              type="button"
+              onClick={() => actions.focusOverviewAtTime(Number.isFinite(playbackTime) ? playbackTime : 0)}
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:hover:bg-accent/15"
+            >
+              <Captions size={14} aria-hidden="true" />
+              查看当前转写
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    );
   }
 
   function renderPanelLeadingActions(panelId, toolId) {
@@ -538,6 +590,7 @@ export function WorkspacePage({ page }) {
               renderPanel={renderStudioPanel}
               renderPanelActions={renderPanelActions}
               renderPanelLeadingActions={renderPanelLeadingActions}
+              renderPanelTrailingActions={renderPanelTrailingActions}
             />
           )}
 

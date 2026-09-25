@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { BrainCircuit, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, StickyNote, X } from "lucide-react";
-import { Mosaic, MosaicWindow } from "react-mosaic-component";
+import { Mosaic, MosaicWindow, MosaicWindowContext } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { getPanelType } from "./workspaceLayout";
@@ -18,7 +18,7 @@ const PANEL_META = {
   "series-mindmap": { label: "全局思维导图", icon: Network },
 };
 
-export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onAddPanel, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions }) {
+export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onAddPanel, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions, renderPanelTrailingActions }) {
   const [mosaicLayout, setMosaicLayout] = useState(layout);
 
   useEffect(() => {
@@ -47,6 +47,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
           const Icon = meta.icon;
           const panelActions = renderPanelActions?.(panelId, type);
           const panelLeadingActions = renderPanelLeadingActions?.(panelId, type);
+          const panelTrailingActions = renderPanelTrailingActions?.(panelId, type);
           const isFocused = focusedPanel === panelId;
 
           return (
@@ -70,15 +71,31 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
                     <button type="button" onClick={() => onSplit(panelId, "row")} className="workspace-mosaic-action" title="在右侧拆分面板" aria-label="在右侧拆分面板"><PanelRight size={15} /></button>
                     <button type="button" onClick={() => onSplit(panelId, "column")} className="workspace-mosaic-action" title="在下方拆分面板" aria-label="在下方拆分面板"><PanelBottom size={15} /></button>
                     <button type="button" onClick={() => onClose(panelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+                    {panelTrailingActions ? <div className="shrink-0">{panelTrailingActions}</div> : null}
                   </div>
                 </header>
               )}
             >
-              <div className="h-full min-h-0 overflow-hidden">{renderPanel(panelId, type)}</div>
+              <PanelContentDragSurface enabled={type === "overview"}>
+                {renderPanel(panelId, type)}
+              </PanelContentDragSurface>
             </MosaicWindow>
           );
         }}
       />
     </div>
   );
+}
+
+function PanelContentDragSurface({ enabled, children }) {
+  const context = useContext(MosaicWindowContext);
+  const content = (
+    <div className={`h-full min-h-0 overflow-hidden ${enabled ? "cursor-grab active:cursor-grabbing" : ""}`}>
+      {children}
+    </div>
+  );
+
+  return enabled && context?.mosaicWindowActions?.connectDragSource
+    ? context.mosaicWindowActions.connectDragSource(content)
+    : content;
 }

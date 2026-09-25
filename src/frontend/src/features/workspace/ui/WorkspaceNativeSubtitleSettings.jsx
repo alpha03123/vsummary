@@ -98,7 +98,7 @@ export function WorkspaceNativeSubtitleSettings({
         aria-expanded={open}
         title="字幕设置"
         onClick={() => setOpen((current) => !current)}
-        className="workspace-elevated-panel inline-flex h-9 w-9 items-center justify-center rounded-xl border text-stone-600 transition-colors duration-200 hover:border-accent/50 hover:bg-accent/5 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:text-stone-300 dark:hover:bg-accent/10"
+        className="workspace-mosaic-action"
       >
         <Settings2 size={17} aria-hidden="true" />
       </button>

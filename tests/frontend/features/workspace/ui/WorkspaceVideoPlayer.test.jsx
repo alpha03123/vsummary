@@ -147,27 +147,21 @@ describe("WorkspaceVideoPlayer", () => {
     expect(onTimeUpdate).toHaveBeenCalledWith(600);
   });
 
-  it("shows the current transcript action only while the video is playing", async () => {
-    const onFocusOverviewAtTime = vi.fn();
+  it("reports playback state so the panel toolbar can show transcript controls", () => {
+    const onPlaybackStateChange = vi.fn();
     const { container } = render(
       <WorkspaceVideoPlayer
         videoSource="/api/videos/s1/v1/preview"
-        onFocusOverviewAtTime={onFocusOverviewAtTime}
+        onPlaybackStateChange={onPlaybackStateChange}
       />,
     );
     const video = container.querySelector("video");
-    Object.defineProperty(video, "currentTime", { value: 42.5, configurable: true });
-
-    expect(screen.queryByRole("button", { name: "查看当前转写" })).not.toBeInTheDocument();
 
     fireEvent.play(video);
-    fireEvent.click(await screen.findByRole("button", { name: "查看当前转写" }));
-    expect(onFocusOverviewAtTime).toHaveBeenCalledWith(42.5);
-
     fireEvent.pause(video);
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "查看当前转写" })).not.toBeInTheDocument();
-    });
+    expect(onPlaybackStateChange).toHaveBeenNthCalledWith(1, false);
+    expect(onPlaybackStateChange).toHaveBeenNthCalledWith(2, true);
+    expect(onPlaybackStateChange).toHaveBeenNthCalledWith(3, false);
   });
 
   it("uses the native subtitle track while the video is fullscreen", async () => {

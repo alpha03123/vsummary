@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
 import { MINDMAP_DEPTH_OPTIONS } from "../../model/mindmapDepthOptions";
@@ -127,8 +128,10 @@ export function WorkspaceSeriesMindmapView({
     );
   }
 
-  const actionBar = controlsOpen ? (
-    <div className="workspace-elevated-panel absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-1 rounded-xl p-1.5 shadow-lg">
+  const actionBar = (
+    <AnimatePresence initial={false} mode="wait">
+      {controlsOpen ? (
+    <motion.div key="controls" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.18, ease: "easeOut" }} className="workspace-elevated-panel absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-1 rounded-xl p-1.5 shadow-lg">
       <div className="flex items-center gap-1">
         <label className="inline-flex">
           <span className="sr-only">导图层级</span>
@@ -142,11 +145,13 @@ export function WorkspaceSeriesMindmapView({
           <ChevronUp size={16} />
         </button>
       </div>
-    </div>
-  ) : (
-    <button type="button" onClick={() => setControlsOpen(true)} className="absolute left-1/2 top-1 z-10 inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center text-stone-400 transition-colors hover:text-accent" title="展开导图工具" aria-label="展开导图工具" aria-expanded="false">
+    </motion.div>
+      ) : (
+    <motion.button key="toggle" type="button" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16, ease: "easeOut" }} onClick={() => setControlsOpen(true)} className="absolute left-1/2 top-1 z-10 inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center text-stone-400 transition-colors hover:text-accent" title="展开导图工具" aria-label="展开导图工具" aria-expanded="false">
       <ChevronDown size={16} />
-    </button>
+    </motion.button>
+      )}
+    </AnimatePresence>
   );
   return (
     <div className="flex h-full min-h-0 flex-col">

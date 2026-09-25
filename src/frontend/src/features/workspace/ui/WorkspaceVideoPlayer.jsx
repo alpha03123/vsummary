@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Captions, Download } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Download } from "lucide-react";
 
-import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "./WorkspaceNativeSubtitleSettings";
+import { DEFAULT_SUBTITLE_STYLE } from "./WorkspaceNativeSubtitleSettings";
 import { WorkspaceSubtitleDisplay } from "./WorkspaceSubtitleDisplay";
-import { WorkspaceMediaPreviewHeader, WorkspaceMediaSeekNotice } from "./shared/WorkspaceMediaPreviewHeader";
 import { useNativeFullscreenSubtitles } from "./useNativeFullscreenSubtitles";
 
 export function WorkspaceVideoPlayer({
@@ -15,17 +13,15 @@ export function WorkspaceVideoPlayer({
   onTimeUpdate,
   resumeSeconds = null,
   onPlaybackEnded,
-  onFocusOverviewAtTime,
-  followOverviewPlayback = false,
-  onFollowOverviewPlaybackChange,
+  subtitlesEnabled = Boolean(subtitleSource),
+  onSubtitlesEnabledChange = () => {},
+  subtitleStyle = DEFAULT_SUBTITLE_STYLE,
+  onSubtitleStyleChange = () => {},
+  onPlaybackStateChange = () => {},
 }) {
   const videoRef = useRef(null);
   const subtitleTrackRef = useRef(null);
   const resumedVideoSourceRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(Boolean(subtitleSource));
-  const [subtitleStyle, setSubtitleStyle] = useState(DEFAULT_SUBTITLE_STYLE);
-  const updateSubtitleStyle = (next) => setSubtitleStyle((current) => ({ ...current, ...next }));
   const isAudioSource = videoSourceType === "audio";
   const nativeFullscreen = useNativeFullscreenSubtitles({
     videoRef,
@@ -35,12 +31,8 @@ export function WorkspaceVideoPlayer({
   });
 
   useEffect(() => {
-    setIsPlaying(false);
+    onPlaybackStateChange(false);
   }, [videoSource]);
-
-  useEffect(() => {
-    setSubtitlesEnabled(Boolean(subtitleSource));
-  }, [subtitleSource, videoSource]);
 
   useEffect(() => {
     if (isAudioSource || !playerSeekRequest || !videoRef.current) {
@@ -98,49 +90,8 @@ export function WorkspaceVideoPlayer({
     return () => video.removeEventListener("loadedmetadata", resume);
   }, [isAudioSource, resumeSeconds, videoSource]);
 
-  function openCurrentTranscript() {
-    const seconds = videoRef.current?.currentTime;
-    if (Number.isFinite(seconds)) {
-      onFocusOverviewAtTime?.(seconds);
-    }
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <WorkspaceMediaPreviewHeader
-        currentTranscriptAction={
-          <AnimatePresence initial={false}>
-            {isPlaying && typeof onFocusOverviewAtTime === "function" ? (
-              <motion.div
-                initial={{ opacity: 0, y: -4, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -4, scale: 0.96 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-              >
-                <button
-                  type="button"
-                  onClick={openCurrentTranscript}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:hover:bg-accent/15"
-                >
-                  <Captions size={15} aria-hidden="true" />
-                  查看当前转写
-                </button>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        }
-        subtitleSettings={!isAudioSource && subtitleSource ? (
-            <WorkspaceNativeSubtitleSettings
-              subtitlesEnabled={subtitlesEnabled}
-              onSubtitlesEnabledChange={setSubtitlesEnabled}
-              followOverviewPlayback={followOverviewPlayback}
-              onFollowOverviewPlaybackChange={onFollowOverviewPlaybackChange}
-              style={subtitleStyle}
-              onStyleChange={setSubtitleStyle}
-            />
-        ) : null}
-      />
-      <WorkspaceMediaSeekNotice seekRequest={playerSeekRequest} />
       {isAudioSource ? (
         <div className="workspace-elevated-panel rounded-3xl border p-8 text-center text-sm font-semibold text-stone-600 shadow-sm dark:text-zinc-300">
           音频文件暂不支持预览
@@ -156,10 +107,10 @@ export function WorkspaceVideoPlayer({
               controlsList="nodownload noplaybackrate noremoteplayback"
               disablePictureInPicture
               preload="metadata"
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
+              onPlay={() => onPlaybackStateChange(true)}
+              onPause={() => onPlaybackStateChange(false)}
               onEnded={() => {
-                setIsPlaying(false);
+                onPlaybackStateChange(false);
                 onPlaybackEnded?.();
               }}
               onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
@@ -181,7 +132,7 @@ export function WorkspaceVideoPlayer({
                 subtitleTrackRef={subtitleTrackRef}
                 subtitleSource={subtitleSource}
                 enabled={subtitlesEnabled}
-                style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
+                style={{ ...subtitleStyle, onPositionChange: (position) => onSubtitleStyleChange({ ...subtitleStyle, position }) }}
               />
             ) : null}
           </div>

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_SUBTITLE_STYLE, WorkspaceNativeSubtitleSettings } from "../WorkspaceNativeSubtitleSettings";
 import { WorkspaceSubtitleDisplay } from "../WorkspaceSubtitleDisplay";
-import { WorkspaceMediaPreviewHeader, WorkspaceMediaSeekNotice } from "../shared/WorkspaceMediaPreviewHeader";
 import { useNativeFullscreenSubtitles } from "../useNativeFullscreenSubtitles";
 
 export function WorkspacePreviewView({ previewSource, previewSubtitleSource = null, previewSeekRequest }) {
@@ -52,17 +51,16 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
 
   return (
     <div className="flex flex-col gap-3">
-      <WorkspaceMediaPreviewHeader
-        subtitleSettings={previewSubtitleSource ? (
+      {previewSubtitleSource ? (
+        <div className="flex justify-end">
             <WorkspaceNativeSubtitleSettings
               subtitlesEnabled={subtitlesEnabled}
               onSubtitlesEnabledChange={setSubtitlesEnabled}
               style={subtitleStyle}
               onStyleChange={setSubtitleStyle}
             />
-        ) : null}
-      />
-      <WorkspaceMediaSeekNotice seekRequest={previewSeekRequest} />
+        </div>
+      ) : null}
       <div className="workspace-elevated-panel relative overflow-hidden rounded-3xl border bg-black shadow-sm">
         <video
           key={previewSource}

@@ -23,10 +23,11 @@ def render_webvtt(segments: list[TranscriptSegmentDTO]) -> str:
         elapsed = segment.start_seconds
         duration = segment.end_seconds - segment.start_seconds
         for index, cue_text in enumerate(visual_cues):
-            if index == len(visual_cues) - 1:
-                cue_end = segment.end_seconds
-            else:
-                cue_end = elapsed + duration * len(cue_text) / total_characters
+            cue_end = (
+                segment.end_seconds
+                if index == len(visual_cues) - 1
+                else elapsed + duration * len(cue_text) / total_characters
+            )
             cues.extend(
                 [
                     "",
