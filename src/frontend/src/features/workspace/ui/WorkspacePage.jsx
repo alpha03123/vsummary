@@ -16,7 +16,7 @@ import { useFocusTrap } from "../../../shared/lib/useFocusTrap";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceBackButton } from "./shared/WorkspaceBackButton";
 import { WorkspaceExportMenu } from "./shared/WorkspaceToolHeader";
-import { clampChatDrawerWidth, clampPanelWidth, clampSidebarWidth, createPanelId, getPanelType, isPanelAllowedForScope, loadWorkspaceLayout, persistWorkspaceLayout, STUDIO_PANEL_TYPES, WORKSPACE_LAYOUT_LIMITS } from "./workspaceLayout";
+import { clampChatDrawerWidth, clampSidebarWidth, createPanelId, getPanelType, getStudioPanelIds, isPanelAllowedForScope, loadWorkspaceLayout, persistWorkspaceLayout, removeStudioPanel, splitStudioPanel, STUDIO_PANEL_TYPES } from "./workspaceLayout";
 import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
 import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
 
@@ -76,7 +76,7 @@ export function WorkspacePage({ page }) {
     ...current,
     [studioScope]: typeof updater === "function" ? updater(current[studioScope]) : updater,
   }));
-  const [focusedPanel, setFocusedPanel] = useState("overview");
+  const [focusedPanel, setFocusedPanel] = useState("preview::default");
   const [importModalState, setImportModalState] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -146,7 +146,7 @@ export function WorkspacePage({ page }) {
     });
   }, [selectedVideoKey]);
 
-  function beginResize(type, startEvent) {
+  function beginResize(startEvent) {
     startEvent.preventDefault();
     startEvent.stopPropagation();
 
@@ -157,50 +157,17 @@ export function WorkspacePage({ page }) {
 
     const startX = startEvent.clientX;
     const startSidebarWidth = layout.sidebarWidth;
-    const panelId = type === "sidebar" ? null : type;
-    const panelIndex = panelId ? layout.studioPanels.indexOf(panelId) : -1;
-    const rightPanelId = panelIndex >= 0 ? layout.studioPanels[panelIndex + 1] : null;
-    const startPanelWidth = panelId ? (layout.panelWidths[panelId] ?? WORKSPACE_LAYOUT_LIMITS.panelDefaultWidth) : null;
-    const startRightPanelWidth = rightPanelId ? (layout.panelWidths[rightPanelId] ?? WORKSPACE_LAYOUT_LIMITS.panelDefaultWidth) : null;
     const containerWidth = container.getBoundingClientRect().width;
 
     function handlePointerMove(event) {
       const deltaX = event.clientX - startX;
-      if (type === "sidebar") {
-        setLayout((current) => ({
-          ...current,
-          sidebarWidth: clampSidebarWidth({
-            proposedWidth: startSidebarWidth + deltaX,
-            containerWidth,
-            hasRightPane,
-          }),
-        }));
-        return;
-      }
-
-      const maxLeftWidth = rightPanelId
-        ? startPanelWidth + startRightPanelWidth - WORKSPACE_LAYOUT_LIMITS.panelMinWidth
-        : clampPanelWidth({
-            proposedWidth: Number.MAX_SAFE_INTEGER,
-            containerWidth,
-            panelCount: layout.studioPanels.length,
-            sidebarWidth: isSidebarOpen ? layout.sidebarWidth : 0,
-          });
-      const nextLeftWidth = Math.min(
-        Math.max(WORKSPACE_LAYOUT_LIMITS.panelMinWidth, startPanelWidth + deltaX),
-        maxLeftWidth,
-      );
-      const appliedDelta = nextLeftWidth - startPanelWidth;
-      const nextRightWidth = rightPanelId
-        ? Math.max(WORKSPACE_LAYOUT_LIMITS.panelMinWidth, startRightPanelWidth - appliedDelta)
-        : null;
       setLayout((current) => ({
         ...current,
-        panelWidths: {
-          ...current.panelWidths,
-          [panelId]: nextLeftWidth,
-          ...(rightPanelId ? { [rightPanelId]: nextRightWidth } : {}),
-        },
+        sidebarWidth: clampSidebarWidth({
+          proposedWidth: startSidebarWidth + deltaX,
+          containerWidth,
+          hasRightPane,
+        }),
       }));
     }
 
@@ -217,26 +184,28 @@ export function WorkspacePage({ page }) {
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
-  function openStudioPanel(toolId) {
+  function openStudioPanel(toolId, direction = "row", targetPanelId = focusedPanel) {
     if (!STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) {
       return;
     }
-    const existingPanel = layout.studioPanels.find((panelId) => (
+    const existingPanel = toolId === "studio" ? null : getStudioPanelIds(layout.studioLayout).find((panelId) => (
       (layout.panelTools[panelId] ?? getPanelType(panelId)) === toolId
     ));
     if (existingPanel) {
       setFocusedPanel(existingPanel);
       return;
     }
-    if (layout.studioPanels.length >= WORKSPACE_LAYOUT_LIMITS.maxPanels) {
-      return;
-    }
     const panelId = createPanelId(toolId);
-    setLayout((current) => ({
-      ...current,
-      studioPanels: [...current.studioPanels, panelId],
-      panelTools: { ...current.panelTools, [panelId]: toolId },
-    }));
+    setLayout((current) => {
+      const resolvedTargetPanelId = targetPanelId ?? getStudioPanelIds(current.studioLayout)[0] ?? null;
+      return {
+        ...current,
+        studioLayout: current.studioLayout && resolvedTargetPanelId
+          ? splitStudioPanel(current.studioLayout, resolvedTargetPanelId, panelId, direction)
+          : panelId,
+        panelTools: { ...current.panelTools, [panelId]: toolId },
+      };
+    });
     setFocusedPanel(panelId);
   }
 
@@ -244,15 +213,8 @@ export function WorkspacePage({ page }) {
     chat.openCitationReference(reference);
   }
 
-  function addStudioPanel() {
-    if (layout.studioPanels.length >= WORKSPACE_LAYOUT_LIMITS.maxPanels) return;
-    const panelId = createPanelId("studio");
-    setLayout((current) => ({
-      ...current,
-      studioPanels: [...current.studioPanels, panelId],
-      panelTools: { ...current.panelTools, [panelId]: "studio" },
-    }));
-    setFocusedPanel(panelId);
+  function addStudioPanel(direction = "row", targetPanelId = focusedPanel) {
+    openStudioPanel("studio", direction, targetPanelId);
   }
 
   function setPanelTool(panelId, toolId) {
@@ -267,27 +229,14 @@ export function WorkspacePage({ page }) {
   function closeStudioPanel(panelId) {
     setLayout((current) => {
       const panelTools = { ...current.panelTools };
-      const panelWidths = { ...current.panelWidths };
       delete panelTools[panelId];
-      delete panelWidths[panelId];
-      return { ...current, studioPanels: current.studioPanels.filter((item) => item !== panelId), panelTools, panelWidths };
+      return {
+        ...current,
+        studioLayout: removeStudioPanel(current.studioLayout, panelId, studioScope, panelTools),
+        panelTools,
+      };
     });
     setFocusedPanel((current) => current === panelId ? null : current);
-  }
-
-  function reorderStudioPanels(sourcePanelId, targetPanelId) {
-    setLayout((current) => {
-      const sourceIndex = current.studioPanels.indexOf(sourcePanelId);
-      const targetIndex = current.studioPanels.indexOf(targetPanelId);
-      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
-        return current;
-      }
-      const studioPanels = [...current.studioPanels];
-      studioPanels.splice(sourceIndex, 1);
-      studioPanels.splice(targetIndex, 0, sourcePanelId);
-      return { ...current, studioPanels };
-    });
-    setFocusedPanel(sourcePanelId);
   }
 
   function updateChatDrawerWidth(proposedWidth) {
@@ -525,7 +474,7 @@ export function WorkspacePage({ page }) {
           role="separator"
           aria-orientation="vertical"
           aria-label="调整来源列表宽度"
-          onPointerDown={(event) => beginResize("sidebar", event)}
+          onPointerDown={beginResize}
           className="group relative z-30 -mx-1 hidden w-5 shrink-0 cursor-col-resize touch-none md:block"
         >
           <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
@@ -545,7 +494,6 @@ export function WorkspacePage({ page }) {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onToggleChatDrawer={chat.toggleDrawer}
           chatDrawerOpen={chat.drawerOpen}
-          studioPanels={layout.studioPanels}
           onAddStudioPanel={addStudioPanel}
         />
 
@@ -586,15 +534,13 @@ export function WorkspacePage({ page }) {
             <div className="flex h-full items-center justify-center p-8"><WorkspaceStateBlock eyebrow="Playground" title="选择一个视频开始分析" dashed /></div>
           ) : (
             <WorkspaceStudioPanels
-              panels={layout.studioPanels}
-              panelWidths={layout.panelWidths}
+              layout={layout.studioLayout}
               panelTools={layout.panelTools}
               focusedPanel={focusedPanel}
               onFocus={setFocusedPanel}
-              onAdd={openStudioPanel}
               onClose={closeStudioPanel}
-              onResizeStart={beginResize}
-              onReorder={reorderStudioPanels}
+              onSplit={(panelId, direction) => openStudioPanel("studio", direction, panelId)}
+              onLayoutChange={(studioLayout) => setLayout((current) => ({ ...current, studioLayout }))}
               renderPanel={renderStudioPanel}
               renderPanelActions={renderPanelActions}
               renderPanelLeadingActions={renderPanelLeadingActions}
