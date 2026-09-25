@@ -322,16 +322,26 @@ function WorkspaceTranscriptList({
           {visibleRows.map((virtualRow) => {
             const segment = segments[virtualRow.index];
             const isHighlighted = highlightedSegmentIndex === virtualRow.index;
-            const segmentButton = (
-              <button
+            const segmentCard = (
+              <div
                 id={`overview-transcript-segment-${chapterId}-${virtualRow.index}`}
-                type="button"
-                disabled={!canSeek}
-                onClick={() => onSeek?.({
+                role={canSeek ? "button" : undefined}
+                tabIndex={canSeek ? 0 : undefined}
+                onClick={canSeek ? () => onSeek?.({
                   seconds: segment.start_seconds,
                   endSeconds: segment.end_seconds,
                   chapterTitle,
-                })}
+                }) : undefined}
+                onKeyDown={canSeek ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSeek?.({
+                      seconds: segment.start_seconds,
+                      endSeconds: segment.end_seconds,
+                      chapterTitle,
+                    });
+                  }
+                } : undefined}
                 className={`block w-full scroll-mt-6 rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors dark:bg-neutral-900 cursor-grab active:cursor-grabbing ${
                   isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
                 } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
@@ -340,11 +350,11 @@ function WorkspaceTranscriptList({
                   {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
-              </button>
+              </div>
             );
             const draggableSegment = mosaicWindowContext?.mosaicWindowActions?.connectDragSource
-              ? mosaicWindowContext.mosaicWindowActions.connectDragSource(segmentButton)
-              : segmentButton;
+              ? mosaicWindowContext.mosaicWindowActions.connectDragSource(segmentCard)
+              : segmentCard;
 
             return (
               <div
