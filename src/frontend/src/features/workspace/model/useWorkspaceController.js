@@ -10,7 +10,7 @@ import {
   getGenerationTaskForSelection,
   isGenerationSnapshotActive,
 } from "./workspaceState";
-import { isPlaygroundSeries } from "./workspaceControllerConstants";
+import { isPlaygroundSeries, PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { workspaceReducer } from "./workspaceReducer";
 import { useWorkspaceDataEffects } from "./useWorkspaceDataEffects";
@@ -24,7 +24,10 @@ export function useWorkspaceController() {
 
   useWorkspaceDataEffects(state, dispatch);
 
-  const activeSeries = findSeriesById(state.library, state.selectedSeriesId);
+  const activeSeries = findSeriesById(state.library, state.selectedSeriesId)
+    ?? (state.selectedContextType === "playground" && state.selectedSeriesId === PLAYGROUND_SERIES_ID
+      ? { id: PLAYGROUND_SERIES_ID, title: "Playground", videos: [], kind: "playground" }
+      : null);
   const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
   const summary = state.summary;
   const mindmap = state.mindmap;
@@ -80,7 +83,7 @@ export function useWorkspaceController() {
 
   function onSelectSeries(seriesId) {
     const series = findSeriesById(state.library, seriesId);
-    if (isPlaygroundSeries(series)) {
+    if (seriesId === PLAYGROUND_SERIES_ID || isPlaygroundSeries(series)) {
       dispatch({ type: "playground_selected", seriesId });
       return;
     }

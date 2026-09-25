@@ -540,6 +540,7 @@ export function workspaceReducer(state, action) {
     case "playground_selected":
       return {
         ...state,
+        error: "",
         selectedSeriesId: action.seriesId ?? PLAYGROUND_SERIES_ID,
         selectedVideoId: null,
         selectedContextType: "playground",

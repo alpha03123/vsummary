@@ -65,6 +65,22 @@ describe("useWorkspaceController.onSeekToTime", () => {
   });
 });
 
+describe("useWorkspaceController.onSelectSeries", () => {
+  it("opens an empty Playground without creating an Agent chat scope", () => {
+    const { result } = renderHook(() => useWorkspaceController());
+
+    act(() => result.current.onSelectSeries("__playground__"));
+
+    expect(result.current.selectedContextType).toBe("playground");
+    expect(result.current.activeSeries).toMatchObject({
+      id: "__playground__",
+      videos: [],
+      kind: "playground",
+    });
+    expect(result.current.activeChatSessionId).toBeNull();
+  });
+});
+
 describe("useWorkspaceController.onFocusOverviewAtTime", () => {
   it("records a citation focus at the current playback time", () => {
     const { result } = renderHook(() => useWorkspaceController());

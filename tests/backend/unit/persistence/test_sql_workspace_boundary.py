@@ -10,6 +10,33 @@ from backend.video_summary.library.models import VideoSourceDTO
 
 
 class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
+    def test_playground_creation_uses_the_current_workspace(self) -> None:
+        sessions = MagicMock()
+        session = sessions.return_value.__enter__.return_value
+        session.execute.return_value.scalar.return_value = None
+        workspace = SqlVideoWorkspace(
+            session_factory=sessions, blob_store=Mock(), cache_root=Path("cache"), workspace_id="workspace-1",
+        )
+        workspace._control = Mock()
+        workspace._control.create_series_at_next_position.return_value = "new-series-id"
+
+        self.assertEqual(workspace.ensure_playground_series(), "new-series-id")
+        workspace._control.create_series_at_next_position.assert_called_once_with(
+            workspace_id="workspace-1", title="Playground", source_kind="playground",
+        )
+
+    def test_existing_playground_is_reused(self) -> None:
+        sessions = MagicMock()
+        session = sessions.return_value.__enter__.return_value
+        session.execute.return_value.scalar.return_value = "existing-playground"
+        workspace = SqlVideoWorkspace(
+            session_factory=sessions, blob_store=Mock(), cache_root=Path("cache"), workspace_id="workspace-1",
+        )
+        workspace._control = Mock()
+
+        self.assertEqual(workspace.ensure_playground_series(), "existing-playground")
+        workspace._control.create_series_at_next_position.assert_not_called()
+
     def test_requires_an_explicit_workspace_id(self) -> None:
         with self.assertRaisesRegex(ValueError, "workspace_id"):
             SqlVideoWorkspace(

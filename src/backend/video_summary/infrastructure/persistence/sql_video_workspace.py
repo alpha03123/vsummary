@@ -497,7 +497,7 @@ class SqlVideoWorkspace:
         self._import_paths(series_id, source_paths, storage_mode=storage_mode)
         return next(item.videos for item in self.list_series() if item.id == series_id)
 
-    def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
+    def ensure_playground_series(self) -> str:
         workspace_id = self._workspace_id
         with self._sessions() as session:
             series_id = session.execute(
@@ -510,7 +510,12 @@ class SqlVideoWorkspace:
                 title="Playground",
                 source_kind="playground",
             )
-        return self.import_local_series_videos_from_paths(series_id=series_id, source_paths=source_paths)
+        return series_id
+
+    def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
+        return self.import_local_series_videos_from_paths(
+            series_id=self.ensure_playground_series(), source_paths=source_paths,
+        )
 
     def rename_series(self, series_id: str, title: str) -> bool:
         if not title.strip():
