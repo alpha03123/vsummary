@@ -49,7 +49,9 @@ if [ ! -x "$MYSQL_HOME/bin/mysqld" ]; then
   echo "Or set VSUMMARY_MYSQL_HOME to your MySQL installation."
   exit 1
 fi
-if [ ! -f "$ROOT/src/frontend/dist/index.html" ]; then
+FRONTEND_DIR="$ROOT/src/frontend"
+FRONTEND_INDEX="$FRONTEND_DIR/dist/index.html"
+if [ ! -f "$FRONTEND_INDEX" ]; then
   echo "Build the frontend first: cd src/frontend && npm ci && npm run build"
   exit 1
 fi
@@ -59,6 +61,28 @@ if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Port $PORT is already in use. Stop the running app or set VSUMMARY_PORT."
   exit 1
 fi
+
+FRONTEND_INPUTS=(
+  "$FRONTEND_DIR/src"
+  "$FRONTEND_DIR/index.html"
+  "$FRONTEND_DIR/package.json"
+  "$FRONTEND_DIR/package-lock.json"
+  "$FRONTEND_DIR/vite.config.js"
+  "$FRONTEND_DIR/postcss.config.js"
+  "$FRONTEND_DIR/tailwind.config.js"
+  "$FRONTEND_DIR/public"
+)
+for input in "${FRONTEND_INPUTS[@]}"; do
+  if [ -e "$input" ] && [ -n "$(find "$input" -type f -newer "$FRONTEND_INDEX" -print -quit)" ]; then
+    if ! command -v npm >/dev/null 2>&1 || [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+      echo "Frontend source changed. Install Node.js and run: cd src/frontend && npm ci"
+      exit 1
+    fi
+    echo "Frontend source changed; rebuilding..."
+    (cd "$FRONTEND_DIR" && npm run build)
+    break
+  fi
+done
 
 export PYTHONPATH="$ROOT/src"
 export HF_HOME="$ROOT/data/huggingface"
