@@ -1,6 +1,6 @@
-import { useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { BrainCircuit, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, StickyNote, X } from "lucide-react";
-import { Mosaic, MosaicWindow, MosaicWindowContext } from "react-mosaic-component";
+import { Mosaic, MosaicWindow } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { getPanelType } from "./workspaceLayout";
@@ -76,26 +76,11 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
                 </header>
               )}
             >
-              <PanelContentDragSurface enabled={type === "overview"}>
-                {renderPanel(panelId, type)}
-              </PanelContentDragSurface>
+              <div className="h-full min-h-0 overflow-hidden">{renderPanel(panelId, type)}</div>
             </MosaicWindow>
           );
         }}
       />
     </div>
   );
-}
-
-function PanelContentDragSurface({ enabled, children }) {
-  const context = useContext(MosaicWindowContext);
-  const content = (
-    <div className={`h-full min-h-0 overflow-hidden ${enabled ? "cursor-grab active:cursor-grabbing" : ""}`}>
-      {children}
-    </div>
-  );
-
-  return enabled && context?.mosaicWindowActions?.connectDragSource
-    ? context.mosaicWindowActions.connectDragSource(content)
-    : content;
 }

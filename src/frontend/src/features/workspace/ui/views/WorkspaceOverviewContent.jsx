@@ -1,8 +1,7 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertTriangle, Captions, ChevronUp, Minus, Plus, Sparkles, X } from "lucide-react";
-import { MosaicWindowContext } from "react-mosaic-component";
 
 import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
 
@@ -286,7 +285,6 @@ function WorkspaceTranscriptList({
   onManualScroll,
   onCollapse,
 }) {
-  const mosaicWindowContext = useContext(MosaicWindowContext);
   const scrollRef = useRef(null);
   const virtualizer = useVirtualizer({
     count: segments.length,
@@ -317,45 +315,11 @@ function WorkspaceTranscriptList({
 
   return (
     <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
-      <div ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll} className="max-h-[min(60vh,42rem)] overflow-y-auto overscroll-contain pr-1">
+      <div ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll} className="max-h-[min(60vh,42rem)] overflow-y-auto pr-1">
         <div className="relative w-full" style={{ height: `${totalSize}px` }}>
           {visibleRows.map((virtualRow) => {
             const segment = segments[virtualRow.index];
             const isHighlighted = highlightedSegmentIndex === virtualRow.index;
-            const segmentCard = (
-              <div
-                id={`overview-transcript-segment-${chapterId}-${virtualRow.index}`}
-                role={canSeek ? "button" : undefined}
-                tabIndex={canSeek ? 0 : undefined}
-                onClick={canSeek ? () => onSeek?.({
-                  seconds: segment.start_seconds,
-                  endSeconds: segment.end_seconds,
-                  chapterTitle,
-                }) : undefined}
-                onKeyDown={canSeek ? (event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSeek?.({
-                      seconds: segment.start_seconds,
-                      endSeconds: segment.end_seconds,
-                      chapterTitle,
-                    });
-                  }
-                } : undefined}
-                className={`block w-full scroll-mt-6 rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors dark:bg-neutral-900 cursor-grab active:cursor-grabbing ${
-                  isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
-                } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
-              >
-                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
-                  {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
-              </div>
-            );
-            const draggableSegment = mosaicWindowContext?.mosaicWindowActions?.connectDragSource
-              ? mosaicWindowContext.mosaicWindowActions.connectDragSource(segmentCard)
-              : segmentCard;
-
             return (
               <div
                 key={virtualRow.key}
@@ -364,7 +328,24 @@ function WorkspaceTranscriptList({
                 className="absolute left-0 top-0 w-full pb-3"
                 style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
-                {draggableSegment}
+                <button
+                  id={`overview-transcript-segment-${chapterId}-${virtualRow.index}`}
+                  type="button"
+                  disabled={!canSeek}
+                  onClick={() => onSeek?.({
+                    seconds: segment.start_seconds,
+                    endSeconds: segment.end_seconds,
+                    chapterTitle,
+                  })}
+                  className={`block w-full scroll-mt-6 rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors dark:bg-neutral-900 ${
+                    isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
+                  } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
+                    {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
+                </button>
               </div>
             );
           })}
