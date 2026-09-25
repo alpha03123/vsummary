@@ -98,32 +98,43 @@ class SqlControlPlaneRepository:
 
         _require_text(workspace_id, field_name="workspace_id")
         _require_text(title, field_name="series title")
-        series_id = new_ulid()
         with self._session_factory.begin() as session:
-            workspace = session.get(Workspace, workspace_id, with_for_update=True)
-            if workspace is None or workspace.deleted_at is not None:
-                raise LookupError(f"workspace not found '{workspace_id}'")
-            position = int(
-                session.scalar(
-                    select(func.coalesce(func.max(Series.position), -1) + 1).where(
-                        Series.workspace_id == workspace_id
-                    )
-                )
-            )
-            session.add(
-                Series(
-                    id=series_id,
-                    workspace_id=workspace_id,
-                    title=title.strip(),
-                    position=position,
-                    source_kind=source_kind,
-                    storage_mode=storage_mode,
-                    migration_run_id=migration_run_id,
-                    import_published=migration_run_id is None,
-                    external_source_url=external_source_url,
-                )
+            self._lock_active_workspace(session, workspace_id)
+            series_id = self._add_series_at_next_position(
+                session,
+                workspace_id=workspace_id,
+                title=title,
+                source_kind=source_kind,
+                storage_mode=storage_mode,
+                migration_run_id=migration_run_id,
+                external_source_url=external_source_url,
             )
         return series_id
+
+    def ensure_playground_series(self, *, workspace_id: str) -> str:
+        """Return the workspace Playground, creating it while holding its lock."""
+
+        _require_text(workspace_id, field_name="workspace_id")
+        with self._session_factory.begin() as session:
+            self._lock_active_workspace(session, workspace_id)
+            existing_series_id = session.scalar(
+                select(Series.id)
+                .where(
+                    Series.workspace_id == workspace_id,
+                    Series.source_kind == "playground",
+                    Series.deleted_at.is_(None),
+                )
+                .order_by(Series.position)
+                .with_for_update()
+            )
+            if existing_series_id is not None:
+                return existing_series_id
+            return self._add_series_at_next_position(
+                session,
+                workspace_id=workspace_id,
+                title="Playground",
+                source_kind="playground",
+            )
 
     def create_series_at_preferred_position(
         self,
@@ -175,6 +186,46 @@ class SqlControlPlaneRepository:
                     external_source_url=external_source_url,
                 )
             )
+        return series_id
+
+    @staticmethod
+    def _lock_active_workspace(session: Session, workspace_id: str) -> None:
+        workspace = session.get(Workspace, workspace_id, with_for_update=True)
+        if workspace is None or workspace.deleted_at is not None:
+            raise LookupError(f"workspace not found '{workspace_id}'")
+
+    @staticmethod
+    def _add_series_at_next_position(
+        session: Session,
+        *,
+        workspace_id: str,
+        title: str,
+        source_kind: str,
+        storage_mode: str = "copy",
+        migration_run_id: str | None = None,
+        external_source_url: str | None = None,
+    ) -> str:
+        series_id = new_ulid()
+        position = int(
+            session.scalar(
+                select(func.coalesce(func.max(Series.position), -1) + 1).where(
+                    Series.workspace_id == workspace_id
+                )
+            )
+        )
+        session.add(
+            Series(
+                id=series_id,
+                workspace_id=workspace_id,
+                title=title.strip(),
+                position=position,
+                source_kind=source_kind,
+                storage_mode=storage_mode,
+                migration_run_id=migration_run_id,
+                import_published=migration_run_id is None,
+                external_source_url=external_source_url,
+            )
+        )
         return series_id
 
     def create_video(

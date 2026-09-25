@@ -11,7 +11,6 @@ import re
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 
-from backend.video_summary.library.constants import PLAYGROUND_SERIES_ID
 from backend.video_summary.library.linked_models import LinkedSeries
 from backend.video_summary.library.models import (
     BilibiliUrlInfoDTO,
@@ -71,10 +70,7 @@ class ResolveLinkedVideo:
     ) -> LibraryVideoCardDTO:
         resolver = _provider_resolver(self._resolvers, provider)
         video = await resolver.resolve_single_video(ExternalUrlInfo(url=_normalize_external_url(url, provider)))
-        resolved_target_series_id = target_series_id or PLAYGROUND_SERIES_ID
-        series = next((item for item in self._workspace.list_series() if item.id == resolved_target_series_id), None)
-        if series is None:
-            raise LookupError(f"series not found '{resolved_target_series_id}'")
+        resolved_target_series_id, series = _resolve_video_target(self._workspace, target_series_id)
         existing = self._workspace.get_linked_series(resolved_target_series_id) or LinkedSeries(
             series_id=resolved_target_series_id,
             title=series.title,
@@ -187,7 +183,7 @@ class ResolveBilibiliVideo:
     """把 B 站单视频 URL 解析为单个链接视频，并加入既有或沙盒系列。
 
     业务场景：用户粘贴单个 B 站视频链接时，本用例解析出元数据并把它挂到指定
-    目标系列下；若未指定则默认放入沙盒系列（`PLAYGROUND_SERIES_ID`）。
+    目标系列下；若未指定则默认放入工作区的沙盒系列。
     同系列下已存在的视频会跳过保存——保证幂等。
     """
 
@@ -225,10 +221,7 @@ class ResolveBilibiliVideo:
             LookupError: 目标系列在本地库中不存在。
         """
         video = await self._resolver.resolve_single_video(self._parser.parse(url))
-        resolved_target_series_id = target_series_id or PLAYGROUND_SERIES_ID
-        series = next((item for item in self._workspace.list_series() if item.id == resolved_target_series_id), None)
-        if series is None:
-            raise LookupError(f"series not found '{resolved_target_series_id}'")
+        resolved_target_series_id, series = _resolve_video_target(self._workspace, target_series_id)
 
         existing = self._workspace.get_linked_series(resolved_target_series_id) or LinkedSeries(
             series_id=resolved_target_series_id,
@@ -272,6 +265,17 @@ class DownloadLinkedVideo:
             self._workspace.attach_downloaded_file(series_id, video_id, source_path)
         finally:
             source_path.unlink(missing_ok=True)
+
+
+def _resolve_video_target(
+    workspace: LinkedSeriesResolverWorkspace,
+    target_series_id: str | None,
+) -> tuple[str, LibrarySeriesDTO]:
+    series_id = target_series_id or workspace.ensure_playground_series()
+    series = next((item for item in workspace.list_series() if item.id == series_id), None)
+    if series is None:
+        raise LookupError(f"series not found '{series_id}'")
+    return series_id, series
 
 
 def _to_series_dto(linked_series: LinkedSeries) -> LibrarySeriesDTO:

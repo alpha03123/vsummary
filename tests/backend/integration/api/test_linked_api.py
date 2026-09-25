@@ -14,9 +14,45 @@ from backend.bilibili.ytdlp_bilibili import BILIBILI_COOKIE_REQUIRED_MESSAGE
 from backend.external.ytdlp import ExternalVideoResolutionError
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.library.linked_models import LinkedVideo
+from backend.video_summary.library.usecases.linked_videos import ResolveBilibiliVideo
 
 
 class LinkedApiTests(unittest.TestCase):
+    def test_bilibili_route_adds_first_video_to_empty_playground(self) -> None:
+        saved = []
+
+        async def resolve_video(_info):
+            return LinkedVideo(
+                source_id="BV1xx411c7mD",
+                item_index=1,
+                title="Example",
+                cover_url="",
+                duration_seconds=60,
+                source_url="https://www.bilibili.com/video/BV1xx411c7mD",
+            )
+
+        workspace = SimpleNamespace(
+            ensure_playground_series=lambda: "created-playground",
+            list_series=lambda: [LibrarySeriesDTO(id="created-playground", title="Playground", videos=[], kind="playground")],
+            get_linked_series=lambda _series_id: None,
+            save_linked_series=saved.append,
+        )
+        container = _build_container()
+        container.resolve_bilibili_video = ResolveBilibiliVideo(
+            workspace,
+            SimpleNamespace(resolve_single_video=resolve_video),
+            SimpleNamespace(invalidate=lambda: None),
+        )
+
+        response = TestClient(create_app(container)).post(
+            "/api/linked/bilibili/resolve/video",
+            json={"url": "https://www.bilibili.com/video/BV1xx411c7mD"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(saved[0].series_id, "created-playground")
+
     def test_create_agent_series_returns_empty_linked_series(self) -> None:
         container = _build_container()
         client = TestClient(create_app(container))

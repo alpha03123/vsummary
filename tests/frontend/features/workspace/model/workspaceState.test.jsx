@@ -4,6 +4,7 @@ import {
   buildSeriesGenerationTaskKey,
   buildVideoGenerationTaskKey,
   createInitialWorkspaceState,
+  createWorkspaceLoadedState,
   getGenerationTaskForSelection,
   loadChatSessionIdsByScope,
   loadChatSessionListsByScope,
@@ -16,6 +17,26 @@ import { workspaceReducer } from "@src/features/workspace/model/workspaceReducer
 import { getPendingVideosForSeriesGeneration } from "@src/features/workspace/model/workspaceContentActions";
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
+
+describe("Playground library reload", () => {
+  it("keeps the Playground open after its first external video is added", () => {
+    const state = {
+      ...createInitialWorkspaceState(),
+      selectedContextType: "playground",
+      selectedSeriesId: "__playground__",
+      selectedVideoId: null,
+    };
+    const library = {
+      series: [{ id: "existing-playground", kind: "playground", videos: [{ id: "video-1" }] }],
+    };
+
+    const nextState = createWorkspaceLoadedState(library, state);
+
+    expect(nextState.selectedSeriesId).toBe("existing-playground");
+    expect(nextState.selectedVideoId).toBeNull();
+    expect(nextState.selectedContextType).toBe("playground");
+  });
+});
 
 describe("workspace UI settings", () => {
   it("normalizes the web search setting with a safe disabled default", () => {

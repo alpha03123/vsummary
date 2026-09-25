@@ -5,11 +5,65 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
 from backend.core.blob_store import BlobStoreError
+from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
+from backend.video_summary.infrastructure.persistence.models import Workspace
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 from backend.video_summary.library.models import VideoSourceDTO
 
 
 class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
+    def test_playground_creation_uses_the_current_workspace(self) -> None:
+        workspace = SqlVideoWorkspace(
+            session_factory=Mock(), blob_store=Mock(), cache_root=Path("cache"), workspace_id="workspace-1",
+        )
+        workspace._control = Mock()
+        workspace._control.ensure_playground_series.return_value = "new-series-id"
+
+        self.assertEqual(workspace.ensure_playground_series(), "new-series-id")
+        workspace._control.ensure_playground_series.assert_called_once_with(workspace_id="workspace-1")
+
+    def test_existing_playground_is_reused(self) -> None:
+        workspace = SqlVideoWorkspace(
+            session_factory=Mock(), blob_store=Mock(), cache_root=Path("cache"), workspace_id="workspace-1",
+        )
+        workspace._control = Mock()
+        workspace._control.ensure_playground_series.return_value = "existing-playground"
+
+        self.assertEqual(workspace.ensure_playground_series(), "existing-playground")
+        workspace._control.ensure_playground_series.assert_called_once_with(workspace_id="workspace-1")
+
+    def test_control_plane_locks_the_workspace_before_reusing_playground(self) -> None:
+        sessions = MagicMock()
+        session = sessions.begin.return_value.__enter__.return_value
+        session.get.return_value = Workspace(id="workspace-1", owner_scope_id="local", title="Local")
+        session.scalar.return_value = "existing-playground"
+
+        series_id = SqlControlPlaneRepository(sessions).ensure_playground_series(workspace_id="workspace-1")
+
+        self.assertEqual(series_id, "existing-playground")
+        session.get.assert_called_once_with(Workspace, "workspace-1", with_for_update=True)
+        self.assertLess(
+            [call[0] for call in session.mock_calls].index("get"),
+            [call[0] for call in session.mock_calls].index("scalar"),
+        )
+        statement = session.scalar.call_args.args[0]
+        self.assertIsNotNone(statement._for_update_arg)
+
+    def test_control_plane_creates_playground_while_holding_the_workspace_lock(self) -> None:
+        sessions = MagicMock()
+        session = sessions.begin.return_value.__enter__.return_value
+        session.get.return_value = Workspace(id="workspace-1", owner_scope_id="local", title="Local")
+        session.scalar.side_effect = [None, 3]
+
+        series_id = SqlControlPlaneRepository(sessions).ensure_playground_series(workspace_id="workspace-1")
+
+        created = session.add.call_args.args[0]
+        self.assertEqual(created.id, series_id)
+        self.assertEqual(created.workspace_id, "workspace-1")
+        self.assertEqual(created.title, "Playground")
+        self.assertEqual(created.source_kind, "playground")
+        self.assertEqual(created.position, 3)
+
     def test_requires_an_explicit_workspace_id(self) -> None:
         with self.assertRaisesRegex(ValueError, "workspace_id"):
             SqlVideoWorkspace(

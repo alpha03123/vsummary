@@ -316,6 +316,9 @@ class LinkedSeriesResolverWorkspace(VideoLibraryReader, LinkedSeriesStore, Proto
     并把解析结果写回 `LinkedSeriesStore`，所以同时需要读和写能力。
     """
 
+    def ensure_playground_series(self) -> str:
+        """取得当前工作区的 Playground ID；首次导入时创建。"""
+
 
 class VideoSummaryGenerator(Protocol):
     """视频总结的异步生成端口。

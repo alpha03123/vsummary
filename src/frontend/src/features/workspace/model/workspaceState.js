@@ -608,6 +608,19 @@ export function createInitialWorkspaceState() {
 }
 
 export function createWorkspaceLoadedState(library, currentState) {
+  if (currentState.selectedContextType === "playground") {
+    const playground = library.series.find((series) => series.kind === "playground");
+    if (playground) {
+      return {
+        ...currentState,
+        library,
+        selectedSeriesId: playground.id,
+        selectedVideoId: null,
+        error: "",
+        loading: false,
+      };
+    }
+  }
   const selection = getDefaultSelection(library, currentState.selectedSeriesId, currentState.selectedVideoId);
   if (!selection.seriesId) {
     return createLibraryHomeState(library, currentState);

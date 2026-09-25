@@ -32,7 +32,7 @@ from backend.video_summary.library.models import (
     VideoAiSummaryDTO, VideoAiSummaryVisualEvidenceDTO, VideoNotesDTO, VideoSourceDTO, VideoSummaryDTO, VideoTranscriptDTO, VideoWorkspaceToolsDTO, WorkspaceDTO, WorkspaceToolDTO,
 )
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
-from backend.video_summary.library.constants import AUDIO_SUFFIXES, MEDIA_STORAGE_MODES, MEDIA_SUFFIXES, PLAYGROUND_SERIES_ID
+from backend.video_summary.library.constants import AUDIO_SUFFIXES, MEDIA_STORAGE_MODES, MEDIA_SUFFIXES
 from backend.core.citations import CitationReference
 
 
@@ -497,20 +497,13 @@ class SqlVideoWorkspace:
         self._import_paths(series_id, source_paths, storage_mode=storage_mode)
         return next(item.videos for item in self.list_series() if item.id == series_id)
 
+    def ensure_playground_series(self) -> str:
+        return self._control.ensure_playground_series(workspace_id=self._workspace_id)
+
     def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
-        workspace_id = self._workspace_id
-        with self._sessions() as session:
-            series_id = session.execute(
-                text("SELECT id FROM series WHERE workspace_id=:workspace AND source_kind='playground' AND deleted_at IS NULL"),
-                {"workspace": workspace_id},
-            ).scalar()
-        if series_id is None:
-            series_id = self._control.create_series_at_next_position(
-                workspace_id=workspace_id,
-                title="Playground",
-                source_kind="playground",
-            )
-        return self.import_local_series_videos_from_paths(series_id=series_id, source_paths=source_paths)
+        return self.import_local_series_videos_from_paths(
+            series_id=self.ensure_playground_series(), source_paths=source_paths,
+        )
 
     def rename_series(self, series_id: str, title: str) -> bool:
         if not title.strip():
