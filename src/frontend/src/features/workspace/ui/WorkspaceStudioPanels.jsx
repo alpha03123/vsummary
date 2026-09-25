@@ -40,6 +40,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
               title={meta.label}
               className={`workspace-mosaic-window ${isFocused ? "workspace-mosaic-window-focused" : ""}`}
               onDragStart={() => onFocus(panelId)}
+              renderPreview={() => <div className="workspace-mosaic-drag-preview" aria-hidden="true" />}
               renderToolbar={() => (
                 <header className="flex h-full min-w-0 items-center justify-between border-b border-stone-200/80 px-3 py-2 dark:border-stone-800">
                   <div className="flex min-w-0 items-center gap-1.5">

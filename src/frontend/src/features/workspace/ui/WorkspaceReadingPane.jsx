@@ -156,7 +156,7 @@ export function WorkspaceReadingPane({
     <section className="@container relative flex h-full w-full flex-col bg-transparent">
       {/* 面板宽度是拖拽的（最小 320px），字号与间距都比视口更早到临界点：
           这里按容器宽度整体收一档，否则窄面板下每层留白叠加起来要拉很长才换行。 */}
-      <div className={`flex flex-1 flex-col gap-3 p-4 @[480px]:gap-5 @[480px]:p-6 ${isMindmapTool ? "overflow-hidden" : "overflow-auto"}`}>
+      <div className={`flex flex-1 flex-col ${isMindmapTool ? "overflow-hidden p-0" : "gap-3 overflow-auto p-4 @[480px]:gap-5 @[480px]:p-6"}`}>
         {!activeSeries ? (
           <WorkspaceStateBlock
             title="等待系列"

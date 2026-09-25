@@ -134,7 +134,7 @@ export function WorkspaceMindmapView({
   }
 
   const actionBar = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="workspace-elevated-panel absolute right-4 top-4 z-10 flex items-center gap-1 rounded-xl border p-1.5 shadow-lg">
       <label className="inline-flex">
         <span className="sr-only">导图层级</span>
         <WorkspaceProviderSelect
@@ -151,30 +151,22 @@ export function WorkspaceMindmapView({
         type="button"
         onClick={() => onGenerateMindmap(maxDepth)}
         disabled={isGeneratingMindmapSelectedVideo}
-        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+        title={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
+        aria-label={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
       >
         <RefreshCw size={14} strokeWidth={2} className={isGeneratingMindmapSelectedVideo ? "animate-spin" : ""} />
-        {isGeneratingMindmapSelectedVideo ? `正在生成 · ${Math.round(liveElapsedSeconds)}s` : "重新生成"}
       </button>
-      <button type="button" className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`)}>
+      <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`)} title="导出 SVG" aria-label="导出 SVG">
         <Download size={14} strokeWidth={2} />
-        导出 SVG
       </button>
     </div>
   );
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/*
-        工具条原本是 `mb-3 flex justify-end`，紧贴在工具页头（标题 + 导出 + 返回工具页）
-        正下方，两者右对齐且只隔 12px —— 视觉上就是「导出」「返回工具页」又被重复了一遍，
-        并且和上面的按钮挤在同一列里，看起来像错位。
-        这里给它一条分隔线 + 更多上间距，把它明确划成「导图工具条」而不是头部的一部分。
-      */}
-      <div className="mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200/70 pt-3 dark:border-white/5">
-        {actionBar}
-      </div>
-      <div className="workspace-elevated-panel relative min-h-0 flex-1 w-full overflow-hidden rounded-3xl border outline-dashed outline-1 outline-offset-4 outline-stone-200 dark:outline-stone-800">
+      <div className="relative min-h-0 flex-1 w-full overflow-hidden">
         <MindmapCanvas root={mindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} theme={theme} />
+        {actionBar}
       </div>
     </div>
   );

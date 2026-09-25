@@ -737,7 +737,7 @@
 }
 
 .workspace-mosaic .mosaic-tile {
-  margin: 4px;
+  margin: 0;
 }
 
 .workspace-mosaic .workspace-mosaic-window {
@@ -766,7 +766,7 @@
 }
 
 .workspace-mosaic .mosaic-split .mosaic-split-line {
-  background: rgb(148 163 184 / 0.3);
+  background: transparent;
   border-radius: 999px;
   transition: background-color 150ms ease, box-shadow 150ms ease;
 }
@@ -779,6 +779,10 @@
 .workspace-mosaic .drop-target-container .drop-target {
   border-color: rgb(var(--workspace-accent-color));
   background: rgb(var(--workspace-accent-color) / 0.16);
+}
+
+.workspace-mosaic-drag-preview {
+  display: none;
 }
 
 .workspace-mosaic-action {

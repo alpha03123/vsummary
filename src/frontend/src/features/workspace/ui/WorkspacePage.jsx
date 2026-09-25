@@ -261,9 +261,7 @@ export function WorkspacePage({ page }) {
         );
       }
       return (
-        // 与右栏 WorkspaceReadingPane 的 p-6 保持一致，否则媒体卡贴着面板边缘、
-        // 而右侧内容缩进 24px，同一行两栏看起来没有对齐。
-        <div className="flex h-full flex-col overflow-y-auto p-6">
+        <div className="flex h-full min-h-0 flex-col p-4">
           <WorkspaceVideoPlayer
             videoSource={tools?.preview?.previewUrl ?? previewUrl}
             subtitleSource={tools?.preview?.subtitleUrl ?? null}

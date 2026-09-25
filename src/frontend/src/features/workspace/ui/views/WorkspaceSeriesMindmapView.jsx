@@ -127,25 +127,22 @@ export function WorkspaceSeriesMindmapView({
   }
 
   const actionBar = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="workspace-elevated-panel absolute right-4 top-4 z-10 flex items-center gap-1 rounded-xl border p-1.5 shadow-lg">
       <label className="inline-flex">
         <span className="sr-only">导图层级</span>
         <WorkspaceProviderSelect ariaLabel="导图层级" value={maxDepth === null ? "auto" : String(maxDepth)} onChange={(value) => setMaxDepth(value === "auto" ? null : Number(value))} options={MINDMAP_DEPTH_OPTIONS} disabled={generatingSeriesMindmap} hideGroupLabels className="w-24" />
       </label>
-      <button type="button" onClick={() => onGenerateSeriesMindmap(maxDepth)} disabled={generatingSeriesMindmap} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40">
-        <RefreshCw size={14} strokeWidth={2} className={generatingSeriesMindmap ? "animate-spin" : ""} />{generatingSeriesMindmap ? `正在生成 · ${Math.round(liveElapsedSeconds)}s` : "重新生成"}
+      <button type="button" onClick={() => onGenerateSeriesMindmap(maxDepth)} disabled={generatingSeriesMindmap} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40" title={generatingSeriesMindmap ? "正在重新生成全局思维导图" : "重新生成全局思维导图"} aria-label={generatingSeriesMindmap ? "正在重新生成全局思维导图" : "重新生成全局思维导图"}>
+        <RefreshCw size={14} strokeWidth={2} className={generatingSeriesMindmap ? "animate-spin" : ""} />
       </button>
-      <button type="button" className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `series-mindmap-${seriesId}.svg`)}><Download size={14} strokeWidth={2} />导出 SVG</button>
+      <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `series-mindmap-${seriesId}.svg`)} title="导出 SVG" aria-label="导出 SVG"><Download size={14} strokeWidth={2} /></button>
     </div>
   );
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 与 WorkspaceMindmapView 保持一致：分隔线 + 上间距，避免工具条贴住工具页头造成「错位感」。 */}
-      <div className="mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200/70 pt-3 dark:border-white/5">
-        {actionBar}
-      </div>
-      <div className="workspace-elevated-panel relative min-h-0 flex-1 w-full overflow-hidden rounded-3xl border outline-dashed outline-1 outline-offset-4 outline-stone-200 dark:outline-stone-800">
+      <div className="relative min-h-0 flex-1 w-full overflow-hidden">
         <MindmapCanvas root={seriesMindmap} selectedNodeId={selectedNode?.id ?? null} onSelectNode={onFocusNode} markmapRef={markmapRef} theme={theme} />
+        {actionBar}
       </div>
     </div>
   );

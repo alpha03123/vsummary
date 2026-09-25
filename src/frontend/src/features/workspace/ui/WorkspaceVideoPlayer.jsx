@@ -106,7 +106,7 @@ export function WorkspaceVideoPlayer({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <WorkspaceMediaPreviewHeader
         subtitleSettings={!isAudioSource && subtitleSource ? (
             <WorkspaceNativeSubtitleSettings
@@ -125,7 +125,7 @@ export function WorkspaceVideoPlayer({
           音频文件暂不支持预览
         </div>
       ) : videoSource ? (
-        <div className="workspace-elevated-panel relative aspect-video max-h-[72vh] w-full overflow-hidden rounded-3xl border bg-black shadow-sm">
+        <div className="workspace-elevated-panel relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-3xl border bg-black shadow-sm">
           <video
             key={videoSource}
             ref={videoRef}
@@ -166,7 +166,7 @@ export function WorkspaceVideoPlayer({
       ) : (
         // 未下载的媒体没有可播放源：给一个和播放器等大的 16:9 占位，
         // 说明当前状态并指向左栏的下载入口，而不是留一条没有信息的黑条。
-        <div className="workspace-elevated-panel flex aspect-video max-h-[72vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 px-6 text-center shadow-sm">
+        <div className="workspace-elevated-panel flex min-h-0 flex-1 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 px-6 text-center shadow-sm">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-stone-300">
             <Download size={22} aria-hidden="true" />
           </span>
