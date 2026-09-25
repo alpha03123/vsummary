@@ -111,16 +111,23 @@ class LiteLLMNoteGenerator:
                     note_max_images=note_max_images,
                     note_image_min_gap_seconds=note_image_min_gap_seconds,
                 )
-            except ValueError:
+            except ValueError as error:
                 if attempt:
-                    raise
-                message_content = _citation_repair_instruction(message_content)
+                    return _to_generated_note_with_degraded_citations(
+                        payload=payload,
+                        transcript=transcript,
+                        allowed_timestamps=allowed_timestamps,
+                        note_visual_mode=note_visual_mode,
+                        note_max_images=note_max_images,
+                        note_image_min_gap_seconds=note_image_min_gap_seconds,
+                    )
+                message_content = _citation_repair_instruction(message_content, error)
         raise AssertionError("AI summary validation loop must return or raise.")
 
 
-def _citation_repair_instruction(message_content):
+def _citation_repair_instruction(message_content, error: ValueError):
     instruction = (
-        "\n重试要求：上一次响应的引用契约无效。请重新生成完整 JSON；"
+        f"\n重试要求：上一次响应的引用契约无效（{error}）。请重新生成完整 JSON；"
         "markdown 中出现的所有 [数字] 标记集合必须与 citations 的 citation_id 集合完全相同，"
         "每个 citation_id 必须连续、只出现一次，且不得出现未声明的数字标记。"
     )
@@ -140,16 +147,7 @@ def _to_generated_note(
     note_max_images: int,
     note_image_min_gap_seconds: float,
 ) -> GeneratedVideoAiNoteDTO:
-    evidence: list[AiSummaryVisualEvidenceDTO] = []
-    seen: set[float] = set()
-    for item in payload.visual_evidence:
-        timestamp = _resolve_visual_evidence_timestamp(item.timestamp_seconds, allowed_timestamps)
-        if timestamp is None:
-            continue
-        if timestamp in seen:
-            continue
-        seen.add(timestamp)
-        evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
+    evidence = _validated_visual_evidence(payload.visual_evidence, allowed_timestamps)
     markdown, citations = _drop_unverified_visual_citations(
         markdown=payload.markdown,
         citations=payload.citations,
@@ -168,6 +166,54 @@ def _to_generated_note(
         note_image_min_gap_seconds=note_image_min_gap_seconds,
         visual_evidence=tuple(evidence),
         citations=tuple(citations),
+    )
+
+
+def _validated_visual_evidence(
+    evidence_payload: list[AiSummaryEvidencePayload],
+    allowed_timestamps: tuple[float, ...],
+) -> list[AiSummaryVisualEvidenceDTO]:
+    evidence: list[AiSummaryVisualEvidenceDTO] = []
+    seen: set[float] = set()
+    for item in evidence_payload:
+        timestamp = _resolve_visual_evidence_timestamp(item.timestamp_seconds, allowed_timestamps)
+        if timestamp is None or timestamp in seen:
+            continue
+        seen.add(timestamp)
+        evidence.append(AiSummaryVisualEvidenceDTO(timestamp_seconds=timestamp, text=item.text.strip()))
+    return evidence
+
+
+def _to_generated_note_with_degraded_citations(
+    *,
+    payload: AiSummaryPayload,
+    transcript: VideoTranscriptDTO,
+    allowed_timestamps: tuple[float, ...],
+    note_visual_mode: str,
+    note_max_images: int,
+    note_image_min_gap_seconds: float,
+) -> GeneratedVideoAiNoteDTO:
+    """Keep a completed note when the model still returns invalid citation metadata."""
+
+    evidence = _validated_visual_evidence(payload.visual_evidence, allowed_timestamps)
+    markdown, citations = _drop_unverified_citations(
+        markdown=payload.markdown,
+        citations=payload.citations,
+        transcript=transcript,
+        visual_evidence=evidence,
+    )
+    return GeneratedVideoAiNoteDTO(
+        content=markdown.strip(),
+        note_visual_mode=note_visual_mode,
+        note_max_images=note_max_images,
+        note_image_min_gap_seconds=note_image_min_gap_seconds,
+        visual_evidence=tuple(evidence),
+        citations=tuple(_build_ai_summary_citations(
+            markdown=markdown,
+            citations=citations,
+            transcript=transcript,
+            visual_evidence=evidence,
+        )),
     )
 
 
@@ -297,6 +343,57 @@ def _drop_unverified_visual_citations(
         for citation in retained
     ]
     return re.sub(r"\[(\d+)\]", replace_marker, markdown), normalized_citations
+
+
+def _drop_unverified_citations(
+    *,
+    markdown: str,
+    citations: list[AiSummaryCitationPayload],
+    transcript: VideoTranscriptDTO,
+    visual_evidence: list[AiSummaryVisualEvidenceDTO],
+) -> tuple[str, list[AiSummaryCitationPayload]]:
+    """Remove unusable citation markers while retaining verified sources."""
+
+    declared_by_id: dict[int, AiSummaryCitationPayload] = {}
+    duplicate_ids: set[int] = set()
+    for citation in citations:
+        if citation.citation_id in declared_by_id:
+            duplicate_ids.add(citation.citation_id)
+        else:
+            declared_by_id[citation.citation_id] = citation
+    marker_counts: dict[int, int] = {}
+    for match in re.finditer(r"\[(\d+)\]", markdown):
+        citation_id = int(match.group(1))
+        marker_counts[citation_id] = marker_counts.get(citation_id, 0) + 1
+
+    retained_ids = {
+        citation_id
+        for citation_id, citation in declared_by_id.items()
+        if citation_id not in duplicate_ids
+        and marker_counts.get(citation_id) == 1
+        and _citation_is_verified(citation, transcript, visual_evidence)
+    }
+    renumbered_ids = {citation_id: index for index, citation_id in enumerate(sorted(retained_ids), start=1)}
+
+    def replace_marker(match: re.Match[str]) -> str:
+        citation_id = int(match.group(1))
+        return f"[{renumbered_ids[citation_id]}]" if citation_id in retained_ids else ""
+
+    normalized_citations = [
+        declared_by_id[citation_id].model_copy(update={"citation_id": renumbered_ids[citation_id]})
+        for citation_id in sorted(retained_ids)
+    ]
+    return re.sub(r"\[(\d+)\]", replace_marker, markdown), normalized_citations
+
+
+def _citation_is_verified(
+    citation: AiSummaryCitationPayload,
+    transcript: VideoTranscriptDTO,
+    visual_evidence: list[AiSummaryVisualEvidenceDTO],
+) -> bool:
+    if citation.source_type == "transcript":
+        return _resolve_transcript_segment(citation.timestamp_seconds, transcript) is not None
+    return _resolve_visual_evidence(citation.timestamp_seconds, visual_evidence) is not None
 
 
 def _build_ai_summary_citations(

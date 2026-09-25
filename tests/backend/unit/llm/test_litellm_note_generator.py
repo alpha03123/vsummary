@@ -1,12 +1,13 @@
-from backend.video_summary.infrastructure.llm.litellm_note_generator import _resolve_visual_evidence_timestamp
+from backend.video_summary.infrastructure.llm.litellm_note_generator import LiteLLMNoteGenerator, _resolve_visual_evidence_timestamp
 from backend.video_summary.infrastructure.llm.litellm_note_generator import (
     AiSummaryCitationPayload,
     AiSummaryEvidencePayload,
     AiSummaryPayload,
     _build_ai_summary_citations,
     _to_generated_note,
+    _to_generated_note_with_degraded_citations,
 )
-from backend.video_summary.library.models import AiSummaryVisualEvidenceDTO, TranscriptSegmentDTO, VideoTranscriptDTO
+from backend.video_summary.library.models import AiSummaryVisualEvidenceDTO, TranscriptSegmentDTO, VideoAiNoteVisualContextDTO, VideoTranscriptDTO
 
 
 def test_resolves_second_precision_grid_label_to_real_frame_timestamp() -> None:
@@ -78,3 +79,63 @@ def test_discards_unverified_visual_evidence_and_its_citation_without_rejecting_
     assert note.content == "转写事实[1]，模型推断的画面事实。"
     assert note.visual_evidence == ()
     assert [citation.id for citation in note.citations] == ["1"]
+
+
+def test_degraded_citations_keep_verified_transcript_references_and_remove_useless_markers() -> None:
+    transcript = VideoTranscriptDTO(
+        "series-1", "video-1", "视频标题", 20, [TranscriptSegmentDTO(2.5, 5.0, "真实转写内容")]
+    )
+    note = _to_generated_note_with_degraded_citations(
+        payload=AiSummaryPayload(
+            markdown="真实依据[3]，不存在的时间[4]，未声明角标[9]。",
+            citations=[
+                AiSummaryCitationPayload(citation_id=3, source_type="transcript", timestamp_seconds=2.5),
+                AiSummaryCitationPayload(citation_id=4, source_type="transcript", timestamp_seconds=15.0),
+            ],
+        ),
+        transcript=transcript,
+        allowed_timestamps=(),
+        note_visual_mode="off",
+        note_max_images=0,
+        note_image_min_gap_seconds=0,
+    )
+
+    assert note.content == "真实依据[1]，不存在的时间，未声明角标。"
+    assert [citation.id for citation in note.citations] == ["1"]
+
+
+def test_retries_with_the_validation_error_then_keeps_note_without_unverified_citations() -> None:
+    payload = AiSummaryPayload(
+        markdown="完成的概括正文[1]。",
+        citations=[AiSummaryCitationPayload(citation_id=1, source_type="transcript", timestamp_seconds=15.0)],
+    )
+    gateway = _SequencedGateway([payload, payload])
+    transcript = VideoTranscriptDTO(
+        "series-1", "video-1", "视频标题", 20, [TranscriptSegmentDTO(2.5, 5.0, "真实转写内容")]
+    )
+
+    note = LiteLLMNoteGenerator(gateway).run_ai_summary(
+        transcript=transcript,
+        summary=None,
+        visual_context=VideoAiNoteVisualContextDTO(frames=[]),
+        template="general",
+        multimodal_enabled=False,
+        note_visual_mode="off",
+        note_max_images=0,
+        note_image_min_gap_seconds=0,
+    )
+
+    assert len(gateway.messages) == 2
+    assert "AI 概括引用了未提供的转写时间。" in gateway.messages[1][0]["content"]
+    assert note.content == "完成的概括正文。"
+    assert note.citations == ()
+
+
+class _SequencedGateway:
+    def __init__(self, payloads: list[AiSummaryPayload]) -> None:
+        self._payloads = iter(payloads)
+        self.messages = []
+
+    def complete_structured(self, messages, **_kwargs):
+        self.messages.append(messages)
+        return next(self._payloads)
