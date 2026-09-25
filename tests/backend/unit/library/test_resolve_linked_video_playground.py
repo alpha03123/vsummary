@@ -32,6 +32,13 @@ class _Workspace:
             self.series.append(existing)
         return existing.id
 
+    def ensure_bilibili_inbox_series(self):
+        existing = next((item for item in self.series if item.kind == "bilibili_inbox"), None)
+        if existing is None:
+            existing = LibrarySeriesDTO(id="bilibili-inbox", title="B站导入", videos=[], kind="bilibili_inbox")
+            self.series.append(existing)
+        return existing.id
+
     def list_series(self):
         return self.series
 
@@ -60,6 +67,19 @@ class ResolveLinkedVideoPlaygroundTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(workspace.saved.series_id, "created-playground")
         self.assertEqual(workspace.saved.title, "Playground")
+
+    async def test_bilibili_plugin_route_creates_its_dedicated_inbox(self):
+        workspace = _Workspace([])
+
+        await ResolveBilibiliVideo(
+            workspace,
+            _Resolver(),
+            _Invalidator(),
+            parser=SimpleNamespace(parse=lambda url: url),
+        ).run_inbox(url="https://www.bilibili.com/video/BV1example")
+
+        self.assertEqual(workspace.saved.series_id, "bilibili-inbox")
+        self.assertEqual(workspace.saved.title, "B站导入")
 
     async def test_first_external_video_creates_playground_series(self):
         workspace = _Workspace([])

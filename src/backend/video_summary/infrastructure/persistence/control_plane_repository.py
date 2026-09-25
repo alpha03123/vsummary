@@ -114,14 +114,25 @@ class SqlControlPlaneRepository:
     def ensure_playground_series(self, *, workspace_id: str) -> str:
         """Return the workspace Playground, creating it while holding its lock."""
 
+        return self.ensure_series_by_source_kind(
+            workspace_id=workspace_id,
+            source_kind="playground",
+            title="Playground",
+        )
+
+    def ensure_series_by_source_kind(self, *, workspace_id: str, source_kind: str, title: str) -> str:
+        """Return a workspace-scoped special series, creating it under the workspace lock."""
+
         _require_text(workspace_id, field_name="workspace_id")
+        _require_text(source_kind, field_name="source_kind")
+        _require_text(title, field_name="series title")
         with self._session_factory.begin() as session:
             self._lock_active_workspace(session, workspace_id)
             existing_series_id = session.scalar(
                 select(Series.id)
                 .where(
                     Series.workspace_id == workspace_id,
-                    Series.source_kind == "playground",
+                    Series.source_kind == source_kind,
                     Series.deleted_at.is_(None),
                 )
                 .order_by(Series.position)
@@ -132,8 +143,8 @@ class SqlControlPlaneRepository:
             return self._add_series_at_next_position(
                 session,
                 workspace_id=workspace_id,
-                title="Playground",
-                source_kind="playground",
+                title=title,
+                source_kind=source_kind,
             )
 
     def create_series_at_preferred_position(

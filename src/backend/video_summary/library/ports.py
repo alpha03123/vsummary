@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from pathlib import Path
 from typing import Protocol
 
 from backend.video_summary.domain.models import ManualTranscriptInput
@@ -318,6 +317,9 @@ class LinkedSeriesResolverWorkspace(VideoLibraryReader, LinkedSeriesStore, Proto
 
     def ensure_playground_series(self) -> str:
         """取得当前工作区的 Playground ID；首次导入时创建。"""
+
+    def ensure_bilibili_inbox_series(self) -> str:
+        """取得浏览器扩展 Bilibili 视频的专用收件箱；首次导入时创建。"""
 
 
 class VideoSummaryGenerator(Protocol):

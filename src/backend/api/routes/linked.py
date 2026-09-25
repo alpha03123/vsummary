@@ -211,6 +211,22 @@ async def resolve_bilibili_video(request: ResolveBilibiliVideoRequest, container
     return VideoCardResponse.from_model(video)
 
 
+@router.post("/api/linked/bilibili/inbox/resolve/video", response_model=VideoCardResponse)
+async def resolve_bilibili_inbox_video(request: ResolveBilibiliVideoRequest, container: WorkspaceServicesDep) -> VideoCardResponse:
+    """解析浏览器扩展当前的 Bilibili 视频并加入专用收件箱。"""
+    try:
+        video = await container.resolve_bilibili_video.run_inbox(url=request.url)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except RuntimeError as error:
+        if _is_bilibili_cookie_required_error(error):
+            raise HTTPException(status_code=409, detail=BILIBILI_COOKIE_REQUIRED_MESSAGE) from error
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return VideoCardResponse.from_model(video)
+
+
 @router.post("/api/linked/{provider}/resolve/series", response_model=SeriesResponse)
 async def resolve_linked_series(
     provider: str,

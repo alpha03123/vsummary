@@ -32,6 +32,20 @@ class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
         self.assertEqual(workspace.ensure_playground_series(), "existing-playground")
         workspace._control.ensure_playground_series.assert_called_once_with(workspace_id="workspace-1")
 
+    def test_bilibili_inbox_creation_uses_the_current_workspace(self) -> None:
+        workspace = SqlVideoWorkspace(
+            session_factory=Mock(), blob_store=Mock(), cache_root=Path("cache"), workspace_id="workspace-1",
+        )
+        workspace._control = Mock()
+        workspace._control.ensure_series_by_source_kind.return_value = "bilibili-inbox"
+
+        self.assertEqual(workspace.ensure_bilibili_inbox_series(), "bilibili-inbox")
+        workspace._control.ensure_series_by_source_kind.assert_called_once_with(
+            workspace_id="workspace-1",
+            source_kind="bilibili_inbox",
+            title="B站导入",
+        )
+
     def test_control_plane_locks_the_workspace_before_reusing_playground(self) -> None:
         sessions = MagicMock()
         session = sessions.begin.return_value.__enter__.return_value

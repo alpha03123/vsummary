@@ -106,7 +106,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_current_head(), "0016_model_job_resource_id")
+        self.assertEqual(script.get_current_head(), "0017_bilibili_inbox_series")
 
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
@@ -127,6 +127,7 @@ class AlembicConfigurationTests(unittest.TestCase):
         self.assertIn("COALESCE(content_video.series_id, note_video.series_id)", ddl)
         self.assertIn("DEFAULT CURRENT_TIMESTAMP", ddl)
         self.assertIn("ALTER TABLE jobs MODIFY resource_id VARCHAR(128) NOT NULL", ddl)
+        self.assertIn("bilibili_inbox", ddl)
         self.assertNotIn("CURRENT_TIMESTAMP(6)", ddl)
 
 

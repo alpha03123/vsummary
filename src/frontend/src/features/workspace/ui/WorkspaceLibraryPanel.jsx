@@ -27,7 +27,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildVideoKey } from "../model/workspaceControllerUtils";
-import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
+import { isBilibiliInboxSeries, isPlaygroundSeries } from "../model/workspaceControllerConstants";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 import { WorkspaceOverflowMenu } from "./shared/WorkspaceOverflowMenu";
 
@@ -594,7 +594,7 @@ export function WorkspaceLibraryPanel({
 }) {
   const videos = activeSeries?.videos ?? [];
   const isPlayground = isPlaygroundSeries(activeSeries);
-  const isBilibiliInbox = activeSeries?.kind === "bilibili_inbox";
+  const isBilibiliInbox = isBilibiliInboxSeries(activeSeries);
   const isLinkedSeries = Boolean(activeSeries?.isLinked);
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");

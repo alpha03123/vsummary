@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -129,6 +129,24 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "linked")
         self.assertTrue(payload["is_linked"])
         self.assertEqual(payload["source_id"], "BV1xx411c7mD")
+
+    def test_bilibili_plugin_route_uses_the_dedicated_inbox_operation(self) -> None:
+        container = _build_container()
+        calls = []
+        default_resolver = container.resolve_bilibili_video
+
+        async def resolve_inbox(*, url):
+            calls.append(url)
+            return await default_resolver.run(url=url, target_series_id=None)
+
+        container.resolve_bilibili_video = SimpleNamespace(run_inbox=resolve_inbox)
+        response = TestClient(create_app(container)).post(
+            "/api/linked/bilibili/inbox/resolve/video",
+            json={"url": "https://www.bilibili.com/video/BV1xx411c7mD"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(calls, ["https://www.bilibili.com/video/BV1xx411c7mD"])
 
     def test_init_bilibili_cookie_returns_configured_status(self) -> None:
         container = _build_container()

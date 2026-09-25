@@ -13,7 +13,6 @@ from urllib.parse import parse_qs, urlsplit
 
 from backend.video_summary.library.linked_models import LinkedSeries
 from backend.video_summary.library.models import (
-    BilibiliUrlInfoDTO,
     LibrarySeriesDTO,
     LibraryVideoCardDTO,
 )
@@ -223,8 +222,27 @@ class ResolveBilibiliVideo:
         video = await self._resolver.resolve_single_video(self._parser.parse(url))
         resolved_target_series_id, series = _resolve_video_target(self._workspace, target_series_id)
 
-        existing = self._workspace.get_linked_series(resolved_target_series_id) or LinkedSeries(
-            series_id=resolved_target_series_id,
+        return self._save_video(video, resolved_target_series_id, series)
+
+    async def run_inbox(self, *, url: str) -> LibraryVideoCardDTO:
+        """解析浏览器插件当前的 Bilibili 视频并写入专用收件箱。"""
+
+        video = await self._resolver.resolve_single_video(self._parser.parse(url))
+        series_id = self._workspace.ensure_bilibili_inbox_series()
+        series = next((item for item in self._workspace.list_series() if item.id == series_id), None)
+        if series is None:
+            raise LookupError(f"series not found '{series_id}'")
+        return self._save_video(video, series_id, series)
+
+    def _save_video(
+        self,
+        video,
+        series_id: str,
+        series: LibrarySeriesDTO,
+    ) -> LibraryVideoCardDTO:
+
+        existing = self._workspace.get_linked_series(series_id) or LinkedSeries(
+            series_id=series_id,
             title=series.title,
             cover_url="",
             source_url="",

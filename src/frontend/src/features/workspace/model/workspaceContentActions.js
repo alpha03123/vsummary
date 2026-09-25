@@ -26,6 +26,7 @@ import {
   loadVideoTranscriptMarkdown,
   resolveLinkedSeries,
   resolveLinkedVideo,
+  resolveBilibiliInboxVideo,
   startVideoDownload,
   subscribeDurableJobProgress,
   updateVideoNote,
@@ -899,6 +900,17 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     }
   }
 
+  async function onResolveBilibiliInboxVideo(url) {
+    try {
+      const rawVideo = await resolveBilibiliInboxVideo(url);
+      await reloadWorkspaceLibrary();
+      return rawVideo;
+    } catch (error) {
+      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "导入当前 Bilibili 视频失败" });
+      throw error;
+    }
+  }
+
   async function onInitExternalCookie(provider, options = {}) {
     try {
       return await localWorkspaceApi.initExternalCookie(provider, options);
@@ -1193,6 +1205,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     onRelinkVideo,
     onResolvePlaygroundVideo,
     onResolveSeriesVideo,
+    onResolveBilibiliInboxVideo,
     onInitExternalCookie,
     onLoadChaoxingStatus,
     onInitChaoxing,

@@ -723,6 +723,14 @@ export async function resolveLinkedVideo(provider, url, targetSeriesId = null) {
   return { jobId, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
+export async function resolveBilibiliInboxVideo(url) {
+  return fetchJson("/api/linked/bilibili/inbox/resolve/video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+}
+
 export async function deleteSeries(seriesId) {
   return fetchJson(`/api/series/${encodeURIComponent(seriesId)}`, {
     method: "DELETE",

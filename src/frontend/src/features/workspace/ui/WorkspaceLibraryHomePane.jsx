@@ -2,11 +2,11 @@ import { motion } from "framer-motion";
 import { PlusCircle } from "lucide-react";
 
 import { blurVariant, staggerContainer } from "../../../lib/animations";
-import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
+import { isBilibiliInboxSeries, isPlaygroundSeries, isSpecialSeries } from "../model/workspaceControllerConstants";
 
 function summarizeLibrary(library) {
   const series = library?.series ?? [];
-  const visibleSeries = series.filter((item) => !isPlaygroundSeries(item));
+  const visibleSeries = series.filter((item) => !isSpecialSeries(item));
   const totalVideos = series.reduce((count, item) => count + item.videos.length, 0);
   const processedVideos = series.reduce(
     (count, item) => count + item.videos.filter((video) => video.processed).length,
@@ -17,12 +17,14 @@ function summarizeLibrary(library) {
     seriesCount: visibleSeries.length,
     totalVideos,
     processedVideos,
-    latestSeries: visibleSeries.slice(0, 4),
+    bilibiliInbox: series.find(isBilibiliInboxSeries) ?? null,
   };
 }
 
 export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries, onAddPlaygroundVideo }) {
   const librarySummary = summarizeLibrary(library);
+  const bilibiliInboxProcessedCount = librarySummary.bilibiliInbox?.videos.filter((video) => video.processed).length ?? 0;
+  const bilibiliInboxVideoCount = librarySummary.bilibiliInbox?.videos.length ?? 0;
   const playgroundSeries = (library?.series ?? []).find(isPlaygroundSeries) ?? {
     id: "__playground__",
     title: "Playground",
@@ -100,37 +102,34 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
             </div>
           </motion.div>
 
-          {/* Recent Shelves (Spans 7 cols) */}
+          {/* Plugin Directory (Spans 7 cols) */}
           <motion.article variants={blurVariant} className="md:col-span-7 workspace-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Recent Shelves</p>
-              <span className="text-[10px] font-bold uppercase text-stone-600 dark:text-zinc-400 bg-stone-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-stone-200 dark:border-white/5 shadow-sm">Top {librarySummary.latestSeries.length}</span>
-            </div>
+            <p className="mb-4 text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Plugin Directory</p>
 
-            {librarySummary.latestSeries.length > 0 ? (
+            {librarySummary.bilibiliInbox ? (
               <div className="grid grid-cols-1 gap-3">
-                {librarySummary.latestSeries.map((seriesItem) => (
-                  <motion.button
-                    key={seriesItem.id}
-                    variants={blurVariant}
-                    whileHover={{ scale: 0.99 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => onSelectSeries(seriesItem.id)}
-                    className="group relative flex items-center justify-between p-4 rounded-2xl border border-stone-200/60 dark:border-white/5 bg-stone-50/50 dark:bg-neutral-900/50 hover:bg-white dark:hover:bg-neutral-800 transition-all text-left shadow-sm hover:shadow-md"
-                  >
-                    <div>
-                      <strong className="block text-[14px] font-bold text-stone-900 dark:text-stone-100 group-hover:text-accent transition-colors">{seriesItem.title}</strong>
-                      <span className="block text-xs font-semibold text-stone-600 dark:text-zinc-500 mt-1">{seriesItem.videos.length} 个视频片段</span>
-                    </div>
+                <motion.button
+                  key={librarySummary.bilibiliInbox.id}
+                  variants={blurVariant}
+                  whileHover={{ scale: 0.99 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => onSelectSeries(librarySummary.bilibiliInbox.id)}
+                  className="group relative flex items-center justify-between p-4 rounded-2xl border border-stone-200/60 dark:border-white/5 bg-stone-50/50 dark:bg-neutral-900/50 hover:bg-white dark:hover:bg-neutral-800 transition-all text-left shadow-sm hover:shadow-md"
+                >
+                  <strong className="block text-[14px] font-bold text-stone-900 dark:text-stone-100 group-hover:text-accent transition-colors">B站导入</strong>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-stone-600 dark:text-zinc-400">
+                      {bilibiliInboxProcessedCount} / {bilibiliInboxVideoCount} 已处理
+                    </span>
                     <div className="w-8 h-8 rounded-full bg-stone-200/50 dark:bg-neutral-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0 border border-stone-300/50 dark:border-white/5">
                       <span className="text-stone-600 dark:text-zinc-300 text-xs font-bold">→</span>
                     </div>
-                  </motion.button>
-                ))}
+                  </div>
+                </motion.button>
               </div>
             ) : (
               <div className="h-32 flex items-center justify-center border-2 border-dashed border-stone-200 dark:border-white/5 rounded-2xl">
-                <p className="text-sm font-semibold text-stone-500">暂无阅读记录</p>
+                <p className="text-sm font-semibold text-stone-500">暂无已连接插件</p>
               </div>
             )}
           </motion.article>

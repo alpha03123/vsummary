@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, FolderKanban, PlayCircle, Sparkles, LayoutGrid, CheckCircle2, Link2, Search, X, Square, CheckSquare, CheckCheck, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { staggerContainer, blurVariant } from "../../../lib/animations";
-import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
+import { isSpecialSeries } from "../model/workspaceControllerConstants";
 
 function getProcessedCount(series) {
   return series.videos.filter((video) => video.processed).length;
@@ -67,7 +67,7 @@ function SeriesSelectionButton({ seriesItem, selected, onToggle }) {
 
 export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequestBulkDelete, compact = false }) {
   const allSeries = library?.series ?? [];
-  const sourceSeries = allSeries.filter((item) => !isPlaygroundSeries(item));
+  const sourceSeries = allSeries.filter((item) => !isSpecialSeries(item));
   const availableSeriesIdsKey = sourceSeries.map((item) => item.id).join("\u0000");
   const [searchText, setSearchText] = useState("");
   const [selectedSeriesIds, setSelectedSeriesIds] = useState([]);
@@ -196,7 +196,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
                 >
                   <div className="mb-4 flex items-start justify-between gap-3 relative z-10">
                     <span className="inline-flex items-center rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 px-3 py-1 text-[11px] font-bold tracking-wide text-stone-600 dark:text-zinc-400 shadow-sm">
-                      {seriesItem.kind === "bilibili_inbox" ? "B站导入" : `${seriesItem.videos.length} videos`}
+                      {`${seriesItem.videos.length} videos`}
                     </span>
                     <div className="flex items-center gap-1">
                       <SeriesSelectionButton seriesItem={seriesItem} selected={selectedSeriesSet.has(seriesItem.id)} onToggle={toggleSeriesSelection} />
@@ -323,7 +323,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
               {/* Card Header */}
               <div className="flex justify-between items-start w-full mb-5">
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200/50 dark:border-white/5 text-stone-600 dark:text-zinc-400 text-[11px] font-bold tracking-wide shadow-sm">
-                  {seriesItem.kind === "bilibili_inbox" ? "B站导入" : `${seriesItem.videos.length} videos`}
+                  {`${seriesItem.videos.length} videos`}
                 </span>
                 <div className="flex items-center gap-2">
                   <SeriesSelectionButton seriesItem={seriesItem} selected={selectedSeriesSet.has(seriesItem.id)} onToggle={toggleSeriesSelection} />

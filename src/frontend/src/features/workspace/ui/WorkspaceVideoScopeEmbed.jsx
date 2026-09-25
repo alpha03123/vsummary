@@ -6,8 +6,7 @@ import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceVideoScopePane } from "./WorkspaceVideoScopePane";
 import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceGenerationOverlay } from "./WorkspaceGenerationOverlay";
-
-const BILIBILI_INBOX_SERIES_ID = "bilibili";
+import { isBilibiliInboxSeries } from "../model/workspaceControllerConstants";
 
 function parseBilibiliTarget(sourceUrl, tabId = null) {
   if (!sourceUrl) {
@@ -106,16 +105,12 @@ export function WorkspaceVideoScopeEmbed() {
     if (!target || !target.bvid || !controller.state.library || error?.key === target.key) {
       return;
     }
-    const inbox = controller.state.library.series?.find((series) => series.id === BILIBILI_INBOX_SERIES_ID);
-    if (!inbox) {
-      setError({ key: target.key, message: "当前 VSummary 版本不支持 B站导入，请升级主程序。" });
-      return;
-    }
-    const video = inbox.videos.find((item) => item.sourceId === target.bvid && item.itemIndex === target.page);
+    const inbox = controller.state.library.series?.find(isBilibiliInboxSeries);
+    const video = inbox?.videos.find((item) => item.sourceId === target.bvid && item.itemIndex === target.page);
     if (!video) {
       if (requestedTargetKeyRef.current !== target.key) {
         requestedTargetKeyRef.current = target.key;
-        controller.onResolveSeriesVideo("bilibili", target.sourceUrl, BILIBILI_INBOX_SERIES_ID).catch((resolveError) => {
+        controller.onResolveBilibiliInboxVideo(target.sourceUrl).catch((resolveError) => {
           setError({
             key: target.key,
             message: resolveError instanceof Error ? resolveError.message : "导入当前 Bilibili 视频失败。",
@@ -126,7 +121,7 @@ export function WorkspaceVideoScopeEmbed() {
     }
     if (selectedTargetKeyRef.current !== target.key) {
       selectedTargetKeyRef.current = target.key;
-      controller.onSelectVideo(BILIBILI_INBOX_SERIES_ID, video.id);
+      controller.onSelectVideo(inbox.id, video.id);
     }
   }, [controller, error?.key, target]);
 

@@ -12,8 +12,11 @@ PLAYGROUND_SERIES_ID = "__playground__"
 从而让所有需要 `series_id` 维度的接口（生成、检索、聊天）仍然可用。
 """
 
-BILIBILI_INBOX_SERIES_ID = "bilibili"
-"""浏览器扩展导入 Bilibili 视频的固定系列 ID。"""
+BILIBILI_INBOX_SOURCE_KIND = "bilibili_inbox"
+"""浏览器扩展 Bilibili 收件箱在控制面中的 source_kind。"""
+
+BILIBILI_INBOX_TITLE = "B站导入"
+"""浏览器扩展 Bilibili 收件箱的固定展示名称。"""
 
 MEDIA_STORAGE_MODES = frozenset({"copy", "hardlink", "external_reference"})
 """本地系列可选的视频存储方式。"""

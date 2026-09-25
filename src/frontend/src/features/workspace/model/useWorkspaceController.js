@@ -303,6 +303,7 @@ export function useWorkspaceController() {
     onRelinkVideo: contentActions.onRelinkVideo,
     onResolvePlaygroundVideo: contentActions.onResolvePlaygroundVideo,
     onResolveSeriesVideo: contentActions.onResolveSeriesVideo,
+    onResolveBilibiliInboxVideo: contentActions.onResolveBilibiliInboxVideo,
     onInitExternalCookie: contentActions.onInitExternalCookie,
     onLoadChaoxingStatus: contentActions.onLoadChaoxingStatus,
     onInitChaoxing: contentActions.onInitChaoxing,

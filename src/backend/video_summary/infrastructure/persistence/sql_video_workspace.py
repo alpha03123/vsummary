@@ -32,7 +32,13 @@ from backend.video_summary.library.models import (
     VideoAiSummaryDTO, VideoAiSummaryVisualEvidenceDTO, VideoNotesDTO, VideoSourceDTO, VideoSummaryDTO, VideoTranscriptDTO, VideoWorkspaceToolsDTO, WorkspaceDTO, WorkspaceToolDTO,
 )
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
-from backend.video_summary.library.constants import AUDIO_SUFFIXES, MEDIA_STORAGE_MODES, MEDIA_SUFFIXES
+from backend.video_summary.library.constants import (
+    AUDIO_SUFFIXES,
+    BILIBILI_INBOX_SOURCE_KIND,
+    BILIBILI_INBOX_TITLE,
+    MEDIA_STORAGE_MODES,
+    MEDIA_SUFFIXES,
+)
 from backend.core.citations import CitationReference
 
 
@@ -130,7 +136,7 @@ class SqlVideoWorkspace:
                 is_linked=row["source_kind"] == "linked",
                 is_agent_managed=bool(_json_object(row["linked_payload"]).get("is_agent_managed")) if row["linked_payload"] is not None else False,
                 source_url=row["external_source_url"] or "",
-                kind="playground" if row["source_kind"] == "playground" else "standard",
+                kind=("playground" if row["source_kind"] == "playground" else "bilibili_inbox" if row["source_kind"] == BILIBILI_INBOX_SOURCE_KIND else "standard"),
             )
             for row in series
         ]
@@ -499,6 +505,13 @@ class SqlVideoWorkspace:
 
     def ensure_playground_series(self) -> str:
         return self._control.ensure_playground_series(workspace_id=self._workspace_id)
+
+    def ensure_bilibili_inbox_series(self) -> str:
+        return self._control.ensure_series_by_source_kind(
+            workspace_id=self._workspace_id,
+            source_kind=BILIBILI_INBOX_SOURCE_KIND,
+            title=BILIBILI_INBOX_TITLE,
+        )
 
     def import_local_playground_videos_from_paths(self, *, source_paths: list[Path]) -> list[LibraryVideoCardDTO]:
         return self.import_local_series_videos_from_paths(
