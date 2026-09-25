@@ -1,4 +1,5 @@
-import { BrainCircuit, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, StickyNote, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BrainCircuit, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, StickyNote, X } from "lucide-react";
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
@@ -17,15 +18,29 @@ const PANEL_META = {
   "series-mindmap": { label: "全局思维导图", icon: Network },
 };
 
-export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions }) {
+export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onAddPanel, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions }) {
+  const [mosaicLayout, setMosaicLayout] = useState(layout);
+
+  useEffect(() => {
+    setMosaicLayout(layout);
+  }, [layout]);
+
   return (
     <div className="flex h-full w-full min-w-0 bg-stone-50/40 p-1 dark:bg-neutral-950/30">
       <Mosaic
-        value={layout}
-        onChange={onLayoutChange}
+        value={mosaicLayout}
+        onChange={setMosaicLayout}
+        onRelease={onLayoutChange}
         className="workspace-mosaic"
         resize={{ minimumPaneSizePercentage: 12 }}
-        zeroStateView={<WorkspaceStateBlock title="暂无打开的面板" description="点击顶部加号添加面板。" dashed />}
+        zeroStateView={
+          <WorkspaceStateBlock title="暂无打开的面板" description="添加一个面板以开始工作。" dashed>
+            <button type="button" onClick={onAddPanel} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90">
+              <Plus size={16} aria-hidden="true" />
+              添加一个面板
+            </button>
+          </WorkspaceStateBlock>
+        }
         renderTile={(panelId, path) => {
           const type = panelTools[panelId] ?? getPanelType(panelId);
           const meta = PANEL_META[type] ?? PANEL_META.studio;

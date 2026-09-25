@@ -213,10 +213,6 @@ export function WorkspacePage({ page }) {
     chat.openCitationReference(reference);
   }
 
-  function addStudioPanel(direction = "row", targetPanelId = focusedPanel) {
-    openStudioPanel("studio", direction, targetPanelId);
-  }
-
   function setPanelTool(panelId, toolId) {
     if (!STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) return;
     setLayout((current) => ({
@@ -492,7 +488,6 @@ export function WorkspacePage({ page }) {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onToggleChatDrawer={chat.toggleDrawer}
           chatDrawerOpen={chat.drawerOpen}
-          onAddStudioPanel={addStudioPanel}
         />
 
         {state.error && (
@@ -538,6 +533,7 @@ export function WorkspacePage({ page }) {
               onFocus={setFocusedPanel}
               onClose={closeStudioPanel}
               onSplit={(panelId, direction) => openStudioPanel("studio", direction, panelId)}
+              onAddPanel={() => openStudioPanel("studio", "row", null)}
               onLayoutChange={(studioLayout) => setLayout((current) => ({ ...current, studioLayout }))}
               renderPanel={renderStudioPanel}
               renderPanelActions={renderPanelActions}

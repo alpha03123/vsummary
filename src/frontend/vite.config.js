@@ -11,7 +11,6 @@ export default defineConfig({
       react: path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
       "markmap-view": path.resolve(__dirname, "node_modules/markmap-view"),
-      "markmap-toolbar": path.resolve(__dirname, "node_modules/markmap-toolbar"),
       d3: path.resolve(__dirname, "node_modules/d3"),
     },
   },

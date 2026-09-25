@@ -1,11 +1,14 @@
 import { formatRange } from "../../../../shared/lib/time";
 
-export function WorkspaceMediaPreviewHeader({ subtitleSettings = null }) {
+export function WorkspaceMediaPreviewHeader({ currentTranscriptAction = null, subtitleSettings = null }) {
   return (
     <div className="workspace-muted-panel relative rounded-3xl border p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase text-stone-600 dark:text-stone-400">Media Preview</p>
-        {subtitleSettings}
+        <div className="flex shrink-0 items-center gap-2">
+          {currentTranscriptAction}
+          {subtitleSettings}
+        </div>
       </div>
     </div>
   );

@@ -785,6 +785,15 @@
   display: none;
 }
 
+.workspace-video-stage {
+  container-type: size;
+}
+
+.workspace-video-frame {
+  width: min(100cqw, calc(100cqh * 16 / 9));
+  aspect-ratio: 16 / 9;
+}
+
 .workspace-mosaic-action {
   display: inline-flex;
   width: 28px;

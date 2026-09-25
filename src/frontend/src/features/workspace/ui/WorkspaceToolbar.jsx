@@ -5,7 +5,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BarChart3,
-  Plus,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { loadApplicationUpdateStatus } from "../../../local-features/api/localWorkspaceApi";
@@ -19,7 +18,6 @@ export function WorkspaceToolbar({
   onToggleSidebar,
   onToggleChatDrawer,
   chatDrawerOpen = false,
-  onAddStudioPanel,
   onOpenUsagePage,
   onOpenUpdate,
 }) {
@@ -87,11 +85,6 @@ export function WorkspaceToolbar({
             {versionStatus.version}
           </span>
         )}
-        {onAddStudioPanel ? (
-          <button type="button" onClick={onAddStudioPanel} className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-600 transition hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="在右侧添加面板" aria-label="在右侧添加面板">
-            <Plus size={20} />
-          </button>
-        ) : null}
         </div>
         {onToggleChatDrawer ? (
           <button

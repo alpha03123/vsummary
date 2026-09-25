@@ -108,6 +108,27 @@ export function WorkspaceVideoPlayer({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <WorkspaceMediaPreviewHeader
+        currentTranscriptAction={
+          <AnimatePresence initial={false}>
+            {isPlaying && typeof onFocusOverviewAtTime === "function" ? (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+              >
+                <button
+                  type="button"
+                  onClick={openCurrentTranscript}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:hover:bg-accent/15"
+                >
+                  <Captions size={15} aria-hidden="true" />
+                  查看当前转写
+                </button>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        }
         subtitleSettings={!isAudioSource && subtitleSource ? (
             <WorkspaceNativeSubtitleSettings
               subtitlesEnabled={subtitlesEnabled}
@@ -125,43 +146,45 @@ export function WorkspaceVideoPlayer({
           音频文件暂不支持预览
         </div>
       ) : videoSource ? (
-        <div className="workspace-elevated-panel relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-3xl border bg-black shadow-sm">
-          <video
-            key={videoSource}
-            ref={videoRef}
-            className="h-full w-full bg-black object-contain"
-            controls
-            controlsList="nodownload noplaybackrate noremoteplayback"
-            disablePictureInPicture
-            preload="metadata"
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onEnded={() => {
-              setIsPlaying(false);
-              onPlaybackEnded?.();
-            }}
-            onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
-          >
-            <source src={videoSource} />
-            {subtitleSource ? (
-              <track
-                ref={subtitleTrackRef}
-                kind="subtitles"
-                src={subtitleSource}
-                srcLang="zh-CN"
-                label="中文字幕"
+        <div className="workspace-video-stage flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+          <div className="workspace-video-frame relative overflow-hidden rounded-3xl border border-stone-200 bg-stone-100 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+            <video
+              key={videoSource}
+              ref={videoRef}
+              className="h-full w-full object-contain"
+              controls
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              preload="metadata"
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => {
+                setIsPlaying(false);
+                onPlaybackEnded?.();
+              }}
+              onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
+            >
+              <source src={videoSource} />
+              {subtitleSource ? (
+                <track
+                  ref={subtitleTrackRef}
+                  kind="subtitles"
+                  src={subtitleSource}
+                  srcLang="zh-CN"
+                  label="中文字幕"
+                />
+              ) : null}
+            </video>
+            {!nativeFullscreen ? (
+              <WorkspaceSubtitleDisplay
+                videoRef={videoRef}
+                subtitleTrackRef={subtitleTrackRef}
+                subtitleSource={subtitleSource}
+                enabled={subtitlesEnabled}
+                style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
               />
             ) : null}
-          </video>
-          {!nativeFullscreen ? (
-            <WorkspaceSubtitleDisplay
-              videoRef={videoRef}
-              subtitleTrackRef={subtitleTrackRef}
-              subtitleSource={subtitleSource}
-              enabled={subtitlesEnabled}
-              style={{ ...subtitleStyle, onPositionChange: (position) => updateSubtitleStyle({ position }) }}
-            />
-          ) : null}
+          </div>
         </div>
       ) : (
         // 未下载的媒体没有可播放源：给一个和播放器等大的 16:9 占位，
@@ -176,26 +199,6 @@ export function WorkspaceVideoPlayer({
           </p>
         </div>
       )}
-      <AnimatePresence initial={false}>
-        {isPlaying && typeof onFocusOverviewAtTime === "function" ? (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="mt-2 flex justify-center"
-          >
-            <button
-              type="button"
-              onClick={openCurrentTranscript}
-              className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm font-semibold text-accent shadow-sm transition-colors hover:border-accent/50 hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:bg-accent/15 dark:hover:bg-accent/20"
-            >
-              <Captions size={17} aria-hidden="true" />
-              查看当前转写
-            </button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
     </div>
   );
 }

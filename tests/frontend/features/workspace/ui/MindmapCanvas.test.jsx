@@ -13,11 +13,6 @@ vi.mock("markmap-view", () => ({
     })),
   },
 }));
-vi.mock("markmap-toolbar", () => ({
-  Toolbar: {
-    create: vi.fn(() => ({ el: document.createElement("div") })),
-  },
-}));
 vi.mock("d3", () => ({
   select: vi.fn(() => ({
     on: vi.fn(),
@@ -28,7 +23,6 @@ vi.mock("d3", () => ({
 
 import { MindmapCanvas } from "@src/features/workspace/ui/MindmapCanvas";
 import { Markmap } from "markmap-view";
-import { Toolbar } from "markmap-toolbar";
 
 const fakeRoot = {
   id: "root", title: "测试导图", summary: "",
@@ -46,7 +40,6 @@ describe("MindmapCanvas — markmap integration", () => {
       <MindmapCanvas root={fakeRoot} selectedNodeId={null} onSelectNode={vi.fn()} />
     );
     expect(Markmap.create).toHaveBeenCalledTimes(1);
-    expect(Toolbar.create).toHaveBeenCalledTimes(1);
   });
 
   it("renders nothing when root is null", () => {
@@ -73,18 +66,6 @@ describe("MindmapCanvas — markmap integration", () => {
     );
     expect(destroy).toHaveBeenCalled();
     expect(Markmap.create).toHaveBeenCalledTimes(2);
-  });
-
-  it("attaches toolbar when root is provided", () => {
-    const toolbarEl = document.createElement("div");
-    Toolbar.create.mockReturnValue({ el: toolbarEl });
-
-    const { container } = render(
-      <div>
-        <MindmapCanvas root={fakeRoot} selectedNodeId={null} onSelectNode={vi.fn()} />
-      </div>
-    );
-    expect(Toolbar.create).toHaveBeenCalledTimes(1);
   });
 
   it("T8: writes the markmap instance to markmapRef on render", () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
 import { MINDMAP_DEPTH_OPTIONS } from "../../model/mindmapDepthOptions";
 import { MindmapCanvas } from "../MindmapCanvas";
@@ -23,6 +23,7 @@ export function WorkspaceMindmapView({
   const hasMindmap = Boolean(mindmap);
 
   const [maxDepth, setMaxDepth] = useState(null);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const markmapRef = useRef(null);
 
@@ -133,34 +134,43 @@ export function WorkspaceMindmapView({
     return null;
   }
 
-  const actionBar = (
-    <div className="workspace-elevated-panel absolute right-4 top-4 z-10 flex items-center gap-1 rounded-xl border p-1.5 shadow-lg">
-      <label className="inline-flex">
-        <span className="sr-only">导图层级</span>
-        <WorkspaceProviderSelect
-          ariaLabel="导图层级"
-          value={maxDepth === null ? "auto" : String(maxDepth)}
-          onChange={(value) => setMaxDepth(value === "auto" ? null : Number(value))}
-          options={MINDMAP_DEPTH_OPTIONS}
-          disabled={isGeneratingMindmapSelectedVideo}
-          hideGroupLabels
-          className="w-24"
-        />
-      </label>
-      <button
-        type="button"
-        onClick={() => onGenerateMindmap(maxDepth)}
-        disabled={isGeneratingMindmapSelectedVideo}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
-        title={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
-        aria-label={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
-      >
-        <RefreshCw size={14} strokeWidth={2} className={isGeneratingMindmapSelectedVideo ? "animate-spin" : ""} />
-      </button>
-      <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`)} title="导出 SVG" aria-label="导出 SVG">
-        <Download size={14} strokeWidth={2} />
-      </button>
+  const actionBar = controlsOpen ? (
+    <div className="absolute inset-x-0 top-0 z-10 flex justify-end border-b border-stone-200/80 bg-white/90 px-3 py-1.5 backdrop-blur dark:border-stone-800 dark:bg-neutral-950/90">
+      <div className="flex items-center gap-1">
+          <label className="inline-flex">
+            <span className="sr-only">导图层级</span>
+            <WorkspaceProviderSelect
+              ariaLabel="导图层级"
+              value={maxDepth === null ? "auto" : String(maxDepth)}
+              onChange={(value) => setMaxDepth(value === "auto" ? null : Number(value))}
+              options={MINDMAP_DEPTH_OPTIONS}
+              disabled={isGeneratingMindmapSelectedVideo}
+              hideGroupLabels
+              className="w-24"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => onGenerateMindmap(maxDepth)}
+            disabled={isGeneratingMindmapSelectedVideo}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+            title={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
+            aria-label={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
+          >
+            <RefreshCw size={14} strokeWidth={2} className={isGeneratingMindmapSelectedVideo ? "animate-spin" : ""} />
+          </button>
+          <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`)} title="导出 SVG" aria-label="导出 SVG">
+            <Download size={14} strokeWidth={2} />
+          </button>
+          <button type="button" onClick={() => setControlsOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent" title="收起导图工具" aria-label="收起导图工具" aria-expanded="true">
+            <ChevronUp size={16} />
+          </button>
+      </div>
     </div>
+  ) : (
+    <button type="button" onClick={() => setControlsOpen(true)} className="absolute left-1/2 top-0 z-10 inline-flex h-6 w-12 -translate-x-1/2 items-center justify-center rounded-b-lg border border-t-0 border-stone-200/80 bg-white/90 text-stone-500 backdrop-blur transition-colors hover:bg-accent/10 hover:text-accent dark:border-stone-800 dark:bg-neutral-950/90" title="展开导图工具" aria-label="展开导图工具" aria-expanded="false">
+      <ChevronDown size={16} />
+    </button>
   );
   return (
     <div className="flex h-full min-h-0 flex-col">
