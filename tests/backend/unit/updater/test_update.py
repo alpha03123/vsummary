@@ -10,12 +10,44 @@ from unittest.mock import patch
 
 from updater.update import (
     _candidate_locations,
+    _compare_release_versions,
     _recover_incomplete_transaction,
     apply_prepared_update,
     check_for_update,
     prepare_update,
     run_update,
 )
+
+
+class ReleaseVersionTests(unittest.TestCase):
+    def test_orders_four_part_versions_and_prerelease_stages(self) -> None:
+        ordered = [
+            "v0.5.2-alpha.1",
+            "v0.5.2-beta.1",
+            "v0.5.2-rc.1",
+            "v0.5.2",
+            "v0.5.2-hotfix",
+            "v0.5.2-hotfix.1",
+            "v0.5.2.1-alpha",
+            "v0.5.2.1-alpha.1",
+            "v0.5.2.1-beta.1",
+            "v0.5.2.1-rc.1",
+            "v0.5.2.1",
+            "v0.5.2.1-hotfix",
+            "v0.5.2.1-hotfix.1",
+            "v0.5.2.2-alpha.1",
+            "v0.5.2.2",
+            "v0.5.3-alpha.1",
+            "v0.5.3",
+        ]
+
+        for earlier, later in zip(ordered, ordered[1:]):
+            self.assertLess(_compare_release_versions(earlier, later), 0)
+
+    def test_rejects_malformed_versions(self) -> None:
+        for version in ("v0.5.2.0", "v0.5", "v0.5.2-preview.1"):
+            with self.subTest(version=version), self.assertRaisesRegex(RuntimeError, "vMAJOR"):
+                _compare_release_versions(version, "v0.5.2.1")
 
 
 class UpdaterTests(unittest.TestCase):

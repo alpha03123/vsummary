@@ -31,6 +31,34 @@ $PacksRootPath = if ([System.IO.Path]::IsPathRooted($OutputRoot)) { $OutputRoot 
 $OutputRootPath = Join-Path $PacksRootPath (Get-Date -Format "yyyy-MM-dd")
 $BuildRootPath = Join-Path $OutputRootPath "_build"
 $ManifestPath = Join-Path $OutputRootPath "vsummary-manifest.json"
+$ReleaseVersionPattern = '^(?:v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:\.(?:[1-9][0-9]*))?(?:-(?:alpha|beta|rc|hotfix)(?:\.(?:0|[1-9][0-9]*))?)?|dev-[0-9a-f]{7,40})$'
+
+function Test-ReleaseVersion {
+    param(
+        [string]$Value,
+        [switch]$AllowDevelopment
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    if (-not $AllowDevelopment -and $Value.StartsWith('dev-')) {
+        return $false
+    }
+    return $Value -match $ReleaseVersionPattern
+}
+
+function Assert-ReleaseVersion {
+    param(
+        [string]$Value,
+        [string]$ParameterName = 'Version',
+        [switch]$AllowDevelopment
+    )
+
+    if (-not (Test-ReleaseVersion -Value $Value -AllowDevelopment:$AllowDevelopment)) {
+        throw "$ParameterName must use vMAJOR.MINOR.PATCH[.HOTFIX][-alpha[.N]|-beta[.N]|-rc[.N]|-hotfix[.N]]."
+    }
+}
 
 function Remove-PathIfExists {
     param([string]$Path)
@@ -202,7 +230,9 @@ function Get-CondaExe {
 
 function Resolve-ReleaseVersion {
     if (-not [string]::IsNullOrWhiteSpace($Version)) {
-        return $Version
+        $resolved = $Version.Trim()
+        Assert-ReleaseVersion -Value $resolved
+        return $resolved
     }
 
     $tag = $null
@@ -216,14 +246,18 @@ function Resolve-ReleaseVersion {
         }
     }
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
-        return $tag.Trim()
+        $resolved = $tag.Trim()
+        Assert-ReleaseVersion -Value $resolved
+        return $resolved
     }
 
     $commit = & git -C $RepoRoot rev-parse --short HEAD
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
         throw "Unable to resolve release version. Pass -Version explicitly."
     }
-    return "dev-$($commit.Trim())"
+    $resolved = "dev-$($commit.Trim())"
+    Assert-ReleaseVersion -Value $resolved -AllowDevelopment
+    return $resolved
 }
 
 function Get-RuntimeRequirements {
@@ -1051,10 +1085,13 @@ function Write-ReleaseManifest {
 }
 
 if ($MyInvocation.InvocationName -ne ".") {
+    $Script:ReleaseVersion = Resolve-ReleaseVersion
+    if (-not [string]::IsNullOrWhiteSpace($PreviousVersion)) {
+        Assert-ReleaseVersion -Value $PreviousVersion.Trim() -ParameterName 'PreviousVersion'
+    }
     $CondaExe = Get-CondaExe
     $CondaPackExe = Require-Command -Name "conda-pack"
     $SevenZipExe = Require-Command -Name "7z"
-    $Script:ReleaseVersion = Resolve-ReleaseVersion
 
     Ensure-Directory -Path $OutputRootPath
 

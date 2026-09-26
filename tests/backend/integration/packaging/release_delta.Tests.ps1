@@ -2,6 +2,17 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "..\..\..\..\scripts\build_release.ps1")
 
+Describe "Release version validation" {
+    It "accepts four-part releases and prerelease or hotfix suffixes" {
+        @("v0.5.2", "v0.5.2-hotfix", "v0.5.2-hotfix.1", "v0.5.2.2", "v0.5.2.2-alpha.1", "v0.5.2.2-beta.1", "v0.5.2.2-rc.1") |
+            ForEach-Object { (Test-ReleaseVersion -Value $_) | Should Be $true }
+    }
+
+    It "rejects unsupported suffixes" {
+        { Assert-ReleaseVersion -Value "v0.5.2-preview" } | Should Throw
+    }
+}
+
 Describe "Build-DeltaPackage" {
     It "returns only one delta object after invoking 7z" {
         $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("vsummary-delta-" + [guid]::NewGuid().ToString("N"))

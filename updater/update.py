@@ -34,6 +34,11 @@ DEFAULT_GITHUB_MIRRORS = (
     "https://gh-proxy.com/",
 )
 GITHUB_HOSTS = {"github.com", "api.github.com", "raw.githubusercontent.com", "objects.githubusercontent.com"}
+RELEASE_VERSION_PATTERN = re.compile(
+    r"^v(?P<major>0|[1-9][0-9]*)\.(?P<minor>0|[1-9][0-9]*)\.(?P<patch>0|[1-9][0-9]*)"
+    r"(?:\.(?P<hotfix>[1-9][0-9]*))?"
+    r"(?:-(?P<stage>alpha|beta|rc|hotfix)(?:\.(?P<stage_number>0|[1-9][0-9]*))?)?$"
+)
 
 
 @dataclass(frozen=True)
@@ -333,15 +338,31 @@ def _read_version_file(root: Path) -> str:
 
 
 def _compare_release_versions(current: str, target: str) -> int:
-    """比较 `v0.x.x` 发布版本，拒绝非发布版本与潜在降级。"""
-    pattern = re.compile(r"^v(?P<major>0|[1-9][0-9]*)\.(?P<minor>0|[1-9][0-9]*)\.(?P<patch>0|[1-9][0-9]*)$")
-    current_match = pattern.fullmatch(current)
-    target_match = pattern.fullmatch(target)
-    if current_match is None or target_match is None:
-        raise RuntimeError("Pack update requires v0.x.x release versions.")
-    current_parts = tuple(int(current_match.group(name)) for name in ("major", "minor", "patch"))
-    target_parts = tuple(int(target_match.group(name)) for name in ("major", "minor", "patch"))
+    """Compare stable and prerelease Pack versions without relying on release dates."""
+
+    current_parts = _parse_release_version(current)
+    target_parts = _parse_release_version(target)
     return (current_parts > target_parts) - (current_parts < target_parts)
+
+
+def _parse_release_version(value: str) -> tuple[int, int, int, int, int, int]:
+    """Parse ``vMAJOR.MINOR.PATCH[.HOTFIX][-STAGE[.N]]`` for update ordering."""
+
+    match = RELEASE_VERSION_PATTERN.fullmatch(value)
+    if match is None:
+        raise RuntimeError(
+            "Pack update requires vMAJOR.MINOR.PATCH[.HOTFIX][-alpha[.N]|-beta[.N]|-rc[.N]|-hotfix[.N]] release versions."
+        )
+    stage_rank = {"alpha": 0, "beta": 1, "rc": 2, None: 3, "hotfix": 4}[match.group("stage")]
+    stage_number = int(match.group("stage_number")) if match.group("stage_number") is not None else -1
+    return (
+        int(match.group("major")),
+        int(match.group("minor")),
+        int(match.group("patch")),
+        int(match.group("hotfix") or 0),
+        stage_rank,
+        stage_number,
+    )
 
 
 def _write_json(path: Path, data: Any) -> None:
