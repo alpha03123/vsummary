@@ -3,6 +3,7 @@ import { LoaderCircle, PencilLine, Trash2, Plus, Calendar } from "lucide-react";
 
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
 import { WorkspaceBackButton } from "../shared/WorkspaceBackButton";
+import { WorkspaceConfirmDialog } from "../shared/WorkspaceConfirmDialog";
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
 
 // 笔记时间戳由后端以 UTC 存储（形如 2026-09-17T11:30:16.056886Z），
@@ -78,6 +79,7 @@ export function WorkspaceNotesView({
   const [isEditing, setIsEditing] = useState(false);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingContent, setEditingContent] = useState("");
+  const [pendingDeleteNoteId, setPendingDeleteNoteId] = useState(null);
 
   const selectedNote = notes?.notes?.find((n) => n.id === selectedNoteId);
 
@@ -126,8 +128,17 @@ export function WorkspaceNotesView({
   }
 
   function handleDeleteNote(id) {
-    onDeleteNote(id);
-    if (viewState === "detail" && selectedNoteId === id) {
+    setPendingDeleteNoteId(id);
+  }
+
+  function confirmDeleteNote() {
+    if (!pendingDeleteNoteId || savingNote) {
+      return;
+    }
+    const deletedNoteId = pendingDeleteNoteId;
+    setPendingDeleteNoteId(null);
+    onDeleteNote(deletedNoteId);
+    if (viewState === "detail" && selectedNoteId === deletedNoteId) {
       setViewState("list");
       setSelectedNoteId(null);
     }
@@ -229,6 +240,7 @@ export function WorkspaceNotesView({
                 <button
                   onClick={() => handleDeleteNote(selectedNote.id)}
                   disabled={savingNote}
+                  aria-label="删除笔记"
                   className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-danger-subtle hover:text-danger dark:text-stone-400"
                   title="删除"
                 >
@@ -274,6 +286,16 @@ export function WorkspaceNotesView({
             </>
           )}
         </article>
+        <WorkspaceConfirmDialog
+          open={pendingDeleteNoteId != null}
+          title="删除这条笔记？"
+          description="删除后无法恢复。"
+          confirmLabel="确认删除"
+          destructive
+          pending={savingNote}
+          onCancel={() => setPendingDeleteNoteId(null)}
+          onConfirm={confirmDeleteNote}
+        />
       </div>
     );
   }

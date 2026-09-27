@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Download } from "lucide-react";
 
 import { DEFAULT_SUBTITLE_STYLE } from "./WorkspaceNativeSubtitleSettings";
@@ -33,6 +33,10 @@ export function WorkspaceVideoPlayer({
   useEffect(() => {
     onPlaybackStateChange(false);
   }, [videoSource]);
+
+  useLayoutEffect(() => () => {
+    videoRef.current?.pause();
+  }, []);
 
   useEffect(() => {
     if (isAudioSource || !playerSeekRequest || !videoRef.current) {

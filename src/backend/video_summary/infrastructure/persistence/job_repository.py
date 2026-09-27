@@ -41,6 +41,8 @@ class JobSnapshot:
     failure_code: str | None
     failure_detail: str | None
     result_content_version: int | None
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,7 @@ class JobEventSnapshot:
     progress: float | None
     detail: str | None
     occurred_at: datetime
+    started_at: datetime | None
 
 
 class SqlJobRepository:
@@ -181,7 +184,7 @@ class SqlJobRepository:
                     heartbeat_at=now,
                 )
             )
-            self._append_event(session, job.id, "running", "claimed", 0.0, "Worker 已领取任务")
+            self._append_event(session, job.id, "running", "claimed", 0.0, "正在准备任务")
             return ClaimedJob(
                 id=job.id,
                 workspace_id=job.workspace_id,
@@ -461,6 +464,7 @@ class SqlJobRepository:
             progress=event.progress,
             detail=event.detail,
             occurred_at=event.created_at,
+            started_at=job.started_at,
         )
 
     def events(self, job_id: str, *, after_sequence: int, workspace_id: str | None = None) -> list[JobEventSnapshot]:
@@ -485,6 +489,7 @@ class SqlJobRepository:
                 progress=row.progress,
                 detail=row.detail,
                 occurred_at=row.created_at,
+                started_at=status.started_at,
             )
             for row in rows
         ]
@@ -596,6 +601,8 @@ def _snapshot(job: Job) -> JobSnapshot:
         failure_code=job.failure_code,
         failure_detail=job.failure_detail,
         result_content_version=job.result_content_version,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
     )
 
 

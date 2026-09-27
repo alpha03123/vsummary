@@ -67,6 +67,37 @@ describe("WorkspaceMarkdownMessage", () => {
     expect(screen.getByText(/^字幕内容.*\.\.\.$/)).toBeInTheDocument();
   });
 
+  it("keeps an open citation preview after a parent rerender", () => {
+    const citations = [{
+      id: "3",
+      label: "Video 3",
+      source_type: "transcript",
+      slots: [{ target_type: "video", video_title: "Video 3", start_seconds: 30, text: "对应证据" }],
+    }];
+    const { rerender } = render(
+      <WorkspaceMarkdownMessage
+        content="回答来自视频。[3]"
+        citations={citations}
+        noteImageContext={{ seriesId: "series-1", videoId: "video-1", durationSeconds: 60 }}
+        onSeek={vi.fn()}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("link", { name: "3" }));
+    expect(screen.getByText("[3] Video 3")).toBeInTheDocument();
+
+    rerender(
+      <WorkspaceMarkdownMessage
+        content="回答来自视频。[3]"
+        citations={citations}
+        noteImageContext={{ seriesId: "series-1", videoId: "video-1", durationSeconds: 60 }}
+        onSeek={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("[3] Video 3")).toBeInTheDocument();
+  });
+
   it("opens citation references with video locations when clicking transcript citations", () => {
     const onOpenCitationReference = vi.fn();
 

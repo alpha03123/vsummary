@@ -38,6 +38,8 @@ class SqlBackedVideoSummaryGenerator:
         worker_id: str | None = None,
         lease_token: str | None = None,
     ) -> None:
+        if progress_reporter is not None:
+            progress_reporter.update("prepare", 1.0, "正在准备生成素材")
         source = self._workspace.get_video_source(series_id, video_id)
         if source is None:
             raise LookupError(f"video not found '{series_id}/{video_id}'")

@@ -58,6 +58,7 @@ async def stream_job_events(
                     "progress": event.progress,
                     "detail": event.detail,
                     "occurred_at": event.occurred_at.isoformat(),
+                    "started_at": event.started_at.timestamp() if event.started_at is not None else None,
                 }
                 yield f"id: {event.sequence}\nevent: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
@@ -85,4 +86,6 @@ def _snapshot_payload(snapshot) -> dict[str, object]:
         "failure_code": snapshot.failure_code,
         "failure_detail": snapshot.failure_detail,
         "result_content_version": snapshot.result_content_version,
+        "started_at": snapshot.started_at.timestamp() if snapshot.started_at is not None else None,
+        "finished_at": snapshot.finished_at.timestamp() if snapshot.finished_at is not None else None,
     }

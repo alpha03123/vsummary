@@ -1415,6 +1415,12 @@ def get_video_generation_status(
                 "progress": event.progress if event is not None else (100.0 if snapshot.status == "succeeded" else 0.0),
                 "detail": snapshot.failure_detail or (event.detail if event is not None else None),
                 "error": snapshot.failure_detail if snapshot.status == "failed" else None,
+                "started_at": snapshot.started_at.timestamp() if snapshot.started_at is not None else None,
+                "elapsed_seconds": (
+                    max(0.0, (event.occurred_at - snapshot.started_at).total_seconds())
+                    if event is not None and snapshot.started_at is not None
+                    else None
+                ),
             },
         }
     return {

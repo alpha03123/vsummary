@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { WorkspaceMetricCard } from "./shared/WorkspaceMetricCard";
@@ -22,6 +23,7 @@ const GENERATION_STAGE_ITEMS = [
 /** 后端细分阶段 → 浮层阶段的归并映射（键为后端 `stage` 原文）。 */
 const STAGE_ALIASES = {
   prepare: "preparing",
+  claimed: "preparing",
   queued: "preparing",
   batch: "preparing",
   queue: "preparing",
@@ -61,9 +63,9 @@ function resolveStageId(stage) {
   return typeof alias === "string" && STAGE_IDS.has(alias) ? alias : null;
 }
 
-function formatDurationLabel(value) {
+function formatDurationLabel(value, fallback = "计算中") {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    return "--";
+    return fallback;
   }
   const totalSeconds = Math.max(0, Math.round(value));
   const minutes = Math.floor(totalSeconds / 60);
@@ -88,15 +90,49 @@ export function WorkspaceGenerationOverlay({
   cancelLabel = "取消",
 }) {
   const isTranscriptMode = mode === "transcript";
-  const hasRealGenerationProgress = typeof generationProgress === "number";
-  const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : "处理中";
+  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
+  const localStartedAtRef = useRef(null);
+  const hasRealGenerationProgress = typeof generationProgress === "number" && generationProgress > 0;
+  const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : "准备中";
   const rawStageId = generationSnapshot?.status === "completed" ? "completed" : generationSnapshot?.stage;
   const activeStageId = resolveStageId(rawStageId);
   const activeStageLabel =
     GENERATION_STAGE_ITEMS.find((item) => item.id === activeStageId)?.label ?? TRANSIENT_STAGE_LABELS[rawStageId] ?? "处理中";
-  const elapsedLabel = formatDurationLabel(generationSnapshot?.elapsedSeconds);
-  const estimatedTotalLabel = formatDurationLabel(generationSnapshot?.estimatedTotalSeconds);
-  const remainingLabel = formatDurationLabel(generationSnapshot?.remainingSeconds);
+  useEffect(() => {
+    if (generationSnapshot?.status !== "running") {
+      localStartedAtRef.current = null;
+      setLiveElapsedSeconds(0);
+      return undefined;
+    }
+    if (localStartedAtRef.current === null) {
+      localStartedAtRef.current = Date.now() / 1000;
+    }
+    const updateElapsed = () => {
+      const snapshotElapsed = Number(generationSnapshot.elapsedSeconds) || 0;
+      const startedAt = generationSnapshot.startedAt;
+      const clockElapsed = typeof startedAt === "number" && Number.isFinite(startedAt) && startedAt > 0
+        ? Math.max(0, Date.now() / 1000 - startedAt)
+        : Math.max(0, Date.now() / 1000 - localStartedAtRef.current);
+      setLiveElapsedSeconds(Math.max(snapshotElapsed, clockElapsed));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [generationSnapshot]);
+
+  const elapsedLabel = formatDurationLabel(liveElapsedSeconds, "0秒");
+  const estimatedTotalSeconds = Number.isFinite(generationSnapshot?.estimatedTotalSeconds)
+    ? generationSnapshot.estimatedTotalSeconds
+    : hasRealGenerationProgress && liveElapsedSeconds > 0
+      ? liveElapsedSeconds / (generationProgress / 100)
+      : null;
+  const remainingSeconds = Number.isFinite(generationSnapshot?.remainingSeconds)
+    ? generationSnapshot.remainingSeconds
+    : estimatedTotalSeconds == null
+      ? null
+      : Math.max(0, estimatedTotalSeconds - liveElapsedSeconds);
+  const estimatedTotalLabel = formatDurationLabel(estimatedTotalSeconds);
+  const remainingLabel = formatDurationLabel(remainingSeconds);
 
   return (
     <motion.div

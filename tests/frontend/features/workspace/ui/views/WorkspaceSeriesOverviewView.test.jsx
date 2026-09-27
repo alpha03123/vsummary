@@ -69,4 +69,52 @@ describe("WorkspaceSeriesOverviewView", () => {
 
     expect(onOpenVideoOverview).toHaveBeenCalledWith("video-2");
   });
+
+  it("expands and highlights the cited transcript segment in the matching video overview", async () => {
+    const citedSummary = createSummary("第二讲概况");
+    citedSummary.chapters[0].transcript_segments = [{
+      start_seconds: 2,
+      end_seconds: 4,
+      text: "被引用的转写片段",
+    }];
+
+    renderView({
+      summariesByVideoId: {
+        "video-1": createSummary("第一讲概况"),
+        "video-2": citedSummary,
+      },
+      citationFocus: {
+        videoId: "video-2",
+        seconds: 3,
+        endSeconds: 3,
+        requestId: "citation-1",
+      },
+    });
+
+    const transcript = await screen.findByRole("button", { name: /被引用的转写片段/ });
+
+    expect(screen.queryByText("第一讲概况")).not.toBeInTheDocument();
+    expect(screen.getByText("第二讲概况")).toBeInTheDocument();
+    expect(document.getElementById("overview-transcript-video-2-第二讲概况-chapter-1")).toHaveProperty("open", true);
+    expect(transcript).toHaveClass("border-2");
+  });
+
+  it("uses video-scoped transcript ids when multiple overviews share a chapter id", () => {
+    const firstSummary = createSummary("第一讲概况");
+    const secondSummary = createSummary("第二讲概况");
+    firstSummary.chapters[0].id = "chapter-1";
+    secondSummary.chapters[0].id = "chapter-1";
+    firstSummary.chapters[0].transcript_segments = [{ start_seconds: 0, end_seconds: 1, text: "第一讲转写" }];
+    secondSummary.chapters[0].transcript_segments = [{ start_seconds: 0, end_seconds: 1, text: "第二讲转写" }];
+
+    renderView({
+      summariesByVideoId: {
+        "video-1": firstSummary,
+        "video-2": secondSummary,
+      },
+    });
+
+    expect(document.getElementById("overview-transcript-video-1-chapter-1")).toBeInTheDocument();
+    expect(document.getElementById("overview-transcript-video-2-chapter-1")).toBeInTheDocument();
+  });
 });

@@ -749,6 +749,10 @@ class SqlVideoWorkspace:
             result = session.execute(text("UPDATE notes SET title=:title,content=:content,row_version=row_version+1,updated_at=:now WHERE id=:id AND video_id=:video AND deleted_at IS NULL"), {"id": note_id, "video": video_id, "title": title.strip(), "content": content.strip(), "now": now})
             if result.rowcount != 1:
                 return None
+            created_at = session.execute(
+                text("SELECT created_at FROM notes WHERE id=:id AND video_id=:video AND deleted_at IS NULL"),
+                {"id": note_id, "video": video_id},
+            ).scalar_one()
             _enqueue_outbox_event(
                 session,
                 workspace_id=self._workspace_id,
@@ -759,7 +763,7 @@ class SqlVideoWorkspace:
                 occurred_at=now,
             )
         self._refresh_rag(series_id, video_id)
-        return VideoNoteDTO(id=note_id, title=title.strip(), content=content.strip(), source="manual", created_at="", updated_at=now.isoformat())
+        return VideoNoteDTO(id=note_id, title=title.strip(), content=content.strip(), source="manual", created_at=created_at.isoformat(), updated_at=now.isoformat())
 
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
         if self.get_video_source(series_id, video_id) is None:

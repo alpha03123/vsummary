@@ -7,6 +7,7 @@ import {
   generateVideoMindmap,
   generateVideoKnowledgeCards,
   generateVideoAiSummary,
+  subscribeDurableJobProgress,
 } from "@src/features/workspace/model/workspaceApi";
 import { loadProviderUsage, relinkExternalVideo } from "@src/local-features/api/localWorkspaceApi";
 
@@ -201,6 +202,38 @@ describe("generateVideoSummary", () => {
     })));
 
     await expect(generateVideoSummary("series-1", "video-1")).resolves.toEqual({ jobId: "job-1", status: "queued" });
+  });
+});
+
+describe("subscribeDurableJobProgress", () => {
+  test("preserves durable job timing and derives estimates from live progress", () => {
+    const listeners = {};
+    vi.stubGlobal("EventSource", class {
+      addEventListener(type, listener) {
+        listeners[type] = listener;
+      }
+
+      close() {}
+    });
+    const listener = vi.fn();
+
+    subscribeDurableJobProgress("job-1", listener);
+    listeners.progress({
+      data: JSON.stringify({
+        status: "running",
+        stage: "prepare",
+        progress: 10,
+        detail: "正在准备生成素材",
+        started_at: Date.now() / 1000 - 20,
+      }),
+    });
+
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+      startedAt: expect.any(Number),
+      elapsedSeconds: expect.any(Number),
+      estimatedTotalSeconds: expect.any(Number),
+      remainingSeconds: expect.any(Number),
+    }));
   });
 });
 

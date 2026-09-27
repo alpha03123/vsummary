@@ -8,6 +8,14 @@ export function buildWorkspaceToolExportActions({ activeSeries, notes, summary, 
   if (!activeSeries || !selectedVideo) {
     return [];
   }
+  if (toolId === "preview") {
+    return [{
+      href: videoExportUrl(activeSeries.id, selectedVideo.id, "video"),
+      enabled: selectedVideo.status !== "source_missing",
+      label: "视频导出",
+      disabledReason: "媒体文件不可用，无法导出",
+    }];
+  }
   if (toolId === "overview") {
     const overviewGenerated = tools?.overview?.generated === true;
     const screenshotsGenerated = Array.isArray(summary?.chapters) && summary.chapters.some((chapter) => chapter.image_url);
@@ -48,7 +56,7 @@ function buildSeriesExportActions(activeSeries) {
 }
 
 function videoExportUrl(seriesId, videoId, exportName) {
-  if (exportName.endsWith(".zip") || exportName.endsWith(".srt")) {
+  if (exportName === "video" || exportName.endsWith(".zip") || exportName.endsWith(".srt")) {
     return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}`;
   }
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;

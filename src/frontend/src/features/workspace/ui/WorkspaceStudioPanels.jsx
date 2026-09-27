@@ -66,12 +66,14 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
                     </button>
                     {panelLeadingActions ? <div className="shrink-0" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div> : null}
                   </div>
-                  <div className="ml-auto flex shrink-0 items-center gap-1" onPointerDown={(event) => event.stopPropagation()}>
-                    {panelActions}
-                    <button type="button" onClick={() => onSplit(panelId, "row")} className="workspace-mosaic-action" title="在右侧拆分面板" aria-label="在右侧拆分面板"><PanelRight size={15} /></button>
-                    <button type="button" onClick={() => onSplit(panelId, "column")} className="workspace-mosaic-action" title="在下方拆分面板" aria-label="在下方拆分面板"><PanelBottom size={15} /></button>
-                    <button type="button" onClick={() => onClose(panelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
-                    {panelTrailingActions ? <div className="shrink-0">{panelTrailingActions}</div> : null}
+                  <div className="ml-auto flex min-w-0 flex-1 items-center" onPointerDown={(event) => event.stopPropagation()}>
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
+                      {panelActions}
+                      <button type="button" onClick={() => onSplit(panelId, "row")} className="workspace-mosaic-action" title="在右侧拆分面板" aria-label="在右侧拆分面板"><PanelRight size={15} /></button>
+                      <button type="button" onClick={() => onSplit(panelId, "column")} className="workspace-mosaic-action" title="在下方拆分面板" aria-label="在下方拆分面板"><PanelBottom size={15} /></button>
+                      <button type="button" onClick={() => onClose(panelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+                    </div>
+                    {panelTrailingActions ? <div className="ml-2 shrink-0">{panelTrailingActions}</div> : null}
                   </div>
                 </header>
               )}

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { WorkspaceChatPanel } from "@src/features/workspace/ui/WorkspaceChatPanel";
+import { WorkspaceChatPanel, WorkspaceChatSessionManager } from "@src/features/workspace/ui/WorkspaceChatPanel";
 
 describe("WorkspaceChatPanel", () => {
   it("allows chat for a video before its AI overview is generated", () => {
@@ -57,30 +57,28 @@ describe("WorkspaceChatPanel composer", () => {
 });
 
 describe("WorkspaceChatPanel session switcher", () => {
-  const baseProps = {
-    workspaceTitle: "我的工作台",
-    activeSeries: { id: "series-1", title: "课程" },
-    selectedVideo: { id: "video-2", title: "第二讲", processed: true },
-    selectedContextType: "video",
-    chatMessages: [],
-    onSubmitChat: vi.fn(),
-  };
-
-  it("groups the session switcher and the new-chat action together", () => {
-    const onStartNewChat = vi.fn();
-    render(
-      <WorkspaceChatPanel
-        {...baseProps}
-        chatSessions={[
-          { id: "session-1", title: "当前对话" },
-          { id: "session-2", title: "新对话 2" },
-        ]}
-        activeSessionId="session-1"
-        onSelectChatSession={vi.fn()}
-        onStartNewChat={onStartNewChat}
+  function renderSessionManager(overrides = {}) {
+    return render(
+      <WorkspaceChatSessionManager
+        chatSessions={overrides.chatSessions ?? []}
+        activeSessionId={overrides.activeSessionId ?? null}
+        onSelectChatSession={overrides.onSelectChatSession}
+        onStartNewChat={overrides.onStartNewChat}
       />,
     );
+  }
 
+  it("keeps session controls collapsed until the conversation manager is expanded", () => {
+    const onStartNewChat = vi.fn();
+    renderSessionManager({
+      chatSessions: [{ id: "session-1", title: "当前对话" }, { id: "session-2", title: "新对话 2" }],
+      activeSessionId: "session-1",
+      onSelectChatSession: vi.fn(),
+      onStartNewChat,
+    });
+
+    expect(screen.queryByRole("button", { name: "切换对话" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开对话管理" }));
     fireEvent.click(screen.getByRole("button", { name: "新建话题" }));
 
     expect(onStartNewChat).toHaveBeenCalledTimes(1);
@@ -88,19 +86,14 @@ describe("WorkspaceChatPanel session switcher", () => {
 
   it("switches sessions from the dropdown", () => {
     const onSelectChatSession = vi.fn();
-    render(
-      <WorkspaceChatPanel
-        {...baseProps}
-        chatSessions={[
-          { id: "session-1", title: "当前对话" },
-          { id: "session-2", title: "新对话 2" },
-        ]}
-        activeSessionId="session-1"
-        onSelectChatSession={onSelectChatSession}
-        onStartNewChat={vi.fn()}
-      />,
-    );
+    renderSessionManager({
+      chatSessions: [{ id: "session-1", title: "当前对话" }, { id: "session-2", title: "新对话 2" }],
+      activeSessionId: "session-1",
+      onSelectChatSession,
+      onStartNewChat: vi.fn(),
+    });
 
+    fireEvent.click(screen.getByRole("button", { name: "展开对话管理" }));
     fireEvent.click(screen.getByRole("button", { name: "切换对话" }));
     fireEvent.click(screen.getByRole("option", { name: "新对话 2" }));
 
@@ -108,19 +101,14 @@ describe("WorkspaceChatPanel session switcher", () => {
   });
 
   it("closes the session list when clicking outside", () => {
-    render(
-      <WorkspaceChatPanel
-        {...baseProps}
-        chatSessions={[
-          { id: "session-1", title: "当前对话" },
-          { id: "session-2", title: "新对话 2" },
-        ]}
-        activeSessionId="session-1"
-        onSelectChatSession={vi.fn()}
-        onStartNewChat={vi.fn()}
-      />,
-    );
+    renderSessionManager({
+      chatSessions: [{ id: "session-1", title: "当前对话" }, { id: "session-2", title: "新对话 2" }],
+      activeSessionId: "session-1",
+      onSelectChatSession: vi.fn(),
+      onStartNewChat: vi.fn(),
+    });
 
+    fireEvent.click(screen.getByRole("button", { name: "展开对话管理" }));
     fireEvent.click(screen.getByRole("button", { name: "切换对话" }));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
 
@@ -132,35 +120,41 @@ describe("WorkspaceChatPanel session switcher", () => {
   });
 
   it("shows the active session title on the trigger", () => {
-    render(
-      <WorkspaceChatPanel
-        {...baseProps}
-        chatSessions={[
-          { id: "session-1", title: "帮我生成一份笔记" },
-          { id: "session-2", title: "新对话 2" },
-        ]}
-        activeSessionId="session-1"
-        onSelectChatSession={vi.fn()}
-        onStartNewChat={vi.fn()}
-      />,
-    );
+    renderSessionManager({
+      chatSessions: [{ id: "session-1", title: "帮我生成一份笔记" }, { id: "session-2", title: "新对话 2" }],
+      activeSessionId: "session-1",
+      onSelectChatSession: vi.fn(),
+      onStartNewChat: vi.fn(),
+    });
 
+    fireEvent.click(screen.getByRole("button", { name: "展开对话管理" }));
     expect(screen.getByRole("button", { name: "切换对话" })).toHaveTextContent("帮我生成一份笔记");
   });
 
   it("offers a labelled new-chat button when there is no session list yet", () => {
     const onStartNewChat = vi.fn();
-    render(
-      <WorkspaceChatPanel
-        {...baseProps}
-        chatSessions={[]}
-        activeSessionId={null}
-        onStartNewChat={onStartNewChat}
-      />,
-    );
+    renderSessionManager({ onStartNewChat });
 
+    fireEvent.click(screen.getByRole("button", { name: "展开对话管理" }));
     fireEvent.click(screen.getByRole("button", { name: "新对话" }));
 
     expect(onStartNewChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes the context-budget header and supports collapsing conversation management", () => {
+    render(
+      <WorkspaceChatPanel
+        workspaceTitle="我的工作台"
+        activeSeries={{ id: "series-1", title: "课程" }}
+        selectedVideo={{ id: "video-2", title: "第二讲", processed: true }}
+        selectedContextType="video"
+        chatMessages={[]}
+        onSubmitChat={vi.fn()}
+        contextUsage={{ level: "normal", usagePercent: 0.6 }}
+      />,
+    );
+
+    expect(screen.queryByText(/预算充足/)).not.toBeInTheDocument();
+    expect(screen.queryByText("对话管理")).not.toBeInTheDocument();
   });
 });

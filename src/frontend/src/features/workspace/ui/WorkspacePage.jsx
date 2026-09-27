@@ -5,7 +5,7 @@ import { WorkspaceVideoScopePane } from "./WorkspaceVideoScopePane";
 import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
-import { WorkspaceChatPanel } from "./WorkspaceChatPanel";
+import { WorkspaceChatPanel, WorkspaceChatSessionManager } from "./WorkspaceChatPanel";
 import { WorkspaceStudioPanels } from "./WorkspaceStudioPanels";
 import { ChatDrawer } from "./ChatDrawer";
 import { WorkspaceImportModal } from "./WorkspaceImportModal";
@@ -323,16 +323,29 @@ export function WorkspacePage({ page }) {
 
   function renderPanelActions(panelId, toolId) {
     if (toolId === "preview") {
-      return tools?.preview?.subtitleUrl ? (
-        <WorkspaceNativeSubtitleSettings
-          subtitlesEnabled={previewSubtitlesEnabled}
-          onSubtitlesEnabledChange={setPreviewSubtitlesEnabled}
-          followOverviewPlayback={followOverviewPlayback}
-          onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
-          style={previewSubtitleStyle}
-          onStyleChange={setPreviewSubtitleStyle}
-        />
-      ) : null;
+      const exportActions = buildWorkspaceToolExportActions({
+        activeSeries,
+        notes,
+        summary,
+        toolId,
+        selectedVideo,
+        tools,
+      });
+      return (
+        <>
+          {exportActions.length ? <WorkspaceExportMenu exportActions={exportActions} /> : null}
+          {tools?.preview?.subtitleUrl ? (
+            <WorkspaceNativeSubtitleSettings
+              subtitlesEnabled={previewSubtitlesEnabled}
+              onSubtitlesEnabledChange={setPreviewSubtitlesEnabled}
+              followOverviewPlayback={followOverviewPlayback}
+              onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
+              style={previewSubtitleStyle}
+              onStyleChange={setPreviewSubtitleStyle}
+            />
+          ) : null}
+        </>
+      );
     }
     if (toolId === "studio" || toolId === "ai-chat") {
       return null;
@@ -349,6 +362,16 @@ export function WorkspacePage({ page }) {
   }
 
   function renderPanelTrailingActions(panelId, toolId) {
+    if (toolId === "ai-chat") {
+      return (
+        <WorkspaceChatSessionManager
+          chatSessions={chat.sessions}
+          activeSessionId={chat.activeSessionId}
+          onSelectChatSession={chat.selectChatSession}
+          onStartNewChat={chat.startNewChat}
+        />
+      );
+    }
     if (toolId !== "preview") {
       return null;
     }
@@ -367,7 +390,7 @@ export function WorkspacePage({ page }) {
               className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:hover:bg-accent/15"
             >
               <Captions size={14} aria-hidden="true" />
-              查看当前转写
+              查看当前逐字稿
             </button>
           </motion.div>
         ) : null}

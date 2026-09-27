@@ -405,13 +405,40 @@ function toDurableGenerationSnapshot(payload) {
   const status = payload?.status === "succeeded" ? "completed" : payload?.status;
   const detail = typeof payload?.detail === "string" ? payload.detail : null;
   const error = typeof payload?.error === "string" ? payload.error : status === "failed" ? detail : null;
+  const startedAt = toEpochSeconds(payload?.started_at);
+  const elapsedSeconds = typeof payload?.elapsed_seconds === "number"
+    ? payload.elapsed_seconds
+    : startedAt == null
+      ? null
+      : Math.max(0, Date.now() / 1000 - startedAt);
+  const progress = typeof payload?.progress === "number" ? payload.progress : null;
+  const estimatedTotalSeconds = progress != null && progress > 1 && elapsedSeconds != null
+    ? elapsedSeconds / (progress / 100)
+    : null;
   return {
     status: typeof status === "string" ? status : "failed",
     stage: typeof payload?.stage === "string" ? payload.stage : null,
-    progress: typeof payload?.progress === "number" ? payload.progress : null,
+    progress,
     detail,
     error,
+    startedAt,
+    elapsedSeconds,
+    estimatedTotalSeconds,
+    remainingSeconds: estimatedTotalSeconds == null || elapsedSeconds == null
+      ? null
+      : Math.max(0, estimatedTotalSeconds - elapsedSeconds),
   };
+}
+
+function toEpochSeconds(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const milliseconds = Date.parse(value);
+  return Number.isNaN(milliseconds) ? null : milliseconds / 1000;
 }
 
 export function subscribeDurableJobProgress(jobId, listener) {

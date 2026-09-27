@@ -24,11 +24,11 @@ export function WorkspaceSeriesOverviewView({
     if (!citationFocus?.videoId) {
       return;
     }
-    setSelectedVideoId("all");
+    setSelectedVideoId(citationFocus.videoId);
   }, [citationFocus]);
 
   useEffect(() => {
-    if (!citationFocus?.videoId || loading || selectedVideoId !== "all") {
+    if (!citationFocus?.videoId || loading || selectedVideoId !== citationFocus.videoId) {
       return;
     }
     document.getElementById(`series-overview-${citationFocus.videoId}`)?.scrollIntoView?.({
@@ -122,7 +122,13 @@ export function WorkspaceSeriesOverviewView({
                 <ExternalLink size={14} aria-hidden="true" />
               </button>
             </div>
-            <WorkspaceOverviewContent ui={ui} summary={summary} sectionHeadingLevel={3} />
+            <WorkspaceOverviewContent
+              ui={ui}
+              summary={summary}
+              citationFocus={citationFocus?.videoId === video.id ? citationFocus : null}
+              sectionHeadingLevel={3}
+              contentScopeId={video.id}
+            />
           </section>
         );
       })}

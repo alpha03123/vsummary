@@ -84,6 +84,16 @@ describe("WorkspaceReadingPane markdown exports", () => {
     );
   });
 
+  it("exports the original media from the video preview", async () => {
+    renderPane({ toolId: "preview" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "导出" }));
+    expect(screen.getByRole("link", { name: "视频导出" })).toHaveAttribute(
+      "href",
+      "/api/videos/series-1/video-1/exports/video",
+    );
+  });
+
   it("disables knowledge card export before cards are generated", async () => {
     renderPane({ toolId: "knowledge-cards" });
 

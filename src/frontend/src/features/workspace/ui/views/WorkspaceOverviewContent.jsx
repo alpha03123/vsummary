@@ -15,6 +15,7 @@ export function WorkspaceOverviewContent({
   citationFocus = null,
   onSeek,
   sectionHeadingLevel = 2,
+  contentScopeId = null,
 }) {
   const [previewImage, setPreviewImage] = useState(null);
   const [expandedTranscriptChapters, setExpandedTranscriptChapters] = useState(() => new Set());
@@ -62,20 +63,20 @@ export function WorkspaceOverviewContent({
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const transcriptDetails = document.getElementById(`overview-transcript-${citationTarget.chapterId}`);
+      const transcriptDetails = document.getElementById(transcriptElementId(contentScopeId, citationTarget.chapterId));
       transcriptDetails?.scrollIntoView?.({ behavior: "smooth", block: "center" });
       const transcriptList = transcriptListRefs.current.get(citationTarget.chapterId);
       if (Number.isInteger(citationTarget.segmentIndex) && transcriptList) {
         transcriptList.scrollToIndex(citationTarget.segmentIndex);
         return;
       }
-      document.getElementById(citationTarget.segmentId ?? citationTarget.chapterId)?.scrollIntoView?.({
+      document.getElementById(transcriptSegmentElementId(contentScopeId, citationTarget.chapterId, citationTarget.segmentIndex))?.scrollIntoView?.({
         behavior: "smooth",
         block: "center",
       });
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [citationTarget, expandedTranscriptChapters]);
+  }, [citationTarget, contentScopeId, expandedTranscriptChapters]);
 
   useEffect(() => {
     if (!followOverviewPlayback || !playbackTarget || !Number.isInteger(playbackTarget.segmentIndex)) {
@@ -92,14 +93,14 @@ export function WorkspaceOverviewContent({
     });
 
     const frameId = window.requestAnimationFrame(() => {
-      document.getElementById(`overview-transcript-${playbackTarget.chapterId}`)?.scrollIntoView?.({
+      document.getElementById(transcriptElementId(contentScopeId, playbackTarget.chapterId))?.scrollIntoView?.({
         behavior: "smooth",
         block: "center",
       });
       transcriptListRefs.current.get(playbackTarget.chapterId)?.scrollToIndex(playbackTarget.segmentIndex);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [followOverviewPlayback, playbackTarget, expandedTranscriptChapters]);
+  }, [contentScopeId, followOverviewPlayback, playbackTarget, expandedTranscriptChapters]);
 
   if (!summary) {
     return null;
@@ -202,7 +203,7 @@ export function WorkspaceOverviewContent({
 
             {chapter.transcript_segments.length ? (
               <details
-                id={`overview-transcript-${chapter.id}`}
+                id={transcriptElementId(contentScopeId, chapter.id)}
                 open={expandedTranscriptChapters.has(chapter.id)}
                 className={`group mt-1 rounded-2xl border border-stone-200/80 bg-stone-50/80 transition-all dark:border-stone-800 dark:bg-stone-950/60 ${
                   hasPlaybackTime && playbackTarget?.chapterId === chapter.id && !expandedTranscriptChapters.has(chapter.id)
@@ -240,6 +241,7 @@ export function WorkspaceOverviewContent({
                   <WorkspaceTranscriptList
                     chapterId={chapter.id}
                     chapterTitle={chapter.title}
+                    contentScopeId={contentScopeId}
                     segments={chapter.transcript_segments}
                     canSeek={canSeek}
                     highlightedSegmentIndex={
@@ -277,6 +279,7 @@ export function WorkspaceOverviewContent({
 function WorkspaceTranscriptList({
   chapterId,
   chapterTitle,
+  contentScopeId,
   segments,
   canSeek,
   highlightedSegmentIndex,
@@ -329,7 +332,7 @@ function WorkspaceTranscriptList({
                 style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
                 <button
-                  id={`overview-transcript-segment-${chapterId}-${virtualRow.index}`}
+                  id={transcriptSegmentElementId(contentScopeId, chapterId, virtualRow.index)}
                   type="button"
                   disabled={!canSeek}
                   onClick={() => onSeek?.({
@@ -365,6 +368,14 @@ function WorkspaceTranscriptList({
       </div>
     </div>
   );
+}
+
+function transcriptElementId(contentScopeId, chapterId) {
+  return `overview-transcript-${contentScopeId ? `${contentScopeId}-` : ""}${chapterId}`;
+}
+
+function transcriptSegmentElementId(contentScopeId, chapterId, segmentIndex) {
+  return `overview-transcript-segment-${contentScopeId ? `${contentScopeId}-` : ""}${chapterId}-${segmentIndex}`;
 }
 
 function findPlaybackTarget(summary, playbackTime) {

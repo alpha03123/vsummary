@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import rehypeKatex from "rehype-katex";
 import ReactMarkdown from "react-markdown";
@@ -12,6 +12,7 @@ const CITATION_PREVIEW_GAP = 8;
 const CITATION_PREVIEW_VIEWPORT_PADDING = 16;
 const THINK_BLOCK_PATTERN = /<think>([\s\S]*?)(?:<\/think>|$)/gi;
 const NOTE_IMAGE_MARKER_PATTERN = /\[\[IMG:(\d+(?::\d{2}){1,2}(?:\.\d+)?|\d+(?:\.\d+)?)\]\]/g;
+const MarkdownRenderContext = createContext(null);
 
 function normalizeCitations(citations) {
   if (!Array.isArray(citations)) {
@@ -246,6 +247,36 @@ function CitationLink({ href, children, preview, citationReference, onOpenCitati
   );
 }
 
+function MarkdownLink({ node: _node, href, children, ...props }) {
+  const { citationMap, onOpenCitationReference } = useContext(MarkdownRenderContext);
+  if (typeof href === "string" && href.startsWith("#citation-")) {
+    const citationId = href.replace("#citation-", "");
+    const citation = citationMap.get(citationId);
+    return (
+      <CitationLink
+        {...props}
+        href={href}
+        preview={buildCitationPreview(citation)}
+        citationReference={buildCitationReference(citation)}
+        onOpenCitationReference={onOpenCitationReference}
+      >
+        {children}
+      </CitationLink>
+    );
+  }
+  return (
+    <a
+      {...props}
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="text-accent hover:text-accent/80 hover:underline"
+    >
+      {children}
+    </a>
+  );
+}
+
 function ThinkBlock({ content }) {
   const [expanded, setExpanded] = useState(true);
   return (
@@ -309,6 +340,22 @@ function NoteFrameImage({ src, alt, seconds, onSeek, onOpenTranscriptAtTime, ...
   );
 }
 
+function MarkdownImage({ node: _node, src, alt, title, ...props }) {
+  const { onSeek, onOpenTranscriptAtTime } = useContext(MarkdownRenderContext);
+  const seconds = typeof title === "string" && title.startsWith("seek:")
+    ? Number(title.slice("seek:".length))
+    : NaN;
+  if (Number.isFinite(seconds)) {
+    return <NoteFrameImage {...props} src={src} alt={alt} seconds={seconds} onSeek={onSeek} onOpenTranscriptAtTime={onOpenTranscriptAtTime} />;
+  }
+  return <img {...props} src={src} alt={alt} />;
+}
+
+const MARKDOWN_COMPONENTS = {
+  a: MarkdownLink,
+  img: MarkdownImage,
+};
+
 function replaceNoteImageMarkers(content, noteImageContext) {
   if (!noteImageContext || typeof content !== "string") return content;
   return content.replace(NOTE_IMAGE_MARKER_PATTERN, (raw, timestamp) => {
@@ -323,57 +370,26 @@ function replaceNoteImageMarkers(content, noteImageContext) {
 }
 
 function MarkdownSegment({ content, citations, onOpenCitationReference, noteImageContext, onSeek, onOpenTranscriptAtTime }) {
-  const normalizedCitations = normalizeCitations(citations);
-  const renderedContent = injectCitationLinks(normalizeMathDelimiters(replaceNoteImageMarkers(content, noteImageContext)), normalizedCitations);
-  const citationMap = new Map(normalizedCitations.map((citation) => [citation.id, citation]));
+  const normalizedCitations = useMemo(() => normalizeCitations(citations), [citations]);
+  const renderedContent = useMemo(
+    () => injectCitationLinks(normalizeMathDelimiters(replaceNoteImageMarkers(content, noteImageContext)), normalizedCitations),
+    [content, noteImageContext, normalizedCitations],
+  );
+  const citationMap = useMemo(() => new Map(normalizedCitations.map((citation) => [citation.id, citation])), [normalizedCitations]);
+  const renderContext = useMemo(
+    () => ({ citationMap, onOpenCitationReference, onSeek, onOpenTranscriptAtTime }),
+    [citationMap, onOpenCitationReference, onSeek, onOpenTranscriptAtTime],
+  );
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        img: ({ node: _node, src, alt, title, ...props }) => {
-          const seconds = typeof title === "string" && title.startsWith("seek:")
-            ? Number(title.slice("seek:".length))
-            : NaN;
-          if (Number.isFinite(seconds)) {
-            return <NoteFrameImage {...props} src={src} alt={alt} seconds={seconds} onSeek={onSeek} onOpenTranscriptAtTime={onOpenTranscriptAtTime} />;
-          }
-          return <img {...props} src={src} alt={alt} />;
-        },
-        a: ({ node: _node, href, children, ...props }) => {
-          if (typeof href === "string" && href.startsWith("#citation-")) {
-            const citationId = href.replace("#citation-", "");
-            const citation = citationMap.get(citationId);
-            const preview = buildCitationPreview(citation);
-            const citationReference = buildCitationReference(citation);
-            return (
-              <CitationLink
-                {...props}
-                href={href}
-                preview={preview}
-                citationReference={citationReference}
-                onOpenCitationReference={onOpenCitationReference}
-              >
-                {children}
-              </CitationLink>
-            );
-          }
-          return (
-            <a
-              {...props}
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:text-accent/80 hover:underline"
-            >
-              {children}
-            </a>
-          );
-        },
-      }}
-    >
-      {renderedContent}
-    </ReactMarkdown>
+    <MarkdownRenderContext.Provider value={renderContext}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={MARKDOWN_COMPONENTS}
+      >
+        {renderedContent}
+      </ReactMarkdown>
+    </MarkdownRenderContext.Provider>
   );
 }
 

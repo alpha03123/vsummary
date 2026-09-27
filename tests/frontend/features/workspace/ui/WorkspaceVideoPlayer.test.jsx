@@ -1,7 +1,18 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceVideoPlayer } from "@src/features/workspace/ui/WorkspaceVideoPlayer";
+
+let pauseSpy;
+
+beforeEach(() => {
+  pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  cleanup();
+  pauseSpy.mockRestore();
+});
 
 describe("WorkspaceVideoPlayer", () => {
   it("shows an unavailable preview message for audio files", () => {
@@ -162,6 +173,14 @@ describe("WorkspaceVideoPlayer", () => {
     expect(onPlaybackStateChange).toHaveBeenNthCalledWith(1, false);
     expect(onPlaybackStateChange).toHaveBeenNthCalledWith(2, true);
     expect(onPlaybackStateChange).toHaveBeenNthCalledWith(3, false);
+  });
+
+  it("pauses the media when the preview panel unmounts", () => {
+    const { unmount } = render(<WorkspaceVideoPlayer videoSource="/api/videos/s1/v1/preview" />);
+
+    unmount();
+
+    expect(pauseSpy).toHaveBeenCalledTimes(1);
   });
 
   it("uses the native subtitle track while the video is fullscreen", async () => {

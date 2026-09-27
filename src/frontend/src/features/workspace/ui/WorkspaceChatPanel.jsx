@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
+import { Sparkles, ArrowUp, LoaderCircle, Square, ChevronLeft, ChevronRight, Wrench, Clock3, BrainCircuit, CheckCircle2, FileText, PlayCircle, Plus, MessagesSquare } from "lucide-react";
 import { formatRange } from "../../../shared/lib/time";
 
 import { CopyToClipboardButton } from "./shared/CopyToClipboardButton";
@@ -12,6 +12,86 @@ const WorkspaceMarkdownMessage = lazy(() =>
   })),
 );
 
+export function WorkspaceChatSessionManager({ chatSessions = [], activeSessionId = null, onSelectChatSession, onStartNewChat }) {
+  const [open, setOpen] = useState(false);
+  const chatSessionOptions = useMemo(
+    () => chatSessions.map((session) => ({ id: session.id, label: session.title || "新话题" })),
+    [chatSessions],
+  );
+
+  return (
+    <div className="relative flex h-full items-center">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-label={open ? "收起对话管理" : "展开对话管理"}
+        aria-expanded={open}
+        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-[10px] font-bold uppercase tracking-widest text-stone-400 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-500 dark:hover:bg-stone-800"
+      >
+        {open ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        对话管理
+      </button>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            initial={{ opacity: 0, x: 10, y: -4 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: 10, y: -4 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="workspace-elevated-panel absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border p-1.5 shadow-lg"
+          >
+            {chatSessionOptions.length ? (
+              <div className="flex items-stretch rounded-xl border border-stone-200 transition-colors focus-within:border-accent/40 dark:border-stone-700">
+                <WorkspaceProviderSelect
+                  value={activeSessionId}
+                  options={chatSessionOptions}
+                  onChange={(sessionId) => {
+                    onSelectChatSession?.(sessionId);
+                    setOpen(false);
+                  }}
+                  ariaLabel="切换对话"
+                  hideGroupLabels
+                  align="end"
+                  menuClassName="min-w-[14rem]"
+                  className="min-w-0 flex-1"
+                  triggerVariant="bare"
+                  leading={<MessagesSquare size={14} />}
+                />
+                {onStartNewChat ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onStartNewChat();
+                      setOpen(false);
+                    }}
+                    className="inline-flex w-9 shrink-0 items-center justify-center rounded-r-xl border-l border-stone-200 text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent dark:border-stone-700 dark:text-stone-400"
+                    title="新建话题"
+                    aria-label="新建话题"
+                  >
+                    <Plus size={16} />
+                  </button>
+                ) : null}
+              </div>
+            ) : onStartNewChat ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onStartNewChat();
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent dark:text-stone-300 dark:hover:bg-accent/15"
+              >
+                <Plus size={16} />
+                新对话
+              </button>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function WorkspaceChatPanel({
   workspaceTitle,
   activeSeries,
@@ -21,8 +101,6 @@ export function WorkspaceChatPanel({
   chatSessions = [],
   activeSessionId = null,
   chatPending = false,
-  contextUsage = null,
-  contextUsageLoading = false,
   ragModels = [],
   knowledgeMemorySnapshot = null,
   draft = "",
@@ -65,10 +143,6 @@ export function WorkspaceChatPanel({
       .filter((message) => message.role === "user" && message.kind == null && typeof message.content === "string" && message.content.trim())
       .map((message) => ({ id: message.id, prompt: message.content.trim() })),
     [chatMessages],
-  );
-  const chatSessionOptions = useMemo(
-    () => chatSessions.map((session) => ({ id: session.id, label: session.title || "新话题" })),
-    [chatSessions],
   );
   const suggestedPrompts = [
     { title: "总结核心结论", desc: "给我总结一下这个视频的核心结论", icon: Sparkles },
@@ -163,123 +237,6 @@ export function WorkspaceChatPanel({
 
   return (
     <div className="@container h-full w-full flex flex-col bg-transparent">
-      {/* Header. Two lines were deleted here, both for the same reason — they
-          restated information the user can already see elsewhere:
-
-          1. The tool-name badge (`工具首页` / `AI概况` / …). It implied the
-             assistant knows which tool page you are on, but the panel-local
-             tool choice is intentionally not part of Agent 对话上下文。工具页
-             本身已经在自己的标题中展示名称，因此这层 badge 只会重复信息。
-
-          2. The `基于《…》` subtitle. The left rail lists the active series and
-             video with full titles; this line repeated the video title and then
-             truncated it, so the only thing it ever added was a clipped string.
-
-          The identity column is now a single title. */}
-      {/* Padding is symmetric to the composer's, so the inner content sits the
-          same distance from the panel's top edge as the composer sits from its
-          bottom edge. The header is the outer edge of the card, so it needs the
-          *larger* share: this previously ran `pt-3.5 pb-5` (14/20), which put
-          the title 28px from the top while leaving the composer 44px from the
-          bottom — the bottom gap was more than half again the top and the whole
-          panel read as sinking. */}
-      {/*
-        窄面板（320px 可达）下头部需要换策略，而不是继续挤。
-
-        `flex-wrap` 单独用是不够的：它只保证「放不下就换行」，但不保证换到哪。
-        实测宽度不足时，右侧「当前对话」切换器会跟左侧的预算胶囊撞进同一视觉行，
-        看起来就是两坨东西糊在一起 —— 比不换行还糟。
-
-        所以这里改成真正的两段式：
-          - 窄面板：`flex-col`，左列（胶囊 + 返回）和右列（切换器）各占满一行，互不重叠
-          - 宽面板（@[440px] 起）：恢复 `flex-row justify-between` 的左右并排
-
-        切换点取 440px —— 这是按各部件实测宽度算出来的，不是拍的：
-          左列 = 图标 36 + gap 12 + max(预算胶囊 94, 返回按钮 90) = 142px
-          右列 = 切换器 w-40 (160) + 新建按钮 40 + 边框 1        = 201px
-          加上 gap-x-3 (12) 和宽面板内边距 px-6*2 (48)           = 403px
-        也就是并排至少要 ~403px 才不挤，取 440px 留约 37px 余量。
-        （早先取 520px 过于保守，面板还宽着就提前换行了。） */}
-      <div className="workspace-toolbar-surface relative z-30 shrink-0 flex flex-col gap-2.5 px-4 pb-3.5 pt-3.5 border-b border-stone-200/80 dark:border-stone-800 @[440px]:flex-row @[440px]:items-center @[440px]:justify-between @[440px]:gap-x-3 @[440px]:px-5 @[440px]:pb-4 @[440px]:pt-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="w-9 h-9 shrink-0 rounded-2xl bg-accent/10 dark:bg-accent/10 flex items-center justify-center border border-accent/20 dark:border-accent/20">
-            <Sparkles size={16} className="text-accent" />
-          </div>
-          {/* The budget pill sits above the back button rather than beside the
-              switcher: it is passive status, so giving it its own line keeps it
-              out of the control row's way, and it reads as a caption for the
-              whole panel instead of a label for the switcher.
-
-              The `分析助手` title that used to sit on the second row is gone.
-              It restated what the panel already is — the drawer header above
-              says `AI 对话`, the input below says `向 AI 助手提问…`, and the
-              messages are visibly a conversation. Deleting it also removed the
-              row's only flex child, so the back button no longer competes for
-              width with a truncating title that carried no information. */}
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <WorkspaceContextUsageInline usage={contextUsage} loading={contextUsageLoading} />
-          </div>
-        </div>
-        {/* Right column: caption, then the switcher. The budget pill used to
-            share the caption row; it now lives above the back button on the left,
-            so this column is just the label plus the control it labels.
-
-            窄面板下这一列 left-align 到自己的行上（原来是 items-end 靠右），
-            因为它已经独占一行了，再靠右反而和上一行的胶囊错开。 */}
-        <div className="flex shrink-0 flex-col items-start gap-1 @[440px]:items-end @[440px]:gap-1.5">
-          {chatSessionOptions.length > 0 ? (
-            <>
-              {/* 「对话管理」只是给切换器加的说明标签，窄面板下没有它切换器依然自明，
-                  优先让它消失以腾出横向空间。 */}
-              <span className="hidden text-[10px] font-bold uppercase leading-none tracking-widest text-stone-400 dark:text-stone-500 @[440px]:block">
-                对话管理
-              </span>
-              {/* Switcher + "new chat" share one bordered shell with an inset
-                  divider so they read as a single unit. No `overflow-hidden` —
-                  it would clip the switcher's absolutely positioned menu. */}
-              <div className="inline-flex items-stretch rounded-xl border border-stone-200 bg-white transition-colors focus-within:border-accent/40 dark:border-stone-700 dark:bg-stone-900">
-                <WorkspaceProviderSelect
-                  value={activeSessionId}
-                  options={chatSessionOptions}
-                  onChange={onSelectChatSession}
-                  ariaLabel="切换对话"
-                  hideGroupLabels
-                  align="end"
-                  menuClassName="min-w-[14rem]"
-                  className="w-40 rounded-l-xl @[440px]:w-48"
-                  triggerVariant="bare"
-                  leading={<MessagesSquare size={14} />}
-                />
-                {onStartNewChat ? (
-                  <button
-                    type="button"
-                    onClick={onStartNewChat}
-                    className="inline-flex w-10 shrink-0 items-center justify-center rounded-r-xl border-l border-stone-200 text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent dark:border-stone-700 dark:text-stone-400"
-                    title="新建话题"
-                    aria-label="新建话题"
-                  >
-                    <Plus size={16} />
-                  </button>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <>
-              {onStartNewChat ? (
-                <button
-                  type="button"
-                  onClick={onStartNewChat}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 transition-colors hover:border-accent/50 hover:text-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
-                  title="新建话题"
-                >
-                  <Plus size={16} />
-                  新对话
-                </button>
-              ) : null}
-            </>
-          )}
-        </div>
-      </div>
 
       {seriesRagLocked ? (
         <div className="border-b border-amber-200/80 bg-amber-50/90 px-6 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
@@ -611,65 +568,6 @@ function truncateConversationPrompt(prompt) {
   return prompt.length > maximumLength ? `${prompt.slice(0, maximumLength).trimEnd()}...` : prompt;
 }
 
-function WorkspaceContextUsageInline({ usage, loading }) {
-  const [expanded, setExpanded] = useState(false);
-  if ((loading && !usage) || !usage) {
-    return null;
-  }
-
-  const thresholdLabel = usage.level === "blocking"
-    ? "已超过阻塞阈值"
-    : usage.level === "compact"
-      ? "压缩区间"
-      : usage.level === "warning"
-        ? "接近阈值"
-        : "预算充足";
-  const usageLabel = `${formatTokenCount(usage.estimatedTotalTokens)} / ${formatTokenCount(usage.windowTokens)}`;
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setExpanded((current) => !current)}
-        aria-expanded={expanded}
-        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${resolveUsageToneClass(usage.level)}`}
-      >
-        {thresholdLabel}
-        <span className="opacity-60">{usage.usagePercent.toFixed(1)}%</span>
-      </button>
-      {expanded ? (
-      <div className="absolute right-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)]">
-        <div className="rounded-2xl border border-stone-200/80 bg-white/95 p-4 shadow-xl backdrop-blur-lg dark:border-stone-700 dark:bg-stone-900/95">
-          <div className="flex items-center justify-between mb-2">
-            <strong className="text-xs font-semibold text-stone-700 dark:text-stone-200">上下文预算</strong>
-            <span className="text-xs text-stone-600 dark:text-stone-400">剩余 {formatTokenCount(usage.remainingTokens)}</span>
-          </div>
-          <p className="text-[11px] text-stone-600 dark:text-stone-400 mb-3">
-            已估算 {usageLabel}，保留输出 {formatTokenCount(usage.reservedOutputTokens)}
-          </p>
-          <div className="h-1.5 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800 mb-3">
-            <div
-              className={`h-full rounded-full transition-all ${resolveUsageBarClass(usage.level)}`}
-              style={{ width: `${Math.max(4, Math.min(100, usage.usagePercent))}%` }}
-            />
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {usage.sources.map((source) => (
-              <span
-                key={source.id}
-                className="rounded-full border border-stone-200/80 bg-stone-50 px-2 py-0.5 text-[10px] font-medium text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
-              >
-                {source.label} {formatTokenCount(source.estimatedTokens)}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-      ) : null}
-    </div>
-  );
-}
-
 function WorkspaceToolTraceMessage({ message }) {
   const steps = Array.isArray(message.toolTrace?.steps) ? message.toolTrace.steps : [];
   const durationLabel = formatDurationLabel(message.toolTrace?.durationMs);
@@ -958,40 +856,4 @@ function formatDurationLabel(durationMs) {
     return `${durationMs}ms`;
   }
   return `${(durationMs / 1000).toFixed(1)}秒`;
-}
-
-function formatTokenCount(value) {
-  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
-    return "0";
-  }
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}k`;
-  }
-  return `${Math.round(value)}`;
-}
-
-function resolveUsageToneClass(level) {
-  if (level === "blocking") {
-    return "bg-danger-subtle text-danger";
-  }
-  if (level === "compact") {
-    return "bg-warning-subtle text-warning";
-  }
-  if (level === "warning") {
-    return "bg-warning-subtle text-warning-muted";
-  }
-  return "bg-success-subtle text-success";
-}
-
-function resolveUsageBarClass(level) {
-  if (level === "blocking") {
-    return "bg-danger-muted";
-  }
-  if (level === "compact") {
-    return "bg-warning-muted";
-  }
-  if (level === "warning") {
-    return "bg-warning";
-  }
-  return "bg-success-muted";
 }

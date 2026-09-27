@@ -24,18 +24,25 @@ export function WorkspaceSeriesMindmapView({
   const [controlsOpen, setControlsOpen] = useState(false);
   const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const markmapRef = useRef(null);
+  const localStartedAtRef = useRef(null);
 
   useEffect(() => {
     const progress = mindmapGenerationProgress;
     if (!progress || progress.status !== "running") {
+      localStartedAtRef.current = null;
       setLiveElapsedSeconds(0);
       return undefined;
     }
+    if (localStartedAtRef.current === null) {
+      localStartedAtRef.current = Date.now() / 1000;
+    }
 
     const getElapsedSeconds = () => {
-      const snapshotElapsed = Number(progress.elapsed_seconds) || 0;
-      const startedAt = Number(progress.started_at);
-      const clockElapsed = Number.isFinite(startedAt) ? Math.max(0, Date.now() / 1000 - startedAt) : 0;
+      const snapshotElapsed = typeof progress.elapsedSeconds === "number" ? progress.elapsedSeconds : 0;
+      const startedAt = progress.startedAt;
+      const clockElapsed = typeof startedAt === "number" && Number.isFinite(startedAt) && startedAt > 0
+        ? Math.max(0, Date.now() / 1000 - startedAt)
+        : Math.max(0, Date.now() / 1000 - localStartedAtRef.current);
       return Math.max(snapshotElapsed, clockElapsed);
     };
 
