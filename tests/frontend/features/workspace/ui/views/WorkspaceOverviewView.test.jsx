@@ -47,7 +47,8 @@ function renderView(overrides = {}) {
 describe("WorkspaceOverviewView chapter + transcript clicks", () => {
   it("chapter header click calls onSeek with chapter timestamps", () => {
     const { onSeek } = renderView();
-    fireEvent.click(screen.getByRole("button", { name: /第一章 入门/ }));
+    const chapterCard = document.getElementById("overview-chapter-ch-1");
+    fireEvent.click(chapterCard.querySelector("button"));
     expect(onSeek).toHaveBeenCalledWith({
       seconds: 5,
       endSeconds: 60,

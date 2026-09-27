@@ -22,6 +22,7 @@
     "katex": "^0.17.0",
     "lucide-react": "^1.7.0",
     "markmap-view": "^0.18.12",
+    "mdast-util-to-string": "^4.0.0",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.0",
@@ -29,7 +30,9 @@
     "react-mosaic-component": "^7.1.0",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.9",

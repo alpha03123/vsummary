@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertTriangle, Captions, ChevronUp, Minus, Plus, Sparkles, X } from "lucide-react";
 
 import { formatRange, formatTimestamp } from "../../../../shared/lib/time";
+import { findContentScrollContainer, WorkspaceContentOutline } from "../shared/WorkspaceContentOutline";
 
 export function WorkspaceOverviewContent({
   ui,
@@ -19,6 +20,7 @@ export function WorkspaceOverviewContent({
 }) {
   const [previewImage, setPreviewImage] = useState(null);
   const [expandedTranscriptChapters, setExpandedTranscriptChapters] = useState(() => new Set());
+  const [selectedOutlineChapterId, setSelectedOutlineChapterId] = useState(null);
   const transcriptListRefs = useRef(new Map());
   const canSeek = typeof onSeek === "function";
   const SectionHeading = `h${sectionHeadingLevel}`;
@@ -35,6 +37,11 @@ export function WorkspaceOverviewContent({
   const activeChapterId = hasPlaybackTime
     ? playbackTarget?.chapterId ?? null
     : citationTarget?.chapterId ?? selectedChapterId;
+  const outlineActiveChapterId = selectedOutlineChapterId ?? activeChapterId;
+  const outlineItems = useMemo(
+    () => (summary?.chapters ?? []).map((chapter) => ({ id: chapter.id, label: chapter.title, depth: 2 })),
+    [summary],
+  );
   const registerTranscriptList = useCallback((chapterId, list) => {
     if (list) {
       transcriptListRefs.current.set(chapterId, list);
@@ -47,6 +54,7 @@ export function WorkspaceOverviewContent({
     if (!citationTarget) {
       return;
     }
+    setSelectedOutlineChapterId(citationTarget.chapterId);
     setExpandedTranscriptChapters((current) => {
       if (current.has(citationTarget.chapterId)) {
         return current;
@@ -56,6 +64,34 @@ export function WorkspaceOverviewContent({
       return next;
     });
   }, [citationTarget]);
+
+  useEffect(() => {
+    if (followOverviewPlayback && playbackTarget?.chapterId) {
+      setSelectedOutlineChapterId(playbackTarget.chapterId);
+    }
+  }, [followOverviewPlayback, playbackTarget]);
+
+  useEffect(() => {
+    const chapters = summary?.chapters ?? [];
+    if (!chapters.length || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+    const firstChapter = document.getElementById(chapterElementId(contentScopeId, chapters[0].id));
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
+      const chapterId = visible?.target.getAttribute("data-outline-chapter-id");
+      if (chapterId) {
+        setSelectedOutlineChapterId(chapterId);
+      }
+    }, { root: findContentScrollContainer(firstChapter), rootMargin: "-12% 0px -72% 0px" });
+    chapters.forEach((chapter) => {
+      const chapterCard = document.getElementById(chapterElementId(contentScopeId, chapter.id));
+      if (chapterCard) observer.observe(chapterCard);
+    });
+    return () => observer.disconnect();
+  }, [contentScopeId, summary]);
 
   useEffect(() => {
     if (!citationTarget || !expandedTranscriptChapters.has(citationTarget.chapterId)) {
@@ -106,8 +142,19 @@ export function WorkspaceOverviewContent({
     return null;
   }
 
+  function selectOutlineChapter(chapterId) {
+    setSelectedOutlineChapterId(chapterId);
+    document.getElementById(chapterElementId(contentScopeId, chapterId))?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
   return (
-    <>
+    <WorkspaceContentOutline
+      label="逐字稿目录"
+      items={outlineItems}
+      activeItemId={outlineActiveChapterId}
+      onSelect={selectOutlineChapter}
+    >
+      <div className="flex flex-col gap-4">
       <article className="workspace-accent-panel relative overflow-hidden rounded-2xl border p-6 text-stone-900 dark:text-stone-100">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Sparkles size={64} />
@@ -148,9 +195,10 @@ export function WorkspaceOverviewContent({
         {(summary.chapters ?? []).map((chapter, index) => (
           <article
             key={chapter.id}
-            id={chapter.id}
+            id={chapterElementId(contentScopeId, chapter.id)}
+            data-outline-chapter-id={chapter.id}
             className={`workspace-elevated-panel flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ${
-              chapter.id === activeChapterId && !hasPlaybackTime
+              chapter.id === outlineActiveChapterId && !hasPlaybackTime
                   ? "border-accent shadow-md ring-2 ring-accent/10"
                 : "border-stone-200/70 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
             }`}
@@ -272,7 +320,8 @@ export function WorkspaceOverviewContent({
         ))}
       </div>
       {previewImage ? <ScreenshotLightbox image={previewImage} onClose={() => setPreviewImage(null)} /> : null}
-    </>
+      </div>
+    </WorkspaceContentOutline>
   );
 }
 
@@ -372,6 +421,10 @@ function WorkspaceTranscriptList({
 
 function transcriptElementId(contentScopeId, chapterId) {
   return `overview-transcript-${contentScopeId ? `${contentScopeId}-` : ""}${chapterId}`;
+}
+
+function chapterElementId(contentScopeId, chapterId) {
+  return `overview-chapter-${contentScopeId ? `${contentScopeId}-` : ""}${chapterId}`;
 }
 
 function transcriptSegmentElementId(contentScopeId, chapterId, segmentIndex) {

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileText, LoaderCircle, PencilLine, RefreshCw, Save } from "lucide-react";
 
 import { WorkspaceMarkdownMessage } from "../shared/WorkspaceMarkdownMessage";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { findContentScrollContainer, WorkspaceContentOutline } from "../shared/WorkspaceContentOutline";
+import { buildMarkdownOutline } from "../../model/markdownOutline";
 
 export function WorkspaceAiSummaryView({
   aiSummary,
@@ -19,6 +21,32 @@ export function WorkspaceAiSummaryView({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const outline = useMemo(() => buildMarkdownOutline(aiSummary?.content, "ai-summary-outline"), [aiSummary?.content]);
+  const [activeOutlineId, setActiveOutlineId] = useState(null);
+
+  useEffect(() => {
+    setActiveOutlineId(outline.items[0]?.id ?? null);
+  }, [outline.items]);
+
+  useEffect(() => {
+    if (!outline.items.length || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+    const firstHeading = document.getElementById(outline.items[0].id);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
+      if (visible?.target.id) {
+        setActiveOutlineId(visible.target.id);
+      }
+    }, { root: findContentScrollContainer(firstHeading), rootMargin: "-12% 0px -72% 0px" });
+    outline.items.forEach((item) => {
+      const heading = document.getElementById(item.id);
+      if (heading) observer.observe(heading);
+    });
+    return () => observer.disconnect();
+  }, [outline.items]);
 
   function startEditing() {
     if (!aiSummary) return;
@@ -31,6 +59,11 @@ export function WorkspaceAiSummaryView({
     if (!title.trim() || !content.trim()) return;
     onUpdate?.({ title: title.trim(), content: content.trim() });
     setEditing(false);
+  }
+
+  function selectOutlineItem(id) {
+    setActiveOutlineId(id);
+    document.getElementById(id)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
   if (loading && !aiSummary) {
@@ -72,20 +105,27 @@ export function WorkspaceAiSummaryView({
           )}
         </div>
       </div>
-      <article className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
-        {editing ? (
+      {editing ? (
+        <article className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
           <div className="flex flex-col gap-4">
             <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-lg font-bold text-stone-900 outline-none focus:border-accent dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100" />
             <textarea value={content} onChange={(event) => setContent(event.target.value)} className="min-h-[360px] w-full resize-y rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900 outline-none focus:border-accent dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100" />
           </div>
-        ) : (
-          <>
+        </article>
+      ) : (
+        <WorkspaceContentOutline
+          label="概括目录"
+          items={outline.items}
+          activeItemId={activeOutlineId}
+          onSelect={selectOutlineItem}
+        >
+          <article className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
             <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">{aiSummary.title}</h1>
             <div className="my-5 h-px bg-stone-100 dark:bg-stone-800" />
-            <div className="markdown-body text-sm text-stone-700 dark:text-stone-300"><WorkspaceMarkdownMessage content={aiSummary.content} citations={aiSummary.citations} noteImageContext={noteImageContext} onSeek={onSeek} onOpenCitationReference={onOpenCitationReference} onOpenTranscriptAtTime={onOpenTranscriptAtTime} /></div>
-          </>
-        )}
-      </article>
+            <div className="markdown-body text-sm text-stone-700 dark:text-stone-300"><WorkspaceMarkdownMessage content={aiSummary.content} citations={aiSummary.citations} headingIds={outline.headingIds} noteImageContext={noteImageContext} onSeek={onSeek} onOpenCitationReference={onOpenCitationReference} onOpenTranscriptAtTime={onOpenTranscriptAtTime} /></div>
+          </article>
+        </WorkspaceContentOutline>
+      )}
     </div>
   );
 }

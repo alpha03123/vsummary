@@ -351,9 +351,37 @@ function MarkdownImage({ node: _node, src, alt, title, ...props }) {
   return <img {...props} src={src} alt={alt} />;
 }
 
+function MarkdownHeading({ node, children, level, ...props }) {
+  const { headingIds } = useContext(MarkdownRenderContext);
+  const line = node?.position?.start?.line;
+  const id = Number.isInteger(line) ? headingIds?.[line] : undefined;
+  const Tag = `h${level}`;
+  return <Tag {...props} id={id}>{children}</Tag>;
+}
+
+function MarkdownHeadingOne(props) {
+  return <MarkdownHeading {...props} level={1} />;
+}
+
+function MarkdownHeadingTwo(props) {
+  return <MarkdownHeading {...props} level={2} />;
+}
+
+function MarkdownHeadingThree(props) {
+  return <MarkdownHeading {...props} level={3} />;
+}
+
+function MarkdownHeadingFour(props) {
+  return <MarkdownHeading {...props} level={4} />;
+}
+
 const MARKDOWN_COMPONENTS = {
   a: MarkdownLink,
   img: MarkdownImage,
+  h1: MarkdownHeadingOne,
+  h2: MarkdownHeadingTwo,
+  h3: MarkdownHeadingThree,
+  h4: MarkdownHeadingFour,
 };
 
 function replaceNoteImageMarkers(content, noteImageContext) {
@@ -369,7 +397,7 @@ function replaceNoteImageMarkers(content, noteImageContext) {
   });
 }
 
-function MarkdownSegment({ content, citations, onOpenCitationReference, noteImageContext, onSeek, onOpenTranscriptAtTime }) {
+function MarkdownSegment({ content, citations, headingIds, onOpenCitationReference, noteImageContext, onSeek, onOpenTranscriptAtTime }) {
   const normalizedCitations = useMemo(() => normalizeCitations(citations), [citations]);
   const renderedContent = useMemo(
     () => injectCitationLinks(normalizeMathDelimiters(replaceNoteImageMarkers(content, noteImageContext)), normalizedCitations),
@@ -377,8 +405,8 @@ function MarkdownSegment({ content, citations, onOpenCitationReference, noteImag
   );
   const citationMap = useMemo(() => new Map(normalizedCitations.map((citation) => [citation.id, citation])), [normalizedCitations]);
   const renderContext = useMemo(
-    () => ({ citationMap, onOpenCitationReference, onSeek, onOpenTranscriptAtTime }),
-    [citationMap, onOpenCitationReference, onSeek, onOpenTranscriptAtTime],
+    () => ({ citationMap, headingIds, onOpenCitationReference, onSeek, onOpenTranscriptAtTime }),
+    [citationMap, headingIds, onOpenCitationReference, onSeek, onOpenTranscriptAtTime],
   );
   return (
     <MarkdownRenderContext.Provider value={renderContext}>
@@ -393,7 +421,7 @@ function MarkdownSegment({ content, citations, onOpenCitationReference, noteImag
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCitationReference, noteImageContext = null, onSeek = null, onOpenTranscriptAtTime = null }) {
+export function WorkspaceMarkdownMessage({ content, citations = null, headingIds = null, onOpenCitationReference, noteImageContext = null, onSeek = null, onOpenTranscriptAtTime = null }) {
   const parts = splitThinkBlocks(content);
   return (
     <div className="flex flex-col gap-4">
@@ -405,6 +433,7 @@ export function WorkspaceMarkdownMessage({ content, citations = null, onOpenCita
             key={`${part.type}-${index}`}
             content={part.content}
             citations={citations}
+            headingIds={headingIds}
             onOpenCitationReference={onOpenCitationReference}
             noteImageContext={noteImageContext}
             onSeek={onSeek}
