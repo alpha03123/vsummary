@@ -167,6 +167,7 @@ export function WorkspaceVideoScopeEmbed() {
     onSubmitChat: page.chat.submit,
     onCancelChat: page.chat.cancel,
   };
+  const needsDownload = page.shell.selectedVideo.isLinked || page.shell.selectedVideo.status === "linked";
 
   return (
     <div className="relative h-screen">
@@ -175,14 +176,27 @@ export function WorkspaceVideoScopeEmbed() {
           {seekError}
         </div>
       ) : null}
-      <WorkspaceVideoScopePane
-        page={page}
-        panelToolId={panelToolId}
-        onPanelSelectTool={setPanelToolId}
-        onProcessLinkedVideo={controller.onProcessLinkedVideo}
-        onOpenChat={() => setChatOpen(true)}
-        onExternalSeek={seekBilibiliVideo}
-      />
+      {needsDownload ? (
+        <WorkspaceStateBlock
+          eyebrow="Bilibili"
+          title={page.shell.selectedVideo.title}
+          description="先下载当前视频，再生成概况、逐字稿和其他工具内容。"
+          actionLabel={page.generation.showOverlay ? "正在处理视频" : "下载并生成"}
+          actionDisabled={page.generation.showOverlay}
+          onAction={controller.onProcessLinkedVideo}
+        >
+          {controller.state.error ? <p role="alert" className="mt-4 text-sm text-red-600">{controller.state.error}</p> : null}
+        </WorkspaceStateBlock>
+      ) : (
+        <WorkspaceVideoScopePane
+          page={page}
+          panelToolId={panelToolId}
+          onPanelSelectTool={setPanelToolId}
+          onProcessLinkedVideo={controller.onProcessLinkedVideo}
+          onOpenChat={() => setChatOpen(true)}
+          onExternalSeek={seekBilibiliVideo}
+        />
+      )}
       {page.generation.showOverlay && page.generation.snapshot ? (
         <WorkspaceGenerationOverlay
           generationProgress={page.generation.progress}

@@ -118,15 +118,27 @@ class SqlVideoWorkspace:
                 LEFT JOIN transcripts t ON t.video_id=v.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL AND s.import_published=1 AND v.deleted_at IS NULL ORDER BY v.created_at"""), {"workspace": self._workspace_id}).mappings().all()
         by_series: dict[str, list[LibraryVideoCardDTO]] = {row["id"]: [] for row in series}
+        linked_videos: dict[tuple[str, str], LinkedVideo] = {}
+        for row in series:
+            if row["linked_payload"] is None:
+                continue
+            for item in _json_object(row["linked_payload"]).get("videos", []):
+                source = _linked_video_from_payload(item)
+                linked_videos[(row["id"], source.video_id)] = source
         for video in videos:
+            source = linked_videos.get((video["series_id"], video["external_source_id"]))
             linked = video["source_kind"] not in {"video", "audio", "local"} and video["blob_key"] is None and video["external_path"] is None
             missing_external = video["external_path"] is not None and not Path(video["external_path"]).is_file()
-            source_type = ("audio" if Path(video["external_path"]).suffix.lower() in AUDIO_SUFFIXES else "video") if video["external_path"] is not None else ("video" if linked else video["source_kind"])
+            source_type = ("audio" if Path(video["external_path"]).suffix.lower() in AUDIO_SUFFIXES else "video") if video["external_path"] is not None else ("video" if linked or source is not None else video["source_kind"])
             by_series.setdefault(video["series_id"], []).append(LibraryVideoCardDTO(
                 id=video["id"], title=video["title"], source_name=Path(video["external_path"] or video["blob_key"] or "media").name,
                 processed=video["content_version"] > 0, status="source_missing" if missing_external else ("ready" if video["content_version"] > 0 else ("linked" if linked else "pending")),
                 has_transcript=video["transcript_video_id"] is not None, source_type=source_type,
-                is_linked=linked, source_id=video["external_source_id"] or "", provider=video["source_kind"] if linked else "",
+                is_linked=linked,
+                source_id=source.source_id if source is not None else video["external_source_id"] or "",
+                item_index=source.item_index if source is not None else 0,
+                source_url=source.source_url if source is not None else "",
+                provider=source.provider if source is not None else video["source_kind"] if linked else "",
             ))
         return [
             LibrarySeriesDTO(
