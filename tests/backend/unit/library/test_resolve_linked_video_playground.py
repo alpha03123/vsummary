@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 
 from backend.video_summary.library.linked_models import LinkedVideo
 from backend.video_summary.library.models import LibrarySeriesDTO
@@ -62,7 +61,6 @@ class ResolveLinkedVideoPlaygroundTests(unittest.IsolatedAsyncioTestCase):
             workspace,
             _Resolver(),
             _Invalidator(),
-            parser=SimpleNamespace(parse=lambda url: url),
         ).run(url="https://www.bilibili.com/video/BV1example")
 
         self.assertEqual(workspace.saved.series_id, "created-playground")
@@ -75,7 +73,6 @@ class ResolveLinkedVideoPlaygroundTests(unittest.IsolatedAsyncioTestCase):
             workspace,
             _Resolver(),
             _Invalidator(),
-            parser=SimpleNamespace(parse=lambda url: url),
         ).run_inbox(url="https://www.bilibili.com/video/BV1example")
 
         self.assertEqual(workspace.saved.series_id, "bilibili-inbox")

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from tests._api_fixtures import make_api_container, make_workspace_services, mock_service
+from backend.video_summary.library.models import VideoMindmapDTO, VideoSourceDTO
+from backend.video_summary.library.usecases import GetVideoSource, GetVideoMindmap
 
 from fastapi.testclient import TestClient
 
-from tests._workspace_scope import attach_workspace_scope
 from backend.local.http.app import create_app
+from backend.api.di.bootstrap import ApiContainer
 
 
 class MindmapExportApiTests(unittest.TestCase):
@@ -86,7 +88,7 @@ def _build_container(
     root: Path | None = None,
     title: str = "测试视频",
     mindmap_node: dict | None = None,
-) -> SimpleNamespace:
+) -> ApiContainer:
     """Build a minimal mock ApiContainer for mindmap export endpoint testing.
 
     Args:
@@ -95,28 +97,28 @@ def _build_container(
         mindmap_node: The mindmap dict to return, or None to simulate missing mindmap.
 
     Returns:
-        SimpleNamespace with enough attributes for the mindmap export endpoint.
+        Production container with scoped services for the mindmap export endpoint.
     """
     resolved_root = root or Path.cwd()
 
     mindmap_dto = None
     if mindmap_node is not None:
-        mindmap_dto = SimpleNamespace(
+        mindmap_dto = VideoMindmapDTO(
             series_id="s1",
             video_id="v1",
             title=title,
             mindmap=mindmap_node,
         )
 
-    video_source = SimpleNamespace(
+    video_source = VideoSourceDTO(
+        series_id="s1", video_id="v1", source_name="video.mp4", source_path=resolved_root / "video.mp4", processed=True,
         output_dir=resolved_root / "workspace" / "s1" / "v1",
         title=title,
     )
 
-    return attach_workspace_scope(SimpleNamespace(
-        root_dir=resolved_root,
-        get_video_source=SimpleNamespace(run=lambda series_id, video_id: video_source),
-        get_video_mindmap=SimpleNamespace(run=lambda series_id, video_id: mindmap_dto),
+    return make_api_container(root_dir=resolved_root, services=make_workspace_services(
+        get_video_source=mock_service(GetVideoSource, run=video_source),
+        get_video_mindmap=mock_service(GetVideoMindmap, run=mindmap_dto),
     ))
 
 

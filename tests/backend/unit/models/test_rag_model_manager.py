@@ -6,7 +6,9 @@ import threading
 import time
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from tests._api_fixtures import mock_service
+from backend.video_summary.library.models import VideoLibraryDTO, WorkspaceDTO, LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.library.usecases import ListVideoLibrary
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -15,11 +17,9 @@ from tests import _path_setup  # noqa: F401
 from tests._workspace_scope import attach_workspace_scope
 
 from backend.local.http.app import create_app
-from backend.api.di.bootstrap import ApiContainer
 from backend.video_summary.infrastructure.asr.huggingface_model_downloader import (
     HuggingFaceCacheWarmSpec,
     HuggingFaceDownloadCancelled,
-    _raise_if_download_cancelled,
 )
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.rag.rag_models import (
@@ -460,9 +460,12 @@ class FakeContainer:
         self.agent_session_store = agent_session_store or FakeSessionStore()
         self.graph_service_called = False
         self.debug_mode = False
-        self.list_video_library = SimpleNamespace(
-            run=lambda: SimpleNamespace(series=[SimpleNamespace(id="series-1", videos=[SimpleNamespace(processed=True)])])
-        )
+        self.list_video_library = mock_service(ListVideoLibrary, run=VideoLibraryDTO(
+            workspace=WorkspaceDTO(id="workspace-1", title="Workspace"),
+            series=[LibrarySeriesDTO(id="series-1", title="Series", videos=[
+                LibraryVideoCardDTO(id="video-1", title="Video", source_name="video.mp4", processed=True, status="ready")
+            ])],
+        ))
         attach_workspace_scope(self)
 
     def get_agent_graph_service(self):

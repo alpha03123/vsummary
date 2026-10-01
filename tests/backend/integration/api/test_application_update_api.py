@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from tests._api_fixtures import make_api_container
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -15,7 +15,7 @@ from backend.local.http.app import create_app
 class ApplicationUpdateApiTests(unittest.TestCase):
     def test_source_installation_returns_non_interactive_source_version(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            with TestClient(create_app(SimpleNamespace(root_dir=Path(temp_dir)))) as client:
+            with TestClient(create_app(make_api_container(root_dir=Path(temp_dir)))) as client:
                 response = client.get("/api/application-update")
 
         self.assertEqual(response.status_code, 200)
@@ -27,7 +27,7 @@ class ApplicationUpdateApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             _prepare_pack(root)
-            with TestClient(create_app(SimpleNamespace(root_dir=root))) as client:
+            with TestClient(create_app(make_api_container(root_dir=root))) as client:
                 status_response = client.get("/api/application-update")
 
                 self.assertEqual(status_response.status_code, 200)

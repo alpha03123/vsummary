@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from subprocess import Popen
+from tests._api_fixtures import mock_service
+
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.local import application_update
@@ -26,7 +28,7 @@ class ApplicationUpdateLauncherTests(unittest.TestCase):
                 patch.object(application_update.subprocess, "Popen") as popen,
                 patch.object(application_update, "Thread") as thread,
             ):
-                application_update.schedule_update(root=root, variant="cpu", container=SimpleNamespace())
+                application_update.schedule_update(root=root, variant="cpu", container=mock_service(Popen))
 
             arguments = popen.call_args.kwargs
             self.assertEqual(arguments["cwd"], root)

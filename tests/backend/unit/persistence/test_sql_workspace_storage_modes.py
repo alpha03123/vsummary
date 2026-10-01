@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference
+
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, Mock
 
@@ -97,7 +98,7 @@ class SqlWorkspaceStorageModeTests(unittest.TestCase):
             source_path = root / "replacement.mp4"
             source_path.write_bytes(b"video")
             workspace, sessions = self._workspace(root)
-            external = SimpleNamespace(source_path="C:/missing.mp4")
+            external = ExternalMediaReference(video_id="video-1", source_path="C:/missing.mp4")
             sessions.begin.return_value.__enter__.return_value.get.return_value = external
 
             workspace.relink_external_video(series_id="series-1", video_id="video-1", source_path=source_path)

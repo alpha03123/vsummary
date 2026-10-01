@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
+from tests._api_fixtures import mock_service
+
 from unittest.mock import Mock
 
 from backend.core.context import WorkspaceContext
@@ -58,7 +60,7 @@ def test_job_submission_records_request_reservation() -> None:
 def test_reused_job_releases_new_reservation() -> None:
     quota = _QuotaGuard()
     repository = SqlJobRepository(Mock(), quota_guard=quota)
-    repository._control = SimpleNamespace(submit_job=lambda **_kwargs: SubmittedJob(id="job-1", created=False, status="running"))
+    repository._control = mock_service(SqlControlPlaneRepository, submit_job=SubmittedJob(id="job-1", created=False, status="running"))
 
     with bind_workspace_context(WorkspaceContext("workspace-1", "actor-1", "request-1")):
         repository.submit(

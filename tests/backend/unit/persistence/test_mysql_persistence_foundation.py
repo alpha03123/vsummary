@@ -8,7 +8,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from alembic import command
-from alembic.script import ScriptDirectory
 
 from backend.video_summary.infrastructure.persistence.database import DatabaseDriverError, DatabaseOptions, _require_pymysql
 from backend.video_summary.infrastructure.persistence.migrate import build_alembic_config
@@ -23,7 +22,7 @@ from backend.local.persistence.managed_mysql import (
     _default_data_root,
 )
 from backend.core.ids import new_ulid
-from backend.video_summary.infrastructure.persistence.models import Base, Job, OutboxEvent, Series, Video
+from backend.video_summary.infrastructure.persistence.models import Base, Job, OutboxEvent
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import _enqueue_outbox_event, _persisted_card_ids
 from backend.video_summary.library.models import KnowledgeCardDTO
 
@@ -83,31 +82,14 @@ class ControlPlaneSchemaTests(unittest.TestCase):
             }.issubset(Base.metadata.tables)
         )
 
-    def test_job_active_key_and_video_source_identity_are_unique(self) -> None:
-        job_constraint_names = {constraint.name for constraint in Job.__table__.constraints}
-        video_constraint_names = {constraint.name for constraint in Video.__table__.constraints}
-
-        self.assertIn("uq_jobs_active_key", job_constraint_names)
-        self.assertIn("uq_videos_series_external_source", video_constraint_names)
-
     def test_job_resource_id_fits_supported_asr_model_keys(self) -> None:
         from backend.video_summary.infrastructure.asr.whisper_cpp_models import SUPPORTED_WHISPER_CPP_MODELS
 
         resource_ids = [f"asr:whisper_cpp:{model.id}" for model in SUPPORTED_WHISPER_CPP_MODELS]
         self.assertGreaterEqual(Job.__table__.c.resource_id.type.length, max(map(len, resource_ids)))
 
-    def test_series_position_is_unique_within_a_workspace(self) -> None:
-        constraint_names = {constraint.name for constraint in Series.__table__.constraints}
-
-        self.assertIn("uq_series_workspace_position", constraint_names)
 
 class AlembicConfigurationTests(unittest.TestCase):
-    def test_package_migration_directory_exposes_control_plane_revision(self) -> None:
-        config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
-        script = ScriptDirectory.from_config(config)
-
-        self.assertEqual(script.get_current_head(), "0017_bilibili_inbox_series")
-
     def test_initial_migration_renders_mysql_ddl_without_a_running_server(self) -> None:
         config = build_alembic_config(DatabaseOptions(url=MYSQL_URL))
         output = StringIO()

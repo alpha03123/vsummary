@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from tests._api_fixtures import make_workspace_services
+
 import unittest
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 from backend.video_summary.infrastructure.persistence.job_repository import ClaimedJob
-from backend.video_summary.infrastructure.persistence.job_worker import SqlJobProgressReporter, SqlJobWorker, WorkerOptions
+from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
 
 
 class _Repository:
@@ -52,7 +53,7 @@ class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
             repository=repository,
             get_execution_services=lambda workspace_id: (
                 resolved_workspaces.append(workspace_id)
-                or SimpleNamespace(job_summary_generator=SimpleNamespace(), job_operation_handlers={"custom": handler})
+                or make_workspace_services(job_operation_handlers={"custom": handler})
             ),
             options=WorkerOptions(worker_id="worker", operation_filter=frozenset({"custom"})),
         )
@@ -77,10 +78,7 @@ class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
 
         worker = SqlJobWorker(
             repository=repository,
-            get_execution_services=lambda _workspace_id: SimpleNamespace(
-                job_summary_generator=SimpleNamespace(),
-                job_operation_handlers={"custom": handler},
-            ),
+            get_execution_services=lambda _workspace_id: make_workspace_services(job_operation_handlers={"custom": handler}),
             options=WorkerOptions(worker_id="worker", operation_filter=frozenset({"custom"})),
         )
         claim = ClaimedJob(

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from sqlalchemy.engine import Result
+from backend.video_summary.infrastructure.persistence.models import LegacyImportItem
+from tests._api_fixtures import mock_service
+
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
@@ -35,7 +38,7 @@ class RecordingSessions:
         return self.existing_media
 
     def execute(self, _query, _parameters):
-        return SimpleNamespace(scalar=lambda: self.query_result)
+        return mock_service(Result, scalar=self.query_result)
 
     def get(self, _model, _key):
         return None
@@ -143,7 +146,7 @@ class LegacyWorkspaceImporterHardlinkTests(unittest.TestCase):
             sessions = RecordingSessions()
             sessions.query_result = "sql-video-1"
             importer = LegacyWorkspaceImporter(root_dir=root, session_factory=sessions, blob_store=FileBlobStore(root / "blobs"))
-            importer._mapped = Mock(return_value=SimpleNamespace(target_id="sql-series-1"))
+            importer._mapped = Mock(return_value=LegacyImportItem(source_kind="legacy", target_type="series", source_key="linked", status="imported", target_id="sql-series-1"))
             importer._import_external_media = Mock()
             importer._import_video_records = Mock(return_value=1)
 

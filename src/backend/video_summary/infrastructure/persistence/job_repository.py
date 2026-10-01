@@ -11,7 +11,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.video_summary.infrastructure.persistence.control_plane_repository import (
-    ControlPlaneConflictError,
     SqlControlPlaneRepository,
     SubmittedJob,
 )
@@ -480,11 +479,12 @@ class SqlJobRepository:
                 .where(JobEvent.job_id == job_id, JobEvent.sequence > after_sequence)
                 .order_by(JobEvent.sequence)
             ).all()
-        current_status = status.status if status is not None else "missing"
         return [
             JobEventSnapshot(
                 sequence=row.sequence,
-                status=current_status,
+                # 重放历史步骤时不能把它们都标成当前终态，否则客户端会在
+                # 第一条旧事件处关闭连接，丢失后面的真实步骤和完成事件。
+                status=(row.stage if row.stage in {"queued", "retrying", "cancelling", "succeeded", "failed", "cancelled"} else "running"),
                 stage=row.stage,
                 progress=row.progress,
                 detail=row.detail,

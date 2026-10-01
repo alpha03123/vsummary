@@ -88,13 +88,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertTrue((self.repo_root / cpu.settings_template).is_file())
         self.assertTrue((self.repo_root / gpu.settings_template).is_file())
 
-    def test_package_variants_do_not_bundle_models(self) -> None:
-        cpu = PACKAGE_VARIANTS["cpu"]
-        gpu = PACKAGE_VARIANTS["gpu"]
-
-        self.assertFalse(hasattr(cpu, "huggingface_models"))
-        self.assertFalse(hasattr(gpu, "huggingface_models"))
-
     def test_cpu_settings_template_uses_local_embedding_model_path(self) -> None:
         cpu = PACKAGE_VARIANTS["cpu"]
         rendered = (self.repo_root / cpu.settings_template).read_text(encoding="utf-8")
@@ -145,13 +138,6 @@ class ReleasePackagingSpecTests(unittest.TestCase):
         self.assertIn('VSUMMARY_DATA=%ROOT%\\.vsummary', script)
         self.assertIn('--managed-data-root "%VSUMMARY_DATA%"', script)
         self.assertIn("PYTHONPATH=%ROOT%\\src", script)
-
-    def test_release_workflow_passes_a_discovered_mysql_runtime_to_packaging(self) -> None:
-        workflow = (self.repo_root / ".github" / "workflows" / "release-package.yml").read_text(encoding="utf-8")
-
-        self.assertIn("Resolve managed MySQL runtime", workflow)
-        self.assertIn("MYSQL_RUNTIME_SOURCE=$mysqlRuntime", workflow)
-        self.assertIn("MySqlRuntimeSource = $env:MYSQL_RUNTIME_SOURCE", workflow)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

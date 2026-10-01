@@ -273,7 +273,7 @@ class GenerateVideoSummary:
             )
             transcript_source_identity = "manual-srt-v1"
             if progress_reporter is not None:
-                progress_reporter.update("load_manual_srt", 20.0, "已读取人工字幕，跳过字幕识别")
+                progress_reporter.update("load_manual_srt", 20.0, "正在使用你提供的字幕，无需重新识别讲话")
         elif saved_transcript is not None:
             transcript = saved_transcript
             video = VideoAsset(
@@ -283,10 +283,10 @@ class GenerateVideoSummary:
             )
             transcript_source_identity = "saved-transcript-v1"
             if progress_reporter is not None:
-                progress_reporter.update("load_transcript", 80.0, "已读取现有字幕，跳过语音识别")
+                progress_reporter.update("load_transcript", 80.0, "正在使用已有文字，无需重新识别讲话")
         elif self._subtitle_provider is not None:
             if progress_reporter is not None:
-                progress_reporter.update("probe_subtitles", 5.0, "正在检查中文字幕")
+                progress_reporter.update("probe_subtitles", 5.0, "正在检查视频是否自带可用字幕")
             try:
                 subtitle_transcript = await asyncio.to_thread(
                     self._subtitle_provider.load,
@@ -307,7 +307,7 @@ class GenerateVideoSummary:
             transcript = subtitle_transcript
             transcript_source_identity = f"subtitle:{_cache_identity(self._subtitle_provider)}"
             if progress_reporter is not None:
-                progress_reporter.update("extract_subtitles", 20.0, "已读取中文字幕，跳过语音识别")
+                progress_reporter.update("extract_subtitles", 20.0, "已找到视频字幕，无需重新识别讲话")
         elif resolved_manual_transcript is None and saved_transcript is None:
             audio_path = staging_dir / "audio.wav"
             transcript_stem = staging_dir / "transcript"
@@ -324,7 +324,7 @@ class GenerateVideoSummary:
             _raise_if_cancelled(progress_reporter, cancellation)
 
             if progress_reporter is not None:
-                progress_reporter.update("extract_audio", 15.0, "正在从视频中提取音频")
+                progress_reporter.update("extract_audio", 15.0, "正在读取视频中的声音")
             try:
                 audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
                 if not audio_restored:
@@ -353,7 +353,7 @@ class GenerateVideoSummary:
                 _raise_if_cancelled(progress_reporter, cancellation)
 
                 if progress_reporter is not None:
-                    progress_reporter.update("transcribe", 20.0, "正在转写音频")
+                    progress_reporter.update("transcribe", 20.0, "正在识别视频中的讲话，转换为文字")
                 transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
                 if transcript is None:
                     transcript = await asyncio.to_thread(
@@ -385,7 +385,7 @@ class GenerateVideoSummary:
             and saved_transcript is None
         ):
             if progress_reporter is not None:
-                progress_reporter.update("enhance_transcript", 78.0, "正在用 AI 修正转写文本")
+                progress_reporter.update("enhance_transcript", 78.0, "正在修正文字中的错字和断句")
             _raise_if_cancelled(progress_reporter, cancellation)
             enhanced_transcript = await asyncio.to_thread(
                 stage_cache.load_transcript,
@@ -429,6 +429,11 @@ class GenerateVideoSummary:
         _raise_if_cancelled(progress_reporter, cancellation)
 
         ai_summary_task: asyncio.Task[None] | None = None
+        def report_ai_summary_progress(stage: str, detail: str) -> None:
+            _raise_if_cancelled(progress_reporter, cancellation)
+            if progress_reporter is not None:
+                progress_reporter.update(stage, None, detail)
+
         # B（唯一 AI 概括）只依赖转写和原视频。它与 A 并发执行，但主任务
         # 必须在发布完成前等待它，避免 SQL 层把「只有逐字稿」误报为完整生成。
         if processing_mode == "summary" and self._ai_summary_runner is not None:
@@ -437,11 +442,14 @@ class GenerateVideoSummary:
                 transcript=transcript,
                 output_dir=output_dir,
                 on_completed=on_ai_summary_completed,
+                on_progress=report_ai_summary_progress,
             )
 
         if processing_mode == "transcript":
             if unavailable_reason is not None:
                 raise RuntimeError(unavailable_reason)
+            if progress_reporter is not None:
+                progress_reporter.update("publish", 99.0, "正在保存识别出的文字")
             await asyncio.to_thread(
                 _commit_transcript_artifacts,
                 staging_dir,
@@ -454,7 +462,7 @@ class GenerateVideoSummary:
             summary_document = _build_no_transcribable_audio_summary(video, unavailable_reason)
         else:
             if progress_reporter is not None:
-                progress_reporter.update("summarize", 88.0, "正在生成 AI 概况")
+                progress_reporter.update("summarize", 88.0, "正在整理内容、划分章节和提炼要点")
             _raise_if_cancelled(progress_reporter, cancellation)
             try:
                 summary_document = await self._summarizer.summarize(video, transcript, cancellation)
@@ -501,7 +509,7 @@ class GenerateVideoSummary:
                 await self._artifact_store.save_visual_evidence(evidence=visual_evidence, output_dir=staging_dir)
         if ai_summary_task is not None:
             if progress_reporter is not None:
-                progress_reporter.update("finalize_ai_summary", 98.0, "正在收尾 AI 概况")
+                progress_reporter.update("finalize_ai_summary", 98.0, "文字整理已完成，正在等待 AI 概况生成")
             await ai_summary_task
         await self._artifact_store.save_summary_document(document=summary_document, output_dir=staging_dir)
         _raise_if_cancelled(progress_reporter, cancellation)
@@ -522,8 +530,9 @@ class GenerateVideoSummary:
         transcript: Transcript,
         output_dir: Path,
         on_completed: Callable[[], None] | None,
+        on_progress: Callable[[str, str], None] | None,
     ) -> asyncio.Task[None]:
-        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir))
+        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress))
         self._ai_summary_tasks.add(task)
 
         def _record_completion(completed: asyncio.Task[None]) -> None:
@@ -832,7 +841,7 @@ def _handle_transcribe_progress(progress_reporter: ProgressReporter, ratio: floa
     progress_reporter.update(
         "transcribe",
         20.0 + max(0.0, min(1.0, ratio)) * 55.0,
-        "正在转写音频",
+        "正在识别视频中的讲话，转换为文字",
     )
 
 

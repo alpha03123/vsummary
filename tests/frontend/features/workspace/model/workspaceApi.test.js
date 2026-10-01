@@ -206,7 +206,25 @@ describe("generateVideoSummary", () => {
 });
 
 describe("subscribeDurableJobProgress", () => {
-  test("preserves durable job timing and derives estimates from live progress", () => {
+  test("preserves progress and separate tasks through concurrent picture events", () => {
+    const listeners = {};
+    vi.stubGlobal("EventSource", class {
+      addEventListener(type, listener) { listeners[type] = listener; }
+      close() {}
+    });
+    const listener = vi.fn();
+    subscribeDurableJobProgress("job-pictures", listener);
+    for (const [stage, progress] of [["summarize", 88], ["sample_frames", null], ["understand_frames", null], ["extract_screenshots", 92]]) {
+      listeners.progress({ data: JSON.stringify({ status: "running", stage, progress }) });
+    }
+    const snapshot = listener.mock.calls.at(-1)[0];
+    expect(snapshot.progress).toBe(92);
+    expect(snapshot.steps.find((step) => step.id === "ai_summary").status).toBe("running");
+    expect(snapshot.steps.find((step) => step.id === "chapter_images").status).toBe("running");
+    expect(listener.mock.calls[1][0].progress).toBe(88);
+  });
+
+  test("preserves durable timing without deriving an ETA from milestone progress", () => {
     const listeners = {};
     vi.stubGlobal("EventSource", class {
       addEventListener(type, listener) {
@@ -231,8 +249,8 @@ describe("subscribeDurableJobProgress", () => {
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({
       startedAt: expect.any(Number),
       elapsedSeconds: expect.any(Number),
-      estimatedTotalSeconds: expect.any(Number),
-      remainingSeconds: expect.any(Number),
+      estimatedTotalSeconds: null,
+      remainingSeconds: null,
     }));
   });
 });

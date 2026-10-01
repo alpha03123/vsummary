@@ -6,6 +6,8 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from backend.video_summary.infrastructure.runtime_capabilities import RuntimeCapabilities
+from dashscope.api_entities.dashscope_response import DashScopeAPIResponse
 from unittest.mock import patch
 
 from tests import _path_setup  # noqa: F401
@@ -25,7 +27,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
         # These are settings-validation tests, not hardware-detection tests.
         capabilities = patch(
             "backend.video_summary.infrastructure.config.settings_service.detect_runtime_capabilities",
-            return_value=types.SimpleNamespace(faster_whisper_available=True, gpu_embedding_available=True),
+            return_value=RuntimeCapabilities(platform="windows", accelerator="nvidia", nvidia_cuda_available=True, faster_whisper_available=True, gpu_embedding_available=True, unavailable_reason=None),
         )
         capabilities.start()
         self.addCleanup(capabilities.stop)
@@ -544,7 +546,7 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
                 @classmethod
                 def get_upload_certificate(cls, *, model, api_key, base_address):
                     calls.append((model, api_key, base_address))
-                    return types.SimpleNamespace(status_code=200, code="", message="")
+                    return DashScopeAPIResponse(status_code=200, code="", message="")
 
             dashscope_module = types.ModuleType("dashscope")
             utils_module = types.ModuleType("dashscope.utils")

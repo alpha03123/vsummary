@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from subprocess import CompletedProcess
+
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -32,7 +33,7 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
         with (
             patch(
                 "backend.video_summary.infrastructure.media_tools.subprocess.run",
-                return_value=SimpleNamespace(stdout="0\n"),
+                return_value=CompletedProcess(args=[], returncode=0, stdout="0\n"),
             ),
             patch("backend.video_summary.infrastructure.media_tools.subprocess.Popen", fake_popen),
         ):
@@ -62,7 +63,7 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
         with (
             patch(
                 "backend.video_summary.infrastructure.media_tools.subprocess.run",
-                return_value=SimpleNamespace(stdout="0\n"),
+                return_value=CompletedProcess(args=[], returncode=0, stdout="0\n"),
             ),
             patch("backend.video_summary.infrastructure.media_tools.subprocess.Popen", fake_popen),
             patch("backend.video_summary.infrastructure.media_tools.LOGGER.exception") as log_exception,
@@ -82,7 +83,7 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
         with (
             patch(
                 "backend.video_summary.infrastructure.media_tools.subprocess.run",
-                return_value=SimpleNamespace(stdout=""),
+                return_value=CompletedProcess(args=[], returncode=0, stdout=""),
             ),
             patch("backend.video_summary.infrastructure.media_tools.subprocess.Popen") as popen,
         ):
@@ -105,11 +106,11 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
     def test_ensure_browser_playable_mp4_remuxes_tail_index_media(self) -> None:
         run_calls: list[list[str]] = []
 
-        def fake_run(command: list[str], **kwargs: Any) -> SimpleNamespace:
+        def fake_run(command: list[str], **kwargs: Any) -> CompletedProcess:
             del kwargs
             run_calls.append(command)
             Path(command[-1]).write_bytes(_mp4(b"ftyp", b"moov", b"mdat"))
-            return SimpleNamespace(returncode=0, stderr=b"")
+            return CompletedProcess(args=[], returncode=0, stderr=b"")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             video_path = Path(temp_dir) / "tail-index.mp4"
@@ -128,11 +129,11 @@ class FfmpegMediaProcessorTests(unittest.TestCase):
     def test_ensure_browser_playable_mp4_remuxes_fragmented_media_with_front_moov(self) -> None:
         run_calls: list[list[str]] = []
 
-        def fake_run(command: list[str], **kwargs: Any) -> SimpleNamespace:
+        def fake_run(command: list[str], **kwargs: Any) -> CompletedProcess:
             del kwargs
             run_calls.append(command)
             Path(command[-1]).write_bytes(_mp4(b"ftyp", b"moov", b"mdat"))
-            return SimpleNamespace(returncode=0, stderr=b"")
+            return CompletedProcess(args=[], returncode=0, stderr=b"")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             video_path = Path(temp_dir) / "fragmented.mp4"

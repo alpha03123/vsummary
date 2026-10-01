@@ -3,19 +3,23 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
-from types import SimpleNamespace
+from dataclasses import replace
+from tests._api_fixtures import make_api_container, make_workspace_services, mock_service, get_test_services, replace_test_services
+from backend.video_summary.library.usecases import ListVideoLibrary, ResolveBilibiliSeries, ResolveLinkedVideo
+from backend.video_summary.library.ports import LinkedSeriesResolverWorkspace, LinkedVideoResolver, WorkspaceIndexInvalidator
 
 from fastapi.testclient import TestClient
 
-from tests._workspace_scope import attach_workspace_scope
-
-from backend.local.http.app import create_app
 from backend.bilibili.ytdlp_bilibili import BILIBILI_COOKIE_REQUIRED_MESSAGE
 from backend.external.ytdlp import ExternalVideoResolutionError
+from backend.local.http.app import create_app
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.infrastructure.persistence.control_plane_repository import SubmittedJob
+from backend.video_summary.infrastructure.persistence.job_repository import JobSnapshot
+from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoCardDTO, VideoLibraryDTO, WorkspaceDTO
 from backend.video_summary.library.linked_models import LinkedVideo
 from backend.video_summary.library.usecases.linked_videos import ResolveBilibiliVideo
+from tests._job_fixtures import job_snapshot
 
 
 class LinkedApiTests(unittest.TestCase):
@@ -32,18 +36,19 @@ class LinkedApiTests(unittest.TestCase):
                 source_url="https://www.bilibili.com/video/BV1xx411c7mD",
             )
 
-        workspace = SimpleNamespace(
-            ensure_playground_series=lambda: "created-playground",
-            list_series=lambda: [LibrarySeriesDTO(id="created-playground", title="Playground", videos=[], kind="playground")],
-            get_linked_series=lambda _series_id: None,
-            save_linked_series=saved.append,
+        workspace = mock_service(
+            LinkedSeriesResolverWorkspace,
+            ensure_playground_series="created-playground",
+            list_series=[LibrarySeriesDTO(id="created-playground", title="Playground", videos=[], kind="playground")],
+            get_linked_series=None,
         )
+        workspace.save_linked_series.side_effect = saved.append
+        resolver = mock_service(LinkedVideoResolver)
+        resolver.resolve_single_video.side_effect = resolve_video
         container = _build_container()
-        container.resolve_bilibili_video = ResolveBilibiliVideo(
-            workspace,
-            SimpleNamespace(resolve_single_video=resolve_video),
-            SimpleNamespace(invalidate=lambda: None),
-        )
+        replace_test_services(container, resolve_bilibili_video=ResolveBilibiliVideo(
+            workspace, resolver, mock_service(WorkspaceIndexInvalidator),
+        ))
 
         response = TestClient(create_app(container)).post(
             "/api/linked/bilibili/resolve/video",
@@ -72,7 +77,7 @@ class LinkedApiTests(unittest.TestCase):
                 "kind": "standard",
             },
         )
-        self.assertEqual(container.create_agent_series.calls, ["Transformer 入门"])
+        self.assertEqual(get_test_services(container).create_agent_series.calls, ["Transformer 入门"])
 
     def test_create_agent_series_rejects_blank_title(self) -> None:
         client = TestClient(create_app(_build_container()))
@@ -133,13 +138,15 @@ class LinkedApiTests(unittest.TestCase):
     def test_bilibili_plugin_route_uses_the_dedicated_inbox_operation(self) -> None:
         container = _build_container()
         calls = []
-        default_resolver = container.resolve_bilibili_video
+        default_resolver = get_test_services(container).resolve_bilibili_video
 
         async def resolve_inbox(*, url):
             calls.append(url)
             return await default_resolver.run(url=url, target_series_id=None)
 
-        container.resolve_bilibili_video = SimpleNamespace(run_inbox=resolve_inbox)
+        resolver = mock_service(ResolveBilibiliVideo)
+        resolver.run_inbox.side_effect = resolve_inbox
+        replace_test_services(container, resolve_bilibili_video=resolver)
         response = TestClient(create_app(container)).post(
             "/api/linked/bilibili/inbox/resolve/video",
             json={"url": "https://www.bilibili.com/video/BV1xx411c7mD"},
@@ -156,7 +163,7 @@ class LinkedApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"configured": True})
-        self.assertTrue(container.bilibili_cookie_initializer.called)
+        self.assertTrue(get_test_services(container).bilibili_cookie_initializer.called)
 
     def test_resolve_youtube_video_uses_generic_provider_route(self) -> None:
         container = _build_container()
@@ -178,7 +185,9 @@ class LinkedApiTests(unittest.TestCase):
                 provider="youtube",
             )
 
-        container.resolve_linked_video = SimpleNamespace(run=resolve_video)
+        resolver = mock_service(ResolveLinkedVideo)
+        resolver.run.side_effect = resolve_video
+        replace_test_services(container, resolve_linked_video=resolver)
         client = TestClient(create_app(container))
 
         response = client.post(
@@ -193,7 +202,7 @@ class LinkedApiTests(unittest.TestCase):
     def test_init_douyin_cookie_uses_provider_initializer(self) -> None:
         container = _build_container()
         initializer = _FakeBilibiliCookieInitializer()
-        container.external_cookie_initializers = {"douyin": initializer}
+        replace_test_services(container, external_cookie_initializers={"douyin": initializer})
         client = TestClient(create_app(container))
 
         response = client.post("/api/linked/douyin/cookie/init")
@@ -209,7 +218,9 @@ class LinkedApiTests(unittest.TestCase):
             del provider, url, target_series_id
             raise ExternalVideoResolutionError("cookie_required", "test detail")
 
-        container.resolve_linked_video = SimpleNamespace(run=resolve_video)
+        resolver = mock_service(ResolveLinkedVideo)
+        resolver.run.side_effect = resolve_video
+        replace_test_services(container, resolve_linked_video=resolver)
         client = TestClient(create_app(container))
 
         response = client.post(
@@ -240,7 +251,7 @@ class LinkedApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json()["job_id"], "job-1")
         self.assertEqual(response.json()["status"], "queued")
-        self.assertEqual(container.download_calls, [("series-1", "BV1xx411c7mD")])
+        self.assertEqual(container.job_repository.download_calls, [("series-1", "BV1xx411c7mD")])
 
     def test_cancel_linked_video_download_requests_durable_job_cancellation(self) -> None:
         container = _build_container()
@@ -255,8 +266,8 @@ class LinkedApiTests(unittest.TestCase):
     def test_cancel_series_generation_cancels_durable_parent_and_children(self) -> None:
         container = _build_container()
         container.job_repository.request_cancel_series_generation = lambda **_kwargs: [
-            SimpleNamespace(id="series-job", resource_id="series-1", resource_type="series", operation="generate_series_batch", status="cancelled"),
-            SimpleNamespace(id="video-job", resource_id="BV1xx411c7mD", resource_type="video", operation="generate_summary", status="cancelled"),
+            job_snapshot(id="series-job", resource_id="series-1", resource_type="series", operation="generate_series_batch", status="cancelled"),
+            job_snapshot(id="video-job", resource_id="BV1xx411c7mD", resource_type="video", operation="generate_summary", status="cancelled"),
         ]
 
         response = TestClient(create_app(container)).post("/api/series/series-1/generate/cancel")
@@ -319,7 +330,7 @@ class LinkedApiTests(unittest.TestCase):
             },
             result["structuredContent"],
         )
-        self.assertEqual(container.create_agent_series.calls, ["Agent 课程"])
+        self.assertEqual(get_test_services(container).create_agent_series.calls, ["Agent 课程"])
 
     def test_mcp_probe_get_without_session_returns_endpoint_metadata(self) -> None:
         client = TestClient(create_app(_build_container()))
@@ -378,22 +389,18 @@ def _build_container(
     linked_workspace = _FakeLinkedWorkspace(video)
     job_repository = _FakeJobRepository(download_calls)
 
-    container = attach_workspace_scope(SimpleNamespace(
-        root_dir=None,
-        list_video_library=SimpleNamespace(
-            run=lambda: SimpleNamespace(
-                series=[
-                    LibrarySeriesDTO(
-                        id="series-1",
-                        title="课程",
-                        videos=resolved_videos,
-                        is_linked=True,
-                    )
-                ]
-            ),
-        ),
-        resolve_bilibili_series=SimpleNamespace(run=resolve_series or default_resolve_series),
-        resolve_bilibili_video=SimpleNamespace(run=resolve_video),
+    library = VideoLibraryDTO(
+        workspace=WorkspaceDTO(id="workspace-1", title="Workspace"),
+        series=[LibrarySeriesDTO(id="series-1", title="课程", videos=resolved_videos, is_linked=True)],
+    )
+    series_resolver = mock_service(ResolveBilibiliSeries)
+    series_resolver.run.side_effect = resolve_series or default_resolve_series
+    video_resolver = mock_service(ResolveBilibiliVideo)
+    video_resolver.run.side_effect = resolve_video
+    services = make_workspace_services(
+        list_video_library=mock_service(ListVideoLibrary, run=library),
+        resolve_bilibili_series=series_resolver,
+        resolve_bilibili_video=video_resolver,
         create_agent_series=create_agent_series,
         bilibili_cookie_initializer=bilibili_cookie_initializer,
         generate_series_summaries=_FakeGenerateSeriesSummaries(active_video_ids),
@@ -401,10 +408,8 @@ def _build_container(
         generation_progress_tracker=generation_progress_tracker,
         video_download_progress_tracker=video_download_progress_tracker,
         linked_series_workspace=linked_workspace,
-        job_repository=job_repository,
-        download_calls=download_calls,
-    ))
-    return container
+    )
+    return make_api_container(services=services, job_repository=job_repository)
 
 
 def _mcp_initialize_payload() -> dict[str, object]:
@@ -488,19 +493,21 @@ class _FakeLinkedWorkspace:
 
 class _FakeJobRepository:
     def __init__(self, download_calls: list[tuple[str, str]]) -> None:
-        self._download_calls = download_calls
-        self._jobs: dict[str, SimpleNamespace] = {}
+        self.download_calls = download_calls
+        self._jobs: dict[str, JobSnapshot] = {}
         self.agent_submissions: list[tuple[str, str]] = []
 
     def submit(self, *, request_payload, **_kwargs):
         job_id = f"job-{len(self._jobs) + 1}"
         operation = _kwargs["operation"]
         if operation == "download_linked_video":
-            self._download_calls.append((request_payload["series_id"], request_payload["video_id"]))
+            self.download_calls.append((request_payload["series_id"], request_payload["video_id"]))
         if operation == "process_agent_video":
             self.agent_submissions.append((request_payload["video_id"], operation))
-        self._jobs[job_id] = SimpleNamespace(id=job_id, status="queued", failure_detail=None)
-        return SimpleNamespace(id=job_id, status="queued")
+        self._jobs[job_id] = job_snapshot(
+            id=job_id, status="queued", resource_id=_kwargs["resource_id"], operation=operation,
+        )
+        return SubmittedJob(id=job_id, created=True, status="queued")
 
     def active_for_resource(self, *, resource_id, operation, **_kwargs):
         if operation != "download_linked_video":
@@ -512,14 +519,14 @@ class _FakeJobRepository:
 
     def request_cancel(self, job_id, **_kwargs):
         snapshot = self._jobs[job_id]
-        snapshot.status = "cancelled"
-        return snapshot
+        self._jobs[job_id] = replace(snapshot, status="cancelled", cancel_requested=True)
+        return self._jobs[job_id]
 
     def get(self, job_id, **_kwargs):
         snapshot = self._jobs.get(job_id)
         if snapshot is None or snapshot.status == "cancelled":
             return snapshot
-        return SimpleNamespace(id=snapshot.id, status="succeeded", failure_detail=None)
+        return replace(snapshot, status="succeeded")
 
 
 if __name__ == "__main__":

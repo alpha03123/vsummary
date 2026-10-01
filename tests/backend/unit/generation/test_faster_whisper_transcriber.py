@@ -4,7 +4,9 @@ import sys
 import types
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from faster_whisper.transcribe import Segment, TranscriptionInfo, TranscriptionOptions
+from faster_whisper.vad import VadOptions
+from tests._api_fixtures import mock_service
 from unittest.mock import patch
 
 
@@ -62,7 +64,7 @@ class FasterWhisperTranscriberTests(unittest.TestCase):
             with patch.object(
                 transcriber._model,
                 "transcribe",
-                return_value=(iter([]), SimpleNamespace(duration=0, language="zh")),
+                return_value=(iter([]), _transcription_info(duration=0, language="zh")),
             ) as transcribe:
                 transcriber.transcribe(Path("audio.wav"), Path("transcript"))
         finally:
@@ -80,8 +82,8 @@ class FasterWhisperTranscriberTests(unittest.TestCase):
             transcriber._model,
             "transcribe",
             return_value=(
-                iter([SimpleNamespace(start=0.0, end=1.0, text="繁體中文")]),
-                SimpleNamespace(duration=1.0, language="zh"),
+                iter([_segment("繁體中文")]),
+                _transcription_info(duration=1.0, language="zh"),
             ),
         ) as transcribe, patch(
             "backend.video_summary.infrastructure.asr.faster_whisper_transcriber._load_chinese_simplifier",
@@ -100,8 +102,8 @@ class FasterWhisperTranscriberTests(unittest.TestCase):
             transcriber._model,
             "transcribe",
             return_value=(
-                iter([SimpleNamespace(start=0.0, end=1.0, text="English transcript")]),
-                SimpleNamespace(duration=1.0, language="en"),
+                iter([_segment("English transcript")]),
+                _transcription_info(duration=1.0, language="en"),
             ),
         ) as transcribe, patch(
             "backend.video_summary.infrastructure.asr.faster_whisper_transcriber._load_chinese_simplifier",
@@ -143,3 +145,14 @@ def _restore_module(name: str, previous_module: types.ModuleType | None) -> None
         sys.modules.pop(name, None)
     else:
         sys.modules[name] = previous_module
+
+
+def _segment(text: str) -> Segment:
+    return Segment(id=0, seek=0, start=0.0, end=1.0, text=text, tokens=[], avg_logprob=0.0,
+                   compression_ratio=1.0, no_speech_prob=0.0, words=None, temperature=0.0)
+
+
+def _transcription_info(*, duration: float, language: str) -> TranscriptionInfo:
+    return TranscriptionInfo(language=language, language_probability=1.0, duration=duration,
+                             duration_after_vad=duration, all_language_probs=None,
+                             transcription_options=mock_service(TranscriptionOptions), vad_options=VadOptions())

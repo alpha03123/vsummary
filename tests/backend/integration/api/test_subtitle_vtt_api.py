@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
+from pathlib import Path
+from tests._api_fixtures import make_api_container, make_workspace_services, mock_service
+from backend.video_summary.library.models import VideoSourceDTO
+from backend.video_summary.library.usecases import GetVideoSource, GetVideoTranscript
 
 from fastapi.testclient import TestClient
 
-from tests._workspace_scope import attach_workspace_scope
 from backend.local.http.app import create_app
 from backend.video_summary.library.models import TranscriptSegmentDTO, VideoTranscriptDTO
 
@@ -46,11 +48,11 @@ def _transcript() -> VideoTranscriptDTO:
 
 
 def _build_container(transcript: VideoTranscriptDTO | None):
-    source = SimpleNamespace(title="第一讲", output_dir=None)
-    return attach_workspace_scope(SimpleNamespace(
-        root_dir=None,
-        get_video_source=SimpleNamespace(run=lambda series_id, video_id: source),
-        get_video_transcript=SimpleNamespace(run=lambda series_id, video_id: transcript),
+    source = VideoSourceDTO(series_id="series-1", video_id="video-1", title="第一讲", source_name="video.mp4",
+                            source_path=Path("video.mp4"), output_dir=Path("transcript"), processed=True)
+    return make_api_container(services=make_workspace_services(
+        get_video_source=mock_service(GetVideoSource, run=source),
+        get_video_transcript=mock_service(GetVideoTranscript, run=transcript),
     ))
 
 

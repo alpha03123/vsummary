@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
+from pathlib import Path
+from tempfile import gettempdir
+from dataclasses import replace
+from backend.video_summary.infrastructure.config.settings import load_settings
 
 from tests import _path_setup  # noqa: F401
 
@@ -17,11 +20,12 @@ class RagRetrievalProxyTests(unittest.TestCase):
             created_services.append(service)
             return service
 
+        settings = load_settings(_path_setup.REPO_ROOT / "config/settings.toml.example", Path(gettempdir()))
         proxy = _RagModelAwareRetrievalService(
             rag_model_manager=FakeRagModelManager(),
             factory=factory,
-            settings_loader=lambda: SimpleNamespace(
-                agent_retrieval=SimpleNamespace(embedding_device="cpu", max_hits=5)
+            settings_loader=lambda: replace(
+                settings, agent_retrieval=replace(settings.agent_retrieval, embedding_device="cpu", max_hits=5),
             ),
         )
 

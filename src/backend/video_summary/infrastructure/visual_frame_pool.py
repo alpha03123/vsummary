@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 import json
 import math
 from pathlib import Path
@@ -38,6 +39,7 @@ def build_or_load_visual_frame_pool(
     output_dir: Path,
     max_input_images: int,
     media_processor: FfmpegMediaProcessor | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> VisualFramePool:
     """构建或复用按视频时间均匀覆盖的九宫格帧池。"""
     if max_input_images <= 0:
@@ -51,6 +53,7 @@ def build_or_load_visual_frame_pool(
             pool_dir=pool_dir,
             max_input_images=max_input_images,
             processor=processor,
+            on_progress=on_progress,
         )
 
 
@@ -60,6 +63,7 @@ def _build_or_load_visual_frame_pool(
     pool_dir: Path,
     max_input_images: int,
     processor: FfmpegMediaProcessor,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> VisualFramePool:
     manifest_path = pool_dir / "manifest.json"
     raw_dir = pool_dir / "raw"
@@ -72,7 +76,7 @@ def _build_or_load_visual_frame_pool(
         duration = processor.probe_duration(video_path)
         timestamps = _candidate_timestamps(duration, max_input_images * TILES_PER_GRID)
         raw_frames: list[tuple[float, Path]] = []
-        for timestamp in timestamps:
+        for index, timestamp in enumerate(timestamps, start=1):
             filename = f"{timestamp:.3f}".rstrip("0").rstrip(".") + ".jpg"
             target = raw_dir / filename
             try:
@@ -81,6 +85,9 @@ def _build_or_load_visual_frame_pool(
                 return VisualFramePool(image_paths=[], timestamps_by_image=[])
             except Exception:
                 continue
+            finally:
+                if on_progress is not None:
+                    on_progress(index, len(timestamps))
             if target.is_file() and _is_distinct_frame(target, raw_frames[-1][1] if raw_frames else None):
                 raw_frames.append((timestamp, target))
 

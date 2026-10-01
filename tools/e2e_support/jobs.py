@@ -53,28 +53,6 @@ def wait_for_video_processed(
     raise RuntimeError(f"Series generation did not process video '{video_id}' within {timeout_seconds:.0f}s: {latest}")
 
 
-def wait_for_video_source(
-    client: CoreApiClient,
-    series_id: str,
-    video_id: str,
-    *,
-    timeout_seconds: float = 300.0,
-) -> None:
-    deadline = time.monotonic() + timeout_seconds
-    latest: dict[str, Any] | None = None
-    while time.monotonic() < deadline:
-        for series in client.library().get("series", []):
-            if series.get("id") != series_id:
-                continue
-            for video in series.get("videos", []):
-                if video.get("id") == video_id:
-                    latest = video
-                    if video.get("is_linked") is not True and video.get("status") != "source_missing":
-                        return
-        time.sleep(0.5)
-    raise RuntimeError(f"Linked download did not make video source available within {timeout_seconds:.0f}s: {latest}")
-
-
 def wait_for_generation_to_settle(
     client: CoreApiClient,
     series_id: str,

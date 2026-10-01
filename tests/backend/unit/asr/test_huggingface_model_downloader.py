@@ -8,8 +8,9 @@
 
 from __future__ import annotations
 
+from huggingface_hub.hf_api import ModelInfo, RepoSibling
+
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -95,7 +96,7 @@ class _FakeHttpGet:
             temp_file.flush()
 
 
-def _install_fakes(monkeypatch, *, siblings: list[SimpleNamespace], contents: dict[str, bytes]) -> _FakeHttpGet:
+def _install_fakes(monkeypatch, *, siblings: list[RepoSibling], contents: dict[str, bytes]) -> _FakeHttpGet:
     """打桩 `HfApi.model_info` 与 `http_get`，返回可断言调用参数的假 `http_get`。"""
 
     class FakeHfApi:
@@ -104,7 +105,7 @@ def _install_fakes(monkeypatch, *, siblings: list[SimpleNamespace], contents: di
 
         def model_info(self, repo_id, files_metadata=False):
             del repo_id, files_metadata
-            return SimpleNamespace(siblings=siblings)
+            return ModelInfo(id="owner/model", siblings=[vars(item) for item in siblings])
 
     fake_http_get = _FakeHttpGet(contents)
     monkeypatch.setattr("huggingface_hub.HfApi", FakeHfApi)
@@ -123,10 +124,10 @@ def _make_spec(target_dir: Path, **overrides) -> HuggingFaceDownloadSpec:
     return HuggingFaceDownloadSpec(**defaults)
 
 
-def _siblings() -> list[SimpleNamespace]:
+def _siblings() -> list[RepoSibling]:
     return [
-        SimpleNamespace(rfilename="model.bin", size=100),
-        SimpleNamespace(rfilename="config.json", size=20),
+        RepoSibling(rfilename="model.bin", size=100),
+        RepoSibling(rfilename="config.json", size=20),
     ]
 
 
@@ -234,7 +235,7 @@ def test_missing_required_file_raises_and_keeps_temp_dir(monkeypatch, tmp_path: 
     reporter = _Reporter()
     _install_fakes(
         monkeypatch,
-        siblings=[SimpleNamespace(rfilename="config.json", size=20)],
+        siblings=[RepoSibling(rfilename="config.json", size=20)],
         contents={"config.json": b"c" * 20},
     )
     target_dir = tmp_path / "model"
@@ -252,8 +253,8 @@ def test_allow_patterns_filter_repo_files(monkeypatch, tmp_path: Path) -> None:
     fake_http_get = _install_fakes(
         monkeypatch,
         siblings=[
-            SimpleNamespace(rfilename="ggml-small.bin", size=30),
-            SimpleNamespace(rfilename="ggml-large.bin", size=40),
+            RepoSibling(rfilename="ggml-small.bin", size=30),
+            RepoSibling(rfilename="ggml-large.bin", size=40),
         ],
         contents={"ggml-small.bin": b"s" * 30, "ggml-large.bin": b"l" * 40},
     )
@@ -277,7 +278,7 @@ def test_no_matching_repo_file_raises(monkeypatch, tmp_path: Path) -> None:
     reporter = _Reporter()
     _install_fakes(
         monkeypatch,
-        siblings=[SimpleNamespace(rfilename="ggml-large.bin", size=40)],
+        siblings=[RepoSibling(rfilename="ggml-large.bin", size=40)],
         contents={"ggml-large.bin": b"l" * 40},
     )
 

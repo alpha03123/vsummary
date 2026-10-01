@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
 
 from backend.shared.filesystem import atomic_write_text
@@ -13,7 +14,7 @@ from backend.video_summary.infrastructure.llm.litellm_note_generator import Lite
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
 from backend.video_summary.library.models import TranscriptSegmentDTO, VideoAiNoteVisualContextDTO, VideoTranscriptDTO, VideoVisualInputFrameDTO
-from backend.video_summary.library.note_images import materialize_note_frames
+from backend.video_summary.library.note_images import materialize_note_frames, parse_note_image_markers
 from backend.video_summary.library.usecases.ai_notes import _split_note_title, constrain_ai_note_image_markers
 
 
@@ -42,23 +43,30 @@ class ConcurrentAiSummaryRunner:
         self._note_image_min_gap_seconds = note_image_min_gap_seconds
         self._media_processor = media_processor
 
-    async def run(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path) -> None:
+    async def run(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, on_progress: Callable[[str, str], None] | None = None) -> None:
         _write_status(output_dir, "running")
         try:
-            await asyncio.to_thread(self._run_sync, video=video, transcript=transcript, output_dir=output_dir)
+            await asyncio.to_thread(self._run_sync, video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress)
         except Exception as error:
             _write_status(output_dir, "failed", str(error))
             raise
         else:
             _write_status(output_dir, "ready")
 
-    def _run_sync(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path) -> None:
+    def _run_sync(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, on_progress: Callable[[str, str], None] | None = None) -> None:
+        def report(stage: str, detail: str) -> None:
+            if on_progress is not None:
+                on_progress(stage, detail)
+
+        if self._multimodal_enabled:
+            report("sample_frames", "正在选取视频画面，供 AI 阅读图片和屏幕内容")
         pool = (
             build_or_load_visual_frame_pool(
                 video_path=video.source_path,
                 output_dir=output_dir,
                 max_input_images=self._max_input_images,
                 media_processor=self._media_processor,
+                on_progress=lambda done, total: report("sample_frames", f"正在选取视频画面（{done}/{total}）"),
             )
             if self._multimodal_enabled
             else None
@@ -76,6 +84,12 @@ class ConcurrentAiSummaryRunner:
                 for path, timestamps in zip(image_paths, timestamps_by_image, strict=True)
             ],
             evidence_timestamps=tuple(timestamp for group in timestamps_by_image for timestamp in group),
+        )
+        report(
+            "understand_frames" if image_paths else "generate_ai_summary",
+            "正在识别画面中的文字和内容，并结合讲话生成概况" if image_paths else
+            "没有可用画面，正在根据讲话内容生成概况" if self._multimodal_enabled else
+            "正在根据讲话内容生成概况",
         )
         generated = self._generator.run_ai_summary(
             transcript=VideoTranscriptDTO(
@@ -105,6 +119,8 @@ class ConcurrentAiSummaryRunner:
             max_images=generated.note_max_images,
             min_gap_seconds=generated.note_image_min_gap_seconds,
         )
+        if parse_note_image_markers(content):
+            report("note_images", "正在为概况添加视频截图")
         materialize_note_frames(
             video_path=video.source_path,
             output_dir=output_dir,
@@ -134,6 +150,7 @@ class ConcurrentAiSummaryRunner:
                 indent=2,
             ),
         )
+        report("ai_summary_completed", "AI 概况已生成")
 
 
 def _utc_now() -> str:

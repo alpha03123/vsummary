@@ -47,6 +47,9 @@ async def stream_job_events(
     async def event_stream():
         sequence = after_sequence
         while True:
+            snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
+            if snapshot is None:
+                break
             events = job_repository.events(job_id, after_sequence=sequence, workspace_id=context.workspace_id)
             for event in events:
                 sequence = event.sequence
@@ -61,8 +64,8 @@ async def stream_job_events(
                     "started_at": event.started_at.timestamp() if event.started_at is not None else None,
                 }
                 yield f"id: {event.sequence}\nevent: progress\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
-            if snapshot is None or snapshot.status in _TERMINAL_STATUSES:
+            # 先读任务状态再取事件，保证看到终态时也已读到同一事务里的完成事件。
+            if snapshot.status in _TERMINAL_STATUSES:
                 break
             await asyncio.sleep(0.25)
 

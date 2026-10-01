@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from backend.local.composition import LocalWorkspaceContextProvider, LocalWorkspaceServicesProvider
 
 from fastapi.testclient import TestClient
 
@@ -87,11 +87,14 @@ class FakeContainer:
         self.config_path = root_dir / "config" / "settings.toml"
         self.settings_service = settings_service or FakeSettingsService()
         self.services = FakeWorkspaceServices()
-        self.context_provider = SimpleNamespace(get_context=lambda *, request_id: SimpleNamespace(workspace_id="workspace-1", request_id=request_id))
-        self.workspace_services_provider = SimpleNamespace(get_services=lambda _context: self.services)
+        self.context_provider = LocalWorkspaceContextProvider(workspace_id="workspace-1")
+        self.workspace_services_provider = LocalWorkspaceServicesProvider(workspace_id="workspace-1")
+        self.workspace_services_provider.install_services(self.services)
 
 
 class FakeWorkspaceServices:
+    workspace_id = "workspace-1"
+
     def __init__(self) -> None:
         self.invalidate_agent_graph_service_calls = 0
         self.invalidate_agent_workspace_indexes_calls = 0

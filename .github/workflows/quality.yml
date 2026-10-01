@@ -16,8 +16,13 @@ jobs:
         run: python -m pip install -r requirements.cpu.txt -r requirements.dev.txt import-linter pytest
       - shell: pwsh
         run: $env:PYTHONPATH = 'src;.'; lint-imports
-      - shell: pwsh
-        run: $env:PYTHONPATH = 'src;.'; python -m pytest tests/backend -q
+      - name: Run backend tests with disposable MySQL
+        shell: pwsh
+        run: |
+          choco install mysql --no-progress --yes
+          $mysql = Get-ChildItem 'C:\Program Files\MySQL' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if ($null -eq $mysql) { throw 'MySQL installation was not found.' }
+          python tools/run_backend_tests.py --mysql-home $mysql.FullName tests/backend -q
 
   frontend:
     runs-on: ubuntu-latest

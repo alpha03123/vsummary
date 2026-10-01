@@ -30,12 +30,6 @@ class CoreApiClient:
     def submit_series_generation(self, series_id: str, *, processing_mode: str = "summary") -> dict[str, Any]:
         return self._json("POST", f"/api/series/{series_id}/generate", "series generation", json={"processing_mode": processing_mode})
 
-    def submit_video_generation(self, series_id: str, video_id: str, *, processing_mode: str = "summary") -> dict[str, Any]:
-        return self._json("POST", f"/api/videos/{series_id}/{video_id}/generate", "video generation", json={"processing_mode": processing_mode})
-
-    def start_linked_download(self, series_id: str, video_id: str) -> dict[str, Any]:
-        return self._json("POST", f"/api/videos/{series_id}/{video_id}/download", "linked video download")
-
     def submit_ai_summary(self, series_id: str, video_id: str, *, template: str) -> dict[str, Any]:
         return self._json("POST", f"/api/videos/{series_id}/{video_id}/ai-summary/generate", "AI summary generation", json={"template": template})
 
@@ -62,9 +56,6 @@ class CoreApiClient:
 
     def get_transcript(self, series_id: str, video_id: str) -> dict[str, Any]:
         return self._json("GET", f"/api/videos/{series_id}/{video_id}/transcript", "transcript")
-
-    def get_notes(self, series_id: str, video_id: str) -> dict[str, Any]:
-        return self._json("GET", f"/api/videos/{series_id}/{video_id}/notes", "notes")
 
     def get_export(self, series_id: str, video_id: str, name: str) -> str:
         return self._request("GET", f"/api/videos/{series_id}/{video_id}/exports/{name}", f"{name} export").text

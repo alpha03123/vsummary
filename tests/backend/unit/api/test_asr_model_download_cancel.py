@@ -1,10 +1,13 @@
-from types import SimpleNamespace
+from tests._api_fixtures import make_api_container
+from unittest.mock import create_autospec
 
 import pytest
 from fastapi import HTTPException
 
 from backend.core.context import WorkspaceContext
 from backend.local.routes.settings import cancel_asr_model_download
+from backend.video_summary.infrastructure.persistence.job_repository import SqlJobRepository
+from tests._job_fixtures import job_snapshot
 
 
 class _ModelManager:
@@ -16,10 +19,12 @@ class _ModelManager:
 
 
 def test_cancel_asr_model_download_requests_durable_job_cancellation() -> None:
-    job_repository = SimpleNamespace(
-        request_cancel_for_resource=lambda **kwargs: SimpleNamespace(id="job-1", status="cancelled", **kwargs),
+    job_repository = create_autospec(SqlJobRepository, instance=True, spec_set=True)
+    job_repository.request_cancel_for_resource.return_value = job_snapshot(
+        id="job-1", status="cancelled", resource_type="model", resource_id="asr:faster_whisper:large-v3-turbo",
+        operation="prepare_asr_model",
     )
-    container = SimpleNamespace(
+    container = make_api_container(
         faster_whisper_model_manager=_ModelManager(),
         job_repository=job_repository,
     )
@@ -28,10 +33,13 @@ def test_cancel_asr_model_download_requests_durable_job_cancellation() -> None:
     response = cancel_asr_model_download("faster_whisper", "large-v3-turbo", container, context)
 
     assert response == {"status": "cancelled", "job_id": "job-1"}
+    job_repository.request_cancel_for_resource.assert_called_once_with(
+        workspace_id="workspace-1", resource_id="asr:faster_whisper:large-v3-turbo", operation="prepare_asr_model",
+    )
 
 
 def test_cancel_asr_model_download_rejects_unsupported_model() -> None:
-    container = SimpleNamespace(
+    container = make_api_container(
         faster_whisper_model_manager=_ModelManager(supported=False),
     )
 

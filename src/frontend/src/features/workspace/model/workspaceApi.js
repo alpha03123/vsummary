@@ -10,6 +10,7 @@ import {
   toWorkspaceSummary,
   toWorkspaceTools,
 } from "./workspaceViewModel";
+import { advanceGenerationSteps } from "./generationSteps";
 
 export async function loadWorkspaceLibrary() {
   return toWorkspaceLibrary(await fetchJson("/api/videos"));
@@ -412,9 +413,6 @@ function toDurableGenerationSnapshot(payload) {
       ? null
       : Math.max(0, Date.now() / 1000 - startedAt);
   const progress = typeof payload?.progress === "number" ? payload.progress : null;
-  const estimatedTotalSeconds = progress != null && progress > 1 && elapsedSeconds != null
-    ? elapsedSeconds / (progress / 100)
-    : null;
   return {
     status: typeof status === "string" ? status : "failed",
     stage: typeof payload?.stage === "string" ? payload.stage : null,
@@ -423,10 +421,8 @@ function toDurableGenerationSnapshot(payload) {
     error,
     startedAt,
     elapsedSeconds,
-    estimatedTotalSeconds,
-    remainingSeconds: estimatedTotalSeconds == null || elapsedSeconds == null
-      ? null
-      : Math.max(0, estimatedTotalSeconds - elapsedSeconds),
+    estimatedTotalSeconds: null,
+    remainingSeconds: null,
   };
 }
 
@@ -444,6 +440,8 @@ function toEpochSeconds(value) {
 export function subscribeDurableJobProgress(jobId, listener) {
   const eventSource = new EventSource(`/api/jobs/${encodeURIComponent(jobId)}/events`);
   let terminal = false;
+  let steps = [];
+  let progress = null;
 
   eventSource.addEventListener("progress", (event) => {
     let payload;
@@ -456,6 +454,10 @@ export function subscribeDurableJobProgress(jobId, listener) {
       return;
     }
     const snapshot = toDurableGenerationSnapshot(payload);
+    steps = advanceGenerationSteps(steps, snapshot);
+    if (snapshot.progress != null) progress = Math.max(progress ?? 0, snapshot.progress);
+    snapshot.steps = steps;
+    snapshot.progress = progress;
     listener(snapshot);
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       terminal = true;

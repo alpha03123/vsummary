@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
+from tests._api_fixtures import make_workspace_services
 
 from fastapi import HTTPException
 from sqlalchemy.exc import OperationalError
@@ -11,7 +11,7 @@ from backend.api.routes.health import health
 
 class HealthRouteTests(unittest.TestCase):
     def test_returns_ok_when_sql_workspace_is_readable(self) -> None:
-        container = SimpleNamespace(check_health=lambda: object())
+        container = make_workspace_services()
 
         self.assertEqual(health(container).status, "ok")
 
@@ -19,7 +19,7 @@ class HealthRouteTests(unittest.TestCase):
         def raise_disconnect():
             raise OperationalError("SELECT 1", {}, ConnectionError("connection refused"))
 
-        container = SimpleNamespace(check_health=raise_disconnect)
+        container = make_workspace_services(check_health=raise_disconnect)
 
         with self.assertRaises(HTTPException) as caught:
             health(container)

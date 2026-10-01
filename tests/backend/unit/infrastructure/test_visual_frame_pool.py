@@ -30,11 +30,13 @@ class VisualFramePoolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             processor = FakeFrameProcessor(duration=180)
+            progress = []
             first = build_or_load_visual_frame_pool(
                 video_path=root / "video.mp4",
                 output_dir=root / "output",
                 max_input_images=2,
                 media_processor=processor,
+                on_progress=lambda done, total: progress.append((done, total)),
             )
             calls_after_first = list(processor.calls)
             second = build_or_load_visual_frame_pool(
@@ -46,6 +48,7 @@ class VisualFramePoolTests(unittest.TestCase):
 
             self.assertEqual(2, len(first.image_paths))
             self.assertEqual(18, len(calls_after_first))
+            self.assertEqual([(done, 18) for done in range(1, 19)], progress)
             self.assertEqual(calls_after_first, processor.calls)
             self.assertEqual(first.image_paths, second.image_paths)
             self.assertFalse((root / "output" / "visual_frame_pool" / "grid-2" / "raw").exists())

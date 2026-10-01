@@ -1,4 +1,5 @@
-from types import SimpleNamespace
+from tests._api_fixtures import mock_service
+from backend.video_summary.infrastructure.persistence.job_repository import SqlJobRepository
 
 from backend.api.adapters.durable_workspace_index_refresher import (
     DurableWorkspaceIndexRefresher,
@@ -22,7 +23,8 @@ def test_all_index_mutations_submit_one_workspace_refresh_job() -> None:
 
 def test_refresh_submission_is_workspace_scoped_and_coalesces_active_job() -> None:
     submissions: list[dict[str, object]] = []
-    repository = SimpleNamespace(submit=lambda **kwargs: submissions.append(kwargs))
+    repository = mock_service(SqlJobRepository)
+    repository.submit.side_effect = lambda **kwargs: submissions.append(kwargs)
 
     submit_workspace_index_refresh(repository=repository, workspace_id="workspace-1")
 
@@ -37,7 +39,8 @@ def test_refresh_submission_is_workspace_scoped_and_coalesces_active_job() -> No
         "idempotency_key": None,
     }]
 
+    repository.submit.side_effect = ControlPlaneConflictError("active")
     submit_workspace_index_refresh(
-        repository=SimpleNamespace(submit=lambda **_kwargs: (_ for _ in ()).throw(ControlPlaneConflictError("active"))),
+        repository=repository,
         workspace_id="workspace-1",
     )

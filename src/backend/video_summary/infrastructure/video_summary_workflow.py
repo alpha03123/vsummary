@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -75,7 +76,9 @@ class ConfiguredVideoSummaryWorkflow:
             transcript_enhancement_enabled: 是否启用转写增强；为 `None`
                 时由用例按默认配置决定。该参数参与缓存签名。
         """
-        application = self._get_application(transcript_enhancement_enabled)
+        if progress_reporter is not None:
+            progress_reporter.update("initialize", 1.0, "正在准备识别和生成所需的模型，首次运行需要稍等")
+        application = await asyncio.to_thread(self._get_application, transcript_enhancement_enabled)
         resolved_progress_reporter = progress_reporter
         if progress_reporter is not None and application.settings.debug.mode:
             resolved_progress_reporter = DebugFileProgressReporter(
