@@ -33,11 +33,11 @@
 
 <img src="assets/showcase-video-overview.gif" alt="视频 AI 概况页面" />
 
-### 视频播放器
+### 多弹性布局
 
-播放器始终位于工作区中栏，章节跳转后自动播放；没选视频时显示「选择视频以开始预览」占位。
+可自由拆分、组合预览、逐字稿、AI 概括等面板；拖拽分割线即可调整比例，布局会自动保留。
 
-<img src="./assets/showcase-player-jump.png" alt="视频播放器中栏" />
+<img src="./assets/showcase-flexible-layout.gif" alt="多弹性面板布局" />
 
 ### 聊天抽屉
 
@@ -45,18 +45,15 @@
 
 <img src="./assets/showcase-chat-drawer.png" alt="聊天抽屉" />
 
+### 浏览器插件
+支持直接解析B站视频，并且能够实现插件--视频位置的跳转
+<img src="./assets/browser-plugin.png" alt="浏览器插件" />
+
 ### MCP：整理本地录音
 
 将 VSummary 接入 MCP 后，AI 助手可以创建系列、导入本地媒体、发起处理并导出 Markdown。下面演示将两段录音处理为一份可编辑的结构化总结。
 
 <img src="./assets/showcase-mcp-recording-summary.gif" alt="MCP 处理并总结本地录音" />
-
-### MCP：自主探索 Bilibili
-
-AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 下载、转写和生成概况；处理完成后可继续读取和整理导出的内容。
-
-<img src="./assets/showcase-mcp-bilibili-explore.gif" alt="MCP 自主探索 Bilibili 并处理视频" />
----
 
 ## 核心特性
 
@@ -64,10 +61,8 @@ AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 
 - **按系列管理学习资料**：适合课程、讲座、播客、会议录像等成组视频。你可以在一个系列里批量处理视频，并从系列视角理解整体内容。
 - **单个视频深度阅读**：每个视频都有独立工作区，可以查看原视频、AI 概况、章节摘要、思维导图、知识卡片和笔记，适合精读一段长视频。
 - **章节与转写一键跳转**：在 AI 概况中，**点击章节卡**或展开后的**任意转写段**即可直接跳到视频对应时间并自动播放，导航视频内容更直观。
-- **中栏始终是视频播放器**：进入任意视频后，中栏就是播放器；未选中视频时显示「选择视频以开始预览」占位。`AI 概况`、`思维导图`、`知识卡片`、`笔记`等独立工具页在右侧并列展示。
-- **分析助手按需唤起**：原本固定在中间的"分析助手"聊天面板被收进工具栏的 💬 抽屉——需要提问时点开，关闭后中栏播放器立即可用。`Esc` 或点击背景都能关闭。
 - **围绕视频内容对话**：可以在单视频或整个系列范围内提问，让系统基于已经整理好的转写、摘要、笔记和知识卡片回答。
-- **外部课程导入**：支持 Bilibili 外链导入，也支持通过 `chaoxing-downloader` 导入超星学习通课程。
+- **外部课程导入**：支持 Bilibili,抖音,youtube 外链导入
 - **MCP 自动化工作流**：通过 MCP 工具让 AI 助手创建和管理视频系列，导入本地媒体或 Bilibili 链接，跟踪处理进度，并导出 Markdown。
 - **本地优先**：原始视频、转写结果、摘要、笔记和知识索引都保存在本地目录中；除了调用你配置的模型供应商外，不需要把视频上传到第三方平台。
 - **低门槛启动**：提供 CPU / GPU 两种整合包，普通用户下载整合包解压后运行 `start.bat` 即可使用
@@ -81,14 +76,6 @@ AI 助手可以先检索 Bilibili 内容，再将选中的视频交给 VSummary 
 ### 源码版 MySQL
 
 Windows 整合包自带 MySQL，不需要安装 Windows 服务。源码版的 `start.bat` 会依次从 `VSUMMARY_MYSQL_HOME`、系统 `PATH`、`%ProgramFiles%\MySQL` 自动寻找 MySQL；找到后由应用在本机回环地址启动私有实例并管理迁移，不使用系统 MySQL 服务。
-
-自动发现失败时，将 `VSUMMARY_MYSQL_HOME` 设为 MySQL 安装根目录（其中应有 `bin\mysqld.exe` 和 `share\`），然后重新打开终端运行：
-
-```bat
-setx VSUMMARY_MYSQL_HOME "D:\tools\mysql-8.4.9-winx64"
-```
-
-新终端生效。数据库数据和应用凭据位于 `%LOCALAPPDATA%\VSummary\mysql`。
 
 macOS / Apple Silicon 可按[安装说明](docs/installation.md#macos--apple-silicon)从源码运行，使用 whisper.cpp / Metal 转写；通过 `start.command` 启动本地网页和专用 MySQL。
 
@@ -106,11 +93,8 @@ Windows 整合包解压后，插件位于 `extensions/bilibili-sidepanel`。启�
 - `videos/`、`workspace/`：旧版本的原始视频和工作产物；旧目录导入由“设置 → 应用更新 → 旧版数据迁移”启动
 - `data/models/`：本地模型文件
 
-导入本地视频可选择复制、硬链接或外部路径引用（界面称“软链接”）。硬链接要求源文件与 Blob 存储位于同一分区；外部路径引用不会复制文件，但移动源文件后需要重新关联。旧目录迁移先展示数据清单及容量；旧硬链接系列若与 Blob 存储跨卷，需要明确选择转换为复制。开始迁移后，每条旧 `videos/` 文件在新 Blob 与 SQL 记录核验成功后直接删除，失败项保留。旧 `workspace/`、`data/` 及外部引用指向的原文件不会自动删除。删除系列会直接删除应用侧的视频 Blob 文件，不经过回收站。
 
-除了发给 LLM 供应商的文本请求外，原始音视频处理都保留在本地。
 
----
 
 ## 常见问题
 
