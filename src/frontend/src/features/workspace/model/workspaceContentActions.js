@@ -215,12 +215,18 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     activeVideoGenerationKeys.add(taskKey);
     dispatch({ type: "generation_started", videoKey, seriesId, videoId });
 
-    try {
-      const submission = await generateVideoSummary(seriesId, videoId, {
+    const generationOptions = {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
-        processingMode,
-        aiSummaryTemplate,
-      });
+    };
+    if (processingMode === "transcript") {
+      generationOptions.processingMode = processingMode;
+    }
+    if (aiSummaryTemplate !== "general") {
+      generationOptions.aiSummaryTemplate = aiSummaryTemplate;
+    }
+
+    try {
+      const submission = await generateVideoSummary(seriesId, videoId, generationOptions);
       dispatch({
         type: "generation_status_loaded",
         taskKey,
