@@ -29,6 +29,19 @@ class SummaryChapterPayload(BaseModel):
     key_points: list[str] = Field(default_factory=list)
     image_timestamp_seconds: float | None = Field(default=None, allow_inf_nan=False)
 
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "SummaryChapterPayload":
+        if self.start_seconds < 0:
+            raise ValueError("章节 start_seconds 不能小于 0。")
+        if self.end_seconds <= self.start_seconds:
+            raise ValueError("章节 end_seconds 必须严格大于 start_seconds。")
+        if (
+            self.image_timestamp_seconds is not None
+            and not self.start_seconds <= self.image_timestamp_seconds <= self.end_seconds
+        ):
+            raise ValueError("章节 image_timestamp_seconds 必须位于章节时间范围内。")
+        return self
+
 
 class SummaryPayload(BaseModel):
     """整篇视频总结的载荷模型。
@@ -46,6 +59,18 @@ class SummaryPayload(BaseModel):
     core_problem: str = ""
     chapters: list[SummaryChapterPayload] = Field(default_factory=list)
     key_takeaways: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_chapter_sequence(self) -> "SummaryPayload":
+        if len({chapter.id for chapter in self.chapters}) != len(self.chapters):
+            raise ValueError("章节 id 不能重复。")
+        for previous, current in zip(self.chapters, self.chapters[1:]):
+            if current.start_seconds < previous.end_seconds:
+                raise ValueError(
+                    f"章节必须按时间排序且互不重叠：{current.id} 的 start_seconds "
+                    f"({current.start_seconds}) 不能小于 {previous.id} 的 end_seconds ({previous.end_seconds})。"
+                )
+        return self
 
 
 class VisualEvidenceFramePayload(BaseModel):

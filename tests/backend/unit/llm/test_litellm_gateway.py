@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 import unittest
@@ -11,6 +12,7 @@ from pydantic import BaseModel, model_validator
 from backend.shared.llm.litellm_gateway import LiteLLMCompletionGateway, clear_structured_mode_cache
 from backend.shared.llm.usage import LlmUsageCategory
 from backend.agent_graph.query.models import SeriesAnswerPayload
+from backend.video_summary.generation import SummaryPayload
 
 
 class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
@@ -530,6 +532,64 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         self.assertEqual(result.value, "ok")
         self.assertEqual(calls, 2)
+
+    def test_async_structured_retry_repairs_overlapping_summary_chapters(self) -> None:
+        chapters = [
+            {"id": "chapter-1", "title": "第一章", "start_seconds": 0, "end_seconds": 10},
+            {"id": "chapter-2", "title": "第二章", "start_seconds": 9, "end_seconds": 20},
+        ]
+        invalid = json.dumps({"title": "概况", "chapters": chapters})
+        repaired = json.dumps({"title": "概况", "chapters": [chapters[0], {**chapters[1], "start_seconds": 10}]})
+        responses = iter([invalid, repaired])
+        calls = []
+
+        async def completion(**kwargs):
+            calls.append(kwargs["messages"])
+            return {"choices": [{"message": {"content": next(responses)}}]}
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai", model="test-model", base_url="https://example.invalid/v1",
+            api_key="test-key", acompletion_fn=completion,
+        )
+        result = asyncio.run(gateway.acomplete_structured(
+            [{"role": "user", "content": "生成视频概况"}], response_model=SummaryPayload, retries=1,
+        ))
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result.chapters[1].start_seconds, result.chapters[0].end_seconds)
+
+    def test_async_structured_retry_repairs_a_reversed_summary_chapter_range(self) -> None:
+        responses = iter(
+            [
+                '{"title":"概况","chapters":[{"id":"chapter-2","title":"第二章","start_seconds":37,"end_seconds":27}]}',
+                '{"title":"概况","chapters":[{"id":"chapter-2","title":"第二章","start_seconds":37,"end_seconds":71}]}',
+            ]
+        )
+        messages: list[list[dict[str, object]]] = []
+
+        async def retrying_acompletion(**kwargs):
+            messages.append(list(kwargs["messages"]))
+            return {"choices": [{"message": {"content": next(responses)}}]}
+
+        gateway = LiteLLMCompletionGateway(
+            provider="openai",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key="test-key",
+            acompletion_fn=retrying_acompletion,
+        )
+
+        result = asyncio.run(
+            gateway.acomplete_structured(
+                [{"role": "user", "content": "生成视频概况"}],
+                response_model=SummaryPayload,
+                retries=1,
+            )
+        )
+
+        self.assertEqual(result.chapters[0].start_seconds, 37)
+        self.assertEqual(result.chapters[0].end_seconds, 71)
+        retry_prompt = "\n".join(str(message["content"]) for message in messages[1])
+        self.assertIn("end_seconds 必须严格大于 start_seconds", retry_prompt)
 
 
 class ValueCheckedPayload(BaseModel):
