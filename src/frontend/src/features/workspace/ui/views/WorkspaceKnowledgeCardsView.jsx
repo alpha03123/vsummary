@@ -3,6 +3,7 @@ import { BrainCircuit, RefreshCw } from "lucide-react";
 import { CopyToClipboardButton } from "../shared/CopyToClipboardButton";
 import { WorkspaceFeedbackBanner } from "../shared/WorkspaceFeedbackBanner";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceGenerationStatus } from "../shared/WorkspaceGenerationStatus";
 
 export function buildCardMarkdown(card) {
   const lines = [];
@@ -49,6 +50,7 @@ export function WorkspaceKnowledgeCardsView({
   tools,
   knowledgeCards,
   knowledgeCardsGenerating,
+  knowledgeCardsGenerationProgress,
   knowledgeCardsFeedback,
   knowledgeCardsLoading,
   onGenerateKnowledgeCards,
@@ -61,13 +63,8 @@ export function WorkspaceKnowledgeCardsView({
       <WorkspaceStateBlock
         eyebrow="Knowledge Cards"
         title="正在生成知识卡片"
-        description="正在提炼..."
-        loading
       >
-        <div className="mt-6 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-800">
-          <div className="h-full w-1/2 animate-pulse rounded-full bg-accent" />
-        </div>
-        <p className="mt-3 text-xs text-stone-600 dark:text-stone-400">生成完成后会自动展示结果。</p>
+        <WorkspaceGenerationStatus snapshot={knowledgeCardsGenerationProgress} label="正在提炼知识卡片" />
       </WorkspaceStateBlock>
     );
   }

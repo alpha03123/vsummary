@@ -477,6 +477,7 @@ export function workspaceReducer(state, action) {
         mindmapLoading: false,
         knowledgeCardsLoading: false,
         knowledgeCardsGenerating: false,
+        knowledgeCardsGenerationProgress: null,
         notesLoading: false,
         savingNote: false,
         generatingVideoKey: null,
@@ -752,6 +753,7 @@ export function workspaceReducer(state, action) {
         ...state,
         knowledgeCardsLoading: true,
         knowledgeCardsGenerating: false,
+        knowledgeCardsGenerationProgress: null,
         error: "",
       };
     case "knowledge_cards_generation_started":
@@ -759,8 +761,20 @@ export function workspaceReducer(state, action) {
         ...state,
         knowledgeCardsLoading: true,
         knowledgeCardsGenerating: true,
+        knowledgeCardsGenerationProgress: {
+          ...createRunningSnapshot("正在准备生成知识卡片"),
+          startedAt: action.startedAt,
+        },
         knowledgeCardsFeedback: null,
         error: "",
+      };
+    case "knowledge_cards_generation_progress_updated":
+      return {
+        ...state,
+        knowledgeCardsGenerationProgress: {
+          ...action.snapshot,
+          startedAt: action.snapshot.startedAt ?? state.knowledgeCardsGenerationProgress?.startedAt,
+        },
       };
     case "knowledge_cards_loaded":
       return {
@@ -768,6 +782,7 @@ export function workspaceReducer(state, action) {
         knowledgeCards: action.cards,
         knowledgeCardsLoading: false,
         knowledgeCardsGenerating: false,
+        knowledgeCardsGenerationProgress: null,
         knowledgeCardsFeedback:
           action.feedbackMessage == null
             ? state.knowledgeCardsFeedback
@@ -793,6 +808,7 @@ export function workspaceReducer(state, action) {
         knowledgeCards: null,
         knowledgeCardsLoading: false,
         knowledgeCardsGenerating: false,
+        knowledgeCardsGenerationProgress: null,
         knowledgeCardsFeedback: null,
       };
     case "knowledge_cards_feedback_cleared":
@@ -1489,6 +1505,7 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         generatingMindmapKey: action.videoKey,
+        mindmapGenerationProgress: { ...createRunningSnapshot("正在准备生成思维导图"), startedAt: action.startedAt },
         error: "",
       };
     case "mindmap_generation_succeeded":
@@ -1647,7 +1664,12 @@ export function workspaceReducer(state, action) {
       };
 
     case "series_mindmap_generation_started":
-      return { ...state, generatingSeriesMindmap: true, error: "" };
+      return {
+        ...state,
+        generatingSeriesMindmap: true,
+        mindmapGenerationProgress: { ...createRunningSnapshot("正在准备生成系列思维导图"), startedAt: action.startedAt },
+        error: "",
+      };
 
     case "series_mindmap_generation_succeeded":
       return {
@@ -1657,7 +1679,13 @@ export function workspaceReducer(state, action) {
         seriesSelectedNodeId: action.mindmap?.children?.[0]?.id ?? action.mindmap?.id ?? null,
       };
     case "mindmap_generation_progress_updated":
-      return { ...state, mindmapGenerationProgress: action.snapshot };
+      return {
+        ...state,
+        mindmapGenerationProgress: {
+          ...action.snapshot,
+          startedAt: action.snapshot.startedAt ?? state.mindmapGenerationProgress?.startedAt,
+        },
+      };
 
     case "mindmap_generation_progress_cleared":
       return { ...state, mindmapGenerationProgress: null };

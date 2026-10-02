@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
@@ -7,6 +7,7 @@ import { MindmapCanvas } from "../MindmapCanvas";
 import { exportMindmapAsSVG } from "../mindmapSVGExport";
 import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceGenerationStatus } from "../shared/WorkspaceGenerationStatus";
 
 export function WorkspaceMindmapView({
   tools,
@@ -25,28 +26,7 @@ export function WorkspaceMindmapView({
 
   const [maxDepth, setMaxDepth] = useState(null);
   const [controlsOpen, setControlsOpen] = useState(false);
-  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const markmapRef = useRef(null);
-
-  useEffect(() => {
-    const progress = mindmapGenerationProgress;
-    if (!progress || progress.status !== "running") {
-      setLiveElapsedSeconds(0);
-      return undefined;
-    }
-
-    const getElapsedSeconds = () => {
-      const snapshotElapsed = Number(progress.elapsed_seconds) || 0;
-      const startedAt = Number(progress.started_at);
-      const clockElapsed = Number.isFinite(startedAt) ? Math.max(0, Date.now() / 1000 - startedAt) : 0;
-      return Math.max(snapshotElapsed, clockElapsed);
-    };
-
-    const updateElapsed = () => setLiveElapsedSeconds(getElapsedSeconds());
-    updateElapsed();
-    const timer = window.setInterval(updateElapsed, 1000);
-    return () => window.clearInterval(timer);
-  }, [mindmapGenerationProgress]);
 
 
   if (!tools?.mindmap.available) {
@@ -102,19 +82,8 @@ export function WorkspaceMindmapView({
             )}
           </button>
         </div>
-        {isGeneratingMindmapSelectedVideo && mindmapGenerationProgress ? (
-          <div className="motion-fade-up mt-6 w-full max-w-2xl">
-            <div className="workspace-elevated-panel rounded-3xl border p-5 flex items-center gap-3">
-              <LoaderCircle size={18} strokeWidth={2.2} className="animate-spin text-accent" />
-              <p className="text-sm text-stone-600 dark:text-zinc-400">
-                {mindmapGenerationProgress.detail || "正在生成思维导图"}
-                <span className="mx-2 text-stone-300 dark:text-zinc-600">·</span>
-                <span className="font-medium text-stone-700 dark:text-zinc-200">
-                  已用 {Math.round(liveElapsedSeconds)} 秒
-                </span>
-              </p>
-            </div>
-          </div>
+        {isGeneratingMindmapSelectedVideo ? (
+          <WorkspaceGenerationStatus snapshot={mindmapGenerationProgress} label="正在生成思维导图" />
         ) : null}
       </WorkspaceStateBlock>
     );

@@ -182,6 +182,11 @@ export async function processAgentVideo(seriesId, videoId, options = {}) {
       processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
     }),
   });
+  const job = payload.jobs?.find((item) => item.resource?.type === "video" && item.resource.id === videoId);
+  if (!job) {
+    throw new Error("视频处理响应中没有当前视频的任务。");
+  }
+  return toVideoGenerationSubmission(job);
 }
 
 export async function cancelVideoSummary(seriesId, videoId) {
@@ -466,10 +471,13 @@ export function subscribeDurableJobProgress(jobId, listener) {
   });
 
   eventSource.onerror = () => {
-    if (!terminal) {
-      listener({ status: "running", stage: "reconnecting", progress: null, detail: "正在同步生成进度...", error: null });
+    if (terminal) return;
+    if (eventSource.readyState === EventSource.CLOSED) {
+      terminal = true;
+      listener({ status: "failed", stage: "failed", progress: null, detail: null, error: "生成进度连接已关闭" });
+      return;
     }
-    eventSource.close();
+    listener({ status: "running", stage: "reconnecting", progress: null, detail: "正在同步生成进度...", error: null });
   };
 
   return () => {
@@ -758,6 +766,10 @@ export async function resolveBilibiliInboxVideo(url) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
   });
+}
+
+export async function cancelDurableJob(jobId) {
+  return fetchJson(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
 }
 
 export async function deleteSeries(seriesId) {

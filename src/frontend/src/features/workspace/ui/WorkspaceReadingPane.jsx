@@ -77,6 +77,7 @@ export function WorkspaceReadingPane({
   mindmap,
   knowledgeCards,
   knowledgeCardsGenerating,
+  knowledgeCardsGenerationProgress,
   knowledgeCardsFeedback,
   notes,
   activeSeries,
@@ -318,6 +319,7 @@ export function WorkspaceReadingPane({
                       tools={tools}
                       knowledgeCards={knowledgeCards}
                       knowledgeCardsGenerating={knowledgeCardsGenerating}
+                      knowledgeCardsGenerationProgress={knowledgeCardsGenerationProgress}
                       knowledgeCardsFeedback={knowledgeCardsFeedback}
                       knowledgeCardsLoading={knowledgeCardsLoading}
                       onGenerateKnowledgeCards={onGenerateKnowledgeCards}

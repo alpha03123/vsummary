@@ -44,6 +44,7 @@ export function buildWorkspacePageModel(controller) {
       seriesOverviewSummariesByVideoId: controller.seriesOverviewSummariesByVideoId,
       knowledgeCards: controller.knowledgeCards,
       knowledgeCardsGenerating: controller.knowledgeCardsGenerating,
+      knowledgeCardsGenerationProgress: controller.knowledgeCardsGenerationProgress,
       knowledgeCardsFeedback: controller.knowledgeCardsFeedback,
       notes: controller.notes,
       aiSummary: controller.aiSummary,

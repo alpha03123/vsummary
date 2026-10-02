@@ -1,5 +1,6 @@
 import {
   cancelSeriesSummaries,
+  cancelDurableJob,
   cancelVideoDownload,
   cancelVideoSummary,
   createVideoNote,
@@ -38,7 +39,7 @@ import {
 import * as localWorkspaceApi from "../../../local-features/api/localWorkspaceApi";
 import { isPlaygroundSeries } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
-import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection } from "./workspaceState";
+import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection, isGenerationSnapshotActive } from "./workspaceState";
 
 const activeSeriesCancellationRef = { current: null };
 const activeVideoGenerationKeys = new Set();
@@ -162,12 +163,13 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       return;
     }
 
-    dispatch({ type: "knowledge_cards_generation_started" });
+    dispatch({ type: "knowledge_cards_generation_started", startedAt: Date.now() / 1000 });
     try {
       const seriesId = state.selectedSeriesId;
       const videoId = state.selectedVideoId;
       const submitted = await generateVideoKnowledgeCards(seriesId, videoId);
       const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+        dispatch({ type: "knowledge_cards_generation_progress_updated", snapshot });
         if (snapshot.status === "completed") {
           unsubscribe();
           const cards = await loadVideoKnowledgeCards(seriesId, videoId);
@@ -286,16 +288,18 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const seriesId = state.selectedSeriesId;
     const videoId = state.selectedVideoId;
     const processingMode = state.processingMode;
+    const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
     try {
       const submitted = await processAgentVideo(seriesId, videoId, { processingMode });
       dispatch({
         type: "generation_status_loaded",
-        taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+        taskKey,
         mode: "video",
         seriesId,
         videoId,
+        jobId: submitted.jobId,
         snapshot: {
-          status: "queued",
+          status: submitted.status,
           stage: "queued",
           progress: 0,
           detail: "任务已进入队列，等待开始处理",
@@ -306,7 +310,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
         dispatch({
           type: "generation_status_loaded",
-          taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
+          taskKey,
           mode: "video",
           seriesId,
           videoId,
@@ -320,10 +324,23 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         }
         if (snapshot.status === "failed" || snapshot.status === "cancelled") {
           unsubscribe();
+          if (snapshot.status === "failed") {
+            dispatch({ type: "load_failed", message: snapshot.error || snapshot.detail || "视频处理失败" });
+          }
         }
       });
     } catch (error) {
-      dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "提交视频处理失败" });
+      const message = error instanceof Error ? error.message : "提交视频处理失败";
+      dispatch({ type: "load_failed", message });
+      dispatch({
+        type: "generation_status_loaded",
+        taskKey,
+        mode: "video",
+        seriesId,
+        videoId,
+        snapshot: { status: "failed", stage: "failed", progress: null, detail: message, error: message },
+        subscriptionActive: false,
+      });
     }
   }
 
@@ -507,23 +524,31 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         const seriesId = state.selectedSeriesId;
         const videoId = state.selectedVideoId;
         const taskKey = buildVideoGenerationTaskKey(seriesId, videoId);
-        dispatch({ type: "video_generation_cancelling", seriesId, videoId });
-        await cancelVideoSummary(seriesId, videoId);
+        const cancelled = currentTask.jobId
+          ? await cancelDurableJob(currentTask.jobId)
+          : await cancelVideoSummary(seriesId, videoId);
+        const status = cancelled.status === "succeeded" ? "completed" : cancelled.status;
+        const snapshot = {
+          ...(currentTask.snapshot ?? {}),
+          status,
+          stage: status,
+          progress: status === "completed" ? 100 : null,
+          detail: status === "cancelling" ? "正在停止当前任务" : status === "cancelled" ? "任务已取消" : currentTask.snapshot?.detail ?? null,
+          error: status === "failed" ? cancelled.failure_detail ?? "任务失败" : null,
+        };
         dispatch({
-          type: "generation_cancelled",
+          type: "generation_status_loaded",
           taskKey,
           mode: "video",
           seriesId,
           videoId,
-          snapshot: {
-            ...(currentTask.snapshot ?? {}),
-            status: "cancelled",
-            stage: "cancelled",
-            progress: null,
-            detail: "任务已取消",
-            error: null,
-          },
+          jobId: cancelled.job_id ?? currentTask.jobId,
+          snapshot,
+          subscriptionActive: isGenerationSnapshotActive(snapshot),
         });
+        if (status === "completed") {
+          await reloadWorkspaceLibrary();
+        }
       }
     } catch (error) {
       dispatch({
@@ -572,7 +597,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     const seriesId = state.selectedSeriesId;
     const videoId = state.selectedVideoId;
     const videoKey = buildVideoKey(seriesId, videoId);
-    dispatch({ type: "mindmap_generation_started", videoKey });
+    dispatch({ type: "mindmap_generation_started", videoKey, startedAt: Date.now() / 1000 });
 
     try {
       const submitted = await generateVideoMindmap(seriesId, videoId, maxDepth);
@@ -603,7 +628,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     if (!state.selectedSeriesId) return;
 
     const seriesId = state.selectedSeriesId;
-    dispatch({ type: "series_mindmap_generation_started" });
+    dispatch({ type: "series_mindmap_generation_started", startedAt: Date.now() / 1000 });
 
     try {
       const submitted = await generateSeriesMindmap(seriesId, maxDepth);

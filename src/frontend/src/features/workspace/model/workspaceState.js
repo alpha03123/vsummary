@@ -570,6 +570,7 @@ export function createInitialWorkspaceState() {
     mindmapLoading: false,
     knowledgeCardsLoading: false,
     knowledgeCardsGenerating: false,
+    knowledgeCardsGenerationProgress: null,
     knowledgeCardsFeedback: null,
     notesLoading: false,
     savingNote: false,

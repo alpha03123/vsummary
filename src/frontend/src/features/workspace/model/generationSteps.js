@@ -6,7 +6,7 @@ const STEPS = [
   { id: "subtitles", label: "检查视频字幕", lane: "main", stages: ["probe_subtitles"] },
   { id: "probe", label: "读取视频信息", lane: "main", stages: ["probe"] },
   { id: "audio", label: "读取视频中的声音", lane: "main", stages: ["extract_audio"] },
-  { id: "transcript", label: "识别讲话，转换为文字", lane: "main", stages: ["transcribe"] },
+  { id: "transcript", label: "识别讲话并转换为文字", lane: "main", stages: ["transcribe"] },
   { id: "load_text", label: "读取已有字幕", lane: "main", stages: ["load_manual_srt", "load_transcript", "extract_subtitles"] },
   { id: "organize", label: "修正文字中的错字和断句", lane: "main", stages: ["enhance_transcript", "organize"] },
   { id: "summarize", label: "整理章节和要点", lane: "main", stages: ["summarize"] },

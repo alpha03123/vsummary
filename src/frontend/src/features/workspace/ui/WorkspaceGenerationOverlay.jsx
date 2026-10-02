@@ -93,6 +93,7 @@ export function WorkspaceGenerationOverlay({
           <div role="progressbar" aria-label="生成流程进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={hasRealGenerationProgress ? generationProgress : undefined} aria-valuetext={activeStageLabel} className="relative shrink-0 h-1.5 w-full overflow-hidden rounded-full bg-stone-200/60 dark:bg-stone-800">
             {hasRealGenerationProgress ? (
               <motion.div
+                key="determinate"
                 className="absolute inset-y-0 left-0 bg-accent"
                 initial={{ width: "0%" }}
                 animate={{ width: `${generationProgress}%` }}
@@ -100,10 +101,11 @@ export function WorkspaceGenerationOverlay({
               />
             ) : (
               <motion.div
+                key="indeterminate"
                 className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-accent"
-                initial={{ x: "-120%" }}
-                animate={{ x: "320%" }}
-                transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+                initial={{ x: "-100%" }}
+                animate={{ x: "300%" }}
+                transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
               />
             )}
           </div>

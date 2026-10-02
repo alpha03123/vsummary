@@ -205,6 +205,7 @@ export function useWorkspaceController() {
     mindmapGenerationProgress,
     knowledgeCards: state.knowledgeCards,
     knowledgeCardsGenerating: state.knowledgeCardsGenerating,
+    knowledgeCardsGenerationProgress: state.knowledgeCardsGenerationProgress,
     knowledgeCardsFeedback: state.knowledgeCardsFeedback,
     notes: state.notes,
     activeSeries,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, LoaderCircle, Network, Download, RefreshCw } from "lucide-react";
 
@@ -6,6 +6,7 @@ import { MINDMAP_DEPTH_OPTIONS } from "../../model/mindmapDepthOptions";
 import { MindmapCanvas } from "../MindmapCanvas";
 import { WorkspaceProviderSelect } from "../shared/WorkspaceSettingsControls";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
+import { WorkspaceGenerationStatus } from "../shared/WorkspaceGenerationStatus";
 import { exportMindmapAsSVG } from "../mindmapSVGExport";
 
 export function WorkspaceSeriesMindmapView({
@@ -22,35 +23,7 @@ export function WorkspaceSeriesMindmapView({
 }) {
   const [maxDepth, setMaxDepth] = useState(null);
   const [controlsOpen, setControlsOpen] = useState(false);
-  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0);
   const markmapRef = useRef(null);
-  const localStartedAtRef = useRef(null);
-
-  useEffect(() => {
-    const progress = mindmapGenerationProgress;
-    if (!progress || progress.status !== "running") {
-      localStartedAtRef.current = null;
-      setLiveElapsedSeconds(0);
-      return undefined;
-    }
-    if (localStartedAtRef.current === null) {
-      localStartedAtRef.current = Date.now() / 1000;
-    }
-
-    const getElapsedSeconds = () => {
-      const snapshotElapsed = typeof progress.elapsedSeconds === "number" ? progress.elapsedSeconds : 0;
-      const startedAt = progress.startedAt;
-      const clockElapsed = typeof startedAt === "number" && Number.isFinite(startedAt) && startedAt > 0
-        ? Math.max(0, Date.now() / 1000 - startedAt)
-        : Math.max(0, Date.now() / 1000 - localStartedAtRef.current);
-      return Math.max(snapshotElapsed, clockElapsed);
-    };
-
-    const updateElapsed = () => setLiveElapsedSeconds(getElapsedSeconds());
-    updateElapsed();
-    const timer = window.setInterval(updateElapsed, 1000);
-    return () => window.clearInterval(timer);
-  }, [mindmapGenerationProgress]);
 
 
   if (seriesMindmapLoading) {
@@ -117,19 +90,8 @@ export function WorkspaceSeriesMindmapView({
             )}
           </button>
         </div>
-        {generatingSeriesMindmap && mindmapGenerationProgress ? (
-          <div className="motion-fade-up mt-6 w-full max-w-2xl">
-            <div className="workspace-elevated-panel rounded-3xl border p-5 flex items-center gap-3">
-              <LoaderCircle size={18} strokeWidth={2.2} className="animate-spin text-accent" />
-              <p className="text-sm text-stone-600 dark:text-zinc-400">
-                {mindmapGenerationProgress.detail || "正在生成系列思维导图"}
-                <span className="mx-2 text-stone-300 dark:text-zinc-600">·</span>
-                <span className="font-medium text-stone-700 dark:text-zinc-200">
-                  已用 {Math.round(liveElapsedSeconds)} 秒
-                </span>
-              </p>
-            </div>
-          </div>
+        {generatingSeriesMindmap ? (
+          <WorkspaceGenerationStatus snapshot={mindmapGenerationProgress} label="正在生成系列思维导图" />
         ) : null}
       </WorkspaceStateBlock>
     );

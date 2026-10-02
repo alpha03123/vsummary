@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   generateVideoSummary,
+  processAgentVideo,
+  cancelDurableJob,
   loadAgentSessionRecovery,
   loadSeriesMindmap,
   generateVideoMindmap,
@@ -150,6 +152,49 @@ describe("loadProviderUsage", () => {
       chatTokens: 5,
       totalTokens: 15,
     });
+  });
+});
+
+describe("linked video durable jobs", () => {
+  test("selects the submitted job for the requested video", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ jobs: [
+        { job_id: "job-other", status: "queued", resource: { type: "video", id: "other-video" } },
+        { job_id: "job-current", status: "queued", resource: { type: "video", id: "video-1" } },
+      ] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(processAgentVideo("series-1", "video-1", { processingMode: "transcript" }))
+      .resolves.toEqual({ jobId: "job-current", status: "queued" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/agent/series/series-1/process",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ video_ids: ["video-1"], processing_mode: "transcript" }),
+      }),
+    );
+  });
+
+  test("rejects a response without the requested video's job", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ jobs: [{ job_id: "job-other", status: "queued", resource: { type: "video", id: "other-video" } }] }),
+    })));
+
+    await expect(processAgentVideo("series-1", "video-1")).rejects.toThrow("当前视频的任务");
+  });
+
+  test("cancels the durable job by its ID", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ job_id: "job/1", status: "cancelling" }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(cancelDurableJob("job/1")).resolves.toMatchObject({ status: "cancelling" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/jobs/job%2F1/cancel", { method: "POST" });
   });
 });
 
