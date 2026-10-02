@@ -70,7 +70,7 @@ function splitThinkBlocks(content) {
     if (match.index > cursor) {
       parts.push({ type: "answer", content: content.slice(cursor, match.index) });
     }
-    parts.push({ type: "think", content: match[1] ?? "" });
+    parts.push({ type: "think", content: match[1] ?? "", isOpen: !match[0].toLowerCase().endsWith("</think>") });
     cursor = THINK_BLOCK_PATTERN.lastIndex;
   }
   if (cursor < content.length) {
@@ -277,8 +277,8 @@ function MarkdownLink({ node: _node, href, children, ...props }) {
   );
 }
 
-function ThinkBlock({ content }) {
-  const [expanded, setExpanded] = useState(true);
+function ThinkBlock({ content, isThinking }) {
+  const [expanded, setExpanded] = useState(false);
   return (
     <section className="rounded-2xl border border-stone-200 bg-stone-50/70 px-4 py-3 text-sm text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-300">
       <button
@@ -288,6 +288,7 @@ function ThinkBlock({ content }) {
         className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-stone-600 dark:text-stone-400"
       >
         思考过程
+        {isThinking ? <span className="ml-auto mr-3 font-normal text-stone-400 dark:text-stone-500">思考中</span> : null}
         <span aria-hidden="true">{expanded ? "收起" : "展开"}</span>
       </button>
       {expanded ? <div className="mt-3 whitespace-pre-wrap leading-6">{content.trim()}</div> : null}
@@ -421,13 +422,13 @@ function MarkdownSegment({ content, citations, headingIds, onOpenCitationReferen
   );
 }
 
-export function WorkspaceMarkdownMessage({ content, citations = null, headingIds = null, onOpenCitationReference, noteImageContext = null, onSeek = null, onOpenTranscriptAtTime = null }) {
+export function WorkspaceMarkdownMessage({ content, isStreaming = false, citations = null, headingIds = null, onOpenCitationReference, noteImageContext = null, onSeek = null, onOpenTranscriptAtTime = null }) {
   const parts = splitThinkBlocks(content);
   return (
     <div className="flex flex-col gap-4">
       {(parts.length ? parts : [{ type: "answer", content }]).map((part, index) => (
         part.type === "think" ? (
-          <ThinkBlock key={`${part.type}-${index}`} content={part.content} />
+          <ThinkBlock key={`${part.type}-${index}`} content={part.content} isThinking={isStreaming && part.isOpen} />
         ) : (
           <MarkdownSegment
             key={`${part.type}-${index}`}

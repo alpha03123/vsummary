@@ -228,6 +228,7 @@ export function WorkspaceChatPanel({
       <Suspense fallback={<AssistantMessageFallback content={message.content} />}>
         <WorkspaceMarkdownMessage
           content={message.content}
+          isStreaming={message.streamingStatus === "running"}
           citations={message.citations}
           onOpenCitationReference={onOpenCitationReference}
         />

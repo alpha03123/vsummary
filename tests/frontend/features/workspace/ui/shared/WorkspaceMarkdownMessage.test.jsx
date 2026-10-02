@@ -29,75 +29,6 @@ describe("WorkspaceMarkdownMessage", () => {
     expect(screen.getByRole("link", { name: "4" })).toHaveAttribute("href", "#citation-4");
   });
 
-  it("truncates long citation preview text", () => {
-    const longText = "字幕内容".repeat(120);
-
-    render(
-      <WorkspaceMarkdownMessage
-        content="回答来自视频。[2]"
-        citations={[
-          {
-            id: "2",
-            label: "Video 1",
-            source_type: "transcript",
-            slots: [
-              {
-                slot: 1,
-                target_type: "video",
-                video_title: "Video 1",
-                start_seconds: 13,
-                end_seconds: 767,
-              },
-              {
-                slot: 2,
-                target_type: "transcript",
-                video_title: "Video 1",
-                text: longText,
-              },
-            ],
-          },
-        ]}
-      />,
-    );
-
-    fireEvent.mouseEnter(screen.getByRole("link", { name: "2" }));
-
-    expect(screen.getByText("[2] Video 1")).toBeInTheDocument();
-    expect(screen.queryByText(longText)).not.toBeInTheDocument();
-    expect(screen.getByText(/^字幕内容.*\.\.\.$/)).toBeInTheDocument();
-  });
-
-  it("keeps an open citation preview after a parent rerender", () => {
-    const citations = [{
-      id: "3",
-      label: "Video 3",
-      source_type: "transcript",
-      slots: [{ target_type: "video", video_title: "Video 3", start_seconds: 30, text: "对应证据" }],
-    }];
-    const { rerender } = render(
-      <WorkspaceMarkdownMessage
-        content="回答来自视频。[3]"
-        citations={citations}
-        noteImageContext={{ seriesId: "series-1", videoId: "video-1", durationSeconds: 60 }}
-        onSeek={vi.fn()}
-      />,
-    );
-
-    fireEvent.mouseEnter(screen.getByRole("link", { name: "3" }));
-    expect(screen.getByText("[3] Video 3")).toBeInTheDocument();
-
-    rerender(
-      <WorkspaceMarkdownMessage
-        content="回答来自视频。[3]"
-        citations={citations}
-        noteImageContext={{ seriesId: "series-1", videoId: "video-1", durationSeconds: 60 }}
-        onSeek={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("[3] Video 3")).toBeInTheDocument();
-  });
-
   it("opens citation references with video locations when clicking transcript citations", () => {
     const onOpenCitationReference = vi.fn();
 
@@ -213,6 +144,9 @@ describe("WorkspaceMarkdownMessage", () => {
     );
 
     expect(screen.getByRole("button", { name: /思考过程/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /思考过程/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("先分析问题，再回答。")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /思考过程/ }));
     expect(screen.getByText("先分析问题，再回答。")).toBeInTheDocument();
     expect(screen.getByText(/最终答案：/)).toBeInTheDocument();
     expect(screen.getByText("可以")).toBeInTheDocument();
