@@ -12,6 +12,8 @@ export function WorkspaceOverflowMenu({
   label = "更多操作",
   placement = "top",
   menuClassName = "min-w-[148px]",
+  triggerContent = null,
+  triggerClassName = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200",
   children,
 }) {
   const triggerRef = useRef(null);
@@ -53,12 +55,12 @@ export function WorkspaceOverflowMenu({
         type="button"
         disabled={disabled}
         onClick={() => onOpenChange(!open)}
-        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+        className={triggerClassName}
         title={label}
         aria-label={label}
         aria-expanded={open}
       >
-        <MoreHorizontal size={18} />
+        {triggerContent ?? <MoreHorizontal size={18} />}
       </button>
       {open && position ? createPortal(
         <div

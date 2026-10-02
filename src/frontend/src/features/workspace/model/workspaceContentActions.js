@@ -199,7 +199,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
     dispatch({ type: "knowledge_cards_feedback_cleared" });
   }
 
-  async function onGenerateVideo() {
+  async function onGenerateVideo(aiSummaryTemplate = "general") {
     if (!state.selectedSeriesId || !state.selectedVideoId) {
       return;
     }
@@ -219,6 +219,7 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
       const submission = await generateVideoSummary(seriesId, videoId, {
         transcriptEnhancementEnabled: state.ui.transcriptEnhancementEnabled,
         processingMode,
+        aiSummaryTemplate,
       });
       dispatch({
         type: "generation_status_loaded",

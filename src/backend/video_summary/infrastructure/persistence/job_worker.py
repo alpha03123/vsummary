@@ -155,6 +155,7 @@ class SqlJobWorker:
                 video_id=claim.resource_id,
                 processing_mode=str(claim.request_payload["processing_mode"]),
                 transcript_enhancement_enabled=claim.request_payload.get("transcript_enhancement_enabled"),
+                ai_summary_template=str(claim.request_payload.get("ai_summary_template") or "general"),
                 manual_transcript=manual_transcript,
                 use_saved_manual_transcript=bool(claim.request_payload.get("use_saved_manual_transcript", True)),
                 progress_reporter=reporter,

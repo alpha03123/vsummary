@@ -167,6 +167,7 @@ export async function generateVideoSummary(seriesId, videoId, options = {}) {
             ? options.transcriptEnhancementEnabled
             : undefined,
         processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
+        ai_summary_template: typeof options.aiSummaryTemplate === "string" ? options.aiSummaryTemplate : "general",
       }),
     }));
 }

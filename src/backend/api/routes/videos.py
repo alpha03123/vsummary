@@ -863,6 +863,7 @@ async def generate_video_summary(
         video_id=video_id,
         processing_mode=processing_mode,
         transcript_enhancement_enabled=None if request is None else request.transcript_enhancement_enabled,
+        ai_summary_template="general" if request is None else request.ai_summary_template,
         idempotency_key=http_request.headers.get("Idempotency-Key"),
     )
 
@@ -876,6 +877,7 @@ def _submit_video_generation_job(
     processing_mode: str,
     transcript_enhancement_enabled: bool | None,
     idempotency_key: str | None,
+    ai_summary_template: str = "general",
     manual_transcript: dict[str, str] | None = None,
     use_saved_manual_transcript: bool = True,
 ) -> JSONResponse:
@@ -885,6 +887,7 @@ def _submit_video_generation_job(
         "video_id": video_id,
         "processing_mode": processing_mode,
         "transcript_enhancement_enabled": transcript_enhancement_enabled,
+        "ai_summary_template": ai_summary_template,
         "use_saved_manual_transcript": use_saved_manual_transcript,
     }
     if manual_transcript is not None:

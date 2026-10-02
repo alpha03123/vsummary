@@ -136,6 +136,7 @@ class GenerateVideoSummary:
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
+        ai_summary_template: str = "general",
         on_ai_summary_completed: Callable[[], None] | None = None,
         source_url: str = "",
         cache_dir: Path | None = None,
@@ -178,6 +179,7 @@ class GenerateVideoSummary:
                 manual_transcript=manual_transcript,
                 use_saved_manual_transcript=use_saved_manual_transcript,
                 processing_mode=processing_mode,
+                ai_summary_template=ai_summary_template,
                 on_ai_summary_completed=on_ai_summary_completed,
                 source_url=source_url,
                 cache_dir=cache_dir if cache_dir is not None else output_dir / ".cache",
@@ -198,6 +200,7 @@ class GenerateVideoSummary:
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
         processing_mode: str,
+        ai_summary_template: str,
         on_ai_summary_completed: Callable[[], None] | None,
         source_url: str,
         cache_dir: Path,
@@ -223,6 +226,7 @@ class GenerateVideoSummary:
                     manual_transcript=manual_transcript,
                     use_saved_manual_transcript=use_saved_manual_transcript,
                     processing_mode=processing_mode,
+                    ai_summary_template=ai_summary_template,
                     on_ai_summary_completed=on_ai_summary_completed,
                     source_url=source_url,
                     cache_dir=cache_dir,
@@ -245,6 +249,7 @@ class GenerateVideoSummary:
         manual_transcript: ManualTranscriptInput | None,
         use_saved_manual_transcript: bool,
         processing_mode: str,
+        ai_summary_template: str,
         on_ai_summary_completed: Callable[[], None] | None,
         source_url: str,
         cache_dir: Path,
@@ -461,6 +466,7 @@ class GenerateVideoSummary:
                 on_completed=on_ai_summary_completed,
                 on_progress=report_ai_summary_progress,
                 cache_dir=cache_dir,
+                template=ai_summary_template,
             )
 
         if processing_mode == "transcript":
@@ -550,8 +556,9 @@ class GenerateVideoSummary:
         on_completed: Callable[[], None] | None,
         on_progress: Callable[[str, str], None] | None,
         cache_dir: Path,
+        template: str,
     ) -> asyncio.Task[None]:
-        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress, cache_dir=cache_dir))
+        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress, cache_dir=cache_dir, template=template))
         self._ai_summary_tasks.add(task)
 
         def _record_completion(completed: asyncio.Task[None]) -> None:

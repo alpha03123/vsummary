@@ -14,7 +14,7 @@ from backend.video_summary.library.models import VideoAiNoteVisualContextDTO
 # key 是对外契约值（见 `api.schemas.contracts.AiNoteTemplate`），不要随意改动。
 NOTE_TEMPLATES: dict[str, dict[str, str]] = {
     "general": {
-        "label": "通用笔记",
+        "label": "通用概括",
         "instruction": (
             "结构清晰、重点突出：按视频自身的脉络分章节，"
             "每个主题写清在讨论什么、得出的结论是什么，并保留必要的细节和例子，便于日后复习。"
@@ -93,7 +93,7 @@ def build_ai_note_prompt(
         "你是专业的视频笔记助手，擅长把视频转写整理成内容完整、条理清晰、可以直接复习的 Markdown 笔记。\n"
         "语言：笔记用中文撰写；专有名词、技术术语、品牌名和人名保留原文（通常是英文），不要硬译。\n\n"
         f"视频标题：{title}\n"
-        f"笔记风格：{resolved_template['label']}。{resolved_template['instruction']}\n\n"
+        f"概括风格：{resolved_template['label']}。{resolved_template['instruction']}\n\n"
         "写作要求：\n"
         "1. 记录全面：视频讲到的实质内容都写进笔记，包括观点、论证、细节、例子、数据和结论；不要只留骨架。\n"
         "2. 保留关键细节：重要事实、数字、术语、例子和问答都保留；术语首次出现时给出原文叫法；公式用 LaTeX 表达。\n"

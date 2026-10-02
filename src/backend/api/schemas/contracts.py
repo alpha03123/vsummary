@@ -21,6 +21,7 @@ class GenerateVideoSummaryRequest(BaseModel):
 
     transcript_enhancement_enabled: bool | None = None
     processing_mode: ProcessingMode = "summary"
+    ai_summary_template: AiNoteTemplate = "general"
 
 
 class GenerateMindmapRequest(BaseModel):

@@ -43,17 +43,17 @@ class ConcurrentAiSummaryRunner:
         self._note_image_min_gap_seconds = note_image_min_gap_seconds
         self._media_processor = media_processor
 
-    async def run(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, on_progress: Callable[[str, str], None] | None = None) -> None:
+    async def run(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, template: str = "general", on_progress: Callable[[str, str], None] | None = None) -> None:
         _write_status(output_dir, "running")
         try:
-            await asyncio.to_thread(self._run_sync, video=video, transcript=transcript, output_dir=output_dir, cache_dir=cache_dir, on_progress=on_progress)
+            await asyncio.to_thread(self._run_sync, video=video, transcript=transcript, output_dir=output_dir, cache_dir=cache_dir, template=template, on_progress=on_progress)
         except Exception as error:
             _write_status(output_dir, "failed", str(error))
             raise
         else:
             _write_status(output_dir, "ready")
 
-    def _run_sync(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, on_progress: Callable[[str, str], None] | None = None) -> None:
+    def _run_sync(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, template: str, on_progress: Callable[[str, str], None] | None = None) -> None:
         def report(stage: str, detail: str) -> None:
             if on_progress is not None:
                 on_progress(stage, detail)
@@ -104,7 +104,7 @@ class ConcurrentAiSummaryRunner:
             ),
             summary=None,
             visual_context=context,
-            template="general",
+            template=template,
             multimodal_enabled=self._multimodal_enabled,
             note_visual_mode=self._note_visual_mode,
             note_max_images=self._note_max_images,

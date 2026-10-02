@@ -13,6 +13,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 import json
 import hashlib
+from urllib.parse import quote
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -281,7 +282,11 @@ class SqlVideoWorkspace:
             series_id=series_id,
             video_id=video_id,
             title=row["title"],
-            summary=_attach_chapter_transcript(_json_object(row["payload"]), transcript_segments),
+            summary=_attach_chapter_image_urls(
+                _attach_chapter_transcript(_json_object(row["payload"]), transcript_segments),
+                series_id=series_id,
+                video_id=video_id,
+            ),
         )
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
@@ -1032,6 +1037,43 @@ def _attach_chapter_transcript(
             enriched_chapters.append(chapter)
             continue
         enriched_chapters.append({**chapter, "transcript_segments": assigned_segments[index]})
+    return {**summary, "chapters": enriched_chapters}
+
+
+def _attach_chapter_image_urls(
+    summary: dict[str, Any],
+    *,
+    series_id: str,
+    video_id: str,
+) -> dict[str, Any]:
+    """为已生成的章节截图补齐前端可直接读取的 API 地址。"""
+
+    chapters = summary.get("chapters")
+    if not isinstance(chapters, list):
+        return summary
+
+    enriched_chapters: list[object] = []
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            enriched_chapters.append(chapter)
+            continue
+        image_filename = chapter.get("image_filename")
+        if (
+            not isinstance(image_filename, str)
+            or Path(image_filename).name != image_filename
+            or Path(image_filename).suffix.lower() != ".jpg"
+        ):
+            enriched_chapters.append(chapter)
+            continue
+        enriched_chapters.append(
+            {
+                **chapter,
+                "image_url": (
+                    f"/api/videos/{quote(series_id, safe='')}/{quote(video_id, safe='')}"
+                    f"/screenshots/{quote(image_filename, safe='')}"
+                ),
+            }
+        )
     return {**summary, "chapters": enriched_chapters}
 
 

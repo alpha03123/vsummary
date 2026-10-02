@@ -60,6 +60,7 @@ class ConfiguredVideoSummaryWorkflow:
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
+        ai_summary_template: str = "general",
         on_ai_summary_completed: Callable[[], None] | None = None,
         source_url: str = "",
         cache_dir: Path | None = None,
@@ -103,6 +104,7 @@ class ConfiguredVideoSummaryWorkflow:
                     "progress_reporter": resolved_progress_reporter,
                     "manual_transcript": manual_transcript,
                     "use_saved_manual_transcript": use_saved_manual_transcript,
+                    "ai_summary_template": ai_summary_template,
                     "on_ai_summary_completed": on_ai_summary_completed,
                 }
                 if processing_mode != "summary":

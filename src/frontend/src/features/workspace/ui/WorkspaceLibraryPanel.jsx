@@ -22,6 +22,8 @@ import {
   LayoutGrid,
   Network,
   Download,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
@@ -32,6 +34,66 @@ import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 import { WorkspaceOverflowMenu } from "./shared/WorkspaceOverflowMenu";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
+
+const AI_SUMMARY_TEMPLATES = [
+  { id: "general", label: "通用概括" },
+  { id: "minimal", label: "要点速览" },
+  { id: "detailed", label: "深度详记" },
+  { id: "tutorial", label: "操作教程" },
+  { id: "academic", label: "学术论文" },
+  { id: "life_journal", label: "生活随笔" },
+  { id: "task_oriented", label: "任务清单" },
+  { id: "meeting_minutes", label: "会议纪要" },
+];
+
+function getAiSummaryTemplate(templateId) {
+  return AI_SUMMARY_TEMPLATES.find((template) => template.id === templateId) ?? AI_SUMMARY_TEMPLATES[0];
+}
+
+function AiSummaryTemplateMenu({ value, onChange, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const selectedTemplate = getAiSummaryTemplate(value);
+
+  return (
+    <WorkspaceOverflowMenu
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+      label={`选择 AI 概括风格（当前：${selectedTemplate.label}）`}
+      placement="top"
+      menuClassName="min-w-[150px]"
+      triggerClassName="inline-flex min-h-[42px] shrink-0 items-center gap-1 border-l border-current/20 px-2.5 transition-colors hover:bg-black/5 active:bg-black/10 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10 dark:active:bg-white/15"
+      triggerContent={
+        <ChevronDown
+          size={16}
+          strokeWidth={2.5}
+          className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      }
+    >
+      {AI_SUMMARY_TEMPLATES.map((template) => {
+        const selected = template.id === selectedTemplate.id;
+        return (
+          <button
+            key={template.id}
+            type="button"
+            onClick={() => {
+              onChange?.(template.id);
+              setOpen(false);
+            }}
+            className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs font-semibold transition-colors ${selected
+              ? "bg-accent/10 text-accent font-bold"
+              : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+              }`}
+          >
+            <span>{template.label}</span>
+            {selected ? <Check size={14} className="text-accent shrink-0" strokeWidth={2.5} /> : null}
+          </button>
+        );
+      })}
+    </WorkspaceOverflowMenu>
+  );
+}
 
 function ProcessingModeMenu({ mode, onChange, disabled = false }) {
   const [open, setOpen] = useState(false);
@@ -243,6 +305,7 @@ function PanelFooter({
   const hasSelectedVideoDownloadError =
     activeSeries?.id && selectedVideo?.id && downloadErrorKey === buildVideoKey(activeSeries.id, selectedVideo.id);
   const [footerOverflowOpen, setFooterOverflowOpen] = useState(false);
+  const [aiSummaryTemplate, setAiSummaryTemplate] = useState("general");
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -458,53 +521,60 @@ function PanelFooter({
     isGeneratingSelectedVideo,
   });
 
+  const showAiSummaryTemplateMenu = processingMode === "summary" && selectedVideo.status !== "source_missing";
+  const generationControlClass = videoGenerationButton.tone === "danger"
+    ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+    : videoGenerationButton.tone === "busy"
+      ? "motion-busy-button bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
+      : "border border-accent/40 bg-accent/8 text-accent";
+
   return (
     <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
       <div className="mb-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
           <div className="flex shrink-0 items-center gap-1">
-          <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
-          <WorkspaceOverflowMenu
-            open={footerOverflowOpen}
-            onOpenChange={setFooterOverflowOpen}
-            placement="bottom"
-            menuClassName="min-w-[160px]"
-          >
-                <ProcessingModeMenuItem
-                  mode={processingMode === "transcript" ? "summary" : "transcript"}
-                  label={processingMode === "transcript" ? "概括模式" : "字幕模式"}
-                  onSelect={() => {
-                    onChangeProcessingMode?.(processingMode === "transcript" ? "summary" : "transcript");
-                    setFooterOverflowOpen(false);
-                  }}
-                />
-                {selectedVideo.sourceUrl && selectedVideo.provider !== "chaoxing" ? (
-                  <a
-                    href={selectedVideo.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setFooterOverflowOpen(false)}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
-                    title={sourceViewLabel}
-                  >
-                    <ExternalLink size={14} />
-                    {sourceViewLabel}
-                  </a>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={deleteButton.disabled}
-                  onClick={() => {
-                    setFooterOverflowOpen(false);
-                    onRequestDeleteCurrentVideo?.();
-                  }}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/30"
+            <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
+            <WorkspaceOverflowMenu
+              open={footerOverflowOpen}
+              onOpenChange={setFooterOverflowOpen}
+              placement="bottom"
+              menuClassName="min-w-[160px]"
+            >
+              <ProcessingModeMenuItem
+                mode={processingMode === "transcript" ? "summary" : "transcript"}
+                label={processingMode === "transcript" ? "概括模式" : "字幕模式"}
+                onSelect={() => {
+                  onChangeProcessingMode?.(processingMode === "transcript" ? "summary" : "transcript");
+                  setFooterOverflowOpen(false);
+                }}
+              />
+              {selectedVideo.sourceUrl && selectedVideo.provider !== "chaoxing" ? (
+                <a
+                  href={selectedVideo.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setFooterOverflowOpen(false)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                  title={sourceViewLabel}
                 >
-                  <Trash2 size={14} />
-                  {deleteButton.disabled ? deleteButton.label : "删除当前视频"}
-                </button>
-          </WorkspaceOverflowMenu>
+                  <ExternalLink size={14} />
+                  {sourceViewLabel}
+                </a>
+              ) : null}
+              <button
+                type="button"
+                disabled={deleteButton.disabled}
+                onClick={() => {
+                  setFooterOverflowOpen(false);
+                  onRequestDeleteCurrentVideo?.();
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                <Trash2 size={14} />
+                {deleteButton.disabled ? deleteButton.label : "删除当前视频"}
+              </button>
+            </WorkspaceOverflowMenu>
           </div>
         </div>
         <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
@@ -514,44 +584,50 @@ function PanelFooter({
           当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概况。
         </div>
       ) : null}
-      <button
-        type="button"
-        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm transition-all duration-200 ${videoGenerationButton.tone === "danger"
-          ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
-          : videoGenerationButton.tone === "busy"
-            ? "motion-busy-button bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400 cursor-not-allowed"
-            : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60 shadow-none active:scale-[0.98]"
-          }`}
-        onClick={
-          videoGenerationButton.tone === "danger"
-            ? onCancelGeneration
-            : modelNeedsDownload
-              ? onOpenSettings
-              : selectedVideo.status === "source_missing"
-                ? onRelinkVideo
-                : onGenerateVideo
-        }
-        disabled={videoGenerationButton.disabled}
-      >
-        {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
-          <>
-            <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
-            {videoGenerationButton.label}
-          </>
-        ) : modelNeedsDownload ? (
-          <>
-            <ArrowDown size={16} strokeWidth={2.5} />
-            {videoGenerationButton.label}
-          </>
-        ) : (
-          <>
-            {selectedVideo.status === "source_missing" ? <Link2 size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
-            {videoGenerationButton.label}
-          </>
-        )}
-      </button>
+      <div className={`flex w-full overflow-hidden rounded-2xl ${generationControlClass}`}>
+        <button
+          type="button"
+          className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors ${videoGenerationButton.tone === "primary" ? "hover:bg-accent/14 active:scale-[0.98]" : "disabled:cursor-not-allowed"}`}
+          onClick={
+            videoGenerationButton.tone === "danger"
+              ? onCancelGeneration
+              : modelNeedsDownload
+                ? onOpenSettings
+                : selectedVideo.status === "source_missing"
+                  ? onRelinkVideo
+                  : () => onGenerateVideo?.(aiSummaryTemplate)
+          }
+          disabled={videoGenerationButton.disabled}
+        >
+          {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
+            <>
+              <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
+              {videoGenerationButton.label}
+            </>
+          ) : modelNeedsDownload ? (
+            <>
+              <ArrowDown size={16} strokeWidth={2.5} />
+              {videoGenerationButton.label}
+            </>
+          ) : (
+            <>
+              {selectedVideo.status === "source_missing" ? <Link2 size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
+              {videoGenerationButton.label}
+            </>
+          )}
+        </button>
+        {showAiSummaryTemplateMenu ? (
+          <AiSummaryTemplateMenu
+            value={aiSummaryTemplate}
+            onChange={setAiSummaryTemplate}
+            disabled={videoGenerationButton.disabled || modelNeedsDownload}
+          />
+        ) : null}
+      </div>
       <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
-        {processingMode === "transcript" ? "仅获取字幕" : "将直接生成概况"}
+        {processingMode === "transcript"
+          ? "仅获取字幕"
+          : `将直接生成风格为“${getAiSummaryTemplate(aiSummaryTemplate).label}”的概括`}
       </p>
     </div>
   );
