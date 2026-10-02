@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "VSummary B站总结",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "minimum_chrome_version": "116",
   "description": "在 Bilibili 视频页将当前视频交给本机 VSummary 处理。",
-  "permissions": ["sidePanel", "tabs", "storage", "webNavigation"],
+  "permissions": ["sidePanel", "tabs", "storage", "webNavigation", "scripting"],
   "host_permissions": [
     "https://www.bilibili.com/video/BV*",
     "https://bilibili.com/video/BV*",

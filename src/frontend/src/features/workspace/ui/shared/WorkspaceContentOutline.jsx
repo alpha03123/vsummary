@@ -17,8 +17,8 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
 
   return (
     <div className="@container w-full">
-      <div className="flex flex-col @[550px]:ml-auto @[550px]:grid @[550px]:max-w-[calc(48rem+10rem+10rem)] @[550px]:grid-cols-[minmax(0,48rem)_10rem] @[550px]:items-start @[550px]:gap-x-[clamp(2.5rem,8vw,10rem)] @[760px]:max-w-[calc(48rem+11rem+10rem)] @[760px]:grid-cols-[minmax(0,48rem)_11rem]">
-        <div className="sticky top-0 z-20 mb-4 bg-white/95 py-2 backdrop-blur @[550px]:hidden dark:bg-stone-950/95">
+      <div className="flex flex-col @[650px]:ml-auto @[650px]:grid @[650px]:max-w-[calc(48rem+10rem+10rem)] @[650px]:grid-cols-[minmax(0,48rem)_10rem] @[650px]:items-start @[650px]:gap-x-[clamp(2.5rem,8vw,10rem)] @[760px]:max-w-[calc(48rem+11rem+10rem)] @[760px]:grid-cols-[minmax(0,48rem)_11rem]">
+        <div className="sticky top-0 z-20 mb-4 bg-white/95 py-2 backdrop-blur @[650px]:hidden dark:bg-stone-950/95">
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
@@ -45,11 +45,11 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
           </AnimatePresence>
         </div>
 
-        <aside className="hidden @[550px]:sticky @[550px]:top-0 @[550px]:col-start-2 @[550px]:row-start-1 @[550px]:block @[550px]:max-h-[calc(100vh-10rem)] @[550px]:overflow-y-auto @[550px]:pr-1">
+        <aside className="hidden @[650px]:sticky @[650px]:top-0 @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100vh-10rem)] @[650px]:overflow-y-auto @[650px]:pr-1">
           <OutlineList label={label} items={items} activeItemId={activeItemId} onSelect={selectItem} />
         </aside>
 
-        <div className="min-w-0 max-w-3xl @[550px]:col-start-1 @[550px]:row-start-1">{children}</div>
+        <div className="min-w-0 max-w-3xl @[650px]:col-start-1 @[650px]:row-start-1">{children}</div>
       </div>
     </div>
   );

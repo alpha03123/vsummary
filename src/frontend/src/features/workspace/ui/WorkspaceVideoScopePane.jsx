@@ -13,6 +13,19 @@ export function WorkspaceVideoScopePane({
 }) {
   const { shell, generation, actions, chat } = page;
 
+  function openReference(reference) {
+    if (!reference) {
+      return;
+    }
+    chat.openCitationReference?.(reference);
+    if (
+      Number.isFinite(reference.seconds)
+      && (!reference.videoId || reference.videoId === shell.selectedVideo?.id)
+    ) {
+      onExternalSeek?.(reference);
+    }
+  }
+
   return (
     <WorkspaceReadingPane
       ui={shell.ui}
@@ -33,6 +46,7 @@ export function WorkspaceVideoScopePane({
       mindmapGenerationProgress={generation.mindmapGenerationProgress}
       knowledgeCards={shell.knowledgeCards}
       knowledgeCardsGenerating={shell.knowledgeCardsGenerating}
+      knowledgeCardsGenerationProgress={shell.knowledgeCardsGenerationProgress}
       knowledgeCardsFeedback={shell.knowledgeCardsFeedback}
       notes={shell.notes}
       activeSeries={shell.activeSeries}
@@ -44,7 +58,7 @@ export function WorkspaceVideoScopePane({
       citationFocus={shell.citationFocus}
       onSeek={(request) => {
         if (shell.selectedVideo?.id && Number.isFinite(request?.seconds)) {
-          chat.openCitationReference?.({
+          openReference({
             videoId: shell.selectedVideo.id,
             seconds: request.seconds,
             endSeconds: request.endSeconds ?? request.seconds,
@@ -52,8 +66,8 @@ export function WorkspaceVideoScopePane({
           });
         } else {
           shell.player.seekToTime(request);
+          onExternalSeek?.(request);
         }
-        onExternalSeek?.(request);
       }}
       toolId={panelToolId}
       embeddedInStudioPanel={embeddedInStudioPanel}
@@ -95,7 +109,7 @@ export function WorkspaceVideoScopePane({
       onUpdateTranscript={actions.updateTranscript}
       onUploadSrt={actions.uploadSrt}
       onRestoreAutomaticTranscript={actions.restoreAutomaticTranscript}
-      onOpenCitationReference={chat.openCitationReference}
+      onOpenCitationReference={openReference}
     />
   );
 }

@@ -17,11 +17,21 @@ function createEventTarget() {
 
 function createChrome(contexts = {}) {
   return {
+    runtime: { lastError: undefined },
+    scripting: { executeScript: vi.fn(async () => []) },
     storage: {
       session: { get: vi.fn(async () => ({ [ACTIVE_VIDEO_CONTEXTS_KEY]: contexts })) },
       onChanged: { addListener: vi.fn() },
     },
-    tabs: { sendMessage: vi.fn(async () => ({ ok: false, error: "播放器不可用" })) },
+    tabs: {
+      connect: vi.fn(() => ({
+        onMessage: { addListener: vi.fn() },
+        onDisconnect: { addListener: vi.fn() },
+        disconnect: vi.fn(),
+      })),
+      onUpdated: { addListener: vi.fn() },
+      sendMessage: vi.fn(async () => ({ ok: false, error: "播放器不可用" })),
+    },
   };
 }
 
@@ -71,11 +81,9 @@ describe("side panel controller", () => {
       origin: "http://127.0.0.1:4173",
       data: { type: "vsummary:seek", seconds: 40, autoplay: true },
     });
-    await Promise.resolve();
-
-    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(10, expect.objectContaining({ seconds: 40, autoplay: true }));
+    await vi.waitFor(() => expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(10, expect.objectContaining({ seconds: 40, autoplay: true })));
     expect(iframeWindow.postMessage).toHaveBeenLastCalledWith(
-      { type: "vsummary:seek-result", ok: false, error: "播放器不可用" },
+      { type: "vsummary:seek-result", key: "BV1:1", tabId: 10, ok: false, error: "播放器不可用" },
       "http://127.0.0.1:4173",
     );
   });

@@ -94,6 +94,7 @@ export function WorkspaceOverviewView({
         <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"><Pencil size={16} />编辑内容</button>
       </div>
       <WorkspaceOverviewContent
+        key={selectedVideo.id}
         ui={ui}
         summary={summary}
         playbackTime={playbackTime}

@@ -21,6 +21,8 @@ export function WorkspaceOverviewContent({
   const [previewImage, setPreviewImage] = useState(null);
   const [expandedTranscriptChapters, setExpandedTranscriptChapters] = useState(() => new Set());
   const [selectedOutlineChapterId, setSelectedOutlineChapterId] = useState(null);
+  const [pendingCitationScroll, setPendingCitationScroll] = useState(null);
+  const handledCitationRequest = useRef(null);
   const transcriptListRefs = useRef(new Map());
   const canSeek = typeof onSeek === "function";
   const SectionHeading = `h${sectionHeadingLevel}`;
@@ -29,15 +31,21 @@ export function WorkspaceOverviewContent({
     () => resolveCitationTarget(summary, citationFocus),
     [summary, citationFocus],
   );
+  const citationRequestId = citationFocus?.requestId ?? (
+    citationTarget ? `${citationTarget.chapterId}:${citationTarget.segmentIndex ?? "chapter"}` : null
+  );
   const playbackTarget = useMemo(
     () => findPlaybackTarget(summary, playbackTime),
     [summary, playbackTime],
   );
   const hasPlaybackTime = Number.isFinite(playbackTime);
+  const activeTarget = hasPlaybackTime ? playbackTarget : citationTarget;
   const activeChapterId = hasPlaybackTime
     ? playbackTarget?.chapterId ?? null
     : citationTarget?.chapterId ?? selectedChapterId;
   const outlineActiveChapterId = selectedOutlineChapterId ?? activeChapterId;
+  const playbackChapterId = playbackTarget?.chapterId;
+  const playbackSegmentIndex = playbackTarget?.segmentIndex;
   const outlineItems = useMemo(
     () => (summary?.chapters ?? []).map((chapter) => ({ id: chapter.id, label: chapter.title, depth: 2 })),
     [summary],
@@ -51,9 +59,10 @@ export function WorkspaceOverviewContent({
   }, []);
 
   useEffect(() => {
-    if (!citationTarget) {
+    if (!citationTarget || !citationRequestId || handledCitationRequest.current === citationRequestId) {
       return;
     }
+    handledCitationRequest.current = citationRequestId;
     setSelectedOutlineChapterId(citationTarget.chapterId);
     setExpandedTranscriptChapters((current) => {
       if (current.has(citationTarget.chapterId)) {
@@ -63,13 +72,8 @@ export function WorkspaceOverviewContent({
       next.add(citationTarget.chapterId);
       return next;
     });
-  }, [citationTarget]);
-
-  useEffect(() => {
-    if (followOverviewPlayback && playbackTarget?.chapterId) {
-      setSelectedOutlineChapterId(playbackTarget.chapterId);
-    }
-  }, [followOverviewPlayback, playbackTarget]);
+    setPendingCitationScroll({ requestId: citationRequestId, target: citationTarget });
+  }, [citationRequestId, citationTarget]);
 
   useEffect(() => {
     const chapters = summary?.chapters ?? [];
@@ -94,57 +98,67 @@ export function WorkspaceOverviewContent({
   }, [contentScopeId, summary]);
 
   useEffect(() => {
-    if (!citationTarget || !expandedTranscriptChapters.has(citationTarget.chapterId)) {
+    if (!pendingCitationScroll || !expandedTranscriptChapters.has(pendingCitationScroll.target.chapterId)) {
       return;
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const transcriptDetails = document.getElementById(transcriptElementId(contentScopeId, citationTarget.chapterId));
+      const { target } = pendingCitationScroll;
+      const transcriptDetails = document.getElementById(transcriptElementId(contentScopeId, target.chapterId));
       transcriptDetails?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      const transcriptList = transcriptListRefs.current.get(citationTarget.chapterId);
-      if (Number.isInteger(citationTarget.segmentIndex) && transcriptList) {
-        transcriptList.scrollToIndex(citationTarget.segmentIndex);
+      const transcriptList = transcriptListRefs.current.get(target.chapterId);
+      if (Number.isInteger(target.segmentIndex) && transcriptList) {
+        transcriptList.scrollToIndex(target.segmentIndex);
+        setPendingCitationScroll((current) => current?.requestId === pendingCitationScroll.requestId ? null : current);
         return;
       }
-      document.getElementById(transcriptSegmentElementId(contentScopeId, citationTarget.chapterId, citationTarget.segmentIndex))?.scrollIntoView?.({
+      document.getElementById(transcriptSegmentElementId(contentScopeId, target.chapterId, target.segmentIndex))?.scrollIntoView?.({
         behavior: "smooth",
         block: "center",
       });
+      setPendingCitationScroll((current) => current?.requestId === pendingCitationScroll.requestId ? null : current);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [citationTarget, contentScopeId, expandedTranscriptChapters]);
+  }, [contentScopeId, expandedTranscriptChapters, pendingCitationScroll]);
 
   useEffect(() => {
-    if (!followOverviewPlayback || !playbackTarget || !Number.isInteger(playbackTarget.segmentIndex)) {
+    if (!followOverviewPlayback || !playbackChapterId) {
       return undefined;
     }
-
-    setExpandedTranscriptChapters((current) => {
-      if (current.has(playbackTarget.chapterId)) {
-        return current;
-      }
-      const next = new Set(current);
-      next.add(playbackTarget.chapterId);
-      return next;
-    });
-
+    setSelectedOutlineChapterId(playbackChapterId);
     const frameId = window.requestAnimationFrame(() => {
-      document.getElementById(transcriptElementId(contentScopeId, playbackTarget.chapterId))?.scrollIntoView?.({
+      const transcriptList = transcriptListRefs.current.get(playbackChapterId);
+      const elementId = transcriptList
+        ? transcriptElementId(contentScopeId, playbackChapterId)
+        : chapterElementId(contentScopeId, playbackChapterId);
+      document.getElementById(elementId)?.scrollIntoView?.({
         behavior: "smooth",
         block: "center",
       });
-      transcriptListRefs.current.get(playbackTarget.chapterId)?.scrollToIndex(playbackTarget.segmentIndex);
+      if (Number.isInteger(playbackSegmentIndex)) transcriptList?.scrollToIndex(playbackSegmentIndex);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [contentScopeId, followOverviewPlayback, playbackTarget, expandedTranscriptChapters]);
+  }, [contentScopeId, followOverviewPlayback, playbackChapterId, playbackSegmentIndex]);
 
   if (!summary) {
     return null;
   }
 
   function selectOutlineChapter(chapterId) {
+    onFollowOverviewPlaybackChange?.(false);
     setSelectedOutlineChapterId(chapterId);
     document.getElementById(chapterElementId(contentScopeId, chapterId))?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
+  function toggleTranscript(chapterId) {
+    onFollowOverviewPlaybackChange?.(false);
+    setPendingCitationScroll(null);
+    setExpandedTranscriptChapters((current) => {
+      const next = new Set(current);
+      if (next.has(chapterId)) next.delete(chapterId);
+      else next.add(chapterId);
+      return next;
+    });
   }
 
   return (
@@ -197,8 +211,9 @@ export function WorkspaceOverviewContent({
             key={chapter.id}
             id={chapterElementId(contentScopeId, chapter.id)}
             data-outline-chapter-id={chapter.id}
+            aria-current={chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id) ? "time" : undefined}
             className={`workspace-elevated-panel flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ${
-              chapter.id === outlineActiveChapterId && !hasPlaybackTime
+              chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id)
                   ? "border-accent shadow-md ring-2 ring-accent/10"
                 : "border-stone-200/70 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
             }`}
@@ -229,8 +244,19 @@ export function WorkspaceOverviewContent({
             {chapter.image_url ? (
               <button
                 type="button"
-                onClick={() => setPreviewImage({ src: chapter.image_url, alt: `${chapter.title} 视频截图` })}
+                onClick={() => {
+                  if (canSeek && Number.isFinite(chapter.image_timestamp_seconds)) {
+                    onSeek?.({
+                      seconds: chapter.image_timestamp_seconds,
+                      endSeconds: chapter.image_timestamp_seconds,
+                      chapterTitle: chapter.title,
+                    });
+                    return;
+                  }
+                  setPreviewImage({ src: chapter.image_url, alt: `${chapter.title} 视频截图` });
+                }}
                 className="group relative block w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-left dark:border-stone-800 dark:bg-stone-950"
+                title={Number.isFinite(chapter.image_timestamp_seconds) ? `跳转到 ${formatTimestamp(chapter.image_timestamp_seconds)}` : "查看章节截图"}
               >
                 <img
                   src={chapter.image_url}
@@ -254,7 +280,7 @@ export function WorkspaceOverviewContent({
                 id={transcriptElementId(contentScopeId, chapter.id)}
                 open={expandedTranscriptChapters.has(chapter.id)}
                 className={`group mt-1 rounded-2xl border border-stone-200/80 bg-stone-50/80 transition-all dark:border-stone-800 dark:bg-stone-950/60 ${
-                  hasPlaybackTime && playbackTarget?.chapterId === chapter.id && !expandedTranscriptChapters.has(chapter.id)
+                  chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id)
                     ? "border-2 border-accent bg-accent/10 shadow-md ring-2 ring-accent/30 dark:bg-accent/15"
                     : ""
                 }`}
@@ -263,12 +289,7 @@ export function WorkspaceOverviewContent({
                   className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3"
                   onClick={(event) => {
                     event.preventDefault();
-                    setExpandedTranscriptChapters((current) => {
-                      const next = new Set(current);
-                      if (next.has(chapter.id)) next.delete(chapter.id);
-                      else next.add(chapter.id);
-                      return next;
-                    });
+                    toggleTranscript(chapter.id);
                   }}
                 >
                   <div className="flex items-center gap-3">
@@ -293,25 +314,12 @@ export function WorkspaceOverviewContent({
                     segments={chapter.transcript_segments}
                     canSeek={canSeek}
                     highlightedSegmentIndex={
-                      hasPlaybackTime && playbackTarget?.chapterId === chapter.id
-                        ? playbackTarget.segmentIndex
-                        : !hasPlaybackTime && citationTarget?.chapterId === chapter.id
-                          ? citationTarget.segmentIndex
-                          : null
+                      activeTarget?.chapterId === chapter.id ? activeTarget.segmentIndex : null
                     }
                     onSeek={onSeek}
                     onRegister={registerTranscriptList}
                     onManualScroll={() => onFollowOverviewPlaybackChange?.(false)}
-                    onCollapse={() => {
-                      setExpandedTranscriptChapters((current) => {
-                        if (!current.has(chapter.id)) {
-                          return current;
-                        }
-                        const next = new Set(current);
-                        next.delete(chapter.id);
-                        return next;
-                      });
-                    }}
+                    onCollapse={() => toggleTranscript(chapter.id)}
                   />
                 ) : null}
               </details>
@@ -383,6 +391,7 @@ function WorkspaceTranscriptList({
                 <button
                   id={transcriptSegmentElementId(contentScopeId, chapterId, virtualRow.index)}
                   type="button"
+                  aria-current={isHighlighted ? "time" : undefined}
                   disabled={!canSeek}
                   onClick={() => onSeek?.({
                     seconds: segment.start_seconds,
@@ -436,21 +445,20 @@ function findPlaybackTarget(summary, playbackTime) {
     return null;
   }
   const chapters = Array.isArray(summary.chapters) ? summary.chapters : [];
+  let matchingSegment = null;
+  let latestStart = -Infinity;
   for (const chapter of chapters) {
-    if (playbackTime < chapter.start_seconds || playbackTime > chapter.end_seconds) {
-      continue;
-    }
-    const segments = Array.isArray(chapter.transcript_segments) ? chapter.transcript_segments : [];
-    const segmentIndex = segments.findIndex(
-      (segment) => playbackTime >= segment.start_seconds && playbackTime <= segment.end_seconds,
-    );
-    return {
-      chapterId: chapter.id,
-      segmentId: segmentIndex >= 0 ? `overview-transcript-segment-${chapter.id}-${segmentIndex}` : null,
-      segmentIndex: segmentIndex >= 0 ? segmentIndex : null,
-    };
+    // ASR segment timestamps determine the spoken position, independently of AI chapter boundaries.
+    (chapter.transcript_segments ?? []).forEach((segment, segmentIndex) => {
+      if (playbackTime >= segment.start_seconds && playbackTime < segment.end_seconds && segment.start_seconds > latestStart) {
+        latestStart = segment.start_seconds;
+        matchingSegment = { chapterId: chapter.id, segmentIndex };
+      }
+    });
   }
-  return null;
+  if (matchingSegment) return matchingSegment;
+  const chapter = chapters.find((item) => playbackTime >= item.start_seconds && playbackTime < item.end_seconds);
+  return chapter ? { chapterId: chapter.id, segmentIndex: null } : null;
 }
 
 const MIN_SCALE = 0.25;
@@ -632,10 +640,10 @@ function resolveCitationTarget(summary, citationFocus) {
     ? chapters.find((chapter) => chapter.id === citationFocus.chapterId)
     : null;
   const chapterByTime = typeof citationFocus.seconds === "number"
-    ? chapters.find((chapter) => citationFocus.seconds >= chapter.start_seconds && citationFocus.seconds <= chapter.end_seconds)
+    ? chapters.find((chapter) => citationFocus.seconds >= chapter.start_seconds && citationFocus.seconds < chapter.end_seconds)
     : null;
-  const segmentMatch = findNearestTranscriptSegment(chapters, citationFocus);
-  const chapter = chapterById ?? chapterByTime ?? segmentMatch?.chapter;
+  const segmentMatch = findNearestTranscriptSegment(chapterById ? [chapterById] : chapters, citationFocus);
+  const chapter = chapterById ?? segmentMatch?.chapter ?? chapterByTime;
   if (!chapter) {
     return null;
   }
@@ -653,6 +661,13 @@ function findNearestTranscriptSegment(chapters, citationFocus) {
   }
   const citationStart = citationFocus.seconds;
   const citationEnd = typeof citationFocus.endSeconds === "number" ? citationFocus.endSeconds : citationStart;
+  const playbackTarget = findPlaybackTarget({ chapters }, citationStart);
+  if (Number.isInteger(playbackTarget?.segmentIndex)) {
+    return {
+      chapter: chapters.find((chapter) => chapter.id === playbackTarget.chapterId),
+      index: playbackTarget.segmentIndex,
+    };
+  }
   let closest = null;
 
   chapters.forEach((chapter) => {

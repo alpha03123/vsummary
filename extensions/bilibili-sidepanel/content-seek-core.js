@@ -1,4 +1,5 @@
 (() => {
+  if (globalThis.VSummaryContentSeek) return;
   const VIDEO_SELECTORS = [
     ".bpx-player-video-wrap video",
     ".bilibili-player-video video",
@@ -55,10 +56,10 @@
       if (autoplay) {
         void video.play().catch(() => {});
       }
+      return video.currentTime;
     };
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      seek();
-      return Promise.resolve();
+      return Promise.resolve(seek());
     }
     return new Promise((resolve, reject) => {
       const timeoutId = window.setTimeout(() => {
@@ -67,8 +68,7 @@
       }, timeoutMs);
       const complete = () => {
         cleanup();
-        seek();
-        resolve();
+        resolve(seek());
       };
       const fail = () => {
         cleanup();
@@ -86,7 +86,32 @@
     });
   }
 
+  function observePlaybackVideo(onTimeUpdate) {
+    const events = ["timeupdate", "seeking", "seeked", "loadedmetadata", "emptied"];
+    let video = null;
+    const publish = () => onTimeUpdate(
+      video && video.readyState >= HTMLMediaElement.HAVE_METADATA ? video.currentTime : null,
+    );
+    const bindVideo = () => {
+      const nextVideo = findPlaybackVideo();
+      if (nextVideo === video) return;
+      events.forEach((event) => video?.removeEventListener(event, publish));
+      video = nextVideo;
+      events.forEach((event) => video?.addEventListener(event, publish));
+      publish();
+    };
+    const observer = new MutationObserver(bindVideo);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    bindVideo();
+    if (!video) publish();
+    return () => {
+      observer.disconnect();
+      events.forEach((event) => video?.removeEventListener(event, publish));
+    };
+  }
+
   globalThis.VSummaryContentSeek = Object.freeze({
+    observePlaybackVideo,
     seekVideo,
     waitForPlaybackVideo,
   });

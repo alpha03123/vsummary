@@ -6,9 +6,6 @@ import { useWorkspaceController } from "@src/features/workspace/model/useWorkspa
 import { createInitialWorkspaceState } from "@src/features/workspace/model/workspaceState";
 
 vi.mock("@src/features/workspace/model/useWorkspaceController", () => ({ useWorkspaceController: vi.fn() }));
-vi.mock("@src/features/workspace/ui/WorkspaceVideoScopePane", () => ({
-  WorkspaceVideoScopePane: () => <div data-testid="video-scope-pane" />,
-}));
 vi.mock("@src/features/workspace/ui/ChatDrawer", () => ({ ChatDrawer: () => null }));
 
 function selectTarget(part = 1) {
@@ -21,6 +18,17 @@ function makeController({ linked = true, part = 1 } = {}) {
   const state = { ...createInitialWorkspaceState(), library: { workspace: { id: "workspace-1", title: "Workspace" }, series: [series] } };
   const controller = {
     state, activeSeries: series, selectedVideo: video, selectedContextType: "video",
+    ui: { showTakeaways: true },
+    tools: { overview: { generated: true } },
+    summary: {
+      title: video.title, key_takeaways: [], chapters: [{
+        id: "ch-1", title: "Chapter", start_seconds: 290, end_seconds: 370, key_points: [],
+        transcript_segments: [
+          { start_seconds: 293, end_seconds: 297, text: "First segment" },
+          { start_seconds: 357, end_seconds: 365, text: "Second segment" },
+        ],
+      }],
+    },
     onSelectVideo: vi.fn(), onResolveBilibiliInboxVideo: vi.fn(), onProcessLinkedVideo: vi.fn(), onCancelGeneration: vi.fn(),
   };
   useWorkspaceController.mockReturnValue(controller);
@@ -45,7 +53,7 @@ describe("WorkspaceVideoScopeEmbed", () => {
     expect(controller.onSelectVideo).toHaveBeenCalledWith("inbox-1", "video-1");
     expect(controller.onResolveBilibiliInboxVideo).not.toHaveBeenCalled();
     expect(controller.onProcessLinkedVideo).toHaveBeenCalledOnce();
-    expect(screen.queryByTestId("video-scope-pane")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /逐字稿阅览/ })).not.toBeInTheDocument();
   });
 
   it("disables another processing request while the durable job is active", () => {
@@ -73,9 +81,10 @@ describe("WorkspaceVideoScopeEmbed", () => {
     useWorkspaceController.mockReturnValue({ ...controller, selectedVideo: downloaded, activeSeries: { ...controller.activeSeries, videos: [downloaded] } });
     rerender(<WorkspaceVideoScopeEmbed />);
 
-    expect(screen.getByTestId("video-scope-pane")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /逐字稿阅览/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "下载并生成" })).not.toBeInTheDocument();
   });
+
 });
 
 describe("isVideoScopeMessage", () => {

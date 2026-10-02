@@ -134,6 +134,9 @@ function asChapter(value, label) {
     key_points: asStringList(record.key_points, `${label}.key_points`),
     start_seconds: asNumber(record.start_seconds, `${label}.start_seconds`),
     end_seconds: asNumber(record.end_seconds, `${label}.end_seconds`),
+    image_timestamp_seconds: typeof record.image_timestamp_seconds === "number"
+      ? record.image_timestamp_seconds
+      : null,
     image_url: asOptionalString(record.image_url),
     transcript_segments: asTranscriptSegments(record.transcript_segments, `${label}.transcript_segments`),
   };

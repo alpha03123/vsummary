@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceOverviewView } from "@src/features/workspace/ui/views/WorkspaceOverviewView";
+import { WorkspaceOverviewContent } from "@src/features/workspace/ui/views/WorkspaceOverviewContent";
 
 const summary = {
   title: "视频标题",
@@ -15,6 +16,8 @@ const summary = {
       end_seconds: 60,
       summary: "本章讲了一些东西",
       key_points: ["点 A", "点 B"],
+      image_url: "/api/videos/s/v/screenshots/chapter-01.jpg",
+      image_timestamp_seconds: 8,
       transcript_segments: [
         { start_seconds: 5, end_seconds: 10, text: "段落一" },
         { start_seconds: 12, end_seconds: 18, text: "段落二" },
@@ -45,6 +48,7 @@ function renderView(overrides = {}) {
 }
 
 describe("WorkspaceOverviewView chapter + transcript clicks", () => {
+
   it("chapter header click calls onSeek with chapter timestamps", () => {
     const { onSeek } = renderView();
     const chapterCard = document.getElementById("overview-chapter-ch-1");
@@ -65,6 +69,58 @@ describe("WorkspaceOverviewView chapter + transcript clicks", () => {
       endSeconds: 10,
       chapterTitle: "第一章 入门",
     });
+  });
+
+  it("chapter screenshot click calls onSeek with its capture timestamp", () => {
+    const { onSeek } = renderView();
+
+    fireEvent.click(screen.getByRole("button", { name: /第一章 入门 视频截图/ }));
+
+    expect(onSeek).toHaveBeenCalledWith({
+      seconds: 8,
+      endSeconds: 8,
+      chapterTitle: "第一章 入门",
+    });
+  });
+
+  it.each(["citation", "playback"])("manual transcript toggles neither seek nor re-scroll during %s focus", (source) => {
+    const scrollIntoView = vi.fn();
+    const previousScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    const previousRequestAnimationFrame = window.requestAnimationFrame;
+    const previousCancelAnimationFrame = window.cancelAnimationFrame;
+    window.requestAnimationFrame = (callback) => { callback(); return 1; };
+    window.cancelAnimationFrame = vi.fn();
+    try {
+      const onFollowOverviewPlaybackChange = vi.fn();
+      const { onSeek } = renderView({
+        ...(source === "citation"
+          ? { citationFocus: { seconds: 12, endSeconds: 18, requestId: "citation-1" } }
+          : { playbackTime: 12, followOverviewPlayback: true }),
+        onFollowOverviewPlaybackChange,
+      });
+      const initialCalls = scrollIntoView.mock.calls.length;
+      expect(initialCalls).toBeGreaterThan(0);
+      const details = document.getElementById("overview-transcript-ch-1");
+      const initiallyOpen = details.open;
+
+      fireEvent.click(screen.getByText("查看本章原文"));
+      expect(details.open).toBe(!initiallyOpen);
+      fireEvent.click(screen.getByText("查看本章原文"));
+
+      expect(details.open).toBe(initiallyOpen);
+      expect(onSeek).not.toHaveBeenCalled();
+      expect(onFollowOverviewPlaybackChange).toHaveBeenLastCalledWith(false);
+      expect(scrollIntoView).toHaveBeenCalledTimes(initialCalls);
+    } finally {
+      window.requestAnimationFrame = previousRequestAnimationFrame;
+      window.cancelAnimationFrame = previousCancelAnimationFrame;
+      if (previousScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", previousScrollIntoView);
+      } else {
+        delete HTMLElement.prototype.scrollIntoView;
+      }
+    }
   });
 
   it("renders only the visible transcript rows for a large chapter", () => {

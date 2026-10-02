@@ -40,4 +40,5 @@ describe("content seek", () => {
 
     await expect(waitForPlaybackVideo()).resolves.toBe(player);
   });
+
 });
