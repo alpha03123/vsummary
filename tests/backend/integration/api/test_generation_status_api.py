@@ -54,7 +54,7 @@ class GenerationStatusApiTests(unittest.TestCase):
         })
         container.job_repository.latest_for_resource.assert_called_once_with(
             workspace_id="workspace-1", resource_id="video-1",
-            operations=("generate_summary", "generate_transcript"),
+            operations=("generate_summary", "generate_transcript", "process_agent_video"),
         )
 
     def test_queued_generation_has_no_start_time_or_elapsed_duration(self) -> None:

@@ -28,7 +28,7 @@ def test_bilibili_ai_zh_subtitle_is_selected(monkeypatch, tmp_path: Path) -> Non
             pass
 
         def extract_info(self, url: str, download: bool) -> dict[str, object]:
-            assert "BV1vJ3P6KEkh" in url
+            assert url == "https://www.bilibili.com/video/BV1vJ3P6KEkh?p=2"
             return {
                 "subtitles": {
                     "ai-en": [{"ext": "srt", "data": _SRT.replace("简体中文", "English")}],
@@ -41,7 +41,10 @@ def test_bilibili_ai_zh_subtitle_is_selected(monkeypatch, tmp_path: Path) -> Non
         "backend.video_summary.infrastructure.subtitle_transcripts._load_embedded_subtitle",
         lambda video_path, output_path, cancellation=None: None,
     )
-    transcript = SubtitleTranscriptProvider().load(tmp_path / "BV1vJ3P6KEkh.mp4", tmp_path)
+    transcript = SubtitleTranscriptProvider().load(
+        tmp_path / "source.mp4", tmp_path,
+        source_url="https://www.bilibili.com/video/BV1vJ3P6KEkh?p=2",
+    )
 
     assert transcript is not None
     assert transcript.language == "zh"
@@ -67,7 +70,10 @@ def test_bilibili_non_chinese_subtitles_are_rejected(monkeypatch, tmp_path: Path
         "backend.video_summary.infrastructure.subtitle_transcripts._load_embedded_subtitle",
         lambda video_path, output_path, cancellation=None: None,
     )
-    transcript = SubtitleTranscriptProvider().load(tmp_path / "BV1NoTk6SERz.mp4", tmp_path)
+    transcript = SubtitleTranscriptProvider().load(
+        tmp_path / "source.mp4", tmp_path,
+        source_url="https://www.bilibili.com/video/BV1NoTk6SERz",
+    )
 
     assert transcript is None
 

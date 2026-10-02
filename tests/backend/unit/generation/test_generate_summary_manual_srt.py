@@ -39,7 +39,7 @@ class _UnexpectedTranscriber:
 
 
 class _UnexpectedSubtitleProvider:
-    def load(self, video_path: Path, staging_dir: Path, cancellation=None) -> Transcript | None:
+    def load(self, video_path: Path, staging_dir: Path, cancellation=None, *, source_url="") -> Transcript | None:
         raise AssertionError("人工 SRT 不应探测在线视频或内嵌字幕")
 
 

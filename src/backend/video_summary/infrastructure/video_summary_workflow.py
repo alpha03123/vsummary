@@ -61,6 +61,8 @@ class ConfiguredVideoSummaryWorkflow:
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
         on_ai_summary_completed: Callable[[], None] | None = None,
+        source_url: str = "",
+        cache_dir: Path | None = None,
     ) -> None:
         """基于当前配置执行一次视频总结生成。
 
@@ -71,6 +73,7 @@ class ConfiguredVideoSummaryWorkflow:
         Args:
             source_path: 媒体源路径。
             output_dir: 总结制品的输出目录（`summary.json` 等）。
+            cache_dir: 按视频固定的阶段缓存目录，任务清理时保留。
             progress_reporter: 可选的上层进度 reporter；为 `None` 时
                 由下游用例自行创建。
             transcript_enhancement_enabled: 是否启用转写增强；为 `None`
@@ -94,6 +97,8 @@ class ConfiguredVideoSummaryWorkflow:
             try:
                 arguments = {
                     "video_path": source_path,
+                    "source_url": source_url,
+                    "cache_dir": cache_dir,
                     "output_dir": output_dir,
                     "progress_reporter": resolved_progress_reporter,
                     "manual_transcript": manual_transcript,

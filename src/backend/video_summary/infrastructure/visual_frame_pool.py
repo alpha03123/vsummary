@@ -14,6 +14,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 from backend.shared.filesystem import atomic_write_text
 from backend.video_summary.generation.ports import NoVideoFramesError
+from backend.video_summary.generation.stage_cache import video_fingerprint
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 
 
@@ -67,7 +68,8 @@ def _build_or_load_visual_frame_pool(
 ) -> VisualFramePool:
     manifest_path = pool_dir / "manifest.json"
     raw_dir = pool_dir / "raw"
-    cached = _load_pool(manifest_path, pool_dir)
+    fingerprint = video_fingerprint(video_path)
+    cached = _load_pool(manifest_path, pool_dir, fingerprint)
     if cached is not None:
         _remove_raw_frames(raw_dir)
         return cached
@@ -107,6 +109,7 @@ def _build_or_load_visual_frame_pool(
             json.dumps(
                 {
                     "max_input_images": max_input_images,
+                    "video_fingerprint": fingerprint,
                     "images": [path.name for path in image_paths],
                     "timestamps": timestamps_by_image,
                 },
@@ -164,11 +167,13 @@ def _compose_grid(group: list[tuple[float, Path]], output_path: Path) -> None:
     canvas.save(output_path, format="JPEG", quality=85)
 
 
-def _load_pool(manifest_path: Path, pool_dir: Path) -> VisualFramePool | None:
+def _load_pool(manifest_path: Path, pool_dir: Path, fingerprint: str) -> VisualFramePool | None:
     if not manifest_path.is_file():
         return None
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if payload.get("video_fingerprint") != fingerprint:
+            return None
         names = payload.get("images")
         timestamps = payload.get("timestamps")
         if not isinstance(names, list) or not isinstance(timestamps, list) or len(names) != len(timestamps):

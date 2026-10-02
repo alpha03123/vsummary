@@ -120,10 +120,7 @@ class SqlVideoWorkspace:
         by_series: dict[str, list[LibraryVideoCardDTO]] = {row["id"]: [] for row in series}
         linked_videos: dict[tuple[str, str], LinkedVideo] = {}
         for row in series:
-            if row["linked_payload"] is None:
-                continue
-            for item in _json_object(row["linked_payload"]).get("videos", []):
-                source = _linked_video_from_payload(item)
+            for source in _linked_video_sources(row["linked_payload"]).values():
                 linked_videos[(row["id"], source.video_id)] = source
         for video in videos:
             source = linked_videos.get((video["series_id"], video["external_source_id"]))
@@ -155,18 +152,21 @@ class SqlVideoWorkspace:
 
     def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         with self._sessions() as session:
-            row = session.execute(text("""SELECT v.id,v.title,v.source_kind,v.content_version,m.blob_key,m.sha256,m.byte_size,m.media_type,e.source_path AS external_path
+            row = session.execute(text("""SELECT v.id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key,m.sha256,m.byte_size,m.media_type,e.source_path AS external_path,l.payload AS linked_payload
                 FROM videos v JOIN series s ON s.id=v.series_id LEFT JOIN media_objects m ON m.video_id=v.id AND m.state='ready'
                 LEFT JOIN external_media_references e ON e.video_id=v.id
+                LEFT JOIN linked_series_metadata l ON l.series_id=s.id
                 WHERE v.id=:video AND s.id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
         if row is None:
             return None
+        linked_source = _linked_video_sources(row["linked_payload"]).get(row["external_source_id"])
+        source_url = linked_source.source_url if linked_source is not None else ""
         if row["external_path"] is not None:
             source_path = Path(row["external_path"])
             if not source_path.is_absolute() or not source_path.is_file():
                 return None
             source_type = "audio" if source_path.suffix.lower() in AUDIO_SUFFIXES else "video"
-            return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=source_path.name, source_type=source_type, source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0)
+            return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=source_path.name, source_type=source_type, source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0, source_url=source_url)
         if row["blob_key"] is None:
             return None
         filename = Path(row["blob_key"]).name
@@ -179,7 +179,7 @@ class SqlVideoWorkspace:
                 extra={"series_id": series_id, "video_id": video_id, "blob_key": row["blob_key"]},
             )
             return None
-        return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=filename, source_type=row["source_kind"], source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0)
+        return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=filename, source_type=row["source_kind"], source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0, source_url=source_url)
 
     def get_video_preview_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         """返回可快速起播的预览媒体，必要时为历史媒体补建派生 Blob。"""
@@ -203,6 +203,7 @@ class SqlVideoWorkspace:
             output_dir=source.output_dir,
             processed=source.processed,
             duration_seconds=source.duration_seconds,
+            source_url=source.source_url,
         )
 
     def materialize_artifact(self, *, video_id: str, kind: str, filename: str) -> Path | None:
@@ -975,6 +976,13 @@ def _linked_video_from_payload(item: dict[str, object]) -> LinkedVideo:
     )
 
 
+def _linked_video_sources(payload: object) -> dict[str, LinkedVideo]:
+    if payload is None:
+        return {}
+    sources = [_linked_video_from_payload(item) for item in _json_object(payload).get("videos", [])]
+    return {source.video_id: source for source in sources}
+
+
 def _json_object(value: object) -> dict[str, Any]:
     decoded = json.loads(value) if isinstance(value, str) else value
     if not isinstance(decoded, dict):
@@ -1006,21 +1014,24 @@ def _attach_chapter_transcript(
     if not isinstance(chapters, list):
         return summary
 
+    assigned_segments: list[list[dict[str, Any]]] = [[] for _ in chapters]
+    ranges = [
+        (_as_optional_seconds(chapter.get("start_seconds")), _as_optional_seconds(chapter.get("end_seconds")))
+        if isinstance(chapter, dict) else (None, None)
+        for chapter in chapters
+    ]
+    for segment in transcript_segments:
+        for index, (start, end) in enumerate(ranges):
+            if start is not None and end is not None and start <= segment["start_seconds"] < end:
+                assigned_segments[index].append(segment)
+                break
+
     enriched_chapters: list[object] = []
-    for chapter in chapters:
+    for index, chapter in enumerate(chapters):
         if not isinstance(chapter, dict):
             enriched_chapters.append(chapter)
             continue
-        start_seconds = _as_optional_seconds(chapter.get("start_seconds"))
-        end_seconds = _as_optional_seconds(chapter.get("end_seconds"))
-        matching_segments = []
-        if start_seconds is not None and end_seconds is not None:
-            matching_segments = [
-                segment
-                for segment in transcript_segments
-                if segment["end_seconds"] >= start_seconds and segment["start_seconds"] <= end_seconds
-            ]
-        enriched_chapters.append({**chapter, "transcript_segments": matching_segments})
+        enriched_chapters.append({**chapter, "transcript_segments": assigned_segments[index]})
     return {**summary, "chapters": enriched_chapters}
 
 

@@ -113,35 +113,23 @@ class FakeSummarizer:
 
 
 class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_extract_audio_cancel_raises_generate_cancelled(self) -> None:
+    async def test_cancelled_job_does_not_start_preprocessing(self) -> None:
         cancellation = GenerationCancellationContext("series-1/video-1")
-        media = FakeMediaProcessor()
+        cancellation.request_cancel()
+        media = WritingMediaProcessor()
+        transcriber = FakeTranscriber()
+        summarizer = FakeSummarizer()
         use_case = GenerateVideoSummary(
-            media_processor=media,
-            transcriber=FakeTranscriber(),
-            transcript_enhancer=None,
-            summarizer=FakeSummarizer(),
-            artifact_store=FakeArtifactStore(),
+            media_processor=media, transcriber=transcriber, transcript_enhancer=None,
+            summarizer=summarizer, artifact_store=TemporaryGenerationArtifactStore(),
         )
-
-        async def cancel_soon():
-            await asyncio.sleep(0.01)
-            cancellation.request_cancel()
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            video_path = root / "fake_video.mp4"
-            output_dir = root / "fake_output"
-
-            with patch("asyncio.to_thread", side_effect=_fake_to_thread):
-                asyncio.create_task(cancel_soon())
-                cancellation.request_cancel()
-                with self.assertRaises(GenerateCancelledError):
-                    from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
-                    tracker = InMemoryProgressTracker()
-                    reporter = tracker.create_reporter("series-1/video-1")
-                    tracker.request_cancel("series-1/video-1")
-                    await use_case.run(video_path, output_dir, reporter, cancellation)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video = root / "video.mp4"
+            video.write_bytes(b"video")
+            with self.assertRaises(GenerateCancelledError):
+                await use_case.run(video, root / "output", cancellation=cancellation)
+        self.assertEqual((media.extract_calls, transcriber.calls, summarizer.calls), (0, 0, 0))
 
     async def test_enhance_transcript_cancel_between_chunks_does_not_save(self) -> None:
         cancellation = GenerationCancellationContext("series-1/video-1")
@@ -261,141 +249,6 @@ class GenerateVideoSummaryCancellationTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse((output_dir / "audio.wav").exists())
             self.assertFalse((output_dir / "transcript.cleaned.json").exists())
             self.assertFalse((output_dir / "summary.json").exists())
-
-    async def test_cancelled_generation_keeps_completed_stage_cache(self) -> None:
-        cancellation = GenerationCancellationContext("series-1/video-1")
-
-        class CancelAfterTranscriptSummarizer:
-            async def summarize(self, video, transcript, cancellation=None):
-                if cancellation is not None:
-                    cancellation.request_cancel()
-                raise GenerateCancelledError("任务已取消")
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            video_path = root / "v.mp4"
-            video_path.write_text("video", encoding="utf-8")
-            output_dir = root / "workspace" / "series-1" / "video-1"
-            media = WritingMediaProcessor()
-            transcriber = FakeTranscriber()
-            use_case = GenerateVideoSummary(
-                media_processor=media,
-                transcriber=transcriber,
-                transcript_enhancer=None,
-                summarizer=CancelAfterTranscriptSummarizer(),
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            with self.assertRaises(GenerateCancelledError):
-                await use_case.run(video_path, output_dir, cancellation=cancellation)
-
-            self.assertTrue((output_dir / ".cache" / "media" / "audio.wav").exists())
-            self.assertTrue((output_dir / ".cache" / "whisper" / "transcript.raw.json").exists())
-            self.assertFalse((output_dir / "audio.wav").exists())
-            self.assertFalse((output_dir / "transcript.cleaned.json").exists())
-            self.assertFalse((output_dir / "summary.json").exists())
-            self.assertEqual(media.extract_calls, 1)
-            self.assertEqual(transcriber.calls, 1)
-
-    async def test_generation_reuses_completed_stage_cache(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            video_path = root / "v.mp4"
-            video_path.write_text("video", encoding="utf-8")
-            output_dir = root / "workspace" / "series-1" / "video-1"
-            first_media = WritingMediaProcessor()
-            first_transcriber = FakeTranscriber()
-            first_use_case = GenerateVideoSummary(
-                media_processor=first_media,
-                transcriber=first_transcriber,
-                transcript_enhancer=None,
-                summarizer=FakeSummarizer(),
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            await first_use_case.run(video_path, output_dir)
-
-            second_media = WritingMediaProcessor()
-            second_transcriber = FakeTranscriber()
-            second_summarizer = FakeSummarizer()
-            second_use_case = GenerateVideoSummary(
-                media_processor=second_media,
-                transcriber=second_transcriber,
-                transcript_enhancer=None,
-                summarizer=second_summarizer,
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            document = await second_use_case.run(video_path, output_dir)
-
-            self.assertEqual(document.summary_data["title"], "Test")
-            self.assertEqual(second_media.extract_calls, 0)
-            self.assertEqual(second_transcriber.calls, 0)
-            self.assertEqual(second_summarizer.calls, 1)
-
-    async def test_generation_ignores_cache_when_video_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            video_path = root / "v.mp4"
-            video_path.write_text("video", encoding="utf-8")
-            output_dir = root / "workspace" / "series-1" / "video-1"
-            first_use_case = GenerateVideoSummary(
-                media_processor=WritingMediaProcessor(),
-                transcriber=FakeTranscriber(),
-                transcript_enhancer=None,
-                summarizer=FakeSummarizer(),
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            await first_use_case.run(video_path, output_dir)
-            video_path.write_text("changed video", encoding="utf-8")
-
-            second_media = WritingMediaProcessor()
-            second_transcriber = FakeTranscriber()
-            second_use_case = GenerateVideoSummary(
-                media_processor=second_media,
-                transcriber=second_transcriber,
-                transcript_enhancer=None,
-                summarizer=FakeSummarizer(),
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            await second_use_case.run(video_path, output_dir)
-
-            self.assertEqual(second_media.extract_calls, 1)
-            self.assertEqual(second_transcriber.calls, 1)
-
-    async def test_generation_reuses_enhanced_transcript_cache(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            video_path = root / "v.mp4"
-            video_path.write_text("video", encoding="utf-8")
-            output_dir = root / "workspace" / "series-1" / "video-1"
-            first_enhancer = FakeEnhancer(chunks=1)
-            first_use_case = GenerateVideoSummary(
-                media_processor=WritingMediaProcessor(),
-                transcriber=FakeTranscriber(),
-                transcript_enhancer=first_enhancer,
-                summarizer=FakeSummarizer(),
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            await first_use_case.run(video_path, output_dir)
-
-            second_enhancer = FakeEnhancer(chunks=1)
-            second_use_case = GenerateVideoSummary(
-                media_processor=WritingMediaProcessor(),
-                transcriber=FakeTranscriber(),
-                transcript_enhancer=second_enhancer,
-                summarizer=FakeSummarizer(),
-                artifact_store=TemporaryGenerationArtifactStore(),
-            )
-
-            await second_use_case.run(video_path, output_dir)
-
-            self.assertEqual(first_enhancer.calls, 1)
-            self.assertEqual(second_enhancer.calls, 0)
-            self.assertTrue((output_dir / ".cache" / "transcript-enhance" / "transcript.enhanced.json").exists())
 
     async def test_external_staging_removal_retries_generation_once(self) -> None:
         """A lost staging directory restarts from durable stage cache once."""

@@ -74,6 +74,8 @@ class SubtitleTranscriptSource(Protocol):
         video_path: Path,
         staging_dir: Path,
         cancellation: "GenerationCancellationContext | None" = None,
+        *,
+        source_url: str = "",
     ) -> Transcript | None:
         """返回中文字幕转写；当前视频没有可用字幕时返回 ``None``。"""
 

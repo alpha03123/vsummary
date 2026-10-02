@@ -13,7 +13,7 @@ from backend.video_summary.generation.usecases.generate_summary import GenerateV
 class _SubtitleSource:
     cache_identity = "test-subtitles"
 
-    def load(self, video_path: Path, staging_dir: Path, cancellation=None) -> Transcript:
+    def load(self, video_path: Path, staging_dir: Path, cancellation=None, *, source_url="") -> Transcript:
         return Transcript(
             language="zh",
             segments=[TranscriptSegment(0.0, 3.0, "使用字幕，不使用 ASR")],
@@ -101,6 +101,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
         )
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             await use_case.run(root / "video.mp4", root / "output")
         assert store.transcript.full_text == "使用字幕，不使用 ASR"
 
@@ -117,6 +118,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
         )
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             video_path = root / "video.mp4"
             video_path.write_text("video", encoding="utf-8")
             await use_case.run(video_path, root / "output")
@@ -137,6 +139,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
         )
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             video_path = root / "silent.mp4"
             video_path.write_bytes(b"video")
             document = await use_case.run(video_path, root / "output")
@@ -163,6 +166,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             await use_case.run(
                 root / "video.mp4",
                 root / "output",
@@ -187,6 +191,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
 
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             with self.assertRaisesRegex(RuntimeError, "AI 概括生成失败"):
                 await use_case.run(
                     root / "video.mp4",

@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 import re
 import subprocess
+from urllib.parse import urlparse
 
 import srt
 
@@ -21,7 +22,6 @@ from backend.video_summary.generation.cancellation import GenerationCancellation
 LOGGER = logging.getLogger(__name__)
 
 _BVID_PATTERN = re.compile(r"(BV[0-9A-Za-z]{10})", re.IGNORECASE)
-_PAGE_PATTERN = re.compile(r"_p(?P<page>[1-9][0-9]*)$", re.IGNORECASE)
 _TEXT_SUBTITLE_CODECS = frozenset({"ass", "mov_text", "srt", "ssa", "subrip", "webvtt"})
 _LOCAL_CHINESE_LANGUAGE_PRIORITY = ("zh-hans", "zh-cn", "zh", "zho", "chi", "cmn")
 _BILIBILI_CHINESE_LANGUAGE_PRIORITY = ("zh-Hans", "zh-CN", "zh", "ai-zh")
@@ -37,9 +37,11 @@ class SubtitleTranscriptProvider:
         video_path: Path,
         staging_dir: Path,
         cancellation: GenerationCancellationContext | None = None,
+        *,
+        source_url: str = "",
     ) -> Transcript | None:
         """返回可用中文字幕；找不到时返回 ``None`` 以让调用方走 ASR。"""
-        bilibili = _load_bilibili_subtitle(video_path, cancellation)
+        bilibili = _load_bilibili_subtitle(source_url, cancellation)
         if bilibili is not None:
             return bilibili
         return _load_embedded_subtitle(video_path, staging_dir / "subtitle.srt", cancellation)
@@ -96,17 +98,17 @@ class _SilentYtDlpLogger:
 
 
 def _load_bilibili_subtitle(
-    video_path: Path,
+    source_url: str,
     cancellation: GenerationCancellationContext | None = None,
 ) -> Transcript | None:
-    bvid_match = _BVID_PATTERN.search(video_path.stem)
-    if bvid_match is None:
+    parsed = urlparse(source_url)
+    if parsed.hostname not in {"www.bilibili.com", "bilibili.com"}:
         return None
+    bvid_match = _BVID_PATTERN.search(parsed.path)
+    if bvid_match is None:
+        raise ValueError("Bilibili 字幕来源链接缺少有效 BV 号。")
     _raise_if_cancelled(cancellation)
     bvid = bvid_match.group(1)
-    page_match = _PAGE_PATTERN.search(video_path.stem)
-    page = int(page_match.group("page")) if page_match is not None else 1
-    url = f"https://www.bilibili.com/video/{bvid}" + (f"?p={page}" if page > 1 else "")
     headers = load_bilibili_headers(bvid)
     cookie_file = write_bilibili_cookies_file(headers.pop("Cookie", ""))
     options: dict[str, object] = {
@@ -131,7 +133,7 @@ def _load_bilibili_subtitle(
         with YoutubeDL(options) as ydl:
             ydl.to_screen = _discard_ytdlp_screen_output
             ydl.to_stdout = _discard_ytdlp_screen_output
-            info = ydl.extract_info(url, download=False)
+            info = ydl.extract_info(source_url, download=False)
         _raise_if_cancelled(cancellation)
         if not isinstance(info, dict):
             return None

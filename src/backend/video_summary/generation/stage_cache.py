@@ -1,6 +1,6 @@
 """生成阶段产物缓存。
 
-按「stage」（media/whisper/transcript-enhance）分别落盘中间产物，
+按「stage」（media/subtitles/whisper/transcript-enhance）分别落盘中间产物，
 并通过 manifest 记录版本号、阶段名、实现身份与视频指纹，使下次
 启动同视频生成时能够直接复用——跳过最耗时的音频抽取与转写步骤。
 
@@ -73,8 +73,8 @@ class GenerationStageCache:
         """读取某阶段的转写缓存。
 
         Args:
-            stage: 转写阶段名，目前支持 `whisper`、`transcript-enhance` 与
-                `no-transcribable-audio`。
+            stage: 转写阶段名，支持 `subtitles`、`whisper`、`transcript-enhance`
+                与 `no-transcribable-audio`。
             identity: 对应阶段的实现身份（whisper 模型或增强器）。
 
         Returns:
@@ -104,6 +104,8 @@ class GenerationStageCache:
             file_name = "transcript.enhanced.json"
         elif stage == "no-transcribable-audio":
             file_name = "transcript.placeholder.json"
+        elif stage == "subtitles":
+            file_name = "transcript.subtitle.json"
         else:
             raise ValueError(f"Unsupported transcript cache stage: {stage}")
         return self._cache_dir / stage / file_name
@@ -118,7 +120,7 @@ class GenerationStageCache:
             "version": self._VERSION,
             "stage": stage,
             "identity": identity,
-            "video_fingerprint": self._video_fingerprint(),
+            "video_fingerprint": video_fingerprint(self._video_path),
         }
 
     def _write_manifest(self, stage: str, *, identity: str) -> None:
@@ -127,7 +129,7 @@ class GenerationStageCache:
             "version": self._VERSION,
             "stage": stage,
             "identity": identity,
-            "video_fingerprint": self._video_fingerprint(),
+            "video_fingerprint": video_fingerprint(self._video_path),
         }
         atomic_write_text(
             self._manifest_path(stage),
@@ -138,18 +140,15 @@ class GenerationStageCache:
         """返回某阶段 manifest 的存储路径。"""
         return self._cache_dir / stage / "manifest.json"
 
-    def _video_fingerprint(self) -> str:
-        """根据视频绝对路径、大小与 mtime 计算指纹。
 
-        任一项变化都会使整组缓存失效，确保用户替换视频文件后不会
-        误读到旧数据。
-        """
-        stat = self._video_path.stat()
-        digest = sha256()
-        digest.update(str(self._video_path.resolve()).encode("utf-8"))
-        digest.update(str(stat.st_size).encode("ascii"))
-        digest.update(str(stat.st_mtime_ns).encode("ascii"))
-        return digest.hexdigest()
+def video_fingerprint(video_path: Path) -> str:
+    """视频路径、大小或修改时间变化时，使生成阶段与帧池缓存共同失效。"""
+    stat = video_path.stat()
+    digest = sha256()
+    digest.update(str(video_path.resolve()).encode("utf-8"))
+    digest.update(str(stat.st_size).encode("ascii"))
+    digest.update(str(stat.st_mtime_ns).encode("ascii"))
+    return digest.hexdigest()
 
 
 def _copy_file_atomic(source_path: Path, target_path: Path) -> None:

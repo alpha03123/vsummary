@@ -142,6 +142,7 @@ class VideoSourceDTO:
         processed: 是否已生成过制品。
         source_type: 源类型，默认 "video"。
         duration_seconds: 视频时长（秒）；未探测到则为 `None`。
+        source_url: 原始外部视频链接，供字幕读取使用；本地媒体为空。
     """
 
     series_id: str
@@ -153,6 +154,7 @@ class VideoSourceDTO:
     processed: bool
     source_type: str = "video"
     duration_seconds: float | None = None
+    source_url: str = ""
 
 
 @dataclass(frozen=True)

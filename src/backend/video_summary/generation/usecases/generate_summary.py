@@ -77,7 +77,7 @@ class GenerateVideoSummary:
     持久化 vs 临时：
     - 持久化：`output_dir` 下的制品（仅在第 7 步原子提交后可见）；
     - 临时：`staging_dir` 下的中间文件（任一阶段失败/取消都会被清理）；
-    - 缓存：`output_dir/.cache`（按 manifest 复用，下一次同视频可跳过）。
+    - 缓存：由调用方指定独立目录；直接运行时默认 `output_dir/.cache`。
     """
 
     def __init__(
@@ -137,12 +137,15 @@ class GenerateVideoSummary:
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
         on_ai_summary_completed: Callable[[], None] | None = None,
+        source_url: str = "",
+        cache_dir: Path | None = None,
     ) -> SummaryDocument | None:
         """为指定视频生成结构化总结文档。
 
         Args:
             video_path: 视频源文件路径。
             output_dir: 制品最终写入目录。
+            cache_dir: 可跨任务复用的阶段缓存目录，与每次任务的临时产物分开。
             progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
             cancellation: 可选的外部取消上下文；为 `None` 且提供了
                 `progress_reporter` 时会自动创建一个，并把 reporter 的
@@ -176,6 +179,8 @@ class GenerateVideoSummary:
                 use_saved_manual_transcript=use_saved_manual_transcript,
                 processing_mode=processing_mode,
                 on_ai_summary_completed=on_ai_summary_completed,
+                source_url=source_url,
+                cache_dir=cache_dir if cache_dir is not None else output_dir / ".cache",
             )
         finally:
             if cancel_watch_task is not None:
@@ -194,6 +199,8 @@ class GenerateVideoSummary:
         use_saved_manual_transcript: bool,
         processing_mode: str,
         on_ai_summary_completed: Callable[[], None] | None,
+        source_url: str,
+        cache_dir: Path,
     ) -> SummaryDocument | None:
         """前置取消检查 → 准备 staging 目录 → 跑核心流水线 → 清理 staging。
 
@@ -217,6 +224,8 @@ class GenerateVideoSummary:
                     use_saved_manual_transcript=use_saved_manual_transcript,
                     processing_mode=processing_mode,
                     on_ai_summary_completed=on_ai_summary_completed,
+                    source_url=source_url,
+                    cache_dir=cache_dir,
                 )
             except FileNotFoundError:
                 if attempt == 0 and not staging_dir.exists():
@@ -237,6 +246,8 @@ class GenerateVideoSummary:
         use_saved_manual_transcript: bool,
         processing_mode: str,
         on_ai_summary_completed: Callable[[], None] | None,
+        source_url: str,
+        cache_dir: Path,
     ) -> SummaryDocument | None:
         """在 staging 目录下依次跑各生成阶段，全部成功后原子提交到 `output_dir`。
 
@@ -245,7 +256,7 @@ class GenerateVideoSummary:
         2. 优先尝试从 `GenerationStageCache` 复用上一次的中间产物；
         3. 在阻塞调用之前检查取消信号，避免浪费昂贵的计算。
         """
-        stage_cache = GenerationStageCache(output_dir / ".cache", video_path)
+        stage_cache = GenerationStageCache(cache_dir, video_path)
         unavailable_reason: str | None = None
         resolved_manual_transcript = manual_transcript
         if resolved_manual_transcript is None and use_saved_manual_transcript and self._manual_transcript_provider is not None:
@@ -288,12 +299,15 @@ class GenerateVideoSummary:
             if progress_reporter is not None:
                 progress_reporter.update("probe_subtitles", 5.0, "正在检查视频是否自带可用字幕")
             try:
-                subtitle_transcript = await asyncio.to_thread(
-                    self._subtitle_provider.load,
-                    video_path,
-                    staging_dir,
-                    cancellation,
-                )
+                subtitle_identity = f"{_cache_identity(self._subtitle_provider)}|source={source_url}"
+                subtitle_transcript = await asyncio.to_thread(stage_cache.load_transcript, "subtitles", identity=subtitle_identity)
+                if subtitle_transcript is None:
+                    subtitle_transcript = await asyncio.to_thread(
+                        self._subtitle_provider.load, video_path, staging_dir, cancellation, source_url=source_url,
+                    )
+                    _raise_if_cancelled(progress_reporter, cancellation)
+                    if subtitle_transcript is not None:
+                        await asyncio.to_thread(stage_cache.store_transcript, "subtitles", subtitle_transcript, identity=subtitle_identity)
             except InterruptedError as error:
                 raise GenerateCancelledError(str(error) or "生成已取消") from error
             _raise_if_cancelled(progress_reporter, cancellation)
@@ -305,7 +319,7 @@ class GenerateVideoSummary:
                 duration_seconds=max(segment.end_seconds for segment in subtitle_transcript.segments),
             )
             transcript = subtitle_transcript
-            transcript_source_identity = f"subtitle:{_cache_identity(self._subtitle_provider)}"
+            transcript_source_identity = f"subtitle:{subtitle_identity}"
             if progress_reporter is not None:
                 progress_reporter.update("extract_subtitles", 20.0, "已找到视频字幕，无需重新识别讲话")
         elif resolved_manual_transcript is None and saved_transcript is None:
@@ -323,39 +337,42 @@ class GenerateVideoSummary:
             )
             _raise_if_cancelled(progress_reporter, cancellation)
 
-            if progress_reporter is not None:
-                progress_reporter.update("extract_audio", 15.0, "正在读取视频中的声音")
-            try:
-                audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
-                if not audio_restored:
-                    await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
-                    _raise_if_cancelled(progress_reporter, cancellation)
-                    await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
-            except NoTranscribableAudioError:
-                unavailable_reason = "未找到可用中文字幕，且视频不含可供转写的音频流。"
-                transcript_source_identity = "no-transcribable-audio-v1"
-                transcript = await asyncio.to_thread(
-                    stage_cache.load_transcript,
-                    "no-transcribable-audio",
-                    identity=transcript_source_identity,
-                )
-                if transcript is None:
-                    transcript = _build_no_transcribable_audio_transcript(video.duration_seconds)
-                    await asyncio.to_thread(
-                        stage_cache.store_transcript,
+            transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
+            if transcript is not None:
+                if progress_reporter is not None:
+                    progress_reporter.update("load_transcript", 75.0, "正在使用缓存的转写，无需重新识别讲话")
+            else:
+                if progress_reporter is not None:
+                    progress_reporter.update("extract_audio", 15.0, "正在读取视频中的声音")
+                try:
+                    audio_restored = await asyncio.to_thread(stage_cache.restore_audio, audio_path, identity=media_identity)
+                    if not audio_restored:
+                        await asyncio.to_thread(self._media_processor.extract_audio, video_path, audio_path, cancellation)
+                        _raise_if_cancelled(progress_reporter, cancellation)
+                        await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
+                except NoTranscribableAudioError:
+                    unavailable_reason = "未找到可用中文字幕，且视频不含可供转写的音频流。"
+                    transcript_source_identity = "no-transcribable-audio-v1"
+                    transcript = await asyncio.to_thread(
+                        stage_cache.load_transcript,
                         "no-transcribable-audio",
-                        transcript,
                         identity=transcript_source_identity,
                     )
-                if progress_reporter is not None:
-                    progress_reporter.update("transcribe", 80.0, "视频没有可供转写的信息，正在写入占位概况")
-            else:
-                _raise_if_cancelled(progress_reporter, cancellation)
+                    if transcript is None:
+                        transcript = _build_no_transcribable_audio_transcript(video.duration_seconds)
+                        await asyncio.to_thread(
+                            stage_cache.store_transcript,
+                            "no-transcribable-audio",
+                            transcript,
+                            identity=transcript_source_identity,
+                        )
+                    if progress_reporter is not None:
+                        progress_reporter.update("transcribe", 80.0, "视频没有可供转写的信息，正在写入占位概况")
+                else:
+                    _raise_if_cancelled(progress_reporter, cancellation)
 
-                if progress_reporter is not None:
-                    progress_reporter.update("transcribe", 20.0, "正在识别视频中的讲话，转换为文字")
-                transcript = await asyncio.to_thread(stage_cache.load_transcript, "whisper", identity=transcriber_identity)
-                if transcript is None:
+                    if progress_reporter is not None:
+                        progress_reporter.update("transcribe", 20.0, "正在识别视频中的讲话，转换为文字")
                     transcript = await asyncio.to_thread(
                         self._transcriber.transcribe,
                         audio_path,
@@ -443,6 +460,7 @@ class GenerateVideoSummary:
                 output_dir=output_dir,
                 on_completed=on_ai_summary_completed,
                 on_progress=report_ai_summary_progress,
+                cache_dir=cache_dir,
             )
 
         if processing_mode == "transcript":
@@ -531,8 +549,9 @@ class GenerateVideoSummary:
         output_dir: Path,
         on_completed: Callable[[], None] | None,
         on_progress: Callable[[str, str], None] | None,
+        cache_dir: Path,
     ) -> asyncio.Task[None]:
-        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress))
+        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress, cache_dir=cache_dir))
         self._ai_summary_tasks.add(task)
 
         def _record_completion(completed: asyncio.Task[None]) -> None:

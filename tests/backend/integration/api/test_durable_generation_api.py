@@ -83,3 +83,28 @@ def test_series_mindmap_returns_the_persisted_tree(generation_client, stored_vid
     response = client.get(f"/api/series/{series_id}/mindmap")
     assert response.status_code == 200
     assert response.json() == tree
+
+
+def test_agent_video_job_can_be_recovered_and_cancelled_by_id(generation_client) -> None:
+    client, _, series_id, video_id = generation_client
+    submitted = client.post(
+        f"/api/agent/series/{series_id}/process",
+        json={"video_ids": [video_id], "processing_mode": "summary"},
+    )
+    assert submitted.status_code == 200
+    jobs = submitted.json()["jobs"]
+    assert len(jobs) == 1
+    job_id = jobs[0]["job_id"]
+    assert jobs[0]["resource"] == {"type": "video", "id": video_id}
+
+    recovered = client.get(f"/api/videos/{series_id}/{video_id}/generate/status")
+    assert recovered.status_code == 200
+    assert recovered.json()["job_id"] == job_id
+    assert recovered.json()["snapshot"]["status"] == "queued"
+
+    cancelled = client.post(f"/api/jobs/{job_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    after_cancel = client.get(f"/api/videos/{series_id}/{video_id}/generate/status")
+    assert after_cancel.json()["job_id"] == job_id
+    assert after_cancel.json()["snapshot"]["status"] == "cancelled"

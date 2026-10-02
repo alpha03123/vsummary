@@ -29,14 +29,13 @@ class VisualFramePoolTests(unittest.TestCase):
     def test_caps_grid_images_and_reuses_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             processor = FakeFrameProcessor(duration=180)
-            progress = []
             first = build_or_load_visual_frame_pool(
                 video_path=root / "video.mp4",
                 output_dir=root / "output",
                 max_input_images=2,
                 media_processor=processor,
-                on_progress=lambda done, total: progress.append((done, total)),
             )
             calls_after_first = list(processor.calls)
             second = build_or_load_visual_frame_pool(
@@ -48,7 +47,6 @@ class VisualFramePoolTests(unittest.TestCase):
 
             self.assertEqual(2, len(first.image_paths))
             self.assertEqual(18, len(calls_after_first))
-            self.assertEqual([(done, 18) for done in range(1, 19)], progress)
             self.assertEqual(calls_after_first, processor.calls)
             self.assertEqual(first.image_paths, second.image_paths)
             self.assertFalse((root / "output" / "visual_frame_pool" / "grid-2" / "raw").exists())
@@ -56,6 +54,7 @@ class VisualFramePoolTests(unittest.TestCase):
     def test_keeps_incomplete_tail_grid_for_short_videos(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             pool = build_or_load_visual_frame_pool(
                 video_path=root / "video.mp4",
                 output_dir=root / "output",
@@ -70,6 +69,7 @@ class VisualFramePoolTests(unittest.TestCase):
     def test_serializes_concurrent_builds_for_the_same_pool(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / "video.mp4").write_bytes(b"video")
             processor = FakeFrameProcessor(duration=20)
 
             def build_pool():

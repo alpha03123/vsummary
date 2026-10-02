@@ -1402,7 +1402,7 @@ def get_video_generation_status(
     snapshot = job_repository.latest_for_resource(
         workspace_id=container.workspace_id,
         resource_id=video_id,
-        operations=("generate_summary", "generate_transcript"),
+        operations=("generate_summary", "generate_transcript", "process_agent_video"),
     )
     if snapshot is not None:
         event = job_repository.latest_event(snapshot.id, workspace_id=container.workspace_id)
