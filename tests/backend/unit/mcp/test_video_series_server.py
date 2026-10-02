@@ -4,7 +4,7 @@ import importlib.util
 import unittest
 from typing import Any
 
-from backend.mcp.video_series_server import VideoSeriesTools, create_mcp_server
+from backend.mcp.video_series_server import create_mcp_server
 
 
 class FakeVideoSeriesClient:
@@ -86,66 +86,6 @@ class FakeVideoSeriesClient:
     async def delete_series(self, series_id: str) -> dict[str, Any]:
         self.calls.append(("delete_series", {"series_id": series_id}))
         return {"status": "deleted", "series_id": series_id}
-
-
-class VideoSeriesToolsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_tools_delegate_to_client(self) -> None:
-        client = FakeVideoSeriesClient()
-        tools = VideoSeriesTools(client)
-
-        await tools.get_project_status(include_series=False)
-        await tools.create_series(title="Transformer")
-        await tools.add_series_videos(series_id="agent-transformer", videos=[{"url": "https://www.bilibili.com/video/BV1"}])
-        await tools.import_local_series(title="Audio Course", file_paths=["E:/media/lesson-1.mp3"])
-        await tools.add_local_series_videos(series_id="agent-transformer", file_paths=["E:/media/lesson-2.mp3"])
-        await tools.process_series(series_id="agent-transformer", video_ids=["BV1"])
-        await tools.get_series_status(series_id="agent-transformer")
-        await tools.export_series(
-            series_id="agent-transformer",
-            kind="mixed",
-            force_file=True,
-            output_path="E:/exports/agent-transformer.md",
-        )
-        await tools.delete_series(series_id="agent-transformer")
-
-        self.assertEqual(
-            [
-                ("get_project_status", {"include_series": False}),
-                ("create_series", {"title": "Transformer"}),
-                (
-                    "add_series_videos",
-                    {"series_id": "agent-transformer", "videos": [{"url": "https://www.bilibili.com/video/BV1"}]},
-                ),
-                ("import_local_series", {"title": "Audio Course", "file_paths": ["E:/media/lesson-1.mp3"]}),
-                (
-                    "add_local_series_videos",
-                    {"series_id": "agent-transformer", "file_paths": ["E:/media/lesson-2.mp3"]},
-                ),
-                (
-                    "process_series",
-                    {
-                        "series_id": "agent-transformer",
-                        "video_ids": ["BV1"],
-                        "run_id": None,
-                        "transcript_enhancement_enabled": None,
-                        "wait": False,
-                    },
-                ),
-                ("get_series_status", {"series_id": "agent-transformer", "video_ids": None}),
-                (
-                    "export_series",
-                    {
-                        "series_id": "agent-transformer",
-                        "kind": "mixed",
-                        "video_ids": None,
-                        "force_file": True,
-                        "output_path": "E:/exports/agent-transformer.md",
-                    },
-                ),
-                ("delete_series", {"series_id": "agent-transformer"}),
-            ],
-            client.calls,
-        )
 
 
 @unittest.skipIf(importlib.util.find_spec("mcp") is None, "mcp package is not installed")

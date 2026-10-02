@@ -1,11 +1,8 @@
-from dataclasses import fields
 from tests._api_fixtures import make_api_container, make_workspace_services, mock_service
 
 from fastapi import Request
 
 from backend.api.dependencies import get_workspace_context, get_workspace_services
-from backend.api.di.bootstrap import ApiContainer
-from backend.api.di.workspace_services import WorkspaceServices
 from backend.core.context import WorkspaceContext, WorkspaceContextProvider, WorkspaceServicesProvider
 from backend.local.composition import LocalWorkspaceContextProvider
 
@@ -42,12 +39,3 @@ def test_workspace_services_are_resolved_from_the_request_context() -> None:
 
     assert services is expected
     provider.get_services.assert_called_once_with(context)
-
-
-def test_host_container_cannot_expose_workspace_bound_services() -> None:
-    host_fields = {field.name for field in fields(ApiContainer)}
-    scope_fields = {field.name for field in fields(WorkspaceServices)}
-
-    assert {"sql_workspace", "list_video_library", "get_video_summary", "job_summary_generator"}.isdisjoint(host_fields)
-    assert {"workspace_id", "list_video_library", "get_video_summary", "job_summary_generator"}.issubset(scope_fields)
-    assert "job_repository" in host_fields

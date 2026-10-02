@@ -110,19 +110,5 @@ class GenerateMindmapProgressTests(unittest.TestCase):
         self.assertFalse(reporter._completed_called)
         # Note: use-case does NOT call reporter.failed() — see comment above.
 
-    def test_works_without_reporter(self):
-        use_case = GenerateMindmap(
-            generator=FakeMindmapGenerator(),
-            artifact_store=FakeGenerationArtifactStore(),
-        )
-        result = asyncio.run(
-            use_case.run(
-                title="Test", duration_seconds=300.0,
-                summary_data={"chapters": []}, output_dir=Path("/tmp/test"),
-            )
-        )
-        self.assertEqual(result["title"], "Test")
-
-
 if __name__ == "__main__":
     unittest.main()

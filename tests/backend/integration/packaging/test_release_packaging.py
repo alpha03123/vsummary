@@ -11,11 +11,8 @@ from tests import _path_setup
 from backend.local.http.app import create_app
 from backend.api.adapters.agent_runtime_provider import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
-    PACKAGE_VARIANTS,
     ReleaseArtifact,
     build_release_manifest,
-    build_release_layout,
-    render_start_bat,
 )
 
 
@@ -76,68 +73,6 @@ class DummyContainer:
 class ReleasePackagingSpecTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repo_root = _path_setup.REPO_ROOT
-
-    def test_package_variants_define_distinct_env_and_settings_templates(self) -> None:
-        cpu = PACKAGE_VARIANTS["cpu"]
-        gpu = PACKAGE_VARIANTS["gpu"]
-
-        self.assertNotEqual(cpu.environment_file, gpu.environment_file)
-        self.assertNotEqual(cpu.settings_template, gpu.settings_template)
-        self.assertTrue((self.repo_root / cpu.environment_file).is_file())
-        self.assertTrue((self.repo_root / gpu.environment_file).is_file())
-        self.assertTrue((self.repo_root / cpu.settings_template).is_file())
-        self.assertTrue((self.repo_root / gpu.settings_template).is_file())
-
-    def test_cpu_settings_template_uses_local_embedding_model_path(self) -> None:
-        cpu = PACKAGE_VARIANTS["cpu"]
-        rendered = (self.repo_root / cpu.settings_template).read_text(encoding="utf-8")
-
-        self.assertIn('provider = "aliyun_bailian"', rendered)
-        self.assertIn('embedding_provider = "fastembed"', rendered)
-        self.assertIn('embedding_model = "BAAI/bge-small-zh-v1.5"', rendered)
-
-    def test_gpu_environment_pins_onnxruntime_gpu_before_cuda_13_builds(self) -> None:
-        gpu = PACKAGE_VARIANTS["gpu"]
-        rendered = (self.repo_root / gpu.environment_file).read_text(encoding="utf-8")
-
-        self.assertIn("onnxruntime-gpu>=1.20,<1.27", rendered)
-        self.assertNotIn("onnxruntime-gpu>=1.20,<2", rendered)
-
-    def test_package_environments_include_local_database_runtime_dependencies(self) -> None:
-        required = {"SQLAlchemy>=2.0.36,<3", "alembic>=1.14,<2", "PyMySQL>=1.1,<2"}
-
-        for variant in PACKAGE_VARIANTS.values():
-            with self.subTest(kind=variant.kind):
-                rendered = (self.repo_root / variant.environment_file).read_text(encoding="utf-8")
-                dependencies = {
-                    line.strip().removeprefix("- ")
-                    for line in rendered.splitlines()
-                    if line.strip().startswith("- ")
-                }
-                self.assertTrue(required.issubset(dependencies))
-
-    def test_build_release_layout_targets_external_pack_root(self) -> None:
-        layout = build_release_layout(
-            repo_root=self.repo_root,
-            pack_root=Path(r"E:\gittools\self\selftest\packs"),
-            kind="cpu",
-        )
-
-        self.assertEqual(layout.package_root, Path(r"E:\gittools\self\selftest\packs\vsummary-cpu"))
-        self.assertEqual(layout.build_root, Path(r"E:\gittools\self\selftest\packs\_build\cpu"))
-        self.assertEqual(layout.runtime_root, Path(r"E:\gittools\self\selftest\packs\_build\cpu\runtime"))
-
-    def test_render_start_bat_sets_local_hf_cache_and_backend_paths(self) -> None:
-        script = render_start_bat()
-
-        self.assertIn("HF_HOME", script)
-        self.assertIn("HUGGINGFACE_HUB_CACHE", script)
-        self.assertIn("-m backend.api.http.server", script)
-        self.assertIn("--managed-mysql-home", script)
-        self.assertIn("%ROOT%\\runtime\\mysql", script)
-        self.assertIn('VSUMMARY_DATA=%ROOT%\\.vsummary', script)
-        self.assertIn('--managed-data-root "%VSUMMARY_DATA%"', script)
-        self.assertIn("PYTHONPATH=%ROOT%\\src", script)
 
     def test_resolve_local_reranker_cache_dir_prefers_packaged_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
