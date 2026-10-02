@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
-from backend.video_summary.library.models import VideoSummaryDTO
+import math
+
+from markdown_it import MarkdownIt
+
 from backend.video_summary.library.note_images import parse_note_image_markers
+
+
+AI_SUMMARY_SECTION_HEADING_LEVEL = 2
+_MARKDOWN_PARSER = MarkdownIt("commonmark")
+
+
+class AiSummaryImageCoverageError(ValueError):
+    """AI 概括的有效图片数未达到按章节计算的最低目标。"""
 
 
 def _split_note_title(content: str, *, fallback: str) -> tuple[str, str]:
@@ -32,7 +43,6 @@ def _split_note_title(content: str, *, fallback: str) -> tuple[str, str]:
 def constrain_ai_note_image_markers(
     content: str,
     *,
-    summary: VideoSummaryDTO | None,
     duration_seconds: float,
     enabled: bool,
     max_images: int,
@@ -43,6 +53,7 @@ def constrain_ai_note_image_markers(
     if not enabled:
         return _filter_markers(content, set())
     accepted: set[tuple[int, int]] = set()
+    accepted_timestamps: list[float] = []
     kept: set[tuple[int, int]] = set()
     for marker in markers:
         # 超时长标记仍保留在正文中，由前端呈现不可用占位；它不消耗图片配额。
@@ -51,20 +62,49 @@ def constrain_ai_note_image_markers(
             continue
         if len(accepted) >= max_images:
             continue
-        chapter = _find_chapter(summary, marker.seconds)
-        if chapter is None:
-            # 章节间缝隙不是用户或模型的错误，保留该时刻并正常抽帧。
-            accepted.add((marker.start, marker.end))
-            continue
-        start, end, overview_timestamps = chapter
-        short_chapter = end - start < min_gap_seconds * 2
-        if any(
-            marker.seconds == timestamp if short_chapter else abs(marker.seconds - timestamp) < min_gap_seconds
-            for timestamp in overview_timestamps
-        ):
+        if any(abs(marker.seconds - timestamp) < min_gap_seconds for timestamp in accepted_timestamps):
             continue
         accepted.add((marker.start, marker.end))
+        accepted_timestamps.append(marker.seconds)
     return _filter_markers(content, accepted | kept)
+
+
+def validate_ai_summary_image_coverage(
+    content: str,
+    *,
+    duration_seconds: float,
+    enabled: bool,
+    max_images: int,
+) -> None:
+    """确保自动配图覆盖足够多的 AI 概括章节。"""
+
+    if not enabled:
+        return
+    chapter_count = count_ai_summary_sections(content)
+    required_count = min(max_images, math.ceil(chapter_count * 0.9))
+    if required_count == 0:
+        return
+    valid_timestamps = {
+        round(marker.seconds, 3)
+        for marker in parse_note_image_markers(content)
+        if marker.seconds <= duration_seconds
+    }
+    actual_count = len(valid_timestamps)
+    if actual_count < required_count:
+        raise AiSummaryImageCoverageError(
+            f"自动配图覆盖不足：概括有 {chapter_count} 个有效章节，"
+            f"至少需要 {required_count} 张有效图片，当前只有 {actual_count} 张。"
+        )
+
+
+def count_ai_summary_sections(content: str) -> int:
+    """统计 AI 概括的一级章节，与前端大纲中的二级标题语义一致。"""
+
+    return sum(
+        1
+        for token in _MARKDOWN_PARSER.parse(content)
+        if token.type == "heading_open" and token.tag == f"h{AI_SUMMARY_SECTION_HEADING_LEVEL}"
+    )
 
 
 def _filter_markers(content: str, accepted: set[tuple[int, int]]) -> str:
@@ -83,32 +123,4 @@ def _filter_markers(content: str, accepted: set[tuple[int, int]]) -> str:
     return "".join(parts)
 
 
-def _overview_timestamps_by_chapter(summary: VideoSummaryDTO | None) -> dict[str, list[float]]:
-    result: dict[str, list[float]] = {}
-    if summary is None:
-        return result
-    chapters = summary.summary.get("chapters")
-    if not isinstance(chapters, list):
-        return result
-    for chapter in chapters:
-        if isinstance(chapter, dict) and isinstance(chapter.get("id"), str) and isinstance(chapter.get("image_timestamp_seconds"), (int, float)):
-            result.setdefault(chapter["id"], []).append(float(chapter["image_timestamp_seconds"]))
-    return result
-
-
-def _find_chapter(summary: VideoSummaryDTO | None, seconds: float):
-    if summary is None:
-        return None
-    chapters = summary.summary.get("chapters")
-    if not isinstance(chapters, list):
-        return None
-    timestamps_by_chapter = _overview_timestamps_by_chapter(summary)
-    for chapter in chapters:
-        if not isinstance(chapter, dict):
-            continue
-        start = chapter.get("start_seconds")
-        end = chapter.get("end_seconds")
-        chapter_id = chapter.get("id")
-        if isinstance(start, (int, float)) and isinstance(end, (int, float)) and isinstance(chapter_id, str) and start <= seconds <= end:
-            return float(start), float(end), timestamps_by_chapter.get(chapter_id, [])
     return None

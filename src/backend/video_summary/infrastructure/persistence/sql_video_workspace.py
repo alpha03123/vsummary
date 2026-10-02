@@ -421,10 +421,10 @@ class SqlVideoWorkspace:
             for item in series.videos:
                 external_source_id = item.video_id
                 existing_video = session.execute(
-                text("""SELECT v.id FROM videos v JOIN series s ON s.id=v.series_id
-                    WHERE v.series_id=:series AND s.workspace_id=:workspace AND v.external_source_id=:external AND v.deleted_at IS NULL"""),
+                text("""SELECT v.id,v.deleted_at FROM videos v JOIN series s ON s.id=v.series_id
+                    WHERE v.series_id=:series AND s.workspace_id=:workspace AND v.external_source_id=:external"""),
                     {"series": series.series_id, "workspace": workspace_id, "external": external_source_id},
-                ).scalar()
+                ).mappings().first()
                 if existing_video is None:
                     session.add(
                         Video(
@@ -436,10 +436,19 @@ class SqlVideoWorkspace:
                             duration_ms=item.duration_seconds * 1000,
                         )
                     )
+                elif existing_video["deleted_at"] is not None:
+                    _clear_deleted_video_content(session, video_id=existing_video["id"])
+                    session.execute(
+                        text("""UPDATE videos
+                            SET deleted_at=NULL,title=:title,source_kind=:kind,duration_ms=:duration,
+                                content_version=0,row_version=row_version+1,updated_at=NOW()
+                            WHERE id=:id"""),
+                        {"id": existing_video["id"], "title": item.title, "kind": item.provider, "duration": item.duration_seconds * 1000},
+                    )
                 else:
                     session.execute(
                         text("UPDATE videos SET title=:title,source_kind=:kind,duration_ms=:duration,row_version=row_version+1,updated_at=NOW() WHERE id=:id"),
-                        {"id": existing_video, "title": item.title, "kind": item.provider, "duration": item.duration_seconds * 1000},
+                        {"id": existing_video["id"], "title": item.title, "kind": item.provider, "duration": item.duration_seconds * 1000},
                     )
             payload = {"cover_url": series.cover_url, "source_url": series.source_url, "is_agent_managed": series.is_agent_managed, "videos": [item.__dict__ for item in series.videos]}
             session.execute(text("INSERT INTO linked_series_metadata (series_id,payload,created_at,updated_at) VALUES (:series,CAST(:payload AS JSON),NOW(),NOW()) ON DUPLICATE KEY UPDATE payload=VALUES(payload),updated_at=NOW()"), {"series": series.series_id, "payload": json.dumps(payload, ensure_ascii=False)})
@@ -927,6 +936,29 @@ def _chapters_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def _clear_deleted_video_content(session: Session, *, video_id: str) -> None:
+    """清除软删除视频的遗留内容，使重新导入从未下载状态开始。"""
+
+    for table in (
+        "ai_summary_visual_evidence",
+        "ai_summaries",
+        "notes",
+        "mindmaps",
+        "knowledge_cards",
+        "knowledge_card_sets",
+        "summary_chapters",
+        "summaries",
+        "transcript_segments",
+        "transcripts",
+        "video_content_state",
+        "job_content_staging",
+        "external_media_references",
+        "media_objects",
+        "artifacts",
+    ):
+        session.execute(text(f"DELETE FROM {table} WHERE video_id=:video"), {"video": video_id})
 
 
 def _enqueue_outbox_event(

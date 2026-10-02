@@ -222,10 +222,11 @@ class SqlJobRepository:
         stage: str,
         progress: float | None,
         detail: str | None,
+        allow_cancelling: bool = False,
     ) -> None:
         with self._session_factory.begin() as session:
             now = _database_now(session)
-            job = self._owned_job(session, claim, now)
+            job = self._owned_job(session, claim, now, allow_cancelling=allow_cancelling)
             self._append_event(session, job.id, job.status, stage, progress, detail)
 
     def cancel_requested(self, claim: ClaimedJob) -> bool:

@@ -687,6 +687,8 @@ export function workspaceReducer(state, action) {
         library: action.library,
         tools: isCurrentVideo ? action.tools : state.tools,
         toolsLoading: isCurrentVideo ? false : state.toolsLoading,
+        summary: isCurrentVideo ? action.summary : state.summary,
+        summaryLoading: isCurrentVideo ? false : state.summaryLoading,
         aiSummary: isCurrentVideo ? action.aiSummary : state.aiSummary,
         aiSummaryLoading: isCurrentVideo ? false : state.aiSummaryLoading,
         generatingAiSummary: isCurrentVideo ? false : state.generatingAiSummary,

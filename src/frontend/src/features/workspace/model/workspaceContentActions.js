@@ -19,6 +19,7 @@ import {
   restoreAutomaticTranscriptAndGenerateVideoSummary,
   loadWorkspaceLibrary,
   loadVideoSummary,
+  loadVideoAiSummary,
   loadVideoNotes,
   loadVideoKnowledgeCards,
   loadVideoMindmap,
@@ -327,7 +328,21 @@ export function createWorkspaceContentActions({ state, dispatch, selectedVideo }
         });
         if (snapshot.status === "completed") {
           unsubscribe();
-          await reloadWorkspaceLibrary();
+          const [library, summary, aiSummary, tools] = await Promise.all([
+            loadWorkspaceLibrary(),
+            loadVideoSummary(seriesId, videoId),
+            loadVideoAiSummary(seriesId, videoId),
+            loadVideoTools(seriesId, videoId),
+          ]);
+          dispatch({
+            type: "video_generation_content_refreshed",
+            seriesId,
+            videoId,
+            library,
+            summary,
+            aiSummary,
+            tools,
+          });
         }
         if (snapshot.status === "failed" || snapshot.status === "cancelled") {
           unsubscribe();

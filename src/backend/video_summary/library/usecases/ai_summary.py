@@ -81,7 +81,6 @@ class GenerateVideoAiSummary:
         title, content = _split_note_title(generated.content, fallback=transcript.title)
         content = constrain_ai_note_image_markers(
             content,
-            summary=outline,
             duration_seconds=transcript.duration_seconds,
             enabled=generated.note_visual_mode == "screenshots",
             max_images=generated.note_max_images,

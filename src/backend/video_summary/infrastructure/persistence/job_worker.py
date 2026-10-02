@@ -68,7 +68,13 @@ class SqlJobProgressReporter:
         self.update("failed", None, message)
 
     def cancelled(self, detail: str | None = None) -> None:
-        self.update("cancelled", None, detail)
+        self._repository.append_progress(
+            self._claim,
+            stage="cancelled",
+            progress=None,
+            detail=detail,
+            allow_cancelling=True,
+        )
 
     def is_cancel_requested(self) -> bool:
         return self._repository.cancel_requested(self._claim)

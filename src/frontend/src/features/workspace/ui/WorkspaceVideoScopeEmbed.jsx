@@ -136,15 +136,22 @@ export function WorkspaceVideoScopeEmbed() {
     if (!video) {
       if (requestedTargetKeyRef.current !== target.key) {
         requestedTargetKeyRef.current = target.key;
-        controller.onResolveBilibiliInboxVideo(target.sourceUrl).catch((resolveError) => {
-          setError({
-            key: target.key,
-            message: resolveError instanceof Error ? resolveError.message : "导入当前 Bilibili 视频失败。",
+        controller.onResolveBilibiliInboxVideo(target.sourceUrl)
+          .catch((resolveError) => {
+            setError({
+              key: target.key,
+              message: resolveError instanceof Error ? resolveError.message : "导入当前 Bilibili 视频失败。",
+            });
+          })
+          .finally(() => {
+            if (requestedTargetKeyRef.current === target.key) {
+              requestedTargetKeyRef.current = null;
+            }
           });
-        });
       }
       return;
     }
+    requestedTargetKeyRef.current = null;
     if (selectedTargetKeyRef.current !== target.key) {
       selectedTargetKeyRef.current = target.key;
       controller.onSelectVideo(inbox.id, video.id);

@@ -62,6 +62,7 @@ def build_ai_note_prompt(
     outline_text: str = "",
     visual_context: VideoAiNoteVisualContextDTO | None = None,
     note_visual_mode: str = "off",
+    note_max_images: int = 10,
 ) -> str:
     """构建直接生成 AI 笔记时使用的提示词。
 
@@ -88,7 +89,7 @@ def build_ai_note_prompt(
         if outline_text.strip()
         else ""
     )
-    visual_section = _build_visual_section(visual_context, note_visual_mode)
+    visual_section = _build_visual_section(visual_context, note_visual_mode, note_max_images)
     return (
         "你是专业的视频笔记助手，擅长把视频转写整理成内容完整、条理清晰、可以直接复习的 Markdown 笔记。\n"
         "语言：笔记用中文撰写；专有名词、技术术语、品牌名和人名保留原文（通常是英文），不要硬译。\n\n"
@@ -113,7 +114,11 @@ def build_ai_note_prompt(
     )
 
 
-def _build_visual_section(visual_context: VideoAiNoteVisualContextDTO | None, note_visual_mode: str) -> str:
+def _build_visual_section(
+    visual_context: VideoAiNoteVisualContextDTO | None,
+    note_visual_mode: str,
+    note_max_images: int,
+) -> str:
     if visual_context is None:
         return ""
     lines: list[str] = []
@@ -125,8 +130,12 @@ def _build_visual_section(visual_context: VideoAiNoteVisualContextDTO | None, no
         lines.append("视觉证据的 timestamp_seconds 只能从以下真实帧时间中选择：" + ", ".join(f"{value:.3f}" for value in visual_context.evidence_timestamps))
     if note_visual_mode == "screenshots":
         lines.append(
-            "\n自动配图已启用：可在适合的位置单独一行写 [[IMG:mm:ss]]（也可写秒数，如 [[IMG:51.0]]）。"
-            "图片会在保存时由系统抽取；不要描述这张新图片的内容，也不要写“如下图所示”。"
+            "\n自动配图已启用：不要吝啬使用图片。根据你最终写出的 `## 1.`、`## 2.` 等编号章节，"
+            f"至少为 min({note_max_images}, ceil(有效章节数 × 0.9)) 个章节各放一张图，且总数不得超过 {note_max_images} 张。"
+            "优先让不同章节各有一张代表画面；遇到代码演示、架构图、流程图、界面操作或前后对比等确实有价值的画面时，"
+            "可在同一章节额外插图。图片标记必须单独成行，格式为 [[IMG:mm:ss]]（也可写秒数，如 [[IMG:51.0]]）；"
+            "选择转写中真实、能代表所在章节的不同时间点。图片会在保存时由系统抽取；"
+            "不要描述这张新图片的内容，也不要写“如下图所示”。"
         )
     else:
         lines.append("\n自动配图未启用：不要输出 [[IMG:...]] 标记。")

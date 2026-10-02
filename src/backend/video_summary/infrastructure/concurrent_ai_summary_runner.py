@@ -113,7 +113,6 @@ class ConcurrentAiSummaryRunner:
         title, content = _split_note_title(generated.content, fallback=video.title)
         content = constrain_ai_note_image_markers(
             content,
-            summary=None,
             duration_seconds=video.duration_seconds,
             enabled=generated.note_visual_mode == "screenshots",
             max_images=generated.note_max_images,

@@ -24,6 +24,7 @@ dependencies = [
     "llama-index-core>=0.12,<1",
     "llama-index-vector-stores-lancedb>=0.4,<1",
     "litellm==1.74.0",
+    "markdown-it-py>=3,<4",
     "mcp>=1.9,<2",
     "opencc-python-reimplemented>=0.1,<1",
     "pandas>=2.2,<3",
