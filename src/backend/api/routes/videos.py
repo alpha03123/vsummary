@@ -241,6 +241,17 @@ def export_video_summary_markdown(series_id: str, video_id: str, container: Work
     return _markdown_response(render_markdown(summary.summary), _export_filename(video_id, "summary"))
 
 
+@router.get("/api/videos/{series_id}/{video_id}/exports/ai-summary.md")
+def export_video_ai_summary_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
+    """导出当前可编辑的 AI 概括 Markdown 文件。"""
+    _ensure_video_exists(container, series_id, video_id)
+    summary = container.get_video_ai_summary.run(series_id, video_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"ai summary not found for video '{series_id}/{video_id}'")
+    markdown = f"# {summary.title.strip()}\n\n{summary.content.strip()}\n"
+    return _markdown_response(markdown, _export_filename(video_id, "ai-summary"))
+
+
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary-with-screenshots.zip")
 def export_video_summary_with_screenshots(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """导出概况 Markdown 与章节截图，保持相对图片链接可离线读取。"""

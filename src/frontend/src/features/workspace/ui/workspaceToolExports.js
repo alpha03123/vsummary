@@ -27,6 +27,14 @@ export function buildWorkspaceToolExportActions({ activeSeries, notes, summary, 
       { href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"), enabled: overviewGenerated, label: "混合导出", disabledReason: "AI 概况生成后才能导出" },
     ];
   }
+  if (toolId === "ai-summary") {
+    return [{
+      href: videoExportUrl(activeSeries.id, selectedVideo.id, "ai-summary"),
+      enabled: tools?.aiSummary?.generated === true,
+      label: "AI 概括导出",
+      disabledReason: "AI 概括生成后才能导出",
+    }];
+  }
   if (toolId === "knowledge-cards") {
     return [{ href: videoExportUrl(activeSeries.id, selectedVideo.id, "knowledge-cards"), enabled: tools?.knowledgeCards?.generated === true, label: "知识卡片导出", disabledReason: "知识卡片生成后才能导出" }];
   }
