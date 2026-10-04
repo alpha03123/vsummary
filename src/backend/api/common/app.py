@@ -20,6 +20,8 @@ from backend.api.routes.jobs import router as jobs_router
 from backend.api.routes.linked import router as linked_router
 from backend.api.routes.videos import router as videos_router
 from backend.core.request_context import bind_workspace_context
+from backend.core.context import WorkspaceContext
+from backend.core.concurrency import bind_request_limiter
 from backend.shared.observability import bind_request_id, close_application_logging, configure_application_logging
 
 
@@ -29,24 +31,17 @@ LOGGER = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     mcp_server = getattr(app.state, "mcp_server", None)
-    job_worker = getattr(getattr(app.state, "container", None), "job_worker", None)
-    outbox_worker = getattr(getattr(app.state, "container", None), "outbox_worker", None)
     try:
-        if job_worker is not None:
-            job_worker.start()
-        if outbox_worker is not None:
-            outbox_worker.start()
         if mcp_server is None:
             yield
         else:
             async with mcp_server.session_manager.run():
                 yield
     finally:
-        if outbox_worker is not None:
-            outbox_worker.stop()
-        if job_worker is not None:
-            job_worker.stop()
         root_dir = getattr(getattr(app.state, "container", None), "root_dir", None)
+        client = getattr(getattr(app.state, "container", None), "model_http_client", None)
+        if client is not None:
+            client.close()
         if root_dir is not None:
             close_application_logging(root_dir)
 
@@ -81,11 +76,13 @@ def create_app(container: ApiContainer) -> FastAPI:
         request.state.request_id = request_id
         container = getattr(request.app.state, "container", None)
         context_provider = getattr(container, "context_provider", None)
-        context = context_provider.get_context(request_id=request_id) if context_provider is not None else None
+        context = getattr(request.state, "workspace_context", None)
+        if not isinstance(context, WorkspaceContext):
+            context = context_provider.get_context(request_id=request_id) if context_provider is not None else None
         if context is not None:
             request.state.workspace_context = context
         started_at = time.perf_counter()
-        with bind_request_id(request_id), bind_workspace_context(context) if context is not None else _null_context():
+        with bind_request_id(request_id), bind_request_limiter(getattr(container, "request_limiter", None)), bind_workspace_context(context) if context is not None else _null_context():
             try:
                 response = await call_next(request)
             except Exception:

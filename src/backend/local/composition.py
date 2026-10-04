@@ -60,7 +60,7 @@ def build_local_container(root_dir: Path, *, workspace: Any):
     """Compose Core services with the Local-only identity and policy adapters."""
 
     from backend.api.di.bootstrap import build_api_container
-    from backend.core.quota import LocalUnlimitedQuotaGuard, LocalUsageMeter
+    from backend.core.quota import UnlimitedQuotaGuard, NoopUsageMeter
 
     services_provider = LocalWorkspaceServicesProvider(workspace_id=workspace.workspace_id)
     container, services = build_api_container(
@@ -68,8 +68,8 @@ def build_local_container(root_dir: Path, *, workspace: Any):
         workspace_override=workspace,
         context_provider=LocalWorkspaceContextProvider(workspace_id=workspace.workspace_id),
         workspace_services_provider=services_provider,
-        quota_guard=LocalUnlimitedQuotaGuard(),
-        usage_meter=LocalUsageMeter(),
+        quota_guard=UnlimitedQuotaGuard(),
+        usage_meter=NoopUsageMeter(),
         capabilities=CapabilitySet(local_file_picker=True, model_download=True),
     )
     services_provider.install_services(services)

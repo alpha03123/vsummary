@@ -21,7 +21,13 @@ def get_job(job_id: str, job_repository: JobRepositoryDep, context: WorkspaceCon
     snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="job not found")
-    return _snapshot_payload(snapshot)
+    payload = _snapshot_payload(snapshot)
+    if snapshot.operation == "generate_series_batch":
+        children = job_repository.children(job_id, workspace_id=context.workspace_id)
+        payload["children"] = [_snapshot_payload(child) for child in children]
+        payload["dispatch_complete"] = snapshot.status == "succeeded"
+        payload["batch_complete"] = snapshot.status in _TERMINAL_STATUSES and all(child.status in _TERMINAL_STATUSES for child in children)
+    return payload
 
 
 @router.post("/api/jobs/{job_id}/cancel")

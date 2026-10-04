@@ -54,13 +54,13 @@ class SqlOutboxRepository:
     def claim_batch(
         self,
         *,
-        workspace_id: str,
+        workspace_id: str | None,
         worker_id: str,
         lease_seconds: int,
         max_attempts: int,
         limit: int = 25,
     ) -> list[ClaimedOutboxEvent]:
-        if not workspace_id.strip() or not worker_id.strip() or lease_seconds < 1 or max_attempts < 1 or limit < 1:
+        if (workspace_id is not None and not workspace_id.strip()) or not worker_id.strip() or lease_seconds < 1 or max_attempts < 1 or limit < 1:
             raise ValueError("workspace_id, worker_id, and positive lease_seconds, max_attempts, and limit are required.")
         with self._sessions.begin() as session:
             now = _database_now(session)
@@ -68,7 +68,7 @@ class SqlOutboxRepository:
             events = session.scalars(
                 select(OutboxEvent)
                 .where(
-                    OutboxEvent.workspace_id == workspace_id,
+                    (OutboxEvent.workspace_id == workspace_id) if workspace_id is not None else True,
                     OutboxEvent.delivered_at.is_(None),
                     OutboxEvent.dead_lettered_at.is_(None),
                     OutboxEvent.attempt_count < max_attempts,

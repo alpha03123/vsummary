@@ -43,8 +43,8 @@ class UsageMeter(Protocol):
     def record(self, context: WorkspaceContext, usage: UsageRecord) -> None: ...
 
 
-class LocalUnlimitedQuotaGuard:
-    """Explicit unlimited policy for the single-user Local product."""
+class UnlimitedQuotaGuard:
+    """Explicit unlimited policy for hosts that do not impose billing quotas."""
 
     def reserve_job(
         self,
@@ -56,7 +56,7 @@ class LocalUnlimitedQuotaGuard:
         del context, operation, estimate
         if not idempotency_key.strip():
             raise ValueError("idempotency_key is required.")
-        return QuotaReservation(id=f"local:{idempotency_key}")
+        return QuotaReservation(id=f"unlimited:{idempotency_key}")
 
     def settle(self, reservation_id: str, actual: UsageRecord) -> None:
         del reservation_id, actual
@@ -65,8 +65,8 @@ class LocalUnlimitedQuotaGuard:
         del reservation_id, reason
 
 
-class LocalUsageMeter:
-    """Local intentionally does not impose metering while retaining the contract."""
+class NoopUsageMeter:
+    """Explicit host policy that does not record additional quota units."""
 
     def record(self, context: WorkspaceContext, usage: UsageRecord) -> None:
         del context, usage

@@ -22,6 +22,7 @@ import json
 from threading import Lock
 from typing import Any, TypeVar
 
+from backend.core.concurrency import limited_completion, limited_async_completion
 from pydantic import BaseModel
 
 from backend.shared.llm.chat_stream import ChatCompletionStreamChunk
@@ -116,8 +117,8 @@ class LiteLLMCompletionGateway:
                 self._reasoning_effort or "",
             ]
         )
-        self._completion = completion_fn or _load_litellm_completion()
-        self._acompletion = acompletion_fn or _load_litellm_acompletion()
+        self._completion = limited_completion(completion_fn or _load_litellm_completion())
+        self._acompletion = limited_async_completion(acompletion_fn or _load_litellm_acompletion())
         self._usage_recorder = usage_recorder
         self._usage_category = usage_category
 

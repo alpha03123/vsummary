@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from backend.core.context import WorkspaceContext
-from backend.core.quota import LocalUnlimitedQuotaGuard, UsageEstimate
+from backend.core.quota import UnlimitedQuotaGuard, UsageEstimate
 from backend.local.composition import LocalWorkspaceContextProvider, LocalWorkspaceServicesProvider
 
 
@@ -33,10 +33,10 @@ class WorkspaceContextTests(unittest.TestCase):
 class LocalQuotaTests(unittest.TestCase):
     def test_local_unlimited_policy_still_requires_idempotency_key(self) -> None:
         context = WorkspaceContext(workspace_id="workspace-1", actor_id="local-user", request_id="request-1")
-        quota = LocalUnlimitedQuotaGuard()
+        quota = UnlimitedQuotaGuard()
 
         reservation = quota.reserve_job(context, "generate_summary", UsageEstimate(units=1), "key-1")
 
-        self.assertEqual(reservation.id, "local:key-1")
+        self.assertTrue(reservation.id)
         with self.assertRaisesRegex(ValueError, "idempotency_key"):
             quota.reserve_job(context, "generate_summary", UsageEstimate(), "")

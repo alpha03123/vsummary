@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from backend.core.concurrency import limited_completion
+
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -71,7 +73,7 @@ class LiteLLMNativeWebSearchGateway:
         self._base_url = resolve_openai_compatible_api_base_url(base_url)
         self._api_key = normalized_api_key
         self._search_context_size = search_context_size.strip() or "medium"
-        self._completion = completion_fn or _load_litellm_completion()
+        self._completion = limited_completion(completion_fn or _load_litellm_completion())
 
     def search(self, query: str, *, max_results: int, timeout_seconds: int) -> list[dict[str, object]]:
         """执行一次联网搜索并返回可引用结果列表。

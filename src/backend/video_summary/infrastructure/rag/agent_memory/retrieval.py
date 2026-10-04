@@ -101,6 +101,9 @@ class SeriesRetrievalService:
         reranker=None,
         rerank_enabled: bool | None = None,
         root_dir: Path | None = None,
+        schedule_refresh=None,
+        index_location=None,
+        model_http_client=None,
     ) -> None:
         """注入工作区读取端口、数据库 URI、embedding/重排序模型与配置目录。
 
@@ -113,10 +116,18 @@ class SeriesRetrievalService:
             rerank_enabled: 重排序开关显式覆盖；为 `None` 时读 settings.toml 默认值。
             root_dir: 项目根目录；为 `None` 时使用默认 embedding 与默认运行时设置。
         """
+        self._index_location = index_location
+        self._schedule_refresh = schedule_refresh
         self._workspace = workspace
         self._db_uri = db_uri
         self._root_dir = root_dir
-        self._embed_model = embed_model or _build_default_embed_model(root_dir)
+        if root_dir is None:
+            self._embedding_profile = {"model": str(getattr(embed_model, "model_name", "mock"))}
+        else:
+            profile = load_settings(root_dir / "config" / "settings.toml", root_dir).agent_retrieval
+            self._embedding_profile = {"provider": profile.embedding_provider, "model": profile.embedding_model,
+                "endpoint": profile.embedding_endpoint, "dimensions": profile.embedding_dimensions}
+        self._embed_model = embed_model or _build_default_embed_model(root_dir, model_http_client)
         self._reranker = reranker
         self._rerank_enabled_override = rerank_enabled
         self._index: VectorStoreIndex | None = None
@@ -356,6 +367,25 @@ class SeriesRetrievalService:
         return self._rebuild_index()
 
     def _require_index(self, series_id: str) -> VectorStoreIndex:
+        if self._schedule_refresh is not None:
+            location = self._index_location() if self._index_location is not None else self._db_uri
+            if location is None:
+                self._schedule_refresh()
+                raise RuntimeError("RAG index is not ready; refresh has been queued.")
+            self._db_uri = str(location)
+            profile_path = Path(self._db_uri) / "embedding-profile.json"
+            if not profile_path.exists() or json.loads(profile_path.read_text(encoding="utf-8")) != self._embedding_profile:
+                self._schedule_refresh()
+                raise RuntimeError("RAG embedding profile changed; index refresh has been queued.")
+            loaded = self._try_load_existing_index()
+            if loaded is None:
+                self._schedule_refresh()
+                raise RuntimeError("RAG index is not ready; refresh has been queued.")
+            self._index = loaded
+            self._series_signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
+            if self._is_series_signature_stale(series_id):
+                self._schedule_refresh()
+            return loaded
         """保证检索时可拿到一个已加载索引；若 signature 过陈旧则异步刷新该系列。
 
         任何路径下若表与索引都不可用，最终会抛 `RuntimeError` 提示先做刷新。
@@ -399,6 +429,9 @@ class SeriesRetrievalService:
         )
         self._series_signatures = signatures
         _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
+        profile_path = Path(self._db_uri) / "embedding-profile.json"
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(json.dumps(self._embedding_profile, sort_keys=True), encoding="utf-8")
         return self._index
 
     def _append_documents(self, documents: list[RetrievalDocument]) -> None:
@@ -598,7 +631,7 @@ class MetaStateReader:
         }
 
 
-def _build_default_embed_model(root_dir: Path | None):
+def _build_default_embed_model(root_dir: Path | None, model_http_client=None):
     """根据 `root_dir` 构造默认 embedding 模型。
 
     `root_dir` 为 `None` 时返回 32 维 `MockEmbedding`（便于无配置环境快速启动）；
@@ -611,6 +644,7 @@ def _build_default_embed_model(root_dir: Path | None):
     return _build_embed_model_from_settings(
         retrieval_settings=settings.agent_retrieval,
         cache_dir=root_dir / "data" / "models" / "fastembed",
+        model_http_client=model_http_client,
     )
 
 
@@ -618,11 +652,18 @@ def _build_embed_model_from_settings(
     *,
     retrieval_settings: AgentRetrievalSettings,
     cache_dir: Path | None = None,
+    model_http_client=None,
 ):
     """把 settings 里的 `AgentRetrievalSettings` 转成实际 embedding 模型。
 
     当前仅支持 `fastembed` provider；其他 provider 抛 `ValueError`。
     """
+    if retrieval_settings.embedding_provider == "openai_compatible":
+        from backend.video_summary.infrastructure.rag.agent_memory.api_models import ApiEmbedding, ModelApiSettings
+        return ApiEmbedding(ModelApiSettings(retrieval_settings.embedding_endpoint,
+            retrieval_settings.embedding_model, retrieval_settings.embedding_api_key,
+            retrieval_settings.api_timeout_seconds, retrieval_settings.embedding_dimensions),
+            batch_size=retrieval_settings.embedding_batch_size, client=model_http_client)
     if retrieval_settings.embedding_provider == "fastembed":
         return build_fastembed_embedding(
             model_name=retrieval_settings.embedding_model,

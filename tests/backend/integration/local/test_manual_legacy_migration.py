@@ -12,7 +12,7 @@ from sqlalchemy import bindparam, select, text
 
 from tests import _path_setup  # noqa: F401
 from backend.local.legacy_migration import LegacyMigrationService
-from backend.local.persistence.file_blob_store import FileBlobStore
+from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
 from backend.core.ids import new_ulid
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
 from backend.video_summary.infrastructure.persistence.database import DatabaseOptions, create_session_factory

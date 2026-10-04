@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from backend.api.common.app import lifespan as core_lifespan
+
 from backend.api.common.app import create_app as create_common_app
 from backend.api.di.bootstrap import ApiContainer
 from backend.api.http.static_assets import mount_frontend_dist
@@ -16,7 +19,19 @@ from backend.mcp.video_series_server import install_mcp_http_endpoint
 def create_app(container: ApiContainer):
     """Build the Local application with Local-only routes and MCP endpoint."""
 
+    @asynccontextmanager
+    async def local_lifespan(app):
+        container.job_worker.start()
+        container.outbox_worker.start()
+        try:
+            async with core_lifespan(app):
+                yield
+        finally:
+            container.outbox_worker.stop()
+            container.job_worker.stop()
+
     application = create_common_app(container)
+    application.router.lifespan_context = local_lifespan
     application.include_router(settings_router)
     application.include_router(cookie_login_router)
     application.include_router(local_import_router)

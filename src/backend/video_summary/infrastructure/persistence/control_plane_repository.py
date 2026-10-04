@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.ids import new_ulid
+from backend.video_summary.infrastructure.persistence.execution_context import current_execution_claim, require_execution_lease
 from backend.video_summary.infrastructure.persistence.models import (
     IdempotencyKey,
     Job,
@@ -291,6 +292,9 @@ class SqlControlPlaneRepository:
         job_id = new_ulid()
         try:
             with self._session_factory.begin() as session:
+                claim = current_execution_claim()
+                if claim is not None:
+                    require_execution_lease(session, workspace_id)
                 existing = self._find_idempotent_job(
                     session,
                     scope_id=idempotency_scope_id,
@@ -300,9 +304,11 @@ class SqlControlPlaneRepository:
                 if existing is not None:
                     return existing
                 if parent_job_id is not None:
-                    parent = session.get(Job, parent_job_id)
+                    parent = session.scalar(select(Job).where(Job.id == parent_job_id).with_for_update())
                     if parent is None or parent.workspace_id != workspace_id:
                         raise ValueError("parent_job_id must reference a Job in the same Workspace.")
+                    if parent.cancel_requested_at is not None:
+                        raise ControlPlaneConflictError("Parent batch has been cancelled.")
                 job = Job(
                     id=job_id,
                     workspace_id=workspace_id,
@@ -341,6 +347,13 @@ class SqlControlPlaneRepository:
                     )
             return SubmittedJob(id=job_id, created=True, status="queued")
         except IntegrityError as error:
+            if parent_job_id is not None:
+                with self._session_factory() as session:
+                    child = session.scalar(select(Job).where(Job.parent_job_id == parent_job_id,
+                        Job.workspace_id == workspace_id, Job.resource_type == resource_type,
+                        Job.resource_id == resource_id, Job.operation == operation))
+                    if child is not None and _request_hash(child.request_payload) == request_hash:
+                        return SubmittedJob(id=child.id, created=False, status=child.status)
             if idempotency_scope_id is not None:
                 existing = self._existing_idempotency_result(
                     scope_id=idempotency_scope_id,

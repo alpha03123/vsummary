@@ -310,6 +310,26 @@ class AgentRetrievalSettings:
     embedding_batch_size: int
     max_hits: int
     rerank_enabled: bool
+    embedding_endpoint: str = ""
+    embedding_api_key: str = ""
+    embedding_dimensions: int | None = None
+    api_timeout_seconds: int = 60
+    rerank_provider: str = "fastembed"
+    rerank_endpoint: str = ""
+    rerank_model: str = ""
+    rerank_api_key: str = ""
+
+    def __post_init__(self):
+        from backend.video_summary.infrastructure.rag.agent_memory.api_models import ModelApiSettings
+        if self.embedding_provider == "openai_compatible":
+            if self.embedding_dimensions is None:
+                raise ValueError("API embedding requires embedding_dimensions.")
+            ModelApiSettings(self.embedding_endpoint, self.embedding_model, self.embedding_api_key,
+                self.api_timeout_seconds, self.embedding_dimensions)
+        if self.rerank_provider not in {"fastembed", "api"}:
+            raise ValueError("Unsupported agent_retrieval.rerank_provider.")
+        if self.rerank_enabled and self.rerank_provider == "api":
+            ModelApiSettings(self.rerank_endpoint, self.rerank_model, self.rerank_api_key, self.api_timeout_seconds)
 
 
 @dataclass(frozen=True)
@@ -544,6 +564,7 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         ),
     )
     agent_retrieval_payload = payload.get("agent_retrieval", {})
+    rag_secrets = _load_dotenv(root_dir / ".env")
     agent_retrieval_settings = AgentRetrievalSettings(
         embedding_provider=_normalize_embedding_provider(
             agent_retrieval_payload.get("embedding_provider")
@@ -569,6 +590,14 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
         rerank_enabled=bool(
             agent_retrieval_payload.get("rerank_enabled", DEFAULT_AGENT_RETRIEVAL_RERANK_ENABLED)
         ),
+        embedding_endpoint=str(agent_retrieval_payload.get("embedding_endpoint", "")).strip(),
+        embedding_api_key=rag_secrets.get("EMBEDDING_API_KEY", os.environ.get("EMBEDDING_API_KEY", "")).strip(),
+        embedding_dimensions=_normalize_positive_int(agent_retrieval_payload["embedding_dimensions"], default=1, field_name="embedding_dimensions") if "embedding_dimensions" in agent_retrieval_payload else None,
+        api_timeout_seconds=_normalize_positive_int(agent_retrieval_payload.get("api_timeout_seconds"), default=60, field_name="api_timeout_seconds"),
+        rerank_provider=str(agent_retrieval_payload.get("rerank_provider", "fastembed")).strip(),
+        rerank_endpoint=str(agent_retrieval_payload.get("rerank_endpoint", "")).strip(),
+        rerank_model=str(agent_retrieval_payload.get("rerank_model", "")).strip(),
+        rerank_api_key=rag_secrets.get("RERANK_API_KEY", os.environ.get("RERANK_API_KEY", "")).strip(),
     )
     generation_payload = payload.get("generation", {})
     generation_settings = GenerationConcurrencySettings(
@@ -1211,6 +1240,13 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"max_hits = {settings.agent_retrieval.max_hits}",
         f"rerank_enabled = {_toml_bool(settings.agent_retrieval.rerank_enabled)}",
         "",
+        f"embedding_endpoint = {_toml_string(settings.agent_retrieval.embedding_endpoint)}",
+        *([f"embedding_dimensions = {settings.agent_retrieval.embedding_dimensions}"] if settings.agent_retrieval.embedding_dimensions is not None else []),
+        f"api_timeout_seconds = {settings.agent_retrieval.api_timeout_seconds}",
+        f"rerank_provider = {_toml_string(settings.agent_retrieval.rerank_provider)}",
+        f"rerank_endpoint = {_toml_string(settings.agent_retrieval.rerank_endpoint)}",
+        f"rerank_model = {_toml_string(settings.agent_retrieval.rerank_model)}",
+        "",
         "[generation]",
         f"video_generation_concurrency = {settings.generation.video_generation_concurrency}",
         f"summary_chunk_concurrency = {settings.generation.summary_chunk_concurrency}",
@@ -1335,7 +1371,7 @@ def _normalize_embedding_provider(value: object) -> str:
         value,
         default=DEFAULT_AGENT_RETRIEVAL_EMBEDDING_PROVIDER,
     )
-    if normalized != "fastembed":
+    if normalized not in {"fastembed", "openai_compatible"}:
         raise ValueError(f"Unsupported agent_retrieval.embedding_provider: {normalized}")
     return normalized
 
@@ -1395,7 +1431,7 @@ class EnvSettings:
 
 def load_env_settings(root_dir: Path) -> EnvSettings:
     """从 `.env` 中读取 LLM 相关配置，构造 `EnvSettings`。"""
-    values = _load_dotenv(root_dir / ".env")
+    values = {**os.environ, **_load_dotenv(root_dir / ".env")}
     return EnvSettings(
         provider=_normalize_env_provider(values.get("OPENAI_PROVIDER")),
         base_url=normalize_openai_base_url(values.get("OPENAI_BASE_URL", "").strip()),

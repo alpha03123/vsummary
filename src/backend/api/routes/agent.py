@@ -279,6 +279,8 @@ def _resolve_rag_block_message(context: AgentContext | None, container) -> str |
     """
     if context is None or context.scope_type != ScopeType.SERIES.value:
         return None
+    if container.embedding_provider != "fastembed":
+        return None
     rag_model_manager = container.rag_model_manager
     if rag_model_manager.has_active_download():
         return RAG_MODEL_DOWNLOAD_MESSAGE

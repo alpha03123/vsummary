@@ -23,14 +23,14 @@ class SqlOutboxWorker:
         self,
         *,
         repository: SqlOutboxRepository,
-        workspace_id: str,
+        workspace_id: str | None,
         handlers: dict[str, Callable[[ClaimedOutboxEvent], None]],
         poll_seconds: float = 1.0,
         lease_seconds: int = 60,
         retention_days: int = 14,
         retry_policy: OutboxRetryPolicy = OutboxRetryPolicy(),
     ) -> None:
-        if not workspace_id.strip():
+        if workspace_id is not None and not workspace_id.strip():
             raise ValueError("workspace_id is required.")
         self._repository = repository
         self._workspace_id = workspace_id

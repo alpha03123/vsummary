@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from backend.core.blob_store import BlobStoreError
-from backend.local.persistence.file_blob_store import FileBlobStore
+from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
 
 
 class FileBlobStoreTests(unittest.TestCase):

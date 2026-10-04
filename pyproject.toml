@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vsummary-core"
-version = "0.5.0a6"
+version = "0.5.0a7"
 description = "Public Core contracts and services for VSummary"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ dependencies = [
     "DrissionPage>=4.1,<5",
     "faster-whisper>=1.1,<2",
     "fastapi>=0.115,<1",
+    "filelock>=3.16,<4",
     "huggingface-hub>=0.24,<1",
     "httpx>=0.27,<1",
     "langgraph>=0.3,<1",

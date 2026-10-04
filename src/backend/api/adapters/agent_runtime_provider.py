@@ -35,7 +35,15 @@ class LazyAgentRuntimeProvider:
         session_store,
         rag_model_manager: RagModelManager | None = None,
         usage_recorder: LlmUsageRecorder | None = None,
+        index_dir: Path | None = None,
+        schedule_index_refresh=None,
+        index_generation=None,
+        model_http_client=None,
     ) -> None:
+        self._index_generation = index_generation
+        self._model_http_client = model_http_client
+        self._index_dir = index_dir or root_dir / "data" / "agent_graph" / "lancedb"
+        self._schedule_index_refresh = schedule_index_refresh
         self._root_dir = root_dir
         self._workspace = workspace
         self._rag_model_manager = rag_model_manager
@@ -134,8 +142,9 @@ class LazyAgentRuntimeProvider:
             if self._cached_retrieval_service is not None:
                 self._cached_retrieval_service.invalidate()
 
-    def refresh_workspace_indexes(self) -> None:
-        AgentWorkspaceIndexBuilder(retrieval_service=self._get_or_create_retrieval_service()).refresh()
+    def refresh_workspace_indexes(self, target_dir: Path | None = None) -> None:
+        service = self._get_or_create_retrieval_service() if target_dir is None else self._build_series_retrieval_service(target_dir)
+        AgentWorkspaceIndexBuilder(retrieval_service=service).refresh()
 
     def upsert_workspace_video(self, series_id: str, video_id: str) -> None:
         self._get_or_create_retrieval_service().upsert_video(series_id, video_id)
@@ -170,7 +179,7 @@ class LazyAgentRuntimeProvider:
             return retrieval_service
 
     def _build_lazy_retrieval_service(self):
-        if self._rag_model_manager is None:
+        if self._rag_model_manager is None or load_settings(self._root_dir / "config" / "settings.toml", self._root_dir).agent_retrieval.embedding_provider != "fastembed":
             return self._build_series_retrieval_service()
         return _RagModelAwareRetrievalService(
             rag_model_manager=self._rag_model_manager,
@@ -178,10 +187,13 @@ class LazyAgentRuntimeProvider:
             settings_loader=lambda: load_settings(self._root_dir / "config" / "settings.toml", self._root_dir),
         )
 
-    def _build_series_retrieval_service(self) -> SeriesRetrievalService:
+    def _build_series_retrieval_service(self, target_dir: Path | None = None) -> SeriesRetrievalService:
         return SeriesRetrievalService(
             workspace=self._workspace,
-            db_uri=str(self._root_dir / "data" / "agent_graph" / "lancedb"),
+            db_uri=str(target_dir or self._index_dir),
+            schedule_refresh=self._schedule_index_refresh if target_dir is None else None,
+            index_location=(lambda: self._index_dir / generation if (generation := self._index_generation()) else None) if target_dir is None and self._index_generation is not None else None,
+            model_http_client=self._model_http_client,
             reranker=self._build_reranker(self._resolve_retrieval_device()),
             root_dir=self._root_dir,
         )
@@ -192,7 +204,14 @@ class LazyAgentRuntimeProvider:
             return "cpu"
         return load_settings(settings_path, self._root_dir).agent_retrieval.embedding_device
 
-    def _build_reranker(self, device: str) -> BGEReranker | None:
+    def _build_reranker(self, device: str):
+        settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir).agent_retrieval
+        if not settings.rerank_enabled:
+            return None
+        if settings.rerank_provider == "api":
+            from backend.video_summary.infrastructure.rag.agent_memory.api_models import ApiReranker, ModelApiSettings
+            return ApiReranker(ModelApiSettings(settings.rerank_endpoint, settings.rerank_model,
+                settings.rerank_api_key, settings.api_timeout_seconds), client=self._model_http_client)
         if self._rag_model_manager is not None:
             if not self._rag_model_manager.is_downloaded("reranker"):
                 return None

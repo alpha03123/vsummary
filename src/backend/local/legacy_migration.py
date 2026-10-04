@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.blob_store import BlobReference
 from backend.core.ids import new_ulid
-from backend.local.persistence.file_blob_store import FileBlobStore
+from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
 from backend.local.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
-from backend.video_summary.infrastructure.persistence.models import LegacyImportItem, LegacyMigrationRun, MediaObject, Series
+from backend.video_summary.infrastructure.persistence.models import LegacyMigrationRun, MediaObject, Series
 from backend.video_summary.library.constants import MEDIA_SUFFIXES
 
 

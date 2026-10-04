@@ -9,6 +9,11 @@ from dataclasses import dataclass
 from threading import Event, Thread
 from typing import Protocol
 from uuid import uuid4
+from backend.core.context import WorkspaceContext
+from backend.core.request_context import bind_workspace_context
+from backend.core.concurrency import RequestLimiter, bind_request_limiter, request_slot
+from backend.video_summary.infrastructure.persistence.execution_context import bind_execution_claim, ContentVersionConflictError
+from backend.video_summary.infrastructure.rag.agent_memory.api_models import ModelApiError
 
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.domain.models import ManualTranscriptInput
@@ -39,6 +44,14 @@ class WorkerOptions:
     lease_seconds: int = 60
     heartbeat_seconds: int = 15
     poll_seconds: float = 0.25
+
+    def __post_init__(self):
+        if not self.worker_id.strip() or self.poll_seconds <= 0:
+            raise ValueError("Worker identity and positive polling interval are required.")
+        if not 0 < self.heartbeat_seconds < self.lease_seconds:
+            raise ValueError("Worker heartbeat must be positive and shorter than the lease.")
+        if self.operation_filter is not None and not self.operation_filter:
+            raise ValueError("Worker operation filter must not be empty.")
 
     @classmethod
     def local(cls) -> "WorkerOptions":
@@ -93,10 +106,12 @@ class SqlJobWorker:
         repository: SqlJobRepository,
         get_execution_services: Callable[[str], JobExecutionServices],
         options: WorkerOptions,
+        request_limiter: RequestLimiter | None = None,
     ) -> None:
         self._repository = repository
         self._get_execution_services = get_execution_services
         self._options = options
+        self._request_limiter = request_limiter
         self._stop = Event()
         self._thread: Thread | None = None
 
@@ -115,30 +130,35 @@ class SqlJobWorker:
         self._thread = None
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                claim = self._repository.claim(
-                    worker_id=self._options.worker_id,
-                    lease_seconds=self._options.lease_seconds,
-                    operations=self._options.operation_filter,
-                )
-            except Exception:
-                LOGGER.exception("job claim failed")
-                self._stop.wait(self._options.poll_seconds)
-                continue
-            if claim is None:
-                self._stop.wait(self._options.poll_seconds)
-                continue
-            try:
-                asyncio.run(self._execute(claim))
-            except JobLeaseLostError:
-                LOGGER.warning("job %s lease was lost before the worker could finish", claim.id)
-            except Exception:
-                LOGGER.exception("job %s escaped worker error handling", claim.id)
+        with bind_request_limiter(self._request_limiter):
+            while not self._stop.is_set():
+                try:
+                    with request_slot("jobs"):
+                        if self._stop.is_set():
+                            return
+                        claim = self._repository.claim(worker_id=self._options.worker_id,
+                            lease_seconds=self._options.lease_seconds, operations=self._options.operation_filter)
+                        if claim is not None:
+                            asyncio.run(self._execute(claim))
+                    if claim is None:
+                        self._stop.wait(self._options.poll_seconds)
+                except JobLeaseLostError:
+                    LOGGER.warning("worker execution lease was lost")
+                except Exception:
+                    LOGGER.exception("worker cycle failed")
+                    self._stop.wait(self._options.poll_seconds)
 
     async def _execute(self, claim: ClaimedJob) -> None:
+        identity = claim.request_payload.get("_execution_context", {})
+        context = WorkspaceContext(workspace_id=claim.workspace_id,
+            actor_id=identity.get("actor_id") or "system-worker", request_id=identity.get("request_id") or claim.id)
+        with bind_execution_claim(claim), bind_workspace_context(context), bind_request_limiter(self._request_limiter):
+            await self._execute_owned(claim)
+
+    async def _execute_owned(self, claim: ClaimedJob) -> None:
         reporter = SqlJobProgressReporter(self._repository, claim)
-        heartbeat = asyncio.create_task(self._heartbeat(claim))
+        execution_task = asyncio.current_task()
+        heartbeat = asyncio.create_task(self._heartbeat(claim, execution_task))
         try:
             reporter.raise_if_cancelled()
             services = self._get_execution_services(claim.workspace_id)
@@ -172,7 +192,9 @@ class SqlJobWorker:
             snapshot = self._repository.get(claim.id)
             if snapshot is None:
                 raise JobLeaseLostError("Job disappeared after execution.")
-            if snapshot.status != "succeeded":
+            if snapshot.status == "running" and snapshot.result_content_version is not None:
+                self._repository.succeed(claim, detail="生成内容已保存")
+            elif snapshot.status != "succeeded":
                 if snapshot.cancel_requested:
                     self._repository.mark_cancelled(claim, detail="任务已取消，未发布候选内容")
                 else:
@@ -182,18 +204,29 @@ class SqlJobWorker:
                         failure_detail="Generation completed without publishing content.",
                         retry_delay_seconds=None,
                     )
+        except asyncio.CancelledError:
+            # A heartbeat failure cancels async work. Synchronous work can finish,
+            # but its persistence calls still verify the lease transactionally.
+            if reporter.is_cancel_requested():
+                self._repository.mark_cancelled(claim, detail="任务已取消")
+                return
+            raise JobLeaseLostError("Worker execution was interrupted by lease loss.")
         except GenerateCancelledError:
             self._repository.mark_cancelled(claim, detail="任务已取消，未发布候选内容")
         except JobLeaseLostError:
+            if reporter.is_cancel_requested():
+                self._repository.mark_cancelled(claim, detail="任务已取消")
+                return
             raise
         except Exception as error:
             if reporter.is_cancel_requested():
                 self._repository.mark_cancelled(claim, detail="任务已取消")
                 return
+            LOGGER.exception("job execution failed", extra={"job_id": claim.id, "workspace_id": claim.workspace_id})
             self._repository.fail(
                 claim,
                 failure_code=_failure_code(error),
-                failure_detail=str(error),
+                failure_detail=_public_failure_detail(error),
                 retry_delay_seconds=_retry_delay_seconds(error),
             )
         finally:
@@ -204,7 +237,7 @@ class SqlJobWorker:
             except asyncio.CancelledError:
                 pass
 
-    async def _heartbeat(self, claim: ClaimedJob) -> None:
+    async def _heartbeat(self, claim: ClaimedJob, execution_task: asyncio.Task) -> None:
         while not self._stop.is_set():
             await asyncio.sleep(self._options.heartbeat_seconds)
             try:
@@ -214,20 +247,41 @@ class SqlJobWorker:
                     lease_seconds=self._options.lease_seconds,
                 )
             except JobLeaseLostError:
+                execution_task.cancel()
                 return
             except Exception:
                 LOGGER.exception("job %s heartbeat failed", claim.id)
+                execution_task.cancel()
                 return
 
 
 def _failure_code(error: Exception) -> str:
-    if isinstance(error, (TimeoutError, ConnectionError, OSError)):
+    if isinstance(error, ContentVersionConflictError):
+        return "content_conflict"
+    if isinstance(error, ModelApiError):
+        return error.code
+    if isinstance(error, (ValueError, LookupError)):
+        return "invalid_request"
+    if isinstance(error, (TimeoutError, ConnectionError, OSError)) or getattr(error, "status_code", 0) in {429, 500, 502, 503, 504}:
         return "provider_unavailable"
     return "internal_error"
 
 
+def _public_failure_detail(error: Exception) -> str:
+    code = _failure_code(error)
+    if code == "content_conflict":
+        return "生成期间内容已修改，请基于最新内容重新提交。"
+    if code == "invalid_request":
+        return "任务参数或目标资源无效。"
+    if code.startswith("provider_"):
+        return "模型服务请求失败，请查看任务错误码或服务器日志。"
+    return "任务执行失败，请查看服务器日志。"
+
+
 def _retry_delay_seconds(error: Exception) -> int | None:
-    return 15 if isinstance(error, (TimeoutError, ConnectionError, OSError)) else None
+    if isinstance(error, ModelApiError):
+        return int(error.retry_after or 15) if error.retryable else None
+    return 15 if isinstance(error, (TimeoutError, ConnectionError, OSError)) or getattr(error, "status_code", 0) in {429, 500, 502, 503, 504} else None
 
 
 def _manual_transcript_from_payload(payload: dict[str, object]) -> ManualTranscriptInput | None:

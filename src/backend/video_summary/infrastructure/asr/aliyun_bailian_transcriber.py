@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 import httpx
+from backend.core.concurrency import request_slot
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
@@ -58,13 +59,14 @@ class AliyunBailianTranscriber:
             raise RuntimeError(f"待转写音频不存在：{audio_path}")
 
         output_stem.parent.mkdir(parents=True, exist_ok=True)
-        oss_url = self._upload_audio(audio_path)
-        _report(on_progress, 0.08)
-        task = self._submit_transcription(oss_url)
-        _report(on_progress, 0.12)
-        result = self._wait_transcription(task)
-        _report(on_progress, 0.90)
-        transcript_payload = self._load_transcription_payload(result)
+        with request_slot("asr"):
+            oss_url = self._upload_audio(audio_path)
+            _report(on_progress, 0.08)
+            task = self._submit_transcription(oss_url)
+            _report(on_progress, 0.12)
+            result = self._wait_transcription(task)
+            _report(on_progress, 0.90)
+            transcript_payload = self._load_transcription_payload(result)
         transcript = _parse_transcript_payload(transcript_payload, language=self._language)
         _report(on_progress, 1.0)
         return transcript

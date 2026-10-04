@@ -9,7 +9,7 @@ from unittest.mock import create_autospec
 from backend.api.di import bootstrap as host_types
 from backend.api.di import workspace_services as scope_types
 from backend.core.capabilities import CapabilitySet
-from backend.core.quota import LocalUnlimitedQuotaGuard, LocalUsageMeter
+from backend.core.quota import UnlimitedQuotaGuard, NoopUsageMeter
 from backend.local.composition import LocalWorkspaceContextProvider, LocalWorkspaceServicesProvider
 
 
@@ -91,8 +91,8 @@ def make_api_container(*, services=None, **overrides) -> host_types.ApiContainer
         root_dir=None,
         context_provider=LocalWorkspaceContextProvider(workspace_id=services.workspace_id, actor_id="test-user"),
         workspace_services_provider=provider,
-        quota_guard=LocalUnlimitedQuotaGuard(),
-        usage_meter=LocalUsageMeter(),
+        quota_guard=UnlimitedQuotaGuard(),
+        usage_meter=NoopUsageMeter(),
         capabilities=CapabilitySet(),
         job_repository=mock_service(host_types.SqlJobRepository),
         job_worker=mock_service(host_types.SqlJobWorker),

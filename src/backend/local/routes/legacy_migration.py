@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from backend.api.dependencies import WorkspaceServicesDep
 from backend.api.di.container import ApiContainerDep
 from backend.local.legacy_migration import LegacyMigrationService, select_legacy_directory
-from backend.local.persistence.file_blob_store import FileBlobStore
+from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
 
 
 router = APIRouter()

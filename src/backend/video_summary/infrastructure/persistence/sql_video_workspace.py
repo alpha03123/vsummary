@@ -15,6 +15,7 @@ import json
 import hashlib
 from urllib.parse import quote
 from sqlalchemy import text
+from backend.video_summary.infrastructure.persistence.execution_context import require_execution_lease, observe_video_version, current_execution_claim
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.blob_store import BlobReference, BlobStore, BlobStoreError
@@ -160,6 +161,9 @@ class SqlVideoWorkspace:
                 WHERE v.id=:video AND s.id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
         if row is None:
             return None
+        observe_video_version(video_id, row["content_version"])
+        claim = current_execution_claim()
+        media_root = self._cache_root if claim is None else self._cache_root / "attempts" / claim.id / claim.lease_token
         linked_source = _linked_video_sources(row["linked_payload"]).get(row["external_source_id"])
         source_url = linked_source.source_url if linked_source is not None else ""
         if row["external_path"] is not None:
@@ -167,20 +171,20 @@ class SqlVideoWorkspace:
             if not source_path.is_absolute() or not source_path.is_file():
                 return None
             source_type = "audio" if source_path.suffix.lower() in AUDIO_SUFFIXES else "video"
-            return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=source_path.name, source_type=source_type, source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0, source_url=source_url)
+            return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=source_path.name, source_type=source_type, source_path=source_path, output_dir=media_root / "jobs" / video_id, processed=row["content_version"] > 0, source_url=source_url)
         if row["blob_key"] is None:
             return None
         filename = Path(row["blob_key"]).name
         reference = BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"])
         try:
-            source_path = self._blobs.materialize(reference, task_dir=self._cache_root / "media" / video_id, filename=filename)
+            source_path = self._blobs.materialize(reference, task_dir=media_root / "media" / video_id, filename=filename)
         except BlobStoreError:
             LOGGER.exception(
                 "failed to materialize video source",
                 extra={"series_id": series_id, "video_id": video_id, "blob_key": row["blob_key"]},
             )
             return None
-        return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=filename, source_type=row["source_kind"], source_path=source_path, output_dir=self._cache_root / "jobs" / video_id, processed=row["content_version"] > 0, source_url=source_url)
+        return VideoSourceDTO(series_id=series_id, video_id=video_id, title=row["title"], source_name=filename, source_type=row["source_kind"], source_path=source_path, output_dir=media_root / "jobs" / video_id, processed=row["content_version"] > 0, source_url=source_url)
 
     def get_video_preview_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         """返回可快速起播的预览媒体，必要时为历史媒体补建派生 Blob。"""
@@ -244,14 +248,16 @@ class SqlVideoWorkspace:
         version = row["content_version"] if content_version is None else content_version
         with source_path.open("rb") as stream:
             staged = self._blobs.put_staging(job_id=f"artifact{video_id}", source=stream, content_type="image/jpeg")
-        reference = self._blobs.commit(staged, object_key=f"artifacts/{video_id}/{kind}/{source_path.name}")
+        reference = self._blobs.commit(staged, object_key=f"artifacts/{video_id}/{kind}/{new_ulid()}/{source_path.name}")
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             existing = session.execute(text("SELECT id FROM artifacts WHERE video_id=:video AND kind=:kind AND blob_key=:key"), {"video": video_id, "kind": kind, "key": reference.key}).scalar()
             if existing is None:
                 session.execute(text("INSERT INTO artifacts (id,workspace_id,video_id,content_version,kind,blob_key,sha256,byte_size,media_type,created_at,updated_at) VALUES (:id,:workspace,:video,:version,:kind,:key,:sha,:size,:type,NOW(),NOW())"), {"id": new_ulid(), "workspace": self._workspace_id, "video": video_id, "version": version, "kind": kind, "key": reference.key, "sha": reference.sha256, "size": reference.byte_size, "type": reference.content_type})
 
     def clear_generated_artifacts(self, video_id: str) -> None:
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             rows = session.execute(text("""SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
                 JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
                 WHERE a.video_id=:video AND s.workspace_id=:workspace AND a.kind IN ('screenshot','note_frame')"""), {"video": video_id, "workspace": self._workspace_id}).mappings().all()
@@ -262,7 +268,7 @@ class SqlVideoWorkspace:
 
     def get_video_summary(self, series_id: str, video_id: str) -> VideoSummaryDTO | None:
         with self._sessions() as session:
-            row = session.execute(text("""SELECT su.title, su.payload FROM summaries su JOIN videos v ON v.id=su.video_id
+            row = session.execute(text("""SELECT su.title, su.payload,v.content_version FROM summaries su JOIN videos v ON v.id=su.video_id
                 JOIN series s ON s.id=v.series_id WHERE su.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
             segments = session.execute(
                 text("SELECT start_ms,end_ms,text FROM transcript_segments WHERE video_id=:video ORDER BY ordinal"),
@@ -270,6 +276,7 @@ class SqlVideoWorkspace:
             ).mappings().all() if row is not None else []
         if row is None:
             return None
+        observe_video_version(video_id, row["content_version"])
         transcript_segments = [
             {
                 "start_seconds": segment["start_ms"] / 1000,
@@ -291,11 +298,12 @@ class SqlVideoWorkspace:
 
     def get_video_transcript(self, series_id: str, video_id: str) -> VideoTranscriptDTO | None:
         with self._sessions() as session:
-            header = session.execute(text("""SELECT v.title,t.duration_ms FROM transcripts t JOIN videos v ON v.id=t.video_id
+            header = session.execute(text("""SELECT v.title,v.content_version,t.duration_ms FROM transcripts t JOIN videos v ON v.id=t.video_id
                 JOIN series s ON s.id=v.series_id WHERE t.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
             if header is None:
                 return None
             segments = session.execute(text("SELECT start_ms,end_ms,text FROM transcript_segments WHERE video_id=:video ORDER BY ordinal"), {"video": video_id}).mappings().all()
+        observe_video_version(video_id, header["content_version"])
         return VideoTranscriptDTO(series_id=series_id, video_id=video_id, title=header["title"], duration_seconds=(header["duration_ms"] / 1000 if header["duration_ms"] is not None else None), segments=[TranscriptSegmentDTO(start_seconds=row["start_ms"] / 1000, end_seconds=row["end_ms"] / 1000, text=row["text"]) for row in segments])
 
     def get_video_chapter_cards(self, series_id: str, video_id: str) -> VideoChapterCardsDTO | None:
@@ -333,6 +341,7 @@ class SqlVideoWorkspace:
         if self.get_video_source(series_id, video_id) is None:
             return None
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             session.execute(text("""INSERT INTO ai_summaries (video_id,title,content,citations,status,created_at,updated_at)
                 VALUES (:video,:title,:content,CAST(:citations AS JSON),'ready',NOW(),NOW())
                 ON DUPLICATE KEY UPDATE title=VALUES(title),content=VALUES(content),citations=VALUES(citations),status='ready',updated_at=NOW()"""), {"video": video_id, "title": title.strip(), "content": content.strip(), "citations": json.dumps([item.model_dump(mode="json") for item in citations] if citations else [])})
@@ -347,6 +356,7 @@ class SqlVideoWorkspace:
         if self.get_video_source(series_id, video_id) is None:
             raise ValueError("Video does not exist.")
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             session.execute(text("DELETE FROM ai_summary_visual_evidence WHERE video_id=:video"), {"video": video_id})
             for ordinal, frame in enumerate(frames):
                 session.execute(text("INSERT INTO ai_summary_visual_evidence (id,video_id,ordinal,timestamp_ms,text) VALUES (:id,:video,:ordinal,:timestamp,:text)"), {"id": new_ulid(), "video": video_id, "ordinal": ordinal, "timestamp": round(frame.timestamp_seconds * 1000), "text": frame.text})
@@ -355,6 +365,7 @@ class SqlVideoWorkspace:
         if self.get_video_source(series_id, video_id) is None:
             raise ValueError("Video does not exist.")
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             version = session.execute(text("SELECT content_version FROM videos WHERE id=:video"), {"video": video_id}).scalar_one()
             session.execute(text("""INSERT INTO mindmaps (id,video_id,content_version,title,payload,row_version,created_at,updated_at)
                 VALUES (:id,:video,:version,:title,CAST(:payload AS JSON),1,NOW(),NOW())
@@ -362,6 +373,7 @@ class SqlVideoWorkspace:
 
     def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             exists = session.execute(text("SELECT 1 FROM series WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL"), {"series": series_id, "workspace": self._workspace_id}).scalar()
             if exists is None:
                 raise LookupError("Series does not exist.")
@@ -370,6 +382,7 @@ class SqlVideoWorkspace:
 
     def save_series_mindmap(self, series_id: str, *, mindmap: dict[str, Any]) -> None:
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             title = session.execute(text("SELECT title FROM series WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL"), {"series": series_id, "workspace": self._workspace_id}).scalar_one()
             session.execute(text("""INSERT INTO mindmaps (id,series_id,title,payload,row_version,created_at,updated_at)
                 VALUES (:id,:series,:title,CAST(:payload AS JSON),1,NOW(),NOW())
@@ -412,6 +425,7 @@ class SqlVideoWorkspace:
     def save_linked_series(self, series: LinkedSeries) -> None:
         workspace_id = self._workspace_id
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             existing = session.execute(text("SELECT id FROM series WHERE id=:series AND workspace_id=:workspace"), {"series": series.series_id, "workspace": workspace_id}).scalar()
             if existing is None:
                 position = int(session.execute(text("SELECT COALESCE(MAX(position),-1)+1 FROM series WHERE workspace_id=:workspace"), {"workspace": workspace_id}).scalar_one())
@@ -475,6 +489,7 @@ class SqlVideoWorkspace:
             raise LookupError("Linked video does not exist.")
         self._delete_browser_previews(resolved_video_id)
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             external = session.get(ExternalMediaReference, resolved_video_id)
             if external is not None:
                 external.source_path = str(source_path)
@@ -485,6 +500,7 @@ class SqlVideoWorkspace:
             staged = self._blobs.put_staging(job_id=f"relink{resolved_video_id}", source=stream, content_type="application/octet-stream")
         reference = self._blobs.commit(staged, object_key=f"media/{resolved_video_id}/source{source_path.suffix.lower()}")
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             session.execute(text("DELETE FROM media_objects WHERE video_id=:video"), {"video": resolved_video_id})
             session.add(MediaObject(id=new_ulid(), video_id=resolved_video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))
         self._prepare_browser_preview(resolved_video_id, source_path)
@@ -549,6 +565,7 @@ class SqlVideoWorkspace:
         if not title.strip():
             raise ValueError("Series title is required.")
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             result = session.execute(text("UPDATE series SET title=:title,row_version=row_version+1,updated_at=NOW() WHERE id=:id AND workspace_id=:workspace AND deleted_at IS NULL"), {"id": series_id, "workspace": self._workspace_id, "title": title.strip()})
         return result.rowcount == 1
 
@@ -556,6 +573,7 @@ class SqlVideoWorkspace:
         if not title.strip():
             raise ValueError("Video title is required.")
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             result = session.execute(text("""UPDATE videos SET title=:title,row_version=row_version+1,updated_at=NOW()
                 WHERE id=:video AND series_id=:series AND deleted_at IS NULL AND EXISTS
                 (SELECT 1 FROM series s WHERE s.id=:series AND s.workspace_id=:workspace AND s.deleted_at IS NULL)"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id, "title": title.strip()})
@@ -563,6 +581,7 @@ class SqlVideoWorkspace:
 
     def delete_video(self, series_id: str, video_id: str) -> bool:
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             owned_video = session.execute(text("""SELECT v.id FROM videos v JOIN series s ON s.id=v.series_id
                 WHERE v.id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL
                 FOR UPDATE"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).scalar()
@@ -591,6 +610,7 @@ class SqlVideoWorkspace:
 
     def delete_series(self, series_id: str) -> bool:
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             owned_series = session.execute(text("SELECT id FROM series WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL FOR UPDATE"), {"series": series_id, "workspace": self._workspace_id}).scalar()
             if owned_series is None:
                 return False
@@ -634,6 +654,7 @@ class SqlVideoWorkspace:
             video_id = self._control.create_video(series_id=series_id, title=source_path.stem, source_kind="audio" if source_path.suffix.lower() in AUDIO_SUFFIXES else "video", external_source_id=digest)
             if storage_mode == "external_reference":
                 with self._sessions.begin() as session:
+                    require_execution_lease(session, self._workspace_id)
                     session.add(ExternalMediaReference(video_id=video_id, source_path=str(source_path)))
                 self._prepare_browser_preview(video_id, source_path)
                 continue
@@ -644,6 +665,7 @@ class SqlVideoWorkspace:
                     staged = self._blobs.put_staging(job_id=f"import{video_id}", source=stream, content_type="application/octet-stream")
             reference = self._blobs.commit(staged, object_key=f"media/{video_id}/source{source_path.suffix.lower()}")
             with self._sessions.begin() as session:
+                require_execution_lease(session, self._workspace_id)
                 session.add(MediaObject(id=new_ulid(), video_id=video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))
             self._prepare_browser_preview(video_id, source_path)
 
@@ -684,6 +706,7 @@ class SqlVideoWorkspace:
             object_key=f"artifacts/{video_id}/{_BROWSER_PREVIEW_KIND}/preview{preview_path.suffix.lower()}",
         )
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             session.add(
                 Artifact(
                     id=new_ulid(),
@@ -719,6 +742,7 @@ class SqlVideoWorkspace:
 
     def _delete_browser_previews(self, video_id: str) -> None:
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             rows = session.execute(text("""SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
                 JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
                 WHERE a.video_id=:video AND a.kind=:kind AND s.workspace_id=:workspace"""), {"video": video_id, "kind": _BROWSER_PREVIEW_KIND, "workspace": self._workspace_id}).mappings().all()
@@ -755,6 +779,7 @@ class SqlVideoWorkspace:
             return None
         note_id, now = new_ulid(), datetime.now(timezone.utc)
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             session.execute(text("INSERT INTO notes (id,video_id,title,content,source,row_version,created_at,updated_at) VALUES (:id,:video,:title,:content,:source,1,:now,:now)"), {"id": note_id, "video": video_id, "title": title.strip(), "content": content.strip(), "source": source, "now": now})
             _enqueue_outbox_event(
                 session,
@@ -773,6 +798,7 @@ class SqlVideoWorkspace:
             return None
         now = datetime.now(timezone.utc)
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             result = session.execute(text("UPDATE notes SET title=:title,content=:content,row_version=row_version+1,updated_at=:now WHERE id=:id AND video_id=:video AND deleted_at IS NULL"), {"id": note_id, "video": video_id, "title": title.strip(), "content": content.strip(), "now": now})
             if result.rowcount != 1:
                 return None
@@ -796,6 +822,7 @@ class SqlVideoWorkspace:
         if self.get_video_source(series_id, video_id) is None:
             return None
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             result = session.execute(text("UPDATE notes SET deleted_at=:now,row_version=row_version+1 WHERE id=:id AND video_id=:video AND deleted_at IS NULL"), {"id": note_id, "video": video_id, "now": datetime.now(timezone.utc)})
         changed = result.rowcount == 1
         if changed:
@@ -807,6 +834,7 @@ class SqlVideoWorkspace:
             raise ValueError("Video does not exist.")
         persisted_ids = _persisted_card_ids(cards)
         with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
             version = session.execute(text("SELECT content_version FROM videos WHERE id=:video FOR UPDATE"), {"video": video_id}).scalar_one()
             session.execute(text("DELETE FROM knowledge_cards WHERE video_id=:video"), {"video": video_id})
             session.execute(text("DELETE FROM knowledge_card_sets WHERE video_id=:video"), {"video": video_id})
@@ -870,7 +898,8 @@ class SqlVideoWorkspace:
             worker_id=worker_id,
             lease_token=lease_token,
         )
-        self._content.publish(job_id=job_id, worker_id=worker_id, lease_token=lease_token)
+        published = self._content.publish(job_id=job_id, worker_id=worker_id, lease_token=lease_token, finish_job=False)
+        observe_video_version(video_id, published.content_version, published=True)
         self.clear_generated_artifacts(video_id)
 
     def _current_payload(self, series_id: str, video_id: str) -> dict[str, Any] | None:

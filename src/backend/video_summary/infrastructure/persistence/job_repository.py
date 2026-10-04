@@ -18,11 +18,8 @@ from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, QuotaReservation, UsageEstimate, UsageMeter, UsageRecord
 from backend.core.context import WorkspaceContext
 from backend.core.request_context import get_workspace_context
-from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent
-
-
-class JobLeaseLostError(RuntimeError):
-    """The worker no longer owns the job lease."""
+from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent, Workspace
+from backend.video_summary.infrastructure.persistence.execution_context import JobLeaseLostError
 
 
 @dataclass(frozen=True)
@@ -101,6 +98,7 @@ class SqlJobRepository:
         reservation: QuotaReservation | None = None
         payload = dict(request_payload)
         if context is not None:
+            payload["_execution_context"] = {"actor_id": context.actor_id, "request_id": context.request_id}
             if context.workspace_id != workspace_id:
                 raise ValueError("request WorkspaceContext does not own the submitted Job.")
             if self._quota_guard is not None and parent_job_id is None:
@@ -134,6 +132,52 @@ class SqlJobRepository:
         if not submitted.created:
             self._release_reservation(reservation, "existing job reused")
         return submitted
+
+    def request_index_refresh(self, workspace_id: str) -> None:
+        with self._session_factory.begin() as session:
+            workspace = session.scalar(select(Workspace).where(Workspace.id == workspace_id,
+                Workspace.deleted_at.is_(None)).with_for_update())
+            if workspace is None:
+                raise LookupError("workspace not found")
+            workspace.index_revision_requested += 1
+            self._ensure_index_job(session, workspace_id)
+
+    @staticmethod
+    def _ensure_index_job(session, workspace_id: str) -> None:
+        key = f"workspace:{workspace_id}:refresh_rag_index"
+        active = session.scalar(select(Job.id).where(Job.active_key == key))
+        if active is not None:
+            return
+        job_id = new_ulid()
+        session.add(Job(id=job_id, workspace_id=workspace_id, resource_type="workspace",
+            resource_id=workspace_id, operation="refresh_rag_index", status="queued",
+            request_payload={"workspace_id": workspace_id}, active_key=key))
+        session.flush()
+        session.add(JobEvent(id=new_ulid(), job_id=job_id, sequence=1, stage="queued", progress=0.0))
+
+    def index_generation(self, workspace_id: str) -> str | None:
+        with self._session_factory() as session:
+            return session.scalar(select(Workspace.index_generation).where(Workspace.id == workspace_id))
+
+    def index_refresh_revision(self, workspace_id: str) -> int:
+        with self._session_factory() as session:
+            value = session.scalar(select(Workspace.index_revision_requested).where(Workspace.id == workspace_id))
+            if value is None:
+                raise LookupError("workspace not found")
+            return value
+
+    def complete_index_refresh(self, claim: ClaimedJob, revision: int, generation: str) -> None:
+        with self._session_factory.begin() as session:
+            self._owned_job(session, claim, _database_now(session))
+            workspace = session.scalar(select(Workspace).where(Workspace.id == claim.workspace_id).with_for_update())
+            workspace.index_generation = generation
+            workspace.index_revision_completed = max(workspace.index_revision_completed, revision)
+
+    def children(self, job_id: str, *, workspace_id: str) -> list[JobSnapshot]:
+        with self._session_factory() as session:
+            jobs = session.scalars(select(Job).where(Job.parent_job_id == job_id,
+                Job.workspace_id == workspace_id).order_by(Job.created_at, Job.id)).all()
+            return [_snapshot(job) for job in jobs]
 
     def claim(
         self,
@@ -247,6 +291,11 @@ class SqlJobRepository:
             job = session.scalar(statement.with_for_update())
             if job is None:
                 return None
+            if job.operation == "generate_series_batch":
+                children = session.scalars(select(Job).where(Job.parent_job_id == job.id,
+                    Job.workspace_id == job.workspace_id).with_for_update()).all()
+                for child in children:
+                    self._request_cancel_locked(session, child, now)
             snapshot = self._request_cancel_locked(session, job, now)
         self.finalize_accounting(job_id, workspace_id=workspace_id)
         return snapshot
@@ -364,6 +413,11 @@ class SqlJobRepository:
             job.finished_at = now
             self._finish_attempt(session, claim, now, outcome="succeeded")
             self._append_event(session, job.id, "succeeded", "succeeded", 100.0, detail)
+            if claim.operation == "refresh_rag_index":
+                workspace = session.scalar(select(Workspace).where(Workspace.id == claim.workspace_id).with_for_update())
+                if workspace.index_revision_requested > workspace.index_revision_completed:
+                    session.flush()
+                    self._ensure_index_job(session, claim.workspace_id)
             return True
 
     def fail(self, claim: ClaimedJob, *, failure_code: str, failure_detail: str, retry_delay_seconds: int | None) -> None:

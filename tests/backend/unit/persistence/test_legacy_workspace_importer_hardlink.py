@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock
 
-from backend.local.persistence.file_blob_store import FileBlobStore
+from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
 from backend.local.persistence.legacy_workspace_importer import LegacyWorkspaceImporter
 from backend.video_summary.infrastructure.persistence.models import ExternalMediaReference, MediaObject
 

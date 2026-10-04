@@ -118,3 +118,4 @@ class WorkspaceServices:
     invalidate_agent_workspace_indexes: Callable[[], None]
     refresh_agent_workspace_indexes: Callable[[], None]
     debug_mode: bool
+    embedding_provider: str = "fastembed"

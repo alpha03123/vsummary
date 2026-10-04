@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.ids import new_ulid
+from backend.video_summary.infrastructure.persistence.execution_context import require_execution_lease
 from backend.video_summary.infrastructure.persistence.models import (
     Job,
     JobAttempt,
@@ -54,15 +55,19 @@ class SqlCurrentContentRepository:
     ) -> None:
         _validate_payload(payload)
         with self._session_factory.begin() as session:
-            job = session.get(Job, job_id)
+            job = session.scalar(select(Job).where(Job.id == job_id).with_for_update())
             if job is None:
                 raise ContentPublishError("Cannot stage content for a missing job.")
             if job.resource_id != video_id:
                 raise ContentPublishError("Job resource does not match staged video.")
             _require_owned_job(session, job, worker_id=worker_id, lease_token=lease_token)
+            require_execution_lease(session, job.workspace_id)
             existing = session.get(JobContentStaging, job_id)
             if existing is None:
                 session.add(JobContentStaging(job_id=job_id, video_id=video_id, payload=payload, state="ready"))
+            elif worker_id is not None:
+                existing.payload = payload
+                existing.state = "ready"
             elif existing.state == "ready" and existing.payload == payload:
                 return
             else:
@@ -74,6 +79,7 @@ class SqlCurrentContentRepository:
         job_id: str,
         worker_id: str | None = None,
         lease_token: str | None = None,
+        finish_job: bool = True,
     ) -> PublishedContent:
         with self._session_factory.begin() as session:
             staged = session.scalar(select(JobContentStaging).where(JobContentStaging.job_id == job_id).with_for_update())
@@ -88,6 +94,7 @@ class SqlCurrentContentRepository:
             _require_owned_job(session, job, worker_id=worker_id, lease_token=lease_token)
             if job.cancel_requested_at is not None:
                 raise ContentPublishError("Cancelled jobs cannot publish content.")
+            require_execution_lease(session, job.workspace_id)
 
             payload = staged.payload
             _validate_payload(payload)
@@ -117,38 +124,40 @@ class SqlCurrentContentRepository:
                 state.summary_version = version
                 state.cards_version = 0
                 state.mindmap_version = 0
-            job.status = "succeeded"
-            job.active_key = None
-            job.claimed_by = None
-            job.lease_token = None
-            job.lease_expires_at = None
-            job.finished_at = session.scalar(select(func.now()))
             job.result_content_version = version
-            if worker_id is not None and lease_token is not None:
-                attempt = session.scalar(
-                    select(JobAttempt).where(
-                        JobAttempt.job_id == job.id,
-                        JobAttempt.attempt_no == job.attempt_count,
-                        JobAttempt.worker_id == worker_id,
-                        JobAttempt.lease_token == lease_token,
+            staged.state = "published"
+            if finish_job:
+                job.status = "succeeded"
+                job.active_key = None
+                job.claimed_by = None
+                job.lease_token = None
+                job.lease_expires_at = None
+                job.finished_at = session.scalar(select(func.now()))
+                if worker_id is not None and lease_token is not None:
+                    attempt = session.scalar(
+                        select(JobAttempt).where(
+                            JobAttempt.job_id == job.id,
+                            JobAttempt.attempt_no == job.attempt_count,
+                            JobAttempt.worker_id == worker_id,
+                            JobAttempt.lease_token == lease_token,
+                        )
+                    )
+                    if attempt is None:
+                        raise ContentPublishError("Job attempt is missing.")
+                    attempt.finished_at = job.finished_at
+                    attempt.outcome = "succeeded"
+                staged.state = "published"
+                sequence = (session.scalar(select(func.max(JobEvent.sequence)).where(JobEvent.job_id == job.id)) or 0) + 1
+                session.add(
+                    JobEvent(
+                        id=new_ulid(),
+                        job_id=job.id,
+                        sequence=sequence,
+                        stage="succeeded",
+                        progress=100.0,
+                        detail="生成内容已保存",
                     )
                 )
-                if attempt is None:
-                    raise ContentPublishError("Job attempt is missing.")
-                attempt.finished_at = job.finished_at
-                attempt.outcome = "succeeded"
-            staged.state = "published"
-            sequence = (session.scalar(select(func.max(JobEvent.sequence)).where(JobEvent.job_id == job.id)) or 0) + 1
-            session.add(
-                JobEvent(
-                    id=new_ulid(),
-                    job_id=job.id,
-                    sequence=sequence,
-                    stage="succeeded",
-                    progress=100.0,
-                    detail="生成内容已保存",
-                )
-            )
             session.add(
                 OutboxEvent(
                     id=new_ulid(),

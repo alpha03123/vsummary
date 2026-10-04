@@ -22,6 +22,8 @@ def get_workspace_context(
     if isinstance(context, WorkspaceContext):
         return context
     request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID") or uuid4().hex
+    if container.context_provider is None:
+        raise HTTPException(status_code=401, detail="authenticated workspace context required")
     return container.context_provider.get_context(request_id=request_id)
 
 

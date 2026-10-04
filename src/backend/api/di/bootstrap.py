@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from sqlalchemy.orm import Session, sessionmaker
+from backend.core.concurrency import RequestLimiter
+from filelock import FileLock
+from backend.video_summary.infrastructure.persistence.control_plane_repository import ControlPlaneConflictError
 from pathlib import Path
-from typing import Callable
+import httpx
 
 from backend.core.context import WorkspaceContext, WorkspaceContextProvider, WorkspaceServicesProvider
 from backend.core.capabilities import CapabilitySet
+from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, UsageMeter
-from backend.agent import AgentContextBudgetService
-from backend.agent_graph.runtime.service import AgentGraphService
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 from backend.api.adapters.linked_video_downloader import ProviderLinkedVideoDownloader
 from backend.api.di.workspace_services import WorkspaceServices
@@ -101,14 +104,14 @@ from backend.video_summary.library.usecases import (
 class ApiContainer:
     config_path: Path
     root_dir: Path
-    context_provider: WorkspaceContextProvider
+    context_provider: WorkspaceContextProvider | None
     workspace_services_provider: WorkspaceServicesProvider[WorkspaceServices]
     quota_guard: QuotaGuard
     usage_meter: UsageMeter
     capabilities: CapabilitySet
     job_repository: SqlJobRepository
-    job_worker: SqlJobWorker
-    outbox_worker: SqlOutboxWorker
+    job_worker: SqlJobWorker | None
+    outbox_worker: SqlOutboxWorker | None
     faster_whisper_model_manager: FasterWhisperModelManager
     whisper_cpp_model_manager: WhisperCppModelManager
     model_download_progress_tracker: InMemoryProgressTracker
@@ -118,60 +121,78 @@ class ApiContainer:
     chaoxing_importer: ChaoxingCourseImporter
     settings_service: SettingsServicePort
     usage_store: MySqlLlmUsageStore
+    request_limiter: RequestLimiter | None = None
+    model_http_client: httpx.Client | None = None
 
 
-def build_api_container(
+def build_host_container(
     root_dir: Path,
+    *,
+    session_factory: sessionmaker[Session],
+    workspace_services_provider: WorkspaceServicesProvider[WorkspaceServices],
+    quota_guard: QuotaGuard,
+    usage_meter: UsageMeter,
+    capabilities: CapabilitySet,
+    context_provider: WorkspaceContextProvider | None = None,
+    request_limiter: RequestLimiter | None = None,
+) -> ApiContainer:
+    """Build shared host dependencies; no Workspace or background process is started."""
+    config_path = root_dir / "config" / "settings.toml"
+    load_settings(config_path, root_dir)
+    job_repository = SqlJobRepository(session_factory, quota_guard=quota_guard, usage_meter=usage_meter)
+    progress = InMemoryProgressTracker()
+    models = FasterWhisperModelManager(root_dir / "data" / "models" / "faster-whisper")
+    whisper = WhisperCppModelManager(root_dir / "data" / "models" / "whisper-cpp")
+
+    def model_downloaded(model_key: str) -> None:
+        if model_key == "embedding" and context_provider is not None:
+            context = context_provider.get_context(request_id="model-download")
+            submit_workspace_index_refresh(repository=job_repository, workspace_id=context.workspace_id)
+
+    rag_models = RagModelManager(root_dir=root_dir, progress_tracker=InMemoryProgressTracker(), on_download_completed=model_downloaded)
+    settings_service = SettingsService(config_path=config_path, root_dir=root_dir, faster_whisper_model_manager=models, whisper_cpp_model_manager=whisper, rag_model_manager=rag_models)
+    settings = load_settings(config_path, root_dir)
+    importer = ChaoxingCourseImporter(client=ChaoxingDownloaderClient(
+        state_dir=root_dir / "data" / "chaoxing",
+        request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
+        init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
+    ))
+    return ApiContainer(
+        config_path=config_path, root_dir=root_dir, context_provider=context_provider,
+        workspace_services_provider=workspace_services_provider, quota_guard=quota_guard,
+        usage_meter=usage_meter, capabilities=capabilities, job_repository=job_repository,
+        job_worker=None, outbox_worker=None, faster_whisper_model_manager=models,
+        whisper_cpp_model_manager=whisper, model_download_progress_tracker=progress,
+        chaoxing_import_progress_tracker=InMemoryProgressTracker(),
+        knowledge_memory_progress_tracker=InMemoryProgressTracker(), rag_model_manager=rag_models,
+        chaoxing_importer=importer, settings_service=settings_service,
+        usage_store=MySqlLlmUsageStore(session_factory), request_limiter=request_limiter,
+        model_http_client=httpx.Client(),
+    )
+
+
+def build_workspace_services(
+    container: ApiContainer,
+    workspace: SqlVideoWorkspace,
+    *,
     generator: VideoSummaryGenerator | None = None,
     mindmap_generator: VideoMindmapGenerator | None = None,
     knowledge_card_generator: KnowledgeCardGenerator | None = None,
-    faster_whisper_model_manager: FasterWhisperModelManager | None = None,
-    whisper_cpp_model_manager: WhisperCppModelManager | None = None,
-    workspace_override: object | None = None,
-    context_provider: WorkspaceContextProvider | None = None,
-    workspace_services_provider: WorkspaceServicesProvider[WorkspaceServices] | None = None,
-    quota_guard: QuotaGuard | None = None,
-    usage_meter: UsageMeter | None = None,
-    capabilities: CapabilitySet | None = None,
-) -> tuple[ApiContainer, WorkspaceServices]:
-    config_path = root_dir / "config" / "settings.toml"
+) -> WorkspaceServices:
+    """Build services and handlers bound to the provider-selected Workspace."""
+    root_dir, config_path = container.root_dir, container.config_path
     settings = load_settings(config_path, root_dir)
-    if workspace_override is None:
-        raise RuntimeError("build_api_container requires an explicit SQL workspace.")
-    workspace = workspace_override
+    usage_store, job_repository = container.usage_store, container.job_repository
+    rag_model_manager = container.rag_model_manager
+    model_manager = container.faster_whisper_model_manager
+    whisper_cpp_manager = container.whisper_cpp_model_manager
     progress_tracker = InMemoryProgressTracker()
     mindmap_progress_tracker = InMemoryProgressTracker()
     video_download_progress_tracker = InMemoryProgressTracker()
-    model_download_progress_tracker = InMemoryProgressTracker()
-    chaoxing_import_progress_tracker = InMemoryProgressTracker()
     knowledge_memory_progress_tracker = InMemoryProgressTracker()
-    rag_model_progress_tracker = InMemoryProgressTracker()
-    if not isinstance(workspace, SqlVideoWorkspace):
-        raise RuntimeError("build_api_container requires SqlVideoWorkspace.")
-    if context_provider is None or workspace_services_provider is None or quota_guard is None or usage_meter is None or capabilities is None:
-        raise RuntimeError("build_api_container requires explicit context, workspace services, quota, usage, and capability adapters.")
-    usage_store = MySqlLlmUsageStore(workspace.session_factory)
     agent_session_store = SqlAgentSessionStore(workspace.session_factory, workspace_id=workspace.workspace_id)
     index_refresher_ref: dict[str, DurableWorkspaceIndexRefresher | None] = {"value": None}
 
-    def on_rag_model_download_completed(model_key: str) -> None:
-        if model_key != "embedding":
-            return
-        index_refresher = index_refresher_ref["value"]
-        if index_refresher is not None:
-            index_refresher.refresh_all()
-
-    rag_model_manager = RagModelManager(
-        root_dir=root_dir,
-        progress_tracker=rag_model_progress_tracker,
-        on_download_completed=on_rag_model_download_completed,
-    )
-    model_manager = faster_whisper_model_manager or FasterWhisperModelManager(
-        root_dir / "data" / "models" / "faster-whisper"
-    )
-    whisper_cpp_manager = whisper_cpp_model_manager or WhisperCppModelManager(
-        root_dir / "data" / "models" / "whisper-cpp"
-    )
     def queue_ai_summary_index_refresh(series_id: str, video_id: str) -> None:
         index_refresher = index_refresher_ref["value"]
         if index_refresher is None:
@@ -185,11 +206,6 @@ def build_api_container(
     )
     if not isinstance(resolved_generator, SqlBackedVideoSummaryGenerator):
         raise RuntimeError("SQL job execution requires SqlBackedVideoSummaryGenerator.")
-    job_repository = SqlJobRepository(
-        workspace.session_factory,
-        quota_guard=quota_guard,
-        usage_meter=usage_meter,
-    )
     resolved_mindmap_generator = mindmap_generator or SqlBackedVideoMindmapGenerator(
         workspace=workspace,
         workflow=ConfiguredMindmapWorkflow(root_dir, usage_recorder=usage_store),
@@ -240,16 +256,6 @@ def build_api_container(
         "generate_video_mindmap": run_video_mindmap_job,
         "generate_series_mindmap": run_series_mindmap_job,
     }
-    def get_job_execution_services(workspace_id: str):
-        return workspace_services_provider.get_services(
-            WorkspaceContext(workspace_id=workspace_id, actor_id="system-worker", request_id=f"job:{workspace_id}")
-        )
-
-    job_worker = SqlJobWorker(
-        repository=job_repository,
-        get_execution_services=get_job_execution_services,
-        options=WorkerOptions.local(),
-    )
     resolved_knowledge_card_generator = knowledge_card_generator or ConfiguredKnowledgeCardGenerator(
         root_dir,
         usage_recorder=usage_store,
@@ -261,6 +267,10 @@ def build_api_container(
         session_store=agent_session_store,
         rag_model_manager=rag_model_manager,
         usage_recorder=usage_store,
+        index_dir=workspace.cache_root / "rag-index",
+        index_generation=lambda: job_repository.index_generation(workspace.workspace_id),
+        model_http_client=container.model_http_client,
+        schedule_index_refresh=lambda: submit_workspace_index_refresh(repository=job_repository, workspace_id=workspace.workspace_id),
     )
     index_refresher = DurableWorkspaceIndexRefresher(
         lambda: submit_workspace_index_refresh(
@@ -271,18 +281,6 @@ def build_api_container(
     workspace_index_invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
     index_refresher_ref["value"] = index_refresher
 
-    def invalidate_workspace_indexes_from_outbox(_event) -> None:
-        agent_runtime.invalidate_workspace_indexes()
-
-    outbox_worker = SqlOutboxWorker(
-        repository=SqlOutboxRepository(workspace.session_factory),
-        workspace_id=workspace.workspace_id,
-        handlers={
-            "content_published": invalidate_workspace_indexes_from_outbox,
-            "note_published": invalidate_workspace_indexes_from_outbox,
-            "knowledge_cards_published": invalidate_workspace_indexes_from_outbox,
-        },
-    )
     series_memory_refresher = RefreshSeriesKnowledgeMemory(
         workspace=workspace,
         index_refresher=index_refresher,
@@ -479,12 +477,13 @@ def build_api_container(
                         "use_saved_manual_transcript": True,
                     },
                     active_key=f"video:{video.id}:{child_operation}",
-                    idempotency_scope_id=None,
-                    idempotency_key=None,
+                    idempotency_scope_id=claim.id,
+                    idempotency_key=f"{video.id}:{child_operation}",
                     parent_job_id=claim.id,
                 )
             except ControlPlaneConflictError:
-                pass
+                reporter.update("queue", index / max(1, len(pending)) * 100.0, f"视频已有任务，跳过：{video.title}")
+                continue
             reporter.update("queue", index / max(1, len(pending)) * 100.0, f"已创建 {index}/{len(pending)} 个视频子任务")
 
     operation_handlers["generate_series_batch"] = run_series_batch_job
@@ -525,9 +524,18 @@ def build_api_container(
     operation_handlers["prepare_asr_model"] = run_asr_model_prepare_job
     operation_handlers["prepare_rag_model"] = run_rag_model_prepare_job
 
-    async def run_rag_index_refresh_job(_claim, reporter) -> None:
+    async def run_rag_index_refresh_job(claim, reporter) -> None:
+        def refresh():
+            index_lock = workspace.cache_root / "rag-index-write.lock"
+            index_lock.parent.mkdir(parents=True, exist_ok=True)
+            with FileLock(str(index_lock)):
+                reporter.raise_if_cancelled()
+                target = job_repository.index_refresh_revision(workspace.workspace_id)
+                generation = new_ulid()
+                agent_runtime.refresh_workspace_indexes(workspace.cache_root / "rag-index" / generation)
+                job_repository.complete_index_refresh(claim, target, generation)
         reporter.update("index", 10.0, "正在重建工作区 RAG 索引")
-        await asyncio.to_thread(agent_runtime.refresh_workspace_indexes)
+        await asyncio.to_thread(refresh)
         reporter.update("index", 100.0, "工作区 RAG 索引已更新")
 
     operation_handlers["refresh_rag_index"] = run_rag_index_refresh_job
@@ -601,32 +609,51 @@ def build_api_container(
         invalidate_agent_workspace_indexes=agent_runtime.invalidate_workspace_indexes,
         refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
         debug_mode=settings.debug.mode,
+        embedding_provider=settings.agent_retrieval.embedding_provider,
     )
-    container = ApiContainer(
-        config_path=config_path,
-        root_dir=root_dir,
-        context_provider=context_provider,
-        workspace_services_provider=workspace_services_provider,
-        quota_guard=quota_guard,
-        usage_meter=usage_meter,
-        capabilities=capabilities,
-        job_repository=job_repository,
-        job_worker=job_worker,
-        outbox_worker=outbox_worker,
-        faster_whisper_model_manager=model_manager,
-        whisper_cpp_model_manager=whisper_cpp_manager,
-        model_download_progress_tracker=model_download_progress_tracker,
-        chaoxing_import_progress_tracker=chaoxing_import_progress_tracker,
-        knowledge_memory_progress_tracker=knowledge_memory_progress_tracker,
-        rag_model_manager=rag_model_manager,
-        chaoxing_importer=chaoxing_importer,
-        settings_service=SettingsService(
-            config_path=config_path,
-            root_dir=root_dir,
-            faster_whisper_model_manager=model_manager,
-            whisper_cpp_model_manager=whisper_cpp_manager,
-            rag_model_manager=rag_model_manager,
-        ),
-        usage_store=usage_store,
-    )
-    return container, workspace_services
+    return workspace_services
+
+
+def build_api_container(
+    root_dir: Path,
+    generator: VideoSummaryGenerator | None = None,
+    mindmap_generator: VideoMindmapGenerator | None = None,
+    knowledge_card_generator: KnowledgeCardGenerator | None = None,
+    faster_whisper_model_manager: FasterWhisperModelManager | None = None,
+    whisper_cpp_model_manager: WhisperCppModelManager | None = None,
+    workspace_override: object | None = None,
+    context_provider: WorkspaceContextProvider | None = None,
+    workspace_services_provider: WorkspaceServicesProvider[WorkspaceServices] | None = None,
+    quota_guard: QuotaGuard | None = None,
+    usage_meter: UsageMeter | None = None,
+    capabilities: CapabilitySet | None = None,
+) -> tuple[ApiContainer, WorkspaceServices]:
+    """Local composition using the same host and Workspace factories as Cloud."""
+    if not isinstance(workspace_override, SqlVideoWorkspace):
+        raise RuntimeError("build_api_container requires an explicit SQL workspace.")
+    if any(value is None for value in (context_provider, workspace_services_provider, quota_guard, usage_meter, capabilities)):
+        raise RuntimeError("build_api_container requires explicit context, workspace services, quota, usage, and capability adapters.")
+    workspace = workspace_override
+    container = build_host_container(root_dir, session_factory=workspace.session_factory,
+        workspace_services_provider=workspace_services_provider, context_provider=context_provider,
+        quota_guard=quota_guard, usage_meter=usage_meter, capabilities=capabilities)
+    if faster_whisper_model_manager is not None:
+        container = replace(container, faster_whisper_model_manager=faster_whisper_model_manager)
+    if whisper_cpp_model_manager is not None:
+        container = replace(container, whisper_cpp_model_manager=whisper_cpp_model_manager)
+    services = build_workspace_services(container, workspace, generator=generator,
+        mindmap_generator=mindmap_generator, knowledge_card_generator=knowledge_card_generator)
+
+    def execution_services(workspace_id: str):
+        return workspace_services_provider.get_services(WorkspaceContext(
+            workspace_id=workspace_id, actor_id="system-worker", request_id=f"job:{workspace_id}"))
+
+    worker = SqlJobWorker(repository=container.job_repository,
+        get_execution_services=execution_services, options=WorkerOptions.local())
+    def invalidate(_event):
+        services.invalidate_agent_workspace_indexes()
+        submit_workspace_index_refresh(repository=container.job_repository, workspace_id=workspace.workspace_id)
+    outbox = SqlOutboxWorker(repository=SqlOutboxRepository(workspace.session_factory),
+        workspace_id=workspace.workspace_id,
+        handlers={name: invalidate for name in ("content_published", "note_published", "knowledge_cards_published")})
+    return replace(container, job_worker=worker, outbox_worker=outbox), services

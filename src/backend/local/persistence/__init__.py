@@ -1,6 +1,6 @@
 """Persistence adapters available only in the Local product."""
 
-from backend.local.persistence.file_blob_store import FileBlobStore
+from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
 
 __all__ = ["FileBlobStore", "ManagedLocalMySql"]
 

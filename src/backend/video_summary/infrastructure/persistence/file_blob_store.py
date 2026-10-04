@@ -155,12 +155,15 @@ class FileBlobStore:
             existing = _stat_file(target, reference.content_type)
             if existing.sha256 == reference.sha256 and existing.byte_size == reference.byte_size:
                 return target
-            target.unlink()
-        shutil.copyfile(source, target)
-        actual = _stat_file(target, reference.content_type)
-        if actual.sha256 != reference.sha256 or actual.byte_size != reference.byte_size:
-            target.unlink(missing_ok=True)
-            raise BlobStoreError("Materialized blob checksum verification failed.")
+        temporary = target.with_name(f".{target.name}.{uuid4().hex}.materializing")
+        try:
+            shutil.copyfile(source, temporary)
+            actual = _stat_file(temporary, reference.content_type)
+            if actual.sha256 != reference.sha256 or actual.byte_size != reference.byte_size:
+                raise BlobStoreError("Materialized blob checksum verification failed.")
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
         return target
 
     def stat(self, reference: BlobReference) -> BlobReference:

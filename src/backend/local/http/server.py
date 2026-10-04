@@ -37,7 +37,7 @@ def main() -> None:
     if args.managed_mysql_home is None:
         raise RuntimeError("Local server requires --managed-mysql-home.")
 
-    from backend.local.persistence.file_blob_store import FileBlobStore
+    from backend.video_summary.infrastructure.persistence.file_blob_store import FileBlobStore
     from backend.local.persistence.local_workspace_bootstrap import ensure_local_workspace_before_migration
     from backend.video_summary.infrastructure.persistence.control_plane_repository import SqlControlPlaneRepository
     from backend.video_summary.infrastructure.persistence.database import create_session_factory

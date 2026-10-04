@@ -42,6 +42,9 @@ class Workspace(TimestampedRow, Base):
     owner_scope_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     row_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    index_generation: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    index_revision_requested: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    index_revision_completed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -265,6 +268,7 @@ class Job(TimestampedRow, Base):
     __tablename__ = "jobs"
     __table_args__ = (
         UniqueConstraint("active_key", name="uq_jobs_active_key"),
+        UniqueConstraint("parent_job_id", "resource_type", "resource_id", "operation", name="uq_jobs_parent_resource_operation"),
         Index("ix_jobs_claim", "status", "lease_expires_at", "created_at"),
         Index("ix_jobs_workspace_created", "workspace_id", "created_at"),
     )
