@@ -1,0 +1,817 @@
+@import "katex/dist/katex.min.css";
+@import "react-mosaic-component/react-mosaic-component.css";
+/* Fonts (IBM Plex Sans + Space Grotesk) are preloaded via <link> in index.html.
+   Previously this file @imported "Public Sans", which was never referenced by
+   the Tailwind fontFamily config actually in use — a redundant network request
+   that has been removed to keep typography single-sourced. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* ── Accent (indigo-500 / #6366f1) ── */
+    --workspace-accent-color: 99 102 241;
+
+    /* ══════════════════════════════════════════════════════
+       LIGHT MODE DESIGN PHILOSOPHY
+       ─ Cold base: slate-50/100 (no warm tint)
+       ─ Pure white cards + layered shadows for depth
+       ─ Ambient tinting: all semantic colors carry
+         a subtle indigo hue shift for visual cohesion
+    ══════════════════════════════════════════════════════ */
+
+    /* ── Shell & panel surfaces ── */
+    /* slate-100 (#f1f5f9): clean, cold, neutral gray base */
+    --workspace-shell-bg: #f1f5f9;
+
+    /* Pure white cards — contrast against slate base creates depth */
+    --workspace-panel-bg: #ffffff;
+    --workspace-panel-border: rgba(148, 163, 184, 0.28); /* slate-400/28 */
+    --workspace-panel-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 4px 12px rgba(15, 23, 42, 0.06),
+      0 0 0 1px rgba(148, 163, 184, 0.10);
+
+    /* Muted: slate-50 — one step lighter than shell */
+    --workspace-muted-bg: #f8fafc;
+    --workspace-muted-border: rgba(148, 163, 184, 0.20);
+
+    /* Toolbar: white with strong blur */
+    --workspace-toolbar-bg: rgba(255, 255, 255, 0.88);
+
+    /* Hero: pure white */
+    --workspace-hero-bg: #ffffff;
+
+    /* Elevated: white + stronger shadow to float above panel */
+    --workspace-elevated-bg: #ffffff;
+    --workspace-elevated-shadow:
+      0 2px 4px rgba(15, 23, 42, 0.05),
+      0 8px 24px rgba(15, 23, 42, 0.08),
+      0 0 0 1px rgba(148, 163, 184, 0.12);
+
+    /* Input: white */
+    --workspace-input-bg: #ffffff;
+
+    /* Accent tinted panel */
+    --workspace-accent-bg: rgba(99, 102, 241, 0.06);
+    --workspace-accent-border: rgba(99, 102, 241, 0.22);
+
+    /* Subtle indigo glow for accent panels */
+    --workspace-glow:
+      0 4px 24px rgba(99, 102, 241, 0.10),
+      0 1px 4px rgba(99, 102, 241, 0.06);
+
+    /* ── Semantic colors (light) — ambient indigo tinting ──
+       Each color is shifted ~5-8% toward indigo's hue (260°)
+       so all UI elements feel lit by the same cool light source.
+    ── */
+
+    /* danger: warm red → "cool crimson" (hue pulled toward 350° from 0°) */
+    --color-danger:        208 35 48;   /* #D02330 — cooler, slight magenta shift */
+    --color-danger-bg:     254 236 238; /* #FEEDEE — cool blush, not warm pink */
+    --color-danger-border: 242 148 158; /* #F2949E — indigo-cooled red-300 */
+    --color-danger-muted:  225 50 68;   /* #E13244 — mid cool red */
+
+    /* warning: amber → "cool amber" (hue pulled from 38° toward 30°) */
+    --color-warning:        202 112 8;   /* #CA7008 — less orange, more golden */
+    --color-warning-bg:     254 246 220; /* #FEF6DC — pale gold, no warm orange */
+    --color-warning-border: 240 195 78;  /* #F0C34E — cool amber-300 */
+    --color-warning-muted:  218 145 12;  /* #DA910C — cool amber-500 */
+
+    /* success: emerald → "teal-shifted emerald" (hue pulled from 160° toward 170°) */
+    --color-success:        4 142 100;   /* #048E64 — blue-leaning teal-green */
+    --color-success-bg:     229 252 243; /* #E5FCF3 — cool mint, not warm green */
+    --color-success-border: 82 218 163;  /* #52DAA3 — teal-tinted emerald-300 */
+    --color-success-muted:  10 172 118;  /* #0AAC76 — cool emerald-500 */
+
+    /* info = accent (pure indigo) */
+    --color-info:        99 102 241;   /* indigo-500 */
+    --color-info-bg:     238 242 255;  /* indigo-50  */
+    --color-info-border: 165 180 252;  /* indigo-300 */
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    /* ── Accent (indigo-400 / #818cf8, slightly lighter for dark bg) ── */
+    --workspace-accent-color: 129 140 248;
+
+    /* ── Shell & panel surfaces ── */
+    --workspace-shell-bg: #0F0F10;
+    --workspace-panel-bg: #151516;
+    --workspace-panel-border: rgba(255, 255, 255, 0.06);
+    --workspace-panel-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    --workspace-muted-bg: #111112;
+    --workspace-muted-border: rgba(255, 255, 255, 0.04);
+    --workspace-toolbar-bg: rgba(21, 21, 22, 0.95);
+    --workspace-hero-bg: #0F0F10;
+    --workspace-elevated-bg: #1A1A1C;
+    --workspace-input-bg: #0B0B0C;
+    --workspace-accent-bg: rgba(129, 140, 248, 0.08);
+    --workspace-accent-border: rgba(129, 140, 248, 0.2);
+    --workspace-glow: none;
+
+    /* ── Semantic colors (dark) ── */
+    --color-danger:        252 165 165; /* red-300   */
+    --color-danger-bg:     28 8 8;      /* red-950   */
+    --color-danger-border: 153 27 27;   /* red-800   */
+    --color-danger-muted:  239 68 68;   /* red-500   */
+
+    --color-warning:        252 211 77;  /* amber-300 */
+    --color-warning-bg:     28 20 4;     /* amber-950 */
+    --color-warning-border: 146 64 14;   /* amber-800 */
+    --color-warning-muted:  245 158 11;  /* amber-500 */
+
+    --color-success:        110 231 183; /* emerald-300 */
+    --color-success-bg:     2 26 17;     /* emerald-950 */
+    --color-success-border: 6 78 59;     /* emerald-900 */
+    --color-success-muted:  16 185 129;  /* emerald-500 */
+
+    --color-info:        129 140 248;  /* indigo-400 (= accent) */
+    --color-info-bg:     16 14 38;     /* indigo-950 */
+    --color-info-border: 67 56 202;    /* indigo-700 */
+  }
+}
+
+@layer base {
+
+  html,
+  body,
+  #root {
+    transition:
+      background-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  body {
+    /* slate-900 (#0f172a): cold blue-black, harmonizes with indigo accent */
+    @apply text-slate-900 font-sans antialiased overflow-hidden m-0;
+    background: var(--workspace-shell-bg);
+
+    transition:
+      background-color 220ms ease,
+      color 220ms ease,
+      border-color 220ms ease,
+      box-shadow 220ms ease,
+      background 280ms ease;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+  }
+
+  #root {
+    @apply h-screen flex flex-col relative z-0;
+  }
+
+  /* Reset button and input fonts to inherit */
+  button,
+  input {
+    font: inherit;
+  }
+
+  /* ── Keyboard focus indicator (WCAG 2.4.7 Focus Visible) ──
+     Provides a consistent accent-colored outline for keyboard
+     navigation. Elements that already declare their own focus style
+     (e.g. inputs with `focus:border-accent` + `outline-none`) keep
+     that style because Tailwind utilities win source-order over base.
+     This rule fills the gap for icon buttons / link-style controls
+     that previously had no visible focus ring. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--workspace-accent-color));
+    outline-offset: 2px;
+  }
+
+  /* Mouse clicks should not show the keyboard focus ring */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.38) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(100, 116, 139, 0.32);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 180ms ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.48);
+    background-clip: padding-box;
+  }
+
+  .dark * {
+    scrollbar-color: rgba(148, 163, 184, 0.24) transparent;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.18);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.32);
+    background-clip: padding-box;
+  }
+
+  .theme-transitioning,
+  .theme-transitioning *,
+  .theme-transitioning *::before,
+  .theme-transitioning *::after {
+    transition:
+      background-color 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      color 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      border-color 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      background 520ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      fill 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      stroke 420ms cubic-bezier(0.22, 1, 0.36, 1) !important,
+      opacity 320ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  }
+}
+
+@layer components {
+
+  .workspace-panel,
+  .workspace-muted-panel,
+  .workspace-toolbar-surface,
+  .workspace-hero-surface,
+  .workspace-elevated-panel,
+  .workspace-accent-panel,
+  .workspace-input-surface {
+    transition:
+      background-color 260ms ease,
+      border-color 260ms ease,
+      color 260ms ease,
+      box-shadow 260ms ease,
+      backdrop-filter 260ms ease,
+      background 320ms ease;
+  }
+
+  .workspace-panel {
+    background: var(--workspace-panel-bg);
+    border-color: var(--workspace-panel-border);
+    box-shadow: var(--workspace-panel-shadow);
+    /* Light: real white card on slate base — no blur needed */
+    /* Dark: glass effect with blur */
+  }
+  .dark .workspace-panel {
+    backdrop-filter: blur(16px);
+  }
+
+  .workspace-muted-panel {
+    background: var(--workspace-muted-bg);
+    border-color: var(--workspace-muted-border);
+    /* Light: slate-50 inset — lower than panel, no shadow */
+    box-shadow: none;
+  }
+  .dark .workspace-muted-panel {
+    box-shadow: var(--workspace-glow);
+  }
+
+  .workspace-toolbar-surface {
+    background: var(--workspace-toolbar-bg);
+    border-color: var(--workspace-panel-border);
+    backdrop-filter: blur(14px);
+    /* Light: white toolbar with gentle bottom shadow */
+    box-shadow: 0 1px 0 rgba(148, 163, 184, 0.20);
+  }
+  .dark .workspace-toolbar-surface {
+    box-shadow: none;
+  }
+
+  .workspace-hero-surface {
+    background: var(--workspace-hero-bg);
+    border-color: var(--workspace-muted-border);
+    box-shadow: var(--workspace-glow);
+  }
+
+  .workspace-elevated-panel {
+    background: var(--workspace-elevated-bg);
+    border-color: var(--workspace-muted-border);
+    /* Light: stronger shadow than panel to float higher */
+    box-shadow: var(--workspace-elevated-shadow, var(--workspace-panel-shadow));
+  }
+  .dark .workspace-elevated-panel {
+    box-shadow: var(--workspace-panel-shadow);
+  }
+
+  .workspace-accent-panel {
+    background: var(--workspace-accent-bg);
+    border-color: var(--workspace-accent-border);
+    box-shadow: var(--workspace-glow);
+  }
+
+  .workspace-input-surface {
+    background: var(--workspace-input-bg);
+    border-color: var(--workspace-panel-border);
+    /* Light: subtle inset shadow for depth */
+    box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .dark .workspace-input-surface {
+    box-shadow: var(--workspace-glow);
+  }
+
+  /* ============================================================
+     SEMANTIC COLOR UTILITIES
+     Use these instead of hardcoded Tailwind color classes.
+     Each semantic group: bg / text / border / muted variants.
+  ============================================================ */
+
+  /* danger (replaces red-*) */
+  .bg-danger        { background-color: rgb(var(--color-danger)); }
+  .bg-danger-subtle { background-color: rgb(var(--color-danger-bg)); }
+  .text-danger      { color: rgb(var(--color-danger)); }
+  .border-danger    { border-color: rgb(var(--color-danger-border)); }
+  .text-danger-muted { color: rgb(var(--color-danger-muted)); }
+
+  /* warning (replaces amber-*) */
+  .bg-warning        { background-color: rgb(var(--color-warning)); }
+  .bg-warning-subtle { background-color: rgb(var(--color-warning-bg)); }
+  .text-warning      { color: rgb(var(--color-warning)); }
+  .border-warning    { border-color: rgb(var(--color-warning-border)); }
+  .text-warning-muted { color: rgb(var(--color-warning-muted)); }
+
+  /* success (replaces emerald-*) */
+  .bg-success        { background-color: rgb(var(--color-success)); }
+  .bg-success-subtle { background-color: rgb(var(--color-success-bg)); }
+  .text-success      { color: rgb(var(--color-success)); }
+  .border-success    { border-color: rgb(var(--color-success-border)); }
+  .text-success-muted { color: rgb(var(--color-success-muted)); }
+
+  /* info (replaces sky-* in non-accent contexts) */
+  .bg-info        { background-color: rgb(var(--color-info)); }
+  .bg-info-subtle { background-color: rgb(var(--color-info-bg)); }
+  .text-info      { color: rgb(var(--color-info)); }
+  .border-info    { border-color: rgb(var(--color-info-border)); }
+
+  /* primary button: solid accent */
+  .btn-primary {
+    background-color: rgb(var(--workspace-accent-color));
+    color: #fff;
+    transition: opacity 150ms ease, transform 100ms ease;
+  }
+  .btn-primary:hover  { opacity: 0.9; }
+  .btn-primary:active { transform: scale(0.98); }
+
+  /* secondary / ghost button */
+  .btn-secondary {
+    background-color: transparent;
+    border: 1px solid rgb(var(--workspace-accent-color) / 0.3);
+    color: rgb(var(--workspace-accent-color));
+    transition: background-color 150ms ease;
+  }
+  .btn-secondary:hover { background-color: rgb(var(--workspace-accent-color) / 0.06); }
+
+  /* danger button */
+  .btn-danger {
+    background-color: rgb(var(--color-danger));
+    color: #fff;
+    transition: opacity 150ms ease, transform 100ms ease;
+  }
+  .btn-danger:hover  { opacity: 0.88; }
+  .btn-danger:active { transform: scale(0.98); }
+
+  /* danger ghost */
+  .btn-danger-ghost {
+    background-color: rgb(var(--color-danger-bg));
+    color: rgb(var(--color-danger));
+    border: 1px solid rgb(var(--color-danger-border));
+    transition: background-color 150ms ease;
+  }
+  .btn-danger-ghost:hover { opacity: 0.85; }
+
+  .motion-fade-up {
+    animation: workspace-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-fade-scale {
+    animation: workspace-fade-scale 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-slide-in {
+    animation: workspace-slide-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .motion-stagger {
+    animation: workspace-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--stagger-index, 0) * 40ms);
+  }
+
+  .motion-busy-button {
+    animation: workspace-button-bounce 220ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  }
+
+  .motion-arrow-shift {
+    transition:
+      transform 200ms ease,
+      color 200ms ease,
+      background-color 200ms ease,
+      filter 200ms ease;
+  }
+
+  .group:hover .motion-arrow-shift {
+    transform: translateX(2px);
+  }
+
+  .note-frame-image {
+    transform: scale(1);
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .note-frame-trigger:hover .note-frame-image,
+  .note-frame-trigger:focus-visible .note-frame-image {
+    transform: scale(1.012);
+  }
+
+  .motion-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .motion-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.5),
+        transparent);
+    animation: workspace-shimmer 1.3s linear infinite;
+  }
+
+  .dark .motion-shimmer::after {
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.08),
+        transparent);
+  }
+}
+
+@keyframes workspace-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes workspace-fade-scale {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspace-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes workspace-button-bounce {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(0.97);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes workspace-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .motion-fade-up,
+  .motion-fade-scale,
+  .motion-slide-in,
+  .motion-stagger,
+  .motion-busy-button {
+    animation: none !important;
+  }
+
+  .motion-shimmer::after {
+    animation: none !important;
+  }
+
+  .motion-arrow-shift,
+  .note-frame-image,
+  .workspace-panel,
+  .workspace-muted-panel,
+  .workspace-toolbar-surface,
+  .workspace-elevated-panel,
+  .workspace-input-surface,
+  button,
+  video {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.markdown-body {
+  line-height: 1.75;
+}
+
+.markdown-body>*:first-child {
+  margin-top: 0;
+}
+
+.markdown-body>*:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body pre,
+.markdown-body blockquote,
+.markdown-body table {
+  margin: 0.75rem 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 1rem 0 0.5rem;
+  font-weight: 700;
+  color: inherit;
+}
+
+.markdown-body h1 {
+  font-size: 1.25rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.125rem;
+}
+
+.markdown-body h3,
+.markdown-body h4 {
+  font-size: 1rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.3rem;
+}
+
+.markdown-body li+li {
+  margin-top: 0.3rem;
+}
+
+.markdown-body code {
+  border-radius: 0.5rem;
+  background: rgba(148, 163, 184, 0.15);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.92em;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.92);
+  padding: 0.9rem 1rem;
+  color: #e2e8f0;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid rgba(14, 116, 144, 0.35);
+  padding-left: 0.9rem;
+  color: rgba(68, 64, 60, 0.9);
+}
+
+.dark .markdown-body blockquote {
+  border-left-color: rgba(125, 211, 252, 0.28);
+  color: rgba(214, 211, 209, 0.9);
+}
+
+.markdown-body a {
+  color: #0070f3;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.dark .markdown-body a {
+  color: #7dd3fc;
+}
+
+.markdown-body a.citation-marker,
+.markdown-body a.citation-marker:visited,
+.markdown-body a.citation-marker:hover,
+.markdown-body a.citation-marker:focus {
+  color: rgb(28 25 23);
+  text-decoration: none;
+}
+
+.dark .markdown-body a.citation-marker,
+.dark .markdown-body a.citation-marker:visited,
+.dark .markdown-body a.citation-marker:hover,
+.dark .markdown-body a.citation-marker:focus {
+  color: rgb(255 255 255);
+  text-decoration: none;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 0.9rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid rgba(214, 211, 209, 0.8);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+}
+
+.dark .markdown-body th,
+.dark .markdown-body td {
+  border-color: rgba(68, 64, 60, 0.9);
+}
+
+.markdown-body th {
+  background: rgba(245, 245, 244, 0.9);
+}
+
+.dark .markdown-body th {
+  background: rgba(28, 25, 23, 0.9);
+}
+
+.mindmap-selected > circle {
+  stroke: var(--color-accent, #3b82f6);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--color-accent, #3b82f6) 55%, transparent));
+}
+
+.mindmap-selected text {
+  fill: var(--color-accent, #3b82f6);
+  font-weight: 700;
+}
+
+.mindmap-svg .markmap-node {
+  cursor: pointer;
+  user-select: none;
+  transition: filter 160ms ease;
+}
+
+.mindmap-svg .markmap-node:hover > circle {
+  stroke: var(--color-accent, #3b82f6);
+  stroke-width: 2.5;
+}
+
+.mindmap-svg .markmap-node.mindmap-hovered > circle {
+  stroke: var(--color-accent, #3b82f6);
+  stroke-width: 2.5;
+}
+
+.mindmap-svg .markmap-node:hover .markmap-foreign > div > div,
+.mindmap-svg .markmap-node.mindmap-hovered .markmap-foreign > div > div {
+  background: color-mix(in srgb, var(--color-accent, #3b82f6) 7%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, #3b82f6) 22%, transparent);
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.mindmap-svg .markmap-foreign,
+.mindmap-svg .markmap-foreign * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.workspace-mosaic {
+  background: transparent;
+}
+
+.workspace-mosaic .mosaic-root {
+  inset: 0;
+}
+
+.workspace-mosaic .mosaic-tile {
+  margin: 0;
+}
+
+.workspace-mosaic .workspace-mosaic-window {
+  border: 1px solid var(--workspace-panel-border);
+  background: var(--workspace-panel-bg);
+  box-shadow: var(--workspace-panel-shadow);
+}
+
+.workspace-mosaic .workspace-mosaic-window-focused {
+  box-shadow: 0 0 0 1px rgb(var(--workspace-accent-color) / 0.38), var(--workspace-panel-shadow);
+}
+
+.workspace-mosaic .workspace-mosaic-window .mosaic-window-toolbar {
+  height: auto;
+  min-height: 42px;
+  background: var(--workspace-panel-bg);
+  box-shadow: none;
+}
+
+.workspace-mosaic .workspace-mosaic-window .mosaic-window-body {
+  background: transparent;
+}
+
+.workspace-mosaic .mosaic-split:hover {
+  background: transparent;
+}
+
+.workspace-mosaic .mosaic-split .mosaic-split-line {
+  background: transparent;
+  border-radius: 999px;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.workspace-mosaic .mosaic-split:hover .mosaic-split-line {
+  background: rgb(var(--workspace-accent-color));
+  box-shadow: 0 0 0 1px rgb(var(--workspace-accent-color) / 0.2);
+}
+
+.workspace-mosaic .drop-target-container .drop-target {
+  border-color: rgb(var(--workspace-accent-color));
+  background: rgb(var(--workspace-accent-color) / 0.16);
+}
+
+.workspace-mosaic-drag-preview {
+  display: none;
+}
+
+.workspace-video-stage {
+  container-type: size;
+}
+
+.workspace-video-frame {
+  width: min(100cqw, calc(100cqh * 16 / 9));
+  aspect-ratio: 16 / 9;
+}
+
+.workspace-mosaic-action {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: rgb(120 113 108);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.workspace-mosaic-action:hover {
+  background: rgb(var(--workspace-accent-color) / 0.1);
+  color: rgb(var(--workspace-accent-color));
+}
+
+.dark .workspace-mosaic-action {
+  color: rgb(168 162 158);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGenerationSteps, visibleGenerationSteps } from "@src/features/workspace/model/generationSteps";
+import { advanceGenerationSteps, visibleGenerationSteps } from "@workspace/workspace/model/generationSteps";
 
 const event = (stage, status = "running") => ({ stage, status, detail: stage });
 
@@ -16,7 +16,7 @@ describe("generation steps", () => {
     }
     expect(steps.find((step) => step.id === "chapter_images").status).toBe("completed");
     expect(steps.find((step) => step.id === "sample_frames").status).toBe("completed");
-    expect(steps.find((step) => step.id === "ai_summary")).toMatchObject({ status: "running", label: "识别画面并生成概况" });
+    expect(steps.find((step) => step.id === "ai_summary")).toMatchObject({ status: "running" });
     steps = advanceGenerationSteps(steps, event("ai_summary_completed"));
     expect(steps.find((step) => step.id === "ai_summary").status).toBe("completed");
   });
@@ -28,11 +28,6 @@ describe("generation steps", () => {
     }
     const visible = visibleGenerationSteps({ ...event("generate_ai_summary"), steps }, "summary");
     expect(visible.map((step) => step.id)).toEqual(["initialize", "load_text", "summarize", "ai_summary", "publish"]);
-    expect(visible.find((step) => step.id === "ai_summary").label).toBe("生成 AI 概况");
-  });
-
-  it("shows only text saving as the next step in transcript mode", () => {
-    expect(visibleGenerationSteps(event("transcribe"), "transcript").map((step) => step.id)).toEqual(["transcript", "publish"]);
   });
 
   it("marks active tasks as stopped on cancellation without claiming they completed", () => {

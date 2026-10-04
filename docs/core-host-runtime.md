@@ -1,6 +1,6 @@
 # Core 宿主运行接口
 
-`vsummary-core==0.5.0a7` 提供 Local 与单机 Cloud 共用的多 workspace、持久任务及 API RAG 能力。身份、成员关系、部署目录和进程管理由宿主提供。
+`vsummary-core==0.5.0a8` 提供 Local 与单机 Cloud 共用的多 workspace、持久任务及 API RAG 能力。身份、成员关系、部署目录和进程管理由宿主提供。
 
 ## 装配
 

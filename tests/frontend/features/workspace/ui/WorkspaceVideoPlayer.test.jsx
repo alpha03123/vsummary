@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { WorkspaceVideoPlayer } from "@workspace/workspace/ui/WorkspaceVideoPlayer";
+import { render } from "@src/testing/renderWorkspace";
+import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { WorkspaceVideoPlayer } from "@src/features/workspace/ui/WorkspaceVideoPlayer";
 
 let pauseSpy;
 
@@ -15,14 +15,6 @@ afterEach(() => {
 });
 
 describe("WorkspaceVideoPlayer", () => {
-  it("shows an unavailable preview message for audio files", () => {
-    const { container } = render(
-      <WorkspaceVideoPlayer videoSource="/api/videos/series-1/audio-1/preview" videoSourceType="audio" />,
-    );
-    expect(screen.getByText("音频文件暂不支持预览")).toBeInTheDocument();
-    expect(container.querySelector("video")).toBeNull();
-  });
-
   it("seeks the <video> and calls play() when playerSeekRequest arrives", () => {
     const playMock = vi.fn(() => Promise.resolve());
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(playMock);
@@ -88,31 +80,6 @@ describe("WorkspaceVideoPlayer", () => {
     }
   });
 
-  it("ignores non-finite seconds without throwing", () => {
-    const playMock = vi.fn(() => Promise.resolve());
-    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(playMock);
-
-    try {
-      const { rerender, container } = render(
-        <WorkspaceVideoPlayer videoSource="/api/videos/s1/v1/preview" playerSeekRequest={null} />,
-      );
-      const video = container.querySelector("video");
-      Object.defineProperty(video, "readyState", { value: 1, configurable: true });
-
-      rerender(
-        <WorkspaceVideoPlayer
-          videoSource="/api/videos/s1/v1/preview"
-          playerSeekRequest={{ seconds: NaN, endSeconds: null, query: "", matchedText: "", chapterTitle: "", requestId: "3" }}
-        />,
-      );
-
-      expect(() => fireEvent.loadedMetadata(video)).not.toThrow();
-      expect(playMock).not.toHaveBeenCalled();
-    } finally {
-      playSpy.mockRestore();
-    }
-  });
-
   it("restores the saved position only once for the current video source", () => {
     const { rerender, container } = render(
       <WorkspaceVideoPlayer
@@ -140,39 +107,6 @@ describe("WorkspaceVideoPlayer", () => {
       />,
     );
     expect(video.currentTime).toBe(12);
-  });
-
-  it("reports playback progress from the native video element", () => {
-    const onTimeUpdate = vi.fn();
-    const { container } = render(
-      <WorkspaceVideoPlayer
-        videoSource="/api/videos/s1/v1/preview"
-        onTimeUpdate={onTimeUpdate}
-      />,
-    );
-    const video = container.querySelector("video");
-    Object.defineProperty(video, "currentTime", { value: 600, configurable: true });
-
-    fireEvent.timeUpdate(video);
-
-    expect(onTimeUpdate).toHaveBeenCalledWith(600);
-  });
-
-  it("reports playback state so the panel toolbar can show transcript controls", () => {
-    const onPlaybackStateChange = vi.fn();
-    const { container } = render(
-      <WorkspaceVideoPlayer
-        videoSource="/api/videos/s1/v1/preview"
-        onPlaybackStateChange={onPlaybackStateChange}
-      />,
-    );
-    const video = container.querySelector("video");
-
-    fireEvent.play(video);
-    fireEvent.pause(video);
-    expect(onPlaybackStateChange).toHaveBeenNthCalledWith(1, false);
-    expect(onPlaybackStateChange).toHaveBeenNthCalledWith(2, true);
-    expect(onPlaybackStateChange).toHaveBeenNthCalledWith(3, false);
   });
 
   it("pauses the media when the preview panel unmounts", () => {

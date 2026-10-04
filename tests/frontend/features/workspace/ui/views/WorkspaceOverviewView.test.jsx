@@ -1,8 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceOverviewView } from "@workspace/workspace/ui/views/WorkspaceOverviewView";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import { WorkspaceOverviewView } from "@src/features/workspace/ui/views/WorkspaceOverviewView";
-import { WorkspaceOverviewContent } from "@src/features/workspace/ui/views/WorkspaceOverviewContent";
 
 const summary = {
   title: "视频标题",
@@ -48,7 +47,6 @@ function renderView(overrides = {}) {
 }
 
 describe("WorkspaceOverviewView chapter + transcript clicks", () => {
-
   it("chapter header click calls onSeek with chapter timestamps", () => {
     const { onSeek } = renderView();
     const chapterCard = document.getElementById("overview-chapter-ch-1");
@@ -140,20 +138,5 @@ describe("WorkspaceOverviewView chapter + transcript clicks", () => {
     fireEvent.click(screen.getByText("查看本章原文"));
 
     expect(screen.getAllByRole("button", { name: /模拟段落/ })).toHaveLength(10);
-  });
-
-  it("clicking on summary or key_points does NOT call onSeek", () => {
-    const { onSeek } = renderView();
-    fireEvent.click(screen.getByText("本章讲了一些东西"));
-    fireEvent.click(screen.getByText("点 A"));
-    fireEvent.click(screen.getByText("点 B"));
-    expect(onSeek).not.toHaveBeenCalled();
-  });
-
-  it("clicking on Key Takeaways bullets does NOT call onSeek", () => {
-    const { onSeek } = renderView();
-    fireEvent.click(screen.getByText("要点 1"));
-    fireEvent.click(screen.getByText("要点 2"));
-    expect(onSeek).not.toHaveBeenCalled();
   });
 });

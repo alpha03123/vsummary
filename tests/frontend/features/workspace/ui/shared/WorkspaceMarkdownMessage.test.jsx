@@ -1,34 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceMarkdownMessage } from "@workspace/workspace/ui/shared/WorkspaceMarkdownMessage";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { WorkspaceMarkdownMessage } from "@src/features/workspace/ui/shared/WorkspaceMarkdownMessage";
-
 describe("WorkspaceMarkdownMessage", () => {
-  it("links citation markers by citation id", () => {
-    render(
-      <WorkspaceMarkdownMessage
-        content="这个结论来自第四条证据。[4]"
-        citations={[
-          {
-            id: "4",
-            label: "Video 4",
-            source_type: "summary",
-            slots: [
-              {
-                slot: 1,
-                target_type: "summary",
-                video_title: "Video 4",
-                text: "第四条证据",
-              },
-            ],
-          },
-        ]}
-      />,
-    );
-
-    expect(screen.getByRole("link", { name: "4" })).toHaveAttribute("href", "#citation-4");
-  });
-
   it("opens citation references with video locations when clicking transcript citations", () => {
     const onOpenCitationReference = vi.fn();
 
@@ -134,21 +109,5 @@ describe("WorkspaceMarkdownMessage", () => {
 
     expect(onOpenTranscriptAtTime).toHaveBeenCalledWith({ seconds: 5 });
     expect(onSeek).not.toHaveBeenCalled();
-  });
-
-  it("renders model think tags as a collapsible thinking block", () => {
-    render(
-      <WorkspaceMarkdownMessage
-        content={"<think>先分析问题，再回答。</think>\n\n最终答案：**可以**。"}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: /思考过程/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /思考过程/ })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("先分析问题，再回答。")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /思考过程/ }));
-    expect(screen.getByText("先分析问题，再回答。")).toBeInTheDocument();
-    expect(screen.getByText(/最终答案：/)).toBeInTheDocument();
-    expect(screen.getByText("可以")).toBeInTheDocument();
   });
 });

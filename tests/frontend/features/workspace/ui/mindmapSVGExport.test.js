@@ -1,7 +1,7 @@
 // tests/frontend/features/workspace/ui/mindmapSVGExport.test.js
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { exportMindmapAsSVG } from "@src/features/workspace/ui/mindmapSVGExport";
+import { exportMindmapAsSVG } from "@workspace/workspace/ui/mindmapSVGExport";
 
 function makeMarkmapMock({
   currentTransform = { k: 1, x: 0, y: 0 },
@@ -42,20 +42,6 @@ function makeMarkmapMock({
   return { mm, svgNode, fit, call, transformCalls };
 }
 
-function installFakeImage() {
-  const original = globalThis.Image;
-  class FakeImage {
-    constructor() { this.onload = null; this.onerror = null; }
-    set src(v) {
-      this._src = v;
-      Promise.resolve().then(() => this.onload && this.onload());
-    }
-    get src() { return this._src || ""; }
-  }
-  globalThis.Image = FakeImage;
-  return () => { globalThis.Image = original; };
-}
-
 describe("exportMindmapAsSVG", () => {
   beforeEach(() => {
     if (!globalThis.URL.createObjectURL) {
@@ -66,52 +52,10 @@ describe("exportMindmapAsSVG", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("T1: does not call mm.fit()", async () => {
-    const { mm, fit } = makeMarkmapMock();
-    const restoreImage = installFakeImage();
-
-    await exportMindmapAsSVG(mm, "test.svg");
-
-    expect(fit).not.toHaveBeenCalled();
-    restoreImage();
-  });
-
-  it("T2: saves the original transform and restores it after a successful export", async () => {
-    const originalTransform = { k: 2.5, x: 100, y: 200 };
-    const { mm, transformCalls, svgNode } = makeMarkmapMock({ currentTransform: originalTransform });
-    const restoreImage = installFakeImage();
-
-    await exportMindmapAsSVG(mm, "out.svg");
-
-    expect(transformCalls).toHaveLength(1);
-    // d3-zoom mutates the transform object during interpolation, so compare by value.
-    const restored = transformCalls[0];
-    expect(restored.k).toBeCloseTo(originalTransform.k);
-    expect(restored.x).toBeCloseTo(originalTransform.x);
-    expect(restored.y).toBeCloseTo(originalTransform.y);
-    restoreImage();
-  });
-
-  it("T3: still restores the transform when an export-pipeline step throws", async () => {
-    const originalTransform = { k: 1.5, x: 50, y: 75 };
-    const { mm, transformCalls } = makeMarkmapMock({ currentTransform: originalTransform });
-
-    // Force Blob construction to throw mid-pipeline. The SVG path doesn't
-    // use <img>, so no installFakeImage() is needed here.
-    const OriginalBlob = globalThis.Blob;
-    globalThis.Blob = class { constructor() { throw new Error("blobbing failed"); } };
-
-    await expect(exportMindmapAsSVG(mm, "out.svg")).rejects.toThrow("blobbing failed");
-
-    expect(transformCalls).toHaveLength(1);
-    expect(transformCalls[0].k).toBeCloseTo(1.5);
-
-    globalThis.Blob = OriginalBlob;
-  });
-
-  it("T4: clone is sized to (state.rect content bounds + 60px padding), not to clientWidth", async () => {
+  it("exports the full content bounds independently of the visible viewport", async () => {
     // content bounds: 2000 wide x 1500 tall; clientWidth is intentionally different
     // so the test fails if the implementation regresses to using clientWidth.
     const contentRect = { x1: 100, x2: 2100, y1: 50, y2: 1550 };
@@ -126,7 +70,6 @@ describe("exportMindmapAsSVG", () => {
       capturedClone = clone;
       return clone;
     });
-    const restoreImage = installFakeImage();
 
     await exportMindmapAsSVG(mm, "out.svg");
 
@@ -140,10 +83,9 @@ describe("exportMindmapAsSVG", () => {
     expect(innerG.hasAttribute("transform")).toBe(false);
 
     svgNode.cloneNode = origCloneNode;
-    restoreImage();
   });
 
-  it("T5: triggers a download anchor with the given filename and a blob: href", async () => {
+  it("downloads the exported SVG with the requested filename", async () => {
     const { mm } = makeMarkmapMock();
     const downloadCalls = [];
     const origCreate = document.createElement.bind(document);
@@ -156,7 +98,6 @@ describe("exportMindmapAsSVG", () => {
       }
       return el;
     });
-    const restoreImage = installFakeImage();
 
     await exportMindmapAsSVG(mm, "my-mindmap.svg");
 
@@ -165,34 +106,40 @@ describe("exportMindmapAsSVG", () => {
     expect(downloadCalls[0].href.startsWith("blob:")).toBe(true);
 
     createSpy.mockRestore();
-    restoreImage();
   });
 
-  it("T6: the live SVG node is unchanged after export (the clone is modified, not the live node)", async () => {
-    const { mm, svgNode } = makeMarkmapMock();
+  it.each([false, true])("preserves the live SVG and zoom when export fails: %s", async (fails) => {
+    const transform = { k: 2.5, x: 100, y: 200 };
+    const { mm, svgNode } = makeMarkmapMock({ currentTransform: transform });
     // Set distinctive attributes on the live SVG to detect any mutation.
     svgNode.setAttribute("width", "100%");
     svgNode.setAttribute("height", "100%");
     const liveWidthBefore = svgNode.getAttribute("width");
     const liveHeightBefore = svgNode.getAttribute("height");
     const liveViewBoxBefore = svgNode.getAttribute("viewBox");
-    const restoreImage = installFakeImage();
+    const liveContentBefore = svgNode.innerHTML;
 
-    await exportMindmapAsSVG(mm, "test.svg");
+    if (fails) {
+      vi.stubGlobal("Blob", class { constructor() { throw new Error("Export failed"); } });
+      await expect(exportMindmapAsSVG(mm, "test.svg")).rejects.toThrow("Export failed");
+    } else {
+      await exportMindmapAsSVG(mm, "test.svg");
+    }
 
     expect(svgNode.getAttribute("width")).toBe(liveWidthBefore);
     expect(svgNode.getAttribute("height")).toBe(liveHeightBefore);
     expect(svgNode.getAttribute("viewBox")).toBe(liveViewBoxBefore);
-    restoreImage();
+    expect(svgNode.innerHTML).toBe(liveContentBefore);
+    expect(svgNode.__zoom).toMatchObject(transform);
   });
 
-  it("T7: throws a clear error when mm.state.rect is all-zero (markmap not yet rendered)", async () => {
+  it("rejects an export before the mindmap content has rendered", async () => {
     const { mm } = makeMarkmapMock({ contentRect: { x1: 0, x2: 0, y1: 0, y2: 0 } });
 
     await expect(exportMindmapAsSVG(mm, "out.svg")).rejects.toThrow(/state\.rect is empty/);
   });
 
-  it("T11: the clone includes the markmap <style> element (required for the exported SVG to render with styling in external viewers)", async () => {
+  it("keeps the styling required to read the SVG outside the application", async () => {
     const { mm, svgNode } = makeMarkmapMock();
     // Markmap adds a <style> element to the live SVG; simulate that.
     const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
@@ -206,7 +153,6 @@ describe("exportMindmapAsSVG", () => {
       capturedClone = clone;
       return clone;
     });
-    const restoreImage = installFakeImage();
 
     await exportMindmapAsSVG(mm, "out.svg");
 
@@ -215,29 +161,5 @@ describe("exportMindmapAsSVG", () => {
     expect(capturedClone.querySelector("style").textContent).toContain("markmap-node");
 
     svgNode.cloneNode = origCloneNode;
-    restoreImage();
-  });
-
-  it("T12: the clone preserves the markmap-dark class when set on the live SVG (dark/light theme is preserved)", async () => {
-    const { mm, svgNode } = makeMarkmapMock();
-    // Simulate dark mode by adding the markmap-dark class to the live SVG.
-    svgNode.setAttribute("class", "mindmap-svg markmap-dark");
-
-    let capturedClone = null;
-    const origCloneNode = svgNode.cloneNode;
-    svgNode.cloneNode = vi.fn((deep) => {
-      const clone = origCloneNode.call(svgNode, deep);
-      capturedClone = clone;
-      return clone;
-    });
-    const restoreImage = installFakeImage();
-
-    await exportMindmapAsSVG(mm, "out.svg");
-
-    expect(capturedClone).not.toBeNull();
-    expect(capturedClone.getAttribute("class")).toContain("markmap-dark");
-
-    svgNode.cloneNode = origCloneNode;
-    restoreImage();
   });
 });

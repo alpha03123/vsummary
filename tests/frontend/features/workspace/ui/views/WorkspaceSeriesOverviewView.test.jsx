@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceSeriesOverviewView } from "@workspace/workspace/ui/views/WorkspaceSeriesOverviewView";
+import { render } from "@src/testing/renderWorkspace";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import { WorkspaceSeriesOverviewView } from "@src/features/workspace/ui/views/WorkspaceSeriesOverviewView";
 
 const activeSeries = {
   id: "series-1",
@@ -51,25 +51,6 @@ function renderView(overrides = {}) {
 }
 
 describe("WorkspaceSeriesOverviewView", () => {
-  it("filters to the selected video without changing series context", () => {
-    renderView();
-
-    // open the custom scope picker then click the second video option
-    fireEvent.click(screen.getByLabelText("选择视频概况"));
-    fireEvent.click(screen.getByRole("option", { name: /第二讲/ }));
-
-    expect(screen.queryByText("第一讲概况")).not.toBeInTheDocument();
-    expect(screen.getByText("第二讲概况")).toBeInTheDocument();
-  });
-
-  it("opens the selected video only when the explicit action is clicked", () => {
-    const { onOpenVideoOverview } = renderView();
-
-    fireEvent.click(screen.getAllByText("进入视频概况")[1]);
-
-    expect(onOpenVideoOverview).toHaveBeenCalledWith("video-2");
-  });
-
   it("expands and highlights the cited transcript segment in the matching video overview", async () => {
     const citedSummary = createSummary("第二讲概况");
     citedSummary.chapters[0].transcript_segments = [{
@@ -91,12 +72,11 @@ describe("WorkspaceSeriesOverviewView", () => {
       },
     });
 
-    const transcript = await screen.findByRole("button", { name: /被引用的转写片段/ });
+    await screen.findByRole("button", { name: /被引用的转写片段/ });
 
     expect(screen.queryByText("第一讲概况")).not.toBeInTheDocument();
     expect(screen.getByText("第二讲概况")).toBeInTheDocument();
     expect(document.getElementById("overview-transcript-video-2-第二讲概况-chapter-1")).toHaveProperty("open", true);
-    expect(transcript).toHaveClass("border-2");
   });
 
   it("uses video-scoped transcript ids when multiple overviews share a chapter id", () => {

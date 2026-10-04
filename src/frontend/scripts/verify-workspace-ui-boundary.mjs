@@ -23,6 +23,7 @@ async function listFiles(directory) {
 
 const violations = [];
 for (const file of await listFiles(root)) {
+  if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
   const source = await readFile(file, "utf8");
   const imports = [];
   collectImports(parse(source, { sourceType: "module", plugins: ["jsx"] }).program, imports);

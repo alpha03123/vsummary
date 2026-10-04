@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceNotesView } from "@workspace/workspace/ui/views/WorkspaceNotesView";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import { WorkspaceNotesView } from "@src/features/workspace/ui/views/WorkspaceNotesView";
 
 const note = {
   id: "note-1",

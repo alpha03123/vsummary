@@ -58,7 +58,7 @@ def import_local_series_from_paths(
     if request.storage_mode is None:
         raise HTTPException(status_code=400, detail="storage_mode 不能为空。")
     try:
-        series = services.import_local_series.run_from_paths(
+        series = services.import_media_series.run_from_paths(
             title=request.series_title,
             source_paths=[Path(path) for path in request.source_paths],
             storage_mode=request.storage_mode,
@@ -74,7 +74,7 @@ def import_local_playground_videos_from_paths(
     services: WorkspaceServicesDep,
 ) -> list[VideoCardResponse]:
     try:
-        videos = services.import_local_playground_videos.run_from_paths(
+        videos = services.import_playground_media.run_from_paths(
             source_paths=[Path(path) for path in request.source_paths],
         )
     except (LookupError, ValueError) as error:
@@ -89,7 +89,7 @@ def import_local_series_videos_from_paths(
     services: WorkspaceServicesDep,
 ) -> list[VideoCardResponse]:
     try:
-        videos = services.import_local_series_videos.run_from_paths(
+        videos = services.import_series_media.run_from_paths(
             series_id=series_id,
             source_paths=[Path(path) for path in request.source_paths],
         )

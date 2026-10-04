@@ -457,6 +457,7 @@ class FakeContainer:
         self.root_dir = Path.cwd()
         self.config_path = self.root_dir / "config" / "settings.toml"
         self.rag_model_manager = rag_model_manager
+        self.embedding_provider = "fastembed"
         self.agent_session_store = agent_session_store or FakeSessionStore()
         self.graph_service_called = False
         self.debug_mode = False

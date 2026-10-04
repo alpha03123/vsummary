@@ -1,0 +1,259 @@
+import { useEffect, useRef, useState } from "react";
+
+import { useWorkspaceController } from "@alpha03123/vsummary-workspace-ui";
+import { buildWorkspacePageModel } from "@alpha03123/vsummary-workspace-ui";
+import { WorkspaceStateBlock } from "@alpha03123/vsummary-workspace-ui";
+import { WorkspaceVideoScopePane } from "@alpha03123/vsummary-workspace-ui";
+import { ChatDrawer } from "@alpha03123/vsummary-workspace-ui";
+import { WorkspaceGenerationOverlay } from "@alpha03123/vsummary-workspace-ui";
+import { isBilibiliInboxSeries } from "@alpha03123/vsummary-workspace-ui";
+
+function parseBilibiliTarget(sourceUrl, tabId = null) {
+  if (!sourceUrl) {
+    return null;
+  }
+  try {
+    const parsed = new URL(sourceUrl);
+    const match = parsed.pathname.match(/\/video\/(BV[\w]+)/i);
+    if (!match) {
+      return { sourceUrl, bvid: null, page: null };
+    }
+    const parsedPage = Number.parseInt(parsed.searchParams.get("p") ?? "1", 10);
+    return {
+      sourceUrl,
+      bvid: match[1],
+      page: Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1,
+      tabId,
+      key: `${match[1]}:${Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getInitialBilibiliTarget() {
+  const params = new URLSearchParams(window.location.search);
+  return parseBilibiliTarget(params.get("bilibili_url"));
+}
+
+export function isVideoScopeMessage(event) {
+  return event.source === window.parent &&
+    event.origin.startsWith("chrome-extension://");
+}
+
+export function WorkspaceVideoScopeEmbed() {
+  const controller = useWorkspaceController();
+  const page = buildWorkspacePageModel(controller);
+  const [target, setTarget] = useState(getInitialBilibiliTarget);
+  const targetRef = useRef(target);
+  const [playback, setPlayback] = useState(null);
+  const [playbackError, setPlaybackError] = useState(null);
+  const [followOverviewPlayback, setFollowOverviewPlayback] = useState(false);
+  const requestedTargetKeyRef = useRef(null);
+  const selectedTargetKeyRef = useRef(null);
+  const [error, setError] = useState(null);
+  const [seekError, setSeekError] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+  const [panelToolId, setPanelToolId] = useState("studio");
+
+  useEffect(() => {
+    function handleVideoContext(event) {
+      if (!isVideoScopeMessage(event)) {
+        return;
+      }
+      if (event.data?.type === "vsummary:playback-time") {
+        const { key, tabId, seconds, error } = event.data;
+        if (key === targetRef.current?.key && tabId === targetRef.current?.tabId &&
+            (seconds === null || Number.isFinite(seconds))) {
+          setPlayback({ key, tabId, seconds });
+          setPlaybackError(error ?? null);
+        }
+        return;
+      }
+      if (event.data?.type === "vsummary:seek-result") {
+        const { key, tabId, ok, seconds, error } = event.data;
+        if (key !== targetRef.current?.key || tabId !== targetRef.current?.tabId) {
+          return;
+        }
+        setSeekError(ok === true ? null : error ?? "无法定位 Bilibili 播放器。");
+        if (ok === true && Number.isFinite(seconds)) {
+          setPlayback({ key, tabId, seconds });
+        }
+        return;
+      }
+      if (event.data?.type !== "vsummary:set-video-context") {
+        return;
+      }
+      const nextTarget = parseBilibiliTarget(event.data.context?.url, event.data.context?.tabId ?? null);
+      if (!nextTarget) {
+        return;
+      }
+      if (targetRef.current?.key !== nextTarget.key || targetRef.current?.tabId !== nextTarget.tabId) {
+        setPlayback(null);
+        setPlaybackError(null);
+        setFollowOverviewPlayback(false);
+      }
+      targetRef.current = nextTarget;
+      setTarget((currentTarget) => (
+        currentTarget?.key === nextTarget.key && currentTarget?.sourceUrl === nextTarget.sourceUrl && currentTarget?.tabId === nextTarget.tabId
+          ? currentTarget
+          : nextTarget
+      ));
+    }
+
+    window.addEventListener("message", handleVideoContext);
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: "vsummary:video-scope-ready" }, "*");
+    }
+    return () => window.removeEventListener("message", handleVideoContext);
+  }, []);
+
+  useEffect(() => {
+    setChatOpen(false);
+    setChatDraft("");
+    setSeekError(null);
+    setPanelToolId("studio");
+  }, [target?.key, target?.tabId]);
+
+  function seekBilibiliVideo({ seconds } = {}) {
+    if (!Number.isFinite(seconds) || window.parent === window) {
+      return;
+    }
+    window.parent.postMessage({
+      type: "vsummary:seek",
+      seconds,
+      autoplay: true,
+    }, "*");
+  }
+
+  useEffect(() => {
+    if (!target || !target.bvid || !controller.state.library || error?.key === target.key) {
+      return;
+    }
+    const inbox = controller.state.library.series?.find(isBilibiliInboxSeries);
+    const video = inbox?.videos.find((item) => item.sourceId === target.bvid && item.itemIndex === target.page);
+    if (!video) {
+      if (requestedTargetKeyRef.current !== target.key) {
+        requestedTargetKeyRef.current = target.key;
+        controller.onResolveBilibiliInboxVideo(target.sourceUrl)
+          .catch((resolveError) => {
+            setError({
+              key: target.key,
+              message: resolveError instanceof Error ? resolveError.message : "导入当前 Bilibili 视频失败。",
+            });
+          })
+          .finally(() => {
+            if (requestedTargetKeyRef.current === target.key) {
+              requestedTargetKeyRef.current = null;
+            }
+          });
+      }
+      return;
+    }
+    requestedTargetKeyRef.current = null;
+    if (selectedTargetKeyRef.current !== target.key) {
+      selectedTargetKeyRef.current = target.key;
+      controller.onSelectVideo(inbox.id, video.id);
+    }
+  }, [controller, error?.key, target]);
+
+  if (error && error.key === target?.key) {
+    return <WorkspaceStateBlock eyebrow="VSummary" title="无法打开视频工作区" description={error.message} dashed />;
+  }
+  if (!target || !target.bvid) {
+    return <WorkspaceStateBlock eyebrow="VSummary" title="当前页面不支持" description="请在 Bilibili 视频播放页打开此侧边栏。" dashed />;
+  }
+  const selectedVideoMatchesTarget =
+    page.shell.selectedVideo?.sourceId === target.bvid &&
+    page.shell.selectedVideo?.itemIndex === target.page;
+  if (!page.shell.activeSeries || !selectedVideoMatchesTarget || page.shell.selectedContextType !== "video") {
+    return <WorkspaceStateBlock eyebrow="VSummary" title="正在打开视频工作区" description="正在定位当前 Bilibili 视频。" loading />;
+  }
+
+  const chatPanelProps = {
+    workspaceTitle: page.shell.library?.workspace?.title,
+    activeSeries: page.shell.activeSeries,
+    selectedVideo: page.shell.selectedVideo,
+    selectedContextType: page.shell.selectedContextType,
+    chatMessages: page.chat.messages,
+    chatSessions: page.chat.sessions,
+    activeSessionId: page.chat.activeSessionId,
+    chatPending: page.chat.pending,
+    summaryLocked: page.shell.selectedVideo?.processed !== true,
+    contextUsage: page.chat.contextUsage,
+    contextUsageLoading: page.chat.contextUsageLoading,
+    ragModels: page.generation.ragModels,
+    knowledgeMemorySnapshot: page.shell.state.knowledgeMemorySnapshot,
+    draft: chatDraft,
+    onDraftChange: setChatDraft,
+    onSelectChatSession: page.chat.selectChatSession,
+    onStartNewChat: page.chat.startNewChat,
+    onOpenSeekReference: (reference) => {
+      page.chat.openSeekReference(reference);
+      seekBilibiliVideo(reference);
+    },
+    onOpenCitationReference: (reference) => {
+      page.chat.openCitationReference(reference);
+      seekBilibiliVideo(reference);
+    },
+    onSubmitChat: page.chat.submit,
+    onCancelChat: page.chat.cancel,
+  };
+  const needsDownload = page.shell.selectedVideo.isLinked || page.shell.selectedVideo.status === "linked";
+  const playbackTime = playback?.key === target.key && playback?.tabId === target.tabId ? playback.seconds : null;
+
+  return (
+    <div className="relative h-screen">
+      {seekError || playbackError ? (
+        <div className="absolute inset-x-4 top-4 z-20 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shadow-sm" role="alert">
+          {seekError || playbackError}
+        </div>
+      ) : null}
+      {needsDownload ? (
+        <WorkspaceStateBlock
+          eyebrow="Bilibili"
+          title={page.shell.selectedVideo.title}
+          description="请处理该视频后查看详情"
+          actionLabel={page.generation.showOverlay ? "正在处理视频" : "下载并生成"}
+          actionDisabled={page.generation.showOverlay}
+          onAction={controller.onProcessLinkedVideo}
+        >
+          {controller.state.error ? <p role="alert" className="mt-4 text-sm text-red-600">{controller.state.error}</p> : null}
+        </WorkspaceStateBlock>
+      ) : (
+        <WorkspaceVideoScopePane
+          key={page.shell.selectedVideo.id}
+          page={page}
+          playbackTime={playbackTime}
+          followOverviewPlayback={followOverviewPlayback}
+          onFollowOverviewPlaybackChange={setFollowOverviewPlayback}
+          panelToolId={panelToolId}
+          onPanelSelectTool={(toolId) => {
+            if (toolId === "ai-chat") {
+              setChatOpen(true);
+              return;
+            }
+            setPanelToolId(toolId);
+          }}
+          onProcessLinkedVideo={controller.onProcessLinkedVideo}
+          onExternalSeek={seekBilibiliVideo}
+        />
+      )}
+      {page.generation.showOverlay && page.generation.snapshot ? (
+        <WorkspaceGenerationOverlay
+          generationProgress={page.generation.progress}
+          generationSnapshot={page.generation.snapshot}
+          mode={page.shell.processingMode}
+          onCancel={controller.onCancelGeneration}
+        />
+      ) : null}
+      <ChatDrawer
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        fullWidth
+        {...chatPanelProps}
+      />
+    </div>
+  );
+}

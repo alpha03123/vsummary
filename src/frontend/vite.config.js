@@ -54,16 +54,20 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8001",
+        target: process.env.VSUMMARY_API_URL ?? "http://127.0.0.1:8001",
         changeOrigin: true,
       },
       "/mcp": {
-        target: "http://127.0.0.1:8001",
+        target: process.env.VSUMMARY_API_URL ?? "http://127.0.0.1:8001",
         changeOrigin: true,
       },
     },
   },
   test: {
+    alias: {
+      "@workspace": path.resolve(__dirname, "packages/workspace-ui/src"),
+      "@alpha03123/vsummary-workspace-ui": path.resolve(__dirname, "packages/workspace-ui/src/index.jsx"),
+    },
     environment: "jsdom",
     globals: true,
     include: ["../../tests/frontend/**/*.{test,spec}.{js,jsx,ts,tsx}"],

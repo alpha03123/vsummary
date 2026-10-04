@@ -22,9 +22,9 @@ from backend.video_summary.library.usecases.notes import (
 )
 from backend.video_summary.library.usecases.content_editing import UpdateVideoSummary, UpdateVideoTranscript
 from backend.video_summary.library.usecases.imports import (
-    ImportLocalPlaygroundVideos,
-    ImportLocalSeries,
-    ImportLocalSeriesVideos,
+    ImportPlaygroundMedia,
+    ImportMediaSeries,
+    ImportSeriesMedia,
 )
 from backend.video_summary.library.usecases.linked_videos import (
     CreateAgentLinkedSeries,
@@ -75,9 +75,9 @@ __all__ = [
     "GetVideoAiSummary",
     "GetVideoTranscript",
     "GetVideoWorkspaceTools",
-    "ImportLocalPlaygroundVideos",
-    "ImportLocalSeries",
-    "ImportLocalSeriesVideos",
+    "ImportPlaygroundMedia",
+    "ImportMediaSeries",
+    "ImportSeriesMedia",
     "ListVideoLibrary",
     "ResolveBilibiliSeries",
     "ResolveBilibiliVideo",

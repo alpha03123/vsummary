@@ -12,7 +12,7 @@ from backend.video_summary.library.models import LibrarySeriesDTO, LibraryVideoC
 from backend.video_summary.library.ports import VideoImportStore
 
 
-class ImportLocalSeries:
+class ImportMediaSeries:
     """新建一个本地视频系列并导入给定文件。
 
     业务场景：用户在工作区里首次组织一批视频时，用此用例落地一个新系列
@@ -38,7 +38,7 @@ class ImportLocalSeries:
         )
 
 
-class ImportLocalPlaygroundVideos:
+class ImportPlaygroundMedia:
     """把本地视频导入到内置的"沙盒演练"系列中。
 
     业务场景：用户尚未决定如何归类视频时，先丢进沙盒系列以便快速试做
@@ -54,7 +54,7 @@ class ImportLocalPlaygroundVideos:
         return self._workspace.import_local_playground_videos_from_paths(source_paths=source_paths)
 
 
-class ImportLocalSeriesVideos:
+class ImportSeriesMedia:
     """把本地视频追加到既有系列。
 
     业务场景：用户已有系列，需要把新一批本地视频挂到该系列下，而不必新建系列；

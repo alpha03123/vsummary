@@ -1,0 +1,40 @@
+import {fileURLToPath} from "node:url";
+import colors from 'tailwindcss/colors';
+import containerQueries from '@tailwindcss/container-queries';
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: "class",
+  content: [
+
+    fileURLToPath(new URL("./src/",import.meta.url)).replaceAll("\\","/")+"**/*.{js,jsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // `sky` previously aliased to indigo (confusing); dev showcase now uses
+        // `indigo-*` directly. `brand` teal palette was never referenced — removed.
+        indigo: colors.indigo,
+        accent: 'rgb(var(--workspace-accent-color) / <alpha-value>)',
+      },
+      fontFamily: {
+        // Match the fonts actually loaded in index.html (IBM Plex Sans + Space Grotesk).
+        // Previously declared 'Public Sans' which was never loaded, causing silent
+        // fallback to system fonts instead of the intended typography.
+        sans: ['"IBM Plex Sans"', 'Inter', '"Segoe UI"', 'sans-serif'],
+        display: ['"Space Grotesk"', '"IBM Plex Sans"', 'sans-serif'],
+      },
+      borderRadius: {
+        '2xl': '1rem',      // 16px
+        '3xl': '1.5rem',    // 24px
+        '4xl': '2rem',      // 32px
+        '5xl': '2.5rem',    // 40px
+      }
+    },
+  },
+  plugins: [
+    // 面板宽度是拖拽出来的（workspaceLayout.js panelMinWidth 320），视口媒体查询
+    // 完全测不到它。工具页头部需要 ~460px，容器查询是唯一能按「面板宽度」降级的方案。
+    containerQueries,
+  ],
+}

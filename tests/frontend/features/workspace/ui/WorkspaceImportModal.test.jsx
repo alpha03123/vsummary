@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceImportModal } from "@src/local-features/workspace/ui/WorkspaceImportModal";
+import { render } from "@src/testing/renderWorkspace";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import { WorkspaceImportModal } from "@src/features/workspace/ui/WorkspaceImportModal";
 
 describe("WorkspaceImportModal", () => {
   it("defaults to an external reference for media outside the Blob storage disk", async () => {
@@ -24,9 +24,9 @@ describe("WorkspaceImportModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /未选择文件/ }));
 
     await screen.findByText("lesson.mp4");
-    fireEvent.click(screen.getByRole("button", { name: "导入" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "导入" })));
 
-    expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["\\\\nas\\videos\\lesson.mp4"], "external_reference");
+    await waitFor(() => expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["\\\\nas\\videos\\lesson.mp4"], "external_reference"));
   });
 
   it("defaults to a hard link for media on the workspace disk", async () => {
@@ -49,8 +49,8 @@ describe("WorkspaceImportModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /未选择文件/ }));
 
     await screen.findByText("lesson.mp4");
-    fireEvent.click(screen.getByRole("button", { name: "导入" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "导入" })));
 
-    expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["C:\\videos\\lesson.mp4"], "hardlink");
+    await waitFor(() => expect(onImportLocalSeries).toHaveBeenCalledWith("课程", ["C:\\videos\\lesson.mp4"], "hardlink"));
   });
 });

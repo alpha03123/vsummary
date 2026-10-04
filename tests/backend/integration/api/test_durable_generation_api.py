@@ -54,6 +54,10 @@ def test_submission_and_duplicate_request_persist_one_job(generation_client, mys
     expected_payload = {"series_id": series_id, **body}
     if not is_series:
         expected_payload["video_id"] = video_id
+    expected_payload["_execution_context"] = {
+        "actor_id": "test-user",
+        "request_id": first.headers["X-Request-ID"],
+    }
     assert job.request_payload == expected_payload
 
 

@@ -41,9 +41,9 @@ from backend.video_summary.library.usecases import (
     GetVideoSummary,
     GetVideoTranscript,
     GetVideoWorkspaceTools,
-    ImportLocalPlaygroundVideos,
-    ImportLocalSeries,
-    ImportLocalSeriesVideos,
+    ImportPlaygroundMedia,
+    ImportMediaSeries,
+    ImportSeriesMedia,
     ListVideoLibrary,
     RenameSeries,
     RenameVideo,
@@ -94,9 +94,9 @@ class WorkspaceServices:
     rename_series: RenameSeries
     rename_video: RenameVideo
     export_series_archive: ExportSeriesArchive
-    import_local_series: ImportLocalSeries
-    import_local_playground_videos: ImportLocalPlaygroundVideos
-    import_local_series_videos: ImportLocalSeriesVideos
+    import_media_series: ImportMediaSeries
+    import_playground_media: ImportPlaygroundMedia
+    import_series_media: ImportSeriesMedia
     create_agent_series: CreateAgentLinkedSeries
     resolve_bilibili_series: ResolveBilibiliSeries
     resolve_bilibili_video: ResolveBilibiliVideo

@@ -13,6 +13,14 @@ from backend.core.context import WorkspaceContext
 
 
 router = APIRouter()
+
+
+@router.get("/api/workspace/index/status")
+def workspace_index_status(job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context)):
+    from backend.api.adapters.job_status import durable_status
+    return durable_status(job_repository, workspace_id=context.workspace_id,
+        resource_id=context.workspace_id, operations=("refresh_rag_index",))
+
 _TERMINAL_STATUSES = {"succeeded", "failed", "cancelled"}
 
 

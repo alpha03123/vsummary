@@ -15,6 +15,8 @@ from pathlib import Path
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from backend.api.adapters.job_status import durable_status
+
 from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
@@ -1444,55 +1446,22 @@ def get_video_generation_status(
 
 
 @router.get("/api/series/{series_id}/generate/progress")
-async def stream_series_generation_progress(
-    series_id: str,
-    container: WorkspaceServicesDep,
-) -> StreamingResponse:
-    """GET /api/series/{series_id}/generate/progress — 订阅系列级批量生成进度流（SSE）。
-
-    以 SSE 推送整个系列生成批次的进度；到达 terminal 状态后自动关闭。
-
-    Args:
-        series_id: 系列 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        StreamingResponse（`text/event-stream`）。
-    """
-    task_id = _build_series_task_id(series_id)
-    return StreamingResponse(
-        stream_progress_events(
-            tracker=container.generation_progress_tracker,
-            task_id=task_id,
-            terminal_statuses={"completed", "failed", "cancelled"},
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
+async def stream_series_generation_progress(series_id: str, container: WorkspaceServicesDep, job_repository: JobRepositoryDep) -> StreamingResponse:
+    async def events():
+        while True:
+            payload = await asyncio.to_thread(get_series_generation_status, series_id, container, job_repository)
+            yield f"event: progress\ndata: {json.dumps(payload['snapshot'], ensure_ascii=False)}\n\n"
+            if payload["snapshot"]["status"] in {"succeeded", "failed", "cancelled", "idle"}:
+                return
+            await asyncio.sleep(0.5)
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
 
 
 @router.get("/api/series/{series_id}/generate/status")
-def get_series_generation_status(
-    series_id: str,
-    container: WorkspaceServicesDep,
-) -> dict[str, object]:
-    """GET /api/series/{series_id}/generate/status — 查询系列级生成任务的当前状态（一次性快照）。
-
-    Args:
-        series_id: 系列 ID。
-        container: FastAPI 依赖注入的 API 容器。
-
-    Returns:
-        {"task_id": ..., "snapshot": {status, progress, detail, ...}}
-    """
-    task_id = _build_series_task_id(series_id)
-    return {
-        "task_id": task_id,
-        "snapshot": container.generation_progress_tracker.get_snapshot(task_id).to_dict(),
-    }
+def get_series_generation_status(series_id: str, container: WorkspaceServicesDep, job_repository: JobRepositoryDep) -> dict[str, object]:
+    snapshot = durable_status(job_repository, workspace_id=container.workspace_id, resource_id=series_id,
+        operations=("generate_series_batch",), batch=True)
+    return {"task_id": _build_series_task_id(series_id), "job_id": snapshot["job_id"], "snapshot": snapshot}
 
 
 def _build_task_id(series_id: str, video_id: str) -> str:

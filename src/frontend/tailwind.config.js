@@ -7,6 +7,7 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "./packages/workspace-ui/src/**/*.{js,jsx}",
   ],
   theme: {
     extend: {

@@ -1,12 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceVideoScopeEmbed } from "@src/local-features/workspace/ui/WorkspaceVideoScopeEmbed";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isVideoScopeMessage, WorkspaceVideoScopeEmbed } from "@src/features/workspace/ui/WorkspaceVideoScopeEmbed";
-import { useWorkspaceController } from "@src/features/workspace/model/useWorkspaceController";
-import { createInitialWorkspaceState } from "@src/features/workspace/model/workspaceState";
+import { isVideoScopeMessage } from "@src/local-features/workspace/ui/WorkspaceVideoScopeEmbed";
+import { useWorkspaceController } from "@alpha03123/vsummary-workspace-ui";
+import { createInitialWorkspaceState } from "@workspace/workspace/model/workspaceState";
 
-vi.mock("@src/features/workspace/model/useWorkspaceController", () => ({ useWorkspaceController: vi.fn() }));
-vi.mock("@src/features/workspace/ui/ChatDrawer", () => ({ ChatDrawer: () => null }));
+vi.mock("@alpha03123/vsummary-workspace-ui", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useWorkspaceController: vi.fn(),
+  ChatDrawer: () => null,
+}));
 
 function selectTarget(part = 1) {
   window.history.replaceState(null, "", `/?embed=video-scope&bilibili_url=${encodeURIComponent(`https://www.bilibili.com/video/BV1example?p=${part}`)}`);
@@ -84,7 +89,6 @@ describe("WorkspaceVideoScopeEmbed", () => {
     expect(screen.getByRole("button", { name: /逐字稿阅览/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "下载并生成" })).not.toBeInTheDocument();
   });
-
 });
 
 describe("isVideoScopeMessage", () => {

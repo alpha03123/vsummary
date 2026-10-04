@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceVideoScopePane } from "@workspace/workspace/ui/WorkspaceVideoScopePane";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { WorkspaceVideoScopePane } from "@src/features/workspace/ui/WorkspaceVideoScopePane";
-
-vi.mock("@src/features/workspace/ui/WorkspaceReadingPane", () => ({
+vi.mock("@workspace/workspace/ui/WorkspaceReadingPane", () => ({
   WorkspaceReadingPane: ({ onSeek, onOpenCitationReference }) => (
     <>
       <button type="button" onClick={() => onSeek({ seconds: 12, endSeconds: 15, chapterTitle: "逐字稿" })}>逐字稿跳转</button>
@@ -51,5 +51,4 @@ describe("WorkspaceVideoScopePane external seeks", () => {
     expect(openCitationReference).toHaveBeenCalledWith({ seconds: 42, endSeconds: 45, chapterTitle: "AI 引用" });
     expect(onExternalSeek).toHaveBeenCalledWith({ seconds: 42, endSeconds: 45, chapterTitle: "AI 引用" });
   });
-
 });

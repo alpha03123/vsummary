@@ -32,7 +32,8 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.5"
+    "unified": "^11.0.5",
+    "@alpha03123/vsummary-workspace-ui": "0.5.0-alpha.5"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.9",
@@ -49,5 +50,8 @@
     "tailwindcss": "^3.4.19",
     "vite": "^7.1.12",
     "vitest": "^4.1.2"
-  }
+  },
+  "workspaces": [
+    "packages/workspace-ui"
+  ]
 }

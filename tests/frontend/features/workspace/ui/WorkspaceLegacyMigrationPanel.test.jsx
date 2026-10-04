@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { WorkspaceLegacyMigrationPanel } from "@src/local-features/workspace/ui/WorkspaceLegacyMigrationPanel";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import { WorkspaceLegacyMigrationPanel } from "@src/features/workspace/ui/WorkspaceLegacyMigrationPanel";
 
 describe("WorkspaceLegacyMigrationPanel", () => {
   it("shows three storage modes and requires cleanup confirmation before starting", async () => {

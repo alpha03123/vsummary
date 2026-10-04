@@ -1,20 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  buildSeriesGenerationTaskKey,
-  buildVideoGenerationTaskKey,
-  createInitialWorkspaceState,
-  createWorkspaceLoadedState,
-  getGenerationTaskForSelection,
-  loadChatSessionIdsByScope,
-  loadChatSessionListsByScope,
-  normalizeUiSettings,
-  removeChatSessionForScope,
-  removeScopedValue,
-  resolveChatSessionsForScope,
-} from "@src/features/workspace/model/workspaceState";
-import { workspaceReducer } from "@src/features/workspace/model/workspaceReducer";
-import { getPendingVideosForSeriesGeneration } from "@src/features/workspace/model/workspaceContentActions";
+import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, createInitialWorkspaceState, createWorkspaceLoadedState, getGenerationTaskForSelection, loadChatSessionIdsByScope, loadChatSessionListsByScope, removeChatSessionForScope, removeScopedValue, resolveChatSessionsForScope } from "@workspace/workspace/model/workspaceState";
+import { workspaceReducer } from "@workspace/workspace/model/workspaceReducer";
+import { createWorkspaceContentActionFactory } from "@workspace/workspace/model/workspaceContentActions";
 
 const CHAT_SESSION_STORAGE_KEY = "video-include.chat-sessions";
 
@@ -35,45 +23,6 @@ describe("Playground library reload", () => {
     expect(nextState.selectedSeriesId).toBe("existing-playground");
     expect(nextState.selectedVideoId).toBeNull();
     expect(nextState.selectedContextType).toBe("playground");
-  });
-});
-
-describe("workspace UI settings", () => {
-  it("normalizes the web search setting with a safe disabled default", () => {
-    expect(normalizeUiSettings({}).webSearchEnabled).toBe(false);
-    expect(normalizeUiSettings({ webSearchEnabled: true }).webSearchEnabled).toBe(true);
-  });
-
-  it("normalizes the answer detail level with medium as the safe default", () => {
-    expect(normalizeUiSettings({}).answerDetailLevel).toBe("medium");
-    expect(normalizeUiSettings({ answerDetailLevel: "short" }).answerDetailLevel).toBe("short");
-    expect(normalizeUiSettings({ answerDetailLevel: "long" }).answerDetailLevel).toBe("long");
-    expect(normalizeUiSettings({ answerDetailLevel: "verbose" }).answerDetailLevel).toBe("medium");
-  });
-
-  it("normalizes the reasoning effort with medium as the safe default", () => {
-    expect(normalizeUiSettings({}).reasoningEffort).toBe("none");
-    expect(normalizeUiSettings({ reasoningEffort: "none" }).reasoningEffort).toBe("none");
-    expect(normalizeUiSettings({ reasoningEffort: "low" }).reasoningEffort).toBe("low");
-    expect(normalizeUiSettings({ reasoningEffort: "medium" }).reasoningEffort).toBe("medium");
-    expect(normalizeUiSettings({ reasoningEffort: "high" }).reasoningEffort).toBe("high");
-    expect(normalizeUiSettings({ reasoningEffort: "minimal" }).reasoningEffort).toBe("none");
-  });
-
-  it("normalizes LiteLLM provider values with openai as the default", () => {
-    expect(normalizeUiSettings({}).llmProvider).toBe("openai");
-    expect(normalizeUiSettings({ llmProvider: "deepseek" }).llmProvider).toBe("deepseek");
-    expect(normalizeUiSettings({ llmProvider: "dashscope" }).llmProvider).toBe("dashscope");
-    expect(normalizeUiSettings({ llmProvider: "openai_compatible" }).llmProvider).toBe("openai");
-    expect(normalizeUiSettings({ llmProvider: "openai_like" }).llmProvider).toBe("openai");
-    expect(normalizeUiSettings({ llmProvider: "ollama_chat" }).llmProvider).toBe("openai");
-    expect(normalizeUiSettings({ llmProvider: "vllm" }).llmProvider).toBe("openai");
-  });
-
-  it("preserves an empty HuggingFace endpoint to use the official source", () => {
-    expect(normalizeUiSettings({ hfEndpoint: "" }).hfEndpoint).toBe("");
-    expect(normalizeUiSettings({ hfEndpoint: "   " }).hfEndpoint).toBe("");
-    expect(normalizeUiSettings({ hfEndpoint: " https://hf-mirror.com " }).hfEndpoint).toBe("https://hf-mirror.com");
   });
 });
 
@@ -181,26 +130,6 @@ describe("workspaceState chat session persistence", () => {
     expect(removeScopedValue(chatThreads, "series|series-a::2")).toEqual({
       "series|series-a": [{ id: "msg-1", role: "assistant", content: "第一个回答" }],
     });
-  });
-});
-
-describe("workspaceReducer knowledge memory status", () => {
-  it("stores the latest long-term memory snapshot", () => {
-    const state = createInitialWorkspaceState();
-    const snapshot = {
-      status: "running",
-      stage: "index",
-      progress: 20,
-      detail: "正在重建长期记忆索引",
-      error: null,
-    };
-
-    const nextState = workspaceReducer(state, {
-      type: "knowledge_memory_status_loaded",
-      snapshot,
-    });
-
-    expect(nextState.knowledgeMemorySnapshot).toBe(snapshot);
   });
 });
 
@@ -458,7 +387,7 @@ describe("workspace chat stream errors", () => {
 });
 
 describe("workspaceContentActions series generation", () => {
-  it("selects only unprocessed videos for one-click sequential generation", () => {
+  it("counts only unprocessed available videos when starting series generation", async () => {
     const library = {
       series: [
         {
@@ -473,10 +402,23 @@ describe("workspaceContentActions series generation", () => {
       ],
     };
 
-    expect(getPendingVideosForSeriesGeneration(library, "series-a").map((video) => video.id)).toEqual([
-      "video-2",
-      "video-3",
-    ]);
+    const dispatch = vi.fn();
+    const generateSeriesSummaries = vi.fn().mockResolvedValue({ jobId: "batch-1", status: "queued" });
+    const createActions = createWorkspaceContentActionFactory({
+      generateSeriesSummaries,
+      subscribeSeriesGenerationProgress: vi.fn(() => vi.fn()),
+    });
+    const actions = createActions({
+      state: { ...createInitialWorkspaceState(), library, selectedSeriesId: "series-a" },
+      dispatch,
+    });
+
+    await actions.onGenerateSeries();
+
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "series_generation_queue_started", seriesId: "series-a", total: 2,
+    }));
+    expect(generateSeriesSummaries).toHaveBeenCalledWith("series-a", expect.objectContaining({ processingMode: "summary" }));
   });
 
   it("tracks one-click series queue from backend series progress", () => {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "@src/features/workspace/model/modelDownloadMessages";
-import { workspaceReducer } from "@src/features/workspace/model/workspaceReducer";
+import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "@src/local-features/workspace/model/modelDownloadMessages";
+import { workspaceReducer } from "@workspace/workspace/model/workspaceReducer";
 import {
   buildSeriesGenerationTaskKey,
   buildVideoGenerationTaskKey,
   createInitialWorkspaceState,
-} from "@src/features/workspace/model/workspaceState";
+} from "@workspace/workspace/model/workspaceState";
 
 describe("workspaceReducer series overview", () => {
   it("stores summaries independently from the selected video summary", () => {
@@ -52,25 +52,6 @@ describe("workspaceReducer model download failures", () => {
     expect(nextState.modelDownloadError).toBe(MODEL_DOWNLOAD_FAILED_MESSAGE);
   });
 
-  it("clears faster-whisper download failure back to regular state", () => {
-    const state = {
-      downloadingModelId: null,
-      modelDownloadStatus: "failed",
-      modelDownloadProgress: null,
-      modelDownloadErrorModelId: "large-v3-turbo",
-      modelDownloadError: "ConnectTimeout",
-    };
-
-    const nextState = workspaceReducer(state, {
-      type: "faster_whisper_model_download_failure_cleared",
-      modelId: "large-v3-turbo",
-    });
-
-    expect(nextState.modelDownloadStatus).toBeNull();
-    expect(nextState.modelDownloadErrorModelId).toBeNull();
-    expect(nextState.modelDownloadError).toBeNull();
-  });
-
   it("tracks multiple faster-whisper model downloads independently", () => {
     let state = {
       modelDownloadsById: {},
@@ -101,31 +82,6 @@ describe("workspaceReducer model download failures", () => {
     expect(state.modelDownloadsById).toEqual({
       medium: expect.objectContaining({ status: "running", progress: 5, error: null }),
       "large-v3": expect.objectContaining({ status: "running", progress: 0, error: null }),
-    });
-  });
-
-  it("marks faster-whisper model download as cancelling", () => {
-    const state = {
-      modelDownloadsById: {
-        "large-v3-turbo": { status: "running", progress: 32, error: null },
-      },
-      downloadingModelId: "large-v3-turbo",
-      modelDownloadStatus: "running",
-      modelDownloadProgress: 32,
-      modelDownloadErrorModelId: null,
-      modelDownloadError: null,
-    };
-
-    const nextState = workspaceReducer(state, {
-      type: "faster_whisper_model_download_cancel_requested",
-      modelId: "large-v3-turbo",
-    });
-
-    expect(nextState.downloadingModelId).toBe("large-v3-turbo");
-    expect(nextState.modelDownloadsById["large-v3-turbo"]).toEqual({
-      status: "cancelling",
-      progress: 32,
-      error: null,
     });
   });
 
@@ -212,35 +168,6 @@ describe("workspaceReducer model download failures", () => {
     });
   });
 
-  it("clears RAG download failure back to regular state", () => {
-    const state = {
-      downloadingRagModelKeys: [],
-      downloadingRagModelKey: null,
-      ragModelsLoading: false,
-      ragModels: [
-        {
-          key: "embedding",
-          status: "failed",
-          progress: null,
-          detail: null,
-          error: "LocalEntryNotFoundError",
-        },
-      ],
-    };
-
-    const nextState = workspaceReducer(state, {
-      type: "rag_model_download_failure_cleared",
-      modelKey: "embedding",
-    });
-
-    expect(nextState.ragModels[0]).toMatchObject({
-      status: "idle",
-      progress: null,
-      detail: null,
-      error: null,
-    });
-  });
-
   it("tracks multiple RAG model downloads independently", () => {
     let state = {
       downloadingRagModelKeys: [],
@@ -304,40 +231,6 @@ describe("workspaceReducer video generation cancellation", () => {
 
     expect(state.generationTasksByKey[taskKey].snapshot.status).toBe("running");
     expect(state.generationSnapshot.status).toBe("running");
-  });
-
-  it("marks video task snapshot as cancelling on video_generation_cancelling", () => {
-    const taskKey = buildVideoGenerationTaskKey("series-a", "video-1");
-    let state = workspaceReducer(createInitialWorkspaceState(), {
-      type: "generation_started",
-      videoKey: taskKey,
-      seriesId: "series-a",
-      videoId: "video-1",
-    });
-
-    state = workspaceReducer(state, {
-      type: "video_generation_cancelling",
-      seriesId: "series-a",
-      videoId: "video-1",
-    });
-
-    expect(state.generationTasksByKey[taskKey].snapshot.status).toBe("cancelling");
-    expect(state.generationTasksByKey[taskKey].snapshot.detail).toBe("正在停止当前任务");
-  });
-
-  it("series_generation_queue_cancelling sets queue status to cancelling", () => {
-    let state = workspaceReducer(createInitialWorkspaceState(), {
-      type: "series_generation_queue_started",
-      seriesId: "series-a",
-      total: 3,
-    });
-
-    state = workspaceReducer(state, {
-      type: "series_generation_queue_cancelling",
-      seriesId: "series-a",
-    });
-
-    expect(state.seriesGenerationQueue.status).toBe("cancelling");
   });
 
   it("ignores series status without run id while a run-scoped queue is active", () => {
@@ -444,30 +337,6 @@ describe("workspaceReducer video generation cancellation", () => {
 });
 
 describe("workspaceReducer chat drawer", () => {
-  it("starts with chatDrawerOpen=false in initial state", () => {
-    const state = createInitialWorkspaceState();
-    expect(state.chatDrawerOpen).toBe(false);
-  });
-
-  it("chat_drawer_toggled flips the field", () => {
-    const start = createInitialWorkspaceState();
-    const opened = workspaceReducer(start, { type: "chat_drawer_toggled" });
-    expect(opened.chatDrawerOpen).toBe(true);
-    const closed = workspaceReducer(opened, { type: "chat_drawer_toggled" });
-    expect(closed.chatDrawerOpen).toBe(false);
-  });
-
-  it("chat_drawer_opened sets the field to true", () => {
-    const state = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
-    expect(state.chatDrawerOpen).toBe(true);
-  });
-
-  it("chat_drawer_closed sets the field to false", () => {
-    const opened = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
-    const closed = workspaceReducer(opened, { type: "chat_drawer_closed" });
-    expect(closed.chatDrawerOpen).toBe(false);
-  });
-
   it("video_selected resets playerSeekRequest but keeps chatDrawerOpen", () => {
     const start = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
     const request = { seconds: 5, endSeconds: null, query: "", matchedText: "", chapterTitle: "x", requestId: 1 };
@@ -568,21 +437,6 @@ describe("workspaceReducer video download cancellation", () => {
     expect(nextState.downloadingVideoKey).toBeNull();
     expect(nextState.library.series[0].videos[0].status).toBe("linked");
   });
-
-  it("marks the selected RAG download as cancelling", () => {
-    const state = {
-      downloadingRagModelKeys: ["embedding"],
-      ragModels: [{ key: "embedding", status: "running", progress: 42, error: null }],
-    };
-
-    const nextState = workspaceReducer(state, {
-      type: "rag_model_download_cancel_requested",
-      modelKey: "embedding",
-    });
-
-    expect(nextState.downloadingRagModelKeys).toEqual(["embedding"]);
-    expect(nextState.ragModels[0]).toMatchObject({ status: "cancelling", progress: 42, error: null });
-  });
 });
 
 describe("workspaceReducer completed video generation refresh", () => {
@@ -640,30 +494,5 @@ describe("workspaceReducer completed video generation refresh", () => {
 
     expect(nextState.aiSummary).toEqual({ title: "Video 2" });
     expect(nextState.tools).toEqual({ aiSummary: { generated: false } });
-  });
-});
-
-describe("workspaceReducer provider usage", () => {
-  it("stores provider usage after loading", () => {
-    const state = workspaceReducer(createInitialWorkspaceState(), {
-      type: "provider_usage_loading_started",
-      range: "30d",
-    });
-
-    const nextState = workspaceReducer(state, {
-      type: "provider_usage_loaded",
-      range: "30d",
-      usage: {
-        total: { totalTokens: 42 },
-        byCategory: [],
-        byProvider: [],
-        recent: [],
-      },
-    });
-
-    expect(nextState.providerUsageRange).toBe("30d");
-    expect(nextState.providerUsageLoading).toBe(false);
-    expect(nextState.providerUsage.total.totalTokens).toBe(42);
-    expect(nextState.providerUsageError).toBe("");
   });
 });

@@ -8,6 +8,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from tests import _path_setup
+from tests._api_fixtures import make_api_container
 from backend.local.http.app import create_app
 from backend.api.adapters.agent_runtime_provider import _resolve_local_reranker_cache_dir
 from tools.release_packaging import (
@@ -26,7 +27,7 @@ class FrontendStaticMountTests(unittest.TestCase):
             (dist_dir / "index.html").write_text("<html><body>frontend</body></html>", encoding="utf-8")
             (assets_dir / "app.js").write_text("console.log('ok');", encoding="utf-8")
 
-            app = create_app(container=DummyContainer(root_dir))
+            app = create_app(container=make_api_container(root_dir=root_dir))
 
             with TestClient(app) as client:
                 index_response = client.get("/")
@@ -53,7 +54,7 @@ class FrontendStaticMountTests(unittest.TestCase):
             (assets_dir / "app.js").write_text("console.log('ok');", encoding="utf-8")
 
             with patch("starlette.responses.guess_type", return_value=("text/plain", None)):
-                app = create_app(container=DummyContainer(root_dir))
+                app = create_app(container=make_api_container(root_dir=root_dir))
 
                 with TestClient(app) as client:
                     asset_response = client.get("/assets/app.js")
@@ -63,11 +64,6 @@ class FrontendStaticMountTests(unittest.TestCase):
                 asset_response.headers["content-type"].split(";")[0],
                 {"application/javascript", "text/javascript"},
             )
-
-
-class DummyContainer:
-    def __init__(self, root_dir: Path) -> None:
-        self.root_dir = root_dir
 
 
 class ReleasePackagingSpecTests(unittest.TestCase):

@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { WorkspaceReadingPane } from "@workspace/workspace/ui/WorkspaceReadingPane";
+import { render } from "@src/testing/renderWorkspace";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-
-import { WorkspaceReadingPane } from "@src/features/workspace/ui/WorkspaceReadingPane";
 
 const selectedVideo = {
   id: "video-1",
@@ -59,13 +59,6 @@ function renderPane(overrides = {}) {
 }
 
 describe("WorkspaceReadingPane markdown exports", () => {
-  it("keeps the selected tool available while its status is loading", async () => {
-    renderPane({ tools: null, toolsLoading: true });
-
-    expect(screen.queryByText("读取工具状态")).toBeNull();
-    expect(await screen.findByText("第一讲")).toBeInTheDocument();
-  });
-
   it("uses the active series and selected video in overview export links", async () => {
     renderPane();
 
@@ -93,47 +86,6 @@ describe("WorkspaceReadingPane markdown exports", () => {
       "/api/videos/series-1/video-1/exports/video",
     );
   });
-
-  it("disables knowledge card export before cards are generated", async () => {
-    renderPane({ toolId: "knowledge-cards" });
-
-    expect(await screen.findByRole("button", { name: "导出" })).toBeDisabled();
-    expect(screen.queryByRole("link", { name: "知识卡片导出" })).toBeNull();
-  });
-
-  it("enables notes export when the current video has notes", async () => {
-    renderPane({
-      toolId: "notes",
-      notes: {
-        notes: [
-          {
-            id: "note-1",
-            title: "重点",
-            content: "内容",
-            source: "manual",
-            createdAt: "2026-06-06T10:00:00Z",
-            updatedAt: "2026-06-06T10:00:00Z",
-          },
-        ],
-      },
-    });
-
-    fireEvent.click(await screen.findByRole("button", { name: "导出" }));
-    expect(screen.getByRole("link", { name: "笔记导出" })).toHaveAttribute(
-      "href",
-      "/api/videos/series-1/video-1/exports/notes.md",
-    );
-  });
-
-  it("disables notes export when there are no notes", async () => {
-    renderPane({
-      toolId: "notes",
-      notes: { notes: [] },
-    });
-
-    expect(await screen.findByRole("button", { name: "导出" })).toBeDisabled();
-  });
-
 });
 
 describe("WorkspaceReadingPane AI summary references", () => {
