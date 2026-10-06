@@ -16,7 +16,6 @@ import {
   Square,
   CheckSquare,
   X,
-  CheckCheck,
   Pencil,
   FileArchive,
   Captions,
@@ -33,6 +32,7 @@ import { buildVideoKey } from "../model/workspaceControllerUtils";
 import { isBilibiliInboxSeries, isPlaygroundSeries } from "../model/workspaceControllerConstants";
 import { useOutsidePointerUp } from "../../shared/lib/useOutsidePointerUp";
 import { WorkspaceOverflowMenu } from "./shared/WorkspaceOverflowMenu";
+import { WorkspaceSelectionBar } from "./shared/WorkspaceSelectionControls";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
 
@@ -999,39 +999,26 @@ export function WorkspaceLibraryPanel({
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
               className="sticky bottom-0 z-20 mx-3 mb-3"
             >
-              <div className="flex items-center justify-between gap-2 rounded-2xl border border-stone-200/80 bg-white/95 px-4 py-2.5 shadow-lg backdrop-blur-sm dark:border-stone-700 dark:bg-neutral-900/95">
-                <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">
-                  已选 {selectedCount} 项
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    disabled={seriesHasActiveWork || filteredVideos.length === 0}
-                    onClick={selectFilteredVideos}
-                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
-                  >
-                    <CheckCheck size={14} />
-                    全选
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedVideoIds([])}
-                    className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-500 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-                  >
-                    取消
-                  </button>
+              <WorkspaceSelectionBar
+                surface="raised"
+                label="批量选择视频"
+                selectedCount={selectedCount}
+                selectAllDisabled={seriesHasActiveWork || filteredVideos.length === 0}
+                onSelectAll={selectFilteredVideos}
+                onClear={() => setSelectedVideoIds([])}
+                extra={
                   <button
                     type="button"
                     disabled={seriesHasActiveWork}
                     onClick={() => onRequestBulkDelete?.(selectedVideoIds)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
                     title={seriesHasActiveWork ? activeWorkSummary || "系列中有任务正在处理，暂不能批量删除" : "删除所选视频"}
                   >
                     <Trash2 size={14} />
                     删除
                   </button>
-                </div>
-              </div>
+                }
+              />
               {seriesHasActiveWork ? (
                 <p className="mt-1.5 px-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
               ) : null}

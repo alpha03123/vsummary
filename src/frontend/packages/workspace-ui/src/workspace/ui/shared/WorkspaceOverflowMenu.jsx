@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
@@ -26,14 +26,15 @@ export function WorkspaceOverflowMenu({
       return;
     }
     setPosition({
-      right: Math.max(16, window.innerWidth - bounds.right),
+      left: Math.max(16, Math.min(bounds.right - menuRef.current.getBoundingClientRect().width,
+        window.innerWidth - menuRef.current.getBoundingClientRect().width - 16)),
       vertical: placement === "top"
         ? { bottom: window.innerHeight - bounds.top + 8 }
         : { top: bounds.bottom + 8 },
     });
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       return undefined;
     }
@@ -62,11 +63,12 @@ export function WorkspaceOverflowMenu({
       >
         {triggerContent ?? <MoreHorizontal size={18} />}
       </button>
-      {open && position ? createPortal(
+      {open ? createPortal(
         <div
           ref={menuRef}
           className={`fixed z-[70] ${menuClassName} rounded-2xl border border-stone-200 bg-white p-1 shadow-xl motion-fade-scale dark:border-stone-700 dark:bg-neutral-900`}
-          style={{ right: position.right, ...position.vertical }}
+          style={{ left: position?.left, ...position?.vertical, maxWidth: 'calc(100vw - 32px)',
+            visibility: position ? 'visible' : 'hidden' }}
         >
           {children}
         </div>,
