@@ -365,6 +365,7 @@ function PanelFooter({
             <button
               type="button"
               onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
+              disabled={isGeneratingSeries && !onCancelGeneration}
               className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${isGeneratingSeries
                 ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
                 : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
@@ -373,7 +374,7 @@ function PanelFooter({
               {isGeneratingSeries ? (
                 <>
                   <LoaderCircle size={16} className="animate-spin" />
-                  取消处理整个系列
+                  {onCancelGeneration ? "取消处理整个系列" : "正在处理整个系列"}
                 </>
               ) : (
                 <>
@@ -496,9 +497,10 @@ function PanelFooter({
           onClick={isGeneratingSelectedVideo
             ? onCancelGeneration
             : () => onDownloadVideo?.(selectedVideo)}
+          disabled={isGeneratingSelectedVideo && !onCancelGeneration}
         >
           {isGeneratingSelectedVideo || selectedVideoIsDownloading ? <X size={16} strokeWidth={2.5} /> : <ArrowDown size={16} strokeWidth={2.5} />}
-          {isGeneratingSelectedVideo ? "取消当前处理" : selectedVideoIsDownloading ? "取消下载" : "下载视频"}
+          {isGeneratingSelectedVideo ? (onCancelGeneration ? "取消当前处理" : "正在处理") : selectedVideoIsDownloading ? "取消下载" : "下载视频"}
         </button>
         {hasSelectedVideoDownloadError && downloadError ? (
           <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300">
@@ -604,12 +606,12 @@ function PanelFooter({
                   ? onRelinkVideo
                   : () => onGenerateVideo?.(aiSummaryTemplate)
           }
-          disabled={videoGenerationButton.disabled}
+          disabled={videoGenerationButton.disabled || (isGeneratingSelectedVideo && !onCancelGeneration)}
         >
           {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
             <>
               <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
-              {videoGenerationButton.label}
+              {isGeneratingSelectedVideo && !onCancelGeneration ? "正在处理" : videoGenerationButton.label}
             </>
           ) : modelNeedsDownload ? (
             <>

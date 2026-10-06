@@ -459,7 +459,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               allowSourceRegeneration={host.features?.sourceRegeneration !== false}
               onRelinkVideo={actions.relinkVideo}
               onGenerateSeries={actions.generateSeries}
-              onCancelGeneration={actions.cancelGeneration}
+              onCancelGeneration={host.features?.generationCancellation === false ? null : actions.cancelGeneration}
               onDownloadVideo={actions.downloadVideo}
               onAddPlaygroundVideo={() => setImportModalState({ mode: "playground" })}
               onAddSeriesVideo={() => {
@@ -635,7 +635,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                   generationSnapshot={generation.snapshot}
                   mode={shell.processingMode}
                   title={shell.processingMode === "transcript" ? "正在获取字幕" : generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
-                  onCancel={actions.cancelGeneration}
+                  onCancel={host.features?.generationCancellation === false ? null : actions.cancelGeneration}
                   cancelLabel={generation.isGeneratingSeries ? "取消整个系列" : "取消本次生成"}
                 />
               </Suspense>
