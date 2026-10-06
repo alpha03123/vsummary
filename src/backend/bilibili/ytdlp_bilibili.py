@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from backend.shared.subprocess_cancellation import watch_process_cancellation
+
 import asyncio
 from collections import deque
 import os
@@ -289,22 +291,25 @@ class BilibiliDownloader:
                 raise RuntimeError("无法读取 yt-dlp 输出。")
             last_percent = -1.0
             recent_output: deque[str] = deque(maxlen=50)
-            for line in process.stdout:
-                stripped_line = line.rstrip()
-                if stripped_line:
-                    recent_output.append(stripped_line)
-                if _download_cancel_requested(reporter):
-                    process.terminate()
+            with watch_process_cancellation(process, lambda: _download_cancel_requested(reporter)) as cancelled:
+                for line in process.stdout:
+                    stripped_line = line.rstrip()
+                    if stripped_line:
+                        recent_output.append(stripped_line)
+                    if _download_cancel_requested(reporter):
+                        process.terminate()
+                        raise DownloadCancelled("下载已取消")
+                    match = self._PROGRESS_RE.search(stripped_line)
+                    if match is None:
+                        continue
+                    percent = float(match.group(1))
+                    if percent == last_percent:
+                        continue
+                    last_percent = percent
+                    reporter.update("download", percent, f"下载中 {percent:.1f}%")
+                process.wait()
+                if cancelled.is_set():
                     raise DownloadCancelled("下载已取消")
-                match = self._PROGRESS_RE.search(stripped_line)
-                if match is None:
-                    continue
-                percent = float(match.group(1))
-                if percent == last_percent:
-                    continue
-                last_percent = percent
-                reporter.update("download", percent, f"下载中 {percent:.1f}%")
-            process.wait()
             if process.returncode != 0:
                 raise RuntimeError(_format_yt_dlp_failure(process.returncode, recent_output))
         except DownloadCancelled:

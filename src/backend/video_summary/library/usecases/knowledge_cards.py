@@ -49,7 +49,33 @@ class GenerateVideoKnowledgeCards:
         self._frame_pool_builder = frame_pool_builder
         self._saved_visual_paths = saved_visual_paths
 
-    def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
+    def run(self, series_id: str, video_id: str):
+        workflow = self._card_requests(series_id, video_id)
+        try:
+            request = next(workflow)
+        except StopIteration as completed:
+            return completed.value
+        cards = self._generator.run(**request)
+        try:
+            workflow.send(cards)
+        except StopIteration as completed:
+            return completed.value
+        raise AssertionError('Knowledge card workflow must finish after generation.')
+
+    async def arun(self, series_id: str, video_id: str):
+        workflow = self._card_requests(series_id, video_id)
+        try:
+            request = next(workflow)
+        except StopIteration as completed:
+            return completed.value
+        cards = await self._generator.arun(**request)
+        try:
+            workflow.send(cards)
+        except StopIteration as completed:
+            return completed.value
+        raise AssertionError('Knowledge card workflow must finish after generation.')
+
+    def _card_requests(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         """为指定视频生成知识卡并落盘，返回最终制品 DTO。
 
         Args:
@@ -81,7 +107,7 @@ class GenerateVideoKnowledgeCards:
             arguments["visual_frame_paths"] = visual_frame_paths
         if visual_evidence_text:
             arguments["visual_evidence_text"] = visual_evidence_text
-        cards = self._generator.run(**arguments)
+        cards = yield arguments
         self._workspace.save_video_knowledge_cards(
             series_id,
             video_id,

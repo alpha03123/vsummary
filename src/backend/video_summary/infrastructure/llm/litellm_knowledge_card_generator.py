@@ -68,7 +68,27 @@ class LiteLLMKnowledgeCardGenerator:
         """
         self._gateway = gateway
 
-    def run(
+    def run(self, **kwargs):
+        workflow = self._card_requests(**kwargs)
+        messages = next(workflow)
+        payload = self._gateway.complete_structured(messages, response_model=KnowledgeCardCollectionPayload, retries=3)
+        try:
+            workflow.send(payload)
+        except StopIteration as completed:
+            return completed.value
+        raise AssertionError('Knowledge card workflow must finish after generation.')
+
+    async def arun(self, **kwargs):
+        workflow = self._card_requests(**kwargs)
+        messages = next(workflow)
+        payload = await self._gateway.acomplete_structured(messages, response_model=KnowledgeCardCollectionPayload, retries=3)
+        try:
+            workflow.send(payload)
+        except StopIteration as completed:
+            return completed.value
+        raise AssertionError('Knowledge card workflow must finish after generation.')
+
+    def _card_requests(
         self,
         *,
         title: str,
@@ -99,11 +119,7 @@ class LiteLLMKnowledgeCardGenerator:
             if visual_frame_paths
             else prompt
         )
-        payload = self._gateway.complete_structured(
-            [{"role": "user", "content": message_content}],
-            response_model=KnowledgeCardCollectionPayload,
-            retries=3,
-        )
+        payload = yield [{"role": "user", "content": message_content}]
         cards = [
             KnowledgeCardDTO(
                 id=card.id.strip(),
@@ -169,6 +185,14 @@ class ConfiguredKnowledgeCardGenerator:
             visual_evidence_text=visual_evidence_text if visual_input == "evidence" else "",
             visual_frame_paths=visual_frame_paths if visual_input == "frames" else None,
         )
+
+    async def arun(self, *, title, summary_data, visual_evidence_text='', visual_frame_paths=None):
+        generator = self._get_generator()
+        settings = load_effective_settings(config_path=self._config_path, root_dir=self._root_dir)
+        visual_input = settings.generation.cards_visual_input
+        return await generator.arun(title=title, summary_data=summary_data,
+            visual_evidence_text=visual_evidence_text if visual_input == 'evidence' else '',
+            visual_frame_paths=visual_frame_paths if visual_input == 'frames' else None)
 
     def _get_generator(self) -> LiteLLMKnowledgeCardGenerator:
         """读取配置文件签名并按需重建/复用生成器。

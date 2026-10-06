@@ -5,6 +5,7 @@ from __future__ import annotations
 from backend.core.preferences import load_effective_settings, preference_cache_key
 
 from dataclasses import replace
+from collections.abc import Generator
 from pathlib import Path
 import re
 from threading import Lock
@@ -59,7 +60,27 @@ class LiteLLMNoteGenerator:
     def __init__(self, gateway: LiteLLMCompletionGateway) -> None:
         self._gateway = gateway
 
-    def run_ai_summary(
+    def run_ai_summary(self, **kwargs) -> GeneratedVideoAiNoteDTO:
+        workflow = self._ai_summary_requests(**kwargs)
+        messages = next(workflow)
+        while True:
+            payload = self._gateway.complete_structured(messages, response_model=AiSummaryPayload, temperature=NOTE_TEMPERATURE)
+            try:
+                messages = workflow.send(payload)
+            except StopIteration as completed:
+                return completed.value
+
+    async def arun_ai_summary(self, **kwargs) -> GeneratedVideoAiNoteDTO:
+        workflow = self._ai_summary_requests(**kwargs)
+        messages = next(workflow)
+        while True:
+            payload = await self._gateway.acomplete_structured(messages, response_model=AiSummaryPayload, temperature=NOTE_TEMPERATURE)
+            try:
+                messages = workflow.send(payload)
+            except StopIteration as completed:
+                return completed.value
+
+    def _ai_summary_requests(
         self,
         *,
         transcript: VideoTranscriptDTO,
@@ -70,7 +91,7 @@ class LiteLLMNoteGenerator:
         note_visual_mode: str,
         note_max_images: int,
         note_image_min_gap_seconds: float,
-    ) -> GeneratedVideoAiNoteDTO:
+    ) -> Generator[list[dict[str, object]], AiSummaryPayload, GeneratedVideoAiNoteDTO]:
         transcript_text = "\n".join(
             f"[{segment.start_seconds:.3f}-{segment.end_seconds:.3f}] {segment.text.strip()}"
             for segment in transcript.segments
@@ -106,11 +127,7 @@ class LiteLLMNoteGenerator:
         )
         allowed_timestamps = tuple(visual_context.evidence_timestamps)
         for attempt in range(2):
-            payload = self._gateway.complete_structured(
-                [{"role": "user", "content": message_content}],
-                response_model=AiSummaryPayload,
-                temperature=NOTE_TEMPERATURE,
-            )
+            payload = yield [{"role": "user", "content": message_content}]
             try:
                 note = _to_generated_note(
                     payload=payload,
@@ -306,6 +323,15 @@ class ConfiguredNoteGenerator:
             note_max_images=settings.generation.note_max_images,
             note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds,
         )
+
+    async def arun_ai_summary(self, **kwargs) -> GeneratedVideoAiNoteDTO:
+        generator = self._get_generator()
+        settings = load_effective_settings(config_path=self._config_path, root_dir=self._root_dir)
+        return await generator.arun_ai_summary(**kwargs,
+            multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
+            note_visual_mode=settings.generation.note_visual_mode,
+            note_max_images=settings.generation.note_max_images,
+            note_image_min_gap_seconds=settings.generation.note_image_min_gap_seconds)
 
     def _get_generator(self) -> LiteLLMNoteGenerator:
         ensure_settings_file(self._config_path)

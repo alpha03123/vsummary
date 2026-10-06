@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
@@ -20,7 +19,7 @@ class AutoGenerateVideoArtifacts:
         *,
         load_enabled_artifacts: Callable[[], tuple[str, ...]],
         generate_mindmap: Callable[[str, str], Awaitable[object]],
-        generate_knowledge_cards: Callable[[str, str], object],
+        generate_knowledge_cards: Callable[[str, str], Awaitable[object]],
         requires_visual_evidence: Callable[[str], bool] | None = None,
         wait_for_visual_evidence: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> None:
@@ -43,7 +42,7 @@ class AutoGenerateVideoArtifacts:
                 if artifact == "mindmap":
                     await self._generate_mindmap(series_id, video_id)
                 elif artifact == "knowledge_cards":
-                    await asyncio.to_thread(self._generate_knowledge_cards, series_id, video_id)
+                    await self._generate_knowledge_cards(series_id, video_id)
             except Exception:
                 LOGGER.exception("auto-generated %s failed for %s/%s", artifact, series_id, video_id)
                 failed.append(artifact)

@@ -42,6 +42,24 @@ class _Repository:
 
 
 class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_running_handler_stops_waiting_when_cancel_requested(self):
+        import asyncio
+        repository=_Repository(cancelled=True,cancel_on_check=2)
+        interrupted=[]
+        async def handler(_claim,_reporter):
+            try:await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                interrupted.append(True);raise
+        worker=SqlJobWorker(repository=repository,
+            get_execution_services=lambda _:make_workspace_services(job_operation_handlers={'custom':handler}),
+            options=WorkerOptions(worker_id='worker',operation_filter=frozenset({'custom'})))
+        claim=ClaimedJob(id='job',workspace_id='workspace',resource_type='video',resource_id='video',operation='custom',
+            request_payload={},attempt_no=1,worker_id='worker',lease_token='token',lease_expires_at=datetime.now(timezone.utc))
+        await asyncio.wait_for(worker._execute(claim),0.5)
+        self.assertEqual(interrupted,[True])
+        self.assertTrue(repository.cancelled_details)
+        self.assertEqual(repository.succeeded,[])
+
     async def test_custom_operation_handler_is_confirmed_through_durable_success(self) -> None:
         repository = _Repository()
         called: list[str] = []

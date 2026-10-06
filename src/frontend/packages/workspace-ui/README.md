@@ -153,3 +153,5 @@ AI 聊天仅在已选择系列或视频时显示。回到全部系列主页时�
 `WorkspaceImportSelection` 是共享的多视频选择对话框，接收 `items`、`onConfirm(selectedIds)` 与 `onClose`，支持默认全选、逐项选择、全选/清空和搜索。Local 在选定视频后导入；Cloud 先完成选择和积分确认，再导入并排队。
 
 宿主可通过 `exportOptions` 按工具限定已有导出项，例如 `{ overview: ['mixed.md', 'summary-with-screenshots.zip'] }`。未配置时保留默认导出菜单。
+
+宿主通过 `features.generationCancellation: false` 关闭处理弹框和侧栏中的生成取消操作。未设置时保留 Local 的取消能力；导入确认、删除确认和编辑取消不受影响。

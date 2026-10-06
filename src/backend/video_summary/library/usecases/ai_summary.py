@@ -34,6 +34,10 @@ class AiSummaryGenerator(Protocol):
     ) -> GeneratedVideoAiNoteDTO:
         ...
 
+    async def arun_ai_summary(self, *, transcript: VideoTranscriptDTO, summary: VideoSummaryDTO | None,
+        visual_context: VideoAiNoteVisualContextDTO, template: str) -> GeneratedVideoAiNoteDTO:
+        ...
+
 
 class VideoAiSummaryStore(VideoLibraryReader, VideoAiSummaryStorePort, Protocol):
     """AI 概括生成所需的读取和唯一制品写入能力。"""
@@ -65,11 +69,30 @@ class GenerateVideoAiSummary:
         self._note_frame_materializer = note_frame_materializer
 
     def run(self, series_id: str, video_id: str, *, template: str = "general") -> VideoAiSummaryDTO | None:
+        workflow = self._generation_requests(series_id, video_id, template=template)
+        request = next(workflow)
+        generated = self._generator.run_ai_summary(**request)
+        try:
+            workflow.send(generated)
+        except StopIteration as completed:
+            return completed.value
+        raise AssertionError('AI summary workflow must finish after generation.')
+
+    async def arun(self, series_id: str, video_id: str, *, template: str = "general") -> VideoAiSummaryDTO | None:
+        workflow = self._generation_requests(series_id, video_id, template=template)
+        request = next(workflow)
+        generated = await self._generator.arun_ai_summary(**request)
+        try:
+            workflow.send(generated)
+        except StopIteration as completed:
+            return completed.value
+        raise AssertionError('AI summary workflow must finish after generation.')
+
+    def _generation_requests(self, series_id: str, video_id: str, *, template: str):
         source = self._workspace.get_video_source(series_id, video_id)
         transcript = self._workspace.get_video_transcript(series_id, video_id)
         if transcript is None:
             raise ValueError("请先生成视频转写，再生成 AI 概括。")
-        outline = self._workspace.get_video_summary(series_id, video_id)
         # B 的事实输入是原始转写和独立帧池，不反向依赖 A 的章节文案或封面图。
         visual_context = VideoAiNoteVisualContextDTO(frames=[])
         if source is None and self._saved_visual_context is not None:
@@ -77,12 +100,7 @@ class GenerateVideoAiSummary:
         multimodal_enabled = self._multimodal_policy() if self._multimodal_policy is not None else self._multimodal_enabled
         if source is not None and multimodal_enabled and self._max_visual_input_images is not None and self._frame_pool_builder is not None:
             visual_context = _build_frame_pool_context(source, visual_context, self._max_visual_input_images, self._frame_pool_builder)
-        generated = self._generator.run_ai_summary(
-            transcript=transcript,
-            summary=None,
-            visual_context=visual_context,
-            template=template,
-        )
+        generated = yield dict(transcript=transcript, summary=None, visual_context=visual_context, template=template)
         title, content = _split_note_title(generated.content, fallback=transcript.title)
         content = constrain_ai_note_image_markers(
             content,

@@ -184,6 +184,10 @@ class GenerateVideoSummary:
                 source_url=source_url,
                 cache_dir=cache_dir if cache_dir is not None else output_dir / ".cache",
             )
+        except (asyncio.CancelledError, GenerateCancelledError):
+            if resolved_cancellation is not None:
+                resolved_cancellation.request_cancel()
+            raise
         finally:
             if cancel_watch_task is not None:
                 cancel_watch_task.cancel()
@@ -467,6 +471,7 @@ class GenerateVideoSummary:
                 on_progress=report_ai_summary_progress,
                 cache_dir=cache_dir,
                 template=ai_summary_template,
+                cancellation=cancellation,
             )
 
         if processing_mode == "transcript":
@@ -557,8 +562,11 @@ class GenerateVideoSummary:
         on_progress: Callable[[str, str], None] | None,
         cache_dir: Path,
         template: str,
+        cancellation: GenerationCancellationContext | None,
     ) -> asyncio.Task[None]:
-        task = asyncio.create_task(self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress, cache_dir=cache_dir, template=template))
+        from backend.video_summary.generation.cancellation import cancellable_await
+        request = self._ai_summary_runner(video=video, transcript=transcript, output_dir=output_dir, on_progress=on_progress, cache_dir=cache_dir, template=template)
+        task = asyncio.create_task(cancellable_await(request, cancellation) if cancellation else request)
         self._ai_summary_tasks.add(task)
 
         def _record_completion(completed: asyncio.Task[None]) -> None:

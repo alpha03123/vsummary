@@ -20,6 +20,23 @@ class _Response:
         self.message = ""
 
 
+def test_asr_wait_checks_cancellation_between_provider_queries(monkeypatch):
+    calls=[]
+    class Transcription:
+        @classmethod
+        def fetch(cls, *args, **kwargs):
+            calls.append(True)
+            return _Response(output={'task_status':'RUNNING'})
+    module=types.ModuleType('dashscope.audio.asr');module.Transcription=Transcription
+    monkeypatch.setitem(sys.modules,'dashscope.audio.asr',module)
+    transcriber=AliyunBailianTranscriber(model='paraformer-v2',base_url='https://dashscope.aliyuncs.com',api_key='test',poll_interval_seconds=0.001)
+    from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+    def progress(_ratio):
+        if calls:raise GenerateCancelledError('cancelled')
+    with pytest.raises(GenerateCancelledError):transcriber._wait_transcription('task',progress)
+    assert len(calls)==1
+
+
 class _HttpResponse:
     def raise_for_status(self) -> None:
         return None
@@ -68,8 +85,8 @@ def test_aliyun_bailian_transcriber_uploads_audio_and_maps_sentences(monkeypatch
             return _Response(output={"task_id": "task-1", "task_status": "PENDING"})
 
         @classmethod
-        def wait(cls, task, *, api_key, base_address):
-            calls.append(("wait", (task.output["task_id"], api_key, base_address)))
+        def fetch(cls, task, *, api_key, base_address):
+            calls.append(("fetch", (task.output["task_id"], api_key, base_address)))
             return _Response(
                 output={
                     "task_id": "task-1",
@@ -160,7 +177,7 @@ def test_aliyun_bailian_transcriber_no_valid_fragment_returns_placeholder(monkey
             return _Response(output={"task_id": "task-1", "task_status": "PENDING"})
 
         @classmethod
-        def wait(cls, task, *, api_key, base_address):
+        def fetch(cls, task, *, api_key, base_address):
             return _Response(
                 output={
                     "task_id": "task-1",

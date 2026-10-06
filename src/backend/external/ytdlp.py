@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from backend.shared.subprocess_cancellation import watch_process_cancellation
+
 import asyncio
 from collections import deque
 from dataclasses import dataclass
@@ -249,17 +251,20 @@ class YtDlpPlatformDownloader:
             raise RuntimeError("无法读取 yt-dlp 输出。")
         recent_output: deque[str] = deque(maxlen=50)
         try:
-            for line in process.stdout:
-                stripped = line.rstrip()
-                if stripped:
-                    recent_output.append(stripped)
-                if _is_cancelled(reporter):
-                    process.terminate()
+            with watch_process_cancellation(process, lambda: _is_cancelled(reporter)) as cancelled:
+                for line in process.stdout:
+                    stripped = line.rstrip()
+                    if stripped:
+                        recent_output.append(stripped)
+                    if _is_cancelled(reporter):
+                        process.terminate()
+                        raise DownloadCancelled("下载已取消")
+                    match = _PROGRESS_RE.search(stripped)
+                    if match is not None:
+                        reporter.update("download", float(match.group(1)), f"下载中 {match.group(1)}%")
+                process.wait()
+                if cancelled.is_set():
                     raise DownloadCancelled("下载已取消")
-                match = _PROGRESS_RE.search(stripped)
-                if match is not None:
-                    reporter.update("download", float(match.group(1)), f"下载中 {match.group(1)}%")
-            process.wait()
             if process.returncode != 0:
                 detail = "\n".join(recent_output)
                 raise RuntimeError(f"yt-dlp 退出码 {process.returncode}" + (f"；最近输出：\n{detail}" if detail else ""))

@@ -46,14 +46,17 @@ class ConcurrentAiSummaryRunner:
     async def run(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, template: str = "general", on_progress: Callable[[str, str], None] | None = None) -> None:
         _write_status(output_dir, "running")
         try:
-            await asyncio.to_thread(self._run_sync, video=video, transcript=transcript, output_dir=output_dir, cache_dir=cache_dir, template=template, on_progress=on_progress)
+            await self._run(video=video, transcript=transcript, output_dir=output_dir, cache_dir=cache_dir, template=template, on_progress=on_progress)
+        except asyncio.CancelledError:
+            _write_status(output_dir, "cancelled")
+            raise
         except Exception as error:
             _write_status(output_dir, "failed", str(error))
             raise
         else:
             _write_status(output_dir, "ready")
 
-    def _run_sync(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, template: str, on_progress: Callable[[str, str], None] | None = None) -> None:
+    async def _run(self, *, video: VideoAsset, transcript: Transcript, output_dir: Path, cache_dir: Path, template: str, on_progress: Callable[[str, str], None] | None = None) -> None:
         def report(stage: str, detail: str) -> None:
             if on_progress is not None:
                 on_progress(stage, detail)
@@ -61,7 +64,7 @@ class ConcurrentAiSummaryRunner:
         if self._multimodal_enabled:
             report("sample_frames", "正在选取视频画面，供 AI 阅读图片和屏幕内容")
         pool = (
-            build_or_load_visual_frame_pool(
+            await asyncio.to_thread(build_or_load_visual_frame_pool,
                 video_path=video.source_path,
                 output_dir=cache_dir,
                 max_input_images=self._max_input_images,
@@ -91,7 +94,7 @@ class ConcurrentAiSummaryRunner:
             "没有可用画面，正在根据讲话内容生成概况" if self._multimodal_enabled else
             "正在根据讲话内容生成概况",
         )
-        generated = self._generator.run_ai_summary(
+        generated = await self._generator.arun_ai_summary(
             transcript=VideoTranscriptDTO(
                 series_id="",
                 video_id="",

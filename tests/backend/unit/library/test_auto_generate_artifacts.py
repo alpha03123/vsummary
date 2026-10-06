@@ -13,7 +13,7 @@ class AutoGenerateVideoArtifactsTests(unittest.TestCase):
         async def generate_mindmap(series_id: str, video_id: str) -> None:
             calls.append(f"mindmap:{series_id}/{video_id}")
 
-        def generate_cards(series_id: str, video_id: str) -> None:
+        async def generate_cards(series_id: str, video_id: str) -> None:
             calls.append(f"cards:{series_id}/{video_id}")
 
         workflow = AutoGenerateVideoArtifacts(
@@ -35,7 +35,7 @@ class AutoGenerateVideoArtifactsTests(unittest.TestCase):
         async def generate_mindmap(series_id: str, video_id: str) -> None:
             calls.append("mindmap")
 
-        def generate_cards(series_id: str, video_id: str) -> None:
+        async def generate_cards(series_id: str, video_id: str) -> None:
             calls.append("cards")
 
         async def wait_for_visual_evidence(series_id: str, video_id: str) -> None:

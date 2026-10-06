@@ -103,3 +103,9 @@ Windows 整合包解压后，插件位于 `extensions/bilibili-sidepanel`。启�
 - QQ群:点击链接加入群聊【vsummary交流沟通群】：https://qm.qq.com/q/nxKBApDVF
 
 <img src="./assets/qq-group-qrcode.jpg" width="240" alt="vsummary 交流群二维码" />
+
+### 任务取消
+
+Local 的视频、系列及附加产物任务使用持久化取消请求。运行中的异步 LLM 请求会中断本地等待，取消后的候选内容不发布；远端服务是否停止推理由供应商决定。下载独立检查取消，不依赖日志输出；百炼 ASR 在状态查询间检查取消，上传或单次网络请求仍需返回后才能响应。
+
+生成器及用例提供 `arun` / `arun_ai_summary` 给异步 worker；同步工具继续使用 `run` / `run_ai_summary`。两种入口共享生成和验证逻辑。自动知识卡片生成回调现在与导图回调一样返回 awaitable。

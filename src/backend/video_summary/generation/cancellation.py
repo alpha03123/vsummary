@@ -53,7 +53,15 @@ class TaskHandle:
 
     def cancel(self) -> None:
         """触发 Task 的取消（`asyncio.CancelledError` 会在 await 处抛出）。"""
-        self._task.cancel()
+        loop = self._task.get_loop()
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        if current_loop is loop:
+            self._task.cancel()
+        else:
+            loop.call_soon_threadsafe(self._task.cancel)
 
 
 class GenerationCancellationContext:
@@ -79,8 +87,7 @@ class GenerationCancellationContext:
     def request_cancel(self) -> None:
         """置位取消事件并同步通知所有已注册句柄。
 
-        通知是「一次性快照」语义：新注册的句柄不会被再次通知，
-        但可以通过 `cancel_requested` 自行查询。
+        已注册的句柄会收到通知；取消后注册的句柄会立即取消。
         """
         self._cancel_event.set()
         with self._lock:
@@ -91,7 +98,11 @@ class GenerationCancellationContext:
     def register(self, handle: CancellableHandle) -> None:
         """注册一个可取消句柄；后续 `request_cancel` 会调用其 `cancel()`。"""
         with self._lock:
-            self._handles.append(handle)
+            cancelled = self._cancel_event.is_set()
+            if not cancelled:
+                self._handles.append(handle)
+        if cancelled:
+            handle.cancel()
 
     def unregister(self, handle: CancellableHandle) -> None:
         """移除已注册句柄；句柄不存在时静默忽略。"""
@@ -121,15 +132,14 @@ async def cancellable_await(
     """
     from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 
-    if ctx.cancel_requested:
-        raise GenerateCancelledError("任务已取消")
-
     task: asyncio.Task = asyncio.ensure_future(coro)  # type: ignore[arg-type]
     handle = TaskHandle(_task=task)
     ctx.register(handle)
     try:
         return await task
     except asyncio.CancelledError:
-        raise GenerateCancelledError("任务已取消")
+        if ctx.cancel_requested:
+            raise GenerateCancelledError("任务已取消")
+        raise
     finally:
         ctx.unregister(handle)

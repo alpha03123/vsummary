@@ -17,7 +17,8 @@ from backend.core.concurrency import RequestLimiter, bind_request_limiter, reque
 from backend.video_summary.infrastructure.persistence.execution_context import bind_execution_claim, ContentVersionConflictError
 from backend.video_summary.infrastructure.rag.agent_memory.api_models import ModelApiError
 
-from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError, _mirror_progress_cancellation
+from backend.video_summary.generation.cancellation import GenerationCancellationContext, TaskHandle
 from backend.video_summary.generation.errors import MediaSourceUnavailableError
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.infrastructure.subtitle_transcripts import parse_srt_transcript
@@ -198,6 +199,9 @@ class SqlJobWorker:
         reporter = SqlJobProgressReporter(self._repository, claim)
         execution_task = asyncio.current_task()
         heartbeat = asyncio.create_task(self._heartbeat(claim, execution_task))
+        cancellation = GenerationCancellationContext(claim.id)
+        cancellation.register(TaskHandle(_task=execution_task))
+        cancel_watcher = asyncio.create_task(_mirror_progress_cancellation(reporter, cancellation))
         try:
             reporter.raise_if_cancelled()
             services = self._get_execution_services(claim.workspace_id)
@@ -286,8 +290,13 @@ class SqlJobWorker:
                     self._repository.finalize_accounting(snapshot.parent_job_id, workspace_id=claim.workspace_id)
             finally:
                 heartbeat.cancel()
+                cancel_watcher.cancel()
                 try:
                     await heartbeat
+                except asyncio.CancelledError:
+                    pass
+                try:
+                    await cancel_watcher
                 except asyncio.CancelledError:
                     pass
 

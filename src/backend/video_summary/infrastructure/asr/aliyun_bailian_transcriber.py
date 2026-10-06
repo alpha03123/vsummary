@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import time
 from http import HTTPStatus
 from pathlib import Path
 from typing import Callable
@@ -28,6 +29,7 @@ class AliyunBailianTranscriber:
         base_url: str,
         api_key: str,
         language: str = "zh",
+        poll_interval_seconds: float = 1.0,
     ) -> None:
         normalized_model = model.strip()
         normalized_api_key = api_key.strip()
@@ -35,6 +37,9 @@ class AliyunBailianTranscriber:
             raise RuntimeError("阿里云百炼 ASR 模型名称不能为空。")
         if not normalized_api_key:
             raise RuntimeError("请先在设置中填写阿里云百炼 ASR API Key。")
+        if poll_interval_seconds <= 0:
+            raise ValueError('ASR polling interval must be positive.')
+        self._poll_interval_seconds = poll_interval_seconds
 
         self._model = normalized_model
         self._base_address = _normalize_dashscope_base_address(base_url)
@@ -79,7 +84,7 @@ class AliyunBailianTranscriber:
             _report(on_progress, 0.08)
             task = self._submit_transcription(oss_url)
             _report(on_progress, 0.12)
-            result = self._wait_transcription(task)
+            result = self._wait_transcription(task, on_progress)
             _report(on_progress, 0.90)
             transcript_payload = self._load_transcription_payload(result)
         transcript = _parse_transcript_payload(transcript_payload, language=self._language)
@@ -131,17 +136,18 @@ class AliyunBailianTranscriber:
         _ensure_success_response(response, "提交阿里云百炼转写任务失败")
         return response
 
-    def _wait_transcription(self, task):
+    def _wait_transcription(self, task, on_progress=None):
         from dashscope.audio.asr import Transcription
-
-        try:
-            response = Transcription.wait(
-                task,
-                api_key=self._api_key,
-                base_address=self._base_address,
-            )
-        except Exception as error:
-            raise RuntimeError(f"等待阿里云百炼转写任务失败：{error}") from error
+        while True:
+            _report(on_progress, 0.12)
+            try:
+                response = Transcription.fetch(task, api_key=self._api_key, base_address=self._base_address)
+            except Exception as error:
+                raise RuntimeError(f"等待阿里云百炼转写任务失败：{error}") from error
+            _ensure_success_response(response, "阿里云百炼转写任务失败")
+            if str(_response_output(response).get('task_status', '')).upper() not in {'PENDING', 'RUNNING'}:
+                break
+            time.sleep(self._poll_interval_seconds)
         _ensure_success_response(response, "阿里云百炼转写任务失败")
 
         output = _response_output(response)

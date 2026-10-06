@@ -311,19 +311,15 @@ def build_workspace_services(
     )
 
     async def run_video_knowledge_cards_job(claim, reporter) -> None:
-        cards = await asyncio.to_thread(
-            GenerateVideoKnowledgeCards(
-                workspace,
-                resolved_knowledge_card_generator,
-                index_refresher,
-                visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
-                max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
-                frame_pool_builder=build_or_load_visual_frame_pool,
+        cards = await GenerateVideoKnowledgeCards(
+            workspace,
+            resolved_knowledge_card_generator,
+            index_refresher,
+            visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
+            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
-            ).run,
-            str(claim.request_payload["series_id"]),
-            claim.resource_id,
-        )
+        ).arun(str(claim.request_payload["series_id"]), claim.resource_id)
         if cards is None:
             raise LookupError("Summary does not exist; cannot generate knowledge cards.")
 
@@ -331,12 +327,8 @@ def build_workspace_services(
         template = claim.request_payload.get("template", "general")
         if not isinstance(template, str) or not template.strip():
             raise ValueError("template must be a non-empty string.")
-        summary = await asyncio.to_thread(
-            ai_summary_use_case.run,
-            str(claim.request_payload["series_id"]),
-            claim.resource_id,
-            template=template,
-        )
+        summary = await ai_summary_use_case.arun(
+            str(claim.request_payload["series_id"]), claim.resource_id, template=template)
         if summary is None:
             raise LookupError("Video source does not exist; cannot generate an AI summary.")
 
@@ -372,7 +364,7 @@ def build_workspace_services(
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
-        ).run(series_id, video_id),
+        ).arun(series_id, video_id),
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,
