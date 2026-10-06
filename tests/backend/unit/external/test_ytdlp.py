@@ -4,6 +4,8 @@ import asyncio
 from pathlib import Path
 
 from backend.external.ytdlp import (
+    DrissionCookieInitializer,
+    ExternalCookieInitError,
     BackgroundYtDlpDownloadStarter,
     ExternalVideoResolutionError,
     YtDlpPlatform,
@@ -11,6 +13,48 @@ from backend.external.ytdlp import (
     YtDlpPlatformResolver,
     _external_platform_error,
 )
+
+
+def test_douyin_visitor_cookie_does_not_finish_login(tmp_path, monkeypatch):
+    import pytest
+    from dataclasses import replace
+    platform = replace(YOUTUBE, provider='douyin', cookie_domain='douyin.com', cookie_env='DOUYIN_COOKIE',
+        login_cookie_names=('sessionid', 'sessionid_ss'))
+    monkeypatch.delenv('DOUYIN_COOKIE', raising=False)
+    class Page:
+        closed = False
+        def get(self, url): pass
+        def cookies(self, **kwargs):
+            return [{'domain': '.douyin.com', 'name': 's_v_web_id', 'value': 'visitor'}]
+        def quit(self): self.closed = True
+    page = Page()
+    initializer = DrissionCookieInitializer(root_dir=tmp_path, platform=platform,
+        page_factory=lambda *_: page, timeout_seconds=0.02, poll_interval_seconds=0.001)
+    with pytest.raises(ExternalCookieInitError): initializer.init()
+    assert not (tmp_path / '.env').exists()
+    assert page.closed
+
+
+def test_cookie_initializer_waits_for_session_before_writing(tmp_path, monkeypatch):
+    from dataclasses import replace
+    platform = replace(YOUTUBE, provider='douyin', cookie_domain='douyin.com', cookie_env='DOUYIN_COOKIE',
+        login_cookie_names=('sessionid', 'sessionid_ss'))
+    monkeypatch.delenv('DOUYIN_COOKIE', raising=False)
+    class Page:
+        polls = 0
+        def get(self, url): pass
+        def cookies(self, **kwargs):
+            self.polls += 1
+            names = ['s_v_web_id'] if self.polls == 1 else ['s_v_web_id', 'sessionid']
+            return [{'domain': '.douyin.com', 'name': name, 'value': 'test'} for name in names]
+        def quit(self): pass
+    page = Page()
+    initializer = DrissionCookieInitializer(root_dir=tmp_path, platform=platform,
+        page_factory=lambda *_: page, timeout_seconds=1, poll_interval_seconds=0)
+    assert initializer.init()
+    assert page.polls == 2
+    assert 'sessionid=test' in (tmp_path / '.env').read_text(encoding='utf-8')
+    monkeypatch.delenv('DOUYIN_COOKIE')
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.shared.ytdlp import write_cookies_file
 from backend.video_summary.library.linked_models import LinkedVideo

@@ -109,7 +109,9 @@ class YtDlpBilibiliResolver:
         """
         payload = await asyncio.to_thread(self._extractor, url_info.url)
         entries = [entry for entry in payload.get("entries", []) if isinstance(entry, dict)]
-        should_fetch_view = not entries or _series_needs_view_titles(payload, entries)
+        should_fetch_view = not entries or _series_needs_view_titles(payload, entries) or any(
+            _as_int(entry.get("duration")) <= 0 for entry in entries
+        )
         view_bvid, view_payload = (
             await _resolve_view_payload(payload, url_info.url, self._view_extractor)
             if should_fetch_view
@@ -129,6 +131,11 @@ class YtDlpBilibiliResolver:
                     }
                 ]
         title_overrides = _extract_title_overrides(view_payload, root_bvid=view_bvid)
+        details = {(_extract_bvid(item), _extract_page(item)): item
+            for item in _entries_from_view_payload(view_bvid=view_bvid, view_payload=view_payload)}
+        entries = [{**entry, "duration": entry.get("duration") if _as_int(entry.get("duration")) > 0
+            else details.get((_extract_bvid(entry), _extract_page(entry)), {}).get("duration")}
+            for entry in entries]
         videos = [
             _linked_video_from_payload(
                 _merge_entry_title(entry, title_overrides=title_overrides),
@@ -869,11 +876,13 @@ def _entries_from_ugc_season(season: dict[str, object]) -> list[dict[str, object
             bvid = _as_text(episode.get("bvid"))
             if not bvid:
                 continue
+            arc = episode.get("arc") if isinstance(episode.get("arc"), dict) else {}
+            page = episode.get("page") if isinstance(episode.get("page"), dict) else {}
             entries.append(
                 {
                     "id": bvid,
                     "title": _as_text(episode.get("title")) or bvid,
-                    "duration": _as_int(episode.get("duration")),
+                    "duration": _as_int(episode.get("duration") or page.get("duration") or arc.get("duration")),
                     "thumbnail": _as_text(episode.get("cover")),
                     "webpage_url": _page_url(bvid, 1),
                 }

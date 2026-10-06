@@ -406,7 +406,7 @@ def build_workspace_services(
         login_url="https://www.douyin.com/",
         cookie_env="DOUYIN_COOKIE",
         browser_port=9225,
-        login_cookie_names=("s_v_web_id", "sessionid", "sessionid_ss"),
+        login_cookie_names=("sessionid", "sessionid_ss"),
         format_selector="bv*+ba/best",
     )
     external_platforms = (youtube_platform, douyin_platform)
