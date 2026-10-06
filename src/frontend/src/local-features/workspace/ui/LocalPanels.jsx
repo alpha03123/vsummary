@@ -59,7 +59,7 @@ export function LocalImportPanel({page, request: importModalState, onClose}){con
           targetSeriesId={importModalState.targetSeriesId ?? null}
           targetSeriesTitle={importModalState.targetSeriesTitle ?? ""}
           onClose={onClose}
-          onResolveSeries={async (provider, url) => actions.resolveLinkedSeries(provider, url)}
+          onResolveSeries={async (provider, url, selection) => actions.resolveLinkedSeries(provider, url, selection)}
           onResolveVideo={async (provider, url, targetSeriesId) => (
             targetSeriesId
               ? actions.resolveSeriesVideo(provider, url, targetSeriesId)

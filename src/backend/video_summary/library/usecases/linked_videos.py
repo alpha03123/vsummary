@@ -45,8 +45,14 @@ class ResolveLinkedSeries:
         self._invalidator = invalidator
 
     async def run(self, *, provider: str, url: str) -> LibrarySeriesDTO:
+        linked_series = await self.preview(provider=provider,url=url)
+        return self.commit(linked_series)
+
+    async def preview(self, *, provider: str, url: str) -> LinkedSeries:
         resolver = _provider_resolver(self._resolvers, provider)
-        linked_series = await resolver.resolve_series(ExternalUrlInfo(url=_normalize_external_url(url, provider)))
+        return await resolver.resolve_series(ExternalUrlInfo(url=_normalize_external_url(url, provider)))
+
+    def commit(self, linked_series: LinkedSeries) -> LibrarySeriesDTO:
         self._workspace.save_linked_series(linked_series)
         self._invalidator.invalidate()
         return _to_series_dto(linked_series)

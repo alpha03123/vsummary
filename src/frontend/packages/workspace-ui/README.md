@@ -147,3 +147,9 @@ AI 聊天仅在已选择系列或视频时显示。回到全部系列主页时�
 
 如果早期版本把父批任务提前标为终态、但子任务仍未结束，worker 会恢复父任务为等待状态并继续
 跟踪子任务。取消这类遗留批任务会进入正常的取消流程。
+
+### 导入预览与选择
+
+`WorkspaceImportSelection` 是共享的多视频选择对话框，接收 `items`、`onConfirm(selectedIds)` 与 `onClose`，支持默认全选、逐项选择、全选/清空和搜索。Local 在选定视频后导入；Cloud 先完成选择和积分确认，再导入并排队。
+
+宿主可通过 `exportOptions` 按工具限定已有导出项，例如 `{ overview: ['mixed.md', 'summary-with-screenshots.zip'] }`。未配置时保留默认导出菜单。

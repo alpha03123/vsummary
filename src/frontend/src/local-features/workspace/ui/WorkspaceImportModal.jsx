@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Loader2, CheckCircle2, AlertCircle, FolderUp, Film, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { WorkspaceExpandableSelect } from "@alpha03123/vsummary-workspace-ui";
+import { WorkspaceExpandableSelect,WorkspaceImportSelection,useWorkspaceRuntime } from "@alpha03123/vsummary-workspace-ui";
 
 export function WorkspaceImportModal({
   mode = "series",
@@ -22,6 +22,14 @@ export function WorkspaceImportModal({
   onImportSeriesVideos,
   onImportLocalPlaygroundVideos,
 }) {
+  const {api}=useWorkspaceRuntime();
+  const [selection,setSelection]=useState(null);
+  const selectionResolver=useRef(null);
+  function chooseVideos(items){
+    if(items.length===1)return Promise.resolve(items.map(item=>item.id));
+    return new Promise(resolve=>{selectionResolver.current=resolve;setSelection({items,ids:items.map(item=>item.id)});});
+  }
+  function finishSelection(ids){selectionResolver.current?.(ids);selectionResolver.current=null;setSelection(null);}
   const [sourceType, setSourceType] = useState("local");
   const [externalProvider, setExternalProvider] = useState("bilibili");
   const [url, setUrl] = useState("");
@@ -119,6 +127,7 @@ export function WorkspaceImportModal({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      selectionResolver.current?.(null);
       requestChaoxingInitCancel();
       requestChaoxingImportCancel();
     };
@@ -261,6 +270,7 @@ export function WorkspaceImportModal({
   }
 
   function handleClose() {
+    finishSelection(null);
     requestChaoxingInitCancel();
     requestChaoxingImportCancel();
     onClose();
@@ -326,7 +336,12 @@ export function WorkspaceImportModal({
             return;
           }
           result = isSeriesCreation
-            ? await onResolveSeries(externalProvider, trimmed)
+            ? await (async()=>{
+                const plan=await api.fetchJson('/api/import/linked/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:externalProvider,url:trimmed})});
+                const ids=await chooseVideos(plan.items);
+                if(!ids){await api.fetchJson(`/api/import/previews/${plan.token}`,{method:'DELETE'});return null;}
+                return onResolveSeries(externalProvider,trimmed,{token:plan.token,selectedVideoIds:ids});
+              })()
             : await onResolveVideo(externalProvider, trimmed, isSeriesVideo ? targetSeriesId : null);
         }
       } else {
@@ -334,12 +349,15 @@ export function WorkspaceImportModal({
           setStatus("idle");
           return;
         }
+        const paths=await chooseVideos(sourcePaths.map(path=>({id:path,title:path.split(/[\\/]/).pop()})));
+        if(!paths){setStatus('idle');return;}
         result = isSeriesCreation
-            ? await onImportLocalSeries(seriesTitle.trim(), sourcePaths, storageMode)
+            ? await onImportLocalSeries(seriesTitle.trim(), paths, storageMode)
             : isSeriesVideo
-              ? await onImportSeriesVideos(targetSeriesId, sourcePaths)
-              : await onImportLocalPlaygroundVideos(sourcePaths);
+              ? await onImportSeriesVideos(targetSeriesId, paths)
+              : await onImportLocalPlaygroundVideos(paths);
       }
+      if(!result){setStatus('idle');return;}
       setPreview({
         title: isSeriesCreation ? result.title : (isSeriesVideo ? (targetSeriesTitle || "当前系列") : result.title ?? "Playground"),
         videoCount: Array.isArray(result) ? result.length : result.videos?.length ?? (sourceType === "external" ? 1 : sourcePaths.length),
@@ -359,7 +377,8 @@ export function WorkspaceImportModal({
   );
 
   return (
-    <AnimatePresence>
+    <><WorkspaceImportSelection open={Boolean(selection)} items={selection?.items??[]} selectedIds={selection?.ids??[]}
+      onChange={ids=>setSelection(current=>({...current,ids}))} onConfirm={finishSelection} onClose={()=>finishSelection(null)}/><AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -751,7 +770,7 @@ export function WorkspaceImportModal({
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence></>
   );
 }
 function toChaoxingInitErrorMessage(error) {

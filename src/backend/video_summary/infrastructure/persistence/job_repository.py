@@ -107,9 +107,10 @@ class SqlJobRepository:
         idempotency_scope_id: str | None,
         idempotency_key: str | None,
         parent_job_id: str | None = None,
+        prepaid_reservation: QuotaReservation | None = None,
     ) -> SubmittedJob:
         context = get_workspace_context()
-        reservation: QuotaReservation | None = None
+        reservation = prepaid_reservation
         payload = dict(request_payload)
         operation_id = new_ulid()
         for internal in ("_quota_reservation", "_execution_context", "_user_preferences", "_usage_estimate"):
@@ -137,18 +138,15 @@ class SqlJobRepository:
                 resource_id,
                 operation_id,
                 processing_mode=payload.get("processing_mode"),
+                video_ids=payload.get('video_ids'),
             )
             if payload.get("manual_transcript") is not None:
                 from dataclasses import replace
                 estimate = replace(estimate, transcript_available=True)
             payload["_usage_estimate"] = asdict(estimate)
             if self._quota_guard is not None and parent_job_id is None:
-                reservation = self._quota_guard.reserve_job(
-                    context,
-                    operation,
-                    estimate,
-                    idempotency_key or estimate.operation_id,
-                )
+                if reservation is None:
+                    reservation = self._quota_guard.reserve_job(context,operation,estimate,idempotency_key or estimate.operation_id)
                 payload["_quota_reservation"] = {
                     "id": reservation.id,
                     "workspace_id": context.workspace_id,
@@ -347,7 +345,7 @@ class SqlJobRepository:
         self.finalize_accounting(job_id, workspace_id=workspace_id)
         return snapshot
 
-    def estimate_usage(self, context, resource_type, resource_id, operation_id, *, processing_mode=None):
+    def estimate_usage(self, context, resource_type, resource_id, operation_id, *, processing_mode=None, video_ids=None):
         if processing_mode not in {None, "summary", "transcript"}:
             raise ValueError("Unsupported processing mode.")
         with self._session_factory() as session:
@@ -362,6 +360,9 @@ class SqlJobRepository:
             if resource_type == "video":
                 rows = session.execute(query.where(Video.id == resource_id)).all()
             elif resource_type == "series":
+                if video_ids is not None:
+                    if not video_ids:raise ValueError('At least one video must be selected.')
+                    query=query.where(Video.id.in_(video_ids))
                 pending = (
                     (VideoContentState.transcript_version.is_(None))
                     | (VideoContentState.transcript_version < Video.content_version)
@@ -397,6 +398,24 @@ class SqlJobRepository:
                 model_profile=profile, children=estimates,
             )
         return estimates[0] if estimates else UsageEstimate(units=0, operation_id=operation_id, model_profile=profile)
+
+    def admission(self, context, units):
+        return self._queue_policy.admit(actor_id=context.actor_id,units=units) if self._queue_policy is not None else nullcontext()
+
+    def in_transaction(self, sessions):
+        """Reuse metering dependencies while the caller owns queue admission and SQL commit."""
+        return SqlJobRepository(sessions,quota_guard=self._quota_guard,usage_meter=self._usage_meter,
+            token_estimate=self._token_estimate,multimodal_estimate=self._multimodal_estimate)
+
+    def submission_for_key(self, context, key):
+        scope=hashlib.sha256((context.workspace_id+':'+context.actor_id).encode()).hexdigest()
+        with self._session_factory() as session:
+            job=session.scalar(select(Job).join(IdempotencyKey,IdempotencyKey.job_id==Job.id).where(
+                IdempotencyKey.scope_id==scope,IdempotencyKey.key==key,
+                Job.workspace_id==context.workspace_id,Job.actor_id==context.actor_id))
+            if job is None:return None
+            from backend.core.jobs import job_snapshot_payload
+            return {**job_snapshot_payload(_snapshot(job)), 'video_ids':job.request_payload.get('video_ids',[])}
 
     def measured_usage(self, session, job):
         children = session.scalars(select(Job).where(Job.parent_job_id == job.id)).all() if job.operation == "generate_series_batch" else []

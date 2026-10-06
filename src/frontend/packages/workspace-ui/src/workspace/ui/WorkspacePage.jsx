@@ -326,7 +326,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
 
   function renderPanelActions(panelId, toolId) {
     if (toolId === "preview") {
-      const exportActions = buildWorkspaceToolExportActions({ resourceUrl:api.resourceUrl,
+      const exportActions = buildWorkspaceToolExportActions({ resourceUrl:api.resourceUrl,allowedExports:host.exportOptions,
         activeSeries,
         notes,
         summary,
@@ -353,7 +353,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     if (toolId === "studio" || toolId === "ai-chat") {
       return null;
     }
-    const exportActions = buildWorkspaceToolExportActions({ resourceUrl:api.resourceUrl,
+    const exportActions = buildWorkspaceToolExportActions({ resourceUrl:api.resourceUrl,allowedExports:host.exportOptions,
       activeSeries,
       notes,
       summary,

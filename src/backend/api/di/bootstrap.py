@@ -483,6 +483,8 @@ def build_workspace_services(
             video for video in series.videos
             if (not video.has_transcript if processing_mode == "transcript" else not video.processed)
         ]
+        if payload.get('video_ids') is not None:
+            pending=[video for video in pending if video.id in payload['video_ids']]
         reporter.update("queue", 0.0, f"正在创建 {len(pending)} 个视频子任务")
         sources = {video.id: workspace.get_video_source(series_id, video.id) is not None for video in pending}
         for video in pending:

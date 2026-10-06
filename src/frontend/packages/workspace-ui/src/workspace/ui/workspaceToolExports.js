@@ -74,4 +74,9 @@ function seriesExportUrl(seriesId, exportName) {
   return `/api/series/${encodeURIComponent(seriesId)}/exports/${exportName}.zip`;
 }
 
-export function buildWorkspaceToolExportActions(options){return buildRawWorkspaceToolExportActions(options).map(action=>({...action,href:options.resourceUrl?options.resourceUrl(action.href):action.href}));}
+export function buildWorkspaceToolExportActions(options){
+ const allowed=options.allowedExports?.[options.toolId];
+ return buildRawWorkspaceToolExportActions(options)
+  .filter(action=>!allowed||allowed.some(name=>action.href.split('/').pop()===name))
+  .map(action=>({...action,href:options.resourceUrl?options.resourceUrl(action.href):action.href}));
+}

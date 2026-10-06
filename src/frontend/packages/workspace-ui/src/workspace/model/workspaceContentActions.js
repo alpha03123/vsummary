@@ -852,9 +852,9 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
     );
   }
 
-  async function onResolveLinkedSeries(provider, url) {
+  async function onResolveLinkedSeries(provider, url, selection = null) {
     try {
-      const rawSeries = await resolveLinkedSeries(provider, url);
+      const rawSeries = await resolveLinkedSeries(provider, url, selection);
       await reloadWorkspaceLibrary();
       return rawSeries;
     } catch (error) {

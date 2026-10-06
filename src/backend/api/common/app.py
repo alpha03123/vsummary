@@ -22,6 +22,7 @@ from backend.api.routes.videos import router as videos_router
 from backend.api.routes.usage import router as usage_router
 from backend.api.routes.preferences import router as preferences_router
 from backend.api.routes.chat_queue import router as chat_queue_router
+from backend.api.routes.import_preview import router as import_preview_router
 from backend.core.request_context import bind_workspace_context
 from backend.core.context import WorkspaceContext
 from backend.core.preferences import bind_user_preferences
@@ -62,6 +63,7 @@ def include_common_routers(app: FastAPI) -> None:
     app.include_router(usage_router)
     app.include_router(preferences_router)
     app.include_router(chat_queue_router)
+    app.include_router(import_preview_router)
 
 
 def create_app(container: ApiContainer) -> FastAPI:

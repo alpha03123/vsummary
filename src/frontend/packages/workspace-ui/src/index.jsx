@@ -28,6 +28,7 @@ export {createBrowserTransport,createScopedStorage} from "./runtime/browserTrans
 export {WorkspaceApp,WorkspaceApplication} from "./runtime/WorkspaceApplication";
 
 export {WorkspaceDialog} from './workspace/ui/shared/WorkspaceDialog';
+export {WorkspaceImportSelection} from './workspace/ui/shared/WorkspaceImportSelection';
 export {WorkspaceOverflowMenu} from './workspace/ui/shared/WorkspaceOverflowMenu';
 export {WorkspaceMetricCard} from './workspace/ui/shared/WorkspaceMetricCard';
 export {WorkspaceToolbar} from './workspace/ui/WorkspaceToolbar';

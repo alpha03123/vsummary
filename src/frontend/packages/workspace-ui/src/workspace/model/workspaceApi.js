@@ -752,7 +752,9 @@ function buildRecoveredMeta(role, createdAt) {
   return `${actor} • ${suffix}`;
 }
 
-async function resolveLinkedSeries(provider, url) {
+async function resolveLinkedSeries(provider, url, selection = null) {
+  if(selection)return fetchJson(`/api/import/linked/${encodeURIComponent(selection.token)}/commit`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected_video_ids:selection.selectedVideoIds})});
   return fetchJson(`/api/linked/${encodeURIComponent(provider)}/resolve/series`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
