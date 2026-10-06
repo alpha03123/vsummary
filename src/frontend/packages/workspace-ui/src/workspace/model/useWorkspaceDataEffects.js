@@ -13,19 +13,6 @@ export function createWorkspaceDataEffects(api){
 const {checkBackendHealth,loadAgentContextUsage,loadAgentMemoryStatus,loadAgentSessionRecovery,loadSeriesGenerationStatus,loadSeriesMindmap,loadVideoKnowledgeCards,loadVideoAiSummary,loadVideoGenerationStatus,loadVideoMindmap,loadVideoNotes,loadVideoSummary,loadVideoTools,loadWorkspaceLibrary,subscribeSeriesGenerationProgress,subscribeDurableJobProgress}=api;
 const generationSubscriptions = new Map();
 
-function isLinkedVideo(video) {
-  return video?.isLinked === true || video?.status === "linked";
-}
-
-function clearLocalVideoContent(dispatch) {
-  dispatch({ type: "tools_loaded", tools: null });
-  dispatch({ type: "summary_cleared" });
-  dispatch({ type: "mindmap_cleared" });
-  dispatch({ type: "knowledge_cards_cleared" });
-  dispatch({ type: "notes_cleared" });
-  dispatch({ type: "ai_summary_cleared" });
-}
-
 function clearGenerationSubscription(taskKey) {
   const unsubscribe = generationSubscriptions.get(taskKey);
   if (typeof unsubscribe === "function") {
@@ -441,11 +428,6 @@ function useWorkspaceDataEffects(state, dispatch) {
       dispatch({ type: "tools_loaded", tools: null });
       return;
     }
-    if (isLinkedVideo(selectedVideo)) {
-      clearLocalVideoContent(dispatch);
-      return;
-    }
-
     let cancelled = false;
     dispatch({ type: "tools_loading_started" });
     loadVideoTools(state.selectedSeriesId, state.selectedVideoId)
@@ -626,7 +608,7 @@ function useWorkspaceDataEffects(state, dispatch) {
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-    if (!selectedVideo || state.selectedContextType !== "video" || !state.tools?.aiSummary.generated || isLinkedVideo(selectedVideo)) {
+    if (!selectedVideo || state.selectedContextType !== "video" || !state.tools?.aiSummary.generated) {
       dispatch({ type: "ai_summary_cleared" });
       return;
     }
@@ -669,13 +651,6 @@ function useWorkspaceDataEffects(state, dispatch) {
       dispatch({ type: "notes_cleared" });
       return;
     }
-    // 未下载的链接视频没有任何本地制品，后端 `/notes` 会直接返回 404；
-    // 这里与上面的 tools effect 保持一致，直接清空而不是发请求。
-    if (isLinkedVideo(selectedVideo)) {
-      dispatch({ type: "notes_cleared" });
-      return;
-    }
-
     let cancelled = false;
     dispatch({ type: "notes_loading_started" });
     loadVideoNotes(state.selectedSeriesId, state.selectedVideoId)

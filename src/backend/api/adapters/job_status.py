@@ -18,11 +18,23 @@ def durable_status(repository, *, workspace_id: str, resource_id: str, operation
             status = "cancelled"
         else:
             status = "succeeded"
-    event = repository.latest_event(job.id, workspace_id=workspace_id)
-    progress = finished / len(children) * 100 if children else event.progress if event else 0
+    history = repository.events(job.id, after_sequence=0, workspace_id=workspace_id)
+    event = history[-1] if history else None
+    progress = max((item.progress for item in history if item.progress is not None), default=0)
     detail = f"已结束 {finished}/{len(children)} 个视频任务" if children else job.failure_detail or (event.detail if event else None)
+    if children:
+        child_histories = [(child, repository.events(child.id, after_sequence=0, workspace_id=workspace_id)) for child in children]
+        progress = sum(100 if child.status in terminal else
+            max((item.progress for item in events if item.progress is not None), default=0)
+            for child, events in child_histories) / len(children)
+        active = [(child, events) for child, events in child_histories if child.status in {'running', 'cancelling'} and events]
+        if active:
+            _, history = max(active, key=lambda pair: pair[1][-1].occurred_at)
+            event = history[-1]
+            if event.detail:detail += f"；{event.detail}"
     return {"job_id": job.id, "status": status, "stage": event.stage if event else status,
         "progress": progress, "detail": detail, "error": job.failure_detail if status == "failed" else None,
         "started_at": job.started_at.timestamp() if job.started_at else None,
         "elapsed_seconds": max(0, (event.occurred_at - job.started_at).total_seconds()) if event and job.started_at else None,
-        "total": len(children), "finished": finished}
+        "total": len(children), "finished": finished,
+        "events": [{"status": item.status, "stage": item.stage, "detail": item.detail, "progress": item.progress} for item in history]}

@@ -37,7 +37,7 @@ export function WorkspaceGenerationOverlay({
   const runningCount = steps.filter((step) => step.status === "running").length;
   const isPreparing = ["queued", "claimed", "prepare", "preparing", "initialize"].includes(generationSnapshot?.stage);
   const hasRealGenerationProgress = typeof generationProgress === "number" && generationProgress > 0 && !isPreparing;
-  const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : "准备中";
+  const generationProgressLabel = hasRealGenerationProgress ? `${Math.round(generationProgress)}%` : isPreparing ? "准备中" : "进行中";
   const activeStageLabel = generationStageLabel(generationSnapshot?.stage);
   useEffect(() => {
     if (stepsRef.current) stepsRef.current.scrollTop = stepsRef.current.scrollHeight;

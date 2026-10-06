@@ -128,7 +128,7 @@ class SqlVideoWorkspace:
                 linked_videos[(row["id"], source.video_id)] = source
         for video in videos:
             source = linked_videos.get((video["series_id"], video["external_source_id"]))
-            linked = video["source_kind"] not in {"video", "audio", "local"} and video["blob_key"] is None and video["external_path"] is None
+            linked = video["source_kind"] not in {"video", "audio", "local"} and video["blob_key"] is None and video["external_path"] is None and video["content_version"] == 0 and video["transcript_video_id"] is None
             missing_external = video["external_path"] is not None and not Path(video["external_path"]).is_file()
             source_type = ("audio" if Path(video["external_path"]).suffix.lower() in AUDIO_SUFFIXES else "video") if video["external_path"] is not None else ("video" if linked or source is not None else video["source_kind"])
             by_series.setdefault(video["series_id"], []).append(LibraryVideoCardDTO(

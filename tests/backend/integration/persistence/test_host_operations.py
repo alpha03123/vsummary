@@ -24,6 +24,17 @@ from backend.local.composition import build_local_container
 from backend.video_summary.infrastructure.persistence.models import Job,Video
 
 
+def test_processed_linked_video_stays_readable_after_media_cleanup(stored_video,mysql_sessions):
+    workspace,series,video=stored_video
+    with mysql_sessions.begin() as session:
+        session.execute(text("UPDATE videos SET source_kind='bilibili',content_version=1 WHERE id=:video"), {'video':video})
+        session.execute(text("DELETE FROM media_objects WHERE video_id=:video"), {'video':video})
+    card=next(item for group in workspace.list_series() for item in group.videos if item.id==video)
+    assert card.processed
+    assert card.status=='ready'
+    assert not card.is_linked
+
+
 class Guard:
     def __init__(self):
         self.attempts=0;self.charges=set();self.records=[]

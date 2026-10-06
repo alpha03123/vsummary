@@ -447,6 +447,7 @@ function toDurableGenerationSnapshot(payload) {
     elapsedSeconds,
     estimatedTotalSeconds: null,
     remainingSeconds: null,
+    steps: restoreGenerationSteps(payload),
   };
 }
 
@@ -699,6 +700,13 @@ function toTokenTotals(record) {
   };
 }
 
+function restoreGenerationSteps(payload) {
+  if (!Array.isArray(payload.events)) return undefined;
+  return payload.events.reduce((steps, event) => advanceGenerationSteps(steps, {
+    ...event, status: event.status === 'succeeded' ? 'completed' : event.status,
+  }), []);
+}
+
 function toProgressSnapshot(payload) {
   return {
     status: payload.status === "succeeded" ? "completed" : typeof payload.status === "string" ? payload.status : "idle",
@@ -715,6 +723,7 @@ function toProgressSnapshot(payload) {
       typeof payload.estimated_total_seconds === "number" ? payload.estimated_total_seconds : null,
     remainingSeconds: typeof payload.remaining_seconds === "number" ? payload.remaining_seconds : null,
     updatedAt: typeof payload.updated_at === "number" ? payload.updated_at : null,
+    steps: restoreGenerationSteps(payload),
   };
 }
 

@@ -147,7 +147,7 @@ function VideoBadge({ video }) {
       </span>
     );
   }
-  if (video.isLinked || video.status === "linked") {
+  if (!video.processed && (video.isLinked || video.status === "linked")) {
     return (
       <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
         <Link2 size={11} />
@@ -436,7 +436,7 @@ function PanelFooter({
     );
   }
 
-  if (selectedVideo.isLinked || selectedVideo.status === "linked") {
+  if (!selectedVideo.processed && (selectedVideo.isLinked || selectedVideo.status === "linked")) {
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-2">
