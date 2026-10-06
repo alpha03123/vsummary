@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 from backend.core.context import WorkspaceContext
 from backend.core.quota import QuotaReservation
+from backend.core.quota import UsageEstimate
 from backend.core.request_context import bind_workspace_context
 from backend.video_summary.infrastructure.persistence.control_plane_repository import SubmittedJob
 from backend.video_summary.infrastructure.persistence.job_repository import SqlJobRepository
@@ -31,6 +32,8 @@ class _QuotaGuard:
 def test_job_submission_records_request_reservation() -> None:
     quota = _QuotaGuard()
     repository = SqlJobRepository(Mock(), quota_guard=quota)
+    repository.active_for_resource=Mock(return_value=None)
+    repository.estimate_usage=Mock(return_value=UsageEstimate(operation_id='candidate'))
     control = Mock(submit_job=Mock(return_value=SubmittedJob(id="job-1", created=True, status="queued")))
     repository._control = control
     context = WorkspaceContext("workspace-1", "actor-1", "request-1")
@@ -60,6 +63,8 @@ def test_job_submission_records_request_reservation() -> None:
 def test_reused_job_releases_new_reservation() -> None:
     quota = _QuotaGuard()
     repository = SqlJobRepository(Mock(), quota_guard=quota)
+    repository.active_for_resource=Mock(return_value=None)
+    repository.estimate_usage=Mock(return_value=UsageEstimate(operation_id='candidate'))
     repository._control = mock_service(SqlControlPlaneRepository, submit_job=SubmittedJob(id="job-1", created=False, status="running"))
 
     with bind_workspace_context(WorkspaceContext("workspace-1", "actor-1", "request-1")):

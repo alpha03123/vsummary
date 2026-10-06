@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from http import HTTPStatus
 from pathlib import Path
 from typing import Callable
 
 import httpx
 from backend.core.concurrency import request_slot
+from backend.core.metering import ResourceUsage, resource_budget_enabled, resource_call
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
@@ -57,6 +59,19 @@ class AliyunBailianTranscriber:
         """上传本地音频到 DashScope 临时 OSS，并返回带时间戳的转写结果。"""
         if not audio_path.exists():
             raise RuntimeError(f"待转写音频不存在：{audio_path}")
+        if resource_budget_enabled():
+            from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
+            seconds = FfmpegMediaProcessor().probe_duration(audio_path)
+            if not math.isfinite(seconds) or seconds <= 0:
+                raise ValueError("ASR audio duration is unavailable.")
+            seconds = math.ceil(seconds)
+            with resource_call(ResourceUsage("asr", self._model, duration_seconds=seconds)) as measurement:
+                transcript = self._transcribe_provider(audio_path, output_stem, on_progress)
+                measurement.complete(duration_seconds=seconds)
+                return transcript
+        return self._transcribe_provider(audio_path, output_stem, on_progress)
+
+    def _transcribe_provider(self, audio_path, output_stem, on_progress):
 
         output_stem.parent.mkdir(parents=True, exist_ok=True)
         with request_slot("asr"):

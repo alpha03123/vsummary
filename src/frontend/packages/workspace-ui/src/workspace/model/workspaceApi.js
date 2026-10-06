@@ -17,6 +17,22 @@ async function loadWorkspaceLibrary() {
   return toWorkspaceLibrary(await fetchJson("/api/videos"));
 }
 
+async function loadProviderUsage(range = "7d") {
+  return toProviderUsage(await fetchJson(`/api/provider-settings/usage?range=${encodeURIComponent(range)}`));
+}
+
+const loadUserPreferences=()=>fetchJson('/api/preferences');
+const updateUserPreferences=values=>fetchJson('/api/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)});
+const loadJobs=({status,operation,offset=0,limit=50}={})=>{
+  const query=new URLSearchParams({offset:String(offset),limit:String(limit)});
+  if(status)query.set('status',status);
+  if(operation)query.set('operation',operation);
+  return fetchJson(`/api/jobs?${query.toString()}`);
+};
+const loadJobStatistics=()=>fetchJson('/api/jobs/stats');
+const loadJob=jobId=>fetchJson(`/api/jobs/${encodeURIComponent(jobId)}`);
+const cancelChatRequest=requestId=>fetchJson(`/api/chat-requests/${encodeURIComponent(requestId)}/cancel`,{method:'POST'});
+
 async function checkBackendHealth() {
   const response = await transport.fetch("/api/health");
   if (!response.ok) {
@@ -221,6 +237,7 @@ async function generateSeriesSummaries(seriesId, options = {}) {
       processing_mode: options.processingMode === "transcript" ? "transcript" : "summary",
     }),
   });
+  return toVideoGenerationSubmission(payload);
 }
 
 async function cancelSeriesSummaries(seriesId, options = {}) {
@@ -494,14 +511,14 @@ function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
   );
   let terminal = false;
 
-  eventSource.onmessage = (event) => {
+  eventSource.addEventListener("progress", (event) => {
     const snapshot = parseProgressMessage(event.data);
     listener(snapshot);
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       terminal = true;
       eventSource.close();
     }
-  };
+  });
 
   eventSource.onerror = () => {
     if (terminal) {
@@ -529,14 +546,14 @@ function subscribeSeriesGenerationProgress(seriesId, listener) {
   );
   let terminal = false;
 
-  eventSource.onmessage = (event) => {
+  eventSource.addEventListener("progress", (event) => {
     const snapshot = parseProgressMessage(event.data);
     listener(snapshot);
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       terminal = true;
       eventSource.close();
     }
-  };
+  });
 
   eventSource.onerror = () => {
     if (terminal) {
@@ -833,5 +850,5 @@ async function generateSeriesMindmap(seriesId, maxDepth = null) {
   }
   return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
-return {loadWorkspaceLibrary,checkBackendHealth,loadVideoSummary,updateVideoSummary,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,updateVideoTranscript,loadVideoTools,loadVideoMindmap,loadVideoKnowledgeCards,generateVideoKnowledgeCards,loadVideoNotes,createVideoNote,loadVideoAiSummary,generateVideoAiSummary,updateVideoAiSummary,updateVideoNote,deleteVideoNote,generateVideoSummary,processAgentVideo,cancelVideoSummary,loadVideoGenerationStatus,generateSeriesSummaries,cancelSeriesSummaries,loadSeriesGenerationStatus,generateVideoMindmap,loadAgentContextUsage,loadAgentMemoryStatus,loadAgentSessionRecovery,clearAgentSession,streamAgentChat,uploadSrtAndGenerateVideoSummary,restoreAutomaticTranscriptAndGenerateVideoSummary,subscribeDurableJobProgress,subscribeVideoGenerationProgress,subscribeSeriesGenerationProgress,getVideoPreviewUrl,fetchJson,toProviderUsage,toProgressSnapshot,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,cancelDurableJob,deleteSeries,renameSeries,deleteVideoSource,renameVideoSource,startVideoDownload,cancelVideoDownload,loadSeriesMindmap,generateSeriesMindmap, resourceUrl:transport.resourceUrl, dispose:transport.dispose};
+return {loadUserPreferences,updateUserPreferences,loadJobs,loadJobStatistics,loadJob,cancelChatRequest,loadWorkspaceLibrary,loadProviderUsage,checkBackendHealth,loadVideoSummary,updateVideoSummary,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,updateVideoTranscript,loadVideoTools,loadVideoMindmap,loadVideoKnowledgeCards,generateVideoKnowledgeCards,loadVideoNotes,createVideoNote,loadVideoAiSummary,generateVideoAiSummary,updateVideoAiSummary,updateVideoNote,deleteVideoNote,generateVideoSummary,processAgentVideo,cancelVideoSummary,loadVideoGenerationStatus,generateSeriesSummaries,cancelSeriesSummaries,loadSeriesGenerationStatus,generateVideoMindmap,loadAgentContextUsage,loadAgentMemoryStatus,loadAgentSessionRecovery,clearAgentSession,streamAgentChat,uploadSrtAndGenerateVideoSummary,restoreAutomaticTranscriptAndGenerateVideoSummary,subscribeDurableJobProgress,subscribeVideoGenerationProgress,subscribeSeriesGenerationProgress,getVideoPreviewUrl,fetchJson,toProviderUsage,toProgressSnapshot,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,cancelDurableJob,deleteSeries,renameSeries,deleteVideoSource,renameVideoSource,startVideoDownload,cancelVideoDownload,loadSeriesMindmap,generateSeriesMindmap, resourceUrl:transport.resourceUrl, dispose:transport.dispose};
 }

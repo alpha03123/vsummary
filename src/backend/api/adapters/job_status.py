@@ -7,7 +7,7 @@ def durable_status(repository, *, workspace_id: str, resource_id: str, operation
         return {"status": "idle", "progress": None, "detail": None, "job_id": None}
     children = repository.children(job.id, workspace_id=workspace_id) if batch else []
     terminal = {"succeeded", "failed", "cancelled"}
-    status = job.status
+    status = "running" if batch and job.status == "waiting_children" else job.status
     finished = sum(child.status in terminal for child in children)
     if batch and children and job.status in terminal:
         if finished < len(children):

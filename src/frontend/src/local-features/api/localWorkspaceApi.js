@@ -1,4 +1,4 @@
-export function createLocalWorkspaceApi(coreApi){const {fetchJson,toProgressSnapshot,toProviderUsage}=coreApi;
+export function createLocalWorkspaceApi(coreApi){const {fetchJson,toProgressSnapshot,loadProviderUsage}=coreApi;
 
 
 async function loadApplicationUpdateStatus() {
@@ -47,10 +47,6 @@ async function loadWorkspaceSettings() {
 async function loadProviderSettings() {
   const payload = await fetchJson("/api/provider-settings");
   return toProviderSettings(payload);
-}
-
-async function loadProviderUsage(range = "7d") {
-  return toProviderUsage(await fetchJson(`/api/provider-settings/usage?range=${encodeURIComponent(range)}`));
 }
 
 async function loadOpenaiApiKey() {

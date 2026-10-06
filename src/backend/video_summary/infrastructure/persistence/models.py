@@ -275,6 +275,8 @@ class Job(TimestampedRow, Base):
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    accounting_status: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
     parent_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=True, index=True)
     resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
     resource_id: Mapped[str] = mapped_column(String(128), nullable=False)

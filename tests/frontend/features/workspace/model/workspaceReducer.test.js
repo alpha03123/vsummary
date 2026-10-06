@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MODEL_DOWNLOAD_FAILED_MESSAGE } from "@src/local-features/workspace/model/modelDownloadMessages";
 import { workspaceReducer } from "@workspace/workspace/model/workspaceReducer";
+import { buildWorkspacePageModel } from "@workspace/workspace/ui/workspacePageModel";
 import {
   buildSeriesGenerationTaskKey,
   buildVideoGenerationTaskKey,
@@ -337,6 +338,18 @@ describe("workspaceReducer video generation cancellation", () => {
 });
 
 describe("workspaceReducer chat drawer", () => {
+  it("closes the chat drawer when returning to the library home", () => {
+    const start = {
+      ...createInitialWorkspaceState(),
+      chatDrawerOpen: true,
+      selectedSeriesId: "series-1",
+      selectedContextType: "series",
+    };
+    const home = workspaceReducer(start, { type: "library_home_selected" });
+    expect(home.selectedContextType).toBeNull();
+    expect(home.chatDrawerOpen).toBe(false);
+  });
+
   it("video_selected resets playerSeekRequest but keeps chatDrawerOpen", () => {
     const start = workspaceReducer(createInitialWorkspaceState(), { type: "chat_drawer_opened" });
     const request = { seconds: 5, endSeconds: null, query: "", matchedText: "", chapterTitle: "x", requestId: 1 };
@@ -367,6 +380,23 @@ describe("workspaceReducer chat drawer", () => {
     expect(next).toBe(current);
     expect(next.tools).toBe(current.tools);
     expect(next.summary).toBe(current.summary);
+  });
+});
+
+describe("series queue guards", () => {
+  it("does not read a missing queue while a series scope is selected", () => {
+    const state = {
+      ...createInitialWorkspaceState(),
+      selectedContextType: "series",
+      selectedSeriesId: undefined,
+      seriesGenerationQueue: undefined,
+    };
+    expect(() => buildWorkspacePageModel({
+      state,
+      selectedContextType: state.selectedContextType,
+      seriesGenerationQueue: state.seriesGenerationQueue,
+      currentGenerationTask: null,
+    })).not.toThrow();
   });
 });
 

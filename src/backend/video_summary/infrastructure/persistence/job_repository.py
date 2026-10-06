@@ -1,13 +1,16 @@
 """Durable MySQL job ownership, progress and cancellation."""
 
 from __future__ import annotations
+from contextlib import nullcontext
 
 import secrets
-from dataclasses import dataclass
+import hashlib
+import logging
+from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.video_summary.infrastructure.persistence.control_plane_repository import (
@@ -18,7 +21,9 @@ from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, QuotaReservation, UsageEstimate, UsageMeter, UsageRecord
 from backend.core.context import WorkspaceContext
 from backend.core.request_context import get_workspace_context
-from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent, Workspace
+from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent, Workspace, Video, Series, VideoContentState, IdempotencyKey
+from backend.core.preferences import current_preferences
+from backend.shared.llm.usage import MySqlLlmUsageStore
 from backend.video_summary.infrastructure.persistence.execution_context import JobLeaseLostError
 
 
@@ -39,6 +44,9 @@ class JobSnapshot:
     result_content_version: int | None
     started_at: datetime | None
     finished_at: datetime | None
+    actor_id: str | None = None
+    created_at: datetime | None = None
+    accounting_status: str = "none"
 
 
 @dataclass(frozen=True)
@@ -75,11 +83,17 @@ class SqlJobRepository:
         *,
         quota_guard: QuotaGuard | None = None,
         usage_meter: UsageMeter | None = None,
+        token_estimate=None,
+        multimodal_estimate=None,
+        queue_policy=None,
     ) -> None:
         self._session_factory = session_factory
         self._control = SqlControlPlaneRepository(session_factory)
         self._quota_guard = quota_guard
         self._usage_meter = usage_meter
+        self._token_estimate = token_estimate
+        self._multimodal_estimate = multimodal_estimate
+        self._queue_policy = queue_policy
 
     def submit(
         self,
@@ -97,16 +111,43 @@ class SqlJobRepository:
         context = get_workspace_context()
         reservation: QuotaReservation | None = None
         payload = dict(request_payload)
+        operation_id = new_ulid()
+        for internal in ("_quota_reservation", "_execution_context", "_user_preferences", "_usage_estimate"):
+            payload.pop(internal, None)
         if context is not None:
             payload["_execution_context"] = {"actor_id": context.actor_id, "request_id": context.request_id}
             if context.workspace_id != workspace_id:
                 raise ValueError("request WorkspaceContext does not own the submitted Job.")
+            preferences = current_preferences()
+            if preferences is not None:
+                payload["_user_preferences"] = preferences
+            if idempotency_scope_id is not None:
+                idempotency_scope_id = hashlib.sha256((idempotency_scope_id + ":" + context.actor_id).encode()).hexdigest()
+                with self._session_factory.begin() as session:
+                    from backend.video_summary.infrastructure.persistence.control_plane_repository import _request_hash
+                    existing = self._control._find_idempotent_job(session, scope_id=idempotency_scope_id, key=idempotency_key, request_hash=_request_hash(payload))
+                    if existing is not None:
+                        return existing
+            active = self.active_for_resource(workspace_id=workspace_id, resource_id=resource_id, operation=operation)
+            if active is not None:
+                return SubmittedJob(id=active.id, created=False, status=active.status)
+            estimate = self.estimate_usage(
+                context,
+                resource_type,
+                resource_id,
+                operation_id,
+                processing_mode=payload.get("processing_mode"),
+            )
+            if payload.get("manual_transcript") is not None:
+                from dataclasses import replace
+                estimate = replace(estimate, transcript_available=True)
+            payload["_usage_estimate"] = asdict(estimate)
             if self._quota_guard is not None and parent_job_id is None:
                 reservation = self._quota_guard.reserve_job(
                     context,
                     operation,
-                    UsageEstimate(units=1),
-                    idempotency_key or active_key,
+                    estimate,
+                    idempotency_key or estimate.operation_id,
                 )
                 payload["_quota_reservation"] = {
                     "id": reservation.id,
@@ -115,17 +156,23 @@ class SqlJobRepository:
                     "request_id": context.request_id,
                 }
         try:
-            submitted = self._control.submit_job(
-                workspace_id=workspace_id,
-                resource_type=resource_type,
-                resource_id=resource_id,
-                operation=operation,
-                request_payload=payload,
-                active_key=active_key,
-                idempotency_scope_id=idempotency_scope_id,
-                idempotency_key=idempotency_key,
-                parent_job_id=parent_job_id,
-            )
+            admission = self._queue_policy.admit(
+                actor_id=context.actor_id,
+                units=max(1, estimate.units) if operation == "generate_series_batch" else 1,
+            ) if self._queue_policy is not None and context is not None and parent_job_id is None and resource_type in {"video", "series"} else nullcontext()
+            with admission:
+                submitted = self._control.submit_job(
+                    job_id=operation_id,
+                    workspace_id=workspace_id,
+                    resource_type=resource_type,
+                    resource_id=resource_id,
+                    operation=operation,
+                    request_payload=payload,
+                    active_key=active_key,
+                    idempotency_scope_id=idempotency_scope_id,
+                    idempotency_key=idempotency_key,
+                    parent_job_id=parent_job_id,
+                )
         except Exception:
             self._release_reservation(reservation, "job submission failed")
             raise
@@ -190,7 +237,7 @@ class SqlJobRepository:
             raise ValueError("worker_id and a positive lease_seconds are required.")
         if operations is not None and not operations:
             raise ValueError("operations must be non-empty when supplied.")
-        with self._session_factory.begin() as session:
+        with (self._queue_policy.lock() if self._queue_policy is not None else nullcontext()), self._session_factory.begin() as session:
             now = _database_now(session)
             self._recover_expired_leases(session, now)
             statement = select(Job).where(
@@ -202,7 +249,7 @@ class SqlJobRepository:
                 statement = statement.where(Job.operation.in_(operations))
             job = session.scalar(
                 statement
-                .order_by(Job.available_at, Job.created_at)
+                .order_by(*(self._queue_policy.scheduling_order() if self._queue_policy is not None else (Job.available_at, Job.created_at)))
                 .with_for_update(skip_locked=True)
                 .limit(1)
             )
@@ -300,36 +347,201 @@ class SqlJobRepository:
         self.finalize_accounting(job_id, workspace_id=workspace_id)
         return snapshot
 
-    def finalize_accounting(self, job_id: str, *, workspace_id: str) -> None:
-        """Settle or release the reservation recorded with a terminal Job once."""
+    def estimate_usage(self, context, resource_type, resource_id, operation_id, *, processing_mode=None):
+        if processing_mode not in {None, "summary", "transcript"}:
+            raise ValueError("Unsupported processing mode.")
+        with self._session_factory() as session:
+            query = select(
+                Video.id,
+                Video.duration_ms,
+                Video.content_version,
+                VideoContentState.transcript_version,
+            ).join(Series, Video.series_id == Series.id).outerjoin(
+                VideoContentState, VideoContentState.video_id == Video.id,
+            ).where(Series.workspace_id == context.workspace_id, Video.deleted_at.is_(None))
+            if resource_type == "video":
+                rows = session.execute(query.where(Video.id == resource_id)).all()
+            elif resource_type == "series":
+                pending = (
+                    (VideoContentState.transcript_version.is_(None))
+                    | (VideoContentState.transcript_version < Video.content_version)
+                    if processing_mode == "transcript"
+                    else Video.content_version == 0
+                )
+                rows = session.execute(query.where(Series.id == resource_id, pending)).all()
+            else:
+                rows = []
+        incoming, outgoing = self._token_estimate() if self._token_estimate is not None else (None, None)
+        profile = (current_preferences() or {}).get("model_profile")
+        multimodal = processing_mode != 'transcript' and (
+            self._multimodal_estimate() if self._multimodal_estimate is not None else
+            bool((current_preferences() or {}).get('ai_summary_multimodal_enabled')))
+        child_operation = "generate_transcript" if processing_mode == "transcript" else "generate_summary"
+        estimates = tuple(
+            UsageEstimate(
+                units=1,
+                operation_id=f"{operation_id}:{row.id}",
+                operation=child_operation,
+                model_profile=profile,
+                multimodal_enabled=multimodal,
+                duration_seconds=(row.duration_ms / 1000 if row.duration_ms is not None else None),
+                input_tokens=incoming,
+                output_tokens=outgoing,
+                transcript_available=row.transcript_version is not None and row.transcript_version > 0,
+            )
+            for row in rows
+        )
+        if resource_type == "series":
+            return UsageEstimate(
+                units=len(estimates), operation_id=operation_id, operation="generate_series_batch",
+                model_profile=profile, children=estimates,
+            )
+        return estimates[0] if estimates else UsageEstimate(units=0, operation_id=operation_id, model_profile=profile)
 
-        action: tuple[str, QuotaReservation, WorkspaceContext] | None = None
+    def measured_usage(self, session, job):
+        children = session.scalars(select(Job).where(Job.parent_job_id == job.id)).all() if job.operation == "generate_series_batch" else []
+        completed = [item for item in children if item.status == "succeeded" or item.result_content_version is not None] if job.operation == "generate_series_batch" else ([job] if job.status == "succeeded" or job.result_content_version is not None else [])
+        operation_ids = [job.id, *(item.id for item in children)]
+        totals = MySqlLlmUsageStore(self._session_factory).summarize(range_key="all", workspace_id=job.workspace_id, actor_id=job.actor_id, operation_ids=operation_ids).total
+        video_ids = [item.resource_id for item in completed if item.resource_type == "video"]
+        durations = session.scalars(select(Video.duration_ms).where(Video.id.in_(video_ids))).all() if video_ids else []
+        seconds = sum(durations) / 1000 if durations and all(value is not None for value in durations) else None
+        preferences = job.request_payload.get("_user_preferences", {})
+        return UsageRecord(units=len(completed), operation_id=job.id, operation=job.operation,
+                           model_profile=preferences.get("model_profile"), duration_seconds=seconds,
+                           input_tokens=totals.prompt_tokens, output_tokens=totals.completion_tokens,
+                           transcript_available=job.request_payload.get("_usage_estimate", {}).get("transcript_available"),
+                           multimodal_enabled=job.request_payload.get("_usage_estimate", {}).get("multimodal_enabled", False),
+                           children=tuple(self.measured_usage(session, child) for child in completed) if children else ())
+
+    def mark_series_batch_waiting(self, claim, *, child_count: int) -> None:
+        if child_count < 1:
+            raise ValueError("A waiting series batch requires at least one child.")
         with self._session_factory.begin() as session:
-            statement = select(Job).where(Job.id == job_id, Job.workspace_id == workspace_id)
-            job = session.scalar(statement.with_for_update())
+            now = _database_now(session)
+            job = self._owned_job(session, claim, now)
+            job.status = "waiting_children"
+            job.claimed_by = None
+            job.lease_token = None
+            job.lease_expires_at = None
+            self._finish_attempt(session, claim, now, outcome="dispatched")
+            self._append_event(
+                session, job.id, "waiting_children", "waiting_children", 0.0,
+                f"已创建 {child_count} 个视频子任务，等待全部结束",
+            )
+
+    def reconcile_series_batches(self, limit=20) -> list[tuple[str, str]]:
+        terminal = {"succeeded", "failed", "cancelled"}
+        child = Job.__table__.alias("batch_child")
+        finalized: list[tuple[str, str]] = []
+        with self._session_factory.begin() as session:
+            parents = session.scalars(
+                select(Job).where(
+                    Job.operation == "generate_series_batch",
+                    Job.status.in_(("waiting_children", "cancelling")),
+                    Job.lease_token.is_(None),
+                    select(child.c.id).where(child.c.parent_job_id == Job.id).exists(),
+                    ~select(child.c.id).where(child.c.parent_job_id == Job.id,
+                        child.c.status.not_in(terminal)).exists(),
+                ).order_by(Job.created_at).limit(limit).with_for_update(skip_locked=True)
+            ).all()
+            now = _database_now(session)
+            for parent in parents:
+                children = session.scalars(
+                    select(Job).where(Job.parent_job_id == parent.id).with_for_update()
+                ).all()
+                if not children:
+                    continue
+                if any(child.status not in terminal for child in children):
+                    continue
+                if parent.cancel_requested_at is not None or any(child.status == "cancelled" for child in children):
+                    status, detail = "cancelled", "系列任务已取消"
+                elif any(child.status == "failed" for child in children):
+                    status, detail = "failed", "系列任务中存在失败的视频"
+                    parent.failure_code = "child_generation_failed"
+                    parent.failure_detail = detail
+                else:
+                    status, detail = "succeeded", "系列全部视频处理完成"
+                parent.status = status
+                parent.active_key = None
+                parent.claimed_by = None
+                parent.lease_token = None
+                parent.lease_expires_at = None
+                parent.finished_at = now
+                self._append_event(session, parent.id, status, status, 100.0, detail)
+                finalized.append((parent.id, parent.workspace_id))
+        return finalized
+
+    def finalize_accounting(self, job_id: str, *, workspace_id: str) -> None:
+        """Finalize after host success. Host settlement and metering must be idempotent."""
+        if self._quota_guard is None:
+            return
+        with self._session_factory.begin() as session:
+            job = session.scalar(select(Job).where(Job.id == job_id, Job.workspace_id == workspace_id).with_for_update())
             if job is None or job.status not in {"succeeded", "failed", "cancelled"}:
                 return
             payload = dict(job.request_payload)
-            reservation_payload = payload.get("_quota_reservation")
-            if not isinstance(reservation_payload, dict) or reservation_payload.get("finalized") is True:
+            reservation = dict(payload.get("_quota_reservation", {}))
+            if not reservation or reservation.get("finalized") is True:
                 return
-            reservation_id = reservation_payload.get("id")
-            context = _context_from_reservation(reservation_payload)
-            if not isinstance(reservation_id, str) or context is None:
-                return
-            reservation_payload["finalized"] = True
-            payload["_quota_reservation"] = reservation_payload
+            context = _context_from_reservation(reservation)
+            if not reservation.get("id") or context is None:
+                raise ValueError("Invalid accounting ownership metadata.")
+            if job.operation == "generate_series_batch":
+                children = session.scalars(select(Job).where(Job.parent_job_id == job.id)).all()
+                if any(child.status not in {"succeeded", "failed", "cancelled"} for child in children):
+                    return
+            actual = self.measured_usage(session, job)
+            if actual.units:
+                self._quota_guard.settle(reservation["id"], actual)
+                if self._usage_meter is not None:
+                    self._usage_meter.record(context, actual)
+            else:
+                self._quota_guard.release(reservation["id"], f"job {job.status}")
+            reservation["finalized"] = True
+            payload["_quota_reservation"] = reservation
             job.request_payload = payload
-            action = (job.status, QuotaReservation(reservation_id), context)
-        if action is None or self._quota_guard is None:
-            return
-        status, reservation, context = action
-        if status == "succeeded":
-            self._quota_guard.settle(reservation.id, UsageRecord(units=1))
-            if self._usage_meter is not None:
-                self._usage_meter.record(context, UsageRecord(units=1))
-        else:
-            self._quota_guard.release(reservation.id, f"job {status}")
+            job.accounting_status = "settled"
+
+    def retry_accounting(self, limit=20):
+        with self._session_factory() as session:
+            rows = session.execute(select(Job.id, Job.workspace_id).where(Job.accounting_status == "pending", Job.status.in_(("succeeded", "failed", "cancelled"))).order_by(Job.finished_at).limit(limit)).all()
+        for job_id, workspace_id in rows:
+            try:
+                self.finalize_accounting(job_id, workspace_id=workspace_id)
+            except Exception:
+                logging.getLogger(__name__).exception("Job accounting remains pending", extra={"job_id": job_id})
+
+    def list_jobs(self, *, workspace_id=None, actor_id=None, status=None, operation=None, offset=0, limit=50, user_tasks=True):
+        if offset < 0 or not 1 <= limit <= 100:
+            raise ValueError("Invalid task pagination.")
+        query = self._jobs_query(workspace_id, actor_id, status, operation, user_tasks)
+        with self._session_factory() as session:
+            total = session.scalar(select(func.count()).select_from(query.subquery()))
+            rows = session.scalars(query.order_by(Job.created_at.desc(), Job.id.desc()).offset(offset).limit(limit)).all()
+            return {"total": total, "items": [_snapshot(row) for row in rows]}
+
+    def job_statistics(self, *, workspace_id=None, actor_id=None, user_tasks=True):
+        query = self._jobs_query(workspace_id, actor_id, None, None, user_tasks).subquery()
+        with self._session_factory() as session:
+            return dict(session.execute(select(query.c.status, func.count()).group_by(query.c.status)).all())
+
+    @staticmethod
+    def _jobs_query(workspace_id, actor_id, status, operation, user_tasks):
+        query = select(Job)
+        if workspace_id is not None:
+            query = query.where(Job.workspace_id == workspace_id)
+        if actor_id is not None:
+            query = query.where(Job.actor_id == actor_id)
+        if status is not None:
+            if status not in {"queued", "running", "retrying", "cancelling", "succeeded", "failed", "cancelled"}:
+                raise ValueError("Unsupported task status.")
+            query = query.where(Job.status == status)
+        if operation is not None:
+            query = query.where(Job.operation == operation)
+        if user_tasks:
+            query = query.where(Job.actor_id.is_not(None), Job.resource_type.in_(("video", "series")), Job.operation != "generate_series_batch")
+        return query
 
     def request_cancel_for_resource(self, *, workspace_id: str, resource_id: str, operation: str) -> JobSnapshot | None:
         with self._session_factory() as session:
@@ -341,10 +553,10 @@ class SqlJobRepository:
             )
         return self.request_cancel(job_id, workspace_id=workspace_id) if job_id is not None else None
 
-    def request_cancel_series_generation(self, *, workspace_id: str, series_id: str) -> list[JobSnapshot]:
+    def request_cancel_series_generation(self, *, workspace_id: str, series_id: str, run_id: str | None = None) -> list[JobSnapshot]:
         """Cancel an active series batch and every generation child it owns."""
 
-        active_statuses = ("queued", "retrying", "running", "cancelling")
+        active_statuses = ("queued", "retrying", "running", "cancelling", "waiting_children")
         with self._session_factory.begin() as session:
             parent = session.scalar(
                 select(Job)
@@ -359,6 +571,9 @@ class SqlJobRepository:
             )
             if parent is None:
                 return []
+            parent_run_id = parent.request_payload.get("run_id")
+            if run_id is not None and parent_run_id != run_id:
+                return []
             jobs = list(
                 session.scalars(
                     select(Job)
@@ -371,7 +586,27 @@ class SqlJobRepository:
                 )
             )
             now = _database_now(session)
-            return [self._request_cancel_locked(session, job, now) for job in jobs]
+            terminal = {"succeeded", "failed", "cancelled"}
+            if parent.status in terminal and any(job.id != parent.id for job in jobs):
+                parent.active_key = f"series:{parent.resource_id}:generate_series_batch"
+                parent.finished_at = None
+                parent.failure_code = None
+                parent.failure_detail = None
+                parent.cancel_requested_at = now
+                parent.status = "cancelling"
+                self._append_event(session, parent.id, "cancelling", "cancelling", None, "已请求取消系列任务")
+            elif parent.status == "waiting_children":
+                parent.cancel_requested_at = now
+                parent.status = "cancelling"
+                self._append_event(session, parent.id, "cancelling", "cancelling", None, "已请求取消系列任务")
+            elif parent.status in active_statuses:
+                self._request_cancel_locked(session, parent, now)
+            snapshots = [
+                self._request_cancel_locked(session, job, now)
+                for job in jobs
+                if job.id != parent.id
+            ]
+            return [_snapshot(parent), *snapshots]
 
     def mark_cancelled(self, claim: ClaimedJob, *, detail: str) -> None:
         with self._session_factory.begin() as session:
@@ -475,7 +710,7 @@ class SqlJobRepository:
                     Job.workspace_id == workspace_id,
                     Job.resource_id == resource_id,
                     Job.operation == operation,
-                    Job.status.in_(("queued", "retrying", "running", "cancelling")),
+                    Job.status.in_(("queued", "retrying", "running", "cancelling", "waiting_children")),
                 )
                 .order_by(Job.created_at.desc())
                 .limit(1)
@@ -658,6 +893,7 @@ def _snapshot(job: Job) -> JobSnapshot:
         result_content_version=job.result_content_version,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        actor_id=job.actor_id, created_at=job.created_at, accounting_status=job.accounting_status,
     )
 
 

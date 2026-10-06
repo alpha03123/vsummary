@@ -1,6 +1,6 @@
 import React from 'react';
 import {WorkspaceSettingsPanel} from './WorkspaceSettingsPanel';
-import {WorkspaceUsagePage} from './WorkspaceUsagePage';
+import {WorkspaceUsagePage} from '@alpha03123/vsummary-workspace-ui';
 import {WorkspaceImportModal} from './WorkspaceImportModal';
 export function LocalSettingsPanel({page}){const {shell:{state,ui},generation,actions}=page;return (<WorkspaceSettingsPanel
                   ui={ui}

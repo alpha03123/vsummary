@@ -3,10 +3,41 @@ import { createWorkspaceApi } from "@workspace/workspace/model/workspaceApi";
 
 const transport = { fetch: vi.fn(), subscribe: vi.fn(), CLOSED: 2 };
 const { generateVideoSummary, processAgentVideo, cancelDurableJob,
-  loadAgentSessionRecovery, subscribeDurableJobProgress } = createWorkspaceApi(transport);
+  generateSeriesSummaries, subscribeSeriesGenerationProgress, subscribeVideoGenerationProgress,
+  loadAgentSessionRecovery, subscribeDurableJobProgress, loadProviderUsage } = createWorkspaceApi(transport);
 
 afterEach(() => {
   vi.resetAllMocks();
+});
+
+describe("series generation submission and progress", () => {
+  test("returns the accepted job so the caller can read its status", async () => {
+    transport.fetch.mockResolvedValue({ ok: true, json: async () => ({ job_id: "batch-1", status: "queued" }) });
+    await expect(generateSeriesSummaries("series-1", { processingMode: "transcript" }))
+      .resolves.toEqual({ jobId: "batch-1", status: "queued" });
+    expect(JSON.parse(transport.fetch.mock.calls[0][1].body).processing_mode).toBe("transcript");
+  });
+
+  test("rejects an incomplete acceptance response at the API boundary", async () => {
+    transport.fetch.mockResolvedValue({ ok: true, json: async () => ({ status: "queued" }) });
+    await expect(generateSeriesSummaries("series-1")).rejects.toThrow("job_id 或 status");
+  });
+
+  test.each(["series", "video"])("consumes named progress events through to cancellation for %s", (scope) => {
+    const handlers = new Map();
+    const connection = { close: vi.fn(), addEventListener: (name, handler) => handlers.set(name, handler) };
+    transport.subscribe.mockReturnValue(connection);
+    const listener = vi.fn();
+    if (scope === "series") subscribeSeriesGenerationProgress("series-1", listener);
+    else subscribeVideoGenerationProgress("series-1", "video-1", listener);
+    for (const status of ["running", "cancelled"]) {
+      handlers.get("progress")({ data: JSON.stringify({ status, stage: status, progress: 20 }) });
+    }
+    expect(listener.mock.calls.map(([snapshot]) => snapshot.status)).toEqual(["running", "cancelled"]);
+    expect(connection.close).toHaveBeenCalledOnce();
+    connection.onerror();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("loadAgentSessionRecovery", () => {
@@ -144,5 +175,20 @@ describe("subscribeDurableJobProgress", () => {
     expect(snapshot.steps.find((step) => step.id === "ai_summary").status).toBe("running");
     expect(snapshot.steps.find((step) => step.id === "chapter_images").status).toBe("running");
     expect(listener.mock.calls[1][0].progress).toBe(88);
+  });
+});
+
+describe("loadProviderUsage", () => {
+  test("uses the shared route and maps the statistics response for analytics", async () => {
+    transport.fetch.mockResolvedValue({ok:true,json:async()=>({
+      range:"30d",total:{prompt_tokens:12,completion_tokens:8,total_tokens:20},
+      by_category:[{category:"chat",prompt_tokens:12,completion_tokens:8,total_tokens:20}],
+      by_provider:[],recent:[],timeline_granularity:"hour",timeline:[],
+    })});
+    const usage=await loadProviderUsage("30d");
+    expect(transport.fetch.mock.calls[0][0]).toBe("/api/provider-settings/usage?range=30d");
+    expect(usage.total).toEqual({promptTokens:12,completionTokens:8,totalTokens:20});
+    expect(usage.byCategory[0].totalTokens).toBe(20);
+    expect(usage.timelineGranularity).toBe("hour");
   });
 });

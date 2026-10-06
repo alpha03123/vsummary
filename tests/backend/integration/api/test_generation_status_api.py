@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dataclasses import replace
-from tests._api_fixtures import make_api_container, make_workspace_services
+from tests._api_fixtures import make_api_container, make_workspace_services, replace_test_services
 from unittest.mock import create_autospec
 
 from fastapi.testclient import TestClient
@@ -86,6 +86,18 @@ class GenerationStatusApiTests(unittest.TestCase):
         self.assertEqual(repository.calls[0]["resource_id"], "series-1")
         self.assertEqual(repository.calls[0]["request_payload"]["series_id"], "series-1")
 
+    def test_series_missing_media_is_rejected_before_submission(self) -> None:
+        container = _build_container()
+        repository = _FakeJobRepository()
+        container = replace(container, job_repository=repository)
+        source = create_autospec(GetVideoSource, instance=True, spec_set=True)
+        source.run.return_value = None
+        replace_test_services(container, get_video_source=source)
+        response = TestClient(create_app(container)).post('/api/series/series-1/generate')
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('重新上传', response.json()['detail'])
+        self.assertEqual(repository.calls, [])
+
     def test_duplicate_series_submit_returns_existing_parent_job(self) -> None:
         container = _build_container()
         container = replace(container, job_repository=_FakeJobRepository(conflict=True))
@@ -94,6 +106,16 @@ class GenerationStatusApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json()["job_id"], "job-existing")
+
+    def test_series_submit_refuses_when_any_pending_video_is_already_active(self) -> None:
+        container = _build_container()
+        repository = _FakeJobRepository(active_video=True)
+        container = replace(container, job_repository=repository)
+
+        response = TestClient(create_app(container)).post("/api/series/series-1/generate")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(repository.calls, [])
 
     def test_series_cancel_requests_durable_parent_job(self) -> None:
         container = _build_container()
@@ -170,9 +192,10 @@ def _build_container():
 
 
 class _FakeJobRepository:
-    def __init__(self, conflict: bool = False) -> None:
+    def __init__(self, conflict: bool = False, active_video: bool = False) -> None:
         self.calls: list[dict[str, object]] = []
         self.conflict = conflict
+        self.active_video = active_video
 
     def submit(self, **kwargs):
         self.calls.append(kwargs)
@@ -183,6 +206,8 @@ class _FakeJobRepository:
         return SubmittedJob(id="job-1", created=True, status="queued")
 
     def active_for_resource(self, **kwargs):
+        if self.active_video and kwargs["resource_id"] in {"video-1", "video-2"}:
+            return job_snapshot(id="active-video")
         if not self.conflict:
             return None
         return job_snapshot(id="job-existing")

@@ -466,7 +466,8 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
   async function onCancelGeneration() {
     try {
       if (
-        state.seriesGenerationQueue?.seriesId === state.selectedSeriesId &&
+        state.seriesGenerationQueue != null &&
+        state.seriesGenerationQueue.seriesId === state.selectedSeriesId &&
         (state.seriesGenerationQueue.status === "running" || state.seriesGenerationQueue.status === "cancelling") &&
         state.selectedSeriesId
       ) {
@@ -542,7 +543,7 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
   }
 
   async function cancelSeriesWork({ seriesId, runId }) {
-    await cancelSeriesSummaries(seriesId, { runId });
+    const cancelled = await cancelSeriesSummaries(seriesId, { runId });
     const linkedVideoIds = new Set(
       getPendingVideosForSeriesGeneration(state.library, seriesId, state.processingMode)
         .filter(isLinkedVideo)
@@ -552,7 +553,8 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
       linkedVideoIds.add(state.seriesGenerationQueue.downloadVideoId);
     }
     await Promise.allSettled(Array.from(linkedVideoIds, (videoId) => cancelVideoDownload(seriesId, videoId)));
-    await reloadWorkspaceLibraryAfterSeriesStop();
+    const status = cancelled.status === "idle" ? "cancelled" : cancelled.status === "succeeded" ? "completed" : cancelled.status;
+    const terminal = ["completed", "failed", "cancelled"].includes(status);
     dispatch({
       type: "generation_status_loaded",
       taskKey: buildSeriesGenerationTaskKey(seriesId),
@@ -561,15 +563,18 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
       runId,
       videoId: null,
       snapshot: {
-        status: "cancelled",
-        stage: "cancelled",
+        status: terminal ? status : "cancelling",
+        stage: terminal ? status : "cancelling",
         progress: null,
-        detail: "任务已取消",
-        error: null,
+        detail: terminal ? (status === "cancelled" ? "任务已取消" : null) : "正在停止系列任务",
+        error: status === "failed" ? "系列任务失败" : null,
       },
-      subscriptionActive: false,
+      subscriptionActive: !terminal,
     });
-    dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "cancelled" });
+    if (terminal) {
+      await reloadWorkspaceLibraryAfterSeriesStop();
+      dispatch({ type: "series_generation_queue_finished", seriesId, runId, status });
+    }
   }
 
   async function onGenerateMindmap(maxDepth = null) {

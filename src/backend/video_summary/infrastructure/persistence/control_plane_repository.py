@@ -281,6 +281,7 @@ class SqlControlPlaneRepository:
         idempotency_scope_id: str | None = None,
         idempotency_key: str | None = None,
         idempotency_ttl: timedelta = timedelta(days=1),
+        job_id: str | None = None,
     ) -> SubmittedJob:
         _require_text(workspace_id, field_name="workspace_id")
         _require_text(resource_type, field_name="resource_type")
@@ -289,7 +290,7 @@ class SqlControlPlaneRepository:
         if (idempotency_scope_id is None) != (idempotency_key is None):
             raise ValueError("idempotency_scope_id and idempotency_key must be supplied together.")
         request_hash = _request_hash(request_payload)
-        job_id = new_ulid()
+        job_id = job_id or new_ulid()
         try:
             with self._session_factory.begin() as session:
                 claim = current_execution_claim()
@@ -303,6 +304,8 @@ class SqlControlPlaneRepository:
                 )
                 if existing is not None:
                     return existing
+                if resource_type == 'video':
+                    session.get(Video, resource_id, with_for_update=True)
                 if parent_job_id is not None:
                     parent = session.scalar(select(Job).where(Job.id == parent_job_id).with_for_update())
                     if parent is None or parent.workspace_id != workspace_id:
@@ -318,6 +321,8 @@ class SqlControlPlaneRepository:
                     operation=operation,
                     status="queued",
                     request_payload=request_payload,
+                    actor_id=request_payload.get("_execution_context", {}).get("actor_id"),
+                    accounting_status="pending" if "_quota_reservation" in request_payload else "none",
                     active_key=active_key,
                 )
                 session.add(job)
@@ -382,7 +387,7 @@ class SqlControlPlaneRepository:
         )
         if record is None:
             return None
-        if record.expires_at <= datetime.now(timezone.utc):
+        if record.expires_at <= session.scalar(select(func.now())):
             session.delete(record)
             session.flush()
             return None
@@ -418,7 +423,8 @@ class SqlControlPlaneRepository:
 
 def _request_hash(payload: dict[str, Any]) -> str:
     try:
-        rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        business_payload = {key: value for key, value in payload.items() if key not in {"_quota_reservation", "_execution_context", "_user_preferences", "_usage_estimate"}}
+        rendered = json.dumps(business_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     except (TypeError, ValueError) as error:
         raise ValueError("Job request payload must be JSON serializable.") from error
     return hashlib.sha256(rendered.encode("utf-8")).hexdigest()

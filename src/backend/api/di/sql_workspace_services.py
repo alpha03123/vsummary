@@ -24,6 +24,7 @@ class SqlWorkspaceServicesProvider:
         blob_store,
         data_root: Path,
         max_cached_workspaces: int = 64,
+        media_preview_enabled: bool = True,
     ):
         if max_cached_workspaces < 1:
             raise ValueError("Workspace cache size must be positive.")
@@ -31,6 +32,7 @@ class SqlWorkspaceServicesProvider:
         self.blob_store = blob_store
         self.data_root = data_root
         self.max_cached_workspaces = max_cached_workspaces
+        self.media_preview_enabled = media_preview_enabled
         self._container: ApiContainer | None = None
         self._services = OrderedDict()
         self._lock = RLock()
@@ -59,6 +61,7 @@ class SqlWorkspaceServicesProvider:
                     blob_store=self.blob_store,
                     cache_root=self.data_root / "workspaces" / context.workspace_id,
                     workspace_id=context.workspace_id,
+                    media_preview_enabled=self.media_preview_enabled,
                 )
                 services = build_workspace_services(self._container, workspace)
                 self._services[context.workspace_id] = services

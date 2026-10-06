@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from backend.core.preferences import load_effective_settings, preference_cache_key
 from pathlib import Path
 from threading import Lock
 
@@ -51,17 +53,21 @@ class LazyAgentRuntimeProvider:
         self._context_loader = WorkspaceAgentContextLoader(workspace)
         self.session_store = session_store
         self._lock = Lock()
+        self._preference_signature = None
         self._cached_agent_graph_service: AgentGraphService | None = None
         self._cached_context_budget_service: AgentContextBudgetService | None = None
         self._cached_retrieval_service: SeriesRetrievalService | None = None
 
     def get_agent_graph_service(self) -> AgentGraphService:
         with self._lock:
-            if self._cached_agent_graph_service is None:
+            signature = preference_cache_key()
+            if self._cached_agent_graph_service is None or signature != self._preference_signature:
+                self._preference_signature = signature
                 env_settings = load_env_settings(self._root_dir)
                 if env_settings.provider != "ollama" and not env_settings.api_key.strip():
                     raise RuntimeError("缺少 API Key，无法调用 Agent 模型。")
-                app_settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
+                app_settings = load_effective_settings(self._root_dir / "config" / "settings.toml", self._root_dir)
+                env_settings = replace(env_settings, model=app_settings.openai.model)
                 self._cached_context_budget_service = AgentContextBudgetService(
                     context_loader=self._context_loader,
                     session_store=self.session_store,

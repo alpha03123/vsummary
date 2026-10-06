@@ -3,8 +3,9 @@ import { isGenerationSnapshotActive } from "../model/workspaceState";
 export function buildWorkspacePageModel(controller) {
   const seriesQueue = controller.seriesGenerationQueue;
   const seriesQueueActive =
+    seriesQueue != null &&
     controller.selectedContextType === "series" &&
-    seriesQueue?.seriesId === controller.state.selectedSeriesId &&
+    seriesQueue.seriesId === controller.state.selectedSeriesId &&
     (seriesQueue.status === "running" || seriesQueue.status === "cancelling");
   const seriesQueueProgress =
     seriesQueueActive && !seriesQueue.downloadVideoId && typeof seriesQueue.total === "number" && seriesQueue.total > 0

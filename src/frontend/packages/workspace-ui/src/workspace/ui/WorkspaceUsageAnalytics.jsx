@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   BarElement,
   CategoryScale,
@@ -7,18 +7,17 @@ import {
   Tooltip,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import { popScaleVariant, blurVariant, staggerContainer, fadeUpVariant } from "@alpha03123/vsummary-workspace-ui";
-import { X, LoaderCircle, BarChart3, Zap, MessageSquare, ArrowUpRight, ArrowDownRight, Clock, Server } from "lucide-react";
+import { staggerContainer, fadeUpVariant } from "../../lib/animations";
+import { LoaderCircle, BarChart3, Zap, MessageSquare, ArrowUpRight, ArrowDownRight, Clock, Server } from "lucide-react";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-export function WorkspaceUsagePage({
+export function WorkspaceUsageAnalytics({
   usage,
   range,
   loading,
   error,
   onChangeRange,
-  onClose,
 }) {
   const ranges = [
     { id: "today", label: "今日" },
@@ -38,38 +37,7 @@ export function WorkspaceUsagePage({
   const maxProviderTokens = providers.length ? Math.max(...providers.map((p) => p.totalTokens)) : 0;
 
   return (
-    <motion.section
-      variants={popScaleVariant}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      className="bg-white dark:bg-neutral-950 rounded-[2rem] shadow-2xl border border-stone-200 dark:border-white/10 w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden pointer-events-auto"
-      aria-label="API 用量统计"
-    >
-      {/* Header */}
-      <div className="sticky top-0 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-md z-30 px-10 py-6 flex items-center justify-between border-b border-stone-200/60 dark:border-white/5 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent/10 text-accent">
-            <BarChart3 size={20} strokeWidth={2.2} />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-accent tracking-widest uppercase">Analytics</p>
-            <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100 tracking-tight">API 用量统计</h2>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors shadow-sm"
-          onClick={onClose}
-          aria-label="关闭面板"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-10 pb-16">
-        <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto">
 
           {/* Range Selector */}
           <div className="flex flex-wrap items-center gap-2 mt-8 mb-6">
@@ -288,12 +256,10 @@ export function WorkspaceUsagePage({
               </motion.div>
             </motion.div>
           )}
-        </div>
-      </div>
-    </motion.section>
+
+    </div>
   );
 }
-
 
 /* ── Sub-components ── */
 

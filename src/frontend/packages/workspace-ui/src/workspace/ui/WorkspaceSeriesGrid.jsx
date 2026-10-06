@@ -107,12 +107,8 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
           <FolderKanban size={32} />
         </div>
         <p className="text-[11px] font-bold text-stone-600 dark:text-zinc-500 tracking-widest uppercase mb-4">Videos Library</p>
-        <h2 className="text-3xl font-bold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">还没有分类 (Series)</h2>
-        <p className="text-stone-600 dark:text-zinc-400 leading-relaxed text-lg font-medium">
-          你可以直接使用导入入口创建系列，也可以手动把视频放进
-          <code className="bg-stone-100 dark:bg-neutral-900 px-2 py-1 rounded-md text-stone-700 dark:text-zinc-300 font-mono text-sm mx-1 border border-stone-200 dark:border-white/5">videos/&lt;series&gt;/</code>
-          目录。
-        </p>
+        <h2 className="text-3xl font-bold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">还没有系列</h2>
+        <p className="text-stone-600 dark:text-zinc-400 leading-relaxed text-base">请点击添加系列以增添第一个系列</p>
         {onAddSeries ? (
           <button
             type="button"
@@ -139,7 +135,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
           <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500 mb-1.5 flex items-center gap-2">
             Series Shelf
           </p>
-          <h2 className="text-2xl font-extrabold text-stone-900 dark:text-stone-100 tracking-tight">All Shelves</h2>
+          <h2 className="text-2xl font-extrabold text-stone-900 dark:text-stone-100 tracking-tight">全部系列</h2>
           <p className="mt-2 text-[13px] font-medium leading-relaxed text-stone-600 dark:text-zinc-400">
             点击下方任一系列来进入工作区
           </p>
@@ -247,9 +243,9 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 dark:bg-neutral-900 border border-stone-200 dark:border-white/5 w-fit shadow-sm mb-5">
             <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Videos Library</span>
           </div>
-          <h2 className="text-4xl lg:text-5xl font-extrabold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">All Shelves <span className="text-stone-600 dark:text-zinc-600 font-medium">(Series)</span></h2>
+          <h2 className="text-4xl lg:text-5xl font-extrabold text-stone-900 dark:text-stone-100 mb-4 tracking-tight">全部系列</h2>
           <p className="text-stone-600 dark:text-zinc-400 text-[15px] font-medium leading-relaxed">
-            首页总览所有的视频分类。点击进入某个分类后，可以查看具体视频、生成 AI 总结，并在右侧阅读核心要点。
+            首页总览所有的视频系列。点击进入某个系列后，可以查看具体视频、生成 AI 总结，并在右侧阅读核心要点。
           </p>
           <div className="relative mt-6 max-w-md">
             <Search size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-600 dark:text-zinc-500" />
@@ -278,7 +274,7 @@ export function WorkspaceSeriesGrid({ library, onOpenSeries, onAddSeries, onRequ
         <div className="flex-shrink-0">
           <span className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-2xl workspace-panel border shadow-sm font-bold text-stone-800 dark:text-stone-200">
             <LayoutGrid size={18} className="text-accent" />
-            {series.length} / {sourceSeries.length} 个分类
+            {series.length} / {sourceSeries.length} 个系列
           </span>
         </div>
       </div>

@@ -1039,6 +1039,22 @@ def generate_series_summaries(
         series = next((item for item in container.list_video_library.run().series if item.id == series_id), None)
         if series is None:
             raise LookupError(f"series not found '{series_id}'")
+        pending = [
+            video for video in series.videos
+            if (not video.has_transcript if processing_mode == "transcript" else not video.processed)
+        ]
+        for video in pending:
+            if not (video.is_linked or video.status == "linked") and container.get_video_source.run(series_id, video.id) is None:
+                raise HTTPException(status_code=409, detail=f"视频「{video.title}」的原媒体不可用，请重新上传后再处理。")
+            if any(
+                job_repository.active_for_resource(
+                    workspace_id=container.workspace_id,
+                    resource_id=video.id,
+                    operation=operation,
+                ) is not None
+                for operation in ("generate_summary", "generate_transcript", "process_agent_video")
+            ):
+                raise ControlPlaneConflictError(f"video '{video.id}' already has an active generation task")
         submitted = job_repository.submit(
             workspace_id=container.workspace_id,
             resource_type="series",
@@ -1056,6 +1072,8 @@ def generate_series_summaries(
         )
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     except ControlPlaneConflictError as error:
         active = job_repository.active_for_resource(
             workspace_id=container.workspace_id,
@@ -1101,9 +1119,23 @@ async def cancel_series_summaries_generation(
     cancelled_jobs = job_repository.request_cancel_series_generation(
         workspace_id=container.workspace_id,
         series_id=series_id,
+        run_id=None if request is None else request.run_id,
     )
     if not cancelled_jobs:
-        raise HTTPException(status_code=404, detail="no active series batch job found")
+        snapshot = durable_status(
+            job_repository,
+            workspace_id=container.workspace_id,
+            resource_id=series_id,
+            operations=("generate_series_batch",),
+            batch=True,
+        )
+        return {
+            "status": "cancelled" if snapshot["status"] == "idle" else snapshot["status"],
+            "job_id": snapshot["job_id"],
+            "task_id": series_task_id,
+            "cancelled_video_ids": [],
+            "cancelled_job_ids": [],
+        }
     snapshot = next(
         (job for job in cancelled_jobs if job.resource_id == series_id and job.operation == "generate_series_batch"),
         cancelled_jobs[0],
@@ -1536,9 +1568,6 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
     Raises:
         HTTPException(404): 视频不存在。
     """
-    source = container.get_video_source.run(series_id, video_id)
-    if source is not None:
-        return source
     library = container.list_video_library.run()
     series = next((item for item in library.series if item.id == series_id), None)
     if series is None or not any(video.id == video_id for video in series.videos):

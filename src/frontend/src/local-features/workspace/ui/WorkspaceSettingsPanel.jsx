@@ -310,7 +310,7 @@ export function WorkspaceSettingsPanel({
                 >
                   <WorkspaceToggleSwitch
                     checked={ui.showTakeaways}
-                    onChange={() => onChangeSetting("showTakeaways", !ui.showTakeaways)}
+                    onChange={(value) => onChangeSetting("showTakeaways", value)}
                   />
                 </WorkspaceSettingRow>
 
@@ -689,7 +689,7 @@ export function WorkspaceSettingsPanel({
                 >
                   <WorkspaceToggleSwitch
                     checked={ui.aiSummaryMultimodalEnabled}
-                    onChange={() => onChangeSetting("aiSummaryMultimodalEnabled", !ui.aiSummaryMultimodalEnabled)}
+                    onChange={(value) => onChangeSetting("aiSummaryMultimodalEnabled", value)}
                   />
                 </WorkspaceSettingRow>
 
@@ -829,7 +829,7 @@ export function WorkspaceSettingsPanel({
                       <WorkspaceToggleSwitch
                         checked={effectiveRerankEnabled}
                         disabled={rerankerNeedsDownload}
-                        onChange={() => !rerankerNeedsDownload && onChangeSetting("ragRerankEnabled", !effectiveRerankEnabled)}
+                        onChange={(value) => onChangeSetting("ragRerankEnabled", value)}
                       />
                       {rerankerNeedsDownload ? (
                         <button type="button" onClick={() => onDownloadRagModel("reranker")} disabled={isRerankerDownloading} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white">
@@ -1073,7 +1073,7 @@ export function WorkspaceSettingsPanel({
                 >
                   <WorkspaceToggleSwitch
                     checked={ui.webSearchEnabled}
-                    onChange={() => onChangeSetting("webSearchEnabled", !ui.webSearchEnabled)}
+                    onChange={(value) => onChangeSetting("webSearchEnabled", value)}
                   />
                 </WorkspaceSettingRow>
 

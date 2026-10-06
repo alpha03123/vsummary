@@ -1,4 +1,5 @@
 import { LoaderCircle } from "lucide-react";
+import { twMerge } from "tailwind-merge";
 
 export function WorkspaceStateBlock({
   eyebrow,
@@ -13,6 +14,7 @@ export function WorkspaceStateBlock({
   actionIcon = null,
   actionDisabled = false,
   onAction = null,
+  className,
 }) {
   const toneClassName =
     tone === "accent"
@@ -23,9 +25,9 @@ export function WorkspaceStateBlock({
 
   return (
     <div
-      className={`${toneClassName} flex min-h-[320px] rounded-3xl border mt-10 p-6 ${
+      className={twMerge(`${toneClassName} flex min-h-[320px] rounded-3xl border mt-10 p-6 ${
         centered ? "items-center justify-center text-center" : ""
-      } ${dashed ? "border-dashed" : ""}`}
+      } ${dashed ? "border-dashed" : ""}`,className)}
     >
       <div className={`${centered ? "max-w-md" : "w-full"}`}>
         {loading ? (

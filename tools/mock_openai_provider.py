@@ -1,6 +1,6 @@
 """A strict, deterministic OpenAI-compatible provider for PR E2E tests.
 
-This process is deliberately outside the application.  VSummary still uses its
+This provider is independent of application services.  VSummary still uses its
 normal LiteLLM clients and performs an actual HTTP request to this server.
 """
 

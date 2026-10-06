@@ -20,7 +20,7 @@ export function WorkspaceApplication() {
   const Effects=host.Effects;
   return <>
     {Effects && <Effects state={controller.state} dispatch={controller.dispatch}/>}
-    <WorkspacePage page={page} panels={host.panels} toolbarExtras={host.renderToolbar?.(controller,page)} sidebarFooter={host.renderSidebarFooter?.(controller,page)}/>
+    <WorkspacePage page={page} panels={host.panels} brand={host.renderBrand?.(controller,page)} toolbarExtras={host.renderToolbar?.(controller,page)} toolbarButtons={host.toolbarButtons} sidebarHeader={host.renderSidebarHeader?.(controller,page)} sidebarFooter={host.renderSidebarFooter?.(controller,page)}/>
   </>;
 }
 

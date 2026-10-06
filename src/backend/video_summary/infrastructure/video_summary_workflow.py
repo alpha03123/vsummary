@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from backend.core.preferences import preference_cache_key
+
 import asyncio
 import json
 import logging
@@ -48,7 +50,7 @@ class ConfiguredVideoSummaryWorkflow:
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
-        self._cached_signature: tuple[str, str, bool | None] | None = None
+        self._cached_signature: tuple[object, ...] | None = None
         self._cached_application = None
 
     async def run(
@@ -129,6 +131,7 @@ class ConfiguredVideoSummaryWorkflow:
         """
         ensure_settings_file(self._config_path)
         signature = (
+            preference_cache_key(),
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
             transcript_enhancement_enabled,

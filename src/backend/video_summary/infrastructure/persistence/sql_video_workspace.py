@@ -60,6 +60,7 @@ class SqlVideoWorkspace:
         cache_root: Path,
         workspace_id: str,
         media_processor: FfmpegMediaProcessor | None = None,
+        media_preview_enabled: bool = True,
     ) -> None:
         if not workspace_id.strip():
             raise ValueError("SqlVideoWorkspace requires an explicit workspace_id.")
@@ -71,6 +72,7 @@ class SqlVideoWorkspace:
         self._content = SqlCurrentContentRepository(session_factory)
         self._rag_source = SqlRagSourceRepository(session_factory)
         self._media_processor = media_processor or FfmpegMediaProcessor()
+        self._media_preview_enabled = media_preview_enabled
         self._preview_locks: dict[str, Lock] = {}
         self._preview_locks_guard = Lock()
 
@@ -152,6 +154,33 @@ class SqlVideoWorkspace:
             for row in series
         ]
 
+    def get_video_title(self, series_id: str, video_id: str) -> str | None:
+        """Read owned video identity without opening or materializing its original media."""
+        with self._sessions() as session:
+            return session.execute(text("""SELECT v.title FROM videos v JOIN series s ON s.id=v.series_id
+                WHERE v.id=:video AND s.id=:series AND s.workspace_id=:workspace
+                AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""),
+                {"video": video_id, "series": series_id, "workspace": self._workspace_id}).scalar()
+
+    def has_source_media(self, series_id: str, video_id: str) -> bool:
+        with self._sessions() as session:
+            return session.execute(text("""SELECT 1 FROM videos v JOIN series s ON s.id=v.series_id
+                WHERE v.id=:video AND s.id=:series AND s.workspace_id=:workspace
+                AND v.deleted_at IS NULL AND s.deleted_at IS NULL AND (
+                    EXISTS(SELECT 1 FROM media_objects m WHERE m.video_id=v.id AND m.state='ready') OR
+                    EXISTS(SELECT 1 FROM external_media_references e WHERE e.video_id=v.id))"""),
+                {"video": video_id, "series": series_id, "workspace": self._workspace_id}).scalar() is not None
+
+    def set_media_duration(self, sha256: str, duration_seconds: float) -> None:
+        import math
+        if not math.isfinite(duration_seconds) or duration_seconds <= 0:
+            raise ValueError('Media duration must be positive and finite.')
+        with self._sessions.begin() as session:
+            session.execute(text("""UPDATE videos v JOIN series s ON s.id=v.series_id
+                JOIN media_objects m ON m.video_id=v.id SET v.duration_ms=:duration
+                WHERE s.workspace_id=:workspace AND m.sha256=:sha AND m.state='ready'"""),
+                {'duration': round(duration_seconds*1000), 'workspace': self._workspace_id, 'sha': sha256})
+
     def get_video_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         with self._sessions() as session:
             row = session.execute(text("""SELECT v.id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key,m.sha256,m.byte_size,m.media_type,e.source_path AS external_path,l.payload AS linked_payload
@@ -188,6 +217,8 @@ class SqlVideoWorkspace:
 
     def get_video_preview_source(self, series_id: str, video_id: str) -> VideoSourceDTO | None:
         """返回可快速起播的预览媒体，必要时为历史媒体补建派生 Blob。"""
+        if not self._media_preview_enabled:
+            return None
         source = self.get_video_source(series_id, video_id)
         if source is None or source.source_path.suffix.lower() in AUDIO_SUFFIXES:
             return source
@@ -236,6 +267,45 @@ class SqlVideoWorkspace:
                 JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
                 WHERE a.video_id=:video AND a.kind=:kind AND s.workspace_id=:workspace ORDER BY a.blob_key"""), {"video": video_id, "kind": kind, "workspace": self._workspace_id}).mappings().all()
         return [self._blobs.materialize(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]), task_dir=self._cache_root / "artifacts" / video_id / kind, filename=Path(row["blob_key"]).name) for row in rows]
+
+    def save_generated_artifact(self, *, video_id: str, kind: str, source_path: Path, media_type: str, content_version: int | None = None, session=None) -> None:
+        """Commit an independent generated asset before its processing directory is removed."""
+        if session is None:
+            with self._sessions.begin() as transaction:
+                return self.save_generated_artifact(video_id=video_id, kind=kind, source_path=source_path,
+                    media_type=media_type, content_version=content_version, session=transaction)
+        if not source_path.is_file():
+            raise ValueError('Generated asset file does not exist.')
+        row = session.execute(text("""SELECT v.content_version FROM videos v JOIN series s ON s.id=v.series_id
+            WHERE v.id=:video AND s.workspace_id=:workspace AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""),
+            {'video': video_id, 'workspace': self._workspace_id}).first()
+        if row is None:
+            raise LookupError('Video does not exist.')
+        digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+        with source_path.open('rb') as stream:
+            staged = self._blobs.put_staging(job_id=f'artifact{video_id}', source=stream, content_type=media_type)
+        reference = self._blobs.commit(staged, object_key=f'artifacts/{video_id}/{kind}/{digest}/{source_path.name}')
+        require_execution_lease(session, self._workspace_id)
+        existing = session.execute(text('SELECT id FROM artifacts WHERE blob_key=:key'), {'key': reference.key}).scalar()
+        if existing is None:
+            session.add(Artifact(id=new_ulid(), workspace_id=self._workspace_id, video_id=video_id,
+                content_version=row.content_version if content_version is None else content_version,
+                kind=kind, blob_key=reference.key, sha256=reference.sha256,
+                byte_size=reference.byte_size, media_type=reference.content_type))
+
+    def get_saved_visual_context(self, series_id: str, video_id: str):
+        from backend.video_summary.library.models import VideoAiNoteVisualContextDTO, VideoVisualInputFrameDTO
+        if self.get_video_title(series_id, video_id) is None:
+            return VideoAiNoteVisualContextDTO(frames=[])
+        frames = [VideoVisualInputFrameDTO(chapter_id='saved-frame', timestamp_seconds=float(path.stem),
+                  image_filename=path.name, image_path=path)
+                  for path in self.list_artifacts(video_id=video_id, kind='note_frame')]
+        return VideoAiNoteVisualContextDTO(frames=frames)
+
+    def get_saved_visual_paths(self, series_id: str, video_id: str):
+        if self.get_video_title(series_id, video_id) is None:
+            raise LookupError('Video does not exist.')
+        return self.list_artifacts(video_id=video_id, kind='visual_frame') or self.list_artifacts(video_id=video_id, kind='note_frame')
 
     def save_binary_artifact(self, *, video_id: str, kind: str, source_path: Path, content_version: int | None = None) -> None:
         if not source_path.is_file() or source_path.suffix.lower() != ".jpg":
@@ -326,7 +396,7 @@ class SqlVideoWorkspace:
         return VideoAiSummaryDTO(series_id=series_id, video_id=video_id, title=row["title"], content=row["content"], created_at=row["created_at"].isoformat(), updated_at=row["updated_at"].isoformat(), citations=[CitationReference.model_validate(item) for item in citations])
 
     def get_video_ai_summary_visual_evidence(self, series_id: str, video_id: str) -> VideoAiSummaryVisualEvidenceDTO | None:
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             return None
         with self._sessions() as session:
             rows = session.execute(text("SELECT timestamp_ms,text FROM ai_summary_visual_evidence WHERE video_id=:video ORDER BY ordinal"), {"video": video_id}).mappings().all()
@@ -338,7 +408,7 @@ class SqlVideoWorkspace:
         return None
 
     def save_video_ai_summary(self, series_id: str, video_id: str, *, title: str, content: str, citations=None) -> VideoAiSummaryDTO | None:
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             return None
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
@@ -353,7 +423,7 @@ class SqlVideoWorkspace:
         return self.save_video_ai_summary(series_id, video_id, title=title, content=content)
 
     def save_video_ai_summary_visual_evidence(self, series_id: str, video_id: str, *, frames: list[AiSummaryVisualEvidenceDTO]) -> None:
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             raise ValueError("Video does not exist.")
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
@@ -362,14 +432,14 @@ class SqlVideoWorkspace:
                 session.execute(text("INSERT INTO ai_summary_visual_evidence (id,video_id,ordinal,timestamp_ms,text) VALUES (:id,:video,:ordinal,:timestamp,:text)"), {"id": new_ulid(), "video": video_id, "ordinal": ordinal, "timestamp": round(frame.timestamp_seconds * 1000), "text": frame.text})
 
     def save_video_mindmap(self, series_id: str, video_id: str, *, mindmap: dict[str, Any]) -> None:
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             raise ValueError("Video does not exist.")
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
             version = session.execute(text("SELECT content_version FROM videos WHERE id=:video"), {"video": video_id}).scalar_one()
             session.execute(text("""INSERT INTO mindmaps (id,video_id,content_version,title,payload,row_version,created_at,updated_at)
                 VALUES (:id,:video,:version,:title,CAST(:payload AS JSON),1,NOW(),NOW())
-                ON DUPLICATE KEY UPDATE content_version=VALUES(content_version),title=VALUES(title),payload=VALUES(payload),row_version=row_version+1,updated_at=NOW()"""), {"id": new_ulid(), "video": video_id, "version": version, "title": self.get_video_source(series_id, video_id).title, "payload": json.dumps(mindmap, ensure_ascii=False)})
+                ON DUPLICATE KEY UPDATE content_version=VALUES(content_version),title=VALUES(title),payload=VALUES(payload),row_version=row_version+1,updated_at=NOW()"""), {"id": new_ulid(), "video": video_id, "version": version, "title": self.get_video_title(series_id, video_id), "payload": json.dumps(mindmap, ensure_ascii=False)})
 
     def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
         with self._sessions.begin() as session:
@@ -510,16 +580,16 @@ class SqlVideoWorkspace:
         source_path.unlink(missing_ok=True)
 
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
-        source = self.get_video_source(series_id, video_id)
-        if source is None:
+        if self.get_video_title(series_id, video_id) is None:
             return None
+        has_media = self._media_preview_enabled and self.has_source_media(series_id, video_id)
         summary = self.get_video_summary(series_id, video_id)
         transcript = self.get_video_transcript(series_id, video_id)
         cards = self.get_video_knowledge_cards(series_id, video_id)
         mindmap = self.get_video_mindmap(series_id, video_id)
         ai_summary = self.get_video_ai_summary(series_id, video_id)
         ready = lambda value: "ready" if value else "pending"
-        return VideoWorkspaceToolsDTO(series_id=series_id, video_id=video_id, overview=WorkspaceToolDTO(id="overview", title="AI整理逐字稿", available=True, generated=summary is not None, status=ready(summary)), ai_summary=WorkspaceToolDTO(id="ai-summary", title="AI概括", available=True, generated=ai_summary is not None, status=ready(ai_summary)), knowledge_cards=WorkspaceToolDTO(id="knowledge-cards", title="知识卡片", available=summary is not None, generated=bool(cards and cards.cards), status="ready" if cards and cards.cards else ("available" if summary else "blocked")), mindmap=WorkspaceToolDTO(id="mindmap", title="思维导图", available=summary is not None, generated=mindmap is not None, status="ready" if mindmap else ("available" if summary else "blocked")), notes=WorkspaceToolDTO(id="notes", title="笔记", available=True, generated=bool(self.get_video_notes(series_id, video_id).notes), status="ready"), preview=WorkspaceToolDTO(id="preview", title="视频预览", available=True, generated=True, status="ready", preview_url=f"/api/videos/{series_id}/{video_id}/preview", subtitle_url=f"/api/videos/{series_id}/{video_id}/subtitles.vtt" if transcript is not None else None), ai_todo="继续生成可用内容。")
+        return VideoWorkspaceToolsDTO(series_id=series_id, video_id=video_id, overview=WorkspaceToolDTO(id="overview", title="AI整理逐字稿", available=True, generated=summary is not None, status=ready(summary)), ai_summary=WorkspaceToolDTO(id="ai-summary", title="AI概括", available=True, generated=ai_summary is not None, status=ready(ai_summary)), knowledge_cards=WorkspaceToolDTO(id="knowledge-cards", title="知识卡片", available=summary is not None, generated=bool(cards and cards.cards), status="ready" if cards and cards.cards else ("available" if summary else "blocked")), mindmap=WorkspaceToolDTO(id="mindmap", title="思维导图", available=summary is not None, generated=mindmap is not None, status="ready" if mindmap else ("available" if summary else "blocked")), notes=WorkspaceToolDTO(id="notes", title="笔记", available=True, generated=bool(self.get_video_notes(series_id, video_id).notes), status="ready"), preview=WorkspaceToolDTO(id="preview", title="视频预览", available=has_media, generated=has_media, status="ready" if has_media else "unavailable", preview_url=f"/api/videos/{series_id}/{video_id}/preview" if has_media else None, subtitle_url=f"/api/videos/{series_id}/{video_id}/subtitles.vtt" if transcript is not None else None), ai_todo="继续生成可用内容。")
 
     def import_local_series_from_paths(self, *, title: str, source_paths: list[Path], storage_mode: str = "copy") -> LibrarySeriesDTO:
         workspace_id = self._workspace_id
@@ -670,6 +740,8 @@ class SqlVideoWorkspace:
             self._prepare_browser_preview(video_id, source_path)
 
     def _prepare_browser_preview(self, video_id: str, source_path: Path) -> None:
+        if not self._media_preview_enabled:
+            return
         """在导入或下载期间预建有尾部索引或分片的 MP4 预览副本。"""
         if not self._media_processor.needs_browser_playback_optimization(source_path):
             return
@@ -775,7 +847,7 @@ class SqlVideoWorkspace:
     def create_video_note(self, series_id: str, video_id: str, *, title: str, content: str, source: str) -> VideoNoteDTO | None:
         if not title.strip() or not content.strip() or source not in {"manual", "agent"}:
             raise ValueError("Invalid note payload.")
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             return None
         note_id, now = new_ulid(), datetime.now(timezone.utc)
         with self._sessions.begin() as session:
@@ -794,7 +866,7 @@ class SqlVideoWorkspace:
         return VideoNoteDTO(id=note_id, title=title.strip(), content=content.strip(), source=source, created_at=now.isoformat(), updated_at=now.isoformat())
 
     def update_video_note(self, series_id: str, video_id: str, note_id: str, *, title: str, content: str) -> VideoNoteDTO | None:
-        if not title.strip() or not content.strip() or self.get_video_source(series_id, video_id) is None:
+        if not title.strip() or not content.strip() or self.get_video_title(series_id, video_id) is None:
             return None
         now = datetime.now(timezone.utc)
         with self._sessions.begin() as session:
@@ -819,7 +891,7 @@ class SqlVideoWorkspace:
         return VideoNoteDTO(id=note_id, title=title.strip(), content=content.strip(), source="manual", created_at=created_at.isoformat(), updated_at=now.isoformat())
 
     def delete_video_note(self, series_id: str, video_id: str, note_id: str) -> bool | None:
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             return None
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
@@ -830,7 +902,7 @@ class SqlVideoWorkspace:
         return changed
 
     def save_video_knowledge_cards(self, series_id: str, video_id: str, *, title: str, cards: list[KnowledgeCardDTO]) -> None:
-        if self.get_video_source(series_id, video_id) is None:
+        if self.get_video_title(series_id, video_id) is None:
             raise ValueError("Video does not exist.")
         persisted_ids = _persisted_card_ids(cards)
         with self._sessions.begin() as session:

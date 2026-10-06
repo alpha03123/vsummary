@@ -54,13 +54,14 @@ export function useWorkspaceController() {
     currentGenerationTask?.mode === "video" &&
     isGenerationSnapshotActive(currentGenerationTask.snapshot);
   const isGeneratingSelectedSeries =
-    state.seriesGenerationQueue?.seriesId === state.selectedSeriesId &&
+    state.seriesGenerationQueue != null &&
+    state.seriesGenerationQueue.seriesId === state.selectedSeriesId &&
     (state.seriesGenerationQueue.status === "running" || state.seriesGenerationQueue.status === "cancelling");
   const isGeneratingMindmapSelectedVideo =
     state.generatingMindmapKey != null &&
     state.generatingMindmapKey === buildVideoKey(state.selectedSeriesId, state.selectedVideoId);
   const selectedVideoIsLinked = selectedVideo?.isLinked === true || selectedVideo?.status === "linked";
-  const previewUrl = state.selectedSeriesId && state.selectedVideoId && !selectedVideoIsLinked
+  const previewUrl = host.features?.mediaPreview !== false && state.selectedSeriesId && state.selectedVideoId && !selectedVideoIsLinked
     ? getVideoPreviewUrl(state.selectedSeriesId, state.selectedVideoId)
     : null;
 
@@ -76,7 +77,6 @@ export function useWorkspaceController() {
     contentActions,
     chatAbortControllerRef,
   });
-  const hostActions=host.createActions?.({state,dispatch,contentActions,coreApi:api})??{};
   const settingsActions={
     onToggleSettingsPanel:()=>dispatch({type:'settings_panel_toggled'}),
     onOpenSettingsPanel:initialTab=>dispatch({type:'settings_panel_opened',initialTab}),
@@ -149,6 +149,10 @@ export function useWorkspaceController() {
     if (!Number.isFinite(seconds)) {
       return;
     }
+    if (host.features?.mediaPreview === false) {
+      onFocusOverviewAtTime(seconds);
+      return;
+    }
     dispatch({
       type: "player_seek_requested",
       seconds,
@@ -181,7 +185,7 @@ export function useWorkspaceController() {
     dispatch({ type: "chat_drawer_closed" });
   }
 
-  return {
+  const controller = {
     state,
     dispatch,
     processingMode: state.processingMode,
@@ -317,6 +321,8 @@ export function useWorkspaceController() {
     onRenameCurrentVideo: contentActions.onRenameCurrentVideo,
     onDeleteVideos: contentActions.onDeleteVideos,
     onDownloadVideo: contentActions.onDownloadVideo,
-    ...hostActions,
   };
+  // Host actions override defaults. Keep the defaults separate so overrides can delegate to them.
+  const hostActions=host.createActions?.({state,dispatch,contentActions,coreApi:api,actions:controller})??{};
+  return {...controller,...hostActions};
 }

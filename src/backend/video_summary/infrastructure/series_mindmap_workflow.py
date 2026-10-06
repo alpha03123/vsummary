@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from backend.core.preferences import preference_cache_key
+
 from pathlib import Path
 from threading import Lock
 
@@ -34,7 +36,7 @@ class ConfiguredSeriesMindmapWorkflow:
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
-        self._cached_signature: tuple[str, str] | None = None
+        self._cached_signature: tuple[object, ...] | None = None
         self._cached_application = None
 
     async def run(
@@ -72,6 +74,7 @@ class ConfiguredSeriesMindmapWorkflow:
         并发安全由 `_application_lock` 串行化，避免并发触发两次 `build_series_mindmap_application`。
         """
         signature = (
+            preference_cache_key(),
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
         )

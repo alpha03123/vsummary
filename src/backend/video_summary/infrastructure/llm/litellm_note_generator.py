@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from backend.core.preferences import load_effective_settings, preference_cache_key
+
 from dataclasses import replace
 from pathlib import Path
 import re
@@ -14,7 +16,7 @@ from backend.video_summary.infrastructure.llm.prompts.notes import build_ai_note
 from backend.core.citations import CitationReference, CitationSlot
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
-from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 from backend.video_summary.library.models import (
     GeneratedVideoAiNoteDTO,
@@ -281,7 +283,7 @@ class ConfiguredNoteGenerator:
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._lock = Lock()
-        self._signature: tuple[str, str] | None = None
+        self._signature: tuple[object, ...] | None = None
         self._generator: LiteLLMNoteGenerator | None = None
 
     def run_ai_summary(
@@ -293,7 +295,7 @@ class ConfiguredNoteGenerator:
         template: str,
     ) -> GeneratedVideoAiNoteDTO:
         generator = self._get_generator()
-        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+        settings = load_effective_settings(config_path=self._config_path, root_dir=self._root_dir)
         return generator.run_ai_summary(
             transcript=transcript,
             summary=summary,
@@ -308,12 +310,13 @@ class ConfiguredNoteGenerator:
     def _get_generator(self) -> LiteLLMNoteGenerator:
         ensure_settings_file(self._config_path)
         signature = (
+            preference_cache_key(),
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
         )
         with self._lock:
             if self._generator is None or signature != self._signature:
-                settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+                settings = load_effective_settings(config_path=self._config_path, root_dir=self._root_dir)
                 self._generator = LiteLLMNoteGenerator(build_litellm_completion_gateway(
                     settings,
                     usage_recorder=self._usage_recorder,

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from filelock import FileLock, Timeout
+from backend.core.metering import ResourceUsage, resource_budget_enabled, resource_call, response_usage
 
 
 class RequestLimitTimeout(TimeoutError):
@@ -131,16 +132,39 @@ def limited_completion(call):
         if kwargs.get("stream"):
             return stream(**kwargs)
         with request_slot("llm"):
-            return call(**kwargs)
+            if not resource_budget_enabled():
+                return call(**kwargs)
+            with resource_call(_llm_estimate(kwargs)) as measurement:
+                result = call(**kwargs)
+                incoming, outgoing = response_usage(result, require_output=True)
+                measurement.complete(input_tokens=incoming, output_tokens=outgoing)
+                return result
 
     def stream(**kwargs):
         with request_slot("llm"):
-            result = call(**kwargs)
-            try:
-                yield from result
-            finally:
-                if hasattr(result, "close"):
-                    result.close()
+            if not resource_budget_enabled():
+                result = call(**kwargs)
+                try:
+                    yield from result
+                finally:
+                    if hasattr(result, "close"):
+                        result.close()
+                return
+            kwargs["stream_options"] = {**kwargs.get("stream_options", {}), "include_usage": True}
+            with resource_call(_llm_estimate(kwargs)) as measurement:
+                result = call(**kwargs)
+                usage = None
+                try:
+                    for chunk in result:
+                        if (chunk.get("usage") if isinstance(chunk, dict) else getattr(chunk, "usage", None)) is not None:
+                            usage = response_usage(chunk, require_output=True)
+                        yield chunk
+                    if usage is None:
+                        raise ValueError("Streaming provider did not return billable usage.")
+                    measurement.complete(input_tokens=usage[0], output_tokens=usage[1])
+                finally:
+                    if hasattr(result, "close"):
+                        result.close()
 
     return invoke
 
@@ -150,16 +174,45 @@ def limited_async_completion(call):
         if kwargs.get("stream"):
             return stream(**kwargs)
         async with async_request_slot("llm"):
-            return await call(**kwargs)
+            if not resource_budget_enabled():
+                return await call(**kwargs)
+            with resource_call(_llm_estimate(kwargs)) as measurement:
+                result = await call(**kwargs)
+                incoming, outgoing = response_usage(result, require_output=True)
+                measurement.complete(input_tokens=incoming, output_tokens=outgoing)
+                return result
 
     async def stream(**kwargs):
         async with async_request_slot("llm"):
-            result = await call(**kwargs)
-            try:
-                async for item in result:
-                    yield item
-            finally:
-                if hasattr(result, "aclose"):
-                    await result.aclose()
+            if not resource_budget_enabled():
+                result = await call(**kwargs)
+                try:
+                    async for item in result:
+                        yield item
+                finally:
+                    if hasattr(result, "aclose"):
+                        await result.aclose()
+                return
+            kwargs["stream_options"] = {**kwargs.get("stream_options", {}), "include_usage": True}
+            with resource_call(_llm_estimate(kwargs)) as measurement:
+                result = await call(**kwargs)
+                usage = None
+                try:
+                    async for item in result:
+                        if (item.get("usage") if isinstance(item, dict) else getattr(item, "usage", None)) is not None:
+                            usage = response_usage(item, require_output=True)
+                        yield item
+                    if usage is None:
+                        raise ValueError("Streaming provider did not return billable usage.")
+                    measurement.complete(input_tokens=usage[0], output_tokens=usage[1])
+                finally:
+                    if hasattr(result, "aclose"):
+                        await result.aclose()
 
     return invoke
+
+
+def _llm_estimate(kwargs):
+    incoming = len(json.dumps(kwargs.get("messages", []), ensure_ascii=False).encode("utf-8"))
+    return ResourceUsage("llm", str(kwargs["model"]), input_tokens=incoming,
+                         output_tokens=kwargs.get("max_tokens", kwargs.get("max_completion_tokens")))

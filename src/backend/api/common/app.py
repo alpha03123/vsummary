@@ -19,9 +19,15 @@ from backend.api.routes.health import router as health_router
 from backend.api.routes.jobs import router as jobs_router
 from backend.api.routes.linked import router as linked_router
 from backend.api.routes.videos import router as videos_router
+from backend.api.routes.usage import router as usage_router
+from backend.api.routes.preferences import router as preferences_router
+from backend.api.routes.chat_queue import router as chat_queue_router
 from backend.core.request_context import bind_workspace_context
 from backend.core.context import WorkspaceContext
+from backend.core.preferences import bind_user_preferences
+from backend.core.metering import bind_resource_budget
 from backend.core.concurrency import bind_request_limiter
+from backend.core.job_queue import JobQueueFull
 from backend.shared.observability import bind_request_id, close_application_logging, configure_application_logging
 
 
@@ -53,6 +59,9 @@ def include_common_routers(app: FastAPI) -> None:
     app.include_router(videos_router)
     app.include_router(agent_router)
     app.include_router(linked_router)
+    app.include_router(usage_router)
+    app.include_router(preferences_router)
+    app.include_router(chat_queue_router)
 
 
 def create_app(container: ApiContainer) -> FastAPI:
@@ -65,6 +74,10 @@ def create_app(container: ApiContainer) -> FastAPI:
     application = FastAPI(title="VSummary Core API", lifespan=lifespan)
     application.state.container = container
     include_common_routers(application)
+
+    @application.exception_handler(JobQueueFull)
+    async def queue_full(_request: Request, error: JobQueueFull) -> JSONResponse:
+        return JSONResponse(status_code=429, content={"detail": str(error)})
 
     @application.exception_handler(OperationalError)
     async def database_unavailable(_request: Request, _error: OperationalError) -> JSONResponse:
@@ -82,7 +95,9 @@ def create_app(container: ApiContainer) -> FastAPI:
         if context is not None:
             request.state.workspace_context = context
         started_at = time.perf_counter()
-        with bind_request_id(request_id), bind_request_limiter(getattr(container, "request_limiter", None)), bind_workspace_context(context) if context is not None else _null_context():
+        store = getattr(container, "preference_store", None)
+        preferences = store.get(context) if store is not None and context is not None else None
+        with bind_request_id(request_id), bind_request_limiter(getattr(container, "request_limiter", None)), bind_workspace_context(context) if context is not None else _null_context(), bind_user_preferences(preferences, getattr(container, "model_profiles", {})), bind_resource_budget(getattr(container, "resource_budget", None), request_id):
             try:
                 response = await call_next(request)
             except Exception:

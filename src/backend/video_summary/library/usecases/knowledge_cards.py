@@ -31,6 +31,7 @@ class GenerateVideoKnowledgeCards:
         visual_input: str = "none",
         max_visual_input_images: int | None = None,
         frame_pool_builder: VisualFramePoolBuilder | None = None,
+        saved_visual_paths=None,
     ) -> None:
         """注入读/写知识卡的复合端口、生成器与可选的索引刷新器。
 
@@ -46,6 +47,7 @@ class GenerateVideoKnowledgeCards:
         self._visual_input = visual_input
         self._max_visual_input_images = max_visual_input_images
         self._frame_pool_builder = frame_pool_builder
+        self._saved_visual_paths = saved_visual_paths
 
     def run(self, series_id: str, video_id: str) -> VideoKnowledgeCardsDTO | None:
         """为指定视频生成知识卡并落盘，返回最终制品 DTO。
@@ -58,12 +60,7 @@ class GenerateVideoKnowledgeCards:
             落盘后的 `VideoKnowledgeCardsDTO`；若视频源或总结不存在则返回 `None`，
             不会抛异常（由调用方决定如何处理"未生成"场景）。
         """
-        if self._workspace.get_video_source(series_id, video_id) is None:
-            return None
-
         source = self._workspace.get_video_source(series_id, video_id)
-        if source is None:
-            return None
 
         summary = self._workspace.get_video_summary(series_id, video_id)
         if summary is None:
@@ -78,6 +75,8 @@ class GenerateVideoKnowledgeCards:
             visual_input=self._visual_input,
             max_visual_input_images=self._max_visual_input_images, frame_pool_builder=self._frame_pool_builder,
         )
+        if source is None and self._visual_input == 'frames' and self._saved_visual_paths is not None:
+            visual_frame_paths = self._saved_visual_paths(series_id, video_id)[:self._max_visual_input_images]
         if visual_frame_paths:
             arguments["visual_frame_paths"] = visual_frame_paths
         if visual_evidence_text:

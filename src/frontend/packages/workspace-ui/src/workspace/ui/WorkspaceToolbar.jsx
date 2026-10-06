@@ -20,6 +20,8 @@ export function WorkspaceToolbar({
   chatDrawerOpen = false,
   onOpenUsagePage,
   toolbarExtras,
+  toolbarButtons,
+  brand,
 }) {
 
   return (
@@ -34,7 +36,7 @@ export function WorkspaceToolbar({
           {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
         </button>
 
-        <div className="flex min-w-0 items-center gap-4">
+        {brand ?? <div className="flex min-w-0 items-center gap-4">
           <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10">
             <BookOpenText size={17} strokeWidth={2.1} />
           </div>
@@ -46,7 +48,7 @@ export function WorkspaceToolbar({
               {isSidebarOpen || !activeSeries ? "知识工作台" : activeSeries.title}
             </h1>
           </div>
-        </div>
+        </div>}
       </div>
 
       <div className="flex items-center gap-3">
@@ -56,29 +58,29 @@ export function WorkspaceToolbar({
             type="button"
             className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors ${chatDrawerOpen ? "bg-stone-200 text-stone-900 dark:bg-stone-800 dark:text-white" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-zinc-400 dark:hover:bg-neutral-900 dark:hover:text-white"}`}
             onClick={onToggleChatDrawer}
-            title="打开分析助手"
-            aria-label="打开分析助手"
+            title={toolbarButtons?.assistant?.label ?? "打开分析助手"}
+            aria-label={toolbarButtons?.assistant?.label ?? "打开分析助手"}
             aria-expanded={chatDrawerOpen}
           >
-            <MessageSquare size={18} strokeWidth={2.2} />
+            {toolbarButtons?.assistant?.icon ?? <MessageSquare size={18} strokeWidth={2.2} />}
           </button>
         ) : null}
         {onOpenUsagePage && (<button
           className="inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white text-stone-600 dark:text-zinc-400"
           onClick={onOpenUsagePage}
-          title="打开用量统计"
-          aria-label="打开用量统计"
+          title={toolbarButtons?.usage?.label ?? "打开用量统计"}
+          aria-label={toolbarButtons?.usage?.label ?? "打开用量统计"}
         >
-          <BarChart3 size={18} strokeWidth={2.2} />
+          {toolbarButtons?.usage?.icon ?? <BarChart3 size={18} strokeWidth={2.2} />}
         </button>)}
         {onToggleSettingsPanel && (<button
           className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"}`}
           onClick={onToggleSettingsPanel}
-          title="Open Settings"
-          aria-label="打开界面设置"
+          title={toolbarButtons?.settings?.label ?? "Open Settings"}
+          aria-label={toolbarButtons?.settings?.label ?? "打开界面设置"}
           aria-expanded={settingsOpen}
         >
-          <Settings2 size={18} strokeWidth={2.2} />
+          {toolbarButtons?.settings?.icon ?? <Settings2 size={18} strokeWidth={2.2} />}
         </button>)}
       </div>
     </header>

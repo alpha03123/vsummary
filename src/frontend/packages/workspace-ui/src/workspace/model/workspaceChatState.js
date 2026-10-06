@@ -30,6 +30,10 @@ export function appendChatThreadMessage(state, chatScopeKey, message, chatPendin
 }
 
 export function applyChatStreamEvent(state, chatScopeKey, requestId, event) {
+  if(event?.type==='queue')return {...state,chatQueue:{...event.payload,chatScopeKey,requestId}};
+  if(['answer_completed','error','cancelled'].includes(event?.type)&&state.chatQueue?.requestId===requestId){
+    state={...state,chatQueue:null};
+  }
   switch (event?.type) {
     case "thinking_started":
       return transformChatThreadMessages(state, chatScopeKey, (messages) =>

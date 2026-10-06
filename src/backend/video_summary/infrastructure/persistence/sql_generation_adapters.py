@@ -1,6 +1,7 @@
 """将现有生成工作流的临时文件结果发布到 SQL。"""
 
 from __future__ import annotations
+from backend.video_summary.generation.errors import MediaSourceUnavailableError
 
 import json
 import shutil
@@ -43,7 +44,7 @@ class SqlBackedVideoSummaryGenerator:
             progress_reporter.update("prepare", 1.0, "正在准备生成素材")
         source = self._workspace.get_video_source(series_id, video_id)
         if source is None:
-            raise LookupError(f"video not found '{series_id}/{video_id}'")
+            raise MediaSourceUnavailableError("视频原媒体不可用，请重新上传后再处理。")
         output_dir = self._temp_root / "generation" / video_id / uuid4().hex
         cache_dir = output_dir / "generation-stages" if job_id is not None else self._workspace.cache_root / "generation-stages" / video_id
         try:
@@ -88,6 +89,15 @@ class SqlBackedVideoSummaryGenerator:
                 self._workspace.save_binary_artifact(video_id=video_id, kind="screenshot", source_path=image)
             for image in (output_dir / "frames").glob("*.jpg") if (output_dir / "frames").is_dir() else []:
                 self._workspace.save_binary_artifact(video_id=video_id, kind="note_frame", source_path=image)
+            for manifest in (output_dir / 'visual_frame_pool').glob('*/manifest.json'):
+                pool = json.loads(manifest.read_text(encoding='utf-8'))
+                for filename in pool['images']:
+                    if Path(filename).name != filename:
+                        raise ValueError('Invalid visual frame-pool filename.')
+                    self._workspace.save_generated_artifact(video_id=video_id, kind='visual_frame',
+                        source_path=manifest.parent/filename, media_type='image/jpeg')
+                self._workspace.save_generated_artifact(video_id=video_id, kind='visual_frame_manifest',
+                    source_path=manifest, media_type='application/json')
             ai_summary_path = output_dir / "ai_summary.json"
             if ai_summary_path.is_file():
                 ai_summary = json.loads(ai_summary_path.read_text(encoding="utf-8"))
@@ -135,12 +145,12 @@ class SqlBackedVideoMindmapGenerator:
         self._temp_root = temp_root
 
     async def run(self, *, series_id: str, video_id: str, summary_data: dict[str, object], transcript_text: str = "", visual_evidence_text: str = "", visual_frame_paths=None, progress_reporter=None, max_depth: int | None = None) -> None:
-        source = self._workspace.get_video_source(series_id, video_id)
-        if source is None:
+        title = self._workspace.get_video_title(series_id, video_id)
+        if title is None:
             raise LookupError(f"video not found '{series_id}/{video_id}'")
         output_dir = self._temp_root / "mindmap" / video_id / uuid4().hex
         try:
-            await self._workflow.run(source.source_path, output_dir, summary_data, transcript_text=transcript_text, visual_evidence_text=visual_evidence_text, visual_frame_paths=visual_frame_paths, progress_reporter=progress_reporter, max_depth=max_depth)
+            await self._workflow.run(None, output_dir, summary_data, title=title, transcript_text=transcript_text, visual_evidence_text=visual_evidence_text, visual_frame_paths=visual_frame_paths, progress_reporter=progress_reporter, max_depth=max_depth)
             path = output_dir / "mindmap.json"
             if not path.is_file():
                 raise RuntimeError("Mindmap generation completed without a mindmap artifact.")

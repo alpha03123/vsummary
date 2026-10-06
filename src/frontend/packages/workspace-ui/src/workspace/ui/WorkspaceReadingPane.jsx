@@ -129,7 +129,7 @@ export function WorkspaceReadingPane({
   onPanelSelectTool = null,
   embeddedInStudioPanel = false,
 }) {
- const {api}=useWorkspaceRuntime();
+ const {api,host}=useWorkspaceRuntime();
   const isStudioHome = toolId === "studio";
   const isSeriesHome = toolId === "series-home";
   const isMindmapTool = toolId === "mindmap" || toolId === "series-mindmap";
@@ -252,6 +252,7 @@ export function WorkspaceReadingPane({
                       ) : (
                         <WorkspaceToolGrid
                           items={Object.entries(selectedContextType === "series" ? SERIES_STUDIO_TOOL_TILES : TOOL_TILES)
+                            .filter(([toolId]) => toolId !== 'preview' || host.features?.mediaPreview !== false)
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,

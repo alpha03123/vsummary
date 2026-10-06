@@ -30,7 +30,8 @@ class AutoGenerateVideoArtifacts:
         self._requires_visual_evidence = requires_visual_evidence or (lambda _artifact: False)
         self._wait_for_visual_evidence = wait_for_visual_evidence
 
-    async def run(self, series_id: str, video_id: str) -> None:
+    async def run(self, series_id: str, video_id: str) -> list[str]:
+        failed=[]
         visual_evidence_ready = False
         for artifact in self._load_enabled_artifacts():
             try:
@@ -45,3 +46,5 @@ class AutoGenerateVideoArtifacts:
                     await asyncio.to_thread(self._generate_knowledge_cards, series_id, video_id)
             except Exception:
                 LOGGER.exception("auto-generated %s failed for %s/%s", artifact, series_id, video_id)
+                failed.append(artifact)
+        return failed

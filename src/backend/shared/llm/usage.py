@@ -11,6 +11,9 @@ from typing import Protocol
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.core.request_context import get_workspace_context
+from backend.core.metering import current_operation_id
+
 
 class LlmUsageCategory(StrEnum):
     GENERATION = "generation"
@@ -83,14 +86,53 @@ class MySqlLlmUsageStore:
 
     def record(self, record: LlmUsageRecord) -> None:
         from backend.core.ids import new_ulid
+        context = get_workspace_context()
+        if context is None:
+            raise RuntimeError("LLM usage recording requires an authenticated workspace context.")
         with self._sessions.begin() as session:
-            session.execute(text("INSERT INTO llm_usage (id,created_at,category,provider,base_url,model,prompt_tokens,completion_tokens,total_tokens) VALUES (:id,:created,:category,:provider,:base,:model,:prompt,:completion,:total)"), {"id": new_ulid(), "created": record.created_at, "category": str(record.category), "provider": record.provider, "base": record.base_url, "model": record.model, "prompt": record.prompt_tokens, "completion": record.completion_tokens, "total": record.total_tokens})
+            session.execute(
+                text("""INSERT INTO llm_usage
+                    (id, workspace_id, actor_id, operation_id, created_at, category, provider, base_url,
+                     model, prompt_tokens, completion_tokens, total_tokens)
+                    VALUES (:id, :workspace, :actor, :operation, :created, :category, :provider,
+                            :base, :model, :prompt, :completion, :total)"""),
+                {"id": new_ulid(), "workspace": context.workspace_id, "actor": context.actor_id,
+                 "operation": current_operation_id(),
+                 "created": record.created_at, "category": str(record.category),
+                 "provider": record.provider, "base": record.base_url, "model": record.model,
+                 "prompt": record.prompt_tokens, "completion": record.completion_tokens,
+                 "total": record.total_tokens},
+            )
 
-    def summarize(self, *, range_key: str, now: datetime | None = None) -> LlmUsageSummary:
+    def summarize(
+        self, *, range_key: str, workspace_id: str | None = None,
+        actor_id: str | None = None, now: datetime | None = None,
+        operation_ids: list[str] | None = None,
+    ) -> LlmUsageSummary:
+        """Aggregate the ledger with the same ownership filter for every result section."""
         resolved_now = now or datetime.now(timezone.utc)
         started_at = _resolve_range_start(range_key, resolved_now)
-        clause = "" if started_at is None else "WHERE created_at >= :started"
-        params = {} if started_at is None else {"started": started_at}
+        predicates = []
+        params = {}
+        if started_at is not None:
+            predicates.append("created_at >= :started")
+            params["started"] = started_at
+        for name, value in (("workspace_id", workspace_id), ("actor_id", actor_id)):
+            if value is not None:
+                if not value.strip():
+                    raise ValueError(f"{name} must not be empty.")
+                predicates.append(f"{name} = :{name}")
+                params[name] = value
+        if operation_ids is not None:
+            if not operation_ids:
+                raise ValueError("operation_ids must not be empty.")
+            placeholders = []
+            for index, operation_id in enumerate(operation_ids):
+                key = f"operation_{index}"
+                placeholders.append(":" + key)
+                params[key] = operation_id
+            predicates.append("operation_id IN (" + ",".join(placeholders) + ")")
+        clause = "WHERE " + " AND ".join(predicates) if predicates else ""
         with self._sessions() as session:
             total = session.execute(text(f"SELECT COALESCE(SUM(prompt_tokens),0),COALESCE(SUM(completion_tokens),0),COALESCE(SUM(total_tokens),0) FROM llm_usage {clause}"), params).one()
             categories = session.execute(text(f"SELECT category,SUM(prompt_tokens),SUM(completion_tokens),SUM(total_tokens) FROM llm_usage {clause} GROUP BY category ORDER BY SUM(total_tokens) DESC"), params).all()
@@ -98,7 +140,10 @@ class MySqlLlmUsageStore:
             recent = session.execute(text(f"SELECT created_at,category,provider,base_url,model,prompt_tokens,completion_tokens,total_tokens FROM llm_usage {clause} ORDER BY created_at DESC,id DESC LIMIT 50"), params).all()
             rows = session.execute(text(f"SELECT created_at,category,total_tokens FROM llm_usage {clause} ORDER BY created_at,id"), params).all()
         granularity, timeline = _build_timeline(list(rows), range_key=range_key, started_at=started_at, now=resolved_now)
-        return LlmUsageSummary(range_key, LlmUsageTotals(*total), [LlmUsageCategorySummary(*row) for row in categories], [LlmUsageProviderSummary(*row) for row in providers], [LlmUsageRecord(*row) for row in recent], granularity, timeline)
+        return LlmUsageSummary(range_key, LlmUsageTotals(*(int(value) for value in total)),
+            [LlmUsageCategorySummary(row[0],*(int(value) for value in row[1:])) for row in categories],
+            [LlmUsageProviderSummary(*row[:3],*(int(value) for value in row[3:])) for row in providers],
+            [LlmUsageRecord(*row) for row in recent], granularity, timeline)
 
 
 def _resolve_range_start(range_key: str, now: datetime) -> datetime | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from backend.api.common.app import lifespan as core_lifespan
 
 from backend.api.common.app import create_app as create_common_app
@@ -16,7 +17,7 @@ from backend.local.routes.settings import router as settings_router
 from backend.mcp.video_series_server import install_mcp_http_endpoint
 
 
-def create_app(container: ApiContainer):
+def create_app(container: ApiContainer, *, frontend_root: Path | None = None):
     """Build the Local application with Local-only routes and MCP endpoint."""
 
     @asynccontextmanager
@@ -38,7 +39,7 @@ def create_app(container: ApiContainer):
     application.include_router(legacy_migration_router)
     application.include_router(chaoxing_router)
     install_mcp_http_endpoint(application)
-    root_dir = getattr(container, "root_dir", None)
+    root_dir = frontend_root if frontend_root is not None else getattr(container, "root_dir", None)
     if root_dir is not None:
         mount_frontend_dist(application, root_dir)
     return application

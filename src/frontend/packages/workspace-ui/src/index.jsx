@@ -30,3 +30,6 @@ export {WorkspaceApp,WorkspaceApplication} from "./runtime/WorkspaceApplication"
 export {WorkspaceDialog} from './workspace/ui/shared/WorkspaceDialog';
 export {WorkspaceOverflowMenu} from './workspace/ui/shared/WorkspaceOverflowMenu';
 export {WorkspaceMetricCard} from './workspace/ui/shared/WorkspaceMetricCard';
+export {WorkspaceToolbar} from './workspace/ui/WorkspaceToolbar';
+export {useFocusTrap} from './shared/lib/useFocusTrap';
+export {WorkspaceUsagePage,WorkspaceUsageAnalytics} from './workspace/ui/WorkspaceUsagePage';

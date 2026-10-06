@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import JobRepositoryDep, get_workspace_context
 from backend.core.context import WorkspaceContext
+from backend.core.jobs import job_snapshot_payload
 
 
 router = APIRouter()
@@ -24,15 +25,31 @@ def workspace_index_status(job_repository: JobRepositoryDep, context: WorkspaceC
 _TERMINAL_STATUSES = {"succeeded", "failed", "cancelled"}
 
 
+@router.get("/api/jobs")
+def list_jobs(job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context),
+              status: str | None = None, operation: str | None = None, offset: int = 0, limit: int = 50):
+    try:
+        result = job_repository.list_jobs(workspace_id=context.workspace_id, actor_id=context.actor_id,
+                                          status=status, operation=operation, offset=offset, limit=limit)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"total": result["total"], "items": [job_snapshot_payload(item) for item in result["items"]]}
+
+
+@router.get("/api/jobs/stats")
+def job_statistics(job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context)):
+    return {"by_status": job_repository.job_statistics(workspace_id=context.workspace_id, actor_id=context.actor_id)}
+
+
 @router.get("/api/jobs/{job_id}")
 def get_job(job_id: str, job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context)) -> dict[str, object]:
     snapshot = job_repository.get(job_id, workspace_id=context.workspace_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="job not found")
-    payload = _snapshot_payload(snapshot)
+    payload = job_snapshot_payload(snapshot)
     if snapshot.operation == "generate_series_batch":
         children = job_repository.children(job_id, workspace_id=context.workspace_id)
-        payload["children"] = [_snapshot_payload(child) for child in children]
+        payload["children"] = [job_snapshot_payload(child) for child in children]
         payload["dispatch_complete"] = snapshot.status == "succeeded"
         payload["batch_complete"] = snapshot.status in _TERMINAL_STATUSES and all(child.status in _TERMINAL_STATUSES for child in children)
     return payload
@@ -43,7 +60,7 @@ def cancel_job(job_id: str, job_repository: JobRepositoryDep, context: Workspace
     snapshot = job_repository.request_cancel(job_id, workspace_id=context.workspace_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="job not found")
-    return _snapshot_payload(snapshot)
+    return job_snapshot_payload(snapshot)
 
 
 @router.get("/api/jobs/{job_id}/events")
@@ -89,20 +106,3 @@ async def stream_job_events(
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
 
-
-def _snapshot_payload(snapshot) -> dict[str, object]:
-    return {
-        "job_id": snapshot.id,
-        "workspace_id": snapshot.workspace_id,
-        "resource": {"type": snapshot.resource_type, "id": snapshot.resource_id},
-        "operation": snapshot.operation,
-        "status": snapshot.status,
-        "attempt_count": snapshot.attempt_count,
-        "max_attempts": snapshot.max_attempts,
-        "cancel_requested": snapshot.cancel_requested,
-        "failure_code": snapshot.failure_code,
-        "failure_detail": snapshot.failure_detail,
-        "result_content_version": snapshot.result_content_version,
-        "started_at": snapshot.started_at.timestamp() if snapshot.started_at is not None else None,
-        "finished_at": snapshot.finished_at.timestamp() if snapshot.finished_at is not None else None,
-    }

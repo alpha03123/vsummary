@@ -123,16 +123,23 @@ export function WorkspaceProviderSelect({
   );
 }
 
-export function WorkspaceSettingRow({ title, description, children, contentClassName = "" }) {
-  const contentLayoutClassName = contentClassName || "2xl:w-auto 2xl:min-w-0";
+const settingRowLayouts = {
+  responsive: { row: "2xl:flex-row 2xl:items-center", label: "2xl:w-[260px] 2xl:shrink-0", content: "justify-end", defaultContent: "2xl:w-auto 2xl:min-w-0" },
+  stacked: { row: "", label: "", content: "justify-start", defaultContent: "" },
+};
+
+export function WorkspaceSettingRow({ title, description, children, layout = "responsive", contentClassName = "" }) {
+  const classes = settingRowLayouts[layout];
+  if (!classes) throw new Error(`Unsupported WorkspaceSettingRow layout: ${layout}`);
+  const contentLayoutClassName = contentClassName || classes.defaultContent;
 
   return (
-    <div className="flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 2xl:flex-row 2xl:items-center min-w-0">
-      <div className="min-w-0 max-w-none 2xl:w-[260px] 2xl:shrink-0">
+    <div className={`flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 min-w-0 ${classes.row}`}>
+      <div className={`min-w-0 max-w-none ${classes.label}`}>
         <strong className="mb-1.5 block text-base font-bold text-stone-900 dark:text-stone-100">{title}</strong>
         <span className="block text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">{description}</span>
       </div>
-      <div className={`flex min-w-0 w-full items-center justify-end ${contentLayoutClassName}`}>{children}</div>
+      <div className={`flex min-w-0 w-full items-center ${classes.content} ${contentLayoutClassName}`}>{children}</div>
     </div>
   );
 }
@@ -167,7 +174,7 @@ export function WorkspaceToggleSwitch({ checked, disabled = false, onChange, ari
       className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
         checked ? "bg-accent" : "bg-stone-300 dark:bg-stone-600"
       }`}
-      onClick={onChange}
+      onClick={() => onChange(!checked)}
       aria-label={ariaLabel}
       aria-pressed={checked}
     >

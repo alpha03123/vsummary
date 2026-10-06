@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from sqlalchemy.orm import Session, sessionmaker
 from backend.core.concurrency import RequestLimiter
 from filelock import FileLock
@@ -13,10 +13,15 @@ from backend.core.context import WorkspaceContext, WorkspaceContextProvider, Wor
 from backend.core.capabilities import CapabilitySet
 from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, UsageMeter
+from backend.core.preferences import UserPreferenceStore, load_effective_settings
+from backend.core.metering import ResourceBudget
+from backend.core.chat_queue import SqlChatQueue
+from backend.video_summary.generation.errors import MediaSourceUnavailableError
 from backend.api.adapters.agent_runtime_provider import LazyAgentRuntimeProvider
 from backend.api.adapters.linked_video_downloader import ProviderLinkedVideoDownloader
 from backend.api.di.workspace_services import WorkspaceServices
 from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator
+from backend.api.workers.host import reconcile_host_jobs
 from backend.api.adapters.durable_workspace_index_refresher import DurableWorkspaceIndexRefresher, submit_workspace_index_refresh
 from backend.bilibili import (
     BilibiliDownloader,
@@ -123,6 +128,10 @@ class ApiContainer:
     usage_store: MySqlLlmUsageStore
     request_limiter: RequestLimiter | None = None
     model_http_client: httpx.Client | None = None
+    preference_store: UserPreferenceStore | None = None
+    model_profiles: dict[str, str] = field(default_factory=dict)
+    resource_budget: ResourceBudget | None = None
+    chat_queue: SqlChatQueue | None = None
 
 
 def build_host_container(
@@ -135,11 +144,24 @@ def build_host_container(
     capabilities: CapabilitySet,
     context_provider: WorkspaceContextProvider | None = None,
     request_limiter: RequestLimiter | None = None,
+    preference_store=None,
+    model_profiles=None,
+    resource_budget=None,
+    chat_queue=None,
+    job_queue_policy=None,
 ) -> ApiContainer:
     """Build shared host dependencies; no Workspace or background process is started."""
     config_path = root_dir / "config" / "settings.toml"
     load_settings(config_path, root_dir)
-    job_repository = SqlJobRepository(session_factory, quota_guard=quota_guard, usage_meter=usage_meter)
+    def estimate_tokens():
+        active=load_effective_settings(config_path,root_dir).agent_context
+        return active.window_tokens,active.reserved_output_tokens
+    def estimate_multimodal():
+        return load_effective_settings(config_path, root_dir).generation.ai_summary_multimodal_enabled
+    job_repository = SqlJobRepository(session_factory, quota_guard=quota_guard, usage_meter=usage_meter,
+                                     queue_policy=job_queue_policy,
+                                     multimodal_estimate=estimate_multimodal if preference_store is not None else None,
+                                     token_estimate=estimate_tokens if preference_store is not None else None)
     progress = InMemoryProgressTracker()
     models = FasterWhisperModelManager(root_dir / "data" / "models" / "faster-whisper")
     whisper = WhisperCppModelManager(root_dir / "data" / "models" / "whisper-cpp")
@@ -167,7 +189,8 @@ def build_host_container(
         knowledge_memory_progress_tracker=InMemoryProgressTracker(), rag_model_manager=rag_models,
         chaoxing_importer=importer, settings_service=settings_service,
         usage_store=MySqlLlmUsageStore(session_factory), request_limiter=request_limiter,
-        model_http_client=httpx.Client(),
+        model_http_client=httpx.Client(), preference_store=preference_store,
+        model_profiles=dict(model_profiles or {}), resource_budget=resource_budget, chat_queue=chat_queue,
     )
 
 
@@ -228,6 +251,7 @@ def build_workspace_services(
             visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
+            saved_visual_paths=workspace.get_saved_visual_paths,
         ).run(
             str(payload["series_id"]),
             claim.resource_id,
@@ -295,6 +319,7 @@ def build_workspace_services(
                 visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
                 max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
                 frame_pool_builder=build_or_load_visual_frame_pool,
+            saved_visual_paths=workspace.get_saved_visual_paths,
             ).run,
             str(claim.request_payload["series_id"]),
             claim.resource_id,
@@ -323,18 +348,21 @@ def build_workspace_services(
         index_refresher,
         max_visual_input_images=settings.generation.max_visual_input_images,
         multimodal_enabled=settings.generation.ai_summary_multimodal_enabled,
+        multimodal_policy=(lambda: load_effective_settings(config_path, root_dir).generation.ai_summary_multimodal_enabled) if container.preference_store is not None else None,
+        saved_visual_context=workspace.get_saved_visual_context,
         frame_pool_builder=build_or_load_visual_frame_pool,
         note_frame_materializer=lambda *, video_path, output_dir, content: materialize_note_frames(video_path=video_path, output_dir=output_dir, content=content, frame_extractor=FfmpegMediaProcessor()),
     )
 
     auto_artifacts = AutoGenerateVideoArtifacts(
-        load_enabled_artifacts=lambda: load_settings(config_path, root_dir).generation.auto_generate_artifacts,
+        load_enabled_artifacts=lambda: load_effective_settings(config_path, root_dir).generation.auto_generate_artifacts,
         generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
             workspace,
             resolved_mindmap_generator,
             visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
+            saved_visual_paths=workspace.get_saved_visual_paths,
         ).run(series_id, video_id),
         generate_knowledge_cards=lambda series_id, video_id: GenerateVideoKnowledgeCards(
             workspace,
@@ -343,6 +371,7 @@ def build_workspace_services(
             visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
             max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
+            saved_visual_paths=workspace.get_saved_visual_paths,
         ).run(series_id, video_id),
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
@@ -351,7 +380,7 @@ def build_workspace_services(
         progress_tracker,
         video_generation_concurrency=settings.generation.video_generation_concurrency,
         series_memory_refresher=series_memory_refresher,
-        auto_generate_artifacts=auto_artifacts.run,
+        auto_generate_artifacts=auto_artifacts.run if container.preference_store is None else None,
     )
     series_generation_use_case = GenerateSeriesSummaryFromLibrary(
         workspace,
@@ -441,7 +470,7 @@ def build_workspace_services(
 
     operation_handlers["process_agent_video"] = run_agent_video_job
 
-    async def run_series_batch_job(claim, reporter) -> None:
+    async def run_series_batch_job(claim, reporter) -> bool | None:
         payload = claim.request_payload
         series_id = claim.resource_id
         processing_mode = str(payload.get("processing_mode") or "summary")
@@ -450,21 +479,25 @@ def build_workspace_services(
         series = next((item for item in workspace.list_series() if item.id == series_id), None)
         if series is None:
             raise LookupError(f"series not found '{series_id}'")
-        pending = [video for video in series.videos if not video.processed]
+        pending = [
+            video for video in series.videos
+            if (not video.has_transcript if processing_mode == "transcript" else not video.processed)
+        ]
         reporter.update("queue", 0.0, f"正在创建 {len(pending)} 个视频子任务")
+        sources = {video.id: workspace.get_video_source(series_id, video.id) is not None for video in pending}
+        for video in pending:
+            if not sources[video.id] and not (video.is_linked or video.status == "linked"):
+                raise MediaSourceUnavailableError(f"视频「{video.title}」的原媒体不可用，请重新上传后再处理。")
         for index, video in enumerate(pending, start=1):
             reporter.raise_if_cancelled()
-            has_source = workspace.get_video_source(series_id, video.id) is not None
+            has_source = sources[video.id]
             child_operation = (
                 "process_agent_video"
                 if not has_source and (video.is_linked or video.status == "linked")
                 else ("generate_summary" if processing_mode == "summary" else "generate_transcript")
             )
-            if not has_source and child_operation != "process_agent_video":
-                reporter.update("queue", index / max(1, len(pending)) * 100.0, f"跳过缺少媒体文件的视频：{video.title}")
-                continue
             try:
-                job_repository.submit(
+                child = job_repository.submit(
                     workspace_id=claim.workspace_id,
                     resource_type="video",
                     resource_id=video.id,
@@ -481,10 +514,17 @@ def build_workspace_services(
                     idempotency_key=f"{video.id}:{child_operation}",
                     parent_job_id=claim.id,
                 )
+                if not child.created:
+                    reporter.update("queue", index / max(1, len(pending)) * 100.0, f"视频已有任务，跳过：{video.title}")
+                    continue
             except ControlPlaneConflictError:
                 reporter.update("queue", index / max(1, len(pending)) * 100.0, f"视频已有任务，跳过：{video.title}")
                 continue
             reporter.update("queue", index / max(1, len(pending)) * 100.0, f"已创建 {index}/{len(pending)} 个视频子任务")
+        child_count = len(job_repository.children(claim.id, workspace_id=claim.workspace_id))
+        if child_count:
+            job_repository.mark_series_batch_waiting(claim, child_count=child_count)
+            return False
 
     operation_handlers["generate_series_batch"] = run_series_batch_job
 
@@ -558,6 +598,7 @@ def build_workspace_services(
             visual_input=settings.generation.cards_visual_input,
             max_visual_input_images=settings.generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
+            saved_visual_paths=workspace.get_saved_visual_paths,
         ),
         generate_video_ai_summary=ai_summary_use_case,
         get_video_ai_summary=GetVideoAiSummary(workspace),
@@ -577,6 +618,7 @@ def build_workspace_services(
             visual_input=settings.generation.mindmap_visual_input,
             max_visual_input_images=settings.generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
+            saved_visual_paths=workspace.get_saved_visual_paths,
         ),
         generate_series_mindmap=GenerateSeriesMindmapFromLibrary(workspace, resolved_series_mindmap_generator),
         get_series_mindmap=GetSeriesMindmap(workspace),
@@ -610,6 +652,7 @@ def build_workspace_services(
         refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
         debug_mode=settings.debug.mode,
         embedding_provider=settings.agent_retrieval.embedding_provider,
+        after_summary=auto_artifacts.run if container.preference_store is not None else None,
     )
     return workspace_services
 
@@ -649,7 +692,8 @@ def build_api_container(
             workspace_id=workspace_id, actor_id="system-worker", request_id=f"job:{workspace_id}"))
 
     worker = SqlJobWorker(repository=container.job_repository,
-        get_execution_services=execution_services, options=WorkerOptions.local())
+        get_execution_services=execution_services, options=WorkerOptions.local(),
+        maintenance=lambda: reconcile_host_jobs(container))
     def invalidate(_event):
         services.invalidate_agent_workspace_indexes()
         submit_workspace_index_refresh(repository=container.job_repository, workspace_id=workspace.workspace_id)

@@ -9,7 +9,12 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from backend.api.di.container import ApiContainerDep
+from backend.api.dependencies import get_workspace_context
+from backend.core.context import WorkspaceContext
+from backend.core.chat_queue import ChatQueueFull
+from backend.api.adapters.chat_execution import ChatExecution
 from fastapi.responses import StreamingResponse
 
 from backend.agent.memory.context import AgentContext
@@ -36,7 +41,7 @@ router = APIRouter()
 
 
 @router.post("/api/agent/chat", response_model=AgentChatResponse)
-def agent_chat(request: AgentChatRequest, container: WorkspaceServicesDep) -> AgentChatResponse:
+def agent_chat(request: AgentChatRequest, container: WorkspaceServicesDep, host: ApiContainerDep, ownership: WorkspaceContext = Depends(get_workspace_context)) -> AgentChatResponse:
     """POST /api/agent/chat — 非流式 Agent 对话。
 
     将用户消息送入 LangGraph Agent 图执行完整的一次推理回合，
@@ -62,11 +67,20 @@ def agent_chat(request: AgentChatRequest, container: WorkspaceServicesDep) -> Ag
         return _build_rag_block_response(context_override, rag_block_message)
 
     try:
-        result = container.get_agent_graph_service().run_turn(
-            session_id=request.session_id,
-            user_message=request.message,
-            context_override=context_override,
-        )
+        if host.chat_queue is None:
+            result = container.get_agent_graph_service().run_turn(session_id=request.session_id, user_message=request.message, context_override=context_override)
+        else:
+            execution = ChatExecution(host, ownership)
+            try:
+                for _ in execution.admission_events():
+                    pass
+                with execution.running() as check:
+                    check()
+                    result = container.get_agent_graph_service().run_turn(session_id=request.session_id, user_message=request.message, context_override=context_override)
+                    check()
+                    execution.finish('succeeded')
+            finally:
+                execution.finish('failed')
     except Exception as error:
         LOGGER.exception("Agent chat failed")
         raise HTTPException(status_code=503, detail=_format_agent_error(error)) from error
@@ -74,7 +88,7 @@ def agent_chat(request: AgentChatRequest, container: WorkspaceServicesDep) -> Ag
 
 
 @router.post("/api/agent/chat/stream")
-def agent_chat_stream(request: AgentChatRequest, container: WorkspaceServicesDep) -> StreamingResponse:
+def agent_chat_stream(request: AgentChatRequest, container: WorkspaceServicesDep, host: ApiContainerDep, ownership: WorkspaceContext = Depends(get_workspace_context)) -> StreamingResponse:
     """POST /api/agent/chat/stream — 流式 Agent 对话（SSE）。
 
     与 `/api/agent/chat` 共享同一请求体，但以 Server-Sent Events 流
@@ -93,30 +107,52 @@ def agent_chat_stream(request: AgentChatRequest, container: WorkspaceServicesDep
     """
     context_override = _build_agent_context_override(request.session_id, request.context)
 
+    try:
+        execution = ChatExecution(host, ownership) if host.chat_queue is not None else None
+    except ChatQueueFull as error:
+        raise HTTPException(status_code=429, detail=str(error)) from error
+
     def event_iterator():
         summary_block_message = _resolve_summary_block_message(context_override, container)
         if summary_block_message:
+            if execution is not None:
+                execution.finish('failed')
             yield encode_sse_event("error", {"message": summary_block_message})
             return
         rag_block_message = _resolve_rag_block_message(context_override, container)
         if rag_block_message:
+            if execution is not None:
+                execution.finish('failed')
             yield from _stream_rag_block_message(rag_block_message)
             return
         debug_trace: dict[str, object] | None = {} if _is_agent_debug_enabled(container) else None
-        try:
+        def events():
             service = container.get_agent_graph_service()
-            for event in service.stream_with_context(
-                session_id=request.session_id,
-                user_message=request.message,
-                context_override=context_override,
-                debug_trace=debug_trace,
-            ):
-                yield encode_sse_event(event.type, event.payload)
+            return service.stream_with_context(session_id=request.session_id, user_message=request.message, context_override=context_override, debug_trace=debug_trace)
+        try:
+            if execution is None:
+                for event in events():
+                    yield encode_sse_event(event.type, event.payload)
+            else:
+                for admission in execution.admission_events():
+                    yield encode_sse_event('queue', admission) if admission is not None else ': waiting\n\n'
+                with execution.running() as check:
+                    for event in events():
+                        check()
+                        if event.type == 'answer_completed':
+                            execution.finish('succeeded')
+                        yield encode_sse_event(event.type, event.payload)
+                    execution.finish('succeeded')
             _log_agent_debug_trace(request, debug_trace)
+        except GeneratorExit:
+            raise
         except Exception as error:
             _log_agent_debug_trace(request, debug_trace)
-            LOGGER.exception("Agent chat stream failed")
-            yield encode_sse_event("error", {"message": _format_agent_error(error)})
+            LOGGER.exception('Agent chat stream failed')
+            yield encode_sse_event('error', {'message': _format_agent_error(error)})
+        finally:
+            if execution is not None:
+                execution.finish('cancelled')
 
     return StreamingResponse(
         event_iterator(),

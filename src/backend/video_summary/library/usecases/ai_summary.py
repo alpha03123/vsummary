@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, Callable
 
 from backend.video_summary.library.models import (
     GeneratedVideoAiNoteDTO,
@@ -51,26 +51,31 @@ class GenerateVideoAiSummary:
         multimodal_enabled: bool = True,
         frame_pool_builder: VisualFramePoolBuilder | None = None,
         note_frame_materializer: NoteFrameMaterializer | None = None,
+        multimodal_policy: Callable[[], bool] | None = None,
+        saved_visual_context=None,
     ) -> None:
         self._workspace = workspace
         self._generator = generator
         self._index_refresher = index_refresher
         self._max_visual_input_images = max_visual_input_images
         self._multimodal_enabled = multimodal_enabled
+        self._multimodal_policy = multimodal_policy
+        self._saved_visual_context = saved_visual_context
         self._frame_pool_builder = frame_pool_builder
         self._note_frame_materializer = note_frame_materializer
 
     def run(self, series_id: str, video_id: str, *, template: str = "general") -> VideoAiSummaryDTO | None:
         source = self._workspace.get_video_source(series_id, video_id)
-        if source is None:
-            return None
         transcript = self._workspace.get_video_transcript(series_id, video_id)
         if transcript is None:
             raise ValueError("请先生成视频转写，再生成 AI 概括。")
         outline = self._workspace.get_video_summary(series_id, video_id)
         # B 的事实输入是原始转写和独立帧池，不反向依赖 A 的章节文案或封面图。
         visual_context = VideoAiNoteVisualContextDTO(frames=[])
-        if self._multimodal_enabled and self._max_visual_input_images is not None and self._frame_pool_builder is not None:
+        if source is None and self._saved_visual_context is not None:
+            visual_context = self._saved_visual_context(series_id, video_id)
+        multimodal_enabled = self._multimodal_policy() if self._multimodal_policy is not None else self._multimodal_enabled
+        if source is not None and multimodal_enabled and self._max_visual_input_images is not None and self._frame_pool_builder is not None:
             visual_context = _build_frame_pool_context(source, visual_context, self._max_visual_input_images, self._frame_pool_builder)
         generated = self._generator.run_ai_summary(
             transcript=transcript,
@@ -86,8 +91,13 @@ class GenerateVideoAiSummary:
             max_images=generated.note_max_images,
             min_gap_seconds=generated.note_image_min_gap_seconds,
         )
-        if self._note_frame_materializer is not None:
+        if source is not None and self._note_frame_materializer is not None:
             self._note_frame_materializer(video_path=source.source_path, output_dir=source.output_dir, content=content)
+        if source is None:
+            from backend.video_summary.library.note_images import parse_note_image_markers
+            available = {round(frame.timestamp_seconds, 3) for frame in visual_context.frames}
+            if any(round(marker.seconds, 3) not in available for marker in parse_note_image_markers(content)):
+                raise ValueError('生成内容引用了尚未保存的图片时间点。')
         result = self._workspace.save_video_ai_summary(
             series_id,
             video_id,

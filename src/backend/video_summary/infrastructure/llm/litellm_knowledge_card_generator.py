@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from backend.core.preferences import load_effective_settings, preference_cache_key
+
 import json
 from pathlib import Path
 from threading import Lock
@@ -15,7 +17,7 @@ from pydantic import BaseModel, Field
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
-from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.video_summary.infrastructure.llm.prompts import KNOWLEDGE_CARD_PROMPT_TEMPLATE
 from backend.video_summary.library.models import KnowledgeCardDTO
 
@@ -138,7 +140,7 @@ class ConfiguredKnowledgeCardGenerator:
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._generator_lock = Lock()
-        self._cached_signature: tuple[str, str] | None = None
+        self._cached_signature: tuple[object, ...] | None = None
         self._cached_generator: LiteLLMKnowledgeCardGenerator | None = None
 
     def run(
@@ -159,7 +161,7 @@ class ConfiguredKnowledgeCardGenerator:
             与 `LiteLLMKnowledgeCardGenerator.run` 同义的 `KnowledgeCardDTO` 列表。
         """
         generator = self._get_generator()
-        settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+        settings = load_effective_settings(config_path=self._config_path, root_dir=self._root_dir)
         visual_input = settings.generation.cards_visual_input
         return generator.run(
             title=title,
@@ -176,12 +178,13 @@ class ConfiguredKnowledgeCardGenerator:
         """
         ensure_settings_file(self._config_path)
         signature = (
+            preference_cache_key(),
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
         )
         with self._generator_lock:
             if self._cached_generator is None or self._cached_signature != signature:
-                settings = load_settings(config_path=self._config_path, root_dir=self._root_dir)
+                settings = load_effective_settings(config_path=self._config_path, root_dir=self._root_dir)
                 gateway = build_litellm_completion_gateway(
                     settings,
                     usage_recorder=self._usage_recorder,

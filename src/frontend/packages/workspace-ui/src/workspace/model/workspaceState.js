@@ -545,6 +545,7 @@ export function createLibraryHomeState(library, currentState) {
     generationSnapshot: null,
     chatScopeKey: null,
     chatBaseScopeKey: null,
+    chatDrawerOpen: false,
     chatMessages: [],
     chatPending: false,
     chatRecoveryLoading: false,

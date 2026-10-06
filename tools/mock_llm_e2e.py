@@ -2,18 +2,30 @@
 
 The application, its HTTP API, durable jobs, media storage, subtitle extraction,
 and Agent graph are real.  Only its outgoing LLM provider is replaced.
+
+Usage: python tools/mock_llm_e2e.py --mysql-home <MySQL installation>
+Configuration and data live in a fresh test directory; the installation's
+.env and config/settings.toml are never modified.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import socket
+import subprocess
 import sys
+import tempfile
+import threading
+import time
+from dataclasses import replace
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 from tools.e2e_support.api_client import LocalApiClient
 from tools.e2e_support.assertions import require_generated_tools
@@ -23,14 +35,112 @@ from tools.e2e_support.resources import E2EResourceScope
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://127.0.0.1:8001")
-    parser.add_argument("--source-path", type=Path, required=True)
+    parser.add_argument("--mysql-home", type=Path, required=True)
+    parser.add_argument("--runtime-root", type=Path, help="Dedicated test directory; existing configuration or database is rejected.")
+    parser.add_argument("--model-cache", type=Path, help="Embedding cache to copy into the test runtime.")
     parser.add_argument("--report", type=Path, default=ROOT / "temp" / "mock-llm-e2e" / "latest.json")
     args = parser.parse_args()
-    result = run(args.base_url, args.source_path)
     args.report.parent.mkdir(parents=True, exist_ok=True)
+    runtime_root = args.runtime_root.resolve() if args.runtime_root else Path(tempfile.mkdtemp(prefix="run-", dir=args.report.parent))
+    print(f"Mock E2E runtime: {runtime_root}", flush=True)
+    try:
+        result = run_isolated(args.mysql_home, runtime_root, args.model_cache)
+    except Exception as error:
+        args.report.write_text(json.dumps({
+            "status": "failed", "runtime_root": str(runtime_root), "error": str(error),
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        raise
+    result["status"] = "passed"
+    result["runtime_root"] = str(runtime_root)
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def run_isolated(mysql_home: Path, runtime_root: Path, model_cache: Path | None = None) -> dict[str, Any]:
+    from backend.local.http.server import configure_event_loop_policy, local_server
+    from tools.mock_openai_provider import Handler
+
+    configure_event_loop_policy()
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as provider:
+        provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)
+        provider_thread.start()
+        try:
+            _prepare_runtime(runtime_root, provider.server_port, model_cache)
+            media = runtime_root / "fixture.mp4"
+            with (runtime_root / "media.log").open("w", encoding="utf-8") as log:
+                subprocess.run([
+                    "pwsh", "-NoLogo", "-NoProfile", "-File", str(ROOT / "tools/create_mock_llm_e2e_media.ps1"),
+                    "-OutputPath", str(media),
+                ], check=True, stdout=log, stderr=subprocess.STDOUT)
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+                print("Starting the Local backend with an isolated database", flush=True)
+                with local_server(mysql_home=mysql_home, runtime_root=runtime_root, port=port) as server:
+                    thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+                    thread.start()
+                    try:
+                        base_url = f"http://127.0.0.1:{port}"
+                        _wait_for_backend(base_url, thread)
+                        return run(base_url, media)
+                    finally:
+                        server.should_exit = True
+                        thread.join(timeout=30)
+                        if thread.is_alive():
+                            raise RuntimeError("Local E2E backend did not shut down within 30 seconds.")
+        finally:
+            provider.shutdown()
+            provider_thread.join(timeout=10)
+
+
+def _prepare_runtime(runtime_root: Path, provider_port: int, model_cache: Path | None) -> None:
+    from backend.video_summary.infrastructure.config.settings import load_settings, save_settings
+    from tools.mock_openai_provider import EXPECTED_API_KEY, EXPECTED_MODEL
+
+    if any((runtime_root / path).exists() for path in (".env", "config", "data/local")):
+        raise FileExistsError(f"Mock E2E requires a fresh runtime configuration and database: {runtime_root}")
+    (runtime_root / "config").mkdir(parents=True)
+    (runtime_root / ".env").write_text(
+        f"OPENAI_API_KEY={EXPECTED_API_KEY}\nOPENAI_PROVIDER=openai_compatible\n"
+        f"OPENAI_BASE_URL=http://127.0.0.1:{provider_port}\nOPENAI_MODEL={EXPECTED_MODEL}\n",
+        encoding="utf-8",
+    )
+    config = runtime_root / "config/settings.toml"
+    shutil.copyfile(ROOT / "config/settings.toml.example", config)
+    settings = load_settings(config, runtime_root)
+    settings = replace(
+        settings,
+        asr=replace(settings.asr, faster_whisper=replace(settings.asr.faster_whisper, device="cpu")),
+        agent_retrieval=replace(settings.agent_retrieval, embedding_device="cpu"),
+        generation=replace(settings.generation, chapter_visual_mode="off", note_visual_mode="off"),
+    )
+    save_settings(config, settings)
+    cache = model_cache if model_cache is not None else ROOT / "data/models/fastembed"
+    target = runtime_root / "data/models/fastembed"
+    if model_cache is not None and not cache.is_dir():
+        raise FileNotFoundError(f"Embedding cache does not exist: {cache}")
+    if cache.is_dir() and not target.exists():
+        shutil.copytree(cache, target)
+
+
+def _wait_for_backend(base_url: str, thread: threading.Thread) -> None:
+    import httpx
+
+    health_url = httpx.URL(base_url).join("/api/health")
+    assert health_url.host == "127.0.0.1" and health_url.path == "/api/health"
+    deadline = time.monotonic() + 180
+    with httpx.Client(timeout=2) as client:
+        while time.monotonic() < deadline:
+            if not thread.is_alive():
+                raise RuntimeError("Local backend exited before becoming healthy.")
+            try:
+                response = client.get(health_url)
+                if response.status_code == 200 and isinstance(response.json(), dict):
+                    return
+            except httpx.ConnectError:
+                pass
+            time.sleep(0.5)
+    raise TimeoutError("Local backend did not become healthy within 180 seconds.")
 
 
 def run(base_url: str, source_path: Path) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 {
   "name": "@alpha03123/vsummary-workspace-ui",
-  "version": "0.5.0-alpha.5",
+  "version": "0.5.0-alpha.19",
   "private": false,
   "description": "Reusable product-neutral workspace components for VSummary shells",
   "license": "Apache-2.0",
@@ -35,26 +35,29 @@
     "build": "vite build"
   },
   "devDependencies": {
+    "@tailwindcss/container-queries": "^0.1.1",
     "@vitejs/plugin-react": "^5.0.0",
-    "vite": "^7.0.0",
-    "tailwindcss": "^3.4.19",
     "autoprefixer": "^10.4.27",
     "postcss-import": "^17.0.0",
-    "@tailwindcss/container-queries": "^0.1.1"
+    "tailwindcss": "^3.4.19",
+    "vite": "^7.0.0"
   },
   "dependencies": {
+    "@microsoft/fetch-event-source": "^2.0.1",
     "@tanstack/react-virtual": "^3.14.10",
+    "chart.js": "^4.5.1",
     "d3": "^7.9.0",
     "katex": "^0.17.0",
     "markmap-view": "^0.18.12",
     "mdast-util-to-string": "^4.0.0",
+    "react-chartjs-2": "^5.3.1",
     "react-markdown": "^10.1.0",
     "react-mosaic-component": "^7.1.0",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.5",
-    "@microsoft/fetch-event-source": "^2.0.1"
+    "tailwind-merge": "^2.6.0",
+    "unified": "^11.0.5"
   }
 }

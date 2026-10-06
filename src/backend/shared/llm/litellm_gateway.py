@@ -278,7 +278,9 @@ class LiteLLMCompletionGateway:
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
         in_think_block = False
+        final_usage = {}
         for chunk in stream:
+            final_usage = _extract_usage(chunk) or final_usage
             reasoning_delta, content_delta = _extract_stream_deltas(chunk)
             if reasoning_delta:
                 if not in_think_block:
@@ -292,6 +294,8 @@ class LiteLLMCompletionGateway:
                 yield content_delta
         if in_think_block:
             yield "</think>"
+        if final_usage:
+            self._record_usage(final_usage)
 
     def stream_text_with_metadata(
         self,
@@ -438,7 +442,9 @@ class LiteLLMCompletionGateway:
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
         in_think_block = False
+        final_usage = {}
         async for chunk in stream:
+            final_usage = _extract_usage(chunk) or final_usage
             reasoning_delta, content_delta = _extract_stream_deltas(chunk)
             if reasoning_delta:
                 if not in_think_block:
@@ -452,6 +458,8 @@ class LiteLLMCompletionGateway:
                 yield content_delta
         if in_think_block:
             yield "</think>"
+        if final_usage:
+            self._record_usage(final_usage)
 
     def complete_structured(
         self,

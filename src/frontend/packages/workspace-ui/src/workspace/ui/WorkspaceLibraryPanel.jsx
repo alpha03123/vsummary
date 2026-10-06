@@ -271,6 +271,7 @@ export function getVideoMediaIdentifier(video) {
 }
 
 function PanelFooter({
+  allowSourceRegeneration = true,
   selectedContextType,
   selectedVideo,
   isGeneratingSelectedVideo,
@@ -324,7 +325,8 @@ function PanelFooter({
 
   if (selectedContextType === "series") {
     const queueIsActive =
-      seriesGenerationQueue?.seriesId === activeSeries?.id &&
+      seriesGenerationQueue != null &&
+      seriesGenerationQueue.seriesId === activeSeries?.id &&
       (seriesGenerationQueue.status === "running" || seriesGenerationQueue.status === "cancelling");
     const queueLabel = queueIsActive
       ? `已完成 ${seriesGenerationQueue.completed}/${seriesGenerationQueue.total}`
@@ -448,14 +450,14 @@ function PanelFooter({
               placement="bottom"
               menuClassName="min-w-[160px]"
             >
-                  <ProcessingModeMenuItem
+                  {onChangeProcessingMode && <ProcessingModeMenuItem
                     mode={processingMode === "transcript" ? "summary" : "transcript"}
                     label={processingMode === "transcript" ? "概括模式" : "字幕模式"}
                     onSelect={() => {
                       onChangeProcessingMode?.(processingMode === "transcript" ? "summary" : "transcript");
                       setFooterOverflowOpen(false);
                     }}
-                  />
+                  />}
                   {selectedVideo.sourceUrl && selectedVideo.provider !== "chaoxing" ? (
                     <a
                       href={selectedVideo.sourceUrl}
@@ -517,6 +519,10 @@ function PanelFooter({
     processingMode,
     sourceMissing: selectedVideo.status === "source_missing",
   });
+  if (!allowSourceRegeneration && selectedVideo.processed && !isGeneratingSelectedVideo) {
+    videoGenerationButton.disabled = true;
+    videoGenerationButton.label = '产物已生成';
+  }
   const deleteButton = getDeleteButtonState({
     isGeneratingSeries,
     isGeneratingSelectedVideo,
@@ -542,14 +548,14 @@ function PanelFooter({
               placement="bottom"
               menuClassName="min-w-[160px]"
             >
-              <ProcessingModeMenuItem
+              {onChangeProcessingMode && <ProcessingModeMenuItem
                 mode={processingMode === "transcript" ? "summary" : "transcript"}
                 label={processingMode === "transcript" ? "概括模式" : "字幕模式"}
                 onSelect={() => {
                   onChangeProcessingMode?.(processingMode === "transcript" ? "summary" : "transcript");
                   setFooterOverflowOpen(false);
                 }}
-              />
+              />}
               {selectedVideo.sourceUrl && selectedVideo.provider !== "chaoxing" ? (
                 <a
                   href={selectedVideo.sourceUrl}
@@ -634,6 +640,7 @@ function PanelFooter({
   );
 }
 export function WorkspaceLibraryPanel({
+  allowSourceRegeneration = true,
   activeSeries,
   selectedContextType,
   selectedVideo,
@@ -736,7 +743,7 @@ export function WorkspaceLibraryPanel({
             type="button"
             className="inline-flex items-center justify-center w-8 h-8 rounded-full text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
             onClick={onEnterLibraryHome}
-            title="返回分类列表"
+            title="返回系列列表"
           >
             <ArrowLeft size={18} />
           </button>
@@ -1034,6 +1041,7 @@ export function WorkspaceLibraryPanel({
       </div>
 
       <PanelFooter
+        allowSourceRegeneration={allowSourceRegeneration}
         selectedContextType={selectedContextType}
         selectedVideo={selectedVideo}
         isGeneratingSelectedVideo={isGeneratingSelectedVideo}
@@ -1072,6 +1080,7 @@ export function WorkspaceLibraryPanel({
 }
 
 function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope, onScopeChange, onClose }) {
+  const {api}=useWorkspaceRuntime();
   const selectedCount = selectedVideoIds.length;
   const selectedAvailable = selectedCount > 0;
   const useSelected = scope === "selected" && selectedAvailable;

@@ -35,9 +35,10 @@ const WorkspaceGenerationOverlay = lazy(() =>
   })),
 );
 
-export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebarFooter = null }) {
+export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbarButtons, brand, sidebarHeader = null, sidebarFooter = null }) {
   const {Settings: SettingsPanel, Usage: UsagePanel, Import: ImportPanel} = panels;
-  const {api}=useWorkspaceRuntime();
+  const {api,host}=useWorkspaceRuntime();
+  const mediaPreviewEnabled = host.features?.mediaPreview !== false;
   const { shell, chat, generation, actions } = page;
   const {
     state,
@@ -67,7 +68,13 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
     video: loadWorkspaceLayout("video", state.preferenceStorage),
     series: loadWorkspaceLayout("series", state.preferenceStorage),
   }));
-  const layout = layoutsByScope[studioScope];
+  const savedLayout = layoutsByScope[studioScope];
+  const layout = mediaPreviewEnabled ? savedLayout : {...savedLayout, panelTools: {
+    ...savedLayout.panelTools,
+    ...Object.fromEntries(getStudioPanelIds(savedLayout.studioLayout)
+      .filter(id => (savedLayout.panelTools[id] ?? getPanelType(id)) === 'preview')
+      .map(id => [id, 'overview'])),
+  }};
   const setLayout = (updater) => setLayoutsByScope((current) => ({
     ...current,
     [studioScope]: typeof updater === "function" ? updater(current[studioScope]) : updater,
@@ -94,6 +101,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
   useFocusTrap(settingsModalRef, state.settingsPanelOpen);
   useFocusTrap(usageModalRef, state.usagePageOpen);
   const isPlaygroundHome = isPlaygroundSeries(activeSeries) && !selectedVideo;
+  const chatScopeActive = selectedContextType === "series" || selectedContextType === "video";
   const hasRightPane = Boolean(activeSeries);
   const currentAsrModel = generation.fasterWhisperModels?.find((model) => model.id === ui.asrModelQuality) ?? null;
   const summaryLocked = selectedContextType === "series"
@@ -189,7 +197,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
   }
 
   function openStudioPanel(toolId, direction = "row", targetPanelId = focusedPanel) {
-    if (!STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) {
+    if ((!mediaPreviewEnabled && toolId === 'preview') || !STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) {
       return;
     }
     const existingPanel = toolId === "studio" ? null : getStudioPanelIds(layout.studioLayout).find((panelId) => (
@@ -218,7 +226,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
   }
 
   function setPanelTool(panelId, toolId) {
-    if (!STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) return;
+    if ((!mediaPreviewEnabled && toolId === 'preview') || !STUDIO_PANEL_TYPES.has(toolId) || !isPanelAllowedForScope(toolId, studioScope)) return;
     setLayout((current) => ({
       ...current,
       panelTools: { ...current.panelTools, [panelId]: toolId },
@@ -430,7 +438,8 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
         }
         className={`workspace-panel shrink-0 flex flex-col rounded-[2rem] border overflow-hidden relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? "opacity-100 mr-1" : "w-0 opacity-0 border-0 m-0"}`}
       >
-        <div className="h-full flex flex-col">
+        {sidebarHeader && <div className="shrink-0">{sidebarHeader}</div>}
+        <div className="min-h-0 flex flex-1 flex-col">
           {activeSeries ? (
             <WorkspaceLibraryPanel
               activeSeries={activeSeries}
@@ -446,7 +455,8 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
               onGenerateVideo={actions.generateVideo}
               onProcessLinkedVideo={actions.processLinkedVideo}
               processingMode={shell.processingMode}
-              onChangeProcessingMode={actions.changeProcessingMode}
+              onChangeProcessingMode={host.features?.sourceRegeneration === false ? null : actions.changeProcessingMode}
+              allowSourceRegeneration={host.features?.sourceRegeneration !== false}
               onRelinkVideo={actions.relinkVideo}
               onGenerateSeries={actions.generateSeries}
               onCancelGeneration={actions.cancelGeneration}
@@ -549,7 +559,9 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
       {/* Main Studio Area */}
       <main className="workspace-panel flex-1 min-w-0 flex flex-col relative rounded-[2rem] border overflow-hidden z-10">
         <WorkspaceToolbar
+          brand={brand}
           toolbarExtras={toolbarExtras}
+          toolbarButtons={toolbarButtons}
           settingsOpen={state.settingsPanelOpen}
           activeSeries={activeSeries}
           onEnterLibraryHome={actions.enterLibraryHome}
@@ -558,8 +570,8 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
           onOpenUpdate={() => actions.openSettingsPanel("update")}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onToggleChatDrawer={chat.toggleDrawer}
-          chatDrawerOpen={chat.drawerOpen}
+          onToggleChatDrawer={chatScopeActive ? chat.toggleDrawer : null}
+          chatDrawerOpen={chatScopeActive && chat.drawerOpen}
         />
 
         {state.error && (
@@ -680,13 +692,13 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
         </AnimatePresence>
       </main>
 
-      <ChatDrawer
+      {chatScopeActive ? <ChatDrawer
         isOpen={chat.drawerOpen}
         onClose={chat.closeDrawer}
         width={layout.chatDrawerWidth}
         onWidthChange={updateChatDrawerWidth}
         {...chatPanelProps}
-      />
+      /> : null}
 
       {importModalState && ImportPanel && (
         <ImportPanel request={importModalState} page={page} onClose={() => setImportModalState(null)} />
@@ -754,7 +766,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, sidebar
 
 function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
   const [dismissedSnapshotKey, setDismissedSnapshotKey] = useState(null);
-  if (!snapshot || snapshot.status === "idle") {
+  if (!snapshot || snapshot.status === "idle" || snapshot.status === "completed") {
     return null;
   }
   const snapshotKey = `${snapshot.status}:${snapshot.sequence ?? 0}:${snapshot.updatedAt ?? 0}`;

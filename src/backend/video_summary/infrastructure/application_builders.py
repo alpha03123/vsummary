@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from backend.core.preferences import load_effective_settings, preference_cache_key
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,7 +25,7 @@ from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
     build_video_summary_runtime,
 )
-from backend.video_summary.infrastructure.config.settings import AppSettings, load_settings
+from backend.video_summary.infrastructure.config.settings import AppSettings
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 
 
@@ -77,7 +79,7 @@ def build_video_summary_application(
     Returns:
         包含 settings 与组装好用例的 `VideoSummaryApplication`。
     """
-    settings = load_settings(config_path=config_path, root_dir=root_dir)
+    settings = load_effective_settings(config_path=config_path, root_dir=root_dir)
     resolved_transcript_enhancement_enabled = (
         settings.asr.transcript_enhancement_enabled
         if transcript_enhancement_enabled is None
@@ -135,7 +137,7 @@ def build_mindmap_application(
     Returns:
         包含 settings 与 `GenerateMindmap` 用例的 `MindmapApplication`。
     """
-    settings = load_settings(config_path=config_path, root_dir=root_dir)
+    settings = load_effective_settings(config_path=config_path, root_dir=root_dir)
     gateway = build_litellm_completion_gateway(
         settings,
         usage_recorder=usage_recorder,
@@ -169,7 +171,7 @@ def build_series_mindmap_application(
     from backend.video_summary.generation.usecases.generate_series_mindmap import GenerateSeriesMindmap
     from backend.video_summary.infrastructure.llm.litellm_series_mindmap_generator import LiteLLMSeriesMindmapGenerator
 
-    settings = load_settings(config_path=config_path, root_dir=root_dir)
+    settings = load_effective_settings(config_path=config_path, root_dir=root_dir)
     gateway = build_litellm_completion_gateway(
         settings,
         usage_recorder=usage_recorder,

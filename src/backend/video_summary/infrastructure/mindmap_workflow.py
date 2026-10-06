@@ -7,11 +7,13 @@
 
 from __future__ import annotations
 
+from backend.core.preferences import load_effective_settings, preference_cache_key
+
 from pathlib import Path
 from threading import Lock
 
 from backend.video_summary.infrastructure.application_builders import build_mindmap_application
-from backend.video_summary.infrastructure.config.settings import ensure_settings_file, load_settings
+from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.shared.llm.usage import LlmUsageRecorder
 
 
@@ -34,12 +36,12 @@ class ConfiguredMindmapWorkflow:
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
-        self._cached_signature: tuple[str, str] | None = None
+        self._cached_signature: tuple[object, ...] | None = None
         self._cached_application = None
 
     async def run(
         self,
-        source_path: Path,
+        source_path: Path | None,
         output_dir: Path,
         summary_data: dict[str, object],
         transcript_text: str = "",
@@ -47,6 +49,7 @@ class ConfiguredMindmapWorkflow:
         visual_frame_paths=None,
         progress_reporter=None,
         max_depth: int | None = None,
+        title: str | None = None,
     ) -> None:
         """基于当前配置执行一次思维导图生成。
 
@@ -61,10 +64,10 @@ class ConfiguredMindmapWorkflow:
             progress_reporter: 可选进度上报端口；为 `None` 时不进行 SSE 上报。
         """
         application = self._get_application()
-        settings = load_settings(self._config_path, self._root_dir)
+        settings = load_effective_settings(self._config_path, self._root_dir)
         visual_input = settings.generation.mindmap_visual_input
         await application.use_case.run(
-            title=source_path.stem,
+            title=title if title is not None else source_path.stem,
             duration_seconds=_resolve_duration_seconds(summary_data),
             summary_data=summary_data,
             output_dir=output_dir,
@@ -83,6 +86,7 @@ class ConfiguredMindmapWorkflow:
         """
         ensure_settings_file(self._config_path)
         signature = (
+            preference_cache_key(),
             self._config_path.read_text(encoding="utf-8"),
             self._dotenv_path.read_text(encoding="utf-8") if self._dotenv_path.exists() else "",
         )

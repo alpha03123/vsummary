@@ -18,6 +18,30 @@ from tools.release_packaging import (
 
 
 class FrontendStaticMountTests(unittest.TestCase):
+    def test_isolated_runtime_serves_assets_from_the_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            installation = directory / "installation"
+            runtime = directory / "runtime"
+            assets = installation / "src/frontend/dist/assets"
+            assets.mkdir(parents=True)
+            (assets.parent / "index.html").write_text("<script type='module' src='/assets/app.js'></script>", encoding="utf-8")
+            script = b"export const runtime = 'installation';"
+            (assets / "app.js").write_bytes(script)
+            runtime.mkdir()
+            config = runtime / ".env"
+            config.write_bytes(b"OPENAI_API_KEY=test-runtime-key\n")
+            application = create_app(container=make_api_container(root_dir=runtime), frontend_root=installation)
+
+            with TestClient(application) as client:
+                index = client.get("/")
+                asset = client.get("/assets/app.js")
+
+            self.assertEqual(index.status_code, 200)
+            self.assertEqual(asset.status_code, 200)
+            self.assertEqual(asset.content, script)
+            self.assertEqual(config.read_bytes(), b"OPENAI_API_KEY=test-runtime-key\n")
+
     def test_create_app_serves_frontend_dist_when_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)

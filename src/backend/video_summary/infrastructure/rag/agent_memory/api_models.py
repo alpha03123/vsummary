@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+from backend.core.metering import ResourceUsage, resource_budget_enabled, resource_call, response_usage
 from llama_index.core.embeddings import BaseEmbedding
 from pydantic import PrivateAttr
 
@@ -58,6 +59,18 @@ class ModelApiSettings:
 def _request(
     settings: ModelApiSettings, resource: str, payload: dict, client: httpx.Client
 ) -> dict:
+    if resource_budget_enabled():
+        texts = payload.get("input") if resource == "embedding" else [str(payload.get("query", "")) + text for text in payload["documents"]]
+        estimate = sum(len(text.encode("utf-8")) for text in texts)
+        with resource_call(ResourceUsage(resource, settings.model, input_tokens=estimate, output_tokens=0)) as measurement:
+            result = _send_request(settings, resource, payload, client)
+            incoming, outgoing = response_usage(result)
+            measurement.complete(input_tokens=incoming, output_tokens=outgoing)
+            return result
+    return _send_request(settings, resource, payload, client)
+
+
+def _send_request(settings, resource, payload, client):
     with request_slot(resource):
         try:
             response = client.post(

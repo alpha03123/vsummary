@@ -10,6 +10,8 @@ from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWo
 
 
 class _Repository:
+    def get(self,*args,**kwargs):
+        return None
     def cancel_requested(self, _claim) -> bool:
         self.cancel_checks += 1
         return self.cancelled and self.cancel_checks >= self.cancel_on_check

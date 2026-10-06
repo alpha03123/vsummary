@@ -12,12 +12,30 @@ from backend.core.context import WorkspaceContext
 class UsageEstimate:
     units: int = 0
     storage_bytes: int = 0
+    operation_id: str = ""
+    operation: str = ""
+    model_profile: str | None = None
+    duration_seconds: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    transcript_available: bool | None = None
+    multimodal_enabled: bool = False
+    children: tuple[UsageEstimate, ...] = ()
 
 
 @dataclass(frozen=True)
 class UsageRecord:
     units: int = 0
     storage_bytes: int = 0
+    operation_id: str = ""
+    operation: str = ""
+    model_profile: str | None = None
+    duration_seconds: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    transcript_available: bool | None = None
+    multimodal_enabled: bool = False
+    children: tuple[UsageRecord, ...] = ()
 
 
 @dataclass(frozen=True)

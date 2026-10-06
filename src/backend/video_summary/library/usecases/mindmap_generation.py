@@ -27,6 +27,7 @@ class GenerateVideoMindmapFromLibrary:
         visual_input: str = "none",
         max_visual_input_images: int | None = None,
         frame_pool_builder: VisualFramePoolBuilder | None = None,
+        saved_visual_paths=None,
     ) -> None:
         """注入只读端口与思维导图生成器。
 
@@ -40,6 +41,7 @@ class GenerateVideoMindmapFromLibrary:
         self._visual_input = visual_input
         self._max_visual_input_images = max_visual_input_images
         self._frame_pool_builder = frame_pool_builder
+        self._saved_visual_paths = saved_visual_paths
 
     async def run(
         self,
@@ -74,6 +76,8 @@ class GenerateVideoMindmapFromLibrary:
             visual_input=self._visual_input,
             max_visual_input_images=self._max_visual_input_images, frame_pool_builder=self._frame_pool_builder,
         )
+        if source is None and self._visual_input == 'frames' and self._saved_visual_paths is not None:
+            visual_frame_paths = self._saved_visual_paths(series_id, video_id)[:self._max_visual_input_images]
 
         try:
             arguments = {

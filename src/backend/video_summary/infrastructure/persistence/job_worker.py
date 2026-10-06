@@ -11,11 +11,14 @@ from typing import Protocol
 from uuid import uuid4
 from backend.core.context import WorkspaceContext
 from backend.core.request_context import bind_workspace_context
+from backend.core.preferences import bind_user_preferences
+from backend.core.metering import bind_resource_budget
 from backend.core.concurrency import RequestLimiter, bind_request_limiter, request_slot
 from backend.video_summary.infrastructure.persistence.execution_context import bind_execution_claim, ContentVersionConflictError
 from backend.video_summary.infrastructure.rag.agent_memory.api_models import ModelApiError
 
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
+from backend.video_summary.generation.errors import MediaSourceUnavailableError
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.infrastructure.subtitle_transcripts import parse_srt_transcript
 from backend.video_summary.infrastructure.persistence.job_repository import (
@@ -34,6 +37,7 @@ class JobExecutionServices(Protocol):
 
     job_summary_generator: SqlBackedVideoSummaryGenerator
     job_operation_handlers: Mapping[str, Callable[[ClaimedJob, "SqlJobProgressReporter"], Awaitable[None]]]
+    after_summary: Callable[[str,str], Awaitable[list[str]]] | None
 
 
 @dataclass(frozen=True)
@@ -44,9 +48,11 @@ class WorkerOptions:
     lease_seconds: int = 60
     heartbeat_seconds: int = 15
     poll_seconds: float = 0.25
+    maintenance_seconds: float = 5
+    concurrency: int = 1
 
     def __post_init__(self):
-        if not self.worker_id.strip() or self.poll_seconds <= 0:
+        if not self.worker_id.strip() or self.poll_seconds <= 0 or self.maintenance_seconds <= 0 or self.concurrency < 1:
             raise ValueError("Worker identity and positive polling interval are required.")
         if not 0 < self.heartbeat_seconds < self.lease_seconds:
             raise ValueError("Worker heartbeat must be positive and shorter than the lease.")
@@ -107,39 +113,69 @@ class SqlJobWorker:
         get_execution_services: Callable[[str], JobExecutionServices],
         options: WorkerOptions,
         request_limiter: RequestLimiter | None = None,
+        preference_store=None,
+        model_profiles=None,
+        resource_budget=None,
+        maintenance=None,
     ) -> None:
+        self._maintenance = maintenance
         self._repository = repository
+        self._preference_store = preference_store
+        self._model_profiles = model_profiles
+        self._resource_budget = resource_budget
         self._get_execution_services = get_execution_services
         self._options = options
         self._request_limiter = request_limiter
         self._stop = Event()
-        self._thread: Thread | None = None
+        self._threads: list[Thread] = []
+        self._maintenance_thread: Thread | None = None
 
     def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
+        if any(thread.is_alive() for thread in self._threads):
             return
         self._stop.clear()
-        self._thread = Thread(target=self._run, name=f"vsummary-job-worker:{self._options.worker_id}", daemon=True)
-        self._thread.start()
+        self._threads = [Thread(target=self._run,
+            args=(f"{self._options.worker_id}-{index + 1}",),
+            name=f"vsummary-job-worker:{self._options.worker_id}-{index + 1}", daemon=True)
+            for index in range(self._options.concurrency)]
+        for thread in self._threads:
+            thread.start()
+        if self._maintenance is not None:
+            self._maintenance_thread = Thread(target=self._run_maintenance,
+                name=f"vsummary-job-maintenance:{self._options.worker_id}", daemon=True)
+            self._maintenance_thread.start()
 
     def stop(self) -> None:
         self._stop.set()
-        thread = self._thread
-        if thread is not None:
+        for thread in self._threads:
             thread.join(timeout=5)
-        self._thread = None
+        if self._maintenance_thread is not None:
+            self._maintenance_thread.join(timeout=5)
+            self._maintenance_thread = None
+        self._threads = []
 
-    def _run(self) -> None:
+    def _run_maintenance(self):
+        while not self._stop.is_set():
+            try:
+                self._repository.retry_accounting()
+                self._maintenance()
+            except Exception:
+                LOGGER.exception("worker maintenance failed")
+            self._stop.wait(self._options.maintenance_seconds)
+
+    def _run(self, worker_id: str) -> None:
         with bind_request_limiter(self._request_limiter):
             while not self._stop.is_set():
                 try:
                     with request_slot("jobs"):
                         if self._stop.is_set():
                             return
-                        claim = self._repository.claim(worker_id=self._options.worker_id,
+                        claim = self._repository.claim(worker_id=worker_id,
                             lease_seconds=self._options.lease_seconds, operations=self._options.operation_filter)
                         if claim is not None:
                             asyncio.run(self._execute(claim))
+                        if self._maintenance is None:
+                            self._repository.retry_accounting()
                     if claim is None:
                         self._stop.wait(self._options.poll_seconds)
                 except JobLeaseLostError:
@@ -152,7 +188,10 @@ class SqlJobWorker:
         identity = claim.request_payload.get("_execution_context", {})
         context = WorkspaceContext(workspace_id=claim.workspace_id,
             actor_id=identity.get("actor_id") or "system-worker", request_id=identity.get("request_id") or claim.id)
-        with bind_execution_claim(claim), bind_workspace_context(context), bind_request_limiter(self._request_limiter):
+        preferences = claim.request_payload.get("_user_preferences")
+        if preferences is None and self._preference_store is not None:
+            preferences = self._preference_store.get(context)
+        with bind_execution_claim(claim), bind_workspace_context(context), bind_request_limiter(self._request_limiter), bind_user_preferences(preferences, self._model_profiles), bind_resource_budget(self._resource_budget, claim.id):
             await self._execute_owned(claim)
 
     async def _execute_owned(self, claim: ClaimedJob) -> None:
@@ -164,7 +203,13 @@ class SqlJobWorker:
             services = self._get_execution_services(claim.workspace_id)
             handler = services.job_operation_handlers.get(claim.operation)
             if handler is not None:
-                await handler(claim, reporter)
+                deferred = await handler(claim, reporter)
+                if deferred is False:
+                    return
+                if claim.operation=='process_agent_video' and services.after_summary is not None:
+                    failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id)
+                    if failed:
+                        reporter.update('auxiliary_failed',100,'视频已生成，部分附加产物生成失败。')
                 self._repository.succeed(claim, detail="任务已完成")
                 return
             if claim.operation not in {"generate_summary", "generate_transcript"}:
@@ -193,6 +238,10 @@ class SqlJobWorker:
             if snapshot is None:
                 raise JobLeaseLostError("Job disappeared after execution.")
             if snapshot.status == "running" and snapshot.result_content_version is not None:
+                if claim.operation=='generate_summary' and services.after_summary is not None:
+                    failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id)
+                    if failed:
+                        reporter.update('auxiliary_failed',100,'视频已生成，部分附加产物生成失败。')
                 self._repository.succeed(claim, detail="生成内容已保存")
             elif snapshot.status != "succeeded":
                 if snapshot.cancel_requested:
@@ -230,12 +279,17 @@ class SqlJobWorker:
                 retry_delay_seconds=_retry_delay_seconds(error),
             )
         finally:
-            self._repository.finalize_accounting(claim.id, workspace_id=claim.workspace_id)
-            heartbeat.cancel()
             try:
-                await heartbeat
-            except asyncio.CancelledError:
-                pass
+                self._repository.finalize_accounting(claim.id, workspace_id=claim.workspace_id)
+                snapshot = self._repository.get(claim.id, workspace_id=claim.workspace_id)
+                if snapshot is not None and snapshot.parent_job_id is not None:
+                    self._repository.finalize_accounting(snapshot.parent_job_id, workspace_id=claim.workspace_id)
+            finally:
+                heartbeat.cancel()
+                try:
+                    await heartbeat
+                except asyncio.CancelledError:
+                    pass
 
     async def _heartbeat(self, claim: ClaimedJob, execution_task: asyncio.Task) -> None:
         while not self._stop.is_set():
@@ -256,6 +310,8 @@ class SqlJobWorker:
 
 
 def _failure_code(error: Exception) -> str:
+    if isinstance(error, MediaSourceUnavailableError):
+        return "media_source_unavailable"
     if isinstance(error, ContentVersionConflictError):
         return "content_conflict"
     if isinstance(error, ModelApiError):
@@ -268,6 +324,8 @@ def _failure_code(error: Exception) -> str:
 
 
 def _public_failure_detail(error: Exception) -> str:
+    if isinstance(error, MediaSourceUnavailableError):
+        return str(error)
     code = _failure_code(error)
     if code == "content_conflict":
         return "生成期间内容已修改，请基于最新内容重新提交。"
