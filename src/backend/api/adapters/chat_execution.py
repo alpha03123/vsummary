@@ -2,7 +2,8 @@
 from contextlib import contextmanager
 import time
 from backend.core.ids import new_ulid
-from backend.core.preferences import current_preferences, load_effective_settings
+from backend.core.preferences import current_preferences
+from backend.video_summary.infrastructure.config.user_preferences import load_effective_settings
 from backend.core.metering import bind_resource_budget
 from backend.core.quota import UsageEstimate
 

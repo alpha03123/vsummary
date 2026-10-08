@@ -1,6 +1,6 @@
 import pytest
 from backend.core.context import WorkspaceContext
-from backend.core.import_preview import ImportPreviewStore
+from backend.video_summary.infrastructure.import_preview import ImportPreviewStore
 from backend.video_summary.library.linked_models import LinkedSeries,LinkedVideo
 
 def test_selection_is_explicit_owned_and_does_not_mutate_original_collection(tmp_path):
@@ -25,6 +25,6 @@ def test_expiration_removes_uncommitted_files(tmp_path,monkeypatch):
     source=tmp_path/'source.mp4';source.write_bytes(b'source')
     store=ImportPreviewStore(tmp_path/'previews',WorkspaceContext('workspace','owner','request'),ttl_seconds=1)
     preview=store.create('files','Pending',[{'id':'item','title':'Video','path':str(source),'duration_seconds':3}])
-    monkeypatch.setattr('backend.core.import_preview.time.time',lambda:preview['expires_at']+1)
+    monkeypatch.setattr('backend.video_summary.infrastructure.import_preview.time.time',lambda:preview['expires_at']+1)
     ImportPreviewStore.expire(store.root)
     assert not store.path(preview['token']).exists()

@@ -13,7 +13,8 @@ from backend.core.context import WorkspaceContext, WorkspaceContextProvider, Wor
 from backend.core.capabilities import CapabilitySet
 from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, UsageMeter
-from backend.core.preferences import UserPreferenceStore, load_effective_settings
+from backend.core.preferences import UserPreferenceStore
+from backend.video_summary.infrastructure.config.user_preferences import load_effective_settings
 from backend.core.metering import ResourceBudget
 from backend.core.chat_queue import SqlChatQueue
 from backend.video_summary.generation.errors import MediaSourceUnavailableError

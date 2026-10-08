@@ -24,6 +24,7 @@ import tomllib
 
 from backend.shared.llm.base_url import normalize_provider_base_url
 from backend.shared.filesystem import atomic_write_text
+from backend.core.preferences import VALID_ANSWER_DETAIL_LEVELS, VALID_AUTO_GENERATE_ARTIFACTS
 
 
 VALID_DEVICES = {"auto", "cpu", "gpu"}
@@ -34,12 +35,10 @@ VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 VALID_WEB_SEARCH_PROVIDERS = {"litellm"}
 VALID_WEB_SEARCH_MODES = {"native"}
 VALID_WEB_SEARCH_CONTEXT_SIZES = {"low", "medium", "high"}
-VALID_ANSWER_DETAIL_LEVELS = {"short", "medium", "long"}
 VALID_REASONING_EFFORTS = {"none", "low", "medium", "high"}
 VALID_CHAPTER_VISUAL_MODES = {"off", "screenshots", "multimodal"}
 VALID_NOTE_VISUAL_MODES = {"off", "screenshots"}
 VALID_VISUAL_INPUTS = {"none", "evidence", "frames"}
-VALID_AUTO_GENERATE_ARTIFACTS = {"mindmap", "knowledge_cards"}
 VALID_LLM_PROVIDERS = {
     "ai21",
     "ai21_chat",

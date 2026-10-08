@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from backend.api.dependencies import WorkspaceServicesDep, get_workspace_context
 from backend.core.context import WorkspaceContext
-from backend.core.import_preview import ImportPreviewStore
+from backend.video_summary.infrastructure.import_preview import ImportPreviewStore
 from backend.api.schemas.responses import SeriesResponse
 
 router=APIRouter()

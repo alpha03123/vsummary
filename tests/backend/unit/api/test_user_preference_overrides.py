@@ -4,7 +4,8 @@ from pathlib import Path
 import shutil
 import pytest
 from pydantic import ValidationError
-from backend.core.preferences import UserPreferences,bind_user_preferences,load_effective_settings,resolve_user_settings,preference_cache_key
+from backend.core.preferences import UserPreferences, bind_user_preferences, preference_cache_key
+from backend.video_summary.infrastructure.config.user_preferences import load_effective_settings, resolve_user_settings
 from backend.video_summary.infrastructure.config.settings import load_settings
 
 

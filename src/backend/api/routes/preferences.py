@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from backend.api.di.container import ApiContainerDep
 from backend.api.dependencies import get_workspace_context
 from backend.core.context import WorkspaceContext
-from backend.core.preferences import USER_OVERRIDABLE, UserPreferences, resolve_user_settings
+from backend.core.preferences import USER_OVERRIDABLE, UserPreferences
+from backend.video_summary.infrastructure.config.user_preferences import resolve_user_settings
 from backend.video_summary.infrastructure.config.settings import load_settings
 
 router = APIRouter()

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from backend.core.preferences import load_effective_settings, preference_cache_key
+from backend.core.preferences import preference_cache_key
+from backend.video_summary.infrastructure.config.user_preferences import load_effective_settings
 
 from dataclasses import replace
 from collections.abc import Generator

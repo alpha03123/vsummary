@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest run",
-    "build": "vite build",
+    "build": "npm run build:workspace-ui && vite build",
     "build:workspace-ui": "npm --prefix packages/workspace-ui run build",
     "verify:workspace-ui-boundary": "node scripts/verify-workspace-ui-boundary.mjs",
     "audit:references": "knip --config knip.json",

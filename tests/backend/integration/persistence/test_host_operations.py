@@ -16,7 +16,8 @@ from backend.core.preferences import bind_user_preferences
 from backend.core.metering import bind_resource_budget
 from backend.core.quota import QuotaReservation
 from backend.core.chat_queue import SqlChatQueue,ChatQueueFull,ChatRequestCancelled
-from backend.core.job_queue import SqlJobQueuePolicy, JobQueueFull
+from backend.core.job_queue import JobQueueFull
+from backend.video_summary.infrastructure.persistence.job_queue import SqlJobQueuePolicy
 from backend.shared.llm.usage import MySqlLlmUsageStore,LlmUsageRecord
 from backend.video_summary.infrastructure.persistence.job_repository import SqlJobRepository
 from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
