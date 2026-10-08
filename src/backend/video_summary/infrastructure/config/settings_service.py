@@ -648,7 +648,7 @@ class SettingsService:
         """校验并把新的 LLM provider 配置落盘到 `.env`。
 
         Args:
-            llm_provider: LLM provider 标识（`qwen` 会被归一为 `dashscope`）。
+            llm_provider: LLM provider 标识，兼容接口使用 `openai`。
             openai_base_url: OpenAI 兼容 base_url。
             openai_model: 模型名称。
             openai_api_key: 新 API Key；为 `None` 时保留 `.env` 现有值。
@@ -798,7 +798,7 @@ class SettingsService:
     ) -> ProviderSettings:
         """归一化并校验 LLM provider 配置，返回可对外暴露的 `ProviderSettings`。
 
-        校验项：provider 枚举（`qwen` → `dashscope`）、base_url 必须以
+        校验项：provider 枚举、base_url 必须以
         `http://` 或 `https://` 开头（允许空字符串）、model 不能为空。`api_key`
         用于派生 `has_openai_api_key` / `openai_api_key_masked`，原文不出现在
         返回值中。
@@ -820,8 +820,6 @@ class SettingsService:
         normalized_base_url = openai_base_url.strip()
         normalized_model = openai_model.strip()
 
-        if normalized_provider == "qwen":
-            normalized_provider = "dashscope"
         if normalized_provider not in VALID_LLM_PROVIDERS:
             raise SettingsValidationError(
                 f"unsupported llm provider '{normalized_provider}'"

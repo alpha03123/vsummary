@@ -15,7 +15,7 @@ from typing import Any
 
 
 EXPECTED_API_KEY = os.environ.get("MOCK_OPENAI_API_KEY", "ci-test-key")
-EXPECTED_MODEL = os.environ.get("MOCK_OPENAI_MODEL", "ci-e2e-model")
+EXPECTED_MODEL = os.environ.get("MOCK_OPENAI_MODEL", "org/ci-e2e-model")
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -18,7 +18,6 @@ const validLlmProviders = new Set([
   "cohere_chat",
   "custom",
   "custom_openai",
-  "dashscope",
   "databricks",
   "datarobot",
   "deepgram",

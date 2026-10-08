@@ -93,11 +93,15 @@ class LiteLLMCompletionGateway:
         usage_recorder: LlmUsageRecorder | None = None,
         usage_category: LlmUsageCategory | None = None,
     ) -> None:
-        self._provider = provider.strip()
+        self._provider = provider.strip().lower()
+        if not self._provider:
+            raise RuntimeError("缺少模型类型，无法调用模型。")
         normalized_api_key = api_key.strip()
         if not normalized_api_key and not _allows_empty_api_key(self._provider):
             raise RuntimeError("缺少 API Key，无法调用模型。")
-        self._model = _normalize_litellm_model(self._provider, model)
+        self._model = model.strip()
+        if not self._model:
+            raise RuntimeError("缺少模型名称，无法调用模型。")
         self._base_url = resolve_provider_api_base_url(self._provider, base_url)
         self._api_key = normalized_api_key or None
         self._reasoning_effort = _normalize_reasoning_effort(reasoning_effort)
@@ -151,6 +155,7 @@ class LiteLLMCompletionGateway:
         """
         request = _build_completion_request(
             model=self._model,
+            provider=self._provider,
             messages=_dump_messages(messages),
             api_base=self._base_url,
             api_key=self._api_key,
@@ -205,6 +210,7 @@ class LiteLLMCompletionGateway:
         """
         request = _build_completion_request(
             model=self._model,
+            provider=self._provider,
             messages=_dump_messages(messages),
             api_base=self._base_url,
             api_key=self._api_key,
@@ -264,6 +270,7 @@ class LiteLLMCompletionGateway:
             stream = self._completion(
                 **_build_stream_request(
                     model=self._model,
+                    provider=self._provider,
                     messages=_dump_messages(messages),
                     api_base=self._base_url,
                     api_key=self._api_key,
@@ -324,6 +331,7 @@ class LiteLLMCompletionGateway:
             stream = self._completion(
                 **_build_stream_request(
                     model=self._model,
+                    provider=self._provider,
                     messages=_dump_messages(messages),
                     api_base=self._base_url,
                     api_key=self._api_key,
@@ -428,6 +436,7 @@ class LiteLLMCompletionGateway:
             stream = await self._acompletion(
                 **_build_stream_request(
                     model=self._model,
+                    provider=self._provider,
                     messages=_dump_messages(messages),
                     api_base=self._base_url,
                     api_key=self._api_key,
@@ -642,33 +651,6 @@ def _load_litellm_acompletion() -> AsyncCompletionFn:
     return acompletion
 
 
-def _normalize_litellm_model(provider: str, model: str) -> str:
-    """将 provider 与 model 组合为 litellm 所期望的 ``provider/model`` 格式。
-
-    若 model 已包含 ``/``（如 ``openai/gpt-4o``）则直接使用；
-    否则拼接为 ``{provider}/{model}``。
-
-    Args:
-        provider: 提供商名称（如 ``"openai"``）。
-        model: 模型名称（如 ``"gpt-4o"``）。
-
-    Returns:
-        ``"provider/model"`` 格式的归一化字符串。
-
-    Raises:
-        RuntimeError: provider 或 model 为空。
-    """
-    normalized_model = model.strip()
-    if not normalized_model:
-        raise RuntimeError("缺少模型名称，无法调用模型。")
-    if "/" in normalized_model:
-        return normalized_model
-    normalized_provider = provider.strip().lower()
-    if not normalized_provider:
-        raise RuntimeError("缺少模型类型，无法调用模型。")
-    return f"{normalized_provider}/{normalized_model}"
-
-
 def _allows_empty_api_key(provider: str) -> bool:
     return provider.strip().lower() == "ollama"
 
@@ -688,6 +670,7 @@ def _dump_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
 def _build_completion_request(
     *,
     model: str,
+    provider: str,
     messages: list[dict[str, Any]],
     api_base: str,
     api_key: str | None,
@@ -704,7 +687,8 @@ def _build_completion_request(
     ``allowed_openai_params`` 以允许 litellm 透传该参数。
 
     Args:
-        model: 归一化后的模型名。
+        model: 用户配置的模型名，命名空间由提供商解析。
+        provider: 显式选择的 LiteLLM 提供商。
         messages: 对话消息列表。
         api_base: 归一化后的 API base URL。
         api_key: API 密钥。
@@ -719,6 +703,7 @@ def _build_completion_request(
     """
     request: dict[str, Any] = {
         "model": model,
+        "custom_llm_provider": provider,
         "messages": messages,
         "api_key": api_key,
         "temperature": temperature,
@@ -739,6 +724,7 @@ def _build_completion_request(
 def _build_stream_request(
     *,
     model: str,
+    provider: str,
     messages: list[dict[str, Any]],
     api_base: str,
     api_key: str,
@@ -752,7 +738,8 @@ def _build_stream_request(
     ``timeout`` 参数（流式调用不需要这两个字段）。
 
     Args:
-        model: 归一化后的模型名。
+        model: 用户配置的模型名，命名空间由提供商解析。
+        provider: 显式选择的 LiteLLM 提供商。
         messages: 对话消息列表。
         api_base: 归一化后的 API base URL。
         api_key: API 密钥。
@@ -765,6 +752,7 @@ def _build_stream_request(
     """
     request: dict[str, Any] = {
         "model": model,
+        "custom_llm_provider": provider,
         "messages": messages,
         "api_key": api_key,
         "temperature": temperature,
