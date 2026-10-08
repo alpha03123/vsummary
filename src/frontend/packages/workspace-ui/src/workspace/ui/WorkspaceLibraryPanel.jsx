@@ -309,13 +309,6 @@ function PanelFooter({
   const [footerOverflowOpen, setFooterOverflowOpen] = useState(false);
   const [aiSummaryTemplate, setAiSummaryTemplate] = useState("general");
 
-  if (!onCancelGeneration && (isGeneratingSeries || isGeneratingSelectedVideo)) {
-    return <div className="workspace-toolbar-surface border-t border-stone-200/80 p-4 pr-6 dark:border-stone-800">
-      <p role="status" className="flex items-center gap-2 text-xs font-semibold text-accent"><LoaderCircle size={16} className="animate-spin"/>{isGeneratingSeries ? "正在处理整个系列" : "正在处理视频"}</p>
-      <h3 className="mt-2 truncate text-sm font-bold text-stone-800 dark:text-stone-100">{isGeneratingSeries ? activeSeries?.title : selectedVideo?.title}</h3>
-    </div>;
-  }
-
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
