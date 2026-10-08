@@ -150,7 +150,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "此模型不支持思考强度"):
             gateway.complete_text([{"role": "user", "content": "ping"}])
 
-    def test_uses_litellm_provider_prefix_for_bare_model_names(self) -> None:
+    def test_preserves_bare_model_names(self) -> None:
         completion = CapturingCompletion("ok")
         gateway = LiteLLMCompletionGateway(
             provider="deepseek",
@@ -163,7 +163,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         gateway.complete_text([{"role": "user", "content": "ping"}])
 
-        self.assertEqual(completion.models, ["deepseek/deepseek-v4-pro"])
+        self.assertEqual(completion.models, ["deepseek-v4-pro"])
 
     def test_stream_text_wraps_reasoning_content_as_think_block(self) -> None:
         gateway = LiteLLMCompletionGateway(
@@ -192,7 +192,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
 
         gateway.complete_text([{"role": "user", "content": "ping"}])
 
-        self.assertEqual(completion.models, ["ollama/qwen2.5:7b"])
+        self.assertEqual(completion.models, ["qwen2.5:7b"])
         self.assertEqual(completion.api_keys, [None])
         self.assertEqual(completion.api_bases, ["http://127.0.0.1:11434"])
 
@@ -219,7 +219,7 @@ class LiteLLMCompletionGatewayStructuredModeTests(unittest.TestCase):
         self.assertEqual(record.category, "chat")
         self.assertEqual(record.provider, "openai")
         self.assertEqual(record.base_url, "https://api.example.test/v1")
-        self.assertEqual(record.model, "openai/gpt-test")
+        self.assertEqual(record.model, "gpt-test")
         self.assertEqual(record.prompt_tokens, 12)
         self.assertEqual(record.completion_tokens, 5)
         self.assertEqual(record.total_tokens, 17)

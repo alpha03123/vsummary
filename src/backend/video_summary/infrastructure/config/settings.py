@@ -59,7 +59,6 @@ VALID_LLM_PROVIDERS = {
     "cohere_chat",
     "custom",
     "custom_openai",
-    "dashscope",
     "databricks",
     "datarobot",
     "deepgram",
@@ -1507,12 +1506,12 @@ def _load_dotenv(dotenv_path: Path) -> dict[str, str]:
 
 
 def _normalize_env_provider(value: object) -> str:
-    """归一化 `OPENAI_PROVIDER`：`qwen` → `dashscope`，`openai_compatible` → `openai`。"""
+    """归一化并校验 `OPENAI_PROVIDER`，兼容协议使用 `openai`。"""
     if not isinstance(value, str):
         return "openai"
     normalized = value.strip().lower()
     if not normalized or normalized == "openai_compatible":
         return "openai"
-    if normalized == "qwen":
-        return "dashscope"
+    if normalized not in VALID_LLM_PROVIDERS:
+        raise ValueError(f"unsupported llm provider '{normalized}'")
     return normalized
