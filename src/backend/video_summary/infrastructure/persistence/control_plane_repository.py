@@ -305,7 +305,16 @@ class SqlControlPlaneRepository:
                 if existing is not None:
                     return existing
                 if resource_type == 'video':
-                    session.get(Video, resource_id, with_for_update=True)
+                    series_id = session.scalar(select(Video.series_id).where(Video.id == resource_id))
+                    series = session.get(Series, series_id, with_for_update=True) if series_id is not None else None
+                    video = session.get(Video, resource_id, with_for_update=True)
+                    if (series is None or video is None or series.workspace_id != workspace_id
+                        or series.deleted_at is not None or video.deleted_at is not None):
+                        raise LookupError("video not found in workspace")
+                elif resource_type == 'series':
+                    series = session.get(Series, resource_id, with_for_update=True)
+                    if series is None or series.workspace_id != workspace_id or series.deleted_at is not None:
+                        raise LookupError("series not found in workspace")
                 if parent_job_id is not None:
                     parent = session.scalar(select(Job).where(Job.id == parent_job_id).with_for_update())
                     if parent is None or parent.workspace_id != workspace_id:

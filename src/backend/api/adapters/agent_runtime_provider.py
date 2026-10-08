@@ -148,9 +148,13 @@ class LazyAgentRuntimeProvider:
             if self._cached_retrieval_service is not None:
                 self._cached_retrieval_service.invalidate()
 
-    def refresh_workspace_indexes(self, target_dir: Path | None = None) -> None:
+    def refresh_workspace_indexes(self, target_dir: Path | None = None, *, source_dir: Path | None = None,
+        changes=(), progress=None, check_cancelled=None) -> None:
         service = self._get_or_create_retrieval_service() if target_dir is None else self._build_series_retrieval_service(target_dir)
-        AgentWorkspaceIndexBuilder(retrieval_service=service).refresh()
+        if source_dir is None or any(change["action"] == "refresh_all" for change in changes):
+            AgentWorkspaceIndexBuilder(retrieval_service=service).refresh()
+        else:
+            service.refresh_incremental(source_dir, changes, progress=progress, check_cancelled=check_cancelled)
 
     def upsert_workspace_video(self, series_id: str, video_id: str) -> None:
         self._get_or_create_retrieval_service().upsert_video(series_id, video_id)

@@ -45,6 +45,7 @@ class Workspace(TimestampedRow, Base):
     index_generation: Mapped[str | None] = mapped_column(String(26), nullable=True)
     index_revision_requested: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     index_revision_completed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    index_pending_changes: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

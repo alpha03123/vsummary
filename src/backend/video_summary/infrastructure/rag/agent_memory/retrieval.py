@@ -18,10 +18,14 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+from shutil import copyfile
 from threading import RLock, Thread
 
 import lancedb
-from llama_index.core import Document, StorageContext, VectorStoreIndex
+import pyarrow as pa
+from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
+from llama_index.core.ingestion import run_transformations
+from llama_index.core.vector_stores.utils import node_to_metadata_dict
 from llama_index.core.embeddings import MockEmbedding
 from llama_index.core.vector_stores import FilterCondition, FilterOperator, MetadataFilter, MetadataFilters
 from llama_index.vector_stores.lancedb import LanceDBVectorStore
@@ -36,7 +40,7 @@ from backend.video_summary.infrastructure.config.settings import (
 from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import build_fastembed_embedding
 from backend.video_summary.library.ports import VideoLibraryReader
 
-INDEX_SCHEMA_VERSION = 6
+INDEX_SCHEMA_VERSION = 7
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
 LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
@@ -175,6 +179,60 @@ class SeriesRetrievalService:
             self._write_series_signature(series_id)
             self.invalidate()
 
+    def refresh_incremental(self, source_dir: Path, changes, *, progress=None, check_cancelled=None) -> None:
+        """Clone the published snapshot and embed only changed video content."""
+        with self._index_lock:
+            source_profile = json.loads((source_dir / "embedding-profile.json").read_text(encoding="utf-8"))
+            if source_profile != self._embedding_profile or not _table_exists(str(source_dir), INDEX_TABLE_NAME):
+                self._rebuild_index()
+                return
+            signatures = _read_signature_file(str(source_dir), INDEX_TABLE_NAME)
+            if signatures is None:
+                self._rebuild_index()
+                return
+            source = lancedb.connect(str(source_dir)).open_table(INDEX_TABLE_NAME)
+            lancedb.connect(self._db_uri).clone_table(INDEX_TABLE_NAME, source.to_lance().uri)
+            copyfile(source_dir / "embedding-profile.json", Path(self._db_uri) / "embedding-profile.json")
+            current_series = {series.id: series for series in self._workspace.list_series()}
+            for completed, change in enumerate(changes, start=1):
+                if check_cancelled is not None:
+                    check_cancelled()
+                action, series_id = change["action"], change["series_id"]
+                series = current_series.get(series_id)
+                documents = []
+                if action in {"upsert_video", "delete_video"}:
+                    video_id = change["video_id"]
+                    video = next((item for item in series.videos if item.id == video_id), None) if series else None
+                    signature = _build_video_signature(self._workspace, series, video) if video and action == "upsert_video" else None
+                    if signature is None or signature not in signatures.get(series_id, ()):
+                        self._delete_video_rows(series_id=series_id, video_id=video_id)
+                        if signature is not None:
+                            documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
+                    entries = [item for item in signatures.get(series_id, ()) if not item.startswith(f"{series_id}:{video_id}:")]
+                    if signature is not None:
+                        entries.append(signature)
+                    if entries:
+                        signatures[series_id] = tuple(sorted(entries))
+                    else:
+                        signatures.pop(series_id, None)
+                elif action in {"refresh_series", "delete_series"}:
+                    signature = _build_series_signature(self._workspace, series_id) if action == "refresh_series" else ()
+                    self._delete_series_rows(series_id=series_id)
+                    if signature:
+                        signatures[series_id] = signature
+                        documents = _build_documents_for_series(self._workspace, series_id=series_id)
+                    else:
+                        signatures.pop(series_id, None)
+                else:
+                    raise ValueError(f"Unsupported incremental index mutation: {action}")
+                if documents:
+                    self._append_documents(documents)
+                if progress is not None:
+                    progress("index", 10 + 80 * completed / len(changes),
+                        f"正在增量更新 RAG 索引：{completed}/{len(changes)}")
+            _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
+            self.invalidate()
+
     def upsert_video(self, series_id: str, video_id: str) -> None:
         """把单个视频的制品加入或更新到 RAG 索引（增量 upsert）。
 
@@ -289,9 +347,12 @@ class SeriesRetrievalService:
                 ),
             )
             nodes = retriever.retrieve(query)
+        active_resources = {series.id: {video.id for video in series.videos} for series in self._workspace.list_series()}
         hits: list[dict[str, object]] = []
         for item in nodes:
             metadata = dict(getattr(item.node, "metadata", {}) or {})
+            if metadata.get("video_id") not in active_resources.get(metadata.get("series_id"), set()):
+                continue
             hit = {
                 "doc_id": str(metadata.get("doc_id", "")),
                 "series_id": str(metadata.get("series_id", "")),
@@ -383,8 +444,6 @@ class SeriesRetrievalService:
                 raise RuntimeError("RAG index is not ready; refresh has been queued.")
             self._index = loaded
             self._series_signatures = _read_signature_file(self._db_uri, INDEX_TABLE_NAME) or {}
-            if self._is_series_signature_stale(series_id):
-                self._schedule_refresh()
             return loaded
         """保证检索时可拿到一个已加载索引；若 signature 过陈旧则异步刷新该系列。
 
@@ -414,19 +473,7 @@ class SeriesRetrievalService:
     def _rebuild_index(self) -> VectorStoreIndex:
         """以 `overwrite` 模式重建 LanceDB 表并生成新的签名快照。"""
         signatures = _build_series_signatures(self._workspace)
-        documents = _to_llama_documents(_build_documents(self._workspace))
-        vector_store = LanceDBVectorStore(
-            uri=self._db_uri,
-            table_name=INDEX_TABLE_NAME,
-            mode="overwrite",
-        )
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        self._index = VectorStoreIndex.from_documents(
-            documents,
-            storage_context=storage_context,
-            embed_model=self._embed_model,
-            show_progress=False,
-        )
+        self._index = self._write_documents(_build_documents(self._workspace), mode="overwrite")
         self._series_signatures = signatures
         _write_signature_file(self._db_uri, INDEX_TABLE_NAME, signatures)
         profile_path = Path(self._db_uri) / "embedding-profile.json"
@@ -438,16 +485,34 @@ class SeriesRetrievalService:
         """以 `append` 模式把文档追加到 LanceDB（封装 `_write_documents`）。"""
         self._write_documents(documents, mode="append")
 
-    def _write_documents(self, documents: list[RetrievalDocument], *, mode: str) -> None:
+    def _write_documents(self, documents: list[RetrievalDocument], *, mode: str) -> VectorStoreIndex:
         """把 `RetrievalDocument` 列表按指定 mode 写入 LanceDB 表。"""
+        nodes = run_transformations(_to_llama_documents(documents), Settings.transformations)
+        nodes = self._embed_model(nodes)
+        connection = lancedb.connect(self._db_uri)
+        table = None
+        if nodes and (mode == "overwrite" or not _table_exists(self._db_uri, INDEX_TABLE_NAME)):
+            metadata_schema = pa.Table.from_pylist([
+                node_to_metadata_dict(node, remove_text=False, flat_metadata=True) for node in nodes
+            ]).schema
+            metadata_fields = [pa.field(field.name, pa.float64()) if field.name in {"start_seconds", "end_seconds"}
+                else field for field in metadata_schema]
+            schema = pa.schema([
+                pa.field("id", pa.string()), pa.field("doc_id", pa.string()),
+                pa.field("vector", pa.list_(pa.float32(), len(nodes[0].embedding))),
+                pa.field("text", pa.string()), pa.field("metadata", pa.struct(metadata_fields)),
+            ])
+            table = connection.create_table(INDEX_TABLE_NAME, schema=schema, mode="overwrite")
         vector_store = LanceDBVectorStore(
             uri=self._db_uri,
             table_name=INDEX_TABLE_NAME,
-            mode=mode,
+            connection=connection,
+            table=table,
+            mode="append",
         )
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        VectorStoreIndex.from_documents(
-            _to_llama_documents(documents),
+        return VectorStoreIndex(
+            nodes,
             storage_context=storage_context,
             embed_model=self._embed_model,
             show_progress=False,
@@ -765,28 +830,23 @@ def _build_series_signature(workspace: VideoLibraryReader, series_id: str) -> Se
     series = next((item for item in workspace.list_series() if item.id == series_id), None)
     if series is None:
         return ()
-    video_parts: list[str] = []
-    for video in series.videos:
-        summary = workspace.get_video_summary(series.id, video.id)
-        transcript = workspace.get_video_transcript(series.id, video.id)
-        notes = workspace.get_video_notes(series.id, video.id)
-        cards = workspace.get_video_knowledge_cards(series.id, video.id)
-        visual_evidence = _get_visual_evidence(workspace, series.id, video.id)
-        ai_summary = _get_ai_summary(workspace, series.id, video.id)
-        ai_summary_visual_evidence = _get_ai_summary_visual_evidence(workspace, series.id, video.id)
-        summary_hash = _artifact_fingerprint(summary)
-        transcript_hash = _artifact_fingerprint(transcript)
-        notes_hash = _artifact_fingerprint(notes)
-        cards_hash = _artifact_fingerprint(cards)
-        visual_evidence_hash = _artifact_fingerprint(visual_evidence)
-        ai_summary_hash = _artifact_fingerprint(ai_summary)
-        ai_summary_visual_evidence_hash = _artifact_fingerprint(ai_summary_visual_evidence)
-        video_parts.append(
-            f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:"
-            f"{summary_hash}:{transcript_hash}:{notes_hash}:{cards_hash}:{visual_evidence_hash}:"
-            f"{ai_summary_hash}:{ai_summary_visual_evidence_hash}"
-        )
-    return tuple(sorted(video_parts))
+    return tuple(sorted(_build_video_signature(workspace, series, video) for video in series.videos))
+
+
+def _build_video_signature(workspace: VideoLibraryReader, series, video) -> str:
+    artifacts = (
+        workspace.get_video_summary(series.id, video.id),
+        workspace.get_video_transcript(series.id, video.id),
+        workspace.get_video_notes(series.id, video.id),
+        workspace.get_video_knowledge_cards(series.id, video.id),
+        _get_visual_evidence(workspace, series.id, video.id),
+        _get_ai_summary(workspace, series.id, video.id),
+        _get_ai_summary_visual_evidence(workspace, series.id, video.id),
+        (series.title, video.title),
+    )
+    return f"{series.id}:{video.id}:{video.status}:{int(video.processed)}:" + ":".join(
+        _artifact_fingerprint(value) for value in artifacts
+    )
 
 
 def _build_workspace_signature(workspace: VideoLibraryReader) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -847,14 +907,6 @@ def _build_documents_for_video(
     video_id: str,
 ) -> list[RetrievalDocument]:
     """为单个视频读取四类制品并交给 `_build_documents_for_assets` 合成文档。"""
-    sql_reader = getattr(workspace, "get_rag_documents", None)
-    if callable(sql_reader):
-        records = sql_reader(series_id, video_id)
-        if records:
-            return [
-                RetrievalDocument(text=str(record["text"]), metadata=dict(record["metadata"]))
-                for record in records
-            ]
     return _build_documents_for_assets(
         summary=workspace.get_video_summary(series_id, video_id),
         ai_summary=_get_ai_summary(workspace, series_id, video_id),
@@ -1212,12 +1264,9 @@ def _optimize_lancedb_table(db_uri: str, table_name: str) -> None:
 
 
 def _table_exists(db_uri: str, table_name: str) -> bool:
-    """判断指定 LanceDB 表是否存在；连接或列举失败时保守返回 `False`。"""
+    """Check table presence; storage errors must propagate."""
     connection = lancedb.connect(db_uri)
-    try:
-        table_names = set(connection.table_names())
-    except Exception:
-        return False
+    table_names = set(connection.table_names())
     return table_name in table_names
 
 
@@ -1231,17 +1280,24 @@ def _write_signature_file(
     table_name: str,
     signature: SeriesSignatureMap,
 ) -> None:
-    """不再将 RAG 一致性状态持久化为本地 signature 文件。"""
-    del db_uri, table_name, signature
+    """Cache indexed content fingerprints; durable revisions remain in SQL."""
+    path = Path(db_uri) / "index-content.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"table": table_name, "series": signature}, ensure_ascii=False, sort_keys=True), encoding="utf-8")
 
 
 def _read_signature_file(
     db_uri: str,
     table_name: str,
 ) -> SeriesSignatureMap | None:
-    """不读取旧 signature 文件；索引缺失时从 SQL Workspace 重建。"""
-    del db_uri, table_name
-    return None
+    """Read fingerprints belonging to this immutable index generation."""
+    path = Path(db_uri) / "index-content.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload["table"] != table_name:
+        raise ValueError("RAG content cache does not match the index table.")
+    return {key: tuple(values) for key, values in payload["series"].items()}
 
 
 def _expand_transcript_hit(

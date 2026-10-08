@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.ids import new_ulid
@@ -19,13 +19,24 @@ class SqlRagSourceRepository:
 
     def refresh_video(self, *, workspace_id: str, series_id: str, video_id: str) -> int:
         with self._sessions.begin() as session:
-            version = session.execute(text("SELECT content_version FROM videos WHERE id=:video AND series_id=:series AND deleted_at IS NULL FOR UPDATE"), {"video": video_id, "series": series_id}).scalar()
+            version = session.execute(text("""SELECT v.content_version FROM videos v JOIN series s ON s.id=v.series_id
+                WHERE v.id=:video AND v.series_id=:series AND s.workspace_id=:workspace
+                AND v.deleted_at IS NULL AND s.deleted_at IS NULL FOR UPDATE"""),
+                {"video": video_id, "series": series_id, "workspace": workspace_id}).scalar()
             if version is None:
                 return 0
             documents = _video_documents(session, video_id)
+            parameters = {"video": video_id, "kinds": tuple(documents)}
+            session.execute(text("""DELETE c FROM rag_chunks c JOIN rag_documents d ON d.id=c.document_id
+                WHERE d.video_id=:video AND d.source_type NOT IN :kinds""").bindparams(bindparam("kinds", expanding=True)), parameters)
+            session.execute(text("DELETE FROM rag_documents WHERE video_id=:video AND source_type NOT IN :kinds")
+                .bindparams(bindparam("kinds", expanding=True)), parameters)
             for source_type, chunks in documents.items():
-                document_id = session.execute(text("SELECT id FROM rag_documents WHERE video_id=:video AND source_type=:kind FOR UPDATE"), {"video": video_id, "kind": source_type}).scalar()
-                content_hash = _hash("\n".join(chunk["text"] for chunk in chunks))
+                existing = session.execute(text("SELECT id,content_hash,source_content_version FROM rag_documents WHERE video_id=:video AND source_type=:kind FOR UPDATE"), {"video": video_id, "kind": source_type}).mappings().first()
+                content_hash = _hash(json.dumps(chunks, ensure_ascii=False, sort_keys=True))
+                if existing is not None and existing["content_hash"] == content_hash and existing["source_content_version"] == version:
+                    continue
+                document_id = existing["id"] if existing is not None else None
                 if document_id is None:
                     document_id = new_ulid()
                     session.execute(text("INSERT INTO rag_documents (id,workspace_id,series_id,video_id,source_content_version,source_type,content_hash,state,created_at,updated_at) VALUES (:id,:workspace,:series,:video,:version,:kind,:hash,'ready',NOW(),NOW())"), {"id": document_id, "workspace": workspace_id, "series": series_id, "video": video_id, "version": version, "kind": source_type, "hash": content_hash})
@@ -40,7 +51,9 @@ class SqlRagSourceRepository:
         with self._sessions() as session:
             rows = session.execute(text("""SELECT c.id,c.text,c.start_ms,c.end_ms,c.metadata,d.video_id,d.source_type,v.title
                 FROM rag_chunks c JOIN rag_documents d ON d.id=c.document_id JOIN videos v ON v.id=d.video_id
-                WHERE d.workspace_id=:workspace AND d.series_id=:series AND d.state='ready' AND v.content_version=d.source_content_version AND v.deleted_at IS NULL ORDER BY d.video_id,c.ordinal"""), {"workspace": workspace_id, "series": series_id}).mappings().all()
+                JOIN series s ON s.id=v.series_id
+                WHERE d.workspace_id=:workspace AND s.workspace_id=:workspace AND d.series_id=:series
+                AND s.deleted_at IS NULL AND d.state='ready' AND v.content_version=d.source_content_version AND v.deleted_at IS NULL ORDER BY d.video_id,c.ordinal"""), {"workspace": workspace_id, "series": series_id}).mappings().all()
         return [{**dict(row), "metadata": json.loads(row["metadata"]) if isinstance(row["metadata"], str) else row["metadata"]} for row in rows]
 
 
@@ -53,12 +66,15 @@ def _video_documents(session: Session, video_id: str) -> dict[str, list[dict[str
     segments = session.execute(text("SELECT start_ms,end_ms,text FROM transcript_segments WHERE video_id=:video ORDER BY ordinal"), {"video": video_id}).mappings().all()
     if segments:
         documents["transcript"] = [{"text": row["text"], "start_ms": row["start_ms"], "end_ms": row["end_ms"], "metadata": {"source_family": "transcript"}} for row in segments]
-    notes = session.execute(text("SELECT id,title,content FROM notes WHERE video_id=:video AND deleted_at IS NULL"), {"video": video_id}).mappings().all()
+    notes = session.execute(text("SELECT id,title,content FROM notes WHERE video_id=:video AND deleted_at IS NULL ORDER BY created_at,id"), {"video": video_id}).mappings().all()
     if notes:
         documents["notes"] = [{"text": f"{row['title']}\n{row['content']}", "note_id": row["id"], "metadata": {"source_family": "notes"}} for row in notes]
     cards = session.execute(text("SELECT id,title,summary,details FROM knowledge_cards WHERE video_id=:video ORDER BY ordinal"), {"video": video_id}).mappings().all()
     if cards:
         documents["cards"] = [{"text": f"{row['title']}\n{row['summary']}\n{row['details']}", "card_id": row["id"], "metadata": {"source_family": "cards"}} for row in cards]
+    ai_summary = session.execute(text("SELECT title,content FROM ai_summaries WHERE video_id=:video AND status='ready'"), {"video": video_id}).mappings().first()
+    if ai_summary is not None:
+        documents["ai_summary"] = [{"text": ai_summary["content"], "metadata": {"source_family": "ai_summary", "title": ai_summary["title"]}}]
     return documents
 
 

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
 from backend.shared.filesystem import atomic_write_text
-from backend.shared.ytdlp import parse_cookie_pairs, write_cookies_file
+from backend.shared.ytdlp import parse_cookie_pairs, temporary_cookie_file, run_with_cookie_fallback, requires_cookie
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 _DEFAULT_USER_AGENT = "Mozilla/5.0"
@@ -149,7 +149,6 @@ class YtDlpPlatformResolver:
     def _extract_info(self, url: str) -> dict[str, object]:
         from yt_dlp import YoutubeDL
 
-        cookie_file = write_cookies_file(os.environ.get(self._platform.cookie_env, ""), self._platform.cookie_domain)
         options: dict[str, object] = {
             "quiet": True,
             "no_warnings": True,
@@ -157,14 +156,14 @@ class YtDlpPlatformResolver:
             "skip_download": True,
             "http_headers": {"User-Agent": _DEFAULT_USER_AGENT},
         }
-        if cookie_file is not None:
-            options["cookiefile"] = str(cookie_file)
-        try:
-            with YoutubeDL(options) as ydl:
-                payload = ydl.extract_info(url, download=False)
-        finally:
-            if cookie_file is not None:
-                cookie_file.unlink(missing_ok=True)
+        def extract(cookie: str):
+            with temporary_cookie_file(cookie, self._platform.cookie_domain) as cookie_file:
+                attempt_options = dict(options)
+                if cookie_file is not None:
+                    attempt_options["cookiefile"] = str(cookie_file)
+                with YoutubeDL(attempt_options) as ydl:
+                    return ydl.extract_info(url, download=False)
+        payload = run_with_cookie_fallback(extract, os.environ.get(self._platform.cookie_env, ""))
         if not isinstance(payload, dict):
             raise RuntimeError("yt-dlp 未返回有效元数据。")
         return payload
@@ -196,11 +195,11 @@ class YtDlpPlatformDownloader:
     def download(self, video: LinkedVideo, dest_dir: Path, reporter: ProgressReporter) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
         output_template = str(dest_dir / f"{video.video_id}.%(ext)s")
-        cookie_file = write_cookies_file(os.environ.get(self._platform.cookie_env, ""), self._platform.cookie_domain)
         command = [
             sys.executable,
             "-m",
             "yt_dlp",
+            "--ignore-config",
             "--no-playlist",
             "--format",
             self._platform.format_selector,
@@ -211,12 +210,16 @@ class YtDlpPlatformDownloader:
             "--newline",
             "--add-header",
             f"User-Agent:{_DEFAULT_USER_AGENT}",
-            *( ["--cookies", str(cookie_file)] if cookie_file is not None else [] ),
             video.source_url,
         ]
+        def download(cookie: str):
+            reporter.raise_if_cancelled()
+            with temporary_cookie_file(cookie, self._platform.cookie_domain) as cookie_file:
+                attempt = command[:-1] + (["--cookies", str(cookie_file)] if cookie_file is not None else []) + command[-1:]
+                self._run_process(attempt, reporter)
         try:
             reporter.update("download", 0.0, "开始下载")
-            self._run_process(command, reporter)
+            run_with_cookie_fallback(download, os.environ.get(self._platform.cookie_env, ""))
             candidates = [
                 path for path in sorted(dest_dir.glob(f"{video.video_id}.*"))
                 if path.is_file() and not path.name.endswith(".part")
@@ -231,9 +234,6 @@ class YtDlpPlatformDownloader:
             platform_error = _external_platform_error(error, self._platform.display_name)
             reporter.failed(str(platform_error))
             raise platform_error from error
-        finally:
-            if cookie_file is not None:
-                cookie_file.unlink(missing_ok=True)
 
     async def download_async(self, video: LinkedVideo, dest_dir: Path, reporter: ProgressReporter) -> Path:
         return await asyncio.to_thread(self.download, video, dest_dir, reporter)
@@ -353,13 +353,7 @@ def _is_cancelled(reporter: ProgressReporter) -> bool:
 def _external_platform_error(error: Exception, platform_name: str = "该平台") -> ExternalVideoResolutionError:
     message = str(error)
     normalized_message = message.lower()
-    if (
-        "fresh cookies" in normalized_message
-        or "cookies are needed" in normalized_message
-        or "cookies are no longer valid" in normalized_message
-        or "sign in to confirm" in normalized_message
-        or "not a bot" in normalized_message
-    ):
+    if requires_cookie(error):
         return ExternalVideoResolutionError("cookie_required", f"{platform_name} 需要重新验证登录状态。请重新获取 Cookie 后再试。")
     if "unsupported url" in normalized_message:
         return ExternalVideoResolutionError("invalid_url", "URL不合法，请输入合理的URL。")

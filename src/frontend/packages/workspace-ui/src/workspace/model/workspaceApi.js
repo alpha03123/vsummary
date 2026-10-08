@@ -439,6 +439,7 @@ function toDurableGenerationSnapshot(payload) {
   const progress = typeof payload?.progress === "number" ? payload.progress : null;
   return {
     status: typeof status === "string" ? status : "failed",
+    sequence: Number.isInteger(payload?.sequence) ? payload.sequence : null,
     stage: typeof payload?.stage === "string" ? payload.stage : null,
     progress,
     detail,
@@ -467,6 +468,7 @@ function subscribeDurableJobProgress(jobId, listener) {
   let terminal = false;
   let steps = [];
   let progress = null;
+  let latestSnapshot = null;
 
   eventSource.addEventListener("progress", (event) => {
     let payload;
@@ -483,6 +485,7 @@ function subscribeDurableJobProgress(jobId, listener) {
     if (snapshot.progress != null) progress = Math.max(progress ?? 0, snapshot.progress);
     snapshot.steps = steps;
     snapshot.progress = progress;
+    latestSnapshot = snapshot;
     listener(snapshot);
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       terminal = true;
@@ -497,7 +500,8 @@ function subscribeDurableJobProgress(jobId, listener) {
       listener({ status: "failed", stage: "failed", progress: null, detail: null, error: "生成进度连接已关闭" });
       return;
     }
-    listener({ status: "running", stage: "reconnecting", progress: null, detail: "正在同步生成进度...", error: null });
+    listener({ ...latestSnapshot, status: "running", stage: "reconnecting", progress, steps,
+      detail: "正在同步生成进度...", error: null });
   };
 
   return () => {

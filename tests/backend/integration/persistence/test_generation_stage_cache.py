@@ -94,7 +94,7 @@ class NoteGenerator:
         self.calls = 0
         self.frames = []
 
-    def run_ai_summary(self, **arguments):
+    async def arun_ai_summary(self, **arguments):
         self.calls += 1
         self.frames = arguments["visual_context"].frames
         assert all(frame.image_path.is_file() for frame in self.frames)

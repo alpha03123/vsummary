@@ -130,10 +130,10 @@ def _build_visual_section(
         lines.append("视觉证据的 timestamp_seconds 只能从以下真实帧时间中选择：" + ", ".join(f"{value:.3f}" for value in visual_context.evidence_timestamps))
     if note_visual_mode == "screenshots":
         lines.append(
-            "\n自动配图已启用：不要吝啬使用图片。根据你最终写出的 `## 1.`、`## 2.` 等编号章节，"
-            f"至少为 min({note_max_images}, ceil(有效章节数 × 0.9)) 个章节各放一张图，且总数不得超过 {note_max_images} 张。"
-            "优先让不同章节各有一张代表画面；遇到代码演示、架构图、流程图、界面操作或前后对比等确实有价值的画面时，"
-            "可在同一章节额外插图。图片标记必须单独成行，格式为 [[IMG:mm:ss]]（也可写秒数，如 [[IMG:51.0]]）；"
+            "\n自动配图已启用：根据内容需要自行选择插图位置和数量。"
+            f"图片总数不得超过 {note_max_images} 张。"
+            "代码演示、架构图、流程图、界面操作或前后对比等画面可作为插图。"
+            "图片标记必须单独成行，格式为 [[IMG:mm:ss]]（也可写秒数，如 [[IMG:51.0]]）；"
             "选择转写中真实、能代表所在章节的不同时间点。图片会在保存时由系统抽取；"
             "不要描述这张新图片的内容，也不要写“如下图所示”。"
         )

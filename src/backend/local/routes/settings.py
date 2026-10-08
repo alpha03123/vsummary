@@ -197,7 +197,7 @@ async def update_workspace_settings(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    services.generate_video_summary.update_video_generation_concurrency(
+    container.job_worker.update_concurrency(
         settings.video_generation_concurrency
     )
     container.chaoxing_importer.configure_delays(

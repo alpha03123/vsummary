@@ -68,7 +68,7 @@ class LibraryVideoCardDTO:
         id: 视频唯一 ID。
         title: 视频标题。
         source_name: 源文件展示名（本地）或站点名（外部链接）。
-        processed: 是否已生成至少一份制品（总结/转写/思维导图等）。
+        processed: 是否已生成 AI 整理逐字稿；仅有原始转写时为 False。
         status: 处理状态文本（如 "pending"/"ready"/"failed"），由用例层定义。
         core_problem: 视频总结中的核心问题摘要，空字符串表示未生成或无内容。
         source_type: 源类型，"video" 表示本地视频文件。

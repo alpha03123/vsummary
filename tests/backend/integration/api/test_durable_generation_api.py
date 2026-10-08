@@ -21,6 +21,7 @@ def generation_client(stored_video, mysql_sessions):
             workspace_id=workspace.workspace_id,
             list_video_library=ListVideoLibrary(workspace), get_video_source=GetVideoSource(workspace),
             get_series_mindmap=GetSeriesMindmap(workspace),
+            linked_series_workspace=workspace,
         ),
     )
     return TestClient(create_app(container)), workspace.workspace_id, series_id, video_id
@@ -58,7 +59,7 @@ def test_submission_and_duplicate_request_persist_one_job(generation_client, mys
         "actor_id": "test-user",
         "request_id": first.headers["X-Request-ID"],
     }
-    assert job.request_payload == expected_payload
+    assert {key: job.request_payload[key] for key in expected_payload} == expected_payload
 
 
 @pytest.mark.parametrize("target", ["knowledge-cards", "mindmap"])

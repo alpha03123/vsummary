@@ -88,6 +88,12 @@ def resolve_user_settings(base: AppSettings, values: Mapping, model_profiles: Ma
         generation["ai_summary_multimodal_enabled"] = selected["ai_summary_multimodal_enabled"]
     if "auto_generate_artifacts" in selected:
         generation["auto_generate_artifacts"] = tuple(selected["auto_generate_artifacts"])
+    multimodal = selected.get("ai_summary_multimodal_enabled", base.generation.ai_summary_multimodal_enabled)
+    generation["chapter_visual_mode"] = "screenshots" if multimodal else "off"
+    generation["note_visual_mode"] = "screenshots" if multimodal else "off"
+    if not multimodal:
+        generation["mindmap_visual_input"] = "none"
+        generation["cards_visual_input"] = "none"
     result = replace(base, generation=replace(base.generation, **generation)) if generation else base
     if "answer_detail_level" in selected:
         result = replace(result, agent_context=replace(result.agent_context, answer_detail_level=selected["answer_detail_level"]))

@@ -95,7 +95,7 @@ export function WorkspaceGenerationOverlay({
               <motion.div
                 key="determinate"
                 className="absolute inset-y-0 left-0 bg-accent"
-                initial={{ width: "0%" }}
+                initial={{ width: `${generationProgress}%` }}
                 animate={{ width: `${generationProgress}%` }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
               />

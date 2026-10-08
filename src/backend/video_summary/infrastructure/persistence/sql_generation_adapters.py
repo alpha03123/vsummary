@@ -46,15 +46,20 @@ class SqlBackedVideoSummaryGenerator:
         if source is None:
             raise MediaSourceUnavailableError("视频原媒体不可用，请重新上传后再处理。")
         output_dir = self._temp_root / "generation" / video_id / uuid4().hex
-        cache_dir = output_dir / "generation-stages" if job_id is not None else self._workspace.cache_root / "generation-stages" / video_id
+        cache_dir = self._workspace.cache_root / "generation-stages" / video_id
         try:
             await self._workflow.run(source.source_path, output_dir, cache_dir=cache_dir, source_url=source.source_url, progress_reporter=progress_reporter, transcript_enhancement_enabled=transcript_enhancement_enabled, manual_transcript=manual_transcript, use_saved_manual_transcript=use_saved_manual_transcript, processing_mode=processing_mode, ai_summary_template=ai_summary_template)
             transcript_path = output_dir / "transcript.cleaned.json"
             summary_path = output_dir / "summary.json"
-            if not transcript_path.is_file() or not summary_path.is_file():
-                raise RuntimeError("Generation completed without transcript and summary artifacts.")
+            if not transcript_path.is_file():
+                raise RuntimeError("Generation completed without a transcript artifact.")
             transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
-            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            if processing_mode == "transcript":
+                summary = None
+            else:
+                if not summary_path.is_file():
+                    raise RuntimeError("Generation completed without a summary artifact.")
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
             payload = {
                 "transcript": {
                     "language": str(transcript.get("language") or "und"),
@@ -65,7 +70,7 @@ class SqlBackedVideoSummaryGenerator:
                         for item in transcript.get("segments", []) if isinstance(item, dict)
                     ],
                 },
-                "summary": {
+                "summary": None if summary is None else {
                     "title": str(summary.get("title") or source.title),
                     "markdown": (output_dir / "summary.md").read_text(encoding="utf-8") if (output_dir / "summary.md").is_file() else "",
                     "payload": summary,

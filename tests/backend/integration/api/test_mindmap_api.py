@@ -3,13 +3,14 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tests._api_fixtures import make_api_container, make_workspace_services, mock_service
-from backend.video_summary.library.models import VideoMindmapDTO, VideoSourceDTO
-from backend.video_summary.library.usecases import GetVideoSource, GetVideoMindmap
+from backend.video_summary.library.models import VideoMindmapDTO, VideoSourceDTO, VideoLibraryDTO, WorkspaceDTO, LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.library.usecases import GetVideoSource, GetVideoMindmap, ListVideoLibrary
 
 from fastapi.testclient import TestClient
 
 from backend.local.http.app import create_app
 from backend.api.di.bootstrap import ApiContainer
+from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 
 
 class MindmapExportApiTests(unittest.TestCase):
@@ -34,22 +35,8 @@ class MindmapExportApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/markdown", response.headers["content-type"])
         self.assertIn("charset=utf-8", response.headers["content-type"])
-
-    def test_export_returns_content_disposition_header(self) -> None:
-        mindmap_node = {
-            "id": "root",
-            "title": "测试导图",
-            "summary": "",
-            "start_seconds": 0.0,
-            "end_seconds": 0.0,
-            "children": [],
-        }
-        container = _build_container(mindmap_node=mindmap_node, title="测试视频")
-        client = TestClient(create_app(container))
-
-        response = client.get("/api/videos/s1/v1/mindmap/export?format=md")
-
         self.assertIn("attachment", response.headers["content-disposition"])
+        self.assertIn("子节点1", response.text)
 
     def test_export_returns_404_when_mindmap_not_found(self) -> None:
         container = _build_container(mindmap_node=None)
@@ -119,6 +106,9 @@ def _build_container(
     return make_api_container(root_dir=resolved_root, services=make_workspace_services(
         get_video_source=mock_service(GetVideoSource, run=video_source),
         get_video_mindmap=mock_service(GetVideoMindmap, run=mindmap_dto),
+        linked_series_workspace=mock_service(SqlVideoWorkspace, get_video_title=title),
+        list_video_library=mock_service(ListVideoLibrary, run=VideoLibraryDTO(WorkspaceDTO('workspace-1','Test'),
+            [LibrarySeriesDTO('s1',title,[LibraryVideoCardDTO('v1',title,'video.mp4',True,'ready')])])),
     ))
 
 

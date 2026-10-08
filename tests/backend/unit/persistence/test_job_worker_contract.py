@@ -4,6 +4,12 @@ from tests._api_fixtures import make_workspace_services
 
 import unittest
 from datetime import datetime, timezone
+import asyncio
+from queue import Empty, Queue
+from threading import Event
+from types import SimpleNamespace
+
+import pytest
 
 from backend.video_summary.infrastructure.persistence.job_repository import ClaimedJob
 from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
@@ -110,3 +116,98 @@ class JobWorkerContractTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(repository.cancelled_details, ["任务已取消"])
         self.assertEqual(repository.failed, [])
+
+
+class _QueuedRepository(_Repository):
+    def __init__(self, count):
+        super().__init__()
+        self.pending = Queue()
+        self.completed = Queue()
+        for index in range(count):
+            self.pending.put(str(index))
+
+    def claim(self, *, worker_id, **_kwargs):
+        try:
+            job_id = self.pending.get_nowait()
+        except Empty:
+            return None
+        return ClaimedJob(
+            id=job_id, workspace_id="workspace", resource_type="video", resource_id=job_id,
+            operation="custom", request_payload={}, attempt_no=1, worker_id=worker_id,
+            lease_token=job_id, lease_expires_at=datetime.now(timezone.utc),
+        )
+
+    def succeed(self, claim, *, detail):
+        super().succeed(claim, detail=detail)
+        self.completed.put(claim.id)
+
+    def retry_accounting(self):
+        pass
+
+
+def _queued_worker(count, concurrency):
+    repository = _QueuedRepository(count)
+    entered = Queue()
+    releases = {str(index): Event() for index in range(count)}
+
+    async def handler(claim, _reporter):
+        entered.put((claim.id, claim.worker_id))
+        await asyncio.to_thread(releases[claim.id].wait, 5)
+
+    worker = SqlJobWorker(
+        repository=repository,
+        get_execution_services=lambda _: SimpleNamespace(job_operation_handlers={"custom": handler}),
+        options=WorkerOptions(worker_id="queue-test", concurrency=concurrency,
+            operation_filter=frozenset({"custom"}), poll_seconds=.01),
+    )
+    return worker, repository, entered, releases
+
+
+def test_fixed_worker_concurrency_limits_claims_until_a_slot_is_free():
+    worker, repository, entered, releases = _queued_worker(3, 2)
+    worker.start()
+    try:
+        first = entered.get(timeout=2)[0]
+        second = entered.get(timeout=2)[0]
+        with pytest.raises(Empty):
+            entered.get(timeout=.1)
+        releases[first].set()
+        third = entered.get(timeout=2)[0]
+        assert len({first, second, third}) == 3
+    finally:
+        for release in releases.values():
+            release.set()
+        worker.stop()
+    assert len(repository.succeeded) == 3
+    assert repository.failed == []
+
+
+def test_worker_resize_grows_immediately_and_retires_after_running_jobs_finish():
+    worker, repository, entered, releases = _queued_worker(5, 1)
+    worker.start()
+    try:
+        first = entered.get(timeout=2)[0]
+        worker.update_concurrency(3)
+        retiring = [entered.get(timeout=2), entered.get(timeout=2)]
+        worker.update_concurrency(1)
+        for job_id, _ in retiring:
+            releases[job_id].set()
+        assert {repository.completed.get(timeout=2), repository.completed.get(timeout=2)} == {
+            job_id for job_id, _ in retiring
+        }
+        with pytest.raises(Empty):
+            entered.get(timeout=.1)
+        releases[first].set()
+        fourth, fourth_worker = entered.get(timeout=2)
+        worker.update_concurrency(2)
+        fifth, fifth_worker = entered.get(timeout=2)
+        assert fourth != fifth
+        assert fifth_worker not in {worker_id for _, worker_id in retiring} | {fourth_worker}
+        assert worker.concurrency == 2
+    finally:
+        for release in releases.values():
+            release.set()
+        worker.stop()
+    assert len(repository.succeeded) == 5
+    assert repository.failed == []
+    assert repository.cancelled_details == []

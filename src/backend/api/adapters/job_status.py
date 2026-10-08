@@ -33,6 +33,7 @@ def durable_status(repository, *, workspace_id: str, resource_id: str, operation
             event = history[-1]
             if event.detail:detail += f"；{event.detail}"
     return {"job_id": job.id, "status": status, "stage": event.stage if event else status,
+        "sequence": event.sequence if event and not batch else None,
         "progress": progress, "detail": detail, "error": job.failure_detail if status == "failed" else None,
         "started_at": job.started_at.timestamp() if job.started_at else None,
         "elapsed_seconds": max(0, (event.occurred_at - job.started_at).total_seconds()) if event and job.started_at else None,

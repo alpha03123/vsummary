@@ -1,4 +1,5 @@
 from datetime import datetime,timezone,timedelta
+from dataclasses import asdict
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock
@@ -21,13 +22,18 @@ from backend.video_summary.infrastructure.persistence.job_repository import SqlJ
 from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
 from backend.video_summary.infrastructure.persistence.job_worker import SqlJobProgressReporter
 from backend.local.composition import build_local_container
-from backend.video_summary.infrastructure.persistence.models import Job,Video
+from backend.local.routes.settings import update_workspace_settings
+from backend.api.schemas.contracts import UpdateWorkspaceSettingsRequest
+from backend.video_summary.infrastructure.config.settings import load_settings, replace_video_generation_concurrency, save_settings
+from backend.video_summary.infrastructure.persistence.models import Job,Video,Summary
 
 
 def test_processed_linked_video_stays_readable_after_media_cleanup(stored_video,mysql_sessions):
     workspace,series,video=stored_video
     with mysql_sessions.begin() as session:
         session.execute(text("UPDATE videos SET source_kind='bilibili',content_version=1 WHERE id=:video"), {'video':video})
+        session.add(Summary(video_id=video,content_version=1,title='Video',markdown='Generated summary',
+            payload={'title':'Video','chapters':[]},content_format_version=1))
         session.execute(text("DELETE FROM media_objects WHERE video_id=:video"), {'video':video})
     card=next(item for group in workspace.list_series() for item in group.videos if item.id==video)
     assert card.processed
@@ -271,6 +277,54 @@ def test_two_workers_execute_while_maintenance_keeps_running(stored_video, mysql
         release.set()
         worker.stop()
     assert all(repository.get(job_id).status == 'succeeded' for job_id in active)
+
+
+def test_local_settings_control_worker_concurrency_at_startup_and_runtime(stored_video, mysql_sessions, tmp_path):
+    workspace, _, video_id = stored_video
+    config_path = tmp_path / 'config' / 'settings.toml'
+    config_path.parent.mkdir()
+    shutil.copyfile(Path(__file__).resolve().parents[4] / 'config/settings.toml.example',
+        config_path.parent / 'settings.toml.example')
+    settings = load_settings(config_path, tmp_path)
+    save_settings(config_path, replace_video_generation_concurrency(settings, 2))
+    container = build_local_container(tmp_path, workspace=workspace)
+    assert container.job_worker.concurrency == 2
+    entered, release, increased = Event(), Event(), Event()
+    gate, active = Lock(), []
+    context = container.context_provider.get_context(request_id='local-concurrency')
+    services = container.workspace_services_provider.get_services(context)
+
+    async def handler(claim, _reporter):
+        with gate:
+            active.append(claim.id)
+            if len(active) == 2:
+                entered.set()
+            if len(active) == 3:
+                increased.set()
+        await asyncio.to_thread(release.wait, 5)
+
+    services.job_operation_handlers['generate_video_mindmap'] = handler
+    with mysql_sessions.begin() as session:
+        for _ in range(3):
+            session.add(Job(id=new_ulid(), workspace_id=workspace.workspace_id,
+                resource_type='video', resource_id=video_id, operation='generate_video_mindmap',
+                status='queued', request_payload={}))
+    container.job_worker.start()
+    try:
+        assert entered.wait(3)
+        assert not increased.is_set()
+        request = UpdateWorkspaceSettingsRequest.model_validate({
+            **asdict(container.settings_service.get_workspace_settings()),
+            'video_generation_concurrency': 3,
+        })
+        asyncio.run(update_workspace_settings(request=request, container=container, services=services))
+        assert increased.wait(3)
+        assert container.job_worker.concurrency == 3
+        assert load_settings(config_path, tmp_path).generation.video_generation_concurrency == 3
+    finally:
+        release.set()
+        container.job_worker.stop()
+    assert all(container.job_repository.get(job_id).status == 'succeeded' for job_id in active)
 
 
 def test_retrying_series_dispatch_reuses_children_and_keeps_waiting(stored_video, mysql_sessions, tmp_path):

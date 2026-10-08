@@ -98,7 +98,7 @@ class VisualFramePoolBuilder(Protocol):
 
 
 class NoteFrameMaterializer(Protocol):
-    def __call__(self, *, video_path: Path, output_dir: Path, content: str) -> None: ...
+    def __call__(self, *, video_id: str, video_path: Path, output_dir: Path, content: str) -> None: ...
 
 
 class VideoKnowledgeCardWriter(Protocol):

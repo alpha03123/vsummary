@@ -29,9 +29,9 @@ from backend.shared.bilibili_ytdlp import (
     load_bilibili_headers,
     parse_cookie_pairs,
     resolve_yt_dlp_proxy,
-    write_bilibili_cookies_file,
 )
 from backend.shared.filesystem import atomic_write_text
+from backend.shared.ytdlp import run_with_cookie_fallback, temporary_cookie_file, is_format_unavailable, CookieRequiredError
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
 
@@ -215,66 +215,51 @@ class BilibiliDownloader:
             url = f"{url}?p={page}"
         output_template = str(dest_dir / f"{stem}.%(ext)s")
         headers = load_bilibili_headers(bvid)
-        cookie_file = write_bilibili_cookies_file(headers.pop("Cookie", ""))
-        failures: list[str] = []
+        cookie = headers.pop("Cookie", "")
+
+        def download(cookie: str) -> Path:
+            reporter.raise_if_cancelled()
+            with temporary_cookie_file(cookie, "bilibili.com") as cookie_file:
+                return self._download_formats(dest_dir, stem, url, output_template, headers, cookie_file, reporter)
         try:
-            for index, (format_label, format_selector) in enumerate(_BILIBILI_DOWNLOAD_FORMATS):
-                _remove_download_outputs(dest_dir, stem)
-                reporter.update(
-                    "download",
-                    0.0 if index == 0 else None,
-                    f"开始下载（{format_label}）" if index == 0 else f"降级重试（{format_label}）",
-                )
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "yt_dlp",
-                    "--no-playlist",
-                    "--format",
-                    format_selector,
-                    "--merge-output-format",
-                    "mp4",
-                    "--output",
-                    output_template,
-                    "--newline",
-                    *build_yt_dlp_proxy_flags(),
-                    *build_yt_dlp_add_header_flags(headers),
-                    *(["--cookies", str(cookie_file)] if cookie_file is not None else []),
-                    url,
-                ]
-                try:
-                    self._run_process(cmd, reporter)
-                except DownloadCancelled:
-                    raise
-                except RuntimeError as exc:
-                    failures.append(f"{format_label}: {exc}")
-                    if index == len(_BILIBILI_DOWNLOAD_FORMATS) - 1:
-                        message = "所有清晰度下载失败：\n" + "\n\n".join(failures)
-                        reporter.failed(message)
-                        raise RuntimeError(message) from exc
-                    reporter.update("download", None, f"{format_label} 下载失败，尝试降级")
-                    continue
-
-                candidates = _find_download_outputs(dest_dir, stem)
-                if candidates:
-                    reporter.completed(f"下载完成：{candidates[0].name}")
-                    return candidates[0]
-
-                failures.append(f"{format_label}: yt-dlp 下载完成但未找到输出文件：{stem}.*")
+            return run_with_cookie_fallback(download, cookie)
         except DownloadCancelled as exc:
             reporter.cancelled(str(exc))
             raise
         except Exception as exc:
-            if not failures:
-                reporter.failed(str(exc))
+            reporter.failed(str(exc))
             raise
-        finally:
-            if cookie_file is not None:
-                cookie_file.unlink(missing_ok=True)
 
-        message = "所有清晰度下载失败：\n" + "\n\n".join(failures)
-        reporter.failed(message)
-        raise RuntimeError(message)
+    def _download_formats(self, dest_dir: Path, stem: str, url: str, output_template: str,
+        headers: dict[str, str], cookie_file: Path | None, reporter: ProgressReporter) -> Path:
+        failures: list[str] = []
+        for index, (format_label, format_selector) in enumerate(_BILIBILI_DOWNLOAD_FORMATS):
+            reporter.raise_if_cancelled()
+            _remove_download_outputs(dest_dir, stem)
+            reporter.update("download", 0.0 if index == 0 else None,
+                f"开始下载（{format_label}）" if index == 0 else f"降级重试（{format_label}）")
+            cmd = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-playlist", "--format", format_selector,
+                "--merge-output-format", "mp4", "--output", output_template, "--newline",
+                *build_yt_dlp_proxy_flags(), *build_yt_dlp_add_header_flags(headers),
+                *(["--cookies", str(cookie_file)] if cookie_file is not None else []), url]
+            try:
+                self._run_process(cmd, reporter)
+            except DownloadCancelled:
+                raise
+            except RuntimeError as exc:
+                if not is_format_unavailable(exc):
+                    raise
+                failures.append(f"{format_label}: {exc}")
+                if index == len(_BILIBILI_DOWNLOAD_FORMATS) - 1:
+                    raise RuntimeError("所有清晰度下载失败：\n" + "\n\n".join(failures)) from exc
+                reporter.update("download", None, f"{format_label} 下载失败，尝试降级")
+                continue
+            candidates = _find_download_outputs(dest_dir, stem)
+            if not candidates:
+                raise RuntimeError(f"yt-dlp 下载完成但未找到输出文件：{stem}.*")
+            reporter.completed(f"下载完成：{candidates[0].name}")
+            return candidates[0]
+        raise RuntimeError("No download formats configured.")
 
     def _run_process(self, cmd: list[str], reporter: ProgressReporter) -> None:
         process = None
@@ -678,11 +663,10 @@ def _extract_info(url: str) -> dict[str, object]:
     from yt_dlp import YoutubeDL
 
     bvid = _extract_bvid_from_text(url)
-    headers = load_bilibili_headers(bvid) if bvid else {
-        "User-Agent": BILIBILI_USER_AGENT,
-        "Referer": "https://www.bilibili.com/",
-    }
-    cookie_file = write_bilibili_cookies_file(headers.pop("Cookie", ""))
+    headers = load_bilibili_headers(bvid)
+    if not bvid:
+        headers["Referer"] = "https://www.bilibili.com/"
+    cookie = headers.pop("Cookie", "")
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -693,14 +677,14 @@ def _extract_info(url: str) -> dict[str, object]:
     proxy = resolve_yt_dlp_proxy()
     if proxy is not None:
         options["proxy"] = proxy
-    if cookie_file is not None:
-        options["cookiefile"] = str(cookie_file)
-    try:
-        with YoutubeDL(options) as ydl:
-            payload = ydl.extract_info(url, download=False)
-    finally:
-        if cookie_file is not None:
-            cookie_file.unlink(missing_ok=True)
+    def extract(cookie: str):
+        with temporary_cookie_file(cookie, "bilibili.com") as cookie_file:
+            attempt_options = dict(options)
+            if cookie_file is not None:
+                attempt_options["cookiefile"] = str(cookie_file)
+            with YoutubeDL(attempt_options) as ydl:
+                return ydl.extract_info(url, download=False)
+    payload = run_with_cookie_fallback(extract, cookie)
     if not isinstance(payload, dict):
         raise RuntimeError("yt-dlp 未返回有效元数据。")
     return payload
@@ -721,18 +705,18 @@ def _extract_view_info(bvid: str) -> dict[str, object]:
     Raises:
         RuntimeError: API 返回异常（code != 0 或 data 无效）。
     """
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": f"https://www.bilibili.com/video/{bvid}/",
-    }
-    response = httpx.get(
-        "https://api.bilibili.com/x/web-interface/view",
-        params={"bvid": bvid},
-        headers=headers,
-        timeout=20,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    headers = load_bilibili_headers(bvid)
+    cookie = headers.pop("Cookie", "")
+    def extract(cookie: str):
+        attempt_headers = {**headers, **({"Cookie": cookie} if cookie else {})}
+        response = httpx.get("https://api.bilibili.com/x/web-interface/view",
+            params={"bvid": bvid}, headers=attempt_headers, timeout=20)
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict) and payload.get("code") == -101:
+            raise CookieRequiredError("Bilibili view API requires login.")
+        return payload
+    payload = run_with_cookie_fallback(extract, cookie)
     if not isinstance(payload, dict) or payload.get("code") != 0:
         raise RuntimeError(f"Bilibili view API 返回异常：{payload.get('message') if isinstance(payload, dict) else payload}")
     data = payload.get("data")

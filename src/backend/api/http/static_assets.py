@@ -31,7 +31,7 @@ def _with_no_cache(response: FileResponse) -> FileResponse:
 
 
 def mount_frontend_dist(app: FastAPI, root_dir: Path) -> None:
-    dist_dir = root_dir / "src" / "frontend" / "dist"
+    dist_dir = (root_dir / "src" / "frontend" / "dist").resolve()
     index_path = dist_dir / "index.html"
     assets_dir = dist_dir / "assets"
 
@@ -54,7 +54,10 @@ def mount_frontend_dist(app: FastAPI, root_dir: Path) -> None:
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not Found")
 
-        candidate = dist_dir / full_path
+        requested = Path(full_path)
+        if requested.anchor or ".." in requested.parts:
+            raise HTTPException(status_code=404, detail="Not Found")
+        candidate = (dist_dir / requested).resolve()
         try:
             candidate.relative_to(dist_dir)
         except ValueError as error:

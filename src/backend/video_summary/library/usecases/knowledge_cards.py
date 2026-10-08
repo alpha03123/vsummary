@@ -86,14 +86,14 @@ class GenerateVideoKnowledgeCards:
             落盘后的 `VideoKnowledgeCardsDTO`；若视频源或总结不存在则返回 `None`，
             不会抛异常（由调用方决定如何处理"未生成"场景）。
         """
-        source = self._workspace.get_video_source(series_id, video_id)
+        source = self._workspace.get_video_source(series_id, video_id) if self._visual_input == "frames" else None
 
         summary = self._workspace.get_video_summary(series_id, video_id)
         if summary is None:
             return None
 
         visual_reader = getattr(self._workspace, "get_video_ai_summary_visual_evidence", None)
-        visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
+        visual_evidence = visual_reader(series_id, video_id) if self._visual_input != "none" and callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
         arguments = {"title": summary.title, "summary_data": summary.summary}
         visual_frame_paths = _visual_frame_pool_paths(

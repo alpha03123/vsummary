@@ -26,11 +26,7 @@ from backend.video_summary.library.models import (
     VideoSummaryDTO,
     VideoTranscriptDTO,
 )
-from backend.video_summary.library.usecases.ai_notes import (
-    AiSummaryImageCoverageError,
-    constrain_ai_note_image_markers,
-    validate_ai_summary_image_coverage,
-)
+from backend.video_summary.library.usecases.ai_notes import constrain_ai_note_image_markers
 
 
 # 笔记属于创作型任务：温度略高于 0，避免模型挑最保守的写法导致句式死板、篇幅偏短。
@@ -140,10 +136,7 @@ class LiteLLMNoteGenerator:
                 return _finalize_ai_summary_images(
                     note=note,
                     duration_seconds=transcript.duration_seconds,
-                    require_coverage=attempt == 0,
                 )
-            except AiSummaryImageCoverageError as error:
-                message_content = _image_coverage_repair_instruction(message_content, error)
             except ValueError as error:
                 if attempt:
                     note = _to_generated_note_with_degraded_citations(
@@ -157,7 +150,6 @@ class LiteLLMNoteGenerator:
                     return _finalize_ai_summary_images(
                         note=note,
                         duration_seconds=transcript.duration_seconds,
-                        require_coverage=False,
                     )
                 message_content = _citation_repair_instruction(message_content, error)
         raise AssertionError("AI summary validation loop must return or raise.")
@@ -176,24 +168,10 @@ def _citation_repair_instruction(message_content, error: ValueError):
     raise TypeError("AI summary message content must be text or multimodal content parts.")
 
 
-def _image_coverage_repair_instruction(message_content, error: AiSummaryImageCoverageError):
-    instruction = (
-        f"\n重试要求：上一次概括的自动配图不达标（{error}）。请重新生成完整 JSON，"
-        "保留完整的章节结构，并为不足的章节补充单独成行的 [[IMG:mm:ss]] 标记。"
-        "优先让不同章节各有一张代表画面；不要超过图片上限，也不要复用同一时间点。"
-    )
-    if isinstance(message_content, str):
-        return message_content + instruction
-    if isinstance(message_content, list):
-        return [*message_content, {"type": "text", "text": instruction.strip()}]
-    raise TypeError("AI summary message content must be text or multimodal content parts.")
-
-
 def _finalize_ai_summary_images(
     *,
     note: GeneratedVideoAiNoteDTO,
     duration_seconds: float,
-    require_coverage: bool,
 ) -> GeneratedVideoAiNoteDTO:
     content = constrain_ai_note_image_markers(
         note.content,
@@ -202,13 +180,6 @@ def _finalize_ai_summary_images(
         max_images=note.note_max_images,
         min_gap_seconds=note.note_image_min_gap_seconds,
     )
-    if require_coverage:
-        validate_ai_summary_image_coverage(
-            content,
-            duration_seconds=duration_seconds,
-            enabled=note.note_visual_mode == "screenshots",
-            max_images=note.note_max_images,
-        )
     return replace(note, content=content)
 
 

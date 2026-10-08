@@ -9,7 +9,9 @@ from backend.video_summary.library.usecases import GetVideoSource, GetVideoTrans
 from fastapi.testclient import TestClient
 
 from backend.local.http.app import create_app
-from backend.video_summary.library.models import TranscriptSegmentDTO, VideoTranscriptDTO
+from backend.video_summary.library.models import TranscriptSegmentDTO, VideoTranscriptDTO, VideoLibraryDTO, WorkspaceDTO, LibrarySeriesDTO, LibraryVideoCardDTO
+from backend.video_summary.library.usecases import ListVideoLibrary
+from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 
 
 class SubtitleWebVttApiTests(unittest.TestCase):
@@ -53,6 +55,9 @@ def _build_container(transcript: VideoTranscriptDTO | None):
     return make_api_container(services=make_workspace_services(
         get_video_source=mock_service(GetVideoSource, run=source),
         get_video_transcript=mock_service(GetVideoTranscript, run=transcript),
+        linked_series_workspace=mock_service(SqlVideoWorkspace, get_video_title=source.title),
+        list_video_library=mock_service(ListVideoLibrary, run=VideoLibraryDTO(WorkspaceDTO('workspace-1','Test'),
+            [LibrarySeriesDTO('series-1',source.title,[LibraryVideoCardDTO('video-1',source.title,'video.mp4',True,'ready')])])),
     ))
 
 

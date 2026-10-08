@@ -113,6 +113,7 @@ class FakeContainer:
         self.config_path = root_dir / "config" / "settings.toml"
         self.rag_model_manager = None
         self._error = error
+        self.chat_queue = None
         self.get_video_summary = FakeVideoSummaryQuery()
         self.debug_mode = False
         attach_workspace_scope(self)
@@ -158,6 +159,39 @@ class FakeAgentGraphService:
     def run_turn(self, **kwargs):
         del kwargs
         raise self._error
+
+
+def test_metered_chat_stream_finishes_without_cross_context_error(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, patch
+    from backend.core.metering import current_operation_id
+    from backend.core.quota import UnlimitedQuotaGuard
+
+    observed = []
+    class Service:
+        def stream_with_context(self, **_kwargs):
+            observed.append(current_operation_id())
+            yield SimpleNamespace(type="answer_delta", payload={"text":"chunk"})
+            observed.append(current_operation_id())
+            yield SimpleNamespace(type="answer_completed", payload={"text":"done"})
+    container = FakeContainer(tmp_path, RuntimeError("unused"))
+    container.chat_queue = MagicMock()
+    container.chat_queue.try_start.return_value = True
+    container.chat_queue.running.return_value.__enter__.return_value = lambda: None
+    container.quota_guard = UnlimitedQuotaGuard()
+    container.resource_budget = None
+    container.usage_store = object()
+    container.get_agent_graph_service = lambda: Service()
+    settings = SimpleNamespace(agent_context=SimpleNamespace(window_tokens=1000,reserved_output_tokens=100))
+    with patch("backend.api.adapters.chat_execution.load_effective_settings", return_value=settings):
+        response = TestClient(create_app(container)).post("/api/agent/chat/stream", json={
+            "session_id":"test", "message":"question", "context":{"scope_type":"video","series_id":"series-1","video_id":"video-1"}})
+    assert response.status_code == 200
+    assert "event: error" not in response.text
+    assert "answer_completed" in response.text
+    operation_id = container.chat_queue.enqueue.call_args.args[1]
+    assert observed == [operation_id, operation_id]
+    container.chat_queue.finish.assert_called_once_with(operation_id, "succeeded")
 
 
 if __name__ == "__main__":

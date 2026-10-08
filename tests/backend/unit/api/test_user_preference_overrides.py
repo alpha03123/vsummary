@@ -28,6 +28,20 @@ def test_whitelist_is_strict_and_does_not_mutate_deployment_settings(tmp_path):
         resolve_user_settings(base,{'model_profile':'unconfigured'},{})
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_cloud_multimodal_preference_controls_images_without_changing_local_defaults(tmp_path, enabled):
+    shutil.copyfile(Path(__file__).resolve().parents[4]/'config/settings.toml.example',tmp_path/'settings.toml.example')
+    base=load_settings(tmp_path/'settings.toml',tmp_path)
+    base=replace(base,generation=replace(base.generation,chapter_visual_mode='screenshots',
+        note_visual_mode='screenshots',mindmap_visual_input='frames',cards_visual_input='frames'))
+    effective=resolve_user_settings(base,{'ai_summary_multimodal_enabled':enabled})
+    assert effective.generation.chapter_visual_mode == ('screenshots' if enabled else 'off')
+    assert effective.generation.note_visual_mode == ('screenshots' if enabled else 'off')
+    assert effective.generation.cards_visual_input == ('frames' if enabled else 'none')
+    assert effective.generation.mindmap_visual_input == ('frames' if enabled else 'none')
+    assert base.generation.note_visual_mode == 'screenshots'
+
+
 def test_simultaneous_actors_receive_independent_effective_settings_and_local_defaults(tmp_path):
     shutil.copyfile(Path(__file__).resolve().parents[4]/'config/settings.toml.example',tmp_path/'settings.toml.example')
     path=tmp_path/'settings.toml'

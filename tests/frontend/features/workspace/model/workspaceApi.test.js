@@ -3,6 +3,7 @@ import { createWorkspaceApi } from "@workspace/workspace/model/workspaceApi";
 
 const transport = { fetch: vi.fn(), subscribe: vi.fn(), CLOSED: 2 };
 const { generateVideoSummary, processAgentVideo, cancelDurableJob,
+  loadVideoGenerationStatus,
   generateSeriesSummaries, subscribeSeriesGenerationProgress, subscribeVideoGenerationProgress,
   loadAgentSessionRecovery, subscribeDurableJobProgress, loadProviderUsage } = createWorkspaceApi(transport);
 
@@ -159,6 +160,27 @@ describe("generateVideoSummary", () => {
 });
 
 describe("subscribeDurableJobProgress", () => {
+  test("restores durable history and sequence before another live event arrives", async () => {
+    transport.fetch.mockResolvedValue({ok:true,json:async()=>({job_id:"job-1",snapshot:{
+      status:"running",stage:"understand_frames",progress:88,sequence:8,
+      events:[{status:"running",stage:"summarize",progress:88},{status:"running",stage:"understand_frames",progress:null}]}})});
+    const {snapshot} = await loadVideoGenerationStatus("series-1","video-1");
+    expect(snapshot.progress).toBe(88);
+    expect(snapshot.sequence).toBe(8);
+    expect(snapshot.steps.map(step=>step.id)).toEqual(["summarize","ai_summary"]);
+  });
+  test("keeps accumulated progress and steps during SSE reconnection", () => {
+    const listeners = {};
+    const connection = {readyState:0,close:vi.fn(),addEventListener:(name,callback)=>{listeners[name]=callback;}};
+    transport.subscribe.mockReturnValue(connection);
+    const listener = vi.fn();
+    subscribeDurableJobProgress("job-1",listener);
+    listeners.progress({data:JSON.stringify({status:"running",stage:"summarize",progress:88,sequence:8})});
+    connection.onerror();
+    expect(listener.mock.calls.at(-1)[0]).toMatchObject({stage:"reconnecting",progress:88,sequence:8});
+    expect(listener.mock.calls.at(-1)[0].steps).toHaveLength(1);
+    expect(connection.close).not.toHaveBeenCalled();
+  });
   test("preserves progress and separate tasks through concurrent picture events", () => {
     const listeners = {};
     transport.subscribe.mockImplementation(() => new class {

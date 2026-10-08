@@ -1,3 +1,7 @@
+import asyncio
+
+import pytest
+
 from backend.video_summary.infrastructure.llm.litellm_note_generator import LiteLLMNoteGenerator, _resolve_visual_evidence_timestamp
 from backend.video_summary.infrastructure.llm.litellm_note_generator import (
     AiSummaryCitationPayload,
@@ -8,6 +12,7 @@ from backend.video_summary.infrastructure.llm.litellm_note_generator import (
     _to_generated_note_with_degraded_citations,
 )
 from backend.video_summary.library.models import AiSummaryVisualEvidenceDTO, TranscriptSegmentDTO, VideoAiNoteVisualContextDTO, VideoTranscriptDTO
+from backend.video_summary.library.note_images import parse_note_image_markers
 
 
 def test_resolves_second_precision_grid_label_to_real_frame_timestamp() -> None:
@@ -131,6 +136,37 @@ def test_retries_with_the_validation_error_then_keeps_note_without_unverified_ci
     assert note.citations == ()
 
 
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("image_seconds", [[], [5, 7, 20, 35]])
+def test_accepts_sparse_images_without_retry_and_preserves_image_limits(asynchronous, image_seconds) -> None:
+    markdown = "\n".join(f"## {index}. Section\nContent" for index in range(1, 6))
+    markdown += "\nFact[1].\n" + "\n".join(f"[[IMG:{seconds}]]" for seconds in image_seconds)
+    payload = AiSummaryPayload(
+        markdown=markdown,
+        citations=[AiSummaryCitationPayload(citation_id=1, source_type="transcript", timestamp_seconds=2.5)],
+    )
+    gateway = _SequencedGateway([payload])
+    generator = LiteLLMNoteGenerator(gateway)
+    arguments = dict(
+        transcript=VideoTranscriptDTO(
+            "series-1", "video-1", "Video", 60, [TranscriptSegmentDTO(2.5, 5.0, "Fact")]
+        ),
+        summary=None,
+        visual_context=VideoAiNoteVisualContextDTO(frames=[]),
+        template="general",
+        multimodal_enabled=False,
+        note_visual_mode="screenshots",
+        note_max_images=2,
+        note_image_min_gap_seconds=10,
+    )
+
+    note = asyncio.run(generator.arun_ai_summary(**arguments)) if asynchronous else generator.run_ai_summary(**arguments)
+
+    assert len(gateway.messages) == 1
+    assert [marker.seconds for marker in parse_note_image_markers(note.content)] == ([5, 20] if image_seconds else [])
+    assert [citation.id for citation in note.citations] == ["1"]
+
+
 class _SequencedGateway:
     def __init__(self, payloads: list[AiSummaryPayload]) -> None:
         self._payloads = iter(payloads)
@@ -139,3 +175,6 @@ class _SequencedGateway:
     def complete_structured(self, messages, **_kwargs):
         self.messages.append(messages)
         return next(self._payloads)
+
+    async def acomplete_structured(self, messages, **kwargs):
+        return self.complete_structured(messages, **kwargs)

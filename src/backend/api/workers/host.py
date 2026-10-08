@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from backend.api.adapters.durable_workspace_index_refresher import (
-    submit_workspace_index_refresh,
+    submit_workspace_index_event,
+    INDEX_CHANGE_EVENTS,
 )
 from backend.core.request_context import get_workspace_context
+from backend.core.context import WorkspaceContext
 from backend.video_summary.infrastructure.persistence.job_worker import (
     SqlJobWorker,
     WorkerOptions,
@@ -52,9 +54,12 @@ def build_worker_host(
 
     def content_changed(event):
         # Events are durable notifications, not process-local cache broadcasts.
-        submit_workspace_index_refresh(
-            repository=container.job_repository, workspace_id=event.workspace_id
-        )
+        submit_workspace_index_event(repository=container.job_repository, event=event)
+
+    def cleanup_resource(event):
+        services = container.workspace_services_provider.get_services(WorkspaceContext(
+            workspace_id=event.workspace_id, actor_id="system-worker", request_id=f"outbox:{event.id}"))
+        services.linked_series_workspace.delete_resource_files(event.payload)
 
     def maintain():
         reconcile_host_jobs(container)
@@ -76,12 +81,8 @@ def build_worker_host(
             repository=SqlOutboxRepository(session_factory),
             workspace_id=None,
             handlers={
-                name: content_changed
-                for name in (
-                    "content_published",
-                    "note_published",
-                    "knowledge_cards_published",
-                )
+                **{name: content_changed for name in INDEX_CHANGE_EVENTS},
+                "resource_cleanup_requested": cleanup_resource,
             },
         ),
     )

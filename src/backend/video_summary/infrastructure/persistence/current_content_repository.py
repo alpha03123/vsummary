@@ -113,7 +113,7 @@ class SqlCurrentContentRepository:
                         video_id=video.id,
                         content_version=version,
                         transcript_version=version,
-                        summary_version=version,
+                        summary_version=version if payload["summary"] is not None else 0,
                         cards_version=0,
                         mindmap_version=0,
                     )
@@ -121,7 +121,7 @@ class SqlCurrentContentRepository:
             else:
                 state.content_version = version
                 state.transcript_version = version
-                state.summary_version = version
+                state.summary_version = version if payload["summary"] is not None else 0
                 state.cards_version = 0
                 state.mindmap_version = 0
             job.result_content_version = version
@@ -211,14 +211,18 @@ def _replace_current_content(session: Session, *, video_id: str, content_version
     current_transcript.raw_srt_artifact_id = transcript.get("raw_srt_artifact_id")
 
     current_summary = session.get(Summary, video_id)
-    if current_summary is None:
+    if summary is None:
+        if current_summary is not None:
+            session.delete(current_summary)
+    elif current_summary is None:
         current_summary = Summary(video_id=video_id)
         session.add(current_summary)
-    current_summary.content_version = content_version
-    current_summary.title = summary["title"]
-    current_summary.markdown = summary["markdown"]
-    current_summary.payload = summary["payload"]
-    current_summary.content_format_version = summary.get("content_format_version", 1)
+    if summary is not None:
+        current_summary.content_version = content_version
+        current_summary.title = summary["title"]
+        current_summary.markdown = summary["markdown"]
+        current_summary.payload = summary["payload"]
+        current_summary.content_format_version = summary.get("content_format_version", 1)
 
     for ordinal, segment in enumerate(transcript["segments"]):
         session.add(
@@ -232,7 +236,7 @@ def _replace_current_content(session: Session, *, video_id: str, content_version
                 text=segment["text"],
             )
         )
-    for ordinal, chapter in enumerate(summary["chapters"]):
+    for ordinal, chapter in enumerate(summary["chapters"] if summary is not None else []):
         session.add(
             SummaryChapter(
                 id=new_ulid(),
@@ -253,8 +257,8 @@ def _validate_payload(payload: dict[str, Any]) -> None:
         raise ContentPublishError("Staged content must be an object.")
     transcript = payload.get("transcript")
     summary = payload.get("summary")
-    if not isinstance(transcript, dict) or not isinstance(summary, dict):
-        raise ContentPublishError("Staged content requires transcript and summary objects.")
+    if not isinstance(transcript, dict) or "summary" not in payload or (summary is not None and not isinstance(summary, dict)):
+        raise ContentPublishError("Staged content requires a transcript and an optional summary object.")
     _require_string(transcript.get("language"), "transcript.language")
     _require_string(transcript.get("source_type"), "transcript.source_type")
     segments = transcript.get("segments")
@@ -268,6 +272,8 @@ def _validate_payload(payload: dict[str, Any]) -> None:
         if segment["start_ms"] < 0 or segment["end_ms"] < segment["start_ms"]:
             raise ContentPublishError("Transcript segment timestamps are invalid.")
         _require_string(segment.get("text"), "transcript segment text")
+    if summary is None:
+        return
     _require_string(summary.get("title"), "summary.title")
     if not isinstance(summary.get("markdown"), str):
         raise ContentPublishError("summary.markdown must be a string.")

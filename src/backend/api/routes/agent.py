@@ -30,7 +30,7 @@ from backend.api.schemas.responses import (
     AgentSessionRecoveryResponse,
     CitationResponse,
 )
-from backend.api.schemas.sse import encode_sse_event
+from backend.api.schemas.sse import encode_sse_event, context_bound_iterator
 from backend.video_summary.infrastructure.rag.rag_models import (
     RAG_EMBEDDING_REQUIRED_MESSAGE,
     RAG_MODEL_DOWNLOAD_MESSAGE,
@@ -155,7 +155,7 @@ def agent_chat_stream(request: AgentChatRequest, container: WorkspaceServicesDep
                 execution.finish('cancelled')
 
     return StreamingResponse(
-        event_iterator(),
+        context_bound_iterator(event_iterator()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

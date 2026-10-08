@@ -169,6 +169,20 @@ function isStaleSeriesRunAction(state, action) {
 
 export { createInitialWorkspaceState };
 
+function reconcileDurableProgress(state, action) {
+  const existing = state.generationTasksByKey?.[action.taskKey];
+  if (!action.jobId || action.jobId !== existing?.jobId) return action;
+  const previous = existing.snapshot;
+  const incoming = action.snapshot;
+  if (Number.isInteger(previous?.sequence) && Number.isInteger(incoming?.sequence)
+      && incoming.sequence < previous.sequence) return null;
+  if (isTerminalGenerationStatus(previous?.status) && isGenerationSnapshotActive(incoming)) return null;
+  const progress = typeof previous?.progress === "number"
+    ? Math.max(previous.progress, incoming?.progress ?? 0) : incoming?.progress;
+  return {...action, progress, snapshot: {...incoming, progress,
+    startedAt: incoming?.startedAt ?? previous?.startedAt}};
+}
+
 export function workspaceReducer(state, action) {
   switch (action.type) {
     case "processing_mode_changed":
@@ -1197,6 +1211,8 @@ export function workspaceReducer(state, action) {
       };
     case "generation_progress_updated":
       {
+        action = reconcileDurableProgress(state, action);
+        if (!action) return state;
         const boundedProgress = action.progress == null ? null : Math.max(0, Math.min(100, action.progress));
         const isCurrentSelection = matchesCurrentGenerationSelection(state, action);
         const isTerminal = isTerminalGenerationStatus(action.snapshot?.status);
@@ -1259,6 +1275,8 @@ export function workspaceReducer(state, action) {
       }
     case "generation_status_loaded":
       {
+        action = reconcileDurableProgress(state, action);
+        if (!action) return state;
         const existing = state.generationTasksByKey?.[action.taskKey];
         if (existing?.snapshot?.status === "failed" && action.snapshot?.status === "idle") {
           return state;

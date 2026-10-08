@@ -21,7 +21,7 @@ from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, QuotaReservation, UsageEstimate, UsageMeter, UsageRecord
 from backend.core.context import WorkspaceContext
 from backend.core.request_context import get_workspace_context
-from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent, Workspace, Video, Series, VideoContentState, IdempotencyKey
+from backend.video_summary.infrastructure.persistence.models import Job, JobAttempt, JobEvent, Workspace, Video, Series, VideoContentState, IdempotencyKey, OutboxEvent
 from backend.core.preferences import current_preferences
 from backend.shared.llm.usage import MySqlLlmUsageStore
 from backend.video_summary.infrastructure.persistence.execution_context import JobLeaseLostError
@@ -72,6 +72,13 @@ class JobEventSnapshot:
     detail: str | None
     occurred_at: datetime
     started_at: datetime | None
+
+
+@dataclass(frozen=True)
+class IndexRefreshPlan:
+    revision: int
+    generation: str | None
+    changes: tuple[dict[str, Any], ...]
 
 
 class SqlJobRepository:
@@ -178,13 +185,55 @@ class SqlJobRepository:
             self._release_reservation(reservation, "existing job reused")
         return submitted
 
-    def request_index_refresh(self, workspace_id: str) -> None:
+    def request_index_refresh(self, workspace_id: str, *, action: str = "refresh_all",
+        series_id: str | None = None, video_id: str | None = None) -> None:
+        if action not in {"refresh_all", "refresh_series", "upsert_video", "delete_video", "delete_series"}:
+            raise ValueError("Unsupported index mutation.")
         with self._session_factory.begin() as session:
             workspace = session.scalar(select(Workspace).where(Workspace.id == workspace_id,
                 Workspace.deleted_at.is_(None)).with_for_update())
             if workspace is None:
                 raise LookupError("workspace not found")
+            if action in {"upsert_video", "delete_video"}:
+                owned_series = session.scalar(select(Video.series_id).join(Series, Series.id == Video.series_id)
+                    .where(Video.id == video_id, Series.workspace_id == workspace_id))
+                if owned_series is None:
+                    # A committed deletion event proves ownership after hard deletion.
+                    deletion = session.scalar(select(OutboxEvent).where(
+                        OutboxEvent.workspace_id == workspace_id,
+                        OutboxEvent.aggregate_id == video_id,
+                        OutboxEvent.event_type == "video_deleted"))
+                    if deletion is not None:
+                        owned_series = deletion.payload["series_id"]
+                        action = "delete_video"
+                if owned_series is None or (series_id is not None and series_id != owned_series):
+                    raise LookupError("video not found in workspace")
+                series_id = owned_series
+            elif action != "refresh_all":
+                if session.scalar(select(Series.id).where(Series.id == series_id,
+                    Series.workspace_id == workspace_id)) is None:
+                    deletion = session.scalar(select(OutboxEvent.id).where(
+                        OutboxEvent.workspace_id == workspace_id,
+                        OutboxEvent.aggregate_id == series_id,
+                        OutboxEvent.event_type == "series_deleted"))
+                    if deletion is None:
+                        raise LookupError("series not found in workspace")
+                    action = "delete_series"
             workspace.index_revision_requested += 1
+            changes = dict(workspace.index_pending_changes)
+            change = {"action": action, "revision": workspace.index_revision_requested,
+                "series_id": series_id, "video_id": video_id}
+            if action == "refresh_all":
+                changes = {"workspace": change}
+            elif action in {"delete_series", "refresh_series"}:
+                changes = {key: item for key, item in changes.items() if item.get("series_id") != series_id}
+                changes[f"series:{series_id}"] = change
+            elif f"series:{series_id}" in changes:
+                key = f"series:{series_id}"
+                changes[key] = {**changes[key], "revision": workspace.index_revision_requested}
+            else:
+                changes[f"video:{video_id}"] = change
+            workspace.index_pending_changes = changes
             self._ensure_index_job(session, workspace_id)
 
     @staticmethod
@@ -211,12 +260,24 @@ class SqlJobRepository:
                 raise LookupError("workspace not found")
             return value
 
+    def index_refresh_plan(self, workspace_id: str) -> IndexRefreshPlan:
+        with self._session_factory() as session:
+            workspace = session.get(Workspace, workspace_id)
+            if workspace is None:
+                raise LookupError("workspace not found")
+            return IndexRefreshPlan(workspace.index_revision_requested, workspace.index_generation,
+                tuple(dict(change) for change in workspace.index_pending_changes.values()))
+
     def complete_index_refresh(self, claim: ClaimedJob, revision: int, generation: str) -> None:
         with self._session_factory.begin() as session:
             self._owned_job(session, claim, _database_now(session))
             workspace = session.scalar(select(Workspace).where(Workspace.id == claim.workspace_id).with_for_update())
             workspace.index_generation = generation
             workspace.index_revision_completed = max(workspace.index_revision_completed, revision)
+            workspace.index_pending_changes = {
+                key: change for key, change in workspace.index_pending_changes.items()
+                if change["revision"] > revision
+            }
 
     def children(self, job_id: str, *, workspace_id: str) -> list[JobSnapshot]:
         with self._session_factory() as session:

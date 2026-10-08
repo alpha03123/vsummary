@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
-from threading import Event, Thread
+from dataclasses import dataclass, replace
+from threading import Event, Lock, Thread
 from typing import Protocol
 from uuid import uuid4
 from backend.core.context import WorkspaceContext
@@ -61,13 +61,14 @@ class WorkerOptions:
             raise ValueError("Worker operation filter must not be empty.")
 
     @classmethod
-    def local(cls) -> "WorkerOptions":
+    def local(cls, *, concurrency: int = 1) -> "WorkerOptions":
         return cls(
             worker_id=f"local-{uuid4().hex}",
             operation_filter=frozenset({"generate_summary", "generate_transcript", "generate_series_batch", "generate_video_mindmap", "generate_series_mindmap", "generate_video_knowledge_cards", "generate_video_ai_summary", "download_linked_video", "process_agent_video", "import_chaoxing_course", "prepare_asr_model", "prepare_rag_model", "refresh_rag_index"}),
             resource_class="local-cpu",
             lease_seconds=120,
             heartbeat_seconds=20,
+            concurrency=concurrency,
         )
 
 
@@ -128,32 +129,64 @@ class SqlJobWorker:
         self._options = options
         self._request_limiter = request_limiter
         self._stop = Event()
-        self._threads: list[Thread] = []
+        self._threads: dict[Thread, Event] = {}
+        self._pool_lock = Lock()
+        self._running = False
+        self._worker_sequence = 0
         self._maintenance_thread: Thread | None = None
 
+    @property
+    def concurrency(self) -> int:
+        return self._options.concurrency
+
     def start(self) -> None:
-        if any(thread.is_alive() for thread in self._threads):
-            return
-        self._stop.clear()
-        self._threads = [Thread(target=self._run,
-            args=(f"{self._options.worker_id}-{index + 1}",),
-            name=f"vsummary-job-worker:{self._options.worker_id}-{index + 1}", daemon=True)
-            for index in range(self._options.concurrency)]
-        for thread in self._threads:
+        with self._pool_lock:
+            if self._running or any(thread.is_alive() for thread in self._threads):
+                return
+            self._stop.clear()
+            self._running = True
+            self._resize_threads()
+            if self._maintenance is not None:
+                self._maintenance_thread = Thread(target=self._run_maintenance,
+                    name=f"vsummary-job-maintenance:{self._options.worker_id}", daemon=True)
+                self._maintenance_thread.start()
+
+    def update_concurrency(self, concurrency: int) -> None:
+        with self._pool_lock:
+            self._options = replace(self._options, concurrency=concurrency)
+            if self._running:
+                self._resize_threads()
+
+    def _resize_threads(self) -> None:
+        self._threads = {thread: retire for thread, retire in self._threads.items() if thread.is_alive()}
+        active = [(thread, retire) for thread, retire in self._threads.items() if not retire.is_set()]
+        for _, retire in active[self._options.concurrency:]:
+            retire.set()
+        for _ in range(self._options.concurrency - len(active)):
+            self._worker_sequence += 1
+            worker_id = f"{self._options.worker_id}-{self._worker_sequence}"
+            retire = Event()
+            thread = Thread(target=self._run, args=(worker_id, retire),
+                name=f"vsummary-job-worker:{worker_id}", daemon=True)
+            self._threads[thread] = retire
             thread.start()
-        if self._maintenance is not None:
-            self._maintenance_thread = Thread(target=self._run_maintenance,
-                name=f"vsummary-job-maintenance:{self._options.worker_id}", daemon=True)
-            self._maintenance_thread.start()
 
     def stop(self) -> None:
-        self._stop.set()
-        for thread in self._threads:
+        with self._pool_lock:
+            self._running = False
+            self._stop.set()
+            threads = list(self._threads)
+            for retire in self._threads.values():
+                retire.set()
+            maintenance = self._maintenance_thread
+        for thread in threads:
             thread.join(timeout=5)
-        if self._maintenance_thread is not None:
-            self._maintenance_thread.join(timeout=5)
-            self._maintenance_thread = None
-        self._threads = []
+        if maintenance is not None:
+            maintenance.join(timeout=5)
+        with self._pool_lock:
+            self._threads = {thread: retire for thread, retire in self._threads.items() if thread.is_alive()}
+            if self._maintenance_thread is maintenance:
+                self._maintenance_thread = None
 
     def _run_maintenance(self):
         while not self._stop.is_set():
@@ -164,12 +197,12 @@ class SqlJobWorker:
                 LOGGER.exception("worker maintenance failed")
             self._stop.wait(self._options.maintenance_seconds)
 
-    def _run(self, worker_id: str) -> None:
+    def _run(self, worker_id: str, retire: Event) -> None:
         with bind_request_limiter(self._request_limiter):
-            while not self._stop.is_set():
+            while not self._stop.is_set() and not retire.is_set():
                 try:
                     with request_slot("jobs"):
-                        if self._stop.is_set():
+                        if self._stop.is_set() or retire.is_set():
                             return
                         claim = self._repository.claim(worker_id=worker_id,
                             lease_seconds=self._options.lease_seconds, operations=self._options.operation_filter)
@@ -178,12 +211,12 @@ class SqlJobWorker:
                         if self._maintenance is None:
                             self._repository.retry_accounting()
                     if claim is None:
-                        self._stop.wait(self._options.poll_seconds)
+                        retire.wait(self._options.poll_seconds)
                 except JobLeaseLostError:
                     LOGGER.warning("worker execution lease was lost")
                 except Exception:
                     LOGGER.exception("worker cycle failed")
-                    self._stop.wait(self._options.poll_seconds)
+                    retire.wait(self._options.poll_seconds)
 
     async def _execute(self, claim: ClaimedJob) -> None:
         identity = claim.request_payload.get("_execution_context", {})
@@ -210,11 +243,15 @@ class SqlJobWorker:
                 deferred = await handler(claim, reporter)
                 if deferred is False:
                     return
-                if claim.operation=='process_agent_video' and services.after_summary is not None:
+                detail = "任务已完成"
+                if (claim.operation == 'process_agent_video'
+                    and claim.request_payload.get('processing_mode', 'summary') == 'summary'
+                    and services.after_summary is not None):
                     failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id)
                     if failed:
                         reporter.update('auxiliary_failed',100,'视频已生成，部分附加产物生成失败。')
-                self._repository.succeed(claim, detail="任务已完成")
+                        detail = "视频已生成；自动生成失败：" + ", ".join(failed)
+                self._repository.succeed(claim, detail=detail)
                 return
             if claim.operation not in {"generate_summary", "generate_transcript"}:
                 self._repository.fail(
@@ -242,11 +279,13 @@ class SqlJobWorker:
             if snapshot is None:
                 raise JobLeaseLostError("Job disappeared after execution.")
             if snapshot.status == "running" and snapshot.result_content_version is not None:
+                detail = "生成内容已保存"
                 if claim.operation=='generate_summary' and services.after_summary is not None:
                     failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id)
                     if failed:
                         reporter.update('auxiliary_failed',100,'视频已生成，部分附加产物生成失败。')
-                self._repository.succeed(claim, detail="生成内容已保存")
+                        detail = "生成内容已保存；自动生成失败：" + ", ".join(failed)
+                self._repository.succeed(claim, detail=detail)
             elif snapshot.status != "succeeded":
                 if snapshot.cancel_requested:
                     self._repository.mark_cancelled(claim, detail="任务已取消，未发布候选内容")

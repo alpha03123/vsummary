@@ -204,6 +204,20 @@ describe("workspaceReducer model download failures", () => {
 });
 
 describe("workspaceReducer video generation cancellation", () => {
+  it("does not rewind a restored job on replay, but resets progress for a new job", () => {
+    const taskKey = buildVideoGenerationTaskKey("series-a","video-1");
+    const base = {type:"generation_status_loaded",taskKey,mode:"video",seriesId:"series-a",videoId:"video-1",jobId:"job-1",subscriptionActive:true};
+    let state = workspaceReducer(createInitialWorkspaceState(),{...base,
+      snapshot:{status:"running",stage:"understand_frames",progress:88,sequence:8,steps:[{id:"ai_summary",status:"running"}]}});
+    const restored = state;
+    state = workspaceReducer(state,{...base,type:"generation_progress_updated",progress:0,
+      snapshot:{status:"running",stage:"queued",progress:0,sequence:1,steps:[]}});
+    expect(state).toBe(restored);
+    state = workspaceReducer(state,{...base,snapshot:{status:"running",stage:"understand_frames",progress:null,sequence:9}});
+    expect(state.generationTasksByKey[taskKey].snapshot.progress).toBe(88);
+    state = workspaceReducer(state,{...base,jobId:"job-2",snapshot:{status:"queued",stage:"queued",progress:0,sequence:1}});
+    expect(state.generationTasksByKey[taskKey].snapshot.progress).toBe(0);
+  });
   it("does not let a stale idle status hide a just-started durable job", () => {
     const taskKey = buildVideoGenerationTaskKey("series-a", "video-1");
     let state = {

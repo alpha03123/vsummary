@@ -759,8 +759,6 @@ def update_video_note(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    if container.get_video_source.run(series_id, video_id) is None:
-        raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
     if note is None:
         raise HTTPException(status_code=404, detail=f"note not found '{note_id}'")
     return VideoNoteResponse.from_model(note)
@@ -1447,29 +1445,16 @@ def get_video_generation_status(
         {"task_id": ..., "snapshot": {status, progress, detail, ...}}
     """
     task_id = _build_task_id(series_id, video_id)
-    snapshot = job_repository.latest_for_resource(
+    snapshot = durable_status(job_repository,
         workspace_id=container.workspace_id,
         resource_id=video_id,
         operations=("generate_summary", "generate_transcript", "process_agent_video"),
     )
-    if snapshot is not None:
-        event = job_repository.latest_event(snapshot.id, workspace_id=container.workspace_id)
+    if snapshot["job_id"] is not None:
         return {
             "task_id": task_id,
-            "job_id": snapshot.id,
-            "snapshot": {
-                "status": snapshot.status,
-                "stage": event.stage if event is not None else snapshot.status,
-                "progress": event.progress if event is not None else (100.0 if snapshot.status == "succeeded" else 0.0),
-                "detail": snapshot.failure_detail or (event.detail if event is not None else None),
-                "error": snapshot.failure_detail if snapshot.status == "failed" else None,
-                "started_at": snapshot.started_at.timestamp() if snapshot.started_at is not None else None,
-                "elapsed_seconds": (
-                    max(0.0, (event.occurred_at - snapshot.started_at).total_seconds())
-                    if event is not None and snapshot.started_at is not None
-                    else None
-                ),
-            },
+            "job_id": snapshot["job_id"],
+            "snapshot": snapshot,
         }
     return {
         "task_id": task_id,

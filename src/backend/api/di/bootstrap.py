@@ -22,7 +22,9 @@ from backend.api.adapters.linked_video_downloader import ProviderLinkedVideoDown
 from backend.api.di.workspace_services import WorkspaceServices
 from backend.api.workers.workspace_index_worker import _WorkspaceIndexInvalidator
 from backend.api.workers.host import reconcile_host_jobs
-from backend.api.adapters.durable_workspace_index_refresher import DurableWorkspaceIndexRefresher, submit_workspace_index_refresh
+from backend.api.adapters.durable_workspace_index_refresher import (
+    DurableWorkspaceIndexRefresher, submit_workspace_index_refresh, submit_workspace_index_event, INDEX_CHANGE_EVENTS,
+)
 from backend.bilibili import (
     BilibiliDownloader,
     DrissionBilibiliCookieInitializer,
@@ -40,7 +42,7 @@ from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperC
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.visual_frame_pool import build_or_load_visual_frame_pool
-from backend.video_summary.library.note_images import materialize_note_frames
+from backend.video_summary.library.note_images import materialize_note_frames, parse_note_image_markers, format_note_image_timestamp
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
 from backend.video_summary.infrastructure.persistence.sql_generation_adapters import (
     SqlBackedSeriesMindmapGenerator,
@@ -248,8 +250,8 @@ def build_workspace_services(
         mindmap = await GenerateVideoMindmapFromLibrary(
             workspace,
             resolved_mindmap_generator,
-            visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
-            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            visual_input=load_effective_settings(config_path, root_dir).generation.mindmap_visual_input,
+            max_visual_input_images=load_effective_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
         ).run(
@@ -294,12 +296,13 @@ def build_workspace_services(
         index_dir=workspace.cache_root / "rag-index",
         index_generation=lambda: job_repository.index_generation(workspace.workspace_id),
         model_http_client=container.model_http_client,
-        schedule_index_refresh=lambda: submit_workspace_index_refresh(repository=job_repository, workspace_id=workspace.workspace_id),
+        schedule_index_refresh=lambda **change: submit_workspace_index_refresh(repository=job_repository, workspace_id=workspace.workspace_id, **change),
     )
     index_refresher = DurableWorkspaceIndexRefresher(
-        lambda: submit_workspace_index_refresh(
+        lambda **change: submit_workspace_index_refresh(
             repository=job_repository,
             workspace_id=workspace.workspace_id,
+            **change,
         ),
     )
     workspace_index_invalidator = _WorkspaceIndexInvalidator(agent_runtime.invalidate_workspace_indexes)
@@ -315,8 +318,8 @@ def build_workspace_services(
             workspace,
             resolved_knowledge_card_generator,
             index_refresher,
-            visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
-            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            visual_input=load_effective_settings(config_path, root_dir).generation.cards_visual_input,
+            max_visual_input_images=load_effective_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
         ).arun(str(claim.request_payload["series_id"]), claim.resource_id)
@@ -334,6 +337,13 @@ def build_workspace_services(
 
     operation_handlers["generate_video_knowledge_cards"] = run_video_knowledge_cards_job
     operation_handlers["generate_video_ai_summary"] = run_video_ai_summary_job
+    def materialize_ai_summary_frames(*, video_id, video_path, output_dir, content):
+        materialize_note_frames(video_path=video_path, output_dir=output_dir, content=content, frame_extractor=FfmpegMediaProcessor())
+        for marker in parse_note_image_markers(content):
+            frame = output_dir / "frames" / f"{format_note_image_timestamp(marker.seconds)}.jpg"
+            if frame.is_file():
+                workspace.save_binary_artifact(video_id=video_id, kind="note_frame", source_path=frame)
+
     ai_summary_use_case = GenerateVideoAiSummary(
         workspace,
         resolved_note_generator,
@@ -343,7 +353,7 @@ def build_workspace_services(
         multimodal_policy=(lambda: load_effective_settings(config_path, root_dir).generation.ai_summary_multimodal_enabled) if container.preference_store is not None else None,
         saved_visual_context=workspace.get_saved_visual_context,
         frame_pool_builder=build_or_load_visual_frame_pool,
-        note_frame_materializer=lambda *, video_path, output_dir, content: materialize_note_frames(video_path=video_path, output_dir=output_dir, content=content, frame_extractor=FfmpegMediaProcessor()),
+        note_frame_materializer=materialize_ai_summary_frames,
     )
 
     auto_artifacts = AutoGenerateVideoArtifacts(
@@ -351,8 +361,8 @@ def build_workspace_services(
         generate_mindmap=lambda series_id, video_id: GenerateVideoMindmapFromLibrary(
             workspace,
             resolved_mindmap_generator,
-            visual_input=load_settings(config_path, root_dir).generation.mindmap_visual_input,
-            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            visual_input=load_effective_settings(config_path, root_dir).generation.mindmap_visual_input,
+            max_visual_input_images=load_effective_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
         ).run(series_id, video_id),
@@ -360,8 +370,8 @@ def build_workspace_services(
             workspace,
             resolved_knowledge_card_generator,
             index_refresher,
-            visual_input=load_settings(config_path, root_dir).generation.cards_visual_input,
-            max_visual_input_images=load_settings(config_path, root_dir).generation.max_visual_input_images,
+            visual_input=load_effective_settings(config_path, root_dir).generation.cards_visual_input,
+            max_visual_input_images=load_effective_settings(config_path, root_dir).generation.max_visual_input_images,
             frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
         ).arun(series_id, video_id),
@@ -372,7 +382,6 @@ def build_workspace_services(
         progress_tracker,
         video_generation_concurrency=settings.generation.video_generation_concurrency,
         series_memory_refresher=series_memory_refresher,
-        auto_generate_artifacts=auto_artifacts.run if container.preference_store is None else None,
     )
     series_generation_use_case = GenerateSeriesSummaryFromLibrary(
         workspace,
@@ -564,11 +573,15 @@ def build_workspace_services(
             index_lock.parent.mkdir(parents=True, exist_ok=True)
             with FileLock(str(index_lock)):
                 reporter.raise_if_cancelled()
-                target = job_repository.index_refresh_revision(workspace.workspace_id)
+                plan = job_repository.index_refresh_plan(workspace.workspace_id)
                 generation = new_ulid()
-                agent_runtime.refresh_workspace_indexes(workspace.cache_root / "rag-index" / generation)
-                job_repository.complete_index_refresh(claim, target, generation)
-        reporter.update("index", 10.0, "正在重建工作区 RAG 索引")
+                target_dir = workspace.cache_root / "rag-index" / generation
+                source_dir = workspace.cache_root / "rag-index" / plan.generation if plan.generation else None
+                agent_runtime.refresh_workspace_indexes(target_dir, source_dir=source_dir,
+                    changes=plan.changes, progress=reporter.update, check_cancelled=reporter.raise_if_cancelled)
+                reporter.raise_if_cancelled()
+                job_repository.complete_index_refresh(claim, plan.revision, generation)
+        reporter.update("index", 10.0, "正在更新工作区 RAG 索引")
         await asyncio.to_thread(refresh)
         reporter.update("index", 100.0, "工作区 RAG 索引已更新")
 
@@ -646,7 +659,7 @@ def build_workspace_services(
         refresh_agent_workspace_indexes=agent_runtime.refresh_workspace_indexes,
         debug_mode=settings.debug.mode,
         embedding_provider=settings.agent_retrieval.embedding_provider,
-        after_summary=auto_artifacts.run if container.preference_store is not None else None,
+        after_summary=auto_artifacts.run,
     )
     return workspace_services
 
@@ -686,12 +699,14 @@ def build_api_container(
             workspace_id=workspace_id, actor_id="system-worker", request_id=f"job:{workspace_id}"))
 
     worker = SqlJobWorker(repository=container.job_repository,
-        get_execution_services=execution_services, options=WorkerOptions.local(),
+        get_execution_services=execution_services,
+        options=WorkerOptions.local(concurrency=load_settings(container.config_path, root_dir).generation.video_generation_concurrency),
         maintenance=lambda: reconcile_host_jobs(container))
     def invalidate(_event):
         services.invalidate_agent_workspace_indexes()
-        submit_workspace_index_refresh(repository=container.job_repository, workspace_id=workspace.workspace_id)
+        submit_workspace_index_event(repository=container.job_repository, event=_event)
     outbox = SqlOutboxWorker(repository=SqlOutboxRepository(workspace.session_factory),
         workspace_id=workspace.workspace_id,
-        handlers={name: invalidate for name in ("content_published", "note_published", "knowledge_cards_published")})
+        handlers={**{name: invalidate for name in INDEX_CHANGE_EVENTS},
+            "resource_cleanup_requested": lambda event: workspace.delete_resource_files(event.payload)})
     return replace(container, job_worker=worker, outbox_worker=outbox), services

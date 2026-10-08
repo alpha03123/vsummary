@@ -52,10 +52,6 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch 
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       clearGenerationSubscription(taskKey);
     }
-    if (snapshot.stage === "reconnecting") {
-      clearGenerationSubscription(taskKey);
-      return;
-    }
     if (snapshot.status === "completed") {
       refreshCompletedVideoContent({ seriesId, videoId, dispatch }).catch(() => {});
     }

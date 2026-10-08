@@ -14,8 +14,8 @@ import srt
 from backend.shared.bilibili_ytdlp import (
     load_bilibili_headers,
     resolve_yt_dlp_proxy,
-    write_bilibili_cookies_file,
 )
+from backend.shared.ytdlp import run_with_cookie_fallback, temporary_cookie_file, requires_cookie, CookieRequiredError
 from backend.video_summary.domain.models import ManualTranscriptInput, Transcript, TranscriptSegment
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, ProcessHandle
 
@@ -87,10 +87,14 @@ class CleanedTranscriptProvider:
 class _SilentYtDlpLogger:
     """阻止 listsubtitles 将轨道表直接写入后端 stdout。"""
 
+    def __init__(self) -> None:
+        self.authentication_required = False
+
     def debug(self, message: str) -> None:
         LOGGER.debug("yt-dlp: %s", message)
 
     def warning(self, message: str) -> None:
+        self.authentication_required |= requires_cookie(RuntimeError(message))
         LOGGER.warning("yt-dlp: %s", message)
 
     def error(self, message: str) -> None:
@@ -110,7 +114,7 @@ def _load_bilibili_subtitle(
     _raise_if_cancelled(cancellation)
     bvid = bvid_match.group(1)
     headers = load_bilibili_headers(bvid)
-    cookie_file = write_bilibili_cookies_file(headers.pop("Cookie", ""))
+    cookie = headers.pop("Cookie", "")
     options: dict[str, object] = {
         "quiet": True,
         "no_warnings": True,
@@ -120,25 +124,29 @@ def _load_bilibili_subtitle(
         "listsubtitles": True,
         "socket_timeout": 20,
         "http_headers": headers,
-        "logger": _SilentYtDlpLogger(),
     }
     proxy = resolve_yt_dlp_proxy()
     if proxy is not None:
         options["proxy"] = proxy
-    if cookie_file is not None:
-        options["cookiefile"] = str(cookie_file)
-    try:
+    def extract(cookie: str) -> Transcript | None:
+        _raise_if_cancelled(cancellation)
         from yt_dlp import YoutubeDL
-
-        with YoutubeDL(options) as ydl:
-            ydl.to_screen = _discard_ytdlp_screen_output
-            ydl.to_stdout = _discard_ytdlp_screen_output
-            info = ydl.extract_info(source_url, download=False)
+        logger = _SilentYtDlpLogger()
+        with temporary_cookie_file(cookie, "bilibili.com") as cookie_file:
+            attempt_options = {**options, "logger": logger}
+            if cookie_file is not None:
+                attempt_options["cookiefile"] = str(cookie_file)
+            with YoutubeDL(attempt_options) as ydl:
+                ydl.to_screen = _discard_ytdlp_screen_output
+                ydl.to_stdout = _discard_ytdlp_screen_output
+                info = ydl.extract_info(source_url, download=False)
         _raise_if_cancelled(cancellation)
         if not isinstance(info, dict):
             return None
         subtitles = info.get("subtitles")
         if not isinstance(subtitles, dict):
+            if logger.authentication_required:
+                raise CookieRequiredError("Bilibili subtitles require login.")
             return None
         for language in _BILIBILI_CHINESE_LANGUAGE_PRIORITY:
             entries = subtitles.get(language)
@@ -150,16 +158,17 @@ def _load_bilibili_subtitle(
                 data = entry.get("data")
                 if isinstance(data, str) and data.strip():
                     return parse_srt_transcript(data)
+        if logger.authentication_required:
+            raise CookieRequiredError("Bilibili subtitles require login.")
         return None
+    try:
+        return run_with_cookie_fallback(extract, cookie)
     except InterruptedError:
         raise
     except Exception:
         _raise_if_cancelled(cancellation)
         LOGGER.warning("Bilibili 中文字幕读取失败，回退 ASR：%s", bvid, exc_info=True)
         return None
-    finally:
-        if cookie_file is not None:
-            cookie_file.unlink(missing_ok=True)
 
 
 def _load_embedded_subtitle(

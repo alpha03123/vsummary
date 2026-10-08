@@ -8,6 +8,29 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextvars import copy_context
+from collections.abc import Generator
+from typing import TypeVar
+
+T = TypeVar("T")
+
+
+def context_bound_iterator(iterator: Generator[T, None, None]) -> Generator[T, None, None]:
+    """Keep one Context across Starlette's separate thread-pool next() calls."""
+    context = copy_context()
+
+    def consume():
+        try:
+            while True:
+                try:
+                    item = context.run(next, iterator)
+                except StopIteration:
+                    return
+                yield item
+        finally:
+            context.run(iterator.close)
+
+    return consume()
 
 
 async def stream_progress_events(*, tracker, task_id: str, terminal_statuses: set[str]):

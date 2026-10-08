@@ -2,19 +2,7 @@
 
 from __future__ import annotations
 
-import math
-
-from markdown_it import MarkdownIt
-
 from backend.video_summary.library.note_images import parse_note_image_markers
-
-
-AI_SUMMARY_SECTION_HEADING_LEVEL = 2
-_MARKDOWN_PARSER = MarkdownIt("commonmark")
-
-
-class AiSummaryImageCoverageError(ValueError):
-    """AI 概括的有效图片数未达到按章节计算的最低目标。"""
 
 
 def _split_note_title(content: str, *, fallback: str) -> tuple[str, str]:
@@ -67,44 +55,6 @@ def constrain_ai_note_image_markers(
         accepted.add((marker.start, marker.end))
         accepted_timestamps.append(marker.seconds)
     return _filter_markers(content, accepted | kept)
-
-
-def validate_ai_summary_image_coverage(
-    content: str,
-    *,
-    duration_seconds: float,
-    enabled: bool,
-    max_images: int,
-) -> None:
-    """确保自动配图覆盖足够多的 AI 概括章节。"""
-
-    if not enabled:
-        return
-    chapter_count = count_ai_summary_sections(content)
-    required_count = min(max_images, math.ceil(chapter_count * 0.9))
-    if required_count == 0:
-        return
-    valid_timestamps = {
-        round(marker.seconds, 3)
-        for marker in parse_note_image_markers(content)
-        if marker.seconds <= duration_seconds
-    }
-    actual_count = len(valid_timestamps)
-    if actual_count < required_count:
-        raise AiSummaryImageCoverageError(
-            f"自动配图覆盖不足：概括有 {chapter_count} 个有效章节，"
-            f"至少需要 {required_count} 张有效图片，当前只有 {actual_count} 张。"
-        )
-
-
-def count_ai_summary_sections(content: str) -> int:
-    """统计 AI 概括的一级章节，与前端大纲中的二级标题语义一致。"""
-
-    return sum(
-        1
-        for token in _MARKDOWN_PARSER.parse(content)
-        if token.type == "heading_open" and token.tag == f"h{AI_SUMMARY_SECTION_HEADING_LEVEL}"
-    )
 
 
 def _filter_markers(content: str, accepted: set[tuple[int, int]]) -> str:

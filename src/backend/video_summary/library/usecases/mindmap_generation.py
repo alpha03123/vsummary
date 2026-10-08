@@ -68,9 +68,9 @@ class GenerateVideoMindmapFromLibrary:
         transcript = self._workspace.get_video_transcript(series_id, video_id)
         transcript_text = "\n".join(s.text for s in transcript.segments) if transcript is not None else ""
         visual_reader = getattr(self._workspace, "get_video_ai_summary_visual_evidence", None)
-        visual_evidence = visual_reader(series_id, video_id) if callable(visual_reader) else None
+        visual_evidence = visual_reader(series_id, video_id) if self._visual_input != "none" and callable(visual_reader) else None
         visual_evidence_text = "\n".join(frame.text for frame in visual_evidence.frames) if visual_evidence is not None else ""
-        source = self._workspace.get_video_source(series_id, video_id)
+        source = self._workspace.get_video_source(series_id, video_id) if self._visual_input == "frames" else None
         visual_frame_paths = _visual_frame_pool_paths(
             source,
             visual_input=self._visual_input,

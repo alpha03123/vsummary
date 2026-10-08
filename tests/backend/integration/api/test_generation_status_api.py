@@ -25,33 +25,41 @@ from tests._job_fixtures import job_snapshot
 
 
 class GenerationStatusApiTests(unittest.TestCase):
-    def test_video_generation_status_returns_last_durable_job_event(self) -> None:
+    def test_video_generation_status_preserves_progress_before_a_percentage_free_event(self) -> None:
         container = _build_container()
         started_at = datetime(2026, 9, 27, 14, 0, tzinfo=timezone.utc)
         container = replace(container, job_repository=create_autospec(SqlJobRepository, instance=True, spec_set=True))
         container.job_repository.latest_for_resource.return_value = job_snapshot(
             id="job-1", started_at=started_at,
         )
-        container.job_repository.latest_event.return_value = JobEventSnapshot(
+        container.job_repository.events.return_value = [JobEventSnapshot(
+            sequence=1, status="running", stage="summarize", progress=88.0,
+            detail="Summarizing", occurred_at=started_at + timedelta(seconds=10), started_at=started_at,
+        ), JobEventSnapshot(
             sequence=2, status="running", stage="publish", progress=99.0,
             detail="正在保存生成结果", occurred_at=started_at + timedelta(seconds=12),
             started_at=started_at,
-        )
+        ), JobEventSnapshot(sequence=3, status="running", stage="understand_frames", progress=None,
+            detail="Understanding frames", occurred_at=started_at + timedelta(seconds=13), started_at=started_at)]
         client = TestClient(create_app(container))
 
         response = client.get("/api/videos/series-1/video-1/generate/status")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["job_id"], "job-1")
-        self.assertEqual(response.json()["snapshot"], {
+        snapshot = response.json()["snapshot"]
+        expected = {
             "status": "running",
-            "stage": "publish",
+            "stage": "understand_frames",
             "progress": 99.0,
-            "detail": "正在保存生成结果",
+            "sequence": 3,
+            "detail": "Understanding frames",
             "error": None,
             "started_at": started_at.timestamp(),
-            "elapsed_seconds": 12.0,
-        })
+            "elapsed_seconds": 13.0,
+        }
+        self.assertEqual({key:snapshot[key] for key in expected},expected)
+        self.assertEqual(len(snapshot["events"]),3)
         container.job_repository.latest_for_resource.assert_called_once_with(
             workspace_id="workspace-1", resource_id="video-1",
             operations=("generate_summary", "generate_transcript", "process_agent_video"),
@@ -61,7 +69,7 @@ class GenerationStatusApiTests(unittest.TestCase):
         container = _build_container()
         container = replace(container, job_repository=create_autospec(SqlJobRepository, instance=True, spec_set=True))
         container.job_repository.latest_for_resource.return_value = job_snapshot(id="job-1", status="queued")
-        container.job_repository.latest_event.return_value = None
+        container.job_repository.events.return_value = []
 
         response = TestClient(create_app(container)).get("/api/videos/series-1/video-1/generate/status")
 
