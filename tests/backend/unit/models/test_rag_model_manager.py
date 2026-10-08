@@ -48,10 +48,11 @@ class RagModelManagerTests(unittest.TestCase):
             _write_model_marker(root_dir, "fast-bge-small-zh-v1.5", extra_files=("model_optimized.onnx",))
             manager = RagModelManager(root_dir=root_dir, progress_tracker=InMemoryProgressTracker())
 
-            models = manager.list_models()
+            with mock.patch("fastembed.TextEmbedding.list_supported_models", return_value=[_tarball_model_metadata()]):
+                models = manager.list_models()
 
-            self.assertTrue(models[0].downloaded)
-            self.assertTrue(models[0].local_path.endswith("fast-bge-small-zh-v1.5"))
+                self.assertTrue(models[0].downloaded)
+                self.assertTrue(models[0].local_path.endswith("fast-bge-small-zh-v1.5"))
 
     def test_partial_model_directory_is_not_reported_as_downloaded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -169,10 +170,11 @@ class RagModelManagerTests(unittest.TestCase):
                 downloader=failing_downloader,
             )
 
-            manager.start_download("embedding")
-            _wait_until(lambda: not manager.has_active_download())
+            with mock.patch("fastembed.TextEmbedding.list_supported_models", return_value=[_tarball_model_metadata()]):
+                manager.start_download("embedding")
+                _wait_until(lambda: not manager.has_active_download())
 
-            self.assertFalse(legacy_dir.exists())
+                self.assertFalse(legacy_dir.exists())
 
     def test_download_start_preserves_stale_hf_cache_but_clears_stale_lock(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -480,6 +482,15 @@ class FakeSessionStore:
 
     def clear_snapshot(self, session_id: str) -> None:
         self.cleared_session_ids.append(session_id)
+
+
+def _tarball_model_metadata() -> dict:
+    # Exercise the URL-cache contract independently of the installed model catalog.
+    return {
+        "model": "BAAI/bge-small-zh-v1.5",
+        "model_file": "model_optimized.onnx",
+        "sources": {"url": "https://example.invalid/model.tar.gz", "_deprecated_tar_struct": True},
+    }
 
 
 def _write_model_marker(root_dir: Path, model_dir_name: str, extra_files: tuple[str, ...] = ()) -> None:

@@ -280,7 +280,9 @@ def test_two_workers_execute_while_maintenance_keeps_running(stored_video, mysql
     assert all(repository.get(job_id).status == 'succeeded' for job_id in active)
 
 
-def test_local_settings_control_worker_concurrency_at_startup_and_runtime(stored_video, mysql_sessions, tmp_path):
+def test_local_settings_control_worker_concurrency_at_startup_and_runtime(stored_video, mysql_sessions, tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.video_summary.infrastructure.runtime_capabilities._is_nvidia_cuda_available", lambda: False)
+    monkeypatch.setattr("backend.video_summary.infrastructure.runtime_capabilities._has_amd_display_adapter", lambda: False)
     workspace, _, video_id = stored_video
     config_path = tmp_path / 'config' / 'settings.toml'
     config_path.parent.mkdir()
@@ -317,6 +319,7 @@ def test_local_settings_control_worker_concurrency_at_startup_and_runtime(stored
         request = UpdateWorkspaceSettingsRequest.model_validate({
             **asdict(container.settings_service.get_workspace_settings()),
             'video_generation_concurrency': 3,
+            'rag_embedding_device': 'cpu',
         })
         asyncio.run(update_workspace_settings(request=request, container=container, services=services))
         assert increased.wait(3)
