@@ -1,6 +1,17 @@
 # Core 宿主接口
 
-当前版本：`vsummary-core==0.5.0a19`。
+当前版本：`vsummary-core==0.5.0a28`。
+
+## 视频获取扩展
+
+`build_host_container(linked_video_resolvers=..., linked_video_downloaders=...)` 接收按 provider
+命名的宿主适配器。解析端口是 `LinkedVideoResolver`，下载端口是 `LinkedVideoDownloader`；
+API 预览/导入、后台下载和 Agent 视频处理共用这些适配器。下载返回临时文件路径，
+后续 BlobStore、转录、生成和 RAG 更新仍由 Core 处理，宿主不能绕过工作区权限和持久化。
+
+yt-dlp 适配器的 `cookie=None` 保留 Local 的匿名优先、认证失败后重试配置 Cookie 的行为；
+`cookie=""` 明确只尝试匿名，非空值明确只尝试该 Cookie。宿主可组合自己的获取策略，
+无需改写进程环境变量。Core 不依赖 TikHub，也不包含第三方获取服务的密钥。
 
 `UsageEstimate` / `UsageRecord` 导出 `multimodal_enabled` 计费特征；宿主可通过 `multimodal_estimate` 回调提供每次任务的有效设置，结算从提交时的预估快照读取该特征。Core 不包含积分倍率或价格。
 

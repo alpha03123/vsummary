@@ -8,6 +8,7 @@ from backend.bilibili import BilibiliDownloader
 from backend.chaoxing import ChaoxingDownloaderClient
 from backend.external import YtDlpPlatformDownloader
 from backend.video_summary.library.linked_models import LinkedVideo
+from backend.video_summary.library.ports import LinkedVideoDownloader
 
 
 class ProviderLinkedVideoDownloader:
@@ -20,13 +21,17 @@ class ProviderLinkedVideoDownloader:
         bilibili_downloader: BilibiliDownloader,
         platform_downloaders: dict[str, YtDlpPlatformDownloader],
         chaoxing_client: ChaoxingDownloaderClient,
+        overrides: dict[str, LinkedVideoDownloader] | None = None,
     ) -> None:
         self._download_root = download_root
         self._bilibili_downloader = bilibili_downloader
         self._platform_downloaders = platform_downloaders
         self._chaoxing_client = chaoxing_client
+        self._overrides = dict(overrides or {})
 
     def download(self, *, series_id: str, video: LinkedVideo, reporter) -> Path:
+        if video.provider in self._overrides:
+            return self._overrides[video.provider].download(series_id=series_id, video=video, reporter=reporter)
         destination = self._download_root / series_id / video.video_id
         if video.provider == "bilibili":
             return self._bilibili_downloader.download(video.source_id, video.item_index, destination, reporter)

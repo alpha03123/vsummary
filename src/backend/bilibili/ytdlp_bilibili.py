@@ -96,9 +96,10 @@ class YtDlpBilibiliResolver:
         extractor: Callable[[str], dict[str, object]] | None = None,
         view_extractor: Callable[[str], dict[str, object]] | None = None,
         request_pacer: RequestPacer | None = None,
+        cookie: str | None = None,
     ) -> None:
-        self._extractor = extractor or partial(_extract_info, request_pacer=request_pacer)
-        self._view_extractor = view_extractor or partial(_extract_view_info, request_pacer=request_pacer)
+        self._extractor = extractor or partial(_extract_info, request_pacer=request_pacer, selected_cookie=cookie)
+        self._view_extractor = view_extractor or partial(_extract_view_info, request_pacer=request_pacer, selected_cookie=cookie)
 
     async def resolve_series(self, url_info: BilibiliUrlInfoDTO) -> LinkedSeries:
         """将 Bilibili URL 解析为合集（LinkedSeries）。
@@ -192,8 +193,9 @@ class BilibiliDownloader:
     """
     _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
-    def __init__(self, *, request_pacer: RequestPacer | None = None):
+    def __init__(self, *, request_pacer: RequestPacer | None = None, cookie: str | None = None):
         self._request_pacer = request_pacer
+        self._cookie = cookie
 
     def download(self, bvid: str, page: int, dest_dir: Path, reporter: ProgressReporter) -> Path:
         """同步下载单个 Bilibili 视频到指定目录。
@@ -228,7 +230,7 @@ class BilibiliDownloader:
             with temporary_cookie_file(cookie, "bilibili.com") as cookie_file:
                 return self._download_formats(dest_dir, stem, url, output_template, headers, cookie_file, reporter)
         try:
-            return run_with_cookie_fallback(download, cookie)
+            return download(self._cookie) if self._cookie is not None else run_with_cookie_fallback(download, cookie)
         except DownloadCancelled as exc:
             reporter.cancelled(str(exc))
             raise
@@ -654,7 +656,7 @@ class CompositeLinkedVideoDownloadStarter:
         return starter.start(series_id=series_id, video=video)
 
 
-def _extract_info(url: str, *, request_pacer: RequestPacer | None = None) -> dict[str, object]:
+def _extract_info(url: str, *, request_pacer: RequestPacer | None = None, selected_cookie: str | None = None) -> dict[str, object]:
     """通过 yt-dlp 提取 Bilibili URL 的元数据（flat 模式，不下载）。
 
     使用 ``extract_flat: "in_playlist"`` 仅获取合集下的标题、ID、时长等
@@ -696,13 +698,13 @@ def _extract_info(url: str, *, request_pacer: RequestPacer | None = None) -> dic
                 attempt_options["cookiefile"] = str(cookie_file)
             with YoutubeDL(attempt_options) as ydl:
                 return ydl.extract_info(url, download=False)
-    payload = run_with_cookie_fallback(extract, cookie)
+    payload = extract(selected_cookie) if selected_cookie is not None else run_with_cookie_fallback(extract, cookie)
     if not isinstance(payload, dict):
         raise RuntimeError("yt-dlp 未返回有效元数据。")
     return payload
 
 
-def _extract_view_info(bvid: str, *, request_pacer: RequestPacer | None = None) -> dict[str, object]:
+def _extract_view_info(bvid: str, *, request_pacer: RequestPacer | None = None, selected_cookie: str | None = None) -> dict[str, object]:
     """调用 Bilibili View API 获取视频的详细信息。
 
     显式 ``proxy=None`` 避免境内 API 的 TLS 代理握手失败（
@@ -730,7 +732,7 @@ def _extract_view_info(bvid: str, *, request_pacer: RequestPacer | None = None) 
         if isinstance(payload, dict) and payload.get("code") == -101:
             raise CookieRequiredError("Bilibili view API requires login.")
         return payload
-    payload = run_with_cookie_fallback(extract, cookie)
+    payload = extract(selected_cookie) if selected_cookie is not None else run_with_cookie_fallback(extract, cookie)
     if not isinstance(payload, dict) or payload.get("code") != 0:
         raise RuntimeError(f"Bilibili view API 返回异常：{payload.get('message') if isinstance(payload, dict) else payload}")
     data = payload.get("data")

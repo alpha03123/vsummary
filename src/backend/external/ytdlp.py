@@ -67,6 +67,19 @@ class YtDlpPlatform:
     format_selector: str = "bv*+ba/best"
 
 
+YOUTUBE_PLATFORM = YtDlpPlatform(
+    provider="youtube", display_name="YouTube", cookie_domain="youtube.com",
+    login_url="https://accounts.google.com/ServiceLogin?service=youtube",
+    cookie_env="YOUTUBE_COOKIE", browser_port=9224,
+    login_cookie_names=("SID", "SAPISID", "LOGIN_INFO"),
+)
+DOUYIN_PLATFORM = YtDlpPlatform(
+    provider="douyin", display_name="抖音", cookie_domain="douyin.com",
+    login_url="https://www.douyin.com/", cookie_env="DOUYIN_COOKIE", browser_port=9225,
+    login_cookie_names=("sessionid", "sessionid_ss"),
+)
+
+
 class DrissionCookieInitializer:
     """通过独立浏览器 profile 登录平台并保存该平台 Cookie。"""
 
@@ -117,9 +130,11 @@ class YtDlpPlatformResolver:
         platform: YtDlpPlatform,
         extractor: Callable[[str], dict[str, object]] | None = None,
         request_pacer: RequestPacer | None = None,
+        cookie: str | None = None,
     ) -> None:
         self._platform = platform
         self._request_pacer = request_pacer
+        self._cookie = cookie
         self._extractor = extractor or self._extract_info
 
     async def resolve_series(self, url_info) -> LinkedSeries:
@@ -170,7 +185,8 @@ class YtDlpPlatformResolver:
                     attempt_options["cookiefile"] = str(cookie_file)
                 with YoutubeDL(attempt_options) as ydl:
                     return ydl.extract_info(url, download=False)
-        payload = run_with_cookie_fallback(extract, os.environ.get(self._platform.cookie_env, ""))
+        payload = (extract(self._cookie) if self._cookie is not None else
+            run_with_cookie_fallback(extract, os.environ.get(self._platform.cookie_env, "")))
         if not isinstance(payload, dict):
             raise RuntimeError("yt-dlp 未返回有效元数据。")
         return payload
@@ -196,9 +212,10 @@ class YtDlpPlatformResolver:
 class YtDlpPlatformDownloader:
     """使用 yt-dlp 下载已解析的平台视频，并上报进度与取消状态。"""
 
-    def __init__(self, platform: YtDlpPlatform, *, request_pacer: RequestPacer | None = None) -> None:
+    def __init__(self, platform: YtDlpPlatform, *, request_pacer: RequestPacer | None = None, cookie: str | None = None) -> None:
         self._platform = platform
         self._request_pacer = request_pacer
+        self._cookie = cookie
 
     def download(self, video: LinkedVideo, dest_dir: Path, reporter: ProgressReporter) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -230,7 +247,10 @@ class YtDlpPlatformDownloader:
                 self._run_process(attempt, reporter)
         try:
             reporter.update("download", 0.0, "开始下载")
-            run_with_cookie_fallback(download, os.environ.get(self._platform.cookie_env, ""))
+            if self._cookie is None:
+                run_with_cookie_fallback(download, os.environ.get(self._platform.cookie_env, ""))
+            else:
+                download(self._cookie)
             candidates = [
                 path for path in sorted(dest_dir.glob(f"{video.video_id}.*"))
                 if path.is_file() and not path.name.endswith(".part")

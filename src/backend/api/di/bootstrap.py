@@ -38,6 +38,7 @@ from backend.external import (
     YtDlpPlatformDownloader,
     YtDlpPlatformResolver,
 )
+from backend.external.ytdlp import YOUTUBE_PLATFORM, DOUYIN_PLATFORM
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -64,7 +65,7 @@ from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWo
 from backend.video_summary.infrastructure.persistence.outbox_repository import SqlOutboxRepository
 from backend.video_summary.infrastructure.persistence.outbox_worker import SqlOutboxWorker
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
-from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator
+from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator, LinkedVideoResolver, LinkedVideoDownloader
 from backend.video_summary.library.usecases import (
     CreateAgentLinkedSeries,
     DeleteSeries,
@@ -135,6 +136,8 @@ class ApiContainer:
     model_profiles: dict[str, str] = field(default_factory=dict)
     resource_budget: ResourceBudget | None = None
     chat_queue: SqlChatQueue | None = None
+    linked_video_resolvers: dict[str, LinkedVideoResolver] = field(default_factory=dict)
+    linked_video_downloaders: dict[str, LinkedVideoDownloader] = field(default_factory=dict)
 
 
 def build_host_container(
@@ -152,6 +155,8 @@ def build_host_container(
     resource_budget=None,
     chat_queue=None,
     job_queue_policy=None,
+    linked_video_resolvers: dict[str, LinkedVideoResolver] | None = None,
+    linked_video_downloaders: dict[str, LinkedVideoDownloader] | None = None,
 ) -> ApiContainer:
     """Build shared host dependencies; no Workspace or background process is started."""
     config_path = root_dir / "config" / "settings.toml"
@@ -194,6 +199,8 @@ def build_host_container(
         usage_store=MySqlLlmUsageStore(session_factory), request_limiter=request_limiter,
         model_http_client=httpx.Client(), preference_store=preference_store,
         model_profiles=dict(model_profiles or {}), resource_budget=resource_budget, chat_queue=chat_queue,
+        linked_video_resolvers=dict(linked_video_resolvers or {}),
+        linked_video_downloaders=dict(linked_video_downloaders or {}),
     )
 
 
@@ -397,31 +404,15 @@ def build_workspace_services(
     }
     bilibili_resolver = YtDlpBilibiliResolver(request_pacer=request_pacers["bilibili"])
     bilibili_cookie_initializer = DrissionBilibiliCookieInitializer(root_dir=root_dir)
-    youtube_platform = YtDlpPlatform(
-        provider="youtube",
-        display_name="YouTube",
-        cookie_domain="youtube.com",
-        login_url="https://accounts.google.com/ServiceLogin?service=youtube",
-        cookie_env="YOUTUBE_COOKIE",
-        browser_port=9224,
-        login_cookie_names=("SID", "SAPISID", "LOGIN_INFO"),
-        format_selector="bv*+ba/best",
-    )
-    douyin_platform = YtDlpPlatform(
-        provider="douyin",
-        display_name="抖音",
-        cookie_domain="douyin.com",
-        login_url="https://www.douyin.com/",
-        cookie_env="DOUYIN_COOKIE",
-        browser_port=9225,
-        login_cookie_names=("sessionid", "sessionid_ss"),
-        format_selector="bv*+ba/best",
-    )
+    youtube_platform = YOUTUBE_PLATFORM
+    douyin_platform = DOUYIN_PLATFORM
     external_platforms = (youtube_platform, douyin_platform)
     external_resolvers = {
         "bilibili": bilibili_resolver,
         **{platform.provider: YtDlpPlatformResolver(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
     }
+    external_resolvers.update(container.linked_video_resolvers)
+    bilibili_resolver = external_resolvers["bilibili"]
     external_cookie_initializers = {
         platform.provider: DrissionCookieInitializer(root_dir=root_dir, platform=platform)
         for platform in external_platforms
@@ -437,6 +428,7 @@ def build_workspace_services(
         bilibili_downloader=BilibiliDownloader(request_pacer=request_pacers["bilibili"]),
         platform_downloaders={platform.provider: YtDlpPlatformDownloader(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
         chaoxing_client=chaoxing_client,
+        overrides=container.linked_video_downloaders,
     )
 
     async def run_linked_video_download_job(claim, reporter) -> None:
