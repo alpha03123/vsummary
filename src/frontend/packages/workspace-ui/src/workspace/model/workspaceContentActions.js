@@ -357,6 +357,7 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
       dispatch({
         taskKey: buildSeriesGenerationTaskKey(seriesId),
         type: "generation_status_loaded",
+        jobId: submitted.jobId,
         mode: "series",
         seriesId,
         runId,
@@ -370,10 +371,11 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
         },
         subscriptionActive: true,
       });
-      const unsubscribe = subscribeSeriesGenerationProgress(seriesId, async (snapshot) => {
+      const unsubscribe = subscribeSeriesGenerationProgress(seriesId, submitted.jobId, async (snapshot) => {
         dispatch({
           type: "generation_status_loaded",
           taskKey: buildSeriesGenerationTaskKey(seriesId),
+          jobId: submitted.jobId,
           mode: "series",
           seriesId,
           runId,
@@ -384,7 +386,7 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
         if (snapshot.status === "completed") {
           unsubscribe();
           const library = await reloadWorkspaceLibrary();
-          dispatch({ type: "series_generation_succeeded", taskKey: buildSeriesGenerationTaskKey(seriesId), seriesId, runId, library });
+          dispatch({ type: "series_generation_succeeded", taskKey: buildSeriesGenerationTaskKey(seriesId), seriesId, runId, jobId: submitted.jobId, library });
           dispatch({ type: "series_generation_queue_finished", seriesId, runId, status: "completed", detail: "视频子任务已进入队列" });
           if (activeSeriesCancellationRef.current === cancellation) activeSeriesCancellationRef.current = null;
         }

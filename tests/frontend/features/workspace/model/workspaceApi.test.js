@@ -12,6 +12,21 @@ afterEach(() => {
 });
 
 describe("series generation submission and progress", () => {
+  test("retains series progress during transient disconnection and closes on completion", () => {
+    const handlers = new Map();
+    const connection = { readyState: 0, close: vi.fn(), addEventListener: (name, handler) => handlers.set(name, handler) };
+    transport.subscribe.mockReturnValue(connection);
+    const listener = vi.fn();
+    subscribeSeriesGenerationProgress("series-1", "batch-1", listener);
+    expect(transport.subscribe).toHaveBeenCalledWith("/api/series/series-1/generate/progress?job_id=batch-1");
+    handlers.get("progress")({ data: JSON.stringify({ status: "running", progress: 42, detail: "working" }) });
+    connection.onerror();
+    expect(listener.mock.calls.at(-1)[0]).toMatchObject({ status: "running", progress: 42, stage: "reconnecting", error: null });
+    expect(connection.close).not.toHaveBeenCalled();
+    handlers.get("progress")({ data: JSON.stringify({ status: "succeeded", progress: 100 }) });
+    expect(listener.mock.calls.at(-1)[0].status).toBe("completed");
+    expect(connection.close).toHaveBeenCalledOnce();
+  });
   test("returns the accepted job so the caller can read its status", async () => {
     transport.fetch.mockResolvedValue({ ok: true, json: async () => ({ job_id: "batch-1", status: "queued" }) });
     await expect(generateSeriesSummaries("series-1", { processingMode: "transcript" }))
@@ -29,7 +44,7 @@ describe("series generation submission and progress", () => {
     const connection = { close: vi.fn(), addEventListener: (name, handler) => handlers.set(name, handler) };
     transport.subscribe.mockReturnValue(connection);
     const listener = vi.fn();
-    if (scope === "series") subscribeSeriesGenerationProgress("series-1", listener);
+    if (scope === "series") subscribeSeriesGenerationProgress("series-1", "batch-1", listener);
     else subscribeVideoGenerationProgress("series-1", "video-1", listener);
     for (const status of ["running", "cancelled"]) {
       handlers.get("progress")({ data: JSON.stringify({ status, stage: status, progress: 20 }) });

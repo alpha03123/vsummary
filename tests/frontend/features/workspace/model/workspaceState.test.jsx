@@ -404,9 +404,10 @@ describe("workspaceContentActions series generation", () => {
 
     const dispatch = vi.fn();
     const generateSeriesSummaries = vi.fn().mockResolvedValue({ jobId: "batch-1", status: "queued" });
+    const subscribeSeriesGenerationProgress = vi.fn(() => vi.fn());
     const createActions = createWorkspaceContentActionFactory({
       generateSeriesSummaries,
-      subscribeSeriesGenerationProgress: vi.fn(() => vi.fn()),
+      subscribeSeriesGenerationProgress,
     });
     const actions = createActions({
       state: { ...createInitialWorkspaceState(), library, selectedSeriesId: "series-a" },
@@ -419,6 +420,8 @@ describe("workspaceContentActions series generation", () => {
       type: "series_generation_queue_started", seriesId: "series-a", total: 2,
     }));
     expect(generateSeriesSummaries).toHaveBeenCalledWith("series-a", expect.objectContaining({ processingMode: "summary" }));
+    expect(subscribeSeriesGenerationProgress).toHaveBeenCalledWith("series-a", "batch-1", expect.any(Function));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "generation_status_loaded", jobId: "batch-1" }));
   });
 
   it("tracks one-click series queue from backend series progress", () => {

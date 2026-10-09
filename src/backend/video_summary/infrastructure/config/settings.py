@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -154,6 +155,8 @@ DEFAULT_ASR_ALIYUN_BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com"
 DEFAULT_ASR_ALIYUN_BAILIAN_MODEL = "paraformer-v2"
 DEFAULT_CHAOXING_REQUEST_DELAY_SECONDS = 0.2
 DEFAULT_CHAOXING_INIT_COURSE_DELAY_SECONDS = 0.3
+DEFAULT_BILIBILI_REQUEST_DELAY_SECONDS = 0.3
+DEFAULT_DOUYIN_REQUEST_DELAY_SECONDS = 1.0
 DEFAULT_ASR_LANGUAGE = "auto"
 DEFAULT_FASTER_WHISPER_INITIAL_PROMPT = ""
 DEFAULT_WHISPER_CPP_BINARY_PATH = "whisper-cli"
@@ -388,10 +391,17 @@ class ChaoxingImportSettings:
 
 
 @dataclass(frozen=True)
+class PlatformRequestSettings:
+    request_delay_seconds: float
+
+
+@dataclass(frozen=True)
 class ExternalImportSettings:
-    """外部导入（超星 / 学习通）的配置集合。"""
+    """外部平台导入和下载配置。"""
 
     chaoxing: ChaoxingImportSettings
+    bilibili: PlatformRequestSettings
+    douyin: PlatformRequestSettings
 
 
 @dataclass(frozen=True)
@@ -692,6 +702,14 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
     external_import_payload = payload.get("external_import", {})
     chaoxing_import_payload = external_import_payload.get("chaoxing", {})
     external_import_settings = ExternalImportSettings(
+        bilibili=PlatformRequestSettings(request_delay_seconds=_normalize_non_negative_float(
+            external_import_payload.get("bilibili", {}).get("request_delay_seconds"),
+            default=DEFAULT_BILIBILI_REQUEST_DELAY_SECONDS,
+            field_name="external_import.bilibili.request_delay_seconds")),
+        douyin=PlatformRequestSettings(request_delay_seconds=_normalize_non_negative_float(
+            external_import_payload.get("douyin", {}).get("request_delay_seconds"),
+            default=DEFAULT_DOUYIN_REQUEST_DELAY_SECONDS,
+            field_name="external_import.douyin.request_delay_seconds")),
         chaoxing=ChaoxingImportSettings(
             request_delay_seconds=_normalize_non_negative_float(
                 chaoxing_import_payload.get("request_delay_seconds"),
@@ -1270,6 +1288,12 @@ def _render_settings_toml(settings: AppSettings) -> str:
         f"request_delay_seconds = {settings.external_import.chaoxing.request_delay_seconds}",
         f"init_course_delay_seconds = {settings.external_import.chaoxing.init_course_delay_seconds}",
         "",
+        "[external_import.bilibili]",
+        f"request_delay_seconds = {settings.external_import.bilibili.request_delay_seconds}",
+        "",
+        "[external_import.douyin]",
+        f"request_delay_seconds = {settings.external_import.douyin.request_delay_seconds}",
+        "",
     ]
     return "\n".join(lines)
 
@@ -1328,7 +1352,7 @@ def _normalize_non_negative_float(value: object, *, default: float, field_name: 
         raise ValueError(f"{field_name} 必须是大于等于 0 的数字。")
     if isinstance(value, (int, float)):
         normalized = float(value)
-        if normalized >= 0:
+        if math.isfinite(normalized) and normalized >= 0:
             return normalized
     raise ValueError(f"{field_name} 必须是大于等于 0 的数字。")
 

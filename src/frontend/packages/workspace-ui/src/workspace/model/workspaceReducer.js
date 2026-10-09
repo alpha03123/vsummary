@@ -514,6 +514,8 @@ export function workspaceReducer(state, action) {
       return {
         ...state,
         error: "",
+        videoDownloadError: null,
+        videoDownloadErrorKey: null,
       };
     case "series_selected": {
       const chatBaseScopeKey = buildChatScopeKey("series", action.seriesId, null);
@@ -1438,6 +1440,7 @@ export function workspaceReducer(state, action) {
           createGenerationTaskRecord({
             taskKey: action.taskKey ?? buildSeriesGenerationTaskKey(action.seriesId),
             mode: "series",
+            jobId: action.jobId ?? state.generationTasksByKey[buildSeriesGenerationTaskKey(action.seriesId)]?.jobId ?? null,
             seriesId: action.seriesId,
             runId: action.runId ?? null,
             snapshot: {

@@ -1,8 +1,10 @@
 """Workspace-scoped durable progress used by browser clients."""
 
 
-def durable_status(repository, *, workspace_id: str, resource_id: str, operations: tuple[str, ...], batch: bool = False):
-    job = repository.latest_for_resource(workspace_id=workspace_id, resource_id=resource_id, operations=operations)
+def durable_status(repository, *, workspace_id: str, resource_id: str, operations: tuple[str, ...], batch: bool = False, job_id: str | None = None):
+    job = repository.get(job_id, workspace_id=workspace_id) if job_id is not None else repository.latest_for_resource(workspace_id=workspace_id, resource_id=resource_id, operations=operations)
+    if job_id is not None and (job is None or job.resource_id != resource_id or job.operation not in operations):
+        raise LookupError("generation job not found")
     if job is None:
         return {"status": "idle", "progress": None, "detail": None, "job_id": None}
     children = repository.children(job.id, workspace_id=workspace_id) if batch else []

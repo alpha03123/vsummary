@@ -232,7 +232,7 @@ def test_youtube_verification_failure_tells_user_to_refresh_cookie() -> None:
     )
 
     assert error.kind == "cookie_required"
-    assert str(error) == "YouTube 需要重新验证登录状态。请重新获取 Cookie 后再试。"
+    assert str(error) == "YouTube拒绝此登录状态。请等待一会重试或者重新获取 Cookie 后再试。"
 
 
 def test_unclassified_platform_failure_never_returns_generic_parse_error() -> None:

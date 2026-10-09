@@ -131,3 +131,10 @@ timeout_seconds = 10
 request_delay_seconds = 0.2
 # 超星 Init 阶段逐课程预热间隔，单位秒。课程多时可适当调高。
 init_course_delay_seconds = 0.3
+
+[external_import.bilibili]
+# 平台调用之间的最小间隔；同一安装下并发任务共享，单位为秒。
+request_delay_seconds = 0.3
+
+[external_import.douyin]
+request_delay_seconds = 1.0

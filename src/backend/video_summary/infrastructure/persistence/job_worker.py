@@ -10,6 +10,7 @@ from threading import Event, Lock, Thread
 from typing import Protocol
 from uuid import uuid4
 from backend.core.context import WorkspaceContext
+from backend.core.errors import UserVisibleError
 from backend.core.request_context import bind_workspace_context
 from backend.core.preferences import bind_user_preferences
 from backend.core.metering import bind_resource_budget
@@ -358,6 +359,8 @@ class SqlJobWorker:
 
 
 def _failure_code(error: Exception) -> str:
+    if isinstance(error, UserVisibleError):
+        return error.code
     if isinstance(error, MediaSourceUnavailableError):
         return "media_source_unavailable"
     if isinstance(error, ContentVersionConflictError):
@@ -372,6 +375,8 @@ def _failure_code(error: Exception) -> str:
 
 
 def _public_failure_detail(error: Exception) -> str:
+    if isinstance(error, UserVisibleError):
+        return str(error)
     if isinstance(error, MediaSourceUnavailableError):
         return str(error)
     code = _failure_code(error)

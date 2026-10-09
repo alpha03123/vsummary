@@ -433,6 +433,14 @@ describe("workspaceReducer video download cancellation", () => {
 
     expect(nextState.videoDownloadError).toBe("download failed");
     expect(nextState.videoDownloadErrorKey).toBe("series-a/linked-1");
+    const page = buildWorkspacePageModel({state: nextState, selectedContextType: "series"});
+    expect(page.generation.videoDownloadError).toBe("download failed");
+    expect(page.generation.videoDownloadErrorKey).toBe("series-a/linked-1");
+    const refreshed = workspaceReducer(nextState, { type: "tools_loaded", tools: null });
+    expect(refreshed.videoDownloadError).toBe("download failed");
+    const dismissed = workspaceReducer(refreshed, { type: "error_cleared" });
+    expect(dismissed.videoDownloadError).toBeNull();
+    expect(dismissed.videoDownloadErrorKey).toBeNull();
     expect(nextState.library.series[0].videos[0].status).toBe("linked");
   });
 

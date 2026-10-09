@@ -26,10 +26,8 @@ class WorkspaceAgentContextLoader:
                 series_title=series.title,
             )
 
-        video = self._workspace.get_video_source(series.id, video_id)
-        # A migrated video can retain SQL summaries/transcripts while its
-        # original media Blob is unavailable. Agent content access must not
-        # be coupled to preview/generation media availability.
+        # Context inspection needs metadata, not a materialized playback file.
+        video = next((item for item in series.videos if item.id == video_id), None)
         tools = self._workspace.get_video_workspace_tools(series.id, video_id)
         summary = self._workspace.get_video_summary(series.id, video_id)
         chapter_titles = []
@@ -47,10 +45,8 @@ class WorkspaceAgentContextLoader:
             scope_type="video",
             series_id=series.id,
             series_title=series.title,
-            video_id=video.video_id if video is not None else video_id,
-            video_title=video.title if video is not None else next(
-                (item.title for item in series.videos if item.id == video_id), video_id
-            ),
+            video_id=video.id if video is not None else video_id,
+            video_title=video.title if video is not None else video_id,
             overview=_map_tool_availability(None if tools is None else tools.overview),
             mindmap=_map_tool_availability(None if tools is None else tools.mindmap),
             knowledge_cards=_map_tool_availability(None if tools is None else tools.knowledge_cards),

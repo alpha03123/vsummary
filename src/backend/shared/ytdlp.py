@@ -7,9 +7,17 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TypeVar
+from backend.shared.request_pacing import RequestPacer
 
 
 T = TypeVar("T")
+
+
+def request_sleep_flags(pacer: RequestPacer | None) -> list[str]:
+    if pacer is None:
+        return []
+    delay = str(pacer.interval_seconds)
+    return ["--sleep-requests", delay, "--sleep-interval", delay]
 
 
 class CookieRequiredError(RuntimeError):

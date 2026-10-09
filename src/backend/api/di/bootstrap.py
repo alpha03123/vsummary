@@ -389,7 +389,13 @@ def build_workspace_services(
         summary_generation_use_case,
         progress_tracker,
     )
-    bilibili_resolver = YtDlpBilibiliResolver()
+    from backend.shared.request_pacing import RequestPacer
+    request_pacers = {
+        provider: RequestPacer(interval_seconds=getattr(settings.external_import, provider).request_delay_seconds,
+            state_path=root_dir / "data" / "request-pacing" / f"{provider}.json")
+        for provider in ("bilibili", "douyin")
+    }
+    bilibili_resolver = YtDlpBilibiliResolver(request_pacer=request_pacers["bilibili"])
     bilibili_cookie_initializer = DrissionBilibiliCookieInitializer(root_dir=root_dir)
     youtube_platform = YtDlpPlatform(
         provider="youtube",
@@ -414,7 +420,7 @@ def build_workspace_services(
     external_platforms = (youtube_platform, douyin_platform)
     external_resolvers = {
         "bilibili": bilibili_resolver,
-        **{platform.provider: YtDlpPlatformResolver(platform) for platform in external_platforms},
+        **{platform.provider: YtDlpPlatformResolver(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
     }
     external_cookie_initializers = {
         platform.provider: DrissionCookieInitializer(root_dir=root_dir, platform=platform)
@@ -428,8 +434,8 @@ def build_workspace_services(
     chaoxing_importer = ChaoxingCourseImporter(client=chaoxing_client)
     durable_linked_downloader = ProviderLinkedVideoDownloader(
         download_root=root_dir / "data" / "downloads",
-        bilibili_downloader=BilibiliDownloader(),
-        platform_downloaders={platform.provider: YtDlpPlatformDownloader(platform) for platform in external_platforms},
+        bilibili_downloader=BilibiliDownloader(request_pacer=request_pacers["bilibili"]),
+        platform_downloaders={platform.provider: YtDlpPlatformDownloader(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
         chaoxing_client=chaoxing_client,
     )
 

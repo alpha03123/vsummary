@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
 from backend.shared.filesystem import atomic_write_text
-from backend.shared.ytdlp import parse_cookie_pairs, temporary_cookie_file, run_with_cookie_fallback, requires_cookie
+from backend.shared.ytdlp import parse_cookie_pairs, temporary_cookie_file, run_with_cookie_fallback, requires_cookie, request_sleep_flags
+from backend.shared.request_pacing import RequestPacer
+from backend.core.errors import UserVisibleError
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 
 _DEFAULT_USER_AGENT = "Mozilla/5.0"
@@ -29,11 +31,11 @@ class ExternalCookieInitError(RuntimeError):
     """平台登录页无法取得可用 Cookie。"""
 
 
-class ExternalVideoResolutionError(RuntimeError):
+class ExternalVideoResolutionError(UserVisibleError):
     """外部视频平台拒绝或无法解析链接。"""
 
     def __init__(self, kind: str, message: str) -> None:
-        super().__init__(message)
+        super().__init__(kind, message)
         self.kind = kind
 
 
@@ -114,8 +116,10 @@ class YtDlpPlatformResolver:
         self,
         platform: YtDlpPlatform,
         extractor: Callable[[str], dict[str, object]] | None = None,
+        request_pacer: RequestPacer | None = None,
     ) -> None:
         self._platform = platform
+        self._request_pacer = request_pacer
         self._extractor = extractor or self._extract_info
 
     async def resolve_series(self, url_info) -> LinkedSeries:
@@ -155,8 +159,11 @@ class YtDlpPlatformResolver:
             "extract_flat": "in_playlist",
             "skip_download": True,
             "http_headers": {"User-Agent": _DEFAULT_USER_AGENT},
+            "sleep_interval_requests": self._request_pacer.interval_seconds if self._request_pacer else 0,
         }
         def extract(cookie: str):
+            if self._request_pacer:
+                self._request_pacer.wait()
             with temporary_cookie_file(cookie, self._platform.cookie_domain) as cookie_file:
                 attempt_options = dict(options)
                 if cookie_file is not None:
@@ -189,8 +196,9 @@ class YtDlpPlatformResolver:
 class YtDlpPlatformDownloader:
     """使用 yt-dlp 下载已解析的平台视频，并上报进度与取消状态。"""
 
-    def __init__(self, platform: YtDlpPlatform) -> None:
+    def __init__(self, platform: YtDlpPlatform, *, request_pacer: RequestPacer | None = None) -> None:
         self._platform = platform
+        self._request_pacer = request_pacer
 
     def download(self, video: LinkedVideo, dest_dir: Path, reporter: ProgressReporter) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -210,10 +218,13 @@ class YtDlpPlatformDownloader:
             "--newline",
             "--add-header",
             f"User-Agent:{_DEFAULT_USER_AGENT}",
+            *request_sleep_flags(self._request_pacer),
             video.source_url,
         ]
         def download(cookie: str):
             reporter.raise_if_cancelled()
+            if self._request_pacer:
+                self._request_pacer.wait(reporter.raise_if_cancelled)
             with temporary_cookie_file(cookie, self._platform.cookie_domain) as cookie_file:
                 attempt = command[:-1] + (["--cookies", str(cookie_file)] if cookie_file is not None else []) + command[-1:]
                 self._run_process(attempt, reporter)
@@ -354,11 +365,11 @@ def _external_platform_error(error: Exception, platform_name: str = "该平台")
     message = str(error)
     normalized_message = message.lower()
     if requires_cookie(error):
-        return ExternalVideoResolutionError("cookie_required", f"{platform_name} 需要重新验证登录状态。请重新获取 Cookie 后再试。")
+        return ExternalVideoResolutionError("cookie_required", f"{platform_name}拒绝此登录状态。请等待一会重试或者重新获取 Cookie 后再试。")
     if "unsupported url" in normalized_message:
         return ExternalVideoResolutionError("invalid_url", "URL不合法，请输入合理的URL。")
     if "private video" in normalized_message or "login required" in normalized_message:
-        return ExternalVideoResolutionError("cookie_required", f"{platform_name} 需要重新验证登录状态。请重新获取 Cookie 后再试。")
+        return ExternalVideoResolutionError("cookie_required", f"{platform_name}拒绝此登录状态。请等待一会重试或者重新获取 Cookie 后再试。")
     if "http error 429" in normalized_message or "too many requests" in normalized_message:
         return ExternalVideoResolutionError("rate_limited", f"{platform_name} 暂时限制了下载请求，请稍后再试。")
     if "requested format is not available" in normalized_message or "no video formats" in normalized_message:

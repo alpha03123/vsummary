@@ -256,6 +256,7 @@ async function loadSeriesGenerationStatus(seriesId) {
   const payload = await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/generate/status`);
   return {
     taskId: typeof payload.task_id === "string" ? payload.task_id : `series/${seriesId}`,
+    jobId: typeof payload.job_id === "string" ? payload.job_id : null,
     snapshot: toProgressSnapshot(payload.snapshot ?? {}),
   };
 }
@@ -545,14 +546,16 @@ function subscribeVideoGenerationProgress(seriesId, videoId, listener) {
   };
 }
 
-function subscribeSeriesGenerationProgress(seriesId, listener) {
+function subscribeSeriesGenerationProgress(seriesId, jobId, listener) {
   const eventSource = transport.subscribe(
-    `/api/series/${encodeURIComponent(seriesId)}/generate/progress`,
+    `/api/series/${encodeURIComponent(seriesId)}/generate/progress?job_id=${encodeURIComponent(jobId)}`,
   );
   let terminal = false;
+  let latestSnapshot = null;
 
   eventSource.addEventListener("progress", (event) => {
     const snapshot = parseProgressMessage(event.data);
+    latestSnapshot = snapshot;
     listener(snapshot);
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       terminal = true;
@@ -564,14 +567,13 @@ function subscribeSeriesGenerationProgress(seriesId, listener) {
     if (terminal) {
       return;
     }
-    listener({
-      status: "failed",
-      stage: "failed",
-      progress: null,
-      detail: null,
-      error: "系列生成进度连接已中断",
-    });
-    eventSource.close();
+    if (eventSource.readyState === transport.CLOSED) {
+      terminal = true;
+      listener({ ...latestSnapshot, status: "failed", stage: "failed", error: "系列生成进度连接已关闭" });
+      return;
+    }
+    listener({ ...latestSnapshot, status: latestSnapshot?.status ?? "running",
+      stage: "reconnecting", detail: "正在同步系列生成进度...", error: null });
   };
 
   return () => {

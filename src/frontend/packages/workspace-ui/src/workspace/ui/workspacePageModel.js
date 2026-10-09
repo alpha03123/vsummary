@@ -104,6 +104,8 @@ export function buildWorkspacePageModel(controller) {
       showOverlay: showGenerationOverlay,
       videoDownloadProgress: controller.state.videoDownloadProgress ?? null,
       downloadingVideoKey: controller.state.downloadingVideoKey,
+      videoDownloadError: controller.state.videoDownloadError ?? null,
+      videoDownloadErrorKey: controller.state.videoDownloadErrorKey ?? null,
     },
     actions: {
       refreshLibrary:controller.onRefreshLibrary,

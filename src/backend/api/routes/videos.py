@@ -1463,10 +1463,11 @@ def get_video_generation_status(
 
 
 @router.get("/api/series/{series_id}/generate/progress")
-async def stream_series_generation_progress(series_id: str, container: WorkspaceServicesDep, job_repository: JobRepositoryDep) -> StreamingResponse:
+async def stream_series_generation_progress(series_id: str, container: WorkspaceServicesDep, job_repository: JobRepositoryDep, job_id: str) -> StreamingResponse:
+    await asyncio.to_thread(get_series_generation_status, series_id, container, job_repository, job_id=job_id)
     async def events():
         while True:
-            payload = await asyncio.to_thread(get_series_generation_status, series_id, container, job_repository)
+            payload = await asyncio.to_thread(get_series_generation_status, series_id, container, job_repository, job_id=job_id)
             yield f"event: progress\ndata: {json.dumps(payload['snapshot'], ensure_ascii=False)}\n\n"
             if payload["snapshot"]["status"] in {"succeeded", "failed", "cancelled", "idle"}:
                 return
@@ -1475,9 +1476,12 @@ async def stream_series_generation_progress(series_id: str, container: Workspace
 
 
 @router.get("/api/series/{series_id}/generate/status")
-def get_series_generation_status(series_id: str, container: WorkspaceServicesDep, job_repository: JobRepositoryDep) -> dict[str, object]:
-    snapshot = durable_status(job_repository, workspace_id=container.workspace_id, resource_id=series_id,
-        operations=("generate_series_batch",), batch=True)
+def get_series_generation_status(series_id: str, container: WorkspaceServicesDep, job_repository: JobRepositoryDep, job_id: str | None = None) -> dict[str, object]:
+    try:
+        snapshot = durable_status(job_repository, workspace_id=container.workspace_id, resource_id=series_id,
+            operations=("generate_series_batch",), batch=True, job_id=job_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     return {"task_id": _build_series_task_id(series_id), "job_id": snapshot["job_id"], "snapshot": snapshot}
 
 

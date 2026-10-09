@@ -11,6 +11,7 @@ from backend.shared.subprocess_cancellation import watch_process_cancellation
 
 import asyncio
 from collections import deque
+from functools import partial
 import os
 import re
 import subprocess
@@ -31,7 +32,8 @@ from backend.shared.bilibili_ytdlp import (
     resolve_yt_dlp_proxy,
 )
 from backend.shared.filesystem import atomic_write_text
-from backend.shared.ytdlp import run_with_cookie_fallback, temporary_cookie_file, is_format_unavailable, CookieRequiredError
+from backend.shared.ytdlp import run_with_cookie_fallback, temporary_cookie_file, is_format_unavailable, CookieRequiredError, request_sleep_flags
+from backend.shared.request_pacing import RequestPacer
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
 from backend.video_summary.library.models import BilibiliUrlInfoDTO
 
@@ -93,9 +95,10 @@ class YtDlpBilibiliResolver:
         self,
         extractor: Callable[[str], dict[str, object]] | None = None,
         view_extractor: Callable[[str], dict[str, object]] | None = None,
+        request_pacer: RequestPacer | None = None,
     ) -> None:
-        self._extractor = extractor or _extract_info
-        self._view_extractor = view_extractor or _extract_view_info
+        self._extractor = extractor or partial(_extract_info, request_pacer=request_pacer)
+        self._view_extractor = view_extractor or partial(_extract_view_info, request_pacer=request_pacer)
 
     async def resolve_series(self, url_info: BilibiliUrlInfoDTO) -> LinkedSeries:
         """将 Bilibili URL 解析为合集（LinkedSeries）。
@@ -189,6 +192,9 @@ class BilibiliDownloader:
     """
     _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
+    def __init__(self, *, request_pacer: RequestPacer | None = None):
+        self._request_pacer = request_pacer
+
     def download(self, bvid: str, page: int, dest_dir: Path, reporter: ProgressReporter) -> Path:
         """同步下载单个 Bilibili 视频到指定目录。
 
@@ -235,12 +241,15 @@ class BilibiliDownloader:
         failures: list[str] = []
         for index, (format_label, format_selector) in enumerate(_BILIBILI_DOWNLOAD_FORMATS):
             reporter.raise_if_cancelled()
+            if self._request_pacer:
+                self._request_pacer.wait(reporter.raise_if_cancelled)
             _remove_download_outputs(dest_dir, stem)
             reporter.update("download", 0.0 if index == 0 else None,
                 f"开始下载（{format_label}）" if index == 0 else f"降级重试（{format_label}）")
             cmd = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-playlist", "--format", format_selector,
                 "--merge-output-format", "mp4", "--output", output_template, "--newline",
                 *build_yt_dlp_proxy_flags(), *build_yt_dlp_add_header_flags(headers),
+                *request_sleep_flags(self._request_pacer),
                 *(["--cookies", str(cookie_file)] if cookie_file is not None else []), url]
             try:
                 self._run_process(cmd, reporter)
@@ -645,7 +654,7 @@ class CompositeLinkedVideoDownloadStarter:
         return starter.start(series_id=series_id, video=video)
 
 
-def _extract_info(url: str) -> dict[str, object]:
+def _extract_info(url: str, *, request_pacer: RequestPacer | None = None) -> dict[str, object]:
     """通过 yt-dlp 提取 Bilibili URL 的元数据（flat 模式，不下载）。
 
     使用 ``extract_flat: "in_playlist"`` 仅获取合集下的标题、ID、时长等
@@ -673,11 +682,14 @@ def _extract_info(url: str) -> dict[str, object]:
         "extract_flat": "in_playlist",
         "skip_download": True,
         "http_headers": headers,
+        "sleep_interval_requests": request_pacer.interval_seconds if request_pacer else 0,
     }
     proxy = resolve_yt_dlp_proxy()
     if proxy is not None:
         options["proxy"] = proxy
     def extract(cookie: str):
+        if request_pacer:
+            request_pacer.wait()
         with temporary_cookie_file(cookie, "bilibili.com") as cookie_file:
             attempt_options = dict(options)
             if cookie_file is not None:
@@ -690,7 +702,7 @@ def _extract_info(url: str) -> dict[str, object]:
     return payload
 
 
-def _extract_view_info(bvid: str) -> dict[str, object]:
+def _extract_view_info(bvid: str, *, request_pacer: RequestPacer | None = None) -> dict[str, object]:
     """调用 Bilibili View API 获取视频的详细信息。
 
     显式 ``proxy=None`` 避免境内 API 的 TLS 代理握手失败（
@@ -709,6 +721,8 @@ def _extract_view_info(bvid: str) -> dict[str, object]:
     cookie = headers.pop("Cookie", "")
     def extract(cookie: str):
         attempt_headers = {**headers, **({"Cookie": cookie} if cookie else {})}
+        if request_pacer:
+            request_pacer.wait()
         response = httpx.get("https://api.bilibili.com/x/web-interface/view",
             params={"bvid": bvid}, headers=attempt_headers, timeout=20)
         response.raise_for_status()

@@ -40,6 +40,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   const {api,host}=useWorkspaceRuntime();
   const mediaPreviewEnabled = host.features?.mediaPreview !== false;
   const { shell, chat, generation, actions } = page;
+  const visibleError = shell.state.error || generation.videoDownloadError;
   const {
     state,
     ui,
@@ -574,10 +575,10 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           chatDrawerOpen={chatScopeActive && chat.drawerOpen}
         />
 
-        {state.error && (
-          <div className="mx-6 mt-4 flex items-start justify-between gap-4 rounded-2xl border border-danger bg-danger-subtle p-4 text-sm text-danger flex-shrink-0 relative z-20">
+        {visibleError && (
+          <div role="alert" className="mx-6 mt-4 flex items-start justify-between gap-4 rounded-2xl border border-danger bg-danger-subtle p-4 text-sm text-danger flex-shrink-0 relative z-20">
             <div className="min-w-0 flex-1 break-words">
-              {state.error}
+              {visibleError}
             </div>
             {typeof actions.clearError === "function" ? (
               <button

@@ -62,19 +62,20 @@ function ensureVideoGenerationSubscription({ seriesId, videoId, jobId, dispatch 
   generationSubscriptions.set(taskKey, unsubscribe);
 }
 
-function ensureSeriesGenerationSubscription({ seriesId, runId, dispatch }) {
+function ensureSeriesGenerationSubscription({ seriesId, runId, jobId, dispatch }) {
   const taskKey = buildSeriesGenerationTaskKey(seriesId);
-  const subscriptionKey = runId ? `${taskKey}:${runId}` : taskKey;
-  if (!taskKey || generationSubscriptions.has(subscriptionKey)) {
+  const subscriptionKey = `${taskKey}:${jobId}`;
+  if (!taskKey || !jobId || generationSubscriptions.has(subscriptionKey)) {
     return;
   }
-  const unsubscribe = subscribeSeriesGenerationProgress(seriesId, (snapshot) => {
+  const unsubscribe = subscribeSeriesGenerationProgress(seriesId, jobId, (snapshot) => {
     dispatch({
       type: "generation_progress_updated",
       taskKey,
       mode: "series",
       seriesId,
       runId,
+      jobId,
       videoId: null,
       progress: snapshot.progress,
       snapshot,
@@ -82,6 +83,11 @@ function ensureSeriesGenerationSubscription({ seriesId, runId, dispatch }) {
     });
     if (snapshot.status === "completed" || snapshot.status === "failed" || snapshot.status === "cancelled") {
       clearGenerationSubscription(subscriptionKey);
+    }
+    if (snapshot.status === "completed") {
+      loadWorkspaceLibrary()
+        .then((library) => dispatch({ type: "workspace_loaded", library }))
+        .catch((error) => dispatch({ type: "load_failed", message: error.message }));
     }
     if (snapshot.status === "failed" && snapshot.error) {
       dispatch({ type: "load_failed", message: snapshot.error });
@@ -91,6 +97,10 @@ function ensureSeriesGenerationSubscription({ seriesId, runId, dispatch }) {
 }
 
 function useWorkspaceDataEffects(state, dispatch) {
+  const completedContentJobs = [
+    state.generationTasksByKey[buildVideoGenerationTaskKey(state.selectedSeriesId, state.selectedVideoId)],
+    state.generationTasksByKey[buildSeriesGenerationTaskKey(state.selectedSeriesId)],
+  ].filter((task) => task?.snapshot?.status === "completed").map((task) => task.jobId).join("|");
   useEffect(() => () => {
     for (const taskKey of generationSubscriptions.keys()) {
       clearGenerationSubscription(taskKey);
@@ -253,7 +263,7 @@ function useWorkspaceDataEffects(state, dispatch) {
     if (state.selectedContextType === "series" && state.selectedSeriesId) {
       let cancelled = false;
       loadSeriesGenerationStatus(state.selectedSeriesId)
-        .then(({ snapshot }) => {
+        .then(({ snapshot, jobId }) => {
           if (cancelled) {
             return;
           }
@@ -261,6 +271,7 @@ function useWorkspaceDataEffects(state, dispatch) {
             type: "generation_status_loaded",
             taskKey: buildSeriesGenerationTaskKey(state.selectedSeriesId),
             mode: "series",
+            jobId,
             seriesId: state.selectedSeriesId,
             runId: state.seriesGenerationQueue?.seriesId === state.selectedSeriesId
               ? state.seriesGenerationQueue.runId
@@ -309,13 +320,14 @@ function useWorkspaceDataEffects(state, dispatch) {
       if (isGenerationSnapshotActive(currentTask.snapshot)) {
         ensureSeriesGenerationSubscription({
           seriesId: currentTask.seriesId,
+          jobId: currentTask.jobId,
           runId: state.seriesGenerationQueue?.seriesId === currentTask.seriesId
             ? state.seriesGenerationQueue.runId
             : null,
           dispatch,
         });
       } else {
-        clearGenerationSubscription(currentTask.taskKey);
+        clearGenerationSubscription(`${currentTask.taskKey}:${currentTask.jobId}`);
       }
     }
   }, [dispatch, state]);
@@ -444,7 +456,7 @@ function useWorkspaceDataEffects(state, dispatch) {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, completedContentJobs]);
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
@@ -614,7 +626,7 @@ function useWorkspaceDataEffects(state, dispatch) {
       .then((summary) => { if (!cancelled) dispatch({ type: "ai_summary_loaded", summary }); })
       .catch((error) => { if (!cancelled) dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "AI 概括加载失败" }); });
     return () => { cancelled = true; };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.aiSummary.generated]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.aiSummary.generated, completedContentJobs]);
 
   useEffect(() => {
     if (
