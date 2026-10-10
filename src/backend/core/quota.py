@@ -21,6 +21,7 @@ class UsageEstimate:
     transcript_available: bool | None = None
     multimodal_enabled: bool = False
     children: tuple[UsageEstimate, ...] = ()
+    artifacts: tuple[UsageEstimate, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,14 @@ class UsageRecord:
     transcript_available: bool | None = None
     multimodal_enabled: bool = False
     children: tuple[UsageRecord, ...] = ()
+    artifacts: tuple[UsageRecord, ...] = ()
+
+    @classmethod
+    def from_dict(cls, data):
+        values = dict(data)
+        for field in ("children", "artifacts"):
+            values[field] = tuple(cls.from_dict(item) for item in data.get(field, ()))
+        return cls(**values)
 
 
 @dataclass(frozen=True)

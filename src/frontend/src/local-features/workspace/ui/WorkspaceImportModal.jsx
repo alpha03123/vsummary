@@ -337,7 +337,7 @@ export function WorkspaceImportModal({
           }
           result = isSeriesCreation
             ? await (async()=>{
-                const plan=await api.fetchJson('/api/import/linked/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:externalProvider,url:trimmed})});
+                const plan=await api.fetchJson('/api/import/linked/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:externalProvider,url:trimmed,title:seriesTitle})});
                 const ids=await chooseVideos(plan.items);
                 if(!ids){await api.fetchJson(`/api/import/previews/${plan.token}`,{method:'DELETE'});return null;}
                 return onResolveSeries(externalProvider,trimmed,{token:plan.token,selectedVideoIds:ids});
@@ -448,6 +448,12 @@ export function WorkspaceImportModal({
 
             {sourceType === "external" ? (
               <div className="space-y-4">
+                {isSeriesCreation && externalProvider !== "chaoxing" && <label className="block">
+                  <span className="mb-2 block text-xs font-bold text-stone-600 dark:text-zinc-400">系列名称</span>
+                  <input type="text" value={seriesTitle} onChange={event=>setSeriesTitle(event.target.value)}
+                    placeholder="选填，留空使用原名称" disabled={status === "loading"}
+                    className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm dark:border-stone-700 dark:bg-neutral-900"/>
+                </label>}
                 <div>
                   <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">渠道</p>
                   <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100 p-1 dark:border-stone-700 dark:bg-neutral-900">

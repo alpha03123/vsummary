@@ -11,6 +11,7 @@ export function WorkspaceAiSummaryView({
   loading,
   generating,
   canGenerate = true,
+  canEdit = true,
   onGenerate,
   onUpdate,
   noteImageContext,
@@ -75,7 +76,7 @@ export function WorkspaceAiSummaryView({
       <WorkspaceStateBlock
         eyebrow="AI Summary"
         title="尚未生成 AI 概括"
-        description="生成后会得到一份可编辑的完整总结，并保留画面与时间标记。"
+        description="生成后会得到完整总结，并保留画面与时间标记。"
         actionLabel={generating ? "正在生成" : "生成 AI 概括"}
         actionIcon={generating ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}
         actionDisabled={generating || !canGenerate}
@@ -99,7 +100,7 @@ export function WorkspaceAiSummaryView({
             </>
           ) : (
             <>
-              <button type="button" onClick={startEditing} className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800" title="编辑 AI 概括"><PencilLine size={15} /></button>
+              {canEdit&&<button type="button" onClick={startEditing} className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800" title="编辑 AI 概括"><PencilLine size={15} /></button>}
               <button type="button" onClick={() => onGenerate?.("general")} disabled={generating || !canGenerate} className="flex h-8 w-8 items-center justify-center rounded-full text-accent hover:bg-accent/10 disabled:opacity-50" title="重新生成 AI 概括">{generating ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />}</button>
             </>
           )}

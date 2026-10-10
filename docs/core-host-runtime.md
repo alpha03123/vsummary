@@ -1,6 +1,18 @@
 # Core 宿主接口
 
-当前版本：`vsummary-core==0.5.0a28`。
+当前版本：`vsummary-core==0.5.0a29`。
+
+## 媒体存储与预览
+
+复制导入在需要快速起播优化时直接保存无损重封装后的库内视频，不另存预览副本。
+硬链接和外部引用保留原文件，按需生成一份 `browser_preview`。只读媒体通过
+`BlobStore.read_path(reference)` 校验后直接读取，不再复制到 `cache/media` 或
+`cache/previews`；需要独立工作副本的场景仍使用 `materialize`。自定义 BlobStore
+需要实现 `read_path`，返回调用进程可直接读取且不可改写的对象路径。
+
+宿主可注入 `usage_estimator` 和 `artifact_token_estimate`，统一生成前估算及自动制品预算。
+LLM 诊断日志以 operation_id 关联调用轮次、耗时、用量与格式重试，不记录提示词、正文或密钥。
+本版本不新增 Core 数据库迁移。
 
 ## 视频获取扩展
 

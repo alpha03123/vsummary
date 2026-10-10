@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from backend.core.metering import bind_operation_id, current_operation_id
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,10 +40,12 @@ class AutoGenerateVideoArtifacts:
                         raise RuntimeError("自动生成的标准画面输入未配置视觉证据等待器。")
                     await self._wait_for_visual_evidence(series_id, video_id)
                     visual_evidence_ready = True
-                if artifact == "mindmap":
-                    await self._generate_mindmap(series_id, video_id)
-                elif artifact == "knowledge_cards":
-                    await self._generate_knowledge_cards(series_id, video_id)
+                operation_id = current_operation_id()
+                with bind_operation_id(f"{operation_id}:{artifact}" if operation_id else None):
+                    if artifact == "mindmap":
+                        await self._generate_mindmap(series_id, video_id)
+                    elif artifact == "knowledge_cards":
+                        await self._generate_knowledge_cards(series_id, video_id)
             except Exception:
                 LOGGER.exception("auto-generated %s failed for %s/%s", artifact, series_id, video_id)
                 failed.append(artifact)

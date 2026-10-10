@@ -1,7 +1,7 @@
 """受控二进制对象存储。
 
 本地实现使用用户数据目录；接口形状与未来对象存储适配器一致。业务层只持有
-对象键和校验信息，FFmpeg/ASR 必须通过 ``materialize`` 获得任务临时路径。
+对象键和校验信息；只读媒体使用 ``read_path``，需要独立副本时使用 ``materialize``。
 """
 
 from __future__ import annotations
@@ -165,6 +165,16 @@ class FileBlobStore:
         finally:
             temporary.unlink(missing_ok=True)
         return target
+
+    def read_path(self, reference: BlobReference) -> Path:
+        """Read committed media in place without creating a second full-size file."""
+        path = self._object_path(reference.key)
+        if not path.is_file():
+            raise BlobStoreError(f"Committed blob does not exist: {path}")
+        actual = _stat_file(path, reference.content_type)
+        if (actual.sha256, actual.byte_size) != (reference.sha256, reference.byte_size):
+            raise BlobStoreError("Committed blob checksum does not match its recorded value.")
+        return path
 
     def stat(self, reference: BlobReference) -> BlobReference:
         """读取并重新计算已提交对象的完整性信息。"""

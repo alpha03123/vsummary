@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import mimetypes
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -208,10 +210,10 @@ class SqlVideoWorkspace:
         filename = Path(row["blob_key"]).name
         reference = BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"])
         try:
-            source_path = self._blobs.materialize(reference, task_dir=media_root / "media" / video_id, filename=filename)
+            source_path = self._blobs.read_path(reference)
         except BlobStoreError:
             LOGGER.exception(
-                "failed to materialize video source",
+                "failed to read video source",
                 extra={"series_id": series_id, "video_id": video_id, "blob_key": row["blob_key"]},
             )
             return None
@@ -548,19 +550,22 @@ class SqlVideoWorkspace:
         if not source_path.is_absolute() or not source_path.is_file() or source_path.suffix.lower() not in MEDIA_SUFFIXES:
             raise ValueError("Relink source must be an existing absolute media file.")
         with self._sessions() as session:
-            resolved_video_id = session.execute(
-                text("""SELECT v.id FROM videos v JOIN series s ON s.id=v.series_id
+            resolved_video = session.execute(
+                text("""SELECT v.id,s.storage_mode FROM videos v JOIN series s ON s.id=v.series_id
                     WHERE v.id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""),
                 {"video": video_id, "series": series_id, "workspace": self._workspace_id},
-            ).scalar()
-            if resolved_video_id is None:
-                resolved_video_id = session.execute(
-                text("""SELECT v.id FROM videos v JOIN series s ON s.id=v.series_id
+            ).mappings().first()
+            if resolved_video is None:
+                resolved_video = session.execute(
+                text("""SELECT v.id,s.storage_mode FROM videos v JOIN series s ON s.id=v.series_id
                     WHERE v.external_source_id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""),
                 {"video": video_id, "series": series_id, "workspace": self._workspace_id},
-                ).scalar()
-        if resolved_video_id is None:
+                ).mappings().first()
+        if resolved_video is None:
             raise LookupError("Linked video does not exist.")
+        storage_mode = resolved_video["storage_mode"]
+        resolved_video_id = resolved_video["id"]
+        self._validate_import_paths([source_path], storage_mode)
         self._delete_browser_previews(resolved_video_id)
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
@@ -570,14 +575,19 @@ class SqlVideoWorkspace:
         if external is not None:
             self._prepare_browser_preview(resolved_video_id, source_path)
             return
-        with source_path.open("rb") as stream:
-            staged = self._blobs.put_staging(job_id=f"relink{resolved_video_id}", source=stream, content_type="application/octet-stream")
-        reference = self._blobs.commit(staged, object_key=f"media/{resolved_video_id}/source{source_path.suffix.lower()}")
+        reference = self._commit_media_source(
+            resolved_video_id, source_path, storage_mode=storage_mode,
+            object_key=f"media/{resolved_video_id}/{new_ulid()}/source{source_path.suffix.lower()}",
+        )
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
+            previous = session.execute(text("SELECT blob_key,sha256,byte_size,media_type FROM media_objects WHERE video_id=:video"), {"video": resolved_video_id}).mappings().all()
             session.execute(text("DELETE FROM media_objects WHERE video_id=:video"), {"video": resolved_video_id})
             session.add(MediaObject(id=new_ulid(), video_id=resolved_video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))
-        self._prepare_browser_preview(resolved_video_id, source_path)
+        for row in previous:
+            self._blobs.delete(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]))
+        if storage_mode == "hardlink":
+            self._prepare_browser_preview(resolved_video_id, source_path)
 
     def attach_downloaded_file(self, series_id: str, video_id: str, source_path: Path) -> None:
         self.relink_external_video(series_id=series_id, video_id=video_id, source_path=source_path)
@@ -779,42 +789,55 @@ class SqlVideoWorkspace:
                     session.add(ExternalMediaReference(video_id=video_id, source_path=str(source_path)))
                 self._prepare_browser_preview(video_id, source_path)
                 continue
-            if storage_mode == "hardlink":
-                staged = self._blobs.put_staging_hardlink(job_id=f"import{video_id}", source_path=source_path, content_type="application/octet-stream")
-            else:
-                with source_path.open("rb") as stream:
-                    staged = self._blobs.put_staging(job_id=f"import{video_id}", source=stream, content_type="application/octet-stream")
-            reference = self._blobs.commit(staged, object_key=f"media/{video_id}/source{source_path.suffix.lower()}")
+            reference = self._commit_media_source(
+                video_id, source_path, storage_mode=storage_mode,
+                object_key=f"media/{video_id}/source{source_path.suffix.lower()}",
+            )
             with self._sessions.begin() as session:
                 require_execution_lease(session, self._workspace_id)
                 session.add(MediaObject(id=new_ulid(), video_id=video_id, blob_key=reference.key, media_type=reference.content_type, byte_size=reference.byte_size, sha256=reference.sha256, state="ready"))
-            self._prepare_browser_preview(video_id, source_path)
+            if storage_mode == "hardlink":
+                self._prepare_browser_preview(video_id, source_path)
+
+    def _commit_media_source(self, video_id: str, source_path: Path, *, storage_mode: str, object_key: str) -> BlobReference:
+        if storage_mode == "hardlink":
+            staged = self._blobs.put_staging_hardlink(job_id=f"import{video_id}", source_path=source_path, content_type="application/octet-stream")
+        elif self._media_preview_enabled and self._media_processor.needs_browser_playback_optimization(source_path):
+            with self._optimized_media_copy(video_id, source_path) as optimized:
+                with optimized.open("rb") as stream:
+                    staged = self._blobs.put_staging(job_id=f"import{video_id}", source=stream, content_type="application/octet-stream")
+        else:
+            with source_path.open("rb") as stream:
+                staged = self._blobs.put_staging(job_id=f"import{video_id}", source=stream, content_type="application/octet-stream")
+        return self._blobs.commit(staged, object_key=object_key)
 
     def _prepare_browser_preview(self, video_id: str, source_path: Path) -> None:
+        """在导入或下载期间预建有尾部索引或分片的 MP4 预览副本。"""
         if not self._media_preview_enabled:
             return
-        """在导入或下载期间预建有尾部索引或分片的 MP4 预览副本。"""
         if not self._media_processor.needs_browser_playback_optimization(source_path):
             return
         with self._preview_lock(video_id):
             self._create_browser_preview(video_id, source_path)
 
-    def _create_browser_preview(self, video_id: str, source_path: Path) -> Path:
-        """无损重封装独立副本，绝不改写原始媒体或硬链接源文件。"""
+    @contextmanager
+    def _optimized_media_copy(self, video_id: str, source_path: Path) -> Iterator[Path]:
+        """Optimize a private copy; never write through a source hard link."""
         staging_dir = self._cache_root / "preview-staging" / video_id
         staging_dir.mkdir(parents=True, exist_ok=True)
         preview_path = staging_dir / f".{uuid4().hex}.preview{source_path.suffix.lower()}"
         try:
             shutil.copyfile(source_path, preview_path)
             self._media_processor.ensure_browser_playable_mp4(preview_path)
-            reference = self._commit_browser_preview(video_id, preview_path)
-            return self._blobs.materialize(
-                reference,
-                task_dir=self._cache_root / "previews" / video_id,
-                filename=Path(reference.key).name,
-            )
+            yield preview_path
         finally:
             preview_path.unlink(missing_ok=True)
+
+    def _create_browser_preview(self, video_id: str, source_path: Path) -> Path:
+        """Persist one preview and serve it directly from the object store."""
+        with self._optimized_media_copy(video_id, source_path) as preview_path:
+            reference = self._commit_browser_preview(video_id, preview_path)
+        return self._blobs.read_path(reference)
 
     def _commit_browser_preview(self, video_id: str, preview_path: Path) -> BlobReference:
         media_type, _ = mimetypes.guess_type(preview_path.name)
@@ -854,13 +877,11 @@ class SqlVideoWorkspace:
         if row is None:
             return None
         try:
-            return self._blobs.materialize(
-                BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]),
-                task_dir=self._cache_root / "previews" / video_id,
-                filename=Path(row["blob_key"]).name,
+            return self._blobs.read_path(
+                BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"])
             )
         except BlobStoreError:
-            LOGGER.exception("failed to materialize browser preview", extra={"video_id": video_id})
+            LOGGER.exception("failed to read browser preview", extra={"video_id": video_id})
             return None
 
     def _delete_browser_previews(self, video_id: str) -> None:

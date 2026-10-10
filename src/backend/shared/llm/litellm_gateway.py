@@ -19,16 +19,19 @@ from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from datetime import datetime, timezone
 import hashlib
 import json
+from time import perf_counter
 from threading import Lock
 from typing import Any, TypeVar
 
 from backend.core.concurrency import limited_completion, limited_async_completion
-from pydantic import BaseModel
+from backend.core.ids import new_ulid
+from pydantic import BaseModel, ValidationError
 
 from backend.shared.llm.chat_stream import ChatCompletionStreamChunk
 from backend.shared.llm.base_url import resolve_provider_api_base_url
 from backend.shared.llm.json_mode import describe_validation_error, validate_json_response
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecord, LlmUsageRecorder
+from backend.shared.llm.diagnostics import log_llm_event
 
 
 StructuredResponseT = TypeVar("StructuredResponseT", bound=BaseModel)
@@ -165,16 +168,27 @@ class LiteLLMCompletionGateway:
             timeout=timeout,
             reasoning_effort=self._reasoning_effort,
         )
+        call_id = new_ulid()
+        started = perf_counter()
+        log_llm_event("llm_call_started", call_id=call_id, model=self._model,
+            reasoning_effort=self._reasoning_effort, structured=response_format is not None)
         try:
             response = self._completion(**request)
         except Exception as error:
+            log_llm_event("llm_call_failed", call_id=call_id, model=self._model,
+                elapsed_seconds=round(perf_counter() - started, 3), error_type=type(error).__name__)
             if _is_unsupported_reasoning_effort_error(error):
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
-        self._record_usage(_extract_usage(response))
+        usage = _extract_usage(response)
+        log_llm_event("llm_call_completed", call_id=call_id, model=self._model,
+            elapsed_seconds=round(perf_counter() - started, 3),
+            prompt_tokens=usage.get("prompt_tokens"), completion_tokens=usage.get("completion_tokens"))
+        self._record_usage(usage)
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
+        log_llm_event("llm_empty_output_stream_fallback", call_id=call_id, model=self._model)
         fallback_chunks = list(self.stream_text(messages, temperature=temperature))
         fallback_content = "".join(fallback_chunks).strip()
         if fallback_content:
@@ -220,16 +234,27 @@ class LiteLLMCompletionGateway:
             timeout=timeout,
             reasoning_effort=self._reasoning_effort,
         )
+        call_id = new_ulid()
+        started = perf_counter()
+        log_llm_event("llm_call_started", call_id=call_id, model=self._model,
+            reasoning_effort=self._reasoning_effort, structured=response_format is not None)
         try:
             response = await self._acompletion(**request)
         except Exception as error:
+            log_llm_event("llm_call_failed", call_id=call_id, model=self._model,
+                elapsed_seconds=round(perf_counter() - started, 3), error_type=type(error).__name__)
             if _is_unsupported_reasoning_effort_error(error):
                 raise RuntimeError("此模型不支持思考强度。") from error
             raise
-        self._record_usage(_extract_usage(response))
+        usage = _extract_usage(response)
+        log_llm_event("llm_call_completed", call_id=call_id, model=self._model,
+            elapsed_seconds=round(perf_counter() - started, 3),
+            prompt_tokens=usage.get("prompt_tokens"), completion_tokens=usage.get("completion_tokens"))
+        self._record_usage(usage)
         content = _extract_completion_content(response)
         if content.strip():
             return content.strip()
+        log_llm_event("llm_empty_output_stream_fallback", call_id=call_id, model=self._model)
         fallback_chunks = [
             chunk
             async for chunk in self.astream_text(
@@ -511,6 +536,8 @@ class LiteLLMCompletionGateway:
             )
             mode_errors: list[str] = []
             for mode_name, structured_messages, response_format in modes:
+                log_llm_event("structured_round_started", model=self._model,
+                    response_model=response_model.__name__, round=attempt_index + 1, mode=mode_name)
                 try:
                     last_raw_text = self.complete_text(
                         structured_messages,
@@ -520,6 +547,10 @@ class LiteLLMCompletionGateway:
                     _remember_structured_mode(self._structured_mode_cache_key, mode_name)
                     break
                 except Exception as error:
+                    log_llm_event("structured_mode_failed", model=self._model,
+                        response_model=response_model.__name__, round=attempt_index + 1,
+                        mode=mode_name, error_type=type(error).__name__,
+                        action="try_next_format" if _is_response_format_error(error) and response_format is not None else "fail")
                     if not _is_response_format_error(error) or response_format is None:
                         raise
                     mode_errors.append(str(error))
@@ -533,8 +564,17 @@ class LiteLLMCompletionGateway:
                     raw_text=last_raw_text,
                     response_model=response_model,
                 )
+                log_llm_event("structured_validation_passed", model=self._model,
+                    response_model=response_model.__name__, round=attempt_index + 1)
                 return validated  # type: ignore[return-value]
             except Exception as error:
+                log_llm_event("structured_validation_failed", model=self._model,
+                    response_model=response_model.__name__, round=attempt_index + 1,
+                    error_type=type(error).__name__,
+                    fields=[{"location": list(issue["loc"]), "type": issue["type"]}
+                        for issue in error.errors(include_input=False, include_url=False)]
+                        if isinstance(error, ValidationError) else [],
+                    action="fail" if attempt_index == retries else "regenerate")
                 validation_error = describe_validation_error(error)
                 if attempt_index == retries:
                     raise RuntimeError(
@@ -584,6 +624,8 @@ class LiteLLMCompletionGateway:
             )
             mode_errors: list[str] = []
             for mode_name, structured_messages, response_format in modes:
+                log_llm_event("structured_round_started", model=self._model,
+                    response_model=response_model.__name__, round=attempt_index + 1, mode=mode_name)
                 try:
                     last_raw_text = await self.acomplete_text(
                         structured_messages,
@@ -594,6 +636,10 @@ class LiteLLMCompletionGateway:
                     _remember_structured_mode(self._structured_mode_cache_key, mode_name)
                     break
                 except Exception as error:
+                    log_llm_event("structured_mode_failed", model=self._model,
+                        response_model=response_model.__name__, round=attempt_index + 1,
+                        mode=mode_name, error_type=type(error).__name__,
+                        action="try_next_format" if _is_response_format_error(error) and response_format is not None else "fail")
                     if not _is_response_format_error(error) or response_format is None:
                         raise
                     mode_errors.append(str(error))
@@ -607,8 +653,17 @@ class LiteLLMCompletionGateway:
                     raw_text=last_raw_text,
                     response_model=response_model,
                 )
+                log_llm_event("structured_validation_passed", model=self._model,
+                    response_model=response_model.__name__, round=attempt_index + 1)
                 return validated  # type: ignore[return-value]
             except Exception as error:
+                log_llm_event("structured_validation_failed", model=self._model,
+                    response_model=response_model.__name__, round=attempt_index + 1,
+                    error_type=type(error).__name__,
+                    fields=[{"location": list(issue["loc"]), "type": issue["type"]}
+                        for issue in error.errors(include_input=False, include_url=False)]
+                        if isinstance(error, ValidationError) else [],
+                    action="fail" if attempt_index == retries else "regenerate")
                 validation_error = describe_validation_error(error)
                 if attempt_index == retries:
                     raise RuntimeError(

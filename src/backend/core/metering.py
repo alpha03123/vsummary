@@ -36,6 +36,15 @@ def current_operation_id() -> str | None:
 
 
 @contextmanager
+def bind_operation_id(operation_id: str | None):
+    token = _operation.set(operation_id)
+    try:
+        yield
+    finally:
+        _operation.reset(token)
+
+
+@contextmanager
 def bind_resource_budget(budget: ResourceBudget | None, operation_id: str | None = None):
     budget_token = _budget.set(budget)
     operation_token = _operation.set(operation_id)

@@ -12,12 +12,13 @@ import re
 from threading import Lock
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from backend.video_summary.infrastructure.llm.prompts.notes import build_ai_note_prompt
 from backend.core.citations import CitationReference, CitationSlot
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
+from backend.shared.llm.diagnostics import log_llm_event
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 from backend.video_summary.library.models import (
@@ -124,6 +125,8 @@ class LiteLLMNoteGenerator:
         )
         allowed_timestamps = tuple(visual_context.evidence_timestamps)
         for attempt in range(2):
+            log_llm_event("ai_summary_round_started", round=attempt + 1,
+                visual_images=len(visual_context.frames) if multimodal_enabled else 0)
             payload = yield [{"role": "user", "content": message_content}]
             try:
                 note = _to_generated_note(
@@ -139,6 +142,11 @@ class LiteLLMNoteGenerator:
                     duration_seconds=transcript.duration_seconds,
                 )
             except ValueError as error:
+                log_llm_event("ai_summary_citation_validation_failed", round=attempt + 1,
+                    reason=[{"location": list(issue["loc"]), "type": issue["type"]}
+                        for issue in error.errors(include_input=False, include_url=False)]
+                        if isinstance(error, ValidationError) else str(error),
+                    action="discard_invalid_citations" if attempt else "regenerate")
                 if attempt:
                     note = _to_generated_note_with_degraded_citations(
                         payload=payload,

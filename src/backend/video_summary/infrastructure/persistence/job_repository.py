@@ -93,6 +93,8 @@ class SqlJobRepository:
         token_estimate=None,
         multimodal_estimate=None,
         queue_policy=None,
+        usage_estimator=None,
+        artifact_token_estimate=None,
     ) -> None:
         self._session_factory = session_factory
         self._control = SqlControlPlaneRepository(session_factory)
@@ -101,6 +103,8 @@ class SqlJobRepository:
         self._token_estimate = token_estimate
         self._multimodal_estimate = multimodal_estimate
         self._queue_policy = queue_policy
+        self._usage_estimator = usage_estimator
+        self._artifact_token_estimate = artifact_token_estimate
 
     def submit(
         self,
@@ -146,6 +150,7 @@ class SqlJobRepository:
                 operation_id,
                 processing_mode=payload.get("processing_mode"),
                 video_ids=payload.get('video_ids'),
+                operation=operation,
             )
             if payload.get("manual_transcript") is not None:
                 from dataclasses import replace
@@ -406,7 +411,7 @@ class SqlJobRepository:
         self.finalize_accounting(job_id, workspace_id=workspace_id)
         return snapshot
 
-    def estimate_usage(self, context, resource_type, resource_id, operation_id, *, processing_mode=None, video_ids=None):
+    def estimate_usage(self, context, resource_type, resource_id, operation_id, *, processing_mode=None, video_ids=None, operation=None):
         if processing_mode not in {None, "summary", "transcript"}:
             raise ValueError("Unsupported processing mode.")
         with self._session_factory() as session:
@@ -430,7 +435,8 @@ class SqlJobRepository:
                     if processing_mode == "transcript"
                     else Video.content_version == 0
                 )
-                rows = session.execute(query.where(Series.id == resource_id, pending)).all()
+                rows = session.execute(query.where(Series.id == resource_id,
+                    True if operation == "generate_series_mindmap" else pending)).all()
             else:
                 rows = []
         incoming, outgoing = self._token_estimate() if self._token_estimate is not None else (None, None)
@@ -438,7 +444,13 @@ class SqlJobRepository:
         multimodal = processing_mode != 'transcript' and (
             self._multimodal_estimate() if self._multimodal_estimate is not None else
             bool((current_preferences() or {}).get('ai_summary_multimodal_enabled')))
-        child_operation = "generate_transcript" if processing_mode == "transcript" else "generate_summary"
+        if operation == "generate_series_mindmap":
+            estimate = UsageEstimate(units=1 if rows else 0, operation_id=operation_id, operation=operation,
+                model_profile=profile, input_tokens=incoming, output_tokens=outgoing, transcript_available=True)
+            return self._usage_estimator(context,resource_type,resource_id,operation,estimate) if self._usage_estimator is not None else estimate
+        child_operation = operation if operation not in {None, "generate_series_batch", "process_agent_video"} else (
+            "generate_transcript" if processing_mode == "transcript" else "generate_summary")
+        include_artifacts = child_operation == "generate_summary" and processing_mode != "transcript"
         estimates = tuple(
             UsageEstimate(
                 units=1,
@@ -450,15 +462,32 @@ class SqlJobRepository:
                 input_tokens=incoming,
                 output_tokens=outgoing,
                 transcript_available=row.transcript_version is not None and row.transcript_version > 0,
+                artifacts=self.estimate_auto_artifacts(f"{operation_id}:{row.id}", profile,
+                    row.duration_ms / 1000 if row.duration_ms is not None else None) if include_artifacts else (),
             )
             for row in rows
         )
         if resource_type == "series":
-            return UsageEstimate(
+            estimate = UsageEstimate(
                 units=len(estimates), operation_id=operation_id, operation="generate_series_batch",
                 model_profile=profile, children=estimates,
             )
-        return estimates[0] if estimates else UsageEstimate(units=0, operation_id=operation_id, model_profile=profile)
+        else:
+            estimate = estimates[0] if estimates else UsageEstimate(units=0, operation_id=operation_id, model_profile=profile)
+        return self._usage_estimator(context,resource_type,resource_id,operation,estimate) if self._usage_estimator is not None and estimate.units else estimate
+
+    def estimate_auto_artifacts(self, operation_id, profile, duration_seconds=None):
+        from backend.core.preferences import AUTO_ARTIFACT_OPERATIONS
+        enabled = (current_preferences() or {}).get("auto_generate_artifacts", [])
+        if not enabled:
+            return ()
+        incoming, outgoing = self._token_estimate() if self._token_estimate is not None else (None, None)
+        return tuple(UsageEstimate(units=1, operation_id=f"{operation_id}:{artifact}",
+            operation=AUTO_ARTIFACT_OPERATIONS[artifact], model_profile=profile,
+            input_tokens=counts[0], output_tokens=counts[1], transcript_available=True)
+            for artifact in enabled
+            for counts in [self._artifact_token_estimate(duration_seconds, artifact, profile)
+                if self._artifact_token_estimate is not None else (incoming,outgoing)])
 
     def admission(self, context, units):
         return self._queue_policy.admit(actor_id=context.actor_id,units=units) if self._queue_policy is not None else nullcontext()
@@ -466,7 +495,9 @@ class SqlJobRepository:
     def in_transaction(self, sessions):
         """Reuse metering dependencies while the caller owns queue admission and SQL commit."""
         return SqlJobRepository(sessions,quota_guard=self._quota_guard,usage_meter=self._usage_meter,
-            token_estimate=self._token_estimate,multimodal_estimate=self._multimodal_estimate)
+            token_estimate=self._token_estimate,multimodal_estimate=self._multimodal_estimate,
+            # Imported rows are uncommitted; host content readers cannot see them yet.
+            artifact_token_estimate=self._artifact_token_estimate)
 
     def submission_for_key(self, context, key):
         scope=hashlib.sha256((context.workspace_id+':'+context.actor_id).encode()).hexdigest()
@@ -487,12 +518,24 @@ class SqlJobRepository:
         durations = session.scalars(select(Video.duration_ms).where(Video.id.in_(video_ids))).all() if video_ids else []
         seconds = sum(durations) / 1000 if durations and all(value is not None for value in durations) else None
         preferences = job.request_payload.get("_user_preferences", {})
+        artifacts = []
+        if job.operation in {"generate_summary", "process_agent_video"} and job.request_payload.get("processing_mode", "summary") != "transcript":
+            from backend.core.preferences import AUTO_ARTIFACT_OPERATIONS
+            for artifact in preferences.get("auto_generate_artifacts", []):
+                artifact_id = f"{job.id}:{artifact}"
+                artifact_totals = MySqlLlmUsageStore(self._session_factory).summarize(range_key="all",
+                    workspace_id=job.workspace_id, actor_id=job.actor_id, operation_ids=[artifact_id]).total
+                artifacts.append(UsageRecord(units=1 if artifact_totals.total_tokens else 0,
+                    operation_id=artifact_id, operation=AUTO_ARTIFACT_OPERATIONS[artifact],
+                    model_profile=preferences.get("model_profile"), input_tokens=artifact_totals.prompt_tokens,
+                    output_tokens=artifact_totals.completion_tokens, transcript_available=True))
         return UsageRecord(units=len(completed), operation_id=job.id, operation=job.operation,
                            model_profile=preferences.get("model_profile"), duration_seconds=seconds,
                            input_tokens=totals.prompt_tokens, output_tokens=totals.completion_tokens,
                            transcript_available=job.request_payload.get("_usage_estimate", {}).get("transcript_available"),
                            multimodal_enabled=job.request_payload.get("_usage_estimate", {}).get("multimodal_enabled", False),
-                           children=tuple(self.measured_usage(session, child) for child in completed) if children else ())
+                           children=tuple(self.measured_usage(session, child) for child in completed) if children else (),
+                           artifacts=tuple(artifacts))
 
     def mark_series_batch_waiting(self, claim, *, child_count: int) -> None:
         if child_count < 1:

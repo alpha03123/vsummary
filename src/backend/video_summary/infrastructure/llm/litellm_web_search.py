@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from backend.core.concurrency import limited_completion
+from backend.core.metering import ResourceUsage, resource_call, response_usage
 
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -94,26 +95,33 @@ class LiteLLMNativeWebSearchGateway:
         normalized_query = query.strip()
         if not normalized_query:
             raise ValueError("联网搜索 query 不能为空。")
-        response = self._completion(
-            model=self._model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "请联网搜索并用简洁中文概括与问题最相关的信息。"
-                        "必须返回可引用来源。\n\n"
-                        f"问题：{normalized_query}"
-                    ),
-                }
-            ],
-            api_base=self._base_url,
-            api_key=self._api_key,
-            temperature=0,
-            timeout=timeout_seconds,
-            web_search_options={
-                "search_context_size": self._search_context_size,
-            },
-        )
+        with resource_call(ResourceUsage(resource="web_search",model=self._model)) as call:
+            response = self._completion(
+                model=self._model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            "请联网搜索并用简洁中文概括与问题最相关的信息。"
+                            "必须返回可引用来源。\n\n"
+                            f"问题：{normalized_query}"
+                        ),
+                    }
+                ],
+                api_base=self._base_url,
+                api_key=self._api_key,
+                temperature=0,
+                timeout=timeout_seconds,
+                web_search_options={
+                    "search_context_size": self._search_context_size,
+                },
+            )
+            usage = response.get("usage") if isinstance(response, Mapping) else getattr(response, "usage", None)
+            if usage is not None:
+                incoming, outgoing = response_usage(response)
+                call.complete(input_tokens=incoming,output_tokens=outgoing)
+            else:
+                call.complete()
         content = _extract_message_content(response)
         results = _extract_url_citations(response, fallback_text=content)
         if not results:

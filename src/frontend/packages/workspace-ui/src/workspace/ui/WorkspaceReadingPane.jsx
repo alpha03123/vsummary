@@ -295,6 +295,7 @@ export function WorkspaceReadingPane({
                       loading={aiSummaryLoading}
                       generating={generatingAiSummary || tools?.aiSummary?.status === "running"}
                       canGenerate={!(selectedVideo?.isLinked === true || selectedVideo?.status === "linked")}
+                      canEdit={host.features?.aiSummaryEditing !== false}
                       onGenerate={onGenerateAiSummary}
                       onUpdate={onUpdateAiSummary}
                       noteImageContext={activeSeries && selectedVideo ? { seriesId: activeSeries.id, videoId: selectedVideo.id, durationSeconds: Number.POSITIVE_INFINITY } : null}

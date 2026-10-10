@@ -12,7 +12,12 @@ from pydantic import BaseModel, ConfigDict, StrictBool, field_validator
 from backend.core.context import WorkspaceContext
 
 VALID_ANSWER_DETAIL_LEVELS = frozenset({"short", "medium", "long"})
-VALID_AUTO_GENERATE_ARTIFACTS = frozenset({"mindmap", "knowledge_cards"})
+AUTO_ARTIFACT_OPERATIONS = {
+    "mindmap": "generate_video_mindmap",
+    "knowledge_cards": "generate_video_knowledge_cards",
+}
+
+VALID_AUTO_GENERATE_ARTIFACTS = frozenset(AUTO_ARTIFACT_OPERATIONS)
 
 USER_OVERRIDABLE = frozenset({
     "ai_summary_multimodal_enabled", "auto_generate_artifacts", "answer_detail_level", "model_profile",

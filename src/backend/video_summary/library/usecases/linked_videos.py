@@ -337,6 +337,20 @@ _PROVIDER_HOSTS = {
 }
 
 
+def detect_external_provider(url: str) -> str:
+    normalized = url.strip()
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
+        normalized = f"https://{normalized.lstrip('/')}"
+    parsed = urlsplit(normalized)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not hostname:
+        raise ValueError("请输入有效的 HTTP(S) 视频链接。")
+    for provider, hosts in _PROVIDER_HOSTS.items():
+        if any(hostname == host or hostname.endswith(f".{host}") for host in hosts):
+            return provider
+    raise ValueError("暂不支持该链接，请使用 B站、YouTube 或抖音链接。")
+
+
 def _provider_resolver(resolvers: dict[str, object], provider: str):
     normalized_provider = provider.strip().lower()
     resolver = resolvers.get(normalized_provider)

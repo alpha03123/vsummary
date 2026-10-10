@@ -599,7 +599,7 @@ async function fetchJson(path, init, options = {}) {
     } catch {
       detail = null;
     }
-    throw new Error(detail ? `${response.status} ${detail}` : `${response.status} 请求失败：${path}`);
+    throw new Error(detail || "请求失败，请稍后重试。");
   }
   return response.json();
 }

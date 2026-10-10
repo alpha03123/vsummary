@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
+from dataclasses import replace
 from backend.api.dependencies import WorkspaceServicesDep, get_workspace_context
 from backend.core.context import WorkspaceContext
 from backend.video_summary.infrastructure.import_preview import ImportPreviewStore
 from backend.api.schemas.responses import SeriesResponse
+from backend.video_summary.library.usecases.linked_videos import detect_external_provider
 
 router=APIRouter()
 
 class LinkedPreviewRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
-    provider:str
+    provider:str | None = None
     url:str
+    title:str = ''
 
 class ImportSelectionRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -22,7 +25,11 @@ def preview_store(services,context):
 @router.post('/api/import/linked/preview')
 async def preview_linked(data:LinkedPreviewRequest,services:WorkspaceServicesDep,context:WorkspaceContext=Depends(get_workspace_context)):
     try:
-        series=await services.resolve_linked_series.preview(provider=data.provider,url=data.url)
+        provider=data.provider or detect_external_provider(data.url)
+        series=await services.resolve_linked_series.preview(provider=provider,url=data.url)
+        title=data.title.strip()
+        if title:
+            series=replace(series,title=title)
         items=[{'id':video.video_id,'title':video.title,'duration_seconds':video.duration_seconds} for video in series.videos]
         return preview_store(services,context).create('linked',series.title,items,linked=series)
     except ValueError as error:raise HTTPException(422,str(error)) from error

@@ -155,6 +155,8 @@ def build_host_container(
     resource_budget=None,
     chat_queue=None,
     job_queue_policy=None,
+    usage_estimator=None,
+    artifact_token_estimate=None,
     linked_video_resolvers: dict[str, LinkedVideoResolver] | None = None,
     linked_video_downloaders: dict[str, LinkedVideoDownloader] | None = None,
 ) -> ApiContainer:
@@ -167,7 +169,8 @@ def build_host_container(
     def estimate_multimodal():
         return load_effective_settings(config_path, root_dir).generation.ai_summary_multimodal_enabled
     job_repository = SqlJobRepository(session_factory, quota_guard=quota_guard, usage_meter=usage_meter,
-                                     queue_policy=job_queue_policy,
+                                     queue_policy=job_queue_policy,usage_estimator=usage_estimator,
+                                     artifact_token_estimate=artifact_token_estimate,
                                      multimodal_estimate=estimate_multimodal if preference_store is not None else None,
                                      token_estimate=estimate_tokens if preference_store is not None else None)
     progress = InMemoryProgressTracker()
