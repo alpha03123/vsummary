@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@src": path.resolve(__dirname, "src"),
+      "@workspace": path.resolve(__dirname, "packages/workspace-ui/src"),
+      "@alpha03123/vsummary-workspace-ui/styles.css": path.resolve(__dirname, "packages/workspace-ui/src/styles.css"),
+      "@alpha03123/vsummary-workspace-ui": path.resolve(__dirname, "packages/workspace-ui/src/index.jsx"),
       "@testing-library/react": path.resolve(__dirname, "node_modules/@testing-library/react"),
       react: path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
