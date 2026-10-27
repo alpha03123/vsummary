@@ -110,8 +110,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-start "vsummary-backend" cmd /k set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& cd /d "%ROOT%\src" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home "%MYSQL_RUNTIME%" --managed-data-root "%VSUMMARY_DATA%"
-start "vsummary-frontend" cmd /k cd /d "%FRONTEND%" ^&^& npm run dev
+start "vsummary-backend" cmd /k pushd "%ROOT%\src" ^&^& set "PATH=%ENV_PATH%;%ENV_PATH%\Library\bin;%ENV_PATH%\Scripts;%PATH%" ^&^& "%PYTHON%" -m backend.api.http.server --host 127.0.0.1 --port 8001 --managed-mysql-home "%MYSQL_RUNTIME%" --managed-data-root "%VSUMMARY_DATA%"
+start "vsummary-frontend" cmd /k pushd "%FRONTEND%" ^&^& npm run dev
 
 echo MySQL runtime: %MYSQL_RUNTIME% ^(%MYSQL_RUNTIME_SOURCE%^)
 echo Backend:  http://127.0.0.1:8001
