@@ -604,7 +604,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                 <WorkspaceLibraryHomePane
                   library={library}
                   onSelectSeries={actions.selectSeries}
-                  onAddSeries={() => setImportModalState({ mode: "series" })}
+                  onSelectVideo={actions.selectVideo}
                   onAddPlaygroundVideo={() => setImportModalState({ mode: "playground" })}
                 />
               </Suspense>
