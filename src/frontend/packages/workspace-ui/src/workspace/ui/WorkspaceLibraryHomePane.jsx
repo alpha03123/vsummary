@@ -1,44 +1,116 @@
 import { motion } from "framer-motion";
-import { PlusCircle } from "lucide-react";
+import { CheckCircle2, ChevronRight, Plus } from "lucide-react";
 
 import { blurVariant, staggerContainer } from "../../lib/animations";
 import { isBilibiliInboxSeries, isPlaygroundSeries, isSpecialSeries } from "../model/workspaceControllerConstants";
 
+const PENDING_PREVIEW_LIMIT = 5;
+
+// linked = 只导入了链接、按需下载处理，不算积压；已下载但未生成的才是「待生成」。
+function videoState(video) {
+  if (video.processed) return "processed";
+  return video.status === "linked" ? "linked" : "pending";
+}
+
+function countVideoStates(videos) {
+  const counts = { total: videos.length, processed: 0, pending: 0, linked: 0 };
+  for (const video of videos) counts[videoState(video)] += 1;
+  return counts;
+}
+
 function summarizeLibrary(library) {
   const series = library?.series ?? [];
-  const visibleSeries = series.filter((item) => !isSpecialSeries(item));
-  const totalVideos = series.reduce((count, item) => count + item.videos.length, 0);
-  const processedVideos = series.reduce(
-    (count, item) => count + item.videos.filter((video) => video.processed).length,
-    0,
+  const allVideos = series.flatMap((item) => item.videos);
+  const pendingVideos = series.flatMap((item) =>
+    item.videos
+      .filter((video) => videoState(video) === "pending")
+      .map((video) => ({ video, series: item })),
   );
 
+  const regularSeries = series.filter((item) => !isSpecialSeries(item));
+
   return {
-    seriesCount: visibleSeries.length,
-    totalVideos,
-    processedVideos,
+    seriesCount: regularSeries.length,
+    seriesTotals: countVideoStates(regularSeries.flatMap((item) => item.videos)),
+    totals: countVideoStates(allVideos),
     bilibiliInbox: series.find(isBilibiliInboxSeries) ?? null,
+    playground: series.find(isPlaygroundSeries) ?? { id: "__playground__", title: "Playground", videos: [], kind: "playground" },
+    pendingVideos,
   };
 }
 
-export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries, onAddPlaygroundVideo }) {
-  const librarySummary = summarizeLibrary(library);
-  const bilibiliInboxProcessedCount = librarySummary.bilibiliInbox?.videos.filter((video) => video.processed).length ?? 0;
-  const bilibiliInboxVideoCount = librarySummary.bilibiliInbox?.videos.length ?? 0;
-  const playgroundSeries = (library?.series ?? []).find(isPlaygroundSeries) ?? {
-    id: "__playground__",
-    title: "Playground",
-    videos: [],
-    kind: "playground",
-  };
-  const playgroundVideoCount = playgroundSeries.videos.length;
-  const playgroundProcessedCount = playgroundSeries.videos.filter((video) => video.processed).length;
-  const progressPercentage = librarySummary.totalVideos > 0
-    ? Math.round((librarySummary.processedVideos / librarySummary.totalVideos) * 100)
-    : 0;
-  const playgroundProgressPercentage = playgroundVideoCount > 0
-    ? Math.round((playgroundProcessedCount / playgroundVideoCount) * 100)
-    : 0;
+function describeCounts(counts) {
+  if (counts.total === 0) return "暂无视频";
+  if (counts.processed === counts.total) return `${counts.total} 个视频 · 全部已生成`;
+  const parts = [`${counts.total} 个视频`, `已生成 ${counts.processed}`];
+  if (counts.pending > 0) parts.push(`待生成 ${counts.pending}`);
+  if (counts.linked > 0) parts.push(`未下载 ${counts.linked}`);
+  return parts.join(" · ");
+}
+
+function StateBar({ counts }) {
+  if (counts.total === 0) return null;
+  const segments = [
+    { key: "processed", className: "bg-accent" },
+    { key: "pending", className: "bg-accent/35" },
+    { key: "linked", className: "bg-stone-300 dark:bg-zinc-700" },
+  ];
+  return (
+    <div className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-stone-200/60 dark:bg-neutral-900/80">
+      {segments.map(({ key, className }) =>
+        counts[key] > 0 ? (
+          <div key={key} className={className} style={{ width: `${(counts[key] / counts.total) * 100}%` }} />
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+// 不传 onOpen 时是只读汇总行（例如「系列」，具体系列在侧栏里）。
+function SourceRow({ title, description, counts, onOpen, action }) {
+  const interactive = Boolean(onOpen);
+  const body = (
+    <>
+      <div className="shrink-0 md:w-28">
+        <strong className={`block text-[15px] font-bold text-stone-900 dark:text-stone-100 ${interactive ? "transition-colors group-hover:text-accent" : ""}`}>{title}</strong>
+        <span className="text-xs text-stone-500 dark:text-zinc-500">{description}</span>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="truncate text-xs font-semibold text-stone-600 dark:text-zinc-400">{describeCounts(counts)}</span>
+        <StateBar counts={counts} />
+      </div>
+    </>
+  );
+  const bodyClassName = "flex min-w-0 flex-1 flex-col items-stretch gap-2 text-left md:flex-row md:items-center md:gap-6";
+
+  return (
+    <div className={`group flex items-center gap-4 rounded-2xl px-4 py-3.5 ${interactive ? "transition-colors hover:bg-white dark:hover:bg-neutral-800/60" : ""}`}>
+      {interactive ? (
+        <button type="button" onClick={onOpen} className={bodyClassName}>{body}</button>
+      ) : (
+        <div className={bodyClassName}>{body}</div>
+      )}
+      <div className="flex shrink-0 justify-end md:w-28">{action}</div>
+      {interactive ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`进入${title}`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-stone-400 transition-colors group-hover:bg-stone-200/60 group-hover:text-stone-700 dark:group-hover:bg-neutral-700 dark:group-hover:text-zinc-200"
+        >
+          <ChevronRight size={16} />
+        </button>
+      ) : (
+        <span className="w-8 shrink-0" />
+      )}
+    </div>
+  );
+}
+
+export function WorkspaceLibraryHomePane({ library, onSelectSeries, onSelectVideo, onAddPlaygroundVideo }) {
+  const summary = summarizeLibrary(library);
+  const { totals, seriesTotals, bilibiliInbox, playground, pendingVideos } = summary;
+  const hiddenPendingCount = Math.max(0, pendingVideos.length - PENDING_PREVIEW_LIMIT);
 
   return (
     <motion.section
@@ -49,135 +121,94 @@ export function WorkspaceLibraryHomePane({ library, onSelectSeries, onAddSeries,
       exit="exit"
       className="flex-1 min-w-0 h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 bg-stone-50/30 dark:bg-transparent"
     >
-      <div className="w-full max-w-5xl mx-auto px-8 xl:px-10 py-6 xl:py-8 flex min-h-full flex-col gap-5">
+      <motion.div
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+        className="w-full max-w-4xl mx-auto px-8 xl:px-10 py-6 xl:py-8 flex flex-col gap-5"
+      >
+        <motion.header variants={blurVariant} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-1">
+          <h2 className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">概览</h2>
+          <p className="text-sm font-semibold text-stone-500 dark:text-zinc-500">
+            {totals.total} 个视频 · 已生成 {totals.processed}
+          </p>
+        </motion.header>
 
-        {/* Header Section */}
-        <motion.div variants={blurVariant} className="flex flex-col gap-3">
-
-          <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
-            Welcome to {" "}
-            <span className="text-stone-600 dark:text-zinc-500">Vsummary</span>
-          </h2>
-
-        </motion.div>
-
-        {/* Bento Grid Layout */}
-        <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
-
-          {/* Main Progress Card (Spans 8 cols) */}
-          <motion.article variants={blurVariant} className="md:col-span-8 workspace-elevated-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-between overflow-hidden relative">
-            <div className="relative z-10">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500 mb-3 flex items-center gap-2">
-                Processing Overview
-              </p>
-              <div className="flex items-baseline gap-3 mb-2">
-                <h3 className="text-5xl font-black text-stone-900 dark:text-stone-100 tracking-tighter">{progressPercentage}%</h3>
-                <p className="text-sm font-semibold text-stone-600 dark:text-zinc-400 pb-1">processed</p>
-              </div>
-
-              <div className="h-3 w-full bg-stone-200/60 dark:bg-neutral-900/80 rounded-full overflow-hidden mt-4 shadow-inner relative">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressPercentage}%` }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute top-0 left-0 h-full bg-accent rounded-full"
-                />
-              </div>
-              <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-600 dark:text-zinc-500">
-                <span>已解析 {librarySummary.processedVideos} 个视频</span>
-                <span>库内共计 {librarySummary.totalVideos} 个视频</span>
-              </div>
-            </div>
-          </motion.article>
-
-          {/* Quick Stats (Spans 4 cols) */}
-          <motion.div variants={blurVariant} className="md:col-span-4 flex flex-col gap-4">
-            <div className="workspace-panel flex-1 rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-center items-center text-center group">
-              <span className="text-4xl font-black text-stone-900 dark:text-stone-100 mb-2 transition-transform group-hover:scale-105">{librarySummary.seriesCount}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Total Series</span>
-            </div>
-            <div className="workspace-panel flex-1 rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 flex flex-col justify-center items-center text-center group">
-              <span className="text-4xl font-black text-stone-900 dark:text-stone-100 mb-2 transition-transform group-hover:scale-105">{librarySummary.totalVideos}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Total Videos</span>
-            </div>
-          </motion.div>
-
-          {/* Plugin Directory (Spans 7 cols) */}
-          <motion.article variants={blurVariant} className="md:col-span-7 workspace-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6">
-            <p className="mb-4 text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">Plugin Directory</p>
-
-            {librarySummary.bilibiliInbox ? (
-              <div className="grid grid-cols-1 gap-3">
-                <motion.button
-                  key={librarySummary.bilibiliInbox.id}
-                  variants={blurVariant}
-                  whileHover={{ scale: 0.99 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => onSelectSeries(librarySummary.bilibiliInbox.id)}
-                  className="group relative flex items-center justify-between p-4 rounded-2xl border border-stone-200/60 dark:border-white/5 bg-stone-50/50 dark:bg-neutral-900/50 hover:bg-white dark:hover:bg-neutral-800 transition-all text-left shadow-sm hover:shadow-md"
+        <motion.article variants={blurVariant} className="workspace-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-3">
+          <p className="px-4 pt-3 pb-2 text-xs font-bold text-stone-500 dark:text-zinc-500">来源</p>
+          <div className="flex flex-col">
+            {summary.seriesCount > 0 ? (
+              <SourceRow title="系列" description={`${summary.seriesCount} 个系列`} counts={seriesTotals} />
+            ) : null}
+            {bilibiliInbox ? (
+              <SourceRow
+                title="B站导入"
+                description="收藏夹与链接"
+                counts={countVideoStates(bilibiliInbox.videos)}
+                onOpen={() => onSelectSeries(bilibiliInbox.id)}
+              />
+            ) : null}
+            <SourceRow
+              title="排练场"
+              description="非系列视频"
+              counts={countVideoStates(playground.videos)}
+              onOpen={() => onSelectSeries(playground.id)}
+              action={onAddPlaygroundVideo ? (
+                <button
+                  type="button"
+                  onClick={onAddPlaygroundVideo}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-600 transition-colors hover:border-accent/40 hover:text-accent dark:border-white/10 dark:text-zinc-400"
                 >
-                  <strong className="block text-[14px] font-bold text-stone-900 dark:text-stone-100 group-hover:text-accent transition-colors">B站导入</strong>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-semibold text-stone-600 dark:text-zinc-400">
-                      {bilibiliInboxProcessedCount} / {bilibiliInboxVideoCount} 已处理
+                  <Plus size={13} /> 添加视频
+                </button>
+              ) : null}
+            />
+          </div>
+          {totals.total > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pt-2 pb-3 text-[11px] font-semibold text-stone-500 dark:text-zinc-500">
+              <span className="flex items-center gap-1.5 whitespace-nowrap"><span className="h-2 w-2 rounded-full bg-accent" />已生成</span>
+              <span className="flex items-center gap-1.5 whitespace-nowrap"><span className="h-2 w-2 rounded-full bg-accent/35" />待生成</span>
+              <span className="flex items-center gap-1.5 whitespace-nowrap"><span className="h-2 w-2 rounded-full bg-stone-300 dark:bg-zinc-700" />未下载（按需处理）</span>
+            </div>
+          ) : null}
+        </motion.article>
+
+        {pendingVideos.length === 0 && totals.total > 0 ? (
+          <motion.p variants={blurVariant} className="flex items-center gap-2 px-5 text-sm font-semibold text-stone-500 dark:text-zinc-500">
+            <CheckCircle2 size={16} className="shrink-0 text-accent" />
+            没有待生成的视频
+            {totals.linked > 0 ? <span className="font-medium">· {totals.linked} 个未下载的视频可在来源里按需处理</span> : null}
+          </motion.p>
+        ) : null}
+
+        {pendingVideos.length > 0 ? (
+          <motion.article variants={blurVariant} className="workspace-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-3">
+            <p className="px-4 pt-3 pb-2 text-xs font-bold text-stone-500 dark:text-zinc-500">已下载，待生成 · {pendingVideos.length}</p>
+            <ul className="flex flex-col">
+              {pendingVideos.slice(0, PENDING_PREVIEW_LIMIT).map(({ video, series }) => (
+                <li key={`${series.id}:${video.id}`}>
+                  <button
+                    type="button"
+                    onClick={() => (onSelectVideo ? onSelectVideo(series.id, video.id) : onSelectSeries(series.id))}
+                    className="group flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-white dark:hover:bg-neutral-800/60"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800 transition-colors group-hover:text-accent dark:text-stone-200">
+                      {video.title}
                     </span>
-                    <div className="w-8 h-8 rounded-full bg-stone-200/50 dark:bg-neutral-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0 border border-stone-300/50 dark:border-white/5">
-                      <span className="text-stone-600 dark:text-zinc-300 text-xs font-bold">→</span>
-                    </div>
-                  </div>
-                </motion.button>
-              </div>
-            ) : (
-              <div className="h-32 flex items-center justify-center border-2 border-dashed border-stone-200 dark:border-white/5 rounded-2xl">
-                <p className="text-sm font-semibold text-stone-500">暂无已连接插件</p>
-              </div>
-            )}
+                    <span className="max-w-[12rem] shrink-0 truncate text-xs text-stone-500 dark:text-zinc-500">
+                      {isBilibiliInboxSeries(series) ? "B站导入" : isPlaygroundSeries(series) ? "排练场" : series.title}
+                    </span>
+                    <ChevronRight size={15} className="shrink-0 text-stone-400 transition-colors group-hover:text-stone-700 dark:group-hover:text-zinc-200" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {hiddenPendingCount > 0 ? (
+              <p className="px-4 pt-1 pb-3 text-xs text-stone-500 dark:text-zinc-500">还有 {hiddenPendingCount} 个，在对应来源里查看</p>
+            ) : null}
           </motion.article>
-
-          {/* Playground Card (Spans 5 cols) */}
-          <motion.article variants={blurVariant} className="md:col-span-5 workspace-muted-panel rounded-[2rem] border border-stone-200 dark:border-white/5 p-6 relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 dark:bg-accent/[0.06] rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
-            <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500 mb-4 relative z-10">Playground</p>
-            <div className="relative z-10 flex flex-col gap-4 flex-1">
-              <div>
-                <h3 className="text-2xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">排练场</h3>
-                <p className="mt-2 text-sm font-medium leading-relaxed text-stone-600 dark:text-zinc-400">
-                  处理非系列视频
-                </p>
-              </div>
-              <div className="mt-2">
-                <div className="flex items-baseline gap-3 mb-2">
-                  <h3 className="text-3xl font-black text-stone-900 dark:text-stone-100 tracking-tighter">{playgroundProgressPercentage}%</h3>
-                  <p className="text-xs font-semibold text-stone-600 dark:text-zinc-400 pb-1">AI 处理率</p>
-                </div>
-                <div className="h-2.5 w-full bg-stone-200/60 dark:bg-neutral-900/80 rounded-full overflow-hidden mt-3 shadow-inner relative">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${playgroundProgressPercentage}%` }}
-                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute top-0 left-0 h-full bg-accent rounded-full"
-                  />
-                </div>
-                <div className="flex justify-between items-center mt-3 text-xs font-semibold text-stone-600 dark:text-zinc-500">
-                  <span>已解析 {playgroundProcessedCount} 个视频</span>
-                  <span>库内共计 {playgroundVideoCount} 个视频</span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 relative z-10 flex flex-col gap-3">
-
-              <button
-                type="button"
-                onClick={() => onSelectSeries(playgroundSeries.id)}
-                className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-2xl bg-accent hover:bg-accent/90 text-white text-sm font-bold shadow-sm transition-colors"
-              >
-                <PlusCircle size={15} /> 进入 Playground
-              </button>
-            </div>
-          </motion.article>
-
-        </motion.div>
-      </div>
+        ) : null}
+      </motion.div>
     </motion.section>
   );
 }

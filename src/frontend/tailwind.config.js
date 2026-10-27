@@ -8,6 +8,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
     "./packages/workspace-ui/src/**/*.{js,jsx}",
+    "./node_modules/@alpha03123/vsummary-workspace-ui/dist/**/*.js",
   ],
   theme: {
     extend: {
