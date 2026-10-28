@@ -1,6 +1,6 @@
 # Core 宿主接口
 
-当前版本：`vsummary-core==0.5.0a29`。
+当前版本：`vsummary-core==0.5.0a30`。
 
 ## 媒体存储与预览
 
@@ -35,6 +35,9 @@ yt-dlp 适配器的 `cookie=None` 保留 Local 的匿名优先、认证失败后
 资源预算和可选聊天队列。`SqlWorkspaceServicesProvider` 按 workspace 构建服务，
 `build_worker_host()` 独立运行任务与 Outbox。API 与 worker 绑定同一 `WorkspaceContext`。
 身份认证和成员关系由宿主处理。Core wheel 不含 Local 路由。
+
+API 默认把 JSON Lines 日志写到 `root_dir/logs/app.jsonl`（按 10 MB × 5 轮转）。`root_dir` 是只读配置目录的宿主
+（如以非 root 用户运行的容器）通过 `build_host_container(log_dir=...)` 指向可写目录；Local 不传，行为不变。
 
 ## 偏好与计量
 

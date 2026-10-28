@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager, contextmanager
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -45,12 +46,21 @@ async def lifespan(app: FastAPI):
             async with mcp_server.session_manager.run():
                 yield
     finally:
-        root_dir = getattr(getattr(app.state, "container", None), "root_dir", None)
+        log_dir = application_log_dir(getattr(app.state, "container", None))
         client = getattr(getattr(app.state, "container", None), "model_http_client", None)
         if client is not None:
             client.close()
-        if root_dir is not None:
-            close_application_logging(root_dir)
+        if log_dir is not None:
+            close_application_logging(log_dir)
+
+
+def application_log_dir(container: object) -> Path | None:
+    """The host's log directory, else ``root_dir/logs`` (Local keeps logs beside its config)."""
+    log_dir = getattr(container, "log_dir", None)
+    if log_dir is not None:
+        return log_dir
+    root_dir = getattr(container, "root_dir", None)
+    return None if root_dir is None else root_dir / "logs"
 
 
 def include_common_routers(app: FastAPI) -> None:
@@ -69,9 +79,9 @@ def include_common_routers(app: FastAPI) -> None:
 def create_app(container: ApiContainer) -> FastAPI:
     """Create an app containing only public Core routes and lifecycle hooks."""
 
-    root_dir = getattr(container, "root_dir", None)
-    if root_dir is not None:
-        configure_application_logging(root_dir)
+    log_dir = application_log_dir(container)
+    if log_dir is not None:
+        configure_application_logging(log_dir)
     install_access_log_filters()
     application = FastAPI(title="VSummary Core API", lifespan=lifespan)
     application.state.container = container

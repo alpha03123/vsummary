@@ -138,6 +138,9 @@ class ApiContainer:
     chat_queue: SqlChatQueue | None = None
     linked_video_resolvers: dict[str, LinkedVideoResolver] = field(default_factory=dict)
     linked_video_downloaders: dict[str, LinkedVideoDownloader] = field(default_factory=dict)
+    # Where the API writes logs/app.jsonl; None keeps root_dir/logs. Hosts whose root_dir is a
+    # read-only configuration directory point this at writable storage.
+    log_dir: Path | None = None
 
 
 def build_host_container(
@@ -159,6 +162,7 @@ def build_host_container(
     artifact_token_estimate=None,
     linked_video_resolvers: dict[str, LinkedVideoResolver] | None = None,
     linked_video_downloaders: dict[str, LinkedVideoDownloader] | None = None,
+    log_dir: Path | None = None,
 ) -> ApiContainer:
     """Build shared host dependencies; no Workspace or background process is started."""
     config_path = root_dir / "config" / "settings.toml"
@@ -204,6 +208,7 @@ def build_host_container(
         model_profiles=dict(model_profiles or {}), resource_budget=resource_budget, chat_queue=chat_queue,
         linked_video_resolvers=dict(linked_video_resolvers or {}),
         linked_video_downloaders=dict(linked_video_downloaders or {}),
+        log_dir=log_dir,
     )
 
 

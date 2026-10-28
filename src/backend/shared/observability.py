@@ -63,9 +63,9 @@ def _decode_process_output(value: str | bytes) -> str:
     return value
 
 
-def configure_application_logging(root_dir: Path) -> Path:
-    """为全部 ``backend.*`` 日志器配置默认 JSON Lines 文件输出。"""
-    log_path = root_dir / "logs" / "app.jsonl"
+def configure_application_logging(log_dir: Path) -> Path:
+    """为全部 ``backend.*`` 日志器配置 ``log_dir/app.jsonl`` 的 JSON Lines 文件输出。"""
+    log_path = log_dir / "app.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("backend")
     logger.setLevel(logging.INFO)
@@ -90,9 +90,9 @@ def configure_application_logging(root_dir: Path) -> Path:
     return log_path
 
 
-def close_application_logging(root_dir: Path) -> None:
-    """关闭指定应用根目录的文件 handler，释放 Windows 文件句柄。"""
-    expected_path = root_dir / "logs" / "app.jsonl"
+def close_application_logging(log_dir: Path) -> None:
+    """关闭指定日志目录的文件 handler，释放 Windows 文件句柄。"""
+    expected_path = log_dir / "app.jsonl"
     logger = logging.getLogger("backend")
     for handler in list(logger.handlers):
         if _same_log_file(getattr(handler, "baseFilename", None), expected_path):
