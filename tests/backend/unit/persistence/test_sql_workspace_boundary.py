@@ -90,7 +90,7 @@ class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
             "external_path": None,
         }
         blobs = Mock()
-        blobs.materialize.side_effect = BlobStoreError("Committed blob does not exist.")
+        blobs.read_path.side_effect = BlobStoreError("Committed blob does not exist.")
         workspace = SqlVideoWorkspace(
             session_factory=sessions,
             blob_store=blobs,
@@ -103,7 +103,7 @@ class SqlVideoWorkspaceBoundaryTests(unittest.TestCase):
         ) as logs:
             self.assertIsNone(workspace.get_video_source("series-1", "video-1"))
 
-        self.assertIn("failed to materialize video source", logs.output[0])
+        self.assertIn("failed to read video source", logs.output[0])
         self.assertIn("BlobStoreError: Committed blob does not exist.", logs.output[0])
 
     def test_external_video_source_uses_the_original_path_without_materializing(self) -> None:

@@ -99,6 +99,9 @@ class SqlWorkspaceStorageModeTests(unittest.TestCase):
             source_path.write_bytes(b"video")
             workspace, sessions = self._workspace(root)
             external = ExternalMediaReference(video_id="video-1", source_path="C:/missing.mp4")
+            # Relink resolves the video and its series' storage mode before touching the reference.
+            sessions.return_value.__enter__.return_value.execute.return_value.mappings.return_value.first.return_value = {
+                "id": "video-1", "storage_mode": "external_reference"}
             sessions.begin.return_value.__enter__.return_value.get.return_value = external
 
             workspace.relink_external_video(series_id="series-1", video_id="video-1", source_path=source_path)
