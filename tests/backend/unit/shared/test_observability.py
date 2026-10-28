@@ -18,8 +18,8 @@ from backend.shared.observability import (
 class ApplicationLoggingTests(unittest.TestCase):
     def test_records_context_and_original_exception(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root_dir = Path(directory)
-            log_path = configure_application_logging(root_dir)
+            log_dir = Path(directory)
+            log_path = configure_application_logging(log_dir)
             logger = logging.getLogger("backend.test.observability")
             try:
                 with bind_request_id("request-1"), bind_task_id("series/video"):
@@ -34,12 +34,12 @@ class ApplicationLoggingTests(unittest.TestCase):
                 self.assertEqual(record["event"], "test_failed")
                 self.assertIn("ValueError: original failure", record["exception"])
             finally:
-                close_application_logging(root_dir)
+                close_application_logging(log_dir)
 
     def test_extracts_original_subprocess_failure_fields(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root_dir = Path(directory)
-            log_path = configure_application_logging(root_dir)
+            log_dir = Path(directory)
+            log_path = configure_application_logging(log_dir)
             logger = logging.getLogger("backend.test.observability")
             try:
                 try:
@@ -56,7 +56,7 @@ class ApplicationLoggingTests(unittest.TestCase):
                 self.assertEqual(record["command"], ["ffmpeg", "-ss", "nan"])
                 self.assertEqual(record["stderr"], "Invalid duration for option ss: nan")
             finally:
-                close_application_logging(root_dir)
+                close_application_logging(log_dir)
 
 
 if __name__ == "__main__":

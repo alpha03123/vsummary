@@ -138,6 +138,13 @@ class ApiContainer:
     chat_queue: SqlChatQueue | None = None
     linked_video_resolvers: dict[str, LinkedVideoResolver] = field(default_factory=dict)
     linked_video_downloaders: dict[str, LinkedVideoDownloader] = field(default_factory=dict)
+    # Writable runtime state (logs/, data/request-pacing, data/chaoxing, data/downloads). None keeps
+    # it under root_dir, as Local does; hosts whose root_dir is read-only configuration move it.
+    state_dir: Path | None = None
+
+    @property
+    def state_root(self) -> Path:
+        return self.root_dir if self.state_dir is None else self.state_dir
 
 
 def build_host_container(
@@ -159,9 +166,11 @@ def build_host_container(
     artifact_token_estimate=None,
     linked_video_resolvers: dict[str, LinkedVideoResolver] | None = None,
     linked_video_downloaders: dict[str, LinkedVideoDownloader] | None = None,
+    state_dir: Path | None = None,
 ) -> ApiContainer:
     """Build shared host dependencies; no Workspace or background process is started."""
     config_path = root_dir / "config" / "settings.toml"
+    state_root = root_dir if state_dir is None else state_dir
     load_settings(config_path, root_dir)
     def estimate_tokens():
         active=load_effective_settings(config_path,root_dir).agent_context
@@ -174,6 +183,7 @@ def build_host_container(
                                      multimodal_estimate=estimate_multimodal if preference_store is not None else None,
                                      token_estimate=estimate_tokens if preference_store is not None else None)
     progress = InMemoryProgressTracker()
+    # Local model caches stay under root_dir: settings.py derives the same paths from it.
     models = FasterWhisperModelManager(root_dir / "data" / "models" / "faster-whisper")
     whisper = WhisperCppModelManager(root_dir / "data" / "models" / "whisper-cpp")
 
@@ -186,7 +196,7 @@ def build_host_container(
     settings_service = SettingsService(config_path=config_path, root_dir=root_dir, faster_whisper_model_manager=models, whisper_cpp_model_manager=whisper, rag_model_manager=rag_models)
     settings = load_settings(config_path, root_dir)
     importer = ChaoxingCourseImporter(client=ChaoxingDownloaderClient(
-        state_dir=root_dir / "data" / "chaoxing",
+        state_dir=state_root / "data" / "chaoxing",
         request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
         init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
     ))
@@ -204,6 +214,7 @@ def build_host_container(
         model_profiles=dict(model_profiles or {}), resource_budget=resource_budget, chat_queue=chat_queue,
         linked_video_resolvers=dict(linked_video_resolvers or {}),
         linked_video_downloaders=dict(linked_video_downloaders or {}),
+        state_dir=state_dir,
     )
 
 
@@ -402,7 +413,7 @@ def build_workspace_services(
     from backend.shared.request_pacing import RequestPacer
     request_pacers = {
         provider: RequestPacer(interval_seconds=getattr(settings.external_import, provider).request_delay_seconds,
-            state_path=root_dir / "data" / "request-pacing" / f"{provider}.json")
+            state_path=container.state_root / "data" / "request-pacing" / f"{provider}.json")
         for provider in ("bilibili", "douyin")
     }
     bilibili_resolver = YtDlpBilibiliResolver(request_pacer=request_pacers["bilibili"])
@@ -421,13 +432,13 @@ def build_workspace_services(
         for platform in external_platforms
     }
     chaoxing_client = ChaoxingDownloaderClient(
-        state_dir=root_dir / "data" / "chaoxing",
+        state_dir=container.state_root / "data" / "chaoxing",
         request_delay_seconds=settings.external_import.chaoxing.request_delay_seconds,
         init_course_delay_seconds=settings.external_import.chaoxing.init_course_delay_seconds,
     )
     chaoxing_importer = ChaoxingCourseImporter(client=chaoxing_client)
     durable_linked_downloader = ProviderLinkedVideoDownloader(
-        download_root=root_dir / "data" / "downloads",
+        download_root=container.state_root / "data" / "downloads",
         bilibili_downloader=BilibiliDownloader(request_pacer=request_pacers["bilibili"]),
         platform_downloaders={platform.provider: YtDlpPlatformDownloader(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
         chaoxing_client=chaoxing_client,
