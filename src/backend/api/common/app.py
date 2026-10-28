@@ -55,12 +55,9 @@ async def lifespan(app: FastAPI):
 
 
 def application_log_dir(container: object) -> Path | None:
-    """The host's log directory, else ``root_dir/logs`` (Local keeps logs beside its config)."""
-    log_dir = getattr(container, "log_dir", None)
-    if log_dir is not None:
-        return log_dir
-    root_dir = getattr(container, "root_dir", None)
-    return None if root_dir is None else root_dir / "logs"
+    """``logs`` under the host's state directory, else under ``root_dir`` (Local)."""
+    state_root = getattr(container, "state_dir", None) or getattr(container, "root_dir", None)
+    return None if state_root is None else state_root / "logs"
 
 
 def include_common_routers(app: FastAPI) -> None:
