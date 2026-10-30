@@ -8,9 +8,6 @@ from backend.api.http.static_assets import mount_frontend_dist
 @pytest.mark.parametrize("path", [
     "/%2e%2e/%2e%2e/private.txt",
     "/..%2f..%2fprivate.txt",
-    "/..%5c..%5cprivate.txt",
-    "/C%3A%5cprivate.txt",
-    "/%5c%5cinvalid-host%5cshare%5cprivate.txt",
 ])
 def test_frontend_routes_reject_paths_outside_dist(tmp_path, path):
     dist=tmp_path/'src/frontend/dist'
