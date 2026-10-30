@@ -262,6 +262,9 @@ class BilibiliDownloader:
                 f"开始下载（{format_label}）" if index == 0 else f"降级重试（{format_label}）")
             cmd = [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-playlist", "--format", format_selector,
                 "--merge-output-format", "mp4", "--output", output_template, "--newline",
+                # Overseas CDN mirrors (upos-sz-mirrorcosov) answer HTTP 567 to requests without a
+                # Range header; chunked downloads send one on every request.
+                "--http-chunk-size", "10M",
                 *build_yt_dlp_proxy_flags(), *build_yt_dlp_add_header_flags(headers),
                 *request_sleep_flags(self._request_pacer),
                 *(["--cookies", str(cookie_file)] if cookie_file is not None else []), url]
