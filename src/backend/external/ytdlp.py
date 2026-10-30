@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
 from backend.shared.filesystem import atomic_write_text
-from backend.shared.ytdlp import parse_cookie_pairs, temporary_cookie_file, run_with_cookie_fallback, requires_cookie, request_sleep_flags
+from backend.shared.ytdlp import parse_cookie_pairs, temporary_cookie_file, run_with_cookie_fallback, requires_cookie, request_sleep_flags, capped_format_selector
 from backend.shared.request_pacing import RequestPacer
 from backend.core.errors import UserVisibleError
 from backend.video_summary.library.linked_models import LinkedSeries, LinkedVideo
@@ -212,10 +212,13 @@ class YtDlpPlatformResolver:
 class YtDlpPlatformDownloader:
     """使用 yt-dlp 下载已解析的平台视频，并上报进度与取消状态。"""
 
-    def __init__(self, platform: YtDlpPlatform, *, request_pacer: RequestPacer | None = None, cookie: str | None = None) -> None:
+    def __init__(self, platform: YtDlpPlatform, *, request_pacer: RequestPacer | None = None, cookie: str | None = None,
+        max_height: int | None = None) -> None:
         self._platform = platform
         self._request_pacer = request_pacer
         self._cookie = cookie
+        # Cloud caps the height to save bandwidth; Local keeps the platform's best quality.
+        self._format_selector = platform.format_selector if max_height is None else capped_format_selector(max_height)
 
     def download(self, video: LinkedVideo, dest_dir: Path, reporter: ProgressReporter) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -227,7 +230,7 @@ class YtDlpPlatformDownloader:
             "--ignore-config",
             "--no-playlist",
             "--format",
-            self._platform.format_selector,
+            self._format_selector,
             "--merge-output-format",
             "mp4",
             "--output",

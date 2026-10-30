@@ -20,6 +20,16 @@ def request_sleep_flags(pacer: RequestPacer | None) -> list[str]:
     return ["--sleep-requests", delay, "--sleep-interval", delay]
 
 
+def capped_format_selector(max_height: int) -> str:
+    """Best stream no taller than ``max_height``, falling back to the smallest one.
+
+    ``<=?`` keeps formats whose height is unknown (common on Douyin) eligible.
+    """
+    if max_height <= 0:
+        raise ValueError("max_height must be positive.")
+    return f"bv*[height<=?{max_height}]+ba/b[height<=?{max_height}]/wv*+ba/w"
+
+
 class CookieRequiredError(RuntimeError):
     """An extractor explicitly reported that authentication is required."""
 

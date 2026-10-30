@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import types
 
@@ -215,3 +217,30 @@ def test_aliyun_bailian_transcriber_no_valid_fragment_returns_placeholder(monkey
     transcript = transcriber.transcribe(audio_path, tmp_path / "transcript")
 
     assert [segment.text for segment in transcript.segments] == ["无明显人声"]
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not installed")
+def test_upload_compresses_wav_to_opus_and_removes_staging(monkeypatch, tmp_path: Path) -> None:
+    audio_path = tmp_path / "audio.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=10",
+        "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(audio_path)], check=True)
+    uploaded: list[tuple[str, int]] = []
+
+    class OssUtils:
+        @classmethod
+        def upload(cls, *, model, file_path, api_key, base_address):
+            uploaded.append((Path(file_path).name, Path(file_path).stat().st_size))
+            return "oss://dashscope-instant/audio.opus", {}
+
+    utils_module = types.ModuleType("dashscope.utils")
+    oss_utils_module = types.ModuleType("dashscope.utils.oss_utils")
+    oss_utils_module.OssUtils = OssUtils
+    monkeypatch.setitem(sys.modules, "dashscope", types.ModuleType("dashscope"))
+    monkeypatch.setitem(sys.modules, "dashscope.utils", utils_module)
+    monkeypatch.setitem(sys.modules, "dashscope.utils.oss_utils", oss_utils_module)
+    transcriber = AliyunBailianTranscriber(model="paraformer-v2", base_url="https://dashscope.aliyuncs.com", api_key="k")
+
+    assert transcriber._upload_audio(audio_path) == "oss://dashscope-instant/audio.opus"
+    assert uploaded[0][0] == "audio.opus"
+    assert uploaded[0][1] * 4 < audio_path.stat().st_size
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["audio.wav"]

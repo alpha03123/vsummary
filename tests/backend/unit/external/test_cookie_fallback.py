@@ -140,3 +140,25 @@ def test_cancellation_never_triggers_cookie_retry():
     with pytest.raises(InterruptedError):
         run_with_cookie_fallback(operation, "SID=secret")
     assert attempts == [""]
+
+
+@pytest.mark.parametrize("platform", ["bilibili", "youtube"])
+def test_downloader_caps_height_when_requested(platform, monkeypatch, tmp_path):
+    monkeypatch.delenv("BILIBILI_COOKIE" if platform == "bilibili" else "YOUTUBE_COOKIE", raising=False)
+    if platform == "bilibili":
+        downloader = BilibiliDownloader(cookie="", max_height=480)
+    else:
+        downloader = YtDlpPlatformDownloader(YOUTUBE, cookie="", max_height=480)
+    formats = []
+    def run(command, reporter):
+        formats.append(command[command.index("--format") + 1])
+        if len(formats) == 1 and platform == "bilibili":
+            raise RuntimeError("Requested format is not available")
+        Path(command[command.index("--output") + 1].replace("%(ext)s", "mp4")).write_bytes(b"media")
+    monkeypatch.setattr(downloader, "_run_process", run)
+    if platform == "bilibili":
+        downloader.download("BV1xx411c7mD", 1, tmp_path, _RecordingReporter())
+        assert formats == ["bv*[height<=?480]+ba/b[height<=?480]", "wv*+ba/w"]
+    else:
+        downloader.download(_linked_video(), tmp_path, _RecordingReporter())
+        assert formats == ["bv*[height<=?480]+ba/b[height<=?480]/wv*+ba/w"]

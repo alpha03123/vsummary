@@ -48,6 +48,15 @@ _BILIBILI_DOWNLOAD_FORMATS = (
 )
 
 
+def _capped_download_formats(max_height: int) -> tuple[tuple[str, str], ...]:
+    if max_height <= 0:
+        raise ValueError("max_height must be positive.")
+    return (
+        (f"{max_height}p", f"bv*[height<=?{max_height}]+ba/b[height<=?{max_height}]"),
+        ("最低清晰度", "wv*+ba/w"),
+    )
+
+
 class ProgressReporter(Protocol):
     """下载进度的上报接口（Protocol）。
 
@@ -189,13 +198,16 @@ class BilibiliDownloader:
     - v5：默认 720p/30fps 优先，下载失败后按清晰度降级重试；代理仅在
       ``BILIBILI_YTDLP_PROXY`` 显式配置时传给 yt-dlp。
 
-    视频质量：优先 720p/30fps，失败后降级到 720p、480p、best。
+    视频质量：优先 720p/30fps，失败后降级到 720p、480p、best。传入 ``max_height``
+    （Cloud 用于节省带宽）时改为该高度以内的最佳清晰度，失败后降级到最低清晰度。
     """
     _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
-    def __init__(self, *, request_pacer: RequestPacer | None = None, cookie: str | None = None):
+    def __init__(self, *, request_pacer: RequestPacer | None = None, cookie: str | None = None,
+        max_height: int | None = None):
         self._request_pacer = request_pacer
         self._cookie = cookie
+        self._formats = _BILIBILI_DOWNLOAD_FORMATS if max_height is None else _capped_download_formats(max_height)
 
     def download(self, bvid: str, page: int, dest_dir: Path, reporter: ProgressReporter) -> Path:
         """同步下载单个 Bilibili 视频到指定目录。
@@ -241,7 +253,7 @@ class BilibiliDownloader:
     def _download_formats(self, dest_dir: Path, stem: str, url: str, output_template: str,
         headers: dict[str, str], cookie_file: Path | None, reporter: ProgressReporter) -> Path:
         failures: list[str] = []
-        for index, (format_label, format_selector) in enumerate(_BILIBILI_DOWNLOAD_FORMATS):
+        for index, (format_label, format_selector) in enumerate(self._formats):
             reporter.raise_if_cancelled()
             if self._request_pacer:
                 self._request_pacer.wait(reporter.raise_if_cancelled)
@@ -261,7 +273,7 @@ class BilibiliDownloader:
                 if not is_format_unavailable(exc):
                     raise
                 failures.append(f"{format_label}: {exc}")
-                if index == len(_BILIBILI_DOWNLOAD_FORMATS) - 1:
+                if index == len(self._formats) - 1:
                     raise RuntimeError("所有清晰度下载失败：\n" + "\n\n".join(failures)) from exc
                 reporter.update("download", None, f"{format_label} 下载失败，尝试降级")
                 continue

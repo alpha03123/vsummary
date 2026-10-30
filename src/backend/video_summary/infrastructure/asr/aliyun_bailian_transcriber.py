@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import math
+import subprocess
+import tempfile
 import time
 from http import HTTPStatus
 from pathlib import Path
@@ -97,15 +99,17 @@ class AliyunBailianTranscriber:
         except ImportError as error:
             raise RuntimeError("dashscope is not installed.") from error
 
-        try:
-            upload_result = OssUtils.upload(
-                model=self._model,
-                file_path=str(audio_path),
-                api_key=self._api_key,
-                base_address=self._base_address,
-            )
-        except Exception as error:
-            raise RuntimeError(f"上传音频到 DashScope 临时存储失败：{error}") from error
+        with tempfile.TemporaryDirectory(dir=audio_path.parent, prefix=".asr-upload-") as staging:
+            upload_path = _compress_for_upload(audio_path, Path(staging))
+            try:
+                upload_result = OssUtils.upload(
+                    model=self._model,
+                    file_path=str(upload_path),
+                    api_key=self._api_key,
+                    base_address=self._base_address,
+                )
+            except Exception as error:
+                raise RuntimeError(f"上传音频到 DashScope 临时存储失败：{error}") from error
 
         oss_url = _extract_oss_url(upload_result)
         if not isinstance(oss_url, str) or not oss_url.strip():
@@ -289,6 +293,24 @@ def _find_first_error_code(output: dict[str, object]) -> str:
             if item_code:
                 return str(item_code)
     return ""
+
+
+def _compress_for_upload(audio_path: Path, staging_dir: Path) -> Path:
+    """把待转写音频压成 32kbps 单声道 Opus 再上传，约为 16kHz WAV 的 1/8。
+
+    Paraformer 直接接受 Opus，语音识别效果基本不受影响；压缩失败时退回上传原文件。
+    """
+    target = staging_dir / f"{audio_path.stem}.opus"
+    command = [
+        "ffmpeg", "-v", "error", "-nostdin", "-y", "-i", str(audio_path),
+        "-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "32k", "-application", "voip", str(target),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as error:
+        logger.warning("ASR audio compression failed; uploading the original file: %s", error)
+        return audio_path
+    return target
 
 
 def _extract_oss_url(upload_result) -> str | None:
