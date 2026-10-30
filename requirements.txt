@@ -20,7 +20,9 @@ pillow>=11,<12
 llama-index-core>=0.12,<1
 llama-index-vector-stores-lancedb>=0.4,<1
 llama-index-embeddings-openai>=0.3,<1
-yt-dlp>=2024.1,<2027
+yt-dlp[default]>=2024.1,<2027
+# JS runtime yt-dlp needs to solve YouTube challenges.
+deno>=2,<3
 DrissionPage>=4.1,<5
 srt>=3.5,<4
 chaoxing-downloader==0.1.3
