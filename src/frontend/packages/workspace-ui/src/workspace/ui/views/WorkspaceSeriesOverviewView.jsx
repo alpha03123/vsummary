@@ -40,9 +40,8 @@ export function WorkspaceSeriesOverviewView({
   if (loading) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Series AI Overview"
-        title="正在读取视频概况"
-        description="正在汇集系列中已生成的 AI 概况。"
+        title="正在读取视频概括"
+        description="正在汇总 AI 概括…"
         loading
       />
     );
@@ -51,9 +50,8 @@ export function WorkspaceSeriesOverviewView({
   if (!seriesVideos.length) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Series AI Overview"
         title="系列暂无视频"
-        description="添加并处理视频后，这里会汇集各视频的 AI 概况。"
+        description="视频处理完后，这里会汇总每个视频的 AI 概括。"
         dashed
       />
     );
@@ -81,7 +79,7 @@ export function WorkspaceSeriesOverviewView({
             >
               <div className="min-w-0">
                 <h2 className="truncate text-base font-bold text-stone-900 dark:text-stone-100">{video.title}</h2>
-                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">尚未生成 AI 概况</p>
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">尚未生成 AI 概括</p>
               </div>
               <button
                 type="button"
@@ -89,7 +87,7 @@ export function WorkspaceSeriesOverviewView({
                 className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-accent/25 bg-accent/5 px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/10"
               >
                 <Sparkles size={15} aria-hidden="true" />
-                去生成概况
+                去生成概括
               </button>
             </article>
           );
@@ -118,7 +116,7 @@ export function WorkspaceSeriesOverviewView({
                 onClick={() => onOpenVideoOverview?.(video.id)}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-neutral-800 dark:hover:text-stone-100"
               >
-                进入视频概况
+                进入视频概括
                 <ExternalLink size={14} aria-hidden="true" />
               </button>
             </div>

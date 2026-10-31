@@ -12,16 +12,16 @@ const STEPS = [
   { id: "summarize", label: "整理章节和要点", lane: "main", stages: ["summarize"] },
   { id: "chapter_images", label: "为章节添加截图", lane: "main", stages: ["extract_screenshots"] },
   { id: "sample_frames", label: "选取视频画面", lane: "ai", stages: ["sample_frames"] },
-  { id: "ai_summary", label: "生成 AI 概况", lane: "ai", stages: ["generate_ai_summary", "understand_frames"] },
-  { id: "note_images", label: "为概况添加截图", lane: "ai", stages: ["note_images"] },
+  { id: "ai_summary", label: "生成 AI 概括", lane: "ai", stages: ["generate_ai_summary", "understand_frames"] },
+  { id: "note_images", label: "为概括添加截图", lane: "ai", stages: ["note_images"] },
   { id: "visual", label: "结合画面完善内容", lane: "main", stages: ["enrich_visual_summary"] },
-  { id: "publish", label: "保存文字、概况和截图", lane: "main", stages: ["publish"] },
+  { id: "publish", label: "保存文字、概括和截图", lane: "main", stages: ["publish"] },
 ];
 
 export function generationStageLabel(stage) {
-  if (stage === "understand_frames") return "识别画面并生成概况";
-  if (stage === "finalize_ai_summary") return "等待概况生成";
-  if (stage === "ai_summary_completed") return "概况已生成";
+  if (stage === "understand_frames") return "识别画面并生成概括";
+  if (stage === "finalize_ai_summary") return "等待概括生成";
+  if (stage === "ai_summary_completed") return "概括已生成";
   if (stage === "reconnecting") return "同步进度";
   if (stage === "cancelling") return "正在停止";
   if (["succeeded", "completed", "complete"].includes(stage)) return "已完成";

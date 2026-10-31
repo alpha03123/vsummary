@@ -19,17 +19,17 @@ export default {
         accent: 'rgb(var(--workspace-accent-color) / <alpha-value>)',
       },
       fontFamily: {
-        // Match the fonts actually loaded in index.html (IBM Plex Sans + Space Grotesk).
-        // Previously declared 'Public Sans' which was never loaded, causing silent
-        // fallback to system fonts instead of the intended typography.
-        sans: ['"IBM Plex Sans"', 'Inter', '"Segoe UI"', 'sans-serif'],
-        display: ['"Space Grotesk"', '"IBM Plex Sans"', 'sans-serif'],
+        // Latin glyphs from IBM Plex Sans; Chinese falls through to each platform's best UI font.
+        // `display` is kept as an alias so headings share the body face instead of a second family.
+        sans: ['"IBM Plex Sans"', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei UI"', '"Microsoft YaHei"', '"Noto Sans SC"', '"Segoe UI"', 'sans-serif'],
+        display: ['"IBM Plex Sans"', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei UI"', '"Microsoft YaHei"', '"Noto Sans SC"', '"Segoe UI"', 'sans-serif'],
       },
       borderRadius: {
+        // Three radii: controls 12px (xl), cards 16px (2xl/3xl), outer panels 20px (4xl/5xl).
         '2xl': '1rem',      // 16px
-        '3xl': '1.5rem',    // 24px
-        '4xl': '2rem',      // 32px
-        '5xl': '2.5rem',    // 40px
+        '3xl': '1rem',      // 16px
+        '4xl': '1.25rem',   // 20px
+        '5xl': '1.25rem',   // 20px
       }
     },
   },

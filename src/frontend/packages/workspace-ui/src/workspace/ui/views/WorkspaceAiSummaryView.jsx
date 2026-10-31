@@ -13,6 +13,8 @@ export function WorkspaceAiSummaryView({
   canGenerate = true,
   canEdit = true,
   onGenerate,
+  // Hosts that discard the source video after processing (Cloud) cannot rewrite a finished summary.
+  canRegenerate = true,
   onUpdate,
   noteImageContext,
   onSeek,
@@ -68,15 +70,14 @@ export function WorkspaceAiSummaryView({
   }
 
   if (loading && !aiSummary) {
-    return <WorkspaceStateBlock eyebrow="AI Summary" title="载入 AI 概括" description="正在读取当前视频的 AI 概括。" loading />;
+    return <WorkspaceStateBlock title="载入 AI 概括" description="正在读取当前视频的 AI 概括。" loading />;
   }
 
   if (!aiSummary) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Summary"
         title="尚未生成 AI 概括"
-        description="生成后会得到完整总结，并保留画面与时间标记。"
+        description="生成后会得到完整的概括，带画面截图和时间点。"
         actionLabel={generating ? "正在生成" : "生成 AI 概括"}
         actionIcon={generating ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}
         actionDisabled={generating || !canGenerate}
@@ -89,7 +90,6 @@ export function WorkspaceAiSummaryView({
     <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
       <div className="flex items-center justify-between gap-3 px-2">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wider text-accent">AI Summary</p>
           <h2 className="mt-1 text-lg font-bold text-stone-900 dark:text-stone-100">AI 概括</h2>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -101,7 +101,7 @@ export function WorkspaceAiSummaryView({
           ) : (
             <>
               {canEdit&&<button type="button" onClick={startEditing} className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800" title="编辑 AI 概括"><PencilLine size={15} /></button>}
-              <button type="button" onClick={() => onGenerate?.("general")} disabled={generating || !canGenerate} className="flex h-8 w-8 items-center justify-center rounded-full text-accent hover:bg-accent/10 disabled:opacity-50" title="重新生成 AI 概括">{generating ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />}</button>
+              {canRegenerate ? <button type="button" onClick={() => onGenerate?.("general")} disabled={generating || !canGenerate} className="flex h-8 w-8 items-center justify-center rounded-full text-accent hover:bg-accent/10 disabled:opacity-50" title="重新生成 AI 概括">{generating ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />}</button> : null}
             </>
           )}
         </div>

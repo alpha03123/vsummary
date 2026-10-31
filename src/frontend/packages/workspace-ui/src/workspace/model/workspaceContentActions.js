@@ -843,7 +843,7 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
     }
     await runTranscriptGeneration(
       (seriesId, videoId) => uploadSrtAndGenerateVideoSummary(seriesId, videoId, file),
-      "导入 SRT 并生成概况失败",
+      "导入 SRT 并生成概括失败",
     );
   }
 

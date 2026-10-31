@@ -12,7 +12,7 @@ export function WorkspaceFeedbackBanner({ feedback, onDismiss }) {
 
 
   return (
-    <div className={`flex items-start gap-3 rounded-[1.5rem] border px-5 py-4 text-sm ${toneClassName}`}>
+    <div className={`flex items-start gap-3 rounded-2xl border px-5 py-4 text-sm ${toneClassName}`}>
       <span className="min-w-0 flex-1">{feedback.message}</span>
       {typeof onDismiss === "function" ? (
         <button

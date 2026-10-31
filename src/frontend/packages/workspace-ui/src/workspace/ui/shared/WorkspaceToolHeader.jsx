@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { ChevronDown, Download, Sparkles } from "lucide-react";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 import { WorkspaceBackButton } from "./WorkspaceBackButton";
 
-export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [], badge = null }) {
+export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [], badge = null, aiGenerated = false }) {
   return (
     <div className="relative flex flex-wrap items-start justify-between gap-x-4 gap-y-2 @[480px]:gap-y-3">
       <div className="min-w-[min(11rem,100%)] flex-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-xl font-bold leading-snug text-stone-900 dark:text-stone-100 @[480px]:text-2xl">{meta?.label}</h1>
+          {/* Generated content is labelled as such (AI 生成合成内容标识办法). */}
+          {aiGenerated ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
+              <Sparkles size={12} /> AI 生成
+            </span>
+          ) : null}
           {badge ? (
             <span className="inline-flex shrink-0 items-center rounded-full border border-stone-200 bg-stone-100/80 px-2.5 py-0.5 text-xs font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800/70 dark:text-stone-300">
               {badge}

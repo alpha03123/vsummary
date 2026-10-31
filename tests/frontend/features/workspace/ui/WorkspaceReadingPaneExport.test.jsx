@@ -63,7 +63,7 @@ describe("WorkspaceReadingPane markdown exports", () => {
     renderPane();
 
     fireEvent.click(await screen.findByRole("button", { name: "导出" }));
-    expect(screen.getByRole("link", { name: "概况导出" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "概括导出" })).toHaveAttribute(
       "href",
       "/api/videos/series-1/video-1/exports/summary.md",
     );
@@ -108,7 +108,8 @@ describe("WorkspaceReadingPane AI summary references", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("link", { name: "1" }));
+    // The AI summary view is lazy-loaded; on a busy CI runner the first render can take over 1s.
+    fireEvent.click(await screen.findByRole("link", { name: "1" }, { timeout: 5000 }));
 
     expect(onOpenCitationReference).toHaveBeenCalledWith(expect.objectContaining({ seconds: 12 }));
     expect(onSelectTool).not.toHaveBeenCalled();

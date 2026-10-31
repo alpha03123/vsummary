@@ -137,18 +137,18 @@ export function WorkspaceNativeSubtitleSettings({
           {onFollowOverviewPlaybackChange ? (
             <div className="workspace-muted-panel mb-4 flex items-center justify-between rounded-2xl border px-4 py-3">
               <div>
-                <p className="text-sm font-semibold">概况跟随播放</p>
+                <p className="text-sm font-semibold">概括跟随播放</p>
                 <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">播放时自动定位当前原文</p>
               </div>
               <WorkspaceToggleSwitch
                 checked={followOverviewPlayback}
                 onChange={() => onFollowOverviewPlaybackChange(!followOverviewPlayback)}
-                ariaLabel="AI 概况跟随播放"
+                ariaLabel="AI 概括跟随播放"
               />
             </div>
           ) : null}
           <section className="mt-4">
-            <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">颜色</p>
+            <p className="mb-2 px-1 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">颜色</p>
             <div className="grid grid-cols-2 gap-2">
               {colorControls.map(({ id, label, value, icon: Icon }) => (
                 <label key={id} className="workspace-muted-panel flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors hover:border-accent/40">
@@ -168,7 +168,7 @@ export function WorkspaceNativeSubtitleSettings({
             </div>
           </section>
           <section className="mt-4 space-y-3">
-            <p className="px-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">排版</p>
+            <p className="px-1 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">排版</p>
             <label className="workspace-muted-panel block cursor-pointer rounded-2xl border px-4 py-3">
               <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字体大小</span><span className="text-accent">{style.fontScale}%</span></span>
               <input aria-label="字幕字体大小" type="range" min="1" max="8" step="0.1" value={style.fontScale} onChange={(event) => updateStyle({ fontScale: Number(event.target.value) })} className="block w-full cursor-pointer accent-accent" />

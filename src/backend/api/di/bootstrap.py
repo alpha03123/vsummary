@@ -65,6 +65,7 @@ from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWo
 from backend.video_summary.infrastructure.persistence.outbox_repository import SqlOutboxRepository
 from backend.video_summary.infrastructure.persistence.outbox_worker import SqlOutboxWorker
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
+from backend.video_summary.infrastructure.persistence.linked_cover_sync import LinkedCoverSync
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator, LinkedVideoResolver, LinkedVideoDownloader
 from backend.video_summary.library.usecases import (
     CreateAgentLinkedSeries,
@@ -141,6 +142,7 @@ class ApiContainer:
     # Writable runtime state (logs/, data/request-pacing, data/chaoxing, data/downloads). None keeps
     # it under root_dir, as Local does; hosts whose root_dir is read-only configuration move it.
     state_dir: Path | None = None
+    cover_sync: LinkedCoverSync | None = None
 
     @property
     def state_root(self) -> Path:
@@ -215,6 +217,8 @@ def build_host_container(
         linked_video_resolvers=dict(linked_video_resolvers or {}),
         linked_video_downloaders=dict(linked_video_downloaders or {}),
         state_dir=state_dir,
+        cover_sync=LinkedCoverSync(session_factory, lambda workspace_id: workspace_services_provider.get_services(
+            WorkspaceContext(workspace_id=workspace_id, actor_id="system-worker", request_id="cover-sync")).linked_series_workspace),
     )
 
 

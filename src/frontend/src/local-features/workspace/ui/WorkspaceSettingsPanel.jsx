@@ -290,11 +290,12 @@ export function WorkspaceSettingsPanel({
                 {/* Theme Setting */}
                 <WorkspaceSettingRow
                   title="深色模式"
-                  description="切换整个工作区界面的明暗主题模式。"
+                  description="选择浅色、深色，或跟随系统。"
                 >
                   <WorkspaceSegmentedControl
                     value={ui.theme}
                     options={[
+                      { id: "system", label: "跟随系统" },
                       { id: "light", label: "浅色" },
                       { id: "dark", label: "深色" },
                     ]}

@@ -110,7 +110,7 @@ export function WorkspaceProviderSelect({
             <div key={group}>
               {gi > 0 && <div className="mx-1.5 my-1 border-t border-stone-100 dark:border-stone-800" />}
               {!hideGroupLabels ? (
-                <div className="px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+                <div className="px-2.5 pb-1 pt-2 text-xs font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">
                   {group}
                 </div>
               ) : null}
@@ -124,8 +124,10 @@ export function WorkspaceProviderSelect({
 }
 
 const settingRowLayouts = {
-  responsive: { row: "2xl:flex-row 2xl:items-center", label: "2xl:w-[260px] 2xl:shrink-0", content: "justify-end", defaultContent: "2xl:w-auto 2xl:min-w-0" },
-  stacked: { row: "", label: "", content: "justify-start", defaultContent: "" },
+  responsive: { row: "flex-col 2xl:flex-row 2xl:items-center", label: "2xl:w-[260px] 2xl:shrink-0", content: "justify-end", defaultContent: "2xl:w-auto 2xl:min-w-0" },
+  stacked: { row: "flex-col", label: "", content: "justify-start", defaultContent: "" },
+  // Small controls (switches) sit on the label's line instead of a row of their own.
+  inline: { row: "flex-row items-center", label: "flex-1", content: "justify-end", defaultContent: "w-auto shrink-0" },
 };
 
 export function WorkspaceSettingRow({ title, description, children, layout = "responsive", contentClassName = "" }) {
@@ -134,12 +136,12 @@ export function WorkspaceSettingRow({ title, description, children, layout = "re
   const contentLayoutClassName = contentClassName || classes.defaultContent;
 
   return (
-    <div className={`flex flex-col justify-between gap-6 rounded-[1.5rem] border border-stone-100 bg-stone-50/50 p-6 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 min-w-0 ${classes.row}`}>
+    <div className={`flex justify-between gap-4 rounded-2xl border border-stone-100 bg-stone-50/50 p-5 transition-colors dark:border-stone-800/60 dark:bg-stone-800/30 min-w-0 ${classes.row}`}>
       <div className={`min-w-0 max-w-none ${classes.label}`}>
-        <strong className="mb-1.5 block text-base font-bold text-stone-900 dark:text-stone-100">{title}</strong>
-        <span className="block text-[13px] leading-relaxed text-stone-600 dark:text-stone-400">{description}</span>
+        <strong className="mb-1 block text-base font-semibold text-stone-900 dark:text-stone-100">{title}</strong>
+        <span className="block text-sm leading-relaxed text-stone-600 dark:text-stone-400">{description}</span>
       </div>
-      <div className={`flex min-w-0 w-full items-center ${classes.content} ${contentLayoutClassName}`}>{children}</div>
+      <div className={`flex min-w-0 items-center ${layout === "inline" ? "" : "w-full"} ${classes.content} ${contentLayoutClassName}`}>{children}</div>
     </div>
   );
 }
@@ -148,12 +150,12 @@ export function WorkspaceAdvancedSettings({ children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className="rounded-[1.5rem] border border-stone-200/80 bg-white/60 p-2 dark:border-stone-700/70 dark:bg-stone-900/40">
+    <section className="rounded-2xl border border-stone-200/80 bg-white/60 p-2 dark:border-stone-700/70 dark:bg-stone-900/40">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-4 rounded-[1.15rem] px-4 py-3 text-left transition-colors hover:bg-stone-100/80 dark:hover:bg-stone-800/70"
+        className="flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-stone-100/80 dark:hover:bg-stone-800/70"
       >
         <span>
           <strong className="block text-sm font-bold text-stone-900 dark:text-stone-100">高级设置</strong>

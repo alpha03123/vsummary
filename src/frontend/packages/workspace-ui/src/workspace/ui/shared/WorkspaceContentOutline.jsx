@@ -73,7 +73,7 @@ export function findContentScrollContainer(element) {
 function OutlineList({ label, items, activeItemId, onSelect }) {
   return (
     <nav aria-label={label ?? "正文目录"} className="rounded-2xl border border-stone-200/80 bg-white/70 p-2 dark:border-stone-800 dark:bg-stone-950/50">
-      {label ? <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">{label}</p> : null}
+      {label ? <p className="px-2 py-1 text-xs font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500">{label}</p> : null}
       <div className="mt-1 flex flex-col gap-1">
         {items.map((item) => {
           const active = item.id === activeItemId;

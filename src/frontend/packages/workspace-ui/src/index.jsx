@@ -2,6 +2,7 @@ import "./styles.css";
 export {useWorkspaceController} from "./workspace/model/useWorkspaceController";
 export {createWorkspaceApi} from "./workspace/model/workspaceApi";
 export {isBilibiliInboxSeries} from "./workspace/model/workspaceControllerConstants";
+export {AI_SUMMARY_TEMPLATES} from "./workspace/model/aiSummaryTemplates";
 export {ChatDrawer} from "./workspace/ui/ChatDrawer";
 export {WorkspaceConfirmDialog} from "./workspace/ui/shared/WorkspaceConfirmDialog";
 export {WorkspaceExpandableSelect} from "./workspace/ui/shared/WorkspaceExpandableSelect";
@@ -35,3 +36,6 @@ export {WorkspaceMetricCard} from './workspace/ui/shared/WorkspaceMetricCard';
 export {WorkspaceToolbar} from './workspace/ui/WorkspaceToolbar';
 export {useFocusTrap} from './shared/lib/useFocusTrap';
 export {WorkspaceUsagePage,WorkspaceUsageAnalytics} from './workspace/ui/WorkspaceUsagePage';
+// Read-only renderers, reused by hosts for static showcases (Cloud's guest examples).
+export {WorkspaceMarkdownMessage} from './workspace/ui/shared/WorkspaceMarkdownMessage';
+export {MindmapCanvas} from './workspace/ui/MindmapCanvas';

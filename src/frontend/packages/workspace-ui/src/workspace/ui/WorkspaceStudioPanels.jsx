@@ -14,7 +14,7 @@ const PANEL_META = {
   "knowledge-cards": { label: "知识卡片", icon: BrainCircuit },
   notes: { label: "笔记", icon: StickyNote },
   "ai-chat": { label: "AI 对话", icon: MessageSquare },
-  "series-overview": { label: "全局 AI 概况", icon: FileText },
+  "series-overview": { label: "全局 AI 概括", icon: FileText },
   "series-mindmap": { label: "全局思维导图", icon: Network },
 };
 

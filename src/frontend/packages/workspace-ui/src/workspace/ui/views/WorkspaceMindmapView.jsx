@@ -32,9 +32,8 @@ export function WorkspaceMindmapView({
   if (!tools?.mindmap.available) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Mindmap"
-        title="需要先生成 AI 概况"
-        description="导图依赖已生成的概况数据。先生成 AI 概况，再回到这里单独触发导图生成。"
+        title="需要先生成 AI 概括"
+        description="先生成 AI 概括，再回来生成导图。"
       />
     );
   }
@@ -42,9 +41,8 @@ export function WorkspaceMindmapView({
   if (!tools.mindmap.generated) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Mindmap Tool"
         title="导图未生成"
-        description="思维导图需要单独生成。系统将分析当前 AI 概况，为您构建可视化的知识导图。"
+        description="导图需要单独生成，会根据这个视频的 AI 概括来画。"
       >
         <div className="flex flex-wrap items-center justify-center gap-3">
           <label className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 dark:text-stone-300">
@@ -92,7 +90,6 @@ export function WorkspaceMindmapView({
   if (mindmapLoading) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Mindmap"
         title="载入思维导图"
         description="正在读取已生成的导图。"
         loading

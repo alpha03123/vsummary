@@ -953,7 +953,7 @@ export function workspaceReducer(state, action) {
         id: action.userMessageId,
         role: "user",
         content: action.message,
-        meta: "You • Just now",
+        meta: "你 • 刚刚",
       }, true);
       const nextSessionListsByScope = updateChatSessionMetaForScope(
         nextState.chatSessionListsByScope,
@@ -977,7 +977,7 @@ export function workspaceReducer(state, action) {
         id: action.assistantMessageId,
         role: "assistant",
         content: action.message,
-        meta: action.meta ?? "Notebook Assistant • Just now",
+        meta: action.meta ?? "助手 • 刚刚",
       }, false);
     case "chat_tool_trace_recorded":
       return appendChatThreadMessage(state, action.chatScopeKey, {
@@ -989,7 +989,7 @@ export function workspaceReducer(state, action) {
           steps: action.steps,
           durationMs: action.durationMs,
         },
-        meta: action.meta ?? "Notebook Assistant • Tool Chain",
+        meta: action.meta ?? "助手 • 工具调用",
       }, true);
     case "settings_panel_closed":
       return {
@@ -1414,7 +1414,7 @@ export function workspaceReducer(state, action) {
                 status: "completed",
                 stage: "completed",
                 progress: 100,
-                detail: transcriptOnly ? "字幕已获取" : "AI 概况已生成",
+                detail: transcriptOnly ? "字幕已获取" : "AI 概括已生成",
                 error: null,
               },
               subscriptionActive: false,

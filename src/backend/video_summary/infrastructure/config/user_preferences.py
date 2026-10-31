@@ -19,9 +19,12 @@ def resolve_user_settings(base: AppSettings, values: Mapping, model_profiles: Ma
     if "auto_generate_artifacts" in selected:
         generation["auto_generate_artifacts"] = tuple(selected["auto_generate_artifacts"])
     multimodal = selected.get("ai_summary_multimodal_enabled", base.generation.ai_summary_multimodal_enabled)
-    generation["chapter_visual_mode"] = "screenshots" if multimodal else "off"
-    generation["note_visual_mode"] = "screenshots" if multimodal else "off"
-    if not multimodal:
+    # Screenshots are cut by ffmpeg at times picked from the transcript, so they stay on without
+    # multimodal; the preference only decides whether a model reads the frames.
+    if multimodal:
+        generation["chapter_visual_mode"] = "screenshots"
+        generation["note_visual_mode"] = "screenshots"
+    else:
         generation["mindmap_visual_input"] = "none"
         generation["cards_visual_input"] = "none"
     result = replace(base, generation=replace(base.generation, **generation)) if generation else base

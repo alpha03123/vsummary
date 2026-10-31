@@ -25,7 +25,7 @@ function formatDurationLabel(value, fallback = "计算中") {
 export function WorkspaceGenerationOverlay({
   generationProgress,
   generationSnapshot,
-  title = "正在生成 AI 概况",
+  title = "正在生成 AI 概括",
   mode = "summary",
   onCancel,
   cancelLabel = "取消",
@@ -84,7 +84,7 @@ export function WorkspaceGenerationOverlay({
         <LoaderCircle size={30} className="shrink-0 animate-spin text-accent" strokeWidth={2.5} />
         <div className="flex min-h-0 w-full flex-col">
           <h3 className="mb-1.5 text-base font-bold text-stone-900 dark:text-stone-100">{title}</h3>
-          <p aria-live="polite" className="mb-2 text-[13px] font-medium text-stone-600 dark:text-stone-400">
+          <p aria-live="polite" className="mb-2 text-sm font-medium text-stone-600 dark:text-stone-400">
             {generationSnapshot?.detail ?? "任务已提交，正在准备处理视频"}
           </p>
           <p className="mb-3 text-xs font-bold text-accent">
@@ -113,7 +113,7 @@ export function WorkspaceGenerationOverlay({
             <span><span>已耗时</span> {elapsedLabel}</span>
             {runningCount > 1 && <span>有 {runningCount} 项同时进行</span>}
           </div>
-          <p className="mt-2 shrink-0 text-left text-[11px] leading-relaxed text-stone-500">进度随处理步骤更新，AI 阅读和生成内容时可能需要等待。</p>
+          <p className="mt-2 shrink-0 text-left text-xs leading-relaxed text-stone-500">进度随处理步骤更新，AI 阅读和生成内容时可能需要等待。</p>
           <ol ref={stepsRef} aria-label="处理步骤" className="mt-3 flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain">
             {steps.map((item) => {
               const isCurrent = item.status === "running";
@@ -123,9 +123,9 @@ export function WorkspaceGenerationOverlay({
                 <li key={item.id} className={`shrink-0 rounded-xl border px-3 py-2 text-left ${isCurrent ? "border-accent/30 bg-accent/8" : isDone ? "border-success/30 bg-success-subtle" : "border-stone-200/70 bg-stone-50/70 dark:border-white/8 dark:bg-white/[0.03]"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{item.label}</span>
-                    <span className={`shrink-0 text-[11px] font-semibold ${isCurrent ? "text-accent" : isDone ? "text-success" : "text-stone-400"}`}>{statusLabel}</span>
+                    <span className={`shrink-0 text-xs font-semibold ${isCurrent ? "text-accent" : isDone ? "text-success" : "text-stone-400"}`}>{statusLabel}</span>
                   </div>
-                  {isCurrent && item.detail && <p className="mt-1 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">{item.detail}</p>}
+                  {isCurrent && item.detail && <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">{item.detail}</p>}
                 </li>
               );
             })}

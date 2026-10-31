@@ -19,7 +19,7 @@ export function WorkspaceDialog({
     onPointerDown={event=>{backdrop.current=event.button===0&&event.target===event.currentTarget;}}
     onPointerUp={event=>{if(backdrop.current&&event.target===event.currentTarget&&!pending)onClose?.();backdrop.current=false;}}>
     <Panel ref={ref} role="dialog" aria-modal="true" aria-labelledby={id} initial={{opacity:0,scale:0.96,y:12}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.96,y:12}}
-      transition={{type:'spring',stiffness:360,damping:28}} className={twMerge('workspace-panel relative w-full max-w-md rounded-[2rem] border p-6 shadow-2xl',className)}
+      transition={{type:'spring',stiffness:360,damping:28}} className={twMerge('workspace-panel relative w-full max-w-md rounded-4xl border p-6 shadow-2xl',className)}
       onKeyDown={event=>{if(event.key==='Escape'&&!pending){event.preventDefault();onClose?.();}}}
       onSubmit={onSubmit?event=>{event.preventDefault();if(!pending)onSubmit(event);}:undefined}>
       {showClose&&onClose&&<button type="button" onClick={onClose} disabled={pending} aria-label={closeLabel} className="absolute right-4 top-4 rounded-xl p-2 text-stone-500 transition-colors hover:bg-stone-100 disabled:opacity-50 dark:text-stone-400 dark:hover:bg-neutral-800"><X size={18}/></button>}

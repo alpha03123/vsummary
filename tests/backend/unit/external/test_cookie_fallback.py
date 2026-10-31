@@ -162,3 +162,23 @@ def test_downloader_caps_height_when_requested(platform, monkeypatch, tmp_path):
     else:
         downloader.download(_linked_video(), tmp_path, _RecordingReporter())
         assert formats == ["bv*[height<=?480]+ba/b[height<=?480]/wv*+ba/w"]
+
+
+def test_series_resolution_falls_back_to_single_video_when_view_api_is_throttled():
+    import asyncio
+    import httpx
+    from backend.bilibili import YtDlpBilibiliResolver
+    from backend.video_summary.library.models import BilibiliUrlInfoDTO
+
+    def throttled(_bvid):
+        request = httpx.Request("GET", "https://api.bilibili.com/x/web-interface/view")
+        raise httpx.HTTPStatusError("412", request=request, response=httpx.Response(412, request=request))
+
+    resolver = YtDlpBilibiliResolver(
+        extractor=lambda _url: {"id": "BV1xx411c7mD", "title": "Single", "duration": 90,
+            "webpage_url": "https://www.bilibili.com/video/BV1xx411c7mD"},
+        view_extractor=throttled,
+    )
+    series = asyncio.run(resolver.resolve_series(BilibiliUrlInfoDTO(url="https://www.bilibili.com/video/BV1xx411c7mD", url_type="unknown")))
+    assert [video.source_id for video in series.videos] == ["BV1xx411c7mD"]
+    assert series.title == "Single"

@@ -192,16 +192,16 @@ function CitationPreviewCard({ preview, position }) {
     >
       <span className="block font-semibold text-stone-900 dark:text-stone-100">{preview.title}</span>
       {preview.sourceType ? (
-        <span className="mt-1 block text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-500">{preview.sourceType}</span>
+        <span className="mt-1 block text-xs uppercase tracking-wide text-stone-500 dark:text-stone-500">{preview.sourceType}</span>
       ) : null}
       {preview.detail ? (
-        <span className="mt-2 block text-[11px] text-stone-600 dark:text-stone-400">{preview.detail}</span>
+        <span className="mt-2 block text-xs text-stone-600 dark:text-stone-400">{preview.detail}</span>
       ) : null}
       {preview.text ? (
         <span className="mt-2 block leading-relaxed text-stone-600 dark:text-stone-300">{preview.text}</span>
       ) : null}
       {preview.url ? (
-        <span className="mt-2 block break-all text-[11px] text-accent">{preview.url}</span>
+        <span className="mt-2 block break-all text-xs text-accent">{preview.url}</span>
       ) : null}
     </span>,
     document.body,

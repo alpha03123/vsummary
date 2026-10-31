@@ -3,7 +3,7 @@ import { Check, ChevronDown, ListFilter, Search } from "lucide-react";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 
 const SEARCHABLE_THRESHOLD = 8;
-const ALL_OPTION_LABEL = "全部视频 AI 概况";
+const ALL_OPTION_LABEL = "全部视频 AI 概括";
 
 /**
  * Scope picker for series-level overview filtering.
@@ -95,7 +95,7 @@ function ScopePicker({ videos, value, onChange, searchable }) {
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        aria-label="选择视频概况"
+        aria-label="选择视频概括"
         aria-haspopup="listbox"
         aria-expanded={open}
         onKeyDown={handleKeyDown}

@@ -27,16 +27,20 @@ export function WorkspaceToolbar({
   return (
     <header className="workspace-toolbar-surface flex justify-between items-center px-6 py-2.5 border-b border-stone-200/80 dark:border-stone-800 sticky top-0 z-20 shrink-0">
       <div className="flex items-center gap-4">
-        {/* Sidebar Toggle */}
-        <button
-          onClick={onToggleSidebar}
-          className="flex items-center justify-center w-9 h-9 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition-colors mr-2"
-          aria-label={isSidebarOpen ? "收起文献库" : "展开文献库"}
-        >
-          {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-        </button>
+        {/* Sidebar Toggle: only inside a series; the home page has no sidebar. */}
+        {onToggleSidebar ? (
+          <button
+            onClick={onToggleSidebar}
+            className="flex items-center justify-center w-9 h-9 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition-colors mr-2"
+            aria-label={isSidebarOpen ? "收起视频列表" : "展开视频列表"}
+          >
+            {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+          </button>
+        ) : null}
 
-        {brand ?? <div className="flex min-w-0 items-center gap-4">
+        {brand && activeSeries && onEnterLibraryHome ? (
+          <button type="button" onClick={onEnterLibraryHome} aria-label="回到首页" className="rounded-xl transition-opacity hover:opacity-75">{brand}</button>
+        ) : brand ?? <div className="flex min-w-0 items-center gap-4">
           <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-white text-black shadow-sm dark:bg-neutral-900 dark:text-white border border-stone-200 dark:border-white/10">
             <BookOpenText size={17} strokeWidth={2.1} />
           </div>
@@ -66,18 +70,20 @@ export function WorkspaceToolbar({
           </button>
         ) : null}
         {onOpenUsagePage && (<button
-          className="inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white text-stone-600 dark:text-zinc-400"
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full transition-colors hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white text-stone-600 dark:text-zinc-400 ${toolbarButtons?.usage?.text ? "w-10 md:w-auto md:px-3" : "w-10"}`}
           onClick={onOpenUsagePage}
           title={toolbarButtons?.usage?.label ?? "打开用量统计"}
           aria-label={toolbarButtons?.usage?.label ?? "打开用量统计"}
         >
           {toolbarButtons?.usage?.icon ?? <BarChart3 size={18} strokeWidth={2.2} />}
+          {/* Hosts can spell out an entry that matters to them (e.g. daily check-in); icon-only on phones. */}
+          {toolbarButtons?.usage?.text ? <span className="hidden text-sm font-semibold md:inline">{toolbarButtons.usage.text}</span> : null}
         </button>)}
         {onToggleSettingsPanel && (<button
           className={`inline-flex items-center justify-center w-10 h-10 rounded-full transition-colors ${settingsOpen ? "bg-stone-200 dark:bg-stone-800 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 shadow-sm" : "text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white"}`}
           onClick={onToggleSettingsPanel}
-          title={toolbarButtons?.settings?.label ?? "Open Settings"}
-          aria-label={toolbarButtons?.settings?.label ?? "打开界面设置"}
+          title={toolbarButtons?.settings?.label ?? "设置"}
+          aria-label={toolbarButtons?.settings?.label ?? "设置"}
           aria-expanded={settingsOpen}
         >
           {toolbarButtons?.settings?.icon ?? <Settings2 size={18} strokeWidth={2.2} />}

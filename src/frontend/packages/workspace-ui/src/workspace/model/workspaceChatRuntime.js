@@ -23,13 +23,13 @@ export function normalizeAgentToolTraceStep(result) {
     case "open_series_overview":
       return createToolTraceStep(result.tool_name, "打开系列概览");
     case "get_video_summary":
-      return createToolTraceStep(result.tool_name, "读取视频概况", payload.title ?? payload.video_id);
+      return createToolTraceStep(result.tool_name, "读取视频概括", payload.title ?? payload.video_id);
     case "get_video_tools":
       return createToolTraceStep(result.tool_name, "读取视频工具状态", payload.video_id);
     case "open_series_home":
       return createToolTraceStep(result.tool_name, "打开系列首页");
     case "open_overview":
-      return createToolTraceStep(result.tool_name, "打开 AI 概况");
+      return createToolTraceStep(result.tool_name, "打开 AI 概括");
     case "open_mindmap":
       return createToolTraceStep(result.tool_name, "打开思维导图");
     case "open_knowledge_cards":
@@ -44,7 +44,7 @@ export function normalizeAgentToolTraceStep(result) {
         typeof payload.seek_seconds === "number" ? `定位到 ${formatSeconds(payload.seek_seconds)}` : "定位视频时间点",
       );
     case "generate_overview":
-      return createToolTraceStep(result.tool_name, "生成 AI 概况");
+      return createToolTraceStep(result.tool_name, "生成 AI 概括");
     case "generate_mindmap":
       return createToolTraceStep(result.tool_name, "生成思维导图");
     case "get_video_transcript":
@@ -62,15 +62,15 @@ export function buildAssistantChatMeta(durationMs, usage = null) {
   const durationLabel = formatDurationLabel(durationMs);
   const tokenLabel = formatTokenUsageLabel(usage);
   if (!durationLabel && !tokenLabel) {
-    return "Notebook Assistant • Just now";
+    return "助手 • 刚刚";
   }
   if (durationLabel && tokenLabel) {
-    return `Notebook Assistant • 用时 ${durationLabel} • 消耗 ${tokenLabel}`;
+    return `助手 • 用时 ${durationLabel} • 消耗 ${tokenLabel}`;
   }
   if (durationLabel) {
-    return `Notebook Assistant • 用时 ${durationLabel}`;
+    return `助手 • 用时 ${durationLabel}`;
   }
-  return `Notebook Assistant • 消耗 ${tokenLabel}`;
+  return `助手 • 消耗 ${tokenLabel}`;
 }
 
 export function formatDurationLabel(durationMs) {

@@ -46,6 +46,9 @@ function asVideoCard(value, label) {
     itemIndex: typeof record.item_index === "number" ? record.item_index : 0,
     sourceUrl: typeof record.source_url === "string" ? record.source_url : "",
     provider: typeof record.provider === "string" ? record.provider : "",
+    coverUrl: typeof record.cover_url === "string" ? record.cover_url : "",
+    durationSeconds: typeof record.duration_seconds === "number" ? record.duration_seconds : null,
+    updatedAt: typeof record.updated_at === "string" ? record.updated_at : "",
   };
 }
 

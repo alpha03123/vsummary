@@ -1,6 +1,6 @@
 @import "katex/dist/katex.min.css";
 @import "react-mosaic-component/react-mosaic-component.css";
-/* Fonts (IBM Plex Sans + Space Grotesk) are preloaded via <link> in index.html.
+/* IBM Plex Sans is loaded by the host (index.html link or @fontsource); Chinese uses system fonts.
    Previously this file @imported "Public Sans", which was never referenced by
    the Tailwind fontFamily config actually in use — a redundant network request
    that has been removed to keep typography single-sourced. */
@@ -814,4 +814,16 @@
 
 .dark .workspace-mosaic-action {
   color: rgb(168 162 158);
+}
+
+/* Progress of work whose percentage we do not know: a short bar sweeping across its track. */
+@keyframes workspace-progress-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.workspace-progress-indeterminate {
+  animation: workspace-progress-sweep 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-progress-indeterminate { animation: none; width: 100%; opacity: 0.5; }
 }

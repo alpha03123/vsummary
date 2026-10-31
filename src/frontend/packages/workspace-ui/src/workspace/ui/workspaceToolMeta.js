@@ -72,8 +72,8 @@ export const TOOL_TILES = {
 
 export const SERIES_TOOL_TILES = {
   "series-overview": {
-    label: "全局 AI 概况",
-    description: "查看全部视频 AI 概况",
+    label: "全局 AI 概括",
+    description: "查看全部视频 AI 概括",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
@@ -136,7 +136,7 @@ export function describeToolState(toolId, toolState) {
     return { label: "已生成", tone: "ready" };
   }
   if (toolState.available === false) {
-    return { label: "需先生成 AI 概况", tone: "blocked" };
+    return { label: "需先生成 AI 概括", tone: "blocked" };
   }
   return { label: "点击进入后生成", tone: "pending" };
 }

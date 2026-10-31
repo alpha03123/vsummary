@@ -30,7 +30,10 @@ async def preview_linked(data:LinkedPreviewRequest,services:WorkspaceServicesDep
         title=data.title.strip()
         if title:
             series=replace(series,title=title)
-        items=[{'id':video.video_id,'title':video.title,'duration_seconds':video.duration_seconds} for video in series.videos]
+        # A video link that belongs to a season/playlist resolves to the whole list; mark the video the
+        # user actually pasted so the selection can start with just that one.
+        items=[{'id':video.video_id,'title':video.title,'duration_seconds':video.duration_seconds,
+            'requested':bool(video.source_id) and video.source_id in data.url} for video in series.videos]
         return preview_store(services,context).create('linked',series.title,items,linked=series)
     except ValueError as error:raise HTTPException(422,str(error)) from error
     except RuntimeError as error:raise HTTPException(502,str(error)) from error

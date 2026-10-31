@@ -10,6 +10,7 @@ from __future__ import annotations
 from backend.shared.subprocess_cancellation import watch_process_cancellation
 
 import asyncio
+import logging
 from collections import deque
 from functools import partial
 import os
@@ -777,7 +778,16 @@ async def _resolve_view_payload(
         bvid = _extract_bvid_from_entries(payload) or _extract_bvid_from_text(fallback_url)
         if not bvid:
             return "", {}
-    return bvid, await asyncio.to_thread(view_extractor, bvid)
+    try:
+        return bvid, await asyncio.to_thread(view_extractor, bvid)
+    except CookieRequiredError:
+        raise
+    except (httpx.HTTPError, RuntimeError, ValueError) as error:
+        # The View API only adds season/part details; Bilibili throttles it (HTTP 412) much sooner
+        # than yt-dlp's own extraction. Losing it must not fail the import: fall back to the single
+        # video yt-dlp already described.
+        logging.getLogger(__name__).warning("Bilibili View API unavailable for %s, importing as a single video: %s", bvid, error)
+        return bvid, {}
 
 
 def _linked_video_from_payload(payload: dict[str, object], *, fallback_url: str) -> LinkedVideo:
@@ -903,7 +913,7 @@ def _entries_from_ugc_season(season: dict[str, object]) -> list[dict[str, object
                     "id": bvid,
                     "title": _as_text(episode.get("title")) or bvid,
                     "duration": _as_int(episode.get("duration") or page.get("duration") or arc.get("duration")),
-                    "thumbnail": _as_text(episode.get("cover")),
+                    "thumbnail": _as_text(episode.get("cover")) or _as_text(arc.get("pic")),
                     "webpage_url": _page_url(bvid, 1),
                 }
             )

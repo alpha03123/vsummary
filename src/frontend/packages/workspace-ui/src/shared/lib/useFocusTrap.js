@@ -14,7 +14,8 @@ const FOCUSABLE_SELECTOR = [
  *
  * Behavior:
  *  - On activate: remembers the currently-focused element (the trigger) and
- *    moves focus to the first focusable child of the container.
+ *    moves focus to the first form field, or the first focusable child when the
+ *    dialog has no fields (so a form opens ready to type, not on its close button).
  *  - Tab / Shift+Tab cycle within the container (WCAG 2.4.3 Focus Order).
  *  - On deactivate: restores focus to the trigger (WCAG 2.4.11).
  *
@@ -46,8 +47,9 @@ export function useFocusTrap(containerRef, active) {
 
     // Move focus into the dialog on open
     const initial = getFocusables();
+    const firstField = initial.find((el) => el.matches('input:not([type="checkbox"]):not([type="radio"]),textarea,select'));
     if (initial.length > 0) {
-      initial[0].focus();
+      (firstField ?? initial[0]).focus();
     } else {
       container.setAttribute("tabindex", "-1");
       container.focus();

@@ -77,6 +77,9 @@ class LibraryVideoCardDTO:
         item_index: 同一来源内的条目序号；本地视频时为 0。
         source_url: 外部入口链接；本地视频时为空字符串。
         provider: 外部站点标识；本地视频时为空字符串。
+        cover_url: 封面图地址（平台封面，没有时用第一章截图）；都没有时为空字符串。
+        duration_seconds: 视频时长；未知时为 None。
+        updated_at: 最近一次变更时间（ISO 8601），用于按最近更新排序。
     """
 
     id: str
@@ -92,6 +95,9 @@ class LibraryVideoCardDTO:
     item_index: int = 0
     source_url: str = ""
     provider: str = ""
+    cover_url: str = ""
+    duration_seconds: float | None = None
+    updated_at: str = ""
 
 
 @dataclass(frozen=True)

@@ -31,9 +31,8 @@ export function WorkspaceOverviewView({
   if (!selectedVideo) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Transcript"
         title="等待视频"
-        description="先在左侧选中一个具体视频，这里才会显示对应的整理逐字稿。"
+        description="在左侧选一个视频，这里会显示它的逐字稿。"
         dashed
       />
     );
@@ -42,9 +41,8 @@ export function WorkspaceOverviewView({
   if (!tools?.overview.generated) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Transcript"
         title={overviewTitle}
-        description="整理逐字稿会在 AI 概括生成流程中一并生成，包含章节、时间轴与原文定位。"
+        description="逐字稿会在生成 AI 概括时一起整理好，带章节和时间点。"
         actionLabel="前往 AI 概括"
         onAction={onOpenAiSummary}
       >
@@ -59,7 +57,7 @@ export function WorkspaceOverviewView({
               <div className="motion-shimmer mt-5 h-7 w-3/4 rounded-2xl bg-stone-100 dark:bg-stone-800"></div>
               <div className="motion-shimmer mt-4 h-4 w-full rounded-full bg-stone-100 dark:bg-stone-800"></div>
               <div className="motion-shimmer mt-3 h-4 w-5/6 rounded-full bg-stone-100 dark:bg-stone-800"></div>
-              <div className="motion-shimmer mt-8 h-24 w-full rounded-[1.5rem] bg-stone-100 dark:bg-stone-800"></div>
+              <div className="motion-shimmer mt-8 h-24 w-full rounded-2xl bg-stone-100 dark:bg-stone-800"></div>
             </div>
           </div>
         ) : null}
@@ -70,7 +68,6 @@ export function WorkspaceOverviewView({
   if (summaryLoading) {
     return (
       <WorkspaceStateBlock
-        eyebrow="AI Transcript"
         title={overviewTitle}
         description="正在读取已生成的整理逐字稿。"
         loading

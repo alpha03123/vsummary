@@ -2,7 +2,6 @@ import { LoaderCircle } from "lucide-react";
 import { twMerge } from "tailwind-merge";
 
 export function WorkspaceStateBlock({
-  eyebrow,
   title,
   description,
   children,
@@ -34,9 +33,6 @@ export function WorkspaceStateBlock({
           <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 text-accent shadow-sm dark:bg-stone-950/90">
             <LoaderCircle size={20} strokeWidth={2.2} className="animate-spin" />
           </div>
-        ) : null}
-        {eyebrow ? (
-          <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">{eyebrow}</p>
         ) : null}
         <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">{title}</h3>
         {description ? (

@@ -1,9 +1,8 @@
 import {useWorkspaceRuntime} from "../../runtime/WorkspaceProvider";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Captions, CheckCircle2, Database, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { Captions, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceVideoScopePane } from "./WorkspaceVideoScopePane";
-import { WorkspaceSeriesGrid } from "./WorkspaceSeriesGrid";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
 import { WorkspaceChatPanel, WorkspaceChatSessionManager } from "./WorkspaceChatPanel";
@@ -14,6 +13,7 @@ import { WorkspaceConfirmDialog } from "./shared/WorkspaceConfirmDialog";
 import { WorkspaceRenameDialog } from "./shared/WorkspaceRenameDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFocusTrap } from "../../shared/lib/useFocusTrap";
+import { matchesNarrowViewport, useNarrowViewport } from "../../shared/lib/useNarrowViewport";
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceBackButton } from "./shared/WorkspaceBackButton";
 import { WorkspaceExportMenu } from "./shared/WorkspaceToolHeader";
@@ -63,7 +63,13 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     citationFocus,
     selectedContextType,
   } = shell;
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const isNarrow = useNarrowViewport();
+  // Phones show one pane at a time: the main area first, the sidebar on demand, and picking a
+  // video hands the screen back to the main area.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => !matchesNarrowViewport());
+  useEffect(() => {
+    if (isNarrow && selectedVideo) setIsSidebarOpen(false);
+  }, [isNarrow, selectedVideo?.id]);
   const studioScope = selectedContextType === "series" ? "series" : "video";
   const [layoutsByScope, setLayoutsByScope] = useState(() => ({
     video: loadWorkspaceLayout("video", state.preferenceStorage),
@@ -82,6 +88,18 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   }));
   const [focusedPanel, setFocusedPanel] = useState("preview::default");
   const [importModalState, setImportModalState] = useState(null);
+  // A host can resume an import the user started before signing in (Cloud keeps the pasted link).
+  useEffect(() => {
+    const pending = host.takePendingImport?.();
+    if (pending) setImportModalState(pending);
+  }, [host]);
+  const linkStart = host.onboarding?.linkStart ? {
+    onStart: (url) => setImportModalState({ mode: "link", url, autoStart: true }),
+    onUpload: () => setImportModalState({ mode: "series", kind: "upload" }),
+    onUploadFiles: (files) => setImportModalState({ mode: "series", kind: "upload", files }),
+    hint: host.onboarding.hint ?? null,
+    extra: host.onboarding.extra ?? null,
+  } : null;
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const [pendingRename, setPendingRename] = useState(null);
@@ -261,7 +279,6 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
         return (
           <div className="flex h-full items-center justify-center p-8">
             <WorkspaceStateBlock
-              eyebrow="Media Preview"
               title="媒体链接已丢失"
               description="请在左侧点击“链接媒体”，文件选择框会打开原始文件所在目录。"
               dashed
@@ -302,9 +319,8 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     return (
       <div className="flex h-full items-center justify-center p-8">
         <WorkspaceStateBlock
-          eyebrow="Player"
           title="选择视频以开始预览"
-          description="选中左侧的视频后,这里会显示可跳转的视频播放器。"
+          description="在左侧选一个视频，这里会显示播放器。"
           dashed
         />
       </div>
@@ -414,7 +430,6 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     return (
       <div className="flex h-screen w-full items-center justify-center bg-transparent">
         <div className="workspace-panel max-w-md rounded-3xl border p-8 text-center">
-          <p className="mb-2 text-sm font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-400">Preparing Workspace</p>
           <h1 className="mb-3 text-2xl font-bold text-stone-900">
             {waitingForBackend ? "正在启动服务..." : "正在载入知识工作台"}
           </h1>
@@ -429,19 +444,30 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   }
 
   return (
-    <div ref={containerRef} className="flex h-screen w-full overflow-hidden p-4 gap-4 text-stone-900 dark:text-stone-100 transition-colors">
-      {/* Left Sidebar (Sources) */}
+    <div ref={containerRef} className="flex h-screen w-full overflow-hidden p-2 gap-2 md:p-4 md:gap-4 text-stone-900 dark:text-stone-100 transition-colors">
+      {/* Left Sidebar: the open series' videos. The home page is a full-width grid of series instead. */}
+      {activeSeries ? (<>
       <aside
         style={
-          isSidebarOpen
+          isSidebarOpen && !isNarrow
             ? { width: `${layout.sidebarWidth}px` }
             : undefined
         }
-        className={`workspace-panel shrink-0 flex flex-col rounded-[2rem] border overflow-hidden relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? "opacity-100 mr-1" : "w-0 opacity-0 border-0 m-0"}`}
+        className={`workspace-panel shrink-0 flex flex-col rounded-4xl border overflow-hidden relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? (isNarrow ? "w-full opacity-100" : "opacity-100 mr-1") : "w-0 opacity-0 border-0 m-0"}`}
       >
+        {isNarrow ? (
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="收起列表"
+            className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+          >
+            <X size={18} />
+          </button>
+        ) : null}
         {sidebarHeader && <div className="shrink-0">{sidebarHeader}</div>}
         <div className="min-h-0 flex flex-1 flex-col">
-          {activeSeries ? (
+          {(
             <WorkspaceLibraryPanel
               activeSeries={activeSeries}
               indexSnapshot={state.knowledgeMemorySnapshot}
@@ -459,6 +485,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               processingMode={shell.processingMode}
               onChangeProcessingMode={host.features?.sourceRegeneration === false ? null : actions.changeProcessingMode}
               allowSourceRegeneration={host.features?.sourceRegeneration !== false}
+              summaryStyleInFooter={host.features?.summaryStyleAtConfirmation !== true}
               onRelinkVideo={actions.relinkVideo}
               onGenerateSeries={actions.generateSeries}
               onCancelGeneration={host.features?.generationCancellation === false ? null : actions.cancelGeneration}
@@ -524,24 +551,6 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               ragModels={generation.ragModels}
               onOpenSettings={() => actions.openSettingsPanel("ai")}
             />
-          ) : (
-            <WorkspaceSeriesGrid
-              library={library}
-              onOpenSeries={actions.selectSeries}
-              onAddSeries={() => setImportModalState({ mode: "series" })}
-              onRequestBulkDelete={(seriesIds) => {
-                if (seriesIds.length === 0) {
-                  return;
-                }
-                setPendingDelete({
-                  kind: "series-batch",
-                  seriesIds,
-                  title: `删除 ${seriesIds.length} 个系列？`,
-                  description: "将删除所选系列、其中的全部视频及产物。该操作不可撤销。",
-                });
-              }}
-              compact
-            />
           )}
         </div>
         {sidebarFooter && <div className="shrink-0 border-t border-stone-200/70 px-4 py-3 dark:border-stone-700/60">{sidebarFooter}</div>}
@@ -557,9 +566,10 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
         </div>
       ) : null}
+      </>) : null}
 
       {/* Main Studio Area */}
-      <main className="workspace-panel flex-1 min-w-0 flex flex-col relative rounded-[2rem] border overflow-hidden z-10">
+      <main className={`workspace-panel flex-1 min-w-0 flex-col relative rounded-4xl border overflow-hidden z-10 ${isNarrow && isSidebarOpen && activeSeries ? "hidden" : "flex"}`}>
         <WorkspaceToolbar
           brand={brand}
           toolbarExtras={toolbarExtras}
@@ -571,13 +581,13 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           onOpenUsagePage={UsagePanel ? actions.openUsagePage : null}
           onOpenUpdate={() => actions.openSettingsPanel("update")}
           isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onToggleSidebar={activeSeries ? () => setIsSidebarOpen(!isSidebarOpen) : null}
           onToggleChatDrawer={chatScopeActive ? chat.toggleDrawer : null}
           chatDrawerOpen={chatScopeActive && chat.drawerOpen}
         />
 
         {visibleError && (
-          <div role="alert" className="mx-6 mt-4 flex items-start justify-between gap-4 rounded-2xl border border-danger bg-danger-subtle p-4 text-sm text-danger flex-shrink-0 relative z-20">
+          <div role="alert" className="mx-6 mt-3 flex items-start justify-between gap-4 rounded-xl border border-danger/40 bg-danger-subtle px-4 py-3 text-sm text-danger flex-shrink-0 relative z-20">
             <div className="min-w-0 flex-1 break-words">
               {visibleError}
             </div>
@@ -595,7 +605,10 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           </div>
         )}
 
-        <WorkspaceKnowledgeMemoryStatusBar snapshot={state.knowledgeMemorySnapshot} />
+        <WorkspaceKnowledgeMemoryStatusBar
+          snapshot={state.knowledgeMemorySnapshot}
+          hasGeneratedContent={Boolean(library?.series?.some((series) => series.videos?.some((video) => video.processed)))}
+        />
 
         <div className="flex-1 min-h-0 relative overflow-hidden bg-transparent">
           {!activeSeries ? (
@@ -604,13 +617,27 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                 <WorkspaceLibraryHomePane
                   library={library}
                   onSelectSeries={actions.selectSeries}
-                  onSelectVideo={actions.selectVideo}
-                  onAddPlaygroundVideo={() => setImportModalState({ mode: "playground" })}
+                  onAddSeries={() => setImportModalState({ mode: "series" })}
+                  onRefreshLibrary={actions.refreshLibrary}
+                  onRequestBulkDelete={(seriesIds) => {
+                    if (seriesIds.length === 0) {
+                      return;
+                    }
+                    setPendingDelete({
+                      kind: "series-batch",
+                      seriesIds,
+                      title: `删除 ${seriesIds.length} 个系列？`,
+                      description: "将删除所选系列、其中的全部视频及产物。该操作不可撤销。",
+                    });
+                  }}
+                  linkStart={linkStart}
+                  showPlayground={host.features?.playground !== false}
+                  inboxComingSoon={host.features?.bilibiliExtension === "coming-soon"}
                 />
               </Suspense>
             </AnimatePresence>
           ) : isPlaygroundHome ? (
-            <div className="flex h-full items-center justify-center p-8"><WorkspaceStateBlock eyebrow="Playground" title="选择一个视频开始分析" dashed /></div>
+            <div className="flex h-full items-center justify-center p-8"><WorkspaceStateBlock title="选择一个视频开始分析" dashed /></div>
           ) : (
             <WorkspaceStudioPanels
               layout={layout.studioLayout}
@@ -636,7 +663,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                   generationProgress={generation.progress}
                   generationSnapshot={generation.snapshot}
                   mode={shell.processingMode}
-                  title={shell.processingMode === "transcript" ? "正在获取字幕" : generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概况"}
+                  title={shell.processingMode === "transcript" ? "正在获取字幕" : generation.isGeneratingSeries ? "正在处理整个系列" : "正在生成 AI 概括"}
                   onCancel={host.features?.generationCancellation === false ? null : actions.cancelGeneration}
                   cancelLabel={generation.isGeneratingSeries ? "取消整个系列" : "取消本次生成"}
                 />
@@ -766,7 +793,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   );
 }
 
-function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
+function WorkspaceKnowledgeMemoryStatusBar({ snapshot, hasGeneratedContent }) {
   const { api } = useWorkspaceRuntime();
   const [dismissedSnapshotKey, setDismissedSnapshotKey] = useState(null);
   const [rebuildPending, setRebuildPending] = useState(false);
@@ -774,21 +801,25 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
   useEffect(() => {
     if (snapshot?.status === "running" || snapshot?.indexState === "ready") setRebuildPending(false);
   }, [snapshot]);
-  if (!snapshot || (snapshot.indexState === "ready" && snapshot.status !== "running")) {
+  const isRunning = snapshot?.status === "running";
+  // Nothing generated means nothing to search yet: a "missing index" then is not the user's problem.
+  if (!snapshot || (snapshot.indexState === "ready" && !isRunning) || (!hasGeneratedContent && !isRunning)) {
     return null;
   }
   const snapshotKey = `${snapshot.indexState}:${snapshot.status}:${snapshot.requestedRevision}:${snapshot.sequence ?? 0}`;
   if (dismissedSnapshotKey === snapshotKey) {
     return null;
   }
-  const isRunning = snapshot.status === "running";
-  const isFailed = snapshot.status === "failed";
-  const Icon = isRunning ? LoaderCircle : isFailed ? Database : CheckCircle2;
-  const titles = { missing: "检索索引缺失", stale: "检索索引已过期", failed: "检索索引不可用", unknown: "检索索引状态未知" };
-  const title = isRunning ? "正在更新检索索引" : titles[snapshot.indexState] ?? "检索索引构建失败";
-  const detail = rebuildError ?? snapshot.indexError ?? (isFailed ? snapshot.error : null)
-    ?? (isRunning ? snapshot.detail : "部分内容尚未进入最新索引，请重建检索索引。");
-  const progressText = isRunning && typeof snapshot.progress === "number" ? `${Math.round(snapshot.progress)}%` : "";
+  const isFailed = snapshot.status === "failed" || snapshot.indexState === "failed";
+  const progressText = isRunning && typeof snapshot.progress === "number" ? ` · ${Math.round(snapshot.progress)}%` : "";
+  const message = isRunning
+    ? `正在更新检索${progressText}`
+    : isFailed
+      ? `检索更新失败${rebuildError ?? snapshot.indexError ?? snapshot.error ? `：${rebuildError ?? snapshot.indexError ?? snapshot.error}` : ""}`
+      : snapshot.indexState === "unknown"
+        ? "暂时无法确认检索状态"
+        : "有新内容还没加入检索，AI 对话可能找不到它们";
+  const canRebuild = !isRunning && snapshot.indexState !== "unknown";
   const rebuildIndex = async () => {
     setRebuildPending(true);
     setRebuildError(null);
@@ -796,40 +827,32 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot }) {
       await api.fetchJson("/api/workspace/index/refresh", { method: "POST" });
     } catch (error) {
       setRebuildPending(false);
-      setRebuildError(error instanceof Error ? error.message : "提交重建任务失败");
+      setRebuildError(error instanceof Error ? error.message : "提交失败");
     }
   };
-  const toneClassName = isFailed
-    ? "border-danger bg-danger-subtle text-danger"
-    : "border-warning bg-warning-subtle text-warning";
 
   return (
-    <div className={`mx-6 mt-4 flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${toneClassName}`}>
-      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 dark:bg-black/20">
-        <Icon size={18} className={isRunning ? "animate-spin" : ""} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 font-semibold">
-          <span>{title}</span>
-          {progressText ? <span className="text-xs opacity-70">{progressText}</span> : null}
-        </div>
-        <p className="mt-0.5 break-words text-xs opacity-80">{detail}</p>
-      </div>
-      {!isRunning && snapshot.indexState !== "unknown" ? (
+    <div role="status" className={`mx-6 mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs ${isFailed ? "border-danger/40 bg-danger-subtle text-danger" : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-400"}`}>
+      {isRunning ? (
+        <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
+      ) : (
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isFailed ? "bg-danger" : "bg-amber-500"}`} />
+      )}
+      <p className="min-w-0 flex-1 break-words">{message}</p>
+      {canRebuild ? (
         <button type="button" onClick={rebuildIndex} disabled={rebuildPending}
-          title="重建检索索引" aria-label="重建检索索引"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-white/60 disabled:opacity-50">
-          <RefreshCw size={16} className={rebuildPending ? "animate-spin" : ""} />
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 font-semibold text-accent hover:bg-accent/10 disabled:opacity-50">
+          <RefreshCw size={12} className={rebuildPending ? "animate-spin" : ""} />
+          {isFailed ? "重试" : "更新"}
         </button>
       ) : null}
       <button
         type="button"
         onClick={() => setDismissedSnapshotKey(snapshotKey)}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-white/60 hover:opacity-100 dark:hover:bg-black/20"
-        title="关闭状态提示"
-        aria-label="关闭状态提示"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+        aria-label="关闭提示"
       >
-        <X size={16} />
+        <X size={14} />
       </button>
     </div>
   );
@@ -839,7 +862,7 @@ function WorkspaceSidePaneLoadingState({ title }) {
   return (
     <section className="flex-1 min-w-[320px] h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all">
       <div className="flex h-full items-center justify-center p-8">
-        <WorkspaceStateBlock title={title} description="界面资源按需加载中。" loading />
+        <WorkspaceStateBlock title={title} loading />
       </div>
     </section>
   );
@@ -847,10 +870,9 @@ function WorkspaceSidePaneLoadingState({ title }) {
 
 function WorkspaceModalLoadingState() {
   return (
-    <div className="workspace-panel flex w-full max-w-xl items-center justify-center rounded-[2rem] border p-10">
+    <div className="workspace-panel flex w-full max-w-xl items-center justify-center rounded-4xl border p-10">
       <WorkspaceStateBlock
         title="正在载入设置面板"
-        description="设置页首次打开时会按需加载。"
         loading
       />
     </div>

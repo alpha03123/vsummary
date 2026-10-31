@@ -287,6 +287,19 @@ def get_video_summary_screenshot(
     return FileResponse(screenshot, media_type="image/jpeg")
 
 
+@router.get("/api/videos/{series_id}/{video_id}/cover")
+def get_video_cover(series_id: str, video_id: str, container: WorkspaceServicesDep) -> FileResponse:
+    """返回视频封面：优先平台封面的本地副本，其次第一章截图。"""
+    _ensure_video_exists(container, series_id, video_id)
+    workspace = container.linked_series_workspace
+    cover = (workspace.materialize_artifact(video_id=video_id, kind="cover", filename="cover.jpg")
+             or workspace.materialize_artifact(video_id=video_id, kind="screenshot", filename="chapter-01.jpg"))
+    if cover is None:
+        raise HTTPException(status_code=404, detail="cover not found")
+    # The library links covers with a content hash, so a changed cover arrives under a new URL.
+    return FileResponse(cover, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=604800"})
+
+
 @router.get("/api/videos/{series_id}/{video_id}/frames/{filename}")
 def get_video_note_frame(
     series_id: str,

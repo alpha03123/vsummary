@@ -1,4 +1,4 @@
-export const defaultUiSettings={theme:'light',showTakeaways:true,transcriptEnhancementEnabled:true,webSearchEnabled:false,answerDetailLevel:'medium',talkCustomPrompt:'',mindmapVisualInput:'none',cardsVisualInput:'none',noteVisualMode:'off',chapterVisualMode:'screenshots',maxVisualInputImages:10};
+export const defaultUiSettings={theme:'system',showTakeaways:true,transcriptEnhancementEnabled:true,webSearchEnabled:false,answerDetailLevel:'medium',talkCustomPrompt:'',mindmapVisualInput:'none',cardsVisualInput:'none',noteVisualMode:'off',chapterVisualMode:'screenshots',maxVisualInputImages:10};
 
 const PROCESSING_MODE_STORAGE_KEY = "vsummary.processing-mode";
 
@@ -24,7 +24,7 @@ export function createWelcomeChatMessages() {
       role: "assistant",
       content:
         "你好！你可以询问视频有关内容，也可以让我替你记录笔记",
-      meta: "Notebook Assistant • Just now",
+      meta: "助手 • 刚刚",
     },
   ];
 }
@@ -636,4 +636,4 @@ export function resetUiSettings() {
   return { ...defaultUiSettings };
 }
 
-export function normalizeUiSettings(value){return {...defaultUiSettings,...value,theme:value?.theme==='dark'?'dark':'light'};}
+export function normalizeUiSettings(value){return {...defaultUiSettings,...value,theme:['light','dark','system'].includes(value?.theme)?value.theme:'system'};}

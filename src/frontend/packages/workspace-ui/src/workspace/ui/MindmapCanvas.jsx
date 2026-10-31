@@ -147,7 +147,7 @@ function convertToMarkmapNode(node) {
 }
 
 function resolveDarkTheme(theme) {
-  return theme === "dark" || (theme == null && document.documentElement.classList.contains("dark"));
+  return theme === "dark" || ((theme == null || theme === "system") && document.documentElement.classList.contains("dark"));
 }
 
 function applyMindmapTheme(svg, isDark) {

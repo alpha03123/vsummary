@@ -18,9 +18,13 @@ AUTO_ARTIFACT_OPERATIONS = {
 }
 
 VALID_AUTO_GENERATE_ARTIFACTS = frozenset(AUTO_ARTIFACT_OPERATIONS)
+VALID_AI_SUMMARY_TEMPLATES = frozenset({
+    "general", "minimal", "detailed", "tutorial", "academic", "life_journal", "task_oriented", "meeting_minutes",
+})
 
 USER_OVERRIDABLE = frozenset({
     "ai_summary_multimodal_enabled", "auto_generate_artifacts", "answer_detail_level", "model_profile",
+    "ai_summary_template",
 })
 
 
@@ -30,6 +34,15 @@ class UserPreferences(BaseModel):
     auto_generate_artifacts: list[str] | None = None
     answer_detail_level: str | None = None
     model_profile: str | None = None
+    # Writing style for AI summaries started without an explicit choice (imports, batches, linked videos).
+    ai_summary_template: str | None = None
+
+    @field_validator("ai_summary_template")
+    @classmethod
+    def summary_template(cls, value):
+        if value is not None and value not in VALID_AI_SUMMARY_TEMPLATES:
+            raise ValueError("Unsupported AI summary template.")
+        return value
 
     @field_validator("answer_detail_level")
     @classmethod

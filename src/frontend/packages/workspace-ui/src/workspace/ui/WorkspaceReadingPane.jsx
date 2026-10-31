@@ -164,7 +164,7 @@ export function WorkspaceReadingPane({
         {!activeSeries ? (
           <WorkspaceStateBlock
             title="等待系列"
-            description="先进入一个 series，右侧才会显示系列或视频工具。"
+            description="从左侧打开一个系列，这里会显示它的工具。"
             dashed
           />
         ) : (
@@ -173,21 +173,20 @@ export function WorkspaceReadingPane({
               <header className="mb-3 flex shrink-0 flex-col gap-3 border-b border-stone-200/80 pb-3 dark:border-white/5 @[480px]:mb-5 @[480px]:gap-5 @[480px]:pb-5">
               {isStudioHome ? (
                 <WorkspaceHomeHeader
-                  eyebrow="Studio"
                   title={isPlaygroundHome ? activeSeries.title : summary?.title ?? selectedVideo?.title}
                   description={isPlaygroundHome ? "从左侧选择一个媒体文件，进入对应的单项工具页。" : "选择下方任意卡片进入独立工具页"}
                 />
               ) : isSeriesHome ? (
                 <WorkspaceHomeHeader
-                  eyebrow="Series Home"
                   title={activeSeries.title}
-                  description="你可以在当前对话栏询问关于整个系列的问题。"
+                  description="可以在对话栏里问整个系列的内容。"
                 >
                 </WorkspaceHomeHeader>
               ) : (
                 <WorkspaceToolHeader
                   meta={currentToolMeta}
                   badge={toolHeaderBadge}
+                  aiGenerated={toolId !== "notes"}
                   onBack={() => onSelectTool(selectedContextType === "series" ? "series-home" : "studio")}
                   exportActions={buildWorkspaceToolExportActions({
                     activeSeries,
@@ -244,8 +243,7 @@ export function WorkspaceReadingPane({
                     <div className="pb-8 pt-2">
                       {isPlaygroundHome ? (
                         <WorkspaceStateBlock
-                          eyebrow="Playground"
-                          title="选择一个 Playground 媒体文件"
+                          title="选择要处理的视频文件"
                           description=""
                           dashed
                         />
@@ -296,6 +294,7 @@ export function WorkspaceReadingPane({
                       generating={generatingAiSummary || tools?.aiSummary?.status === "running"}
                       canGenerate={!(selectedVideo?.isLinked === true || selectedVideo?.status === "linked")}
                       canEdit={host.features?.aiSummaryEditing !== false}
+                      canRegenerate={host.features?.sourceRegeneration !== false}
                       onGenerate={onGenerateAiSummary}
                       onUpdate={onUpdateAiSummary}
                       noteImageContext={activeSeries && selectedVideo ? { seriesId: activeSeries.id, videoId: selectedVideo.id, durationSeconds: Number.POSITIVE_INFINITY } : null}
@@ -389,7 +388,7 @@ function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount,
   if (toolId === "series-mindmap") {
     return seriesMindmapAvailable
       ? { label: "可生成", tone: "pending" }
-      : { label: "需先生成 AI 概况", tone: "blocked" };
+      : { label: "需先生成 AI 概括", tone: "blocked" };
   }
 
   return null;
@@ -409,14 +408,13 @@ function resolveSeriesOverviewBadge({
     return null;
   }
   const generated = videos.filter((video) => seriesOverviewSummariesByVideoId?.[video.id]).length;
-  return `${generated} / ${videos.length} 视频概况`;
+  return `${generated} / ${videos.length} 视频概括`;
 }
 
-function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
+function WorkspaceHomeHeader({ title, description, children }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-[min(100%,20rem)] flex-1">
-        <p className="mb-1 text-xs font-bold uppercase text-stone-600 dark:text-stone-400">{eyebrow}</p>
         <h2 className="break-words text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{title}</h2>
         <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{description}</p>
       </div>
@@ -428,9 +426,7 @@ function WorkspaceHomeHeader({ eyebrow, title, description, children }) {
 function WorkspaceToolLoadingState({ toolName }) {
   return (
     <WorkspaceStateBlock
-      eyebrow="Loading Tool"
       title={`正在载入${toolName}`}
-      description="当前工具页按需加载中，准备完成后会立刻显示内容。"
       loading
     />
   );

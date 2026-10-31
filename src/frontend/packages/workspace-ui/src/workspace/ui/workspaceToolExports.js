@@ -20,11 +20,11 @@ function buildRawWorkspaceToolExportActions({ activeSeries, notes, summary, tool
     const overviewGenerated = tools?.overview?.generated === true;
     const screenshotsGenerated = Array.isArray(summary?.chapters) && summary.chapters.some((chapter) => chapter.image_url);
     return [
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"), enabled: overviewGenerated, label: "概况导出", disabledReason: "AI 概况生成后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary-with-screenshots.zip"), enabled: screenshotsGenerated, label: "概况与截图导出", disabledReason: "AI 概况和章节截图生成后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"), enabled: overviewGenerated, label: "转写导出", disabledReason: "AI 概况生成后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"), enabled: overviewGenerated, label: "概括导出", disabledReason: "AI 概括生成后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary-with-screenshots.zip"), enabled: screenshotsGenerated, label: "概括与截图导出", disabledReason: "AI 概括和章节截图生成后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"), enabled: overviewGenerated, label: "转写导出", disabledReason: "AI 概括生成后才能导出" },
       { href: videoExportUrl(activeSeries.id, selectedVideo.id, "subtitles.srt"), enabled: selectedVideo.hasTranscript === true, label: "SRT 字幕导出", disabledReason: "获取字幕后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"), enabled: overviewGenerated, label: "混合导出", disabledReason: "AI 概况生成后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"), enabled: overviewGenerated, label: "混合导出", disabledReason: "AI 概括生成后才能导出" },
     ];
   }
   if (toolId === "ai-summary") {

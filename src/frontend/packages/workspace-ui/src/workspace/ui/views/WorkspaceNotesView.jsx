@@ -34,7 +34,7 @@ function NoteListItem({ note, onOpen }) {
     >
       <div className="flex items-center justify-between gap-4">
         <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
           {note.source === "agent" ? "AGENT" : "Manual"}
         </span>
       </div>
@@ -147,7 +147,6 @@ export function WorkspaceNotesView({
   if (notesLoading) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Notes"
         title="载入笔记"
         description="正在读取当前视频的笔记。"
         loading
@@ -270,7 +269,7 @@ export function WorkspaceNotesView({
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
                   {selectedNote.source === "agent" ? "Agent Note" : "Manual Note"}
                 </span>
                 <span className="text-xs font-medium text-stone-500 dark:text-stone-500">
@@ -329,7 +328,6 @@ export function WorkspaceNotesView({
         ) : (
           <div className="mt-4">
             <WorkspaceStateBlock
-              eyebrow="Notes"
               title="暂无笔记"
               description="记录个人要点、想法和待办。"
               dashed

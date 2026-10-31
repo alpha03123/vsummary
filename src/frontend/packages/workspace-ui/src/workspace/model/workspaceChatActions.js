@@ -22,7 +22,7 @@ export function createWorkspaceChatActions({
       ? activeSeries?.videos?.some((video) => video.processed)
       : selectedVideo?.processed === true;
     if (!hasSummary) {
-      dispatch({ type: "load_failed", message: "当前范围尚未生成 AI 概况，请先生成概况后再进行对话。" });
+      dispatch({ type: "load_failed", message: "先生成 AI 概括，再开始对话。" });
       return;
     }
 
@@ -36,7 +36,7 @@ export function createWorkspaceChatActions({
 
     const sessionId = state.chatScopeKey;
     if (!sessionId) {
-      throw new Error("当前未处于 series 或 video 上下文，无法发起 AI 对话。");
+      throw new Error("先选一个系列或视频，再开始对话。");
     }
     const context = buildAgentChatContextPayload(
       state.library,
@@ -130,7 +130,7 @@ export function createWorkspaceChatActions({
   function onStartNewChat() {
     const chatBaseScopeKey = state.chatBaseScopeKey;
     if (!chatBaseScopeKey) {
-      throw new Error("当前未处于 series 或 video 上下文，无法新建对话。");
+      throw new Error("先选一个系列或视频，再新建对话。");
     }
     const sessionId = `${chatBaseScopeKey}::${Date.now()}`;
     const sessionMeta = createNextChatSessionMeta(state.chatSessionListsByScope, chatBaseScopeKey, sessionId);
@@ -156,7 +156,7 @@ export function createWorkspaceChatActions({
   async function onClearChat() {
     const sessionId = state.chatScopeKey;
     if (!sessionId) {
-      throw new Error("当前未处于 series 或 video 上下文，无法清空对话。");
+      throw new Error("先选一个系列或视频，再清空对话。");
     }
     const context = buildAgentChatContextPayload(
       state.library,

@@ -26,7 +26,7 @@ export function WorkspaceChatSessionManager({ chatSessions = [], activeSessionId
         onClick={() => setOpen((current) => !current)}
         aria-label={open ? "收起对话管理" : "展开对话管理"}
         aria-expanded={open}
-        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-[10px] font-bold uppercase tracking-widest text-stone-400 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-500 dark:hover:bg-stone-800"
+        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-xs font-bold uppercase tracking-widest text-stone-400 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-500 dark:hover:bg-stone-800"
       >
         {open ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         对话管理
@@ -131,11 +131,11 @@ export function WorkspaceChatPanel({
   // Only surfaced while the composer is blocked — each of these tells the user
   // what to fix. Null in the normal idle state so the row is not rendered.
   const composerHint = summaryLocked
-    ? "生成 AI 概况后，这里会恢复对话"
+    ? "生成 AI 概括后，这里会恢复对话"
     : seriesRagLocked
-      ? "RAG 向量模型下载完成后，这里会恢复 series 问答"
+      ? "检索模型下载完成后，就能针对整个系列提问"
       : seriesIndexingLocked
-        ? "数据库整理完成后，这里会恢复 series 问答"
+        ? "数据整理完成后，就能针对整个系列提问"
         : null;
   const lockedContentClass = summaryLocked || seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
   const conversationTurns = useMemo(
@@ -244,7 +244,7 @@ export function WorkspaceChatPanel({
           <div className="font-semibold">请先下载 RAG 向量模型</div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">
-              series依赖rag数据库能力，请先下载相关模型。
+              针对整个系列提问需要检索模型，请先在设置里下载。
             </p>
             <button
               type="button"
@@ -258,9 +258,8 @@ export function WorkspaceChatPanel({
       ) : null}
 
       {summaryLocked ? (
-        <div className="border-b border-red-200/80 bg-red-50/90 px-6 py-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200" role="alert">
-          <div className="font-semibold">尚未生成 AI 概况</div>
-          <p className="mt-1 text-xs leading-5">请先生成当前范围的 AI 概况，再开始对话。</p>
+        <div className="border-b border-stone-200/80 bg-stone-50 px-6 py-2.5 text-xs text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-400" role="status">
+          对话基于 AI 概括，先生成概括就能提问。
         </div>
       ) : null}
 
@@ -294,8 +293,8 @@ export function WorkspaceChatPanel({
             <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-6 border border-accent/20 shadow-sm">
               <Sparkles size={28} className="text-accent" />
             </div>
-            <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 mb-2">有什么我可以帮您的？</h2>
-            <p className="text-sm text-stone-600 dark:text-stone-400 mb-10 max-w-md text-center">您可以直接提问，或者尝试以下快速指令来探索当前上下文。</p>
+            <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 mb-2">想问点什么？</h2>
+            <p className="text-sm text-stone-600 dark:text-stone-400 mb-10 max-w-md text-center">直接输入问题，或者点下面的快捷提问。</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
               {suggestedPrompts.map((prompt, idx) => {
@@ -335,8 +334,8 @@ export function WorkspaceChatPanel({
                 <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
                   <LoaderCircle size={16} className="animate-spin text-white" />
                 </div>
-                <div className="workspace-elevated-panel p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-600 dark:text-stone-300">
-                  正在分析您的问题...
+                <div className="workspace-elevated-panel p-4 rounded-2xl rounded-tl-sm border text-stone-600 dark:text-stone-300">
+                  正在思考…
                 </div>
               </div>
             ) : null}
@@ -360,7 +359,7 @@ export function WorkspaceChatPanel({
             ref={composerRef}
             placeholder={
               summaryLocked
-                ? "请先生成 AI 概况..."
+                ? "请先生成 AI 概括..."
                 : seriesRagLocked
                   ? "请先下载 RAG 向量模型..."
                   : seriesIndexingLocked
@@ -370,7 +369,7 @@ export function WorkspaceChatPanel({
             /* `overflow-y-auto` draws a permanent scrollbar track in some
                browsers even at one line, so the box scrolls only once it is
                actually capped by `max-h-40`. */
-            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-4 py-3 text-[15px] leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 @[440px]:px-5"
+            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-4 py-3 text-base leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 @[440px]:px-5"
           rows={1}
             value={currentDraft}
             onChange={(event) => updateDraft(event.target.value)}
@@ -392,7 +391,7 @@ export function WorkspaceChatPanel({
               disabled={chatPending ? false : interactionDisabled || !currentDraft.trim()}
               aria-label={chatPending ? "中断对话" : "发送消息"}
               title={chatPending ? "中断对话" : "发送消息"}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-stone-900 text-white shadow-sm transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white group-focus-within:bg-accent group-focus-within:text-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-900 text-white shadow-sm transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white group-focus-within:bg-accent group-focus-within:text-white"
             >
               {chatPending ? <Square size={15} fill="currentColor" /> : <ArrowUp size={18} strokeWidth={2.5} />}
             </button>
@@ -407,7 +406,10 @@ export function WorkspaceChatPanel({
             <Sparkles size={12} className="text-stone-500 dark:text-stone-500" />
             <p className="text-xs font-medium text-stone-500 dark:text-stone-500">{composerHint}</p>
           </div>
-        ) : null}
+        ) : (
+          // One short line marks answers as AI-generated (required labelling); kept small for chat height.
+          <p className="mt-2 text-center text-xs text-stone-400 dark:text-stone-500">回答由 AI 生成，可能有误</p>
+        )}
       </div>
     </div>
   );
@@ -443,8 +445,8 @@ function ConversationMessage({ message, renderMessageContent }) {
               || message.kind === "seek-reference"
               ? "w-full"
               : isAssistant
-                ? "workspace-elevated-panel markdown-body p-4 rounded-[1.5rem] rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
-                : "px-4 py-3 rounded-[1.5rem] rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm @[440px]:px-5"
+                ? "workspace-elevated-panel markdown-body p-4 rounded-2xl rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
+                : "px-4 py-3 rounded-2xl rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm @[440px]:px-5"
           }
         >
           {renderMessageContent(message, isAssistant)}
@@ -578,7 +580,7 @@ function WorkspaceToolTraceMessage({ message }) {
   const isCancelled = message.toolTrace?.status === "cancelled";
 
   return (
-    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+    <details className="group rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-warning-subtle text-warning">
@@ -586,24 +588,24 @@ function WorkspaceToolTraceMessage({ message }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <strong className="text-[15px] font-semibold">{message.content}</strong>
+              <strong className="text-base font-semibold">{message.content}</strong>
               {durationLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                   <Clock3 size={12} />
                   用时 {durationLabel}
                 </span>
               ) : null}
               {isRunning ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-warning-subtle px-2 py-0.5 text-[11px] font-medium text-warning">
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning-subtle px-2 py-0.5 text-xs font-medium text-warning">
                   <LoaderCircle size={12} className="animate-spin" />
                   调用中
                 </span>
               ) : isFailed ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-danger-subtle px-2 py-0.5 text-[11px] font-medium text-danger">
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger-subtle px-2 py-0.5 text-xs font-medium text-danger">
                   失败
                 </span>
               ) : isCancelled ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">
                   已中断
                 </span>
               ) : null}
@@ -632,11 +634,11 @@ function WorkspaceToolTraceMessage({ message }) {
               className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3 py-3 dark:border-stone-800 dark:bg-stone-900/70"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <code className="rounded-md bg-stone-200/80 px-2 py-0.5 text-[11px] font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
+                <code className="rounded-md bg-stone-200/80 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
                   {step.toolName}
                 </code>
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{step.label}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${step.status === "running"
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${step.status === "running"
                   ? "bg-warning-subtle text-warning"
                   : step.status === "failed"
                     ? "bg-danger-subtle text-danger"
@@ -669,7 +671,7 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
     : "已找到相关转写片段";
 
   return (
-    <details className="group rounded-[1.35rem] border border-info/20 bg-info-subtle shadow-sm dark:border-info/10 dark:bg-info-subtle">
+    <details className="group rounded-2xl border border-info/20 bg-info-subtle shadow-sm dark:border-info/10 dark:bg-info-subtle">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-800 dark:text-stone-100">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-accent dark:bg-accent/10 dark:text-accent">
@@ -677,7 +679,7 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <strong className="text-[15px] font-semibold">{title}</strong>
+              <strong className="text-base font-semibold">{title}</strong>
             </div>
             <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
               展开查看命中的转写片段，再决定是否跳到视频。
@@ -729,7 +731,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
 
   if (hasStages) {
     return (
-      <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+      <details className="group rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
         <summary className="list-none cursor-pointer px-4 py-3.5">
           <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
@@ -737,9 +739,9 @@ function WorkspaceThoughtTraceMessage({ message }) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <strong className="text-[15px] font-semibold">{message.content}</strong>
+                <strong className="text-base font-semibold">{message.content}</strong>
                 {durationLabel ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                     <Clock3 size={12} />
                     用时 {durationLabel}
                   </span>
@@ -788,7 +790,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${stageRunning
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stageRunning
                           ? "bg-info-subtle text-info"
                           : stageFailed
                             ? "bg-danger-subtle text-danger"
@@ -814,7 +816,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
   }
 
   return (
-    <details className="group rounded-[1.35rem] border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+    <details className="group rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
       <summary className="list-none cursor-pointer px-4 py-3.5">
         <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
@@ -822,9 +824,9 @@ function WorkspaceThoughtTraceMessage({ message }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <strong className="text-[15px] font-semibold">{message.content}</strong>
+              <strong className="text-base font-semibold">{message.content}</strong>
               {durationLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
                   <Clock3 size={12} />
                   用时 {durationLabel}
                 </span>

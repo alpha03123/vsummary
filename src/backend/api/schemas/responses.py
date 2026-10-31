@@ -52,6 +52,9 @@ class VideoCardResponse(BaseModel):
     item_index: int = 0
     source_url: str = ""
     provider: str = ""
+    cover_url: str = ""
+    duration_seconds: float | None = None
+    updated_at: str = ""
 
     @classmethod
     def from_model(cls, video: LibraryVideoCardDTO) -> "VideoCardResponse":
@@ -77,6 +80,9 @@ class VideoCardResponse(BaseModel):
             item_index=video.item_index,
             source_url=video.source_url,
             provider=video.provider,
+            cover_url=video.cover_url,
+            duration_seconds=video.duration_seconds,
+            updated_at=video.updated_at,
         )
 
 class SeriesResponse(BaseModel):

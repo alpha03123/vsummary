@@ -165,11 +165,11 @@ function buildThinkingMessage(requestId, payload, { status }) {
       stages: previousStages,
     },
     meta: status === "running"
-      ? hasStages ? "Notebook Assistant • 执行中" : "Notebook Assistant • 思考中"
+      ? hasStages ? "助手 • 执行中" : "助手 • 思考中"
       : status === "failed"
-        ? `Notebook Assistant • ${hasStages ? "执行失败" : "思路失败"}`
+        ? `助手 • ${hasStages ? "执行失败" : "思路失败"}`
       : status === "cancelled"
-        ? `Notebook Assistant • ${hasStages ? "执行已中断" : "思路已中断"}`
+        ? `助手 • ${hasStages ? "执行已中断" : "思路已中断"}`
       : buildStatusMeta(hasStages ? "执行" : "思路", durationMs),
   };
 }
@@ -217,10 +217,10 @@ function buildToolTraceMessage(requestId, messages, event, completed) {
     meta: completed
       ? buildStatusMeta("工具链", durationMs)
       : status === "running"
-        ? "Notebook Assistant • 正在调用工具"
+        ? "助手 • 正在调用工具"
         : status === "failed"
-          ? "Notebook Assistant • 工具链失败"
-        : "Notebook Assistant • 等待下一步",
+          ? "助手 • 工具链失败"
+        : "助手 • 等待下一步",
   };
 }
 
@@ -345,11 +345,11 @@ function buildStreamingAnswerMessage(requestId, content, status, durationMs, usa
     usage,
     citations,
     meta: status === "running"
-      ? "Notebook Assistant • 输出中"
+      ? "助手 • 输出中"
       : status === "failed"
-        ? "Notebook Assistant • 输出失败"
+        ? "助手 • 输出失败"
         : status === "cancelled"
-          ? "Notebook Assistant • 已中断"
+          ? "助手 • 已中断"
       : buildAssistantChatMeta(durationMs, usage),
   };
 }
@@ -391,7 +391,7 @@ function markChatStreamFailed(messages, requestId, errorMessage) {
           status: step.status === "running" ? "failed" : step.status,
         })),
       },
-      meta: "Notebook Assistant • 工具链失败",
+      meta: "助手 • 工具链失败",
     };
   }
 
@@ -452,7 +452,7 @@ function markChatStreamCancelled(messages, requestId, cancellationMessage) {
           status: step.status === "running" ? "cancelled" : step.status,
         })),
       },
-      meta: "Notebook Assistant • 工具链已中断",
+      meta: "助手 • 工具链已中断",
     };
   }
 
@@ -479,9 +479,9 @@ function markChatStreamCancelled(messages, requestId, cancellationMessage) {
 function buildStatusMeta(label, durationMs) {
   const durationLabel = formatDurationLabel(durationMs);
   if (!durationLabel) {
-    return `Notebook Assistant • ${label}完成`;
+    return `助手 • ${label}完成`;
   }
-  return `Notebook Assistant • ${label}用时 ${durationLabel}`;
+  return `助手 • ${label}用时 ${durationLabel}`;
 }
 
 function buildSeekReferenceMessage(requestId, event) {
@@ -502,6 +502,6 @@ function buildSeekReferenceMessage(requestId, event) {
       chapterTitle: typeof payload.chapter_title === "string" ? payload.chapter_title : "",
       query: typeof payload.query === "string" ? payload.query : "",
     },
-    meta: "Notebook Assistant • 证据定位",
+    meta: "助手 • 证据定位",
   };
 }

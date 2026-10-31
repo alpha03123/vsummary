@@ -777,7 +777,7 @@ function parseSseEvent(rawValue) {
 }
 
 function buildRecoveredMeta(role, createdAt) {
-  const actor = role === "user" ? "You" : "Notebook Assistant";
+  const actor = role === "user" ? "你" : "助手";
   const suffix = createdAt ? "已恢复" : "恢复记录";
   return `${actor} • ${suffix}`;
 }

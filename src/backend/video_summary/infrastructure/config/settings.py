@@ -30,7 +30,7 @@ from backend.core.preferences import VALID_ANSWER_DETAIL_LEVELS, VALID_AUTO_GENE
 
 VALID_DEVICES = {"auto", "cpu", "gpu"}
 VALID_ASR_PROVIDERS = {"faster_whisper", "whisper_cpp", "aliyun_bailian"}
-VALID_THEMES = {"light", "dark"}
+VALID_THEMES = {"light", "dark", "system"}
 VALID_TRANSCRIPTION_MODES = {"fast", "balanced", "accurate"}
 VALID_PLANNER_TRANSPORTS = {"structured", "stream_buffered"}
 VALID_WEB_SEARCH_PROVIDERS = {"litellm"}

@@ -41,6 +41,8 @@ def reconcile_host_jobs(container):
         container.job_repository.finalize_accounting(job_id, workspace_id=workspace_id)
     if container.chat_queue is not None:
         container.chat_queue.reconcile(container.quota_guard, container.usage_store)
+    if container.cover_sync is not None:
+        container.cover_sync.run()
 
 
 def build_worker_host(

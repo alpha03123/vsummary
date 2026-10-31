@@ -119,8 +119,8 @@ export function useWorkspaceController() {
       chapterId,
     });
 
-    // 复用 citation 的定位通道：让已经打开的「AI 概况」卡片滚动到对应章节与转写段落。
-    // 仅在视频作用域下发 —— 系列导图的节点时间分属各个视频，用当前视频的概况去匹配会跳错章节。
+    // 复用 citation 的定位通道：让已经打开的「AI 概括」卡片滚动到对应章节与转写段落。
+    // 仅在视频作用域下发 —— 系列导图的节点时间分属各个视频，用当前视频的概括去匹配会跳错章节。
     if (state.selectedContextType === "video") {
       dispatch({
         type: "citation_focus_requested",

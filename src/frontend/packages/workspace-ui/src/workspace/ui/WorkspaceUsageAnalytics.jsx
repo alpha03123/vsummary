@@ -110,14 +110,14 @@ export function WorkspaceUsageAnalytics({
                       <p className={`text-lg font-black tabular-nums text-stone-900 dark:text-stone-100 ${loading ? "opacity-60" : ""}`}>
                         {formatTokenCount(total.promptTokens)}
                       </p>
-                      <p className="text-[10px] font-semibold text-stone-500 dark:text-stone-500 uppercase tracking-wide">Prompt</p>
+                      <p className="text-xs font-semibold text-stone-500 dark:text-stone-500 uppercase tracking-wide">输入</p>
                     </div>
                     <span className="text-stone-300 dark:text-stone-700">/</span>
                     <div className="min-w-0">
                       <p className={`text-lg font-black tabular-nums text-stone-900 dark:text-stone-100 ${loading ? "opacity-60" : ""}`}>
                         {formatTokenCount(total.completionTokens)}
                       </p>
-                      <p className="text-[10px] font-semibold text-stone-500 dark:text-stone-500 uppercase tracking-wide">Completion</p>
+                      <p className="text-xs font-semibold text-stone-500 dark:text-stone-500 uppercase tracking-wide">输出</p>
                     </div>
                   </div>
                 </div>
@@ -140,7 +140,7 @@ export function WorkspaceUsageAnalytics({
                 <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 mb-3 flex items-center gap-2">
                   <Server size={14} strokeWidth={2.5} className="text-stone-500" />
                   供应商与模型
-                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-500">({providers.length})</span>
+                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-500">({providers.length})</span>
                 </h3>
                 {providers.length ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -154,7 +154,7 @@ export function WorkspaceUsageAnalytics({
                             <p className="truncate text-sm font-bold text-stone-800 dark:text-stone-200">
                               {item.provider} · {item.model}
                             </p>
-                            <p className="mt-0.5 truncate text-[11px] text-stone-600 dark:text-stone-500">
+                            <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-500">
                               {item.baseUrl || "默认接口"}
                             </p>
                           </div>
@@ -171,7 +171,7 @@ export function WorkspaceUsageAnalytics({
                             />
                           </div>
                         )}
-                        <div className="flex items-center gap-4 mt-2 text-[11px] text-stone-600 dark:text-stone-400">
+                        <div className="flex items-center gap-4 mt-2 text-xs text-stone-600 dark:text-stone-400">
                           <span className="flex items-center gap-1">
                             <ArrowUpRight size={10} strokeWidth={2.5} />
                             Prompt {formatTokenCount(item.promptTokens)}
@@ -196,7 +196,7 @@ export function WorkspaceUsageAnalytics({
                 <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 mb-3 flex items-center gap-2">
                   <Clock size={14} strokeWidth={2.5} className="text-stone-500" />
                   最近调用记录
-                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-500">({recent.length})</span>
+                  <span className="text-xs font-semibold text-stone-500 dark:text-stone-500">({recent.length})</span>
                 </h3>
                 {recent.length ? (
                   <div className={`overflow-hidden rounded-2xl border border-stone-200 transition-opacity dark:border-stone-800 ${loading ? "opacity-60" : ""}`}>
@@ -204,12 +204,12 @@ export function WorkspaceUsageAnalytics({
                       <table className="w-full text-left">
                         <thead>
                           <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
-                            <th className="px-4 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">时间</th>
-                            <th className="px-4 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">类别</th>
-                            <th className="px-4 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">供应商 · 模型</th>
-                            <th className="px-4 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider text-right">Prompt</th>
-                            <th className="px-4 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider text-right">Completion</th>
-                            <th className="px-4 py-2.5 text-[11px] font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider text-right">Total</th>
+                            <th className="px-4 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">时间</th>
+                            <th className="px-4 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">类别</th>
+                            <th className="px-4 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">供应商 · 模型</th>
+                            <th className="px-4 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider text-right">输入</th>
+                            <th className="px-4 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider text-right">输出</th>
+                            <th className="px-4 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider text-right">合计</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -222,7 +222,7 @@ export function WorkspaceUsageAnalytics({
                                 {formatUsageTime(item.createdAt)}
                               </td>
                               <td className="px-4 py-2.5">
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                                   item.category === "chat"
                                     ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
                                     : "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400"
@@ -394,7 +394,7 @@ function UsageBarChart({ timeline, granularity, range, loading = false }) {
             按时间聚合真实 token 消耗，悬停查看明细。
           </p>
         </div>
-        <div className="flex items-center gap-3 text-[11px] font-bold text-stone-600 dark:text-stone-400">
+        <div className="flex items-center gap-3 text-xs font-bold text-stone-600 dark:text-stone-400">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-[0_0_0_3px_rgba(99,102,241,0.12)]" />
             生成

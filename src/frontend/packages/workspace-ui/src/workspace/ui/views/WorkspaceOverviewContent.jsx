@@ -175,8 +175,8 @@ export function WorkspaceOverviewContent({
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Sparkles size={64} />
         </div>
-        <p className="relative z-10 mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
-          Core Problem
+        <p className="relative z-10 mb-3 text-xs font-bold text-stone-600 dark:text-stone-400">
+          核心问题
         </p>
         <p className="relative z-10 text-base font-medium leading-relaxed">
           {summary.core_problem ?? "无核心问题描述。"}
@@ -194,7 +194,7 @@ export function WorkspaceOverviewContent({
 
       {ui.showTakeaways && summary.key_takeaways.length ? (
         <article className="workspace-muted-panel rounded-2xl border p-6">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">Key Takeaways</p>
+          <p className="mb-3 text-xs font-bold text-stone-600 dark:text-stone-400">关键收获</p>
           <div className="flex flex-col gap-3">
             {summary.key_takeaways.map((takeaway) => (
               <div key={takeaway} className="flex items-start gap-3">
@@ -404,7 +404,7 @@ function WorkspaceTranscriptList({
                     isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
                   } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
                 >
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
+                  <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
                     {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>

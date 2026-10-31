@@ -34,23 +34,11 @@ import { isBilibiliInboxSeries, isPlaygroundSeries } from "../model/workspaceCon
 import { useOutsidePointerUp } from "../../shared/lib/useOutsidePointerUp";
 import { WorkspaceOverflowMenu } from "./shared/WorkspaceOverflowMenu";
 import { WorkspaceSelectionBar } from "./shared/WorkspaceSelectionControls";
+import { WorkspaceCover, formatDuration } from "./shared/WorkspaceCover";
+import { AI_SUMMARY_TEMPLATES, getAiSummaryTemplate } from "../model/aiSummaryTemplates";
 
 const slideTransition = { type: "spring", stiffness: 350, damping: 25, mass: 0.8 };
 
-const AI_SUMMARY_TEMPLATES = [
-  { id: "general", label: "通用概括" },
-  { id: "minimal", label: "要点速览" },
-  { id: "detailed", label: "深度详记" },
-  { id: "tutorial", label: "操作教程" },
-  { id: "academic", label: "学术论文" },
-  { id: "life_journal", label: "生活随笔" },
-  { id: "task_oriented", label: "任务清单" },
-  { id: "meeting_minutes", label: "会议纪要" },
-];
-
-function getAiSummaryTemplate(templateId) {
-  return AI_SUMMARY_TEMPLATES.find((template) => template.id === templateId) ?? AI_SUMMARY_TEMPLATES[0];
-}
 
 function AiSummaryTemplateMenu({ value, onChange, disabled = false }) {
   const [open, setOpen] = useState(false);
@@ -141,7 +129,7 @@ function VideoIndexBadge({ state, rebuilding, onRebuild }) {
   if (!labels[state]) return null;
   return (
     <span className="inline-flex items-center gap-1">
-      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
         <AlertTriangle size={12} />
         {labels[state]}
       </span>
@@ -159,7 +147,7 @@ function VideoBadge({ video }) {
   if (video.status === "source_missing") {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300"
+        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300"
         title="原始媒体文件当前不可访问，请重新链接媒体。"
       >
         <Link2 size={12} />
@@ -169,15 +157,15 @@ function VideoBadge({ video }) {
   }
   if (!video.processed && (video.isLinked || video.status === "linked")) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
         <Link2 size={11} />
-        未下载
+        仅链接
       </span>
     );
   }
   if (video.status === "downloading") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300">
         <ArrowDown size={11} className="animate-bounce" />
         下载中
       </span>
@@ -186,7 +174,7 @@ function VideoBadge({ video }) {
   if (video.status === "untranscribable") {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-800 dark:border-orange-900/70 dark:bg-orange-950/40 dark:text-orange-300"
+        className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-orange-800 dark:border-orange-900/70 dark:bg-orange-950/40 dark:text-orange-300"
         title="没有可供转写使用的信息"
       >
         <AlertTriangle size={12} />
@@ -196,22 +184,22 @@ function VideoBadge({ video }) {
   }
   if (video.processed) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
         <CheckCircle2 size={12} />
-        已生成概况
+        已生成概括
       </span>
     );
   }
   if (video.hasTranscript) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:border-violet-900/70 dark:bg-violet-950/40 dark:text-violet-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-violet-700 dark:border-violet-900/70 dark:bg-violet-950/40 dark:text-violet-300">
         <Captions size={12} />
         已有字幕
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border border-transparent">
+    <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border border-transparent">
       <CircleDashed size={12} />
       未处理
     </span>
@@ -259,7 +247,7 @@ export function getVideoGenerationButtonState({
     disabled: false,
     label: processingMode === "transcript"
       ? (hasTranscript ? "重新获取字幕" : "获取字幕文件")
-      : (processed ? "重新生成 AI 概况" : "生成 AI 概况"),
+      : (processed ? "重新生成 AI 概括" : "生成 AI 概括"),
     tone: "primary",
   };
 }
@@ -292,6 +280,7 @@ export function getVideoMediaIdentifier(video) {
 
 function PanelFooter({
   allowSourceRegeneration = true,
+  summaryStyleInFooter = true,
   selectedContextType,
   selectedVideo,
   isGeneratingSelectedVideo,
@@ -354,13 +343,12 @@ function PanelFooter({
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-1">
-          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">Now Look At:</p>
-          <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">Series scope</h3>
+          <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">当前范围：整个系列</h3>
         </div>
         <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-400">
           {embeddingNeedsDownload
-            ? "当前向量检索模型尚未下载，下载后才能使用 series 问答。"
-            : `你可以在当前对话栏询问关于整个系列的问题 ： ${activeSeries?.title}。`}
+            ? "检索模型还没下载，下载后才能针对整个系列提问。"
+            : `在对话栏里可以直接问「${activeSeries?.title}」整个系列的内容。`}
         </p>
         <div className="mt-3">
           {queueIsActive ? (
@@ -424,7 +412,7 @@ function PanelFooter({
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-3">
-          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
+          <p className="text-xs font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
           <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">{selectedVideo.title}</h3>
         </div>
         <div className="relative w-full overflow-hidden rounded-full bg-stone-200 h-2.5 mb-1.5 dark:bg-neutral-800">
@@ -462,7 +450,7 @@ function PanelFooter({
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
+            <p className="text-xs font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
             <div className="flex shrink-0 items-center gap-1">
             <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
             <WorkspaceOverflowMenu
@@ -541,7 +529,8 @@ function PanelFooter({
     processingMode,
     sourceMissing: selectedVideo.status === "source_missing",
   });
-  if (!allowSourceRegeneration && selectedVideo.processed && !isGeneratingSelectedVideo) {
+  const regenerationLocked = !allowSourceRegeneration && selectedVideo.processed && !isGeneratingSelectedVideo;
+  if (regenerationLocked) {
     videoGenerationButton.disabled = true;
     videoGenerationButton.label = '产物已生成';
   }
@@ -550,7 +539,8 @@ function PanelFooter({
     isGeneratingSelectedVideo,
   });
 
-  const showAiSummaryTemplateMenu = processingMode === "summary" && selectedVideo.status !== "source_missing";
+  // Hosts that ask before generating (Cloud) choose the style in that confirmation instead.
+  const showAiSummaryTemplateMenu = summaryStyleInFooter && processingMode === "summary" && selectedVideo.status !== "source_missing" && !regenerationLocked;
   const generationControlClass = videoGenerationButton.tone === "danger"
     ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
     : videoGenerationButton.tone === "busy"
@@ -561,7 +551,7 @@ function PanelFooter({
     <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
       <div className="mb-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
+          <p className="text-xs font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
           <div className="flex shrink-0 items-center gap-1">
             <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
             <WorkspaceOverflowMenu
@@ -610,7 +600,7 @@ function PanelFooter({
       </div>
       {modelNeedsDownload ? (
         <div className="mb-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-          当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概况。
+          当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概括。
         </div>
       ) : null}
       <div className={`flex w-full overflow-hidden rounded-2xl ${generationControlClass}`}>
@@ -653,16 +643,19 @@ function PanelFooter({
           />
         ) : null}
       </div>
-      <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
-        {processingMode === "transcript"
-          ? "仅获取字幕"
-          : `将直接生成风格为“${getAiSummaryTemplate(aiSummaryTemplate).label}”的概括`}
-      </p>
+      {processingMode === "transcript" || showAiSummaryTemplateMenu ? (
+        <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+          {processingMode === "transcript"
+            ? "仅获取字幕"
+            : `将直接生成风格为“${getAiSummaryTemplate(aiSummaryTemplate).label}”的概括`}
+        </p>
+      ) : null}
     </div>
   );
 }
 export function WorkspaceLibraryPanel({
   allowSourceRegeneration = true,
+  summaryStyleInFooter = true,
   activeSeries,
   indexSnapshot = null,
   selectedContextType,
@@ -768,21 +761,26 @@ export function WorkspaceLibraryPanel({
 
       {/* Sidebar Header */}
       <div className="p-5 pb-4 border-b border-stone-200/80 dark:border-stone-800 flex-shrink-0">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-[10px] font-bold text-stone-600 dark:text-zinc-400 tracking-wider uppercase mb-1">
-              {isPlayground ? "Playground" : isBilibiliInbox ? "B站导入" : isLinkedSeries ? "Linked Series" : "Sources"}
-            </p>
-            <h2 className="text-lg font-bold text-stone-800 dark:text-stone-100 leading-tight">{activeSeries?.title ?? "未选择 series"}</h2>
-          </div>
+        <div className="mb-3 flex items-center justify-between gap-2 pr-10 md:pr-0">
           <button
             type="button"
-            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
             onClick={onEnterLibraryHome}
-            title="返回系列列表"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} />
+            首页
           </button>
+          <span className="truncate text-xs font-medium text-stone-500 dark:text-zinc-500">
+            {isPlayground ? "单个视频" : isBilibiliInbox ? "B站导入" : isLinkedSeries ? "链接系列" : "本地文件夹"}
+          </span>
+        </div>
+        <div className="mb-4 flex items-center gap-3">
+          {!isPlayground && !isBilibiliInbox ? (
+            <div className="h-10 w-[72px] shrink-0 overflow-hidden rounded-lg border border-stone-200/80 dark:border-white/10">
+              <WorkspaceCover url={activeSeries?.videos.find((video) => video.coverUrl)?.coverUrl} seed={activeSeries?.id} iconSize={16} />
+            </div>
+          ) : null}
+          <h2 className="min-w-0 text-base font-bold leading-snug text-stone-800 line-clamp-2 dark:text-stone-100">{activeSeries?.title ?? "未选择系列"}</h2>
         </div>
         {!isPlayground ? (
           <div className="mb-4 flex items-center gap-2">
@@ -890,7 +888,7 @@ export function WorkspaceLibraryPanel({
                     }`}
                 >
                   {label}
-                  <span className={`ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 py-px text-[10px] font-bold leading-none ${statusFilter === value
+                  <span className={`ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 py-px text-xs font-bold leading-none ${statusFilter === value
                       ? "bg-accent/10 text-accent"
                       : "bg-stone-200/80 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
                     }`}>{count}</span>
@@ -920,13 +918,13 @@ export function WorkspaceLibraryPanel({
             <button
               type="button"
               onClick={onSelectSeriesContext}
-              className={`text-left flex flex-col gap-2 p-4 rounded-[1.5rem] border transition-all duration-200 outline-none shadow-sm bg-accent/10 border-accent/30 text-stone-900 dark:text-stone-100 z-10 relative
+              className={`text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none shadow-sm bg-accent/10 border-accent/30 text-stone-900 dark:text-stone-100 z-10 relative
               ${selectedContextType === "series"
                   ? "ring-[2px] ring-accent/20"
                   : "hover:bg-accent/15 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] cursor-pointer"
                 }`}
             >
-              {/* The card header above already prints `LINKED SERIES` + the full
+              {/* The card header above already prints the source label + the full
                   series title, so this card used to repeat that title verbatim
                   and then add a sentence explaining what "series scope" means.
                   Both carried no new information: the title was a copy, and the
@@ -942,7 +940,7 @@ export function WorkspaceLibraryPanel({
                   <FolderKanban size={14} className="text-accent" />
                   整个系列
                 </span>
-                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-accent">
+                <span className="inline-flex items-center text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-accent">
                   当前范围
                 </span>
               </div>
@@ -956,7 +954,7 @@ export function WorkspaceLibraryPanel({
                 key={video.id}
                 role="button"
                 tabIndex={0}
-                className={`motion-stagger text-left flex flex-col gap-2 p-4 rounded-[1.5rem] border transition-all duration-200 outline-none cursor-pointer relative z-10
+                className={`motion-stagger text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none cursor-pointer relative z-10
                 ${isActive
                     ? "border-transparent"
                     : "workspace-elevated-panel border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.22)]"
@@ -973,7 +971,7 @@ export function WorkspaceLibraryPanel({
                 {isActive && (
                   <motion.div
                     layoutId="library-bg"
-                    className="absolute inset-0 bg-stone-100/80 dark:bg-stone-800/80 border border-stone-300 dark:border-stone-700 shadow-sm rounded-[1.5rem] -z-10"
+                    className="absolute inset-0 bg-stone-100/80 dark:bg-stone-800/80 border border-stone-300 dark:border-stone-700 shadow-sm rounded-2xl -z-10"
                     transition={slideTransition}
                   />
                 )}
@@ -1004,10 +1002,16 @@ export function WorkspaceLibraryPanel({
                         {selectedVideoSet.has(video.id) ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     ) : null}
-                    <FileVideo size={16} className={isActive ? "text-accent" : "text-stone-500 dark:text-stone-500"} />
                   </div>
                 </div>
-                <div className="flex flex-col gap-0.5 mt-1">
+                <div className="mt-1 flex gap-3">
+                <div className="relative h-[50px] w-[88px] shrink-0 overflow-hidden rounded-lg border border-stone-200/80 dark:border-white/10">
+                  <WorkspaceCover url={video.coverUrl} seed={video.id} iconSize={16} className={!video.processed && (video.isLinked || video.status === "linked") ? "opacity-70 grayscale-[0.5]" : ""} />
+                  {formatDuration(video.durationSeconds) ? (
+                    <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] font-semibold tabular-nums leading-4 text-white">{formatDuration(video.durationSeconds)}</span>
+                  ) : null}
+                </div>
+                <div className="flex min-w-0 flex-col gap-0.5">
                   <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
                     {video.title}
                   </strong>
@@ -1023,11 +1027,12 @@ export function WorkspaceLibraryPanel({
                     {getVideoMediaIdentifier(video)}
                   </span>
                 </div>
+                </div>
               </div>
             );
           })}
           {!isPlayground && filteredVideos.length === 0 ? (
-            <div className="workspace-elevated-panel rounded-[1.5rem] border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm text-stone-600 dark:border-stone-800 dark:text-stone-400">
+            <div className="workspace-elevated-panel rounded-2xl border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm text-stone-600 dark:border-stone-800 dark:text-stone-400">
               当前筛选条件下没有匹配的视频。
             </div>
           ) : null}
@@ -1064,7 +1069,7 @@ export function WorkspaceLibraryPanel({
                 }
               />
               {seriesHasActiveWork ? (
-                <p className="mt-1.5 px-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
+                <p className="mt-1.5 px-2 text-xs leading-relaxed text-amber-600 dark:text-amber-400">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
               ) : null}
             </motion.div>
           )}
@@ -1073,6 +1078,7 @@ export function WorkspaceLibraryPanel({
 
       <PanelFooter
         allowSourceRegeneration={allowSourceRegeneration}
+        summaryStyleInFooter={summaryStyleInFooter}
         selectedContextType={selectedContextType}
         selectedVideo={selectedVideo}
         isGeneratingSelectedVideo={isGeneratingSelectedVideo}
@@ -1119,7 +1125,7 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
     ? `?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`
     : "";
   const actions = [
-    ["mixed", "AI 概况混合包", "Markdown · 概况、要点与逐字稿", Sparkles],
+    ["mixed", "AI 概括混合包", "Markdown · 概括、要点与逐字稿", Sparkles],
     ["knowledge-cards", "知识卡片", "Markdown · 逐条知识卡片", LayoutGrid],
     ["mindmaps", "思维导图", "Markdown · 章节层级导图", Network],
     ["srt", "SRT 字幕", "SRT · 标准字幕，可直接导入播放器", Captions],
@@ -1151,9 +1157,8 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Series export</p>
                 <h3 id="series-export-title" className="mt-1 text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">批量导出</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-stone-500 dark:text-stone-400">选好范围后，点击内容包即可开始下载。</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-stone-500 dark:text-stone-400">选好范围后，点击内容包即可开始下载。</p>
               </div>
               <button
                 type="button"
@@ -1166,7 +1171,7 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
             </div>
 
             <section className="mt-6">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出范围</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出范围</p>
               <div className="mt-2.5 grid grid-cols-2 gap-2.5">
                 <ScopeOption
                   selected={scope === "all"}
@@ -1183,14 +1188,14 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
                 />
               </div>
               {!selectedAvailable ? (
-                <p className="mt-2.5 text-[11px] leading-relaxed text-stone-400 dark:text-stone-500">
+                <p className="mt-2.5 text-xs leading-relaxed text-stone-400 dark:text-stone-500">
                   想按选中项导出，先在左侧列表勾选视频。
                 </p>
               ) : null}
             </section>
 
             <section className="mt-6">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出内容</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出内容</p>
               <div className="mt-2.5 flex flex-col gap-2.5">
                 {actions.map(([kind, label, meta, Icon]) => (
                   <a
@@ -1204,8 +1209,8 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
                       <Icon size={17} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold text-stone-800 dark:text-stone-100">{label}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-stone-500 dark:text-stone-400">{meta}</span>
+                      <span className="block truncate text-sm font-semibold text-stone-800 dark:text-stone-100">{label}</span>
+                      <span className="mt-0.5 block truncate text-xs text-stone-500 dark:text-stone-400">{meta}</span>
                     </span>
                     <Download size={16} className="shrink-0 text-stone-400 transition-colors group-hover:text-accent dark:text-stone-500" />
                   </a>
@@ -1241,11 +1246,11 @@ function ScopeOption({ selected, disabled = false, onSelect, label, hint }) {
       >
         {selected && !disabled ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
       </span>
-      <span className={`min-w-0 flex-1 truncate text-[13px] font-semibold ${disabled ? "text-stone-400 dark:text-stone-500" : "text-stone-800 dark:text-stone-100"}`}>
+      <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${disabled ? "text-stone-400 dark:text-stone-500" : "text-stone-800 dark:text-stone-100"}`}>
         {label}
       </span>
       {hint ? (
-        <span className="shrink-0 text-[11px] tabular-nums text-stone-400 dark:text-stone-500">{hint}</span>
+        <span className="shrink-0 text-xs tabular-nums text-stone-400 dark:text-stone-500">{hint}</span>
       ) : null}
     </button>
   );

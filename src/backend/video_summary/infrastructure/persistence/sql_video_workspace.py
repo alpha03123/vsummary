@@ -119,12 +119,19 @@ class SqlVideoWorkspace:
             series = session.execute(text("""SELECT s.id,s.title,s.source_kind,s.external_source_url,m.payload AS linked_payload
                 FROM series s LEFT JOIN linked_series_metadata m ON m.series_id=s.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL AND s.import_published=1 ORDER BY s.position,s.created_at"""), {"workspace": self._workspace_id}).mappings().all()
-            videos = session.execute(text("""SELECT v.id,v.series_id,v.title,v.source_kind,v.external_source_id,v.content_version,m.blob_key,e.source_path AS external_path,t.video_id AS transcript_video_id,su.video_id AS summary_video_id
+            videos = session.execute(text("""SELECT v.id,v.series_id,v.title,v.source_kind,v.external_source_id,v.content_version,v.updated_at,m.blob_key,e.source_path AS external_path,t.video_id AS transcript_video_id,t.duration_ms,su.video_id AS summary_video_id
                 FROM videos v JOIN series s ON s.id=v.series_id LEFT JOIN media_objects m ON m.video_id=v.id AND m.state='ready'
                 LEFT JOIN external_media_references e ON e.video_id=v.id
                 LEFT JOIN transcripts t ON t.video_id=v.id
                 LEFT JOIN summaries su ON su.video_id=v.id
                 WHERE s.workspace_id=:workspace AND s.deleted_at IS NULL AND s.import_published=1 AND v.deleted_at IS NULL ORDER BY v.created_at"""), {"workspace": self._workspace_id}).mappings().all()
+            # A stored platform cover wins; otherwise the first chapter screenshot stands in.
+            covers: dict[str, tuple[str, str]] = {}
+            for row in session.execute(text("""SELECT a.video_id,a.kind,a.sha256 FROM artifacts a
+                WHERE a.workspace_id=:workspace AND (a.kind='cover' OR (a.kind='screenshot' AND a.blob_key LIKE :first))
+                ORDER BY a.created_at"""), {"workspace": self._workspace_id, "first": "%/chapter-01.jpg"}).mappings():
+                if row["kind"] == "cover" or row["video_id"] not in covers:
+                    covers[row["video_id"]] = (row["kind"], row["sha256"])
         by_series: dict[str, list[LibraryVideoCardDTO]] = {row["id"]: [] for row in series}
         linked_videos: dict[tuple[str, str], LinkedVideo] = {}
         for row in series:
@@ -144,6 +151,11 @@ class SqlVideoWorkspace:
                 item_index=source.item_index if source is not None else 0,
                 source_url=source.source_url if source is not None else "",
                 provider=source.provider if source is not None else video["source_kind"] if linked else "",
+                cover_url=(f"/api/videos/{quote(video['series_id'], safe='')}/{quote(video['id'], safe='')}/cover?v={covers[video['id']][1][:12]}"
+                           if video["id"] in covers else ""),
+                duration_seconds=(video["duration_ms"] / 1000 if video["duration_ms"] else
+                                  float(source.duration_seconds) if source is not None and source.duration_seconds else None),
+                updated_at=video["updated_at"].isoformat() if video["updated_at"] is not None else "",
             ))
         return [
             LibrarySeriesDTO(

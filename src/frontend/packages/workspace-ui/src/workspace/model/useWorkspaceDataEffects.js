@@ -221,17 +221,21 @@ function useWorkspaceDataEffects(state, dispatch) {
     if (shouldAnimate) {
       root.classList.add("theme-transitioning");
     }
-    root.classList.toggle("dark", state.ui.theme === "dark");
+    // "system" follows the OS setting and keeps following it while the page is open.
+    const systemDark = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+    const applyTheme = () => root.classList.toggle("dark", state.ui.theme === "dark" || (state.ui.theme === "system" && Boolean(systemDark?.matches)));
+    applyTheme();
     root.dataset.workspaceThemeReady = "true";
-    if (!shouldAnimate) {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
+    if (state.ui.theme === "system") systemDark?.addEventListener("change", applyTheme);
+    const timeoutId = shouldAnimate ? window.setTimeout(() => {
       root.classList.remove("theme-transitioning");
-    }, 560);
+    }, 560) : null;
     return () => {
-      window.clearTimeout(timeoutId);
-      root.classList.remove("theme-transitioning");
+      systemDark?.removeEventListener("change", applyTheme);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+        root.classList.remove("theme-transitioning");
+      }
     };
   }, [state.ui.theme]);
 

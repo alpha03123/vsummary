@@ -29,7 +29,6 @@ export function WorkspaceSeriesMindmapView({
   if (seriesMindmapLoading) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Series Mindmap"
         title="载入思维导图"
         description="正在读取已生成的导图。"
         loading
@@ -40,9 +39,8 @@ export function WorkspaceSeriesMindmapView({
   if (!seriesMindmapAvailable) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Series Mindmap"
-        title="需要先生成 AI 概况"
-        description="系列导图依赖已生成的视频概况。请先生成系列中各视频的 AI 概况。"
+        title="需要先生成 AI 概括"
+        description="系列导图要用到每个视频的 AI 概括，先把它们生成出来。"
       />
     );
   }
@@ -50,9 +48,8 @@ export function WorkspaceSeriesMindmapView({
   if (!seriesMindmap) {
     return (
       <WorkspaceStateBlock
-        eyebrow="Series Mindmap"
         title="导图未生成"
-        description="点击下面按钮，基于系列中所有视频的概况生成跨视频知识结构导图。"
+        description="根据系列里所有视频的 AI 概括，画一张总的导图。"
       >
         <div className="flex flex-wrap items-center justify-center gap-3">
           <label className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 dark:text-stone-300">

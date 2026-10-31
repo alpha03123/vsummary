@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.core.citations import CitationReference
+from backend.core.preferences import current_preferences
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.persistence.sql_video_workspace import SqlVideoWorkspace
@@ -35,7 +36,7 @@ class SqlBackedVideoSummaryGenerator:
         manual_transcript: ManualTranscriptInput | None = None,
         use_saved_manual_transcript: bool = True,
         processing_mode: str = "summary",
-        ai_summary_template: str = "general",
+        ai_summary_template: str | None = None,
         job_id: str | None = None,
         worker_id: str | None = None,
         lease_token: str | None = None,
@@ -45,6 +46,9 @@ class SqlBackedVideoSummaryGenerator:
         source = self._workspace.get_video_source(series_id, video_id)
         if source is None:
             raise MediaSourceUnavailableError("视频原媒体不可用，请重新上传后再处理。")
+        if ai_summary_template is None:
+            # Jobs that do not name a style (imports, series batches, linked videos) follow the user's choice.
+            ai_summary_template = str((current_preferences() or {}).get("ai_summary_template") or "general")
         output_dir = self._temp_root / "generation" / video_id / uuid4().hex
         cache_dir = self._workspace.cache_root / "generation-stages" / video_id
         try:

@@ -30,7 +30,7 @@ const DISABLED_VISUALS = {
 function ToolStatusChip({ label, tone }) {
   return (
     <span
-      className={`mt-3 inline-flex w-fit shrink-0 whitespace-nowrap items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+      className={`mt-3 inline-flex w-fit shrink-0 whitespace-nowrap items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
         STATUS_TONES[tone] ?? STATUS_TONES.pending
       }`}
     >
@@ -58,7 +58,7 @@ export function WorkspaceToolGrid({ items, onSelect }) {
             type="button"
             onClick={() => onSelect(id)}
             disabled={disabled}
-            className={`motion-stagger group rounded-[1.5rem] p-5 text-left transition-all duration-200 ${
+            className={`motion-stagger group rounded-2xl p-5 text-left transition-all duration-200 ${
               disabled ? `cursor-not-allowed ${DISABLED_VISUALS.palette}` : `cursor-pointer ${meta.palette}`
             }`}
             style={{ "--stagger-index": index }}
