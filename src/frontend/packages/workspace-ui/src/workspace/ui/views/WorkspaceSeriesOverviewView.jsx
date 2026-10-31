@@ -58,7 +58,9 @@ export function WorkspaceSeriesOverviewView({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-24">
+    // Same width and right alignment as WorkspaceContentOutline's two-column grid (48rem text + outline + gap),
+    // so each video's summary gets the single-video width instead of being squeezed into max-w-3xl.
+    <div className="ml-auto flex w-full max-w-[calc(48rem+11rem+10rem)] flex-col gap-8 pb-24">
       <div className="flex border-b border-stone-200/80 pb-5 dark:border-white/5">
         <WorkspaceVideoScopePicker
           videos={seriesVideos}

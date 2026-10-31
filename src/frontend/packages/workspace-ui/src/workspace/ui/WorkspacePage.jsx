@@ -35,7 +35,7 @@ const WorkspaceGenerationOverlay = lazy(() =>
   })),
 );
 
-export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbarButtons, brand, sidebarHeader = null, sidebarFooter = null }) {
+export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbarTrailing = null, toolbarButtons, brand, sidebarHeader = null, sidebarFooter = null }) {
   const {Settings: SettingsPanel, Usage: UsagePanel, Import: ImportPanel} = panels;
   const {api,host}=useWorkspaceRuntime();
   const mediaPreviewEnabled = host.features?.mediaPreview !== false;
@@ -573,6 +573,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
         <WorkspaceToolbar
           brand={brand}
           toolbarExtras={toolbarExtras}
+          toolbarTrailing={toolbarTrailing}
           toolbarButtons={toolbarButtons}
           settingsOpen={state.settingsPanelOpen}
           activeSeries={activeSeries}

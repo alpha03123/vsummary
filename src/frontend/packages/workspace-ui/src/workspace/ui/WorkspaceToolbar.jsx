@@ -20,6 +20,7 @@ export function WorkspaceToolbar({
   chatDrawerOpen = false,
   onOpenUsagePage,
   toolbarExtras,
+  toolbarTrailing,
   toolbarButtons,
   brand,
 }) {
@@ -69,6 +70,8 @@ export function WorkspaceToolbar({
             {toolbarButtons?.assistant?.icon ?? <MessageSquare size={18} strokeWidth={2.2} />}
           </button>
         ) : null}
+        {/* Host items that belong after the assistant button (renderToolbar items go before it). */}
+        {toolbarTrailing}
         {onOpenUsagePage && (<button
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full transition-colors hover:bg-stone-100 dark:hover:bg-neutral-900 hover:text-stone-900 dark:hover:text-white text-stone-600 dark:text-zinc-400 ${toolbarButtons?.usage?.text ? "w-10 md:w-auto md:px-3" : "w-10"}`}
           onClick={onOpenUsagePage}
