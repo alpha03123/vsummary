@@ -14,7 +14,8 @@ const ACTION_CLASS='inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 
  * The count is the highest-contrast element (accent once everything is selected) so the
  * bar answers "how much is selected?" before any of the buttons answer "what next?".
  * Callers append their own destructive actions through `extra` so they keep the same
- * height and radius as the built-in buttons.
+ * height and radius as the built-in buttons. When a narrow column or wide system font cannot
+ * fit everything on one line, the actions wrap instead of overflowing the bar.
  */
 export function WorkspaceSelectionBar({
  selectedCount,totalCount,onSelectAll,onClear,
@@ -23,13 +24,13 @@ export function WorkspaceSelectionBar({
  surface='inset',extra=null,className='',
 }){
  const allSelected=Boolean(totalCount)&&selectedCount>=totalCount;
- return <div role="group" aria-label={label} className={`flex items-center justify-between gap-2 rounded-2xl border p-1.5 ${SURFACES[surface]??SURFACES.inset} ${className}`}>
+ return <div role="group" aria-label={label} className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-2xl border p-1.5 ${SURFACES[surface]??SURFACES.inset} ${className}`}>
   <span className="flex min-w-0 items-center gap-1 px-2.5 text-xs font-semibold text-stone-500 dark:text-stone-400">
    <span className="truncate">已选</span>
    <b className={`tabular-nums ${allSelected?'text-accent':'text-stone-900 dark:text-stone-100'}`}>{selectedCount}</b>
    {totalCount!=null&&<span className="tabular-nums font-medium text-stone-400 dark:text-stone-500">/ {totalCount}</span>}
   </span>
-  <div className="flex shrink-0 items-center gap-1">
+  <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
    <button type="button" disabled={selectAllDisabled} onClick={onSelectAll}
     className={`${ACTION_CLASS} text-stone-600 hover:bg-white hover:shadow-sm dark:text-stone-300 dark:hover:bg-stone-800`}>
     <CheckCheck size={14} aria-hidden="true"/>{selectAllLabel}

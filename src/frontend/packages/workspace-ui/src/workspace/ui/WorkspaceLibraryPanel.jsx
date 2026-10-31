@@ -911,7 +911,7 @@ export function WorkspaceLibraryPanel({
       </div>
 
       {/* Video / Source List */}
-      <div className="relative flex-1 overflow-y-auto" aria-label="视频列表">
+      <div className="relative flex flex-1 flex-col overflow-y-auto" aria-label="视频列表">
         {indexRebuildError ? <p role="alert" className="px-4 pt-3 text-xs text-red-700 dark:text-red-300">{indexRebuildError}</p> : null}
         <div className={`p-4 flex flex-col gap-3 ${selectedCount > 0 ? "pb-20" : ""}`}>
           {!isPlayground ? (
@@ -1038,7 +1038,7 @@ export function WorkspaceLibraryPanel({
           ) : null}
         </div>
 
-        {/* Floating Bulk Action Bar */}
+        {/* Bulk action bar: mt-auto parks it at the bottom of a short list; sticky keeps it there while a long one scrolls. */}
         <AnimatePresence>
           {!isPlayground && selectedCount > 0 && (
             <motion.div
@@ -1046,7 +1046,7 @@ export function WorkspaceLibraryPanel({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 16, opacity: 0 }}
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
-              className="sticky bottom-0 z-20 mx-3 mb-3"
+              className="sticky bottom-3 z-20 mx-4 mb-3 mt-auto"
             >
               <WorkspaceSelectionBar
                 surface="raised"
