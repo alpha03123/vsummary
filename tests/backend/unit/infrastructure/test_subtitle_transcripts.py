@@ -117,6 +117,47 @@ def test_bilibili_fallback_only_runs_when_direct_read_fails(monkeypatch, tmp_pat
     assert (transcript.full_text if transcript else None) == ("备用字幕" if direct_fails else None)
 
 
+@pytest.mark.parametrize("manual, expected", [
+    ({"en": [{"ext": "srt", "url": "https://yt/en"}], "zh-TW": [{"ext": "vtt", "url": "https://yt/tw.vtt"}, {"ext": "srt", "url": "https://yt/tw"}]}, "繁體字幕"),
+    ({"en": [{"ext": "srt", "url": "https://yt/en"}]}, None),
+])
+def test_youtube_reads_uploaded_chinese_subtitles_only(monkeypatch, tmp_path: Path, manual, expected) -> None:
+    class Response:
+        def __init__(self, body: str) -> None:
+            self.body = body
+
+        def read(self) -> bytes:
+            return self.body.encode("utf-8")
+
+    class FakeYoutubeDL:
+        def __init__(self, options: dict[str, object]) -> None:
+            pass
+
+        def __enter__(self) -> "FakeYoutubeDL":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def extract_info(self, url: str, download: bool) -> dict[str, object]:
+            assert url == "https://www.youtube.com/watch?v=abcdefghijk" and download is False
+            # Auto captions (machine translated) carry Chinese too but must be ignored.
+            return {"subtitles": manual, "automatic_captions": {"zh-Hans": [{"ext": "srt", "url": "https://yt/auto"}]}}
+
+        def urlopen(self, url: str) -> Response:
+            assert url == "https://yt/tw"
+            return Response(_SRT.replace("简体中文", "繁體"))
+
+    monkeypatch.setattr("yt_dlp.YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(
+        "backend.video_summary.infrastructure.subtitle_transcripts._load_embedded_subtitle",
+        lambda video_path, output_path, cancellation=None: None,
+    )
+    transcript = SubtitleTranscriptProvider().load(
+        tmp_path / "source.mp4", tmp_path, source_url="https://www.youtube.com/watch?v=abcdefghijk")
+    assert (transcript.full_text if transcript else None) == expected
+
+
 def test_embedded_chinese_text_subtitle_is_exported(monkeypatch, tmp_path: Path) -> None:
     calls: list[list[str]] = []
 
