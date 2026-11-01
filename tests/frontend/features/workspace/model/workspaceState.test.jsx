@@ -675,3 +675,15 @@ describe("workspaceContentActions series generation", () => {
     );
   });
 });
+
+describe("Transcript focus scope", () => {
+  it("does not carry a transcript jump into the next video or series", () => {
+    const focused = workspaceReducer(
+      { ...createInitialWorkspaceState(), selectedContextType: "video", selectedSeriesId: "s1", selectedVideoId: "v1" },
+      { type: "citation_focus_requested", focus: { seconds: 0, requestId: "r1" } },
+    );
+    expect(focused.citationFocus).toEqual({ seconds: 0, requestId: "r1" });
+    expect(workspaceReducer(focused, { type: "video_selected", seriesId: "s1", videoId: "v2" }).citationFocus).toBeNull();
+    expect(workspaceReducer(focused, { type: "series_context_selected", seriesId: "s1" }).citationFocus).toBeNull();
+  });
+});

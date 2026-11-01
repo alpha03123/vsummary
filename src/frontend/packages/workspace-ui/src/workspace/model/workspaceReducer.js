@@ -540,6 +540,8 @@ export function workspaceReducer(state, action) {
         selectedChapterId: null,
         selectedNodeId: null,
         playerSeekRequest: null,
+        // A transcript jump belongs to the scope it was requested in, not the next one opened.
+        citationFocus: null,
         generationProgress: null,
         generationSnapshot: null,
         generatingSeriesId: null,
@@ -570,6 +572,8 @@ export function workspaceReducer(state, action) {
         selectedChapterId: null,
         selectedNodeId: null,
         playerSeekRequest: null,
+        // A transcript jump belongs to the scope it was requested in, not the next one opened.
+        citationFocus: null,
         generationProgress: null,
         generationSnapshot: null,
         generatingSeriesId: null,
@@ -614,6 +618,8 @@ export function workspaceReducer(state, action) {
         selectedChapterId: null,
         selectedNodeId: null,
         playerSeekRequest: null,
+        // A transcript jump belongs to the scope it was requested in, not the next one opened.
+        citationFocus: null,
         generationProgress: null,
         generationSnapshot: null,
         generatingSeriesId: null,
@@ -666,6 +672,8 @@ export function workspaceReducer(state, action) {
         selectedChapterId: null,
         selectedNodeId: null,
         playerSeekRequest: null,
+        // A transcript jump belongs to the scope it was requested in, not the next one opened.
+        citationFocus: null,
         generationProgress: null,
         generationSnapshot: null,
         downloadingVideoKey: null,
