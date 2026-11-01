@@ -490,6 +490,12 @@ class SeriesRetrievalService:
         nodes = run_transformations(_to_llama_documents(documents), Settings.transformations)
         nodes = self._embed_model(nodes)
         connection = lancedb.connect(self._db_uri)
+        if not nodes and (mode == "overwrite" or not _table_exists(self._db_uri, INDEX_TABLE_NAME)):
+            # Nothing to index yet (e.g. a workspace whose only video failed to process). LanceDB cannot
+            # create a table without a vector width, so the index stays empty until a document arrives.
+            if _table_exists(self._db_uri, INDEX_TABLE_NAME):
+                connection.drop_table(INDEX_TABLE_NAME)
+            return VectorStoreIndex([], embed_model=self._embed_model, show_progress=False)
         table = None
         if nodes and (mode == "overwrite" or not _table_exists(self._db_uri, INDEX_TABLE_NAME)):
             metadata_schema = pa.Table.from_pylist([
