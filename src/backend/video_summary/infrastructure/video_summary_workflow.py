@@ -23,6 +23,7 @@ from threading import Lock
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.ports import ProgressReporter
 from backend.video_summary.infrastructure.application_builders import build_video_summary_application
+from backend.video_summary.infrastructure.subtitle_transcripts import BilibiliSubtitleFallback
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.shared.llm.usage import LlmUsageRecorder
 from backend.shared.observability import bind_task_id
@@ -39,7 +40,12 @@ class ConfiguredVideoSummaryWorkflow:
     每次调用都重建昂贵的资源，并保证配置变更后能立即生效。
     """
 
-    def __init__(self, root_dir: Path, usage_recorder: LlmUsageRecorder | None = None) -> None:
+    def __init__(
+        self,
+        root_dir: Path,
+        usage_recorder: LlmUsageRecorder | None = None,
+        bilibili_subtitle_fallback: BilibiliSubtitleFallback | None = None,
+    ) -> None:
         """记录项目根目录、配置文件路径与缓存状态。
 
         Args:
@@ -47,6 +53,7 @@ class ConfiguredVideoSummaryWorkflow:
         """
         self._root_dir = root_dir
         self._usage_recorder = usage_recorder
+        self._bilibili_subtitle_fallback = bilibili_subtitle_fallback
         self._config_path = root_dir / "config" / "settings.toml"
         self._dotenv_path = root_dir / ".env"
         self._application_lock = Lock()
@@ -143,6 +150,7 @@ class ConfiguredVideoSummaryWorkflow:
                     root_dir=self._root_dir,
                     transcript_enhancement_enabled=transcript_enhancement_enabled,
                     usage_recorder=self._usage_recorder,
+                    bilibili_subtitle_fallback=self._bilibili_subtitle_fallback,
                 )
                 self._cached_signature = signature
             return self._cached_application

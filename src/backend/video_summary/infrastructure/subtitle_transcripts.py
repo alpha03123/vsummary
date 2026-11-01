@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 import re
 import subprocess
+from typing import Protocol
 from urllib.parse import urlparse
 
 import srt
@@ -27,10 +28,23 @@ _LOCAL_CHINESE_LANGUAGE_PRIORITY = ("zh-hans", "zh-cn", "zh", "zho", "chi", "cmn
 _BILIBILI_CHINESE_LANGUAGE_PRIORITY = ("zh-Hans", "zh-CN", "zh", "ai-zh")
 
 
+class BilibiliSubtitleFallback(Protocol):
+    """宿主提供的 Bilibili 字幕备用来源，只在直连读取失败时调用。"""
+
+    def load(self, source_url: str) -> Transcript | None: ...
+
+
+class _BilibiliSubtitleFailed(Exception):
+    """直连 Bilibili 读取字幕出错（区别于读取成功但没有中文字幕）。"""
+
+
 class SubtitleTranscriptProvider:
     """按 Bilibili、内嵌字幕的顺序尝试获得中文字幕转写。"""
 
     cache_identity = "subtitle-transcript-v1"
+
+    def __init__(self, bilibili_fallback: BilibiliSubtitleFallback | None = None) -> None:
+        self._bilibili_fallback = bilibili_fallback
 
     def load(
         self,
@@ -41,10 +55,28 @@ class SubtitleTranscriptProvider:
         source_url: str = "",
     ) -> Transcript | None:
         """返回可用中文字幕；找不到时返回 ``None`` 以让调用方走 ASR。"""
-        bilibili = _load_bilibili_subtitle(source_url, cancellation)
+        try:
+            bilibili = _load_bilibili_subtitle(source_url, cancellation)
+        except _BilibiliSubtitleFailed:
+            bilibili = self._load_bilibili_fallback(source_url, cancellation)
         if bilibili is not None:
             return bilibili
         return _load_embedded_subtitle(video_path, staging_dir / "subtitle.srt", cancellation)
+
+    def _load_bilibili_fallback(
+        self,
+        source_url: str,
+        cancellation: GenerationCancellationContext | None,
+    ) -> Transcript | None:
+        if self._bilibili_fallback is None:
+            return None
+        try:
+            transcript = self._bilibili_fallback.load(source_url)
+        except Exception:
+            LOGGER.warning("Bilibili 字幕备用来源读取失败，回退 ASR：%s", source_url, exc_info=True)
+            transcript = None
+        _raise_if_cancelled(cancellation)
+        return transcript
 
 
 class ManualSrtTranscriptProvider:
@@ -167,8 +199,8 @@ def _load_bilibili_subtitle(
         raise
     except Exception:
         _raise_if_cancelled(cancellation)
-        LOGGER.warning("Bilibili 中文字幕读取失败，回退 ASR：%s", bvid, exc_info=True)
-        return None
+        LOGGER.warning("Bilibili 中文字幕读取失败：%s", bvid, exc_info=True)
+        raise _BilibiliSubtitleFailed(bvid) from None
 
 
 def _load_embedded_subtitle(

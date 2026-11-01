@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
+from backend.video_summary.domain.models import Transcript, TranscriptSegment
 from backend.video_summary.infrastructure.subtitle_transcripts import SubtitleTranscriptProvider
 
 
@@ -76,6 +77,44 @@ def test_bilibili_non_chinese_subtitles_are_rejected(monkeypatch, tmp_path: Path
     )
 
     assert transcript is None
+
+
+@pytest.mark.parametrize("direct_fails", [True, False])
+def test_bilibili_fallback_only_runs_when_direct_read_fails(monkeypatch, tmp_path: Path, direct_fails: bool) -> None:
+    class FakeYoutubeDL:
+        def __init__(self, options: dict[str, object]) -> None:
+            pass
+
+        def __enter__(self) -> "FakeYoutubeDL":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def extract_info(self, url: str, download: bool) -> dict[str, object]:
+            if direct_fails:
+                raise RuntimeError("HTTP Error 412: Precondition Failed")
+            return {"subtitles": {}}
+
+    class Fallback:
+        def __init__(self) -> None:
+            self.urls: list[str] = []
+
+        def load(self, source_url: str) -> Transcript:
+            self.urls.append(source_url)
+            return Transcript(language="zh", segments=[TranscriptSegment(0, 1.5, "备用字幕")])
+
+    monkeypatch.setattr("yt_dlp.YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(
+        "backend.video_summary.infrastructure.subtitle_transcripts._load_embedded_subtitle",
+        lambda video_path, output_path, cancellation=None: None,
+    )
+    fallback = Fallback()
+    url = "https://www.bilibili.com/video/BV1vJ3P6KEkh?p=2"
+    transcript = SubtitleTranscriptProvider(fallback).load(tmp_path / "source.mp4", tmp_path, source_url=url)
+
+    assert fallback.urls == ([url] if direct_fails else [])
+    assert (transcript.full_text if transcript else None) == ("备用字幕" if direct_fails else None)
 
 
 def test_embedded_chinese_text_subtitle_is_exported(monkeypatch, tmp_path: Path) -> None:

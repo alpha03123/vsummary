@@ -65,6 +65,7 @@ from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWo
 from backend.video_summary.infrastructure.persistence.outbox_repository import SqlOutboxRepository
 from backend.video_summary.infrastructure.persistence.outbox_worker import SqlOutboxWorker
 from backend.video_summary.infrastructure.video_summary_workflow import ConfiguredVideoSummaryWorkflow
+from backend.video_summary.infrastructure.subtitle_transcripts import BilibiliSubtitleFallback
 from backend.video_summary.infrastructure.persistence.linked_cover_sync import LinkedCoverSync
 from backend.video_summary.library.ports import KnowledgeCardGenerator, VideoMindmapGenerator, VideoSummaryGenerator, LinkedVideoResolver, LinkedVideoDownloader
 from backend.video_summary.library.usecases import (
@@ -139,6 +140,8 @@ class ApiContainer:
     chat_queue: SqlChatQueue | None = None
     linked_video_resolvers: dict[str, LinkedVideoResolver] = field(default_factory=dict)
     linked_video_downloaders: dict[str, LinkedVideoDownloader] = field(default_factory=dict)
+    # Hosts may supply a second source for Bilibili subtitles when direct access is refused.
+    bilibili_subtitle_fallback: BilibiliSubtitleFallback | None = None
     # Writable runtime state (logs/, data/request-pacing, data/chaoxing, data/downloads). None keeps
     # it under root_dir, as Local does; hosts whose root_dir is read-only configuration move it.
     state_dir: Path | None = None
@@ -168,6 +171,7 @@ def build_host_container(
     artifact_token_estimate=None,
     linked_video_resolvers: dict[str, LinkedVideoResolver] | None = None,
     linked_video_downloaders: dict[str, LinkedVideoDownloader] | None = None,
+    bilibili_subtitle_fallback: BilibiliSubtitleFallback | None = None,
     state_dir: Path | None = None,
 ) -> ApiContainer:
     """Build shared host dependencies; no Workspace or background process is started."""
@@ -216,6 +220,7 @@ def build_host_container(
         model_profiles=dict(model_profiles or {}), resource_budget=resource_budget, chat_queue=chat_queue,
         linked_video_resolvers=dict(linked_video_resolvers or {}),
         linked_video_downloaders=dict(linked_video_downloaders or {}),
+        bilibili_subtitle_fallback=bilibili_subtitle_fallback,
         state_dir=state_dir,
         cover_sync=LinkedCoverSync(session_factory, lambda workspace_id: workspace_services_provider.get_services(
             WorkspaceContext(workspace_id=workspace_id, actor_id="system-worker", request_id="cover-sync")).linked_series_workspace),
@@ -252,7 +257,8 @@ def build_workspace_services(
 
     resolved_generator = generator or SqlBackedVideoSummaryGenerator(
         workspace=workspace,
-        workflow=ConfiguredVideoSummaryWorkflow(root_dir, usage_recorder=usage_store),
+        workflow=ConfiguredVideoSummaryWorkflow(root_dir, usage_recorder=usage_store,
+            bilibili_subtitle_fallback=container.bilibili_subtitle_fallback),
         temp_root=workspace.cache_root,
     )
     if not isinstance(resolved_generator, SqlBackedVideoSummaryGenerator):

@@ -21,7 +21,7 @@ from backend.video_summary.infrastructure.llm.litellm_transcript_enhancer import
 from backend.video_summary.infrastructure.media_tools import FfmpegMediaProcessor
 from backend.video_summary.infrastructure.concurrent_ai_summary_runner import ConcurrentAiSummaryRunner
 from backend.video_summary.infrastructure.llm.litellm_note_generator import LiteLLMNoteGenerator
-from backend.video_summary.infrastructure.subtitle_transcripts import CleanedTranscriptProvider, ManualSrtTranscriptProvider, SubtitleTranscriptProvider
+from backend.video_summary.infrastructure.subtitle_transcripts import BilibiliSubtitleFallback, CleanedTranscriptProvider, ManualSrtTranscriptProvider, SubtitleTranscriptProvider
 from backend.video_summary.infrastructure.video_summary_runtime import (
     build_litellm_completion_gateway,
     build_video_summary_runtime,
@@ -61,6 +61,7 @@ def build_video_summary_application(
     root_dir: Path,
     transcript_enhancement_enabled: bool | None = None,
     usage_recorder: LlmUsageRecorder | None = None,
+    bilibili_subtitle_fallback: BilibiliSubtitleFallback | None = None,
 ) -> VideoSummaryApplication:
     """装配单视频总结用例及其全部依赖。
 
@@ -108,7 +109,7 @@ def build_video_summary_application(
         ),
         summarizer=runtime.summarizer,
         artifact_store=artifact_store,
-        subtitle_provider=SubtitleTranscriptProvider(),
+        subtitle_provider=SubtitleTranscriptProvider(bilibili_subtitle_fallback),
         manual_transcript_provider=ManualSrtTranscriptProvider(),
         saved_transcript_provider=CleanedTranscriptProvider(),
         frame_extractor=media_processor,
