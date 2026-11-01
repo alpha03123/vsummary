@@ -41,15 +41,15 @@ class AiSummaryEvidencePayload(BaseModel):
 
 
 class AiSummaryCitationPayload(BaseModel):
-    citation_id: int = Field(ge=1, le=20)
+    citation_id: int
     source_type: Literal["transcript", "visual"]
-    timestamp_seconds: float = Field(ge=0)
+    timestamp_seconds: float
 
 
 class AiSummaryPayload(BaseModel):
     markdown: str = Field(min_length=1)
     visual_evidence: list[AiSummaryEvidencePayload] = Field(default_factory=list)
-    citations: list[AiSummaryCitationPayload] = Field(min_length=1, max_length=20)
+    citations: list[AiSummaryCitationPayload] = Field(default_factory=list)
 
 
 class LiteLLMNoteGenerator:
@@ -124,57 +124,36 @@ class LiteLLMNoteGenerator:
             else prompt
         )
         allowed_timestamps = tuple(visual_context.evidence_timestamps)
-        for attempt in range(2):
-            log_llm_event("ai_summary_round_started", round=attempt + 1,
-                visual_images=len(visual_context.frames) if multimodal_enabled else 0)
-            payload = yield [{"role": "user", "content": message_content}]
-            try:
-                note = _to_generated_note(
-                    payload=payload,
-                    transcript=transcript,
-                    allowed_timestamps=allowed_timestamps,
-                    note_visual_mode=note_visual_mode,
-                    note_max_images=note_max_images,
-                    note_image_min_gap_seconds=note_image_min_gap_seconds,
-                )
-                return _finalize_ai_summary_images(
-                    note=note,
-                    duration_seconds=transcript.duration_seconds,
-                )
-            except ValueError as error:
-                log_llm_event("ai_summary_citation_validation_failed", round=attempt + 1,
-                    reason=[{"location": list(issue["loc"]), "type": issue["type"]}
-                        for issue in error.errors(include_input=False, include_url=False)]
-                        if isinstance(error, ValidationError) else str(error),
-                    action="discard_invalid_citations" if attempt else "regenerate")
-                if attempt:
-                    note = _to_generated_note_with_degraded_citations(
-                        payload=payload,
-                        transcript=transcript,
-                        allowed_timestamps=allowed_timestamps,
-                        note_visual_mode=note_visual_mode,
-                        note_max_images=note_max_images,
-                        note_image_min_gap_seconds=note_image_min_gap_seconds,
-                    )
-                    return _finalize_ai_summary_images(
-                        note=note,
-                        duration_seconds=transcript.duration_seconds,
-                    )
-                message_content = _citation_repair_instruction(message_content, error)
-        raise AssertionError("AI summary validation loop must return or raise.")
-
-
-def _citation_repair_instruction(message_content, error: ValueError):
-    instruction = (
-        f"\n重试要求：上一次响应的引用契约无效（{error}）。请重新生成完整 JSON；"
-        "markdown 中出现的所有 [数字] 标记集合必须与 citations 的 citation_id 集合完全相同，"
-        "每个 citation_id 必须连续、只出现一次，且不得出现未声明的数字标记。"
-    )
-    if isinstance(message_content, str):
-        return message_content + instruction
-    if isinstance(message_content, list):
-        return [*message_content, {"type": "text", "text": instruction.strip()}]
-    raise TypeError("AI summary message content must be text or multimodal content parts.")
+        log_llm_event("ai_summary_round_started", round=1,
+            visual_images=len(visual_context.frames) if multimodal_enabled else 0)
+        payload = yield [{"role": "user", "content": message_content}]
+        try:
+            note = _to_generated_note(
+                payload=payload,
+                transcript=transcript,
+                allowed_timestamps=allowed_timestamps,
+                note_visual_mode=note_visual_mode,
+                note_max_images=note_max_images,
+                note_image_min_gap_seconds=note_image_min_gap_seconds,
+            )
+        except ValueError as error:
+            log_llm_event("ai_summary_citation_validation_failed", round=1,
+                reason=[{"location": list(issue["loc"]), "type": issue["type"]}
+                    for issue in error.errors(include_input=False, include_url=False)]
+                    if isinstance(error, ValidationError) else str(error),
+                action="discard_invalid_citations")
+            note = _to_generated_note_with_degraded_citations(
+                payload=payload,
+                transcript=transcript,
+                allowed_timestamps=allowed_timestamps,
+                note_visual_mode=note_visual_mode,
+                note_max_images=note_max_images,
+                note_image_min_gap_seconds=note_image_min_gap_seconds,
+            )
+        return _finalize_ai_summary_images(
+            note=note,
+            duration_seconds=transcript.duration_seconds,
+        )
 
 
 def _finalize_ai_summary_images(
@@ -433,7 +412,8 @@ def _drop_unverified_citations(
     retained_ids = {
         citation_id
         for citation_id, citation in declared_by_id.items()
-        if citation_id not in duplicate_ids
+        if citation_id >= 1
+        and citation_id not in duplicate_ids
         and marker_counts.get(citation_id) == 1
         and _citation_is_verified(citation, transcript, visual_evidence)
     }
@@ -455,6 +435,8 @@ def _citation_is_verified(
     transcript: VideoTranscriptDTO,
     visual_evidence: list[AiSummaryVisualEvidenceDTO],
 ) -> bool:
+    if citation.timestamp_seconds < 0:
+        return False
     if citation.source_type == "transcript":
         return _resolve_transcript_segment(citation.timestamp_seconds, transcript) is not None
     return _resolve_visual_evidence(citation.timestamp_seconds, visual_evidence) is not None
@@ -475,6 +457,8 @@ def _build_ai_summary_citations(
         raise ValueError("AI 概括引用 ID 不能重复。")
     if declared_ids != set(range(1, len(citations) + 1)):
         raise ValueError("AI 概括引用 ID 必须从 1 连续编号。")
+    if any(item.timestamp_seconds < 0 for item in citations):
+        raise ValueError("AI 概括引用时间不能为负数。")
 
     result: list[CitationReference] = []
     for item in sorted(citations, key=lambda citation: citation.citation_id):

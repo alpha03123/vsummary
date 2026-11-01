@@ -109,18 +109,21 @@ def test_degraded_citations_keep_verified_transcript_references_and_remove_usele
     assert [citation.id for citation in note.citations] == ["1"]
 
 
-def test_retries_with_the_validation_error_then_keeps_note_without_unverified_citations() -> None:
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_discards_invalid_citation_markers_immediately_without_regenerating(asynchronous: bool) -> None:
     payload = AiSummaryPayload(
-        markdown="完成的概括正文[1]。",
-        citations=[AiSummaryCitationPayload(citation_id=1, source_type="transcript", timestamp_seconds=15.0)],
+        markdown="保留真实引用[2]，抹除错误时间角标[1]，抹除未声明角标[9]。",
+        citations=[
+            AiSummaryCitationPayload(citation_id=1, source_type="transcript", timestamp_seconds=15.0),
+            AiSummaryCitationPayload(citation_id=2, source_type="transcript", timestamp_seconds=2.5),
+        ],
     )
-    gateway = _SequencedGateway([payload, payload])
-    transcript = VideoTranscriptDTO(
-        "series-1", "video-1", "视频标题", 20, [TranscriptSegmentDTO(2.5, 5.0, "真实转写内容")]
-    )
-
-    note = LiteLLMNoteGenerator(gateway).run_ai_summary(
-        transcript=transcript,
+    gateway = _SequencedGateway([payload])
+    generator = LiteLLMNoteGenerator(gateway)
+    arguments = dict(
+        transcript=VideoTranscriptDTO(
+            "series-1", "video-1", "视频标题", 20, [TranscriptSegmentDTO(2.5, 5.0, "真实转写内容")]
+        ),
         summary=None,
         visual_context=VideoAiNoteVisualContextDTO(frames=[]),
         template="general",
@@ -130,10 +133,41 @@ def test_retries_with_the_validation_error_then_keeps_note_without_unverified_ci
         note_image_min_gap_seconds=0,
     )
 
-    assert len(gateway.messages) == 2
-    assert "AI 概括引用了未提供的转写时间。" in gateway.messages[1][0]["content"]
-    assert note.content == "完成的概括正文。"
-    assert note.citations == ()
+    note = asyncio.run(generator.arun_ai_summary(**arguments)) if asynchronous else generator.run_ai_summary(**arguments)
+
+    assert len(gateway.messages) == 1
+    assert note.content == "保留真实引用[1]，抹除错误时间角标，抹除未声明角标。"
+    assert [citation.id for citation in note.citations] == ["1"]
+
+
+def test_accepts_out_of_range_or_empty_citation_payload_without_structured_schema_retry() -> None:
+    segments = [TranscriptSegmentDTO(float(i), float(i) + 0.5, f"片段{i}") for i in range(1, 25)]
+    payload = AiSummaryPayload(
+        markdown=" ".join(f"要点{i}[{i}]" for i in range(1, 23)) + " 无效角标[0] 负时间[99]",
+        citations=[
+            *[
+                AiSummaryCitationPayload(citation_id=i, source_type="transcript", timestamp_seconds=float(i))
+                for i in range(1, 23)
+            ],
+            AiSummaryCitationPayload(citation_id=0, source_type="transcript", timestamp_seconds=1.0),
+            AiSummaryCitationPayload(citation_id=99, source_type="transcript", timestamp_seconds=-1.0),
+        ],
+    )
+    gateway = _SequencedGateway([payload])
+    note = LiteLLMNoteGenerator(gateway).run_ai_summary(
+        transcript=VideoTranscriptDTO("series-1", "video-1", "视频标题", 60, segments),
+        summary=None,
+        visual_context=VideoAiNoteVisualContextDTO(frames=[]),
+        template="general",
+        multimodal_enabled=False,
+        note_visual_mode="off",
+        note_max_images=0,
+        note_image_min_gap_seconds=0,
+    )
+
+    assert len(gateway.messages) == 1
+    assert "无效角标 " in note.content and "[0]" not in note.content and "[99]" not in note.content
+    assert [citation.id for citation in note.citations] == [str(i) for i in range(1, 23)]
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
