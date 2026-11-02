@@ -117,14 +117,19 @@ function isLegacyDefaultLayout(value, scope) {
   const layout = value?.studioLayout
     ?? (Array.isArray(value?.studioPanels) ? createBalancedStudioLayout(value.studioPanels) : null);
   const ids = getStudioPanelIds(layout);
-  const legacy = scope === "series" ? DEFAULT_SERIES_STUDIO_PANELS : DEFAULT_STUDIO_PANELS;
-  return ids.length === legacy.length && ids.every((id, index) => id === legacy[index]);
+  // The series scope has had two defaults: the old chat-only one and the short-lived tool-page
+  // one. Both are untouched defaults, not user arrangements, so phones migrate either.
+  const legacySets = scope === "series"
+    ? [DEFAULT_SERIES_STUDIO_PANELS, ["studio::default"]]
+    : [DEFAULT_STUDIO_PANELS];
+  return legacySets.some((legacy) =>
+    ids.length === legacy.length && ids.every((id, index) => id === legacy[index]));
 }
 
 function createDefaultWorkspaceLayout(scope) {
   // One pane on phones: the split layouts were designed for a desktop-width editor.
   const panels = matchesNarrowViewport()
-    ? (scope === "series" ? ["studio::default"] : ["ai-summary::default"])
+    ? (scope === "series" ? ["series-overview::default"] : ["ai-summary::default"])
     : (scope === "series" ? DEFAULT_SERIES_STUDIO_PANELS : DEFAULT_STUDIO_PANELS);
   return {
     version: 2,

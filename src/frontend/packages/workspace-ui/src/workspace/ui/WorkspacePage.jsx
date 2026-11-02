@@ -478,7 +478,10 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               seriesGenerationQueue={generation.seriesGenerationQueue}
               downloadingVideoKey={generation.downloadingVideoKey}
               onEnterLibraryHome={actions.enterLibraryHome}
-              onSelectSeriesContext={actions.selectSeriesContext}
+              onSelectSeriesContext={() => {
+                actions.selectSeriesContext();
+                if (isNarrow) setIsSidebarOpen(false);
+              }}
               onSelectVideo={actions.selectVideo}
               onGenerateVideo={actions.generateVideo}
               onProcessLinkedVideo={actions.processLinkedVideo}
@@ -617,7 +620,10 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               <Suspense fallback={<WorkspaceSidePaneLoadingState title="正在载入工作区首页" />}>
                 <WorkspaceLibraryHomePane
                   library={library}
-                  onSelectSeries={actions.selectSeries}
+                  onSelectSeries={(seriesId) => {
+                    actions.selectSeries(seriesId);
+                    if (isNarrow) setIsSidebarOpen(false);
+                  }}
                   onAddSeries={() => setImportModalState({ mode: "series" })}
                   onRefreshLibrary={actions.refreshLibrary}
                   onRequestBulkDelete={(seriesIds) => {
