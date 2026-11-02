@@ -16,6 +16,7 @@ export function WorkspaceOverviewView({
   selectedChapterId,
   citationFocus,
   summaryLoading,
+  canEdit = true,
   isGeneratingSelectedVideo,
   onSeek,
   onLoadTranscriptMarkdown,
@@ -87,9 +88,9 @@ export function WorkspaceOverviewView({
           正在整理逐字稿，当前仍显示上一次结果。
         </div>
       ) : null}
-      <div className="flex flex-wrap justify-end gap-2">
+      {canEdit ? <div className="flex flex-wrap justify-end gap-2">
         <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"><Pencil size={16} />编辑内容</button>
-      </div>
+      </div> : null}
       <WorkspaceOverviewContent
         key={selectedVideo.id}
         ui={ui}
@@ -101,7 +102,7 @@ export function WorkspaceOverviewView({
         citationFocus={citationFocus}
         onSeek={onSeek}
       />
-      {editorOpen ? <WorkspaceContentEditorModal onClose={() => setEditorOpen(false)} onLoadSummaryMarkdown={onLoadSummaryMarkdown} onLoadTranscriptMarkdown={onLoadTranscriptMarkdown} onUpdateSummary={onUpdateSummary} onUpdateTranscript={onUpdateTranscript} /> : null}
+      {canEdit && editorOpen ? <WorkspaceContentEditorModal onClose={() => setEditorOpen(false)} onLoadSummaryMarkdown={onLoadSummaryMarkdown} onLoadTranscriptMarkdown={onLoadTranscriptMarkdown} onUpdateSummary={onUpdateSummary} onUpdateTranscript={onUpdateTranscript} /> : null}
     </div>
   );
 }

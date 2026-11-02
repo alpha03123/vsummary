@@ -17,7 +17,7 @@ import { createWorkspaceChatActions } from "./workspaceChatActions";
 
 export function useWorkspaceController() {
   const {host,api,useDataEffects,createContentActions}=useWorkspaceRuntime();
-  const [state, dispatch] = useReducer(workspaceReducer, {storage:host.storage, ui:host.initialUi}, createInitialWorkspaceState);
+  const [state, dispatch] = useReducer(workspaceReducer, {storage:host.storage, ui:host.initialUi, processingMode:host.initialProcessingMode}, createInitialWorkspaceState);
   const {getVideoPreviewUrl}=api;
   const chatAbortControllerRef = useRef(null);
 

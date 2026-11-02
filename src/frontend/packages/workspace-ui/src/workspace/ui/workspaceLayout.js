@@ -1,3 +1,5 @@
+import { matchesNarrowViewport } from "../../shared/lib/useNarrowViewport";
+
 export const WORKSPACE_LAYOUT_STORAGE_KEY = "video-include.workspace-layout";
 
 export const WORKSPACE_LAYOUT_LIMITS = {
@@ -29,7 +31,13 @@ export function loadWorkspaceLayout(scope = "video", storage=window.localStorage
     if (!raw) {
       return defaults;
     }
-    return normalizeWorkspaceLayout(JSON.parse(raw), scope);
+    const parsed = JSON.parse(raw);
+    // Phones keep one pane. A layout that is still exactly the old default was never customised,
+    // so swap it for the phone default; custom arrangements are tabbed at render time instead.
+    if (matchesNarrowViewport() && isLegacyDefaultLayout(parsed, scope)) {
+      return defaults;
+    }
+    return normalizeWorkspaceLayout(parsed, scope);
   } catch {
     return defaults;
   }
@@ -102,8 +110,22 @@ export function isPanelAllowedForScope(type, scope) {
   return ["studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "notes", "ai-chat"].includes(type);
 }
 
+function isLegacyDefaultLayout(value, scope) {
+  if (value?.panelTools && Object.keys(value.panelTools).length) {
+    return false;
+  }
+  const layout = value?.studioLayout
+    ?? (Array.isArray(value?.studioPanels) ? createBalancedStudioLayout(value.studioPanels) : null);
+  const ids = getStudioPanelIds(layout);
+  const legacy = scope === "series" ? DEFAULT_SERIES_STUDIO_PANELS : DEFAULT_STUDIO_PANELS;
+  return ids.length === legacy.length && ids.every((id, index) => id === legacy[index]);
+}
+
 function createDefaultWorkspaceLayout(scope) {
-  const panels = scope === "series" ? DEFAULT_SERIES_STUDIO_PANELS : DEFAULT_STUDIO_PANELS;
+  // One pane on phones: the split layouts were designed for a desktop-width editor.
+  const panels = matchesNarrowViewport()
+    ? (scope === "series" ? ["studio::default"] : ["ai-summary::default"])
+    : (scope === "series" ? DEFAULT_SERIES_STUDIO_PANELS : DEFAULT_STUDIO_PANELS);
   return {
     version: 2,
     sidebarWidth: WORKSPACE_LAYOUT_LIMITS.sidebarDefaultWidth,

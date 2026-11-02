@@ -340,6 +340,9 @@ function PanelFooter({
     const queueLabel = queueIsActive
       ? `已完成 ${seriesGenerationQueue.completed}/${seriesGenerationQueue.total}`
       : null;
+    const seriesVideos = activeSeries?.videos ?? [];
+    const seriesComplete = seriesVideos.length > 0 && seriesVideos.every((video) =>
+      processingMode === "transcript" ? video.hasTranscript : video.processed);
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
         <div className="mb-1">
@@ -373,10 +376,12 @@ function PanelFooter({
             <button
               type="button"
               onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
-              disabled={isGeneratingSeries && !onCancelGeneration}
+              disabled={isGeneratingSeries ? !onCancelGeneration : seriesComplete}
               className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${isGeneratingSeries
                 ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
-                : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
+                : seriesComplete
+                  ? "cursor-default border border-stone-200 text-stone-400 dark:border-stone-700 dark:text-stone-500"
+                  : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
                 }`}
             >
               {isGeneratingSeries ? (
@@ -386,12 +391,14 @@ function PanelFooter({
                 </>
               ) : (
                 <>
-                  {processingMode === "transcript" ? <Captions size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
-                  {processingMode === "transcript" ? "获取全部视频字幕" : "处理全部系列视频"}
+                  {seriesComplete ? <Check size={16} strokeWidth={2.5} /> : processingMode === "transcript" ? <Captions size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
+                  {seriesComplete
+                    ? (processingMode === "transcript" ? "全部字幕已获取" : "系列已全部生成")
+                    : processingMode === "transcript" ? "获取全部视频字幕" : "处理全部系列视频"}
                 </>
               )}
             </button>
-            <ProcessingModeMenu mode={processingMode} onChange={onChangeProcessingMode} disabled={isGeneratingSeries} />
+            {onChangeProcessingMode ? <ProcessingModeMenu mode={processingMode} onChange={onChangeProcessingMode} disabled={isGeneratingSeries} /> : null}
           </div>
         </div>
       </div>

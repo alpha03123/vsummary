@@ -18,7 +18,9 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
   return (
     <div className="@container w-full">
       <div className="flex flex-col @[650px]:ml-auto @[650px]:grid @[650px]:max-w-[calc(48rem+10rem+10rem)] @[650px]:grid-cols-[minmax(0,48rem)_10rem] @[650px]:items-start @[650px]:gap-x-[clamp(2.5rem,8vw,10rem)] @[760px]:max-w-[calc(48rem+11rem+10rem)] @[760px]:grid-cols-[minmax(0,48rem)_11rem]">
-        <div className="sticky top-0 z-20 mb-4 bg-white/95 py-2 backdrop-blur @[650px]:hidden dark:bg-stone-950/95">
+        {/* The bar must match the button it wraps: stone-950 behind a stone-900 button showed the
+            wrapper's padding as a black frame around the outline on phones. */}
+        <div className="sticky top-0 z-20 mb-4 bg-white/95 py-2 backdrop-blur @[650px]:hidden dark:bg-stone-900/95">
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}

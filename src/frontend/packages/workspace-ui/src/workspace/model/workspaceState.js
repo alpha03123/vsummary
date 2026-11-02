@@ -403,7 +403,7 @@ export function setRecoveredChatScope(chatRecoveryByScope, scopeKey, recovered) 
   };
 }
 
-export function createInitialWorkspaceState({storage=window.localStorage,ui={}}={}) {
+export function createInitialWorkspaceState({storage=window.localStorage,ui={},processingMode}={}) {
   const chatSessionIdsByScope = loadChatSessionIdsByScope(storage);
   const chatSessionListsByScope = loadChatSessionListsByScope(storage);
   return {
@@ -431,7 +431,7 @@ export function createInitialWorkspaceState({storage=window.localStorage,ui={}}=
     generatingVideoKey: null,
     generatingSeriesId: null,
     generationMode: null,
-    processingMode: loadProcessingMode(storage),
+    processingMode: processingMode ?? loadProcessingMode(storage),
     generatingMindmapKey: null,
     seriesGenerationQueue: null,
     generationTasksByKey: {},

@@ -134,6 +134,8 @@ export function WorkspaceReadingPane({
   const isSeriesHome = toolId === "series-home";
   const isMindmapTool = toolId === "mindmap" || toolId === "series-mindmap";
   const isPlaygroundHome = isPlaygroundSeries(activeSeries) && !selectedVideo;
+  const seriesVideos = activeSeries?.videos ?? [];
+  const processedSeriesCount = seriesVideos.filter((video) => video.processed).length;
   const currentToolMeta = resolveToolMeta(toolId);
   const rawPreviewSource = tools?.preview?.previewUrl ?? previewUrl;
   const previewSource = rawPreviewSource ? api.resourceUrl(rawPreviewSource) : undefined;
@@ -187,7 +189,7 @@ export function WorkspaceReadingPane({
                   meta={currentToolMeta}
                   badge={toolHeaderBadge}
                   aiGenerated={toolId !== "notes"}
-                  onBack={() => onSelectTool(selectedContextType === "series" ? "series-home" : "studio")}
+                  onBack={() => onSelectTool("studio")}
                   exportActions={buildWorkspaceToolExportActions({
                     activeSeries,
                     notes,
@@ -254,10 +256,20 @@ export function WorkspaceReadingPane({
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,
+                              // Series tools have no per-video `tools` snapshot; without this branch every
+                              // tile fell back to describeToolState(null) and showed 读取中 forever.
+                              description: selectedContextType === "series" && toolId === "ai-chat" ? "询问整个系列的内容" : undefined,
                               disabled: sourceMissing || getToolState(tools, toolId)?.available === false,
                               status: sourceMissing
                                 ? SOURCE_MISSING_STATUS
-                                : describeToolState(toolId, getToolState(tools, toolId)),
+                                : selectedContextType === "series"
+                                  ? resolveSeriesToolStatus({
+                                      toolId,
+                                      processedVideoCount: processedSeriesCount,
+                                      totalVideoCount: seriesVideos.length,
+                                      seriesMindmapAvailable,
+                                    })
+                                  : describeToolState(toolId, getToolState(tools, toolId)),
                             }))}
                           onSelect={onSelectTool}
                         />
@@ -276,6 +288,7 @@ export function WorkspaceReadingPane({
                       selectedChapterId={selectedChapterId}
                       citationFocus={citationFocus}
                       summaryLoading={summaryLoading}
+                      canEdit={host.features?.contentEditing !== false}
                       isGeneratingSelectedVideo={isGeneratingSelectedVideo}
                       onSeek={onSeek}
                       onLoadTranscriptMarkdown={onLoadTranscriptMarkdown}

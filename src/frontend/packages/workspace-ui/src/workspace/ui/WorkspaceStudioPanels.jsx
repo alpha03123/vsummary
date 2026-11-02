@@ -3,7 +3,7 @@ import { BrainCircuit, FileText, GripVertical, ListChecks, MessageSquare, Networ
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
-import { getPanelType } from "./workspaceLayout";
+import { getPanelType, getStudioPanelIds } from "./workspaceLayout";
 
 const PANEL_META = {
   studio: { label: "工具页", icon: FileText },
@@ -18,12 +18,64 @@ const PANEL_META = {
   "series-mindmap": { label: "全局思维导图", icon: Network },
 };
 
-export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onAddPanel, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions, renderPanelTrailingActions }) {
+export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onAddPanel, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions, renderPanelTrailingActions, narrow = false }) {
   const [mosaicLayout, setMosaicLayout] = useState(layout);
 
   useEffect(() => {
     setMosaicLayout(layout);
   }, [layout]);
+
+  const addPanel = (
+    <button type="button" onClick={onAddPanel} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90">
+      <Plus size={16} aria-hidden="true" />
+      添加一个面板
+    </button>
+  );
+  const zeroState = (
+    <WorkspaceStateBlock title="暂无打开的面板" description="添加一个面板以开始工作。" dashed>
+      {addPanel}
+    </WorkspaceStateBlock>
+  );
+
+  // Phones show one pane at a time. The saved layout is still the desktop one — tabs only change
+  // which pane is visible, so a two-column arrangement made on a laptop never squeezes into 390px.
+  if (narrow) {
+    const panelIds = getStudioPanelIds(layout);
+    if (!panelIds.length) {
+      return <div className="flex h-full w-full min-w-0 bg-stone-50/40 p-1 dark:bg-neutral-950/30">{zeroState}</div>;
+    }
+    const activePanelId = panelIds.includes(focusedPanel) ? focusedPanel : panelIds[0];
+    const activeType = panelTools[activePanelId] ?? getPanelType(activePanelId);
+    const meta = PANEL_META[activeType] ?? PANEL_META.studio;
+    return (
+      <div className="flex h-full w-full min-w-0 flex-col bg-stone-50/40 dark:bg-neutral-950/30">
+        <header className="flex shrink-0 items-center gap-1 border-b border-stone-200/80 px-1.5 py-1.5 dark:border-stone-800">
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {panelIds.map((panelId) => {
+              const type = panelTools[panelId] ?? getPanelType(panelId);
+              const panelMeta = PANEL_META[type] ?? PANEL_META.studio;
+              const PanelIcon = panelMeta.icon;
+              const active = panelId === activePanelId;
+              return (
+                <button key={panelId} type="button" onClick={() => onFocus(panelId)} aria-pressed={active} title={panelMeta.label}
+                  className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors ${active ? "bg-accent/10 text-accent" : "text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"}`}>
+                  <PanelIcon size={15} className="shrink-0" aria-hidden="true" />
+                  <span className="max-w-[9rem] truncate">{panelMeta.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {renderPanelLeadingActions?.(activePanelId, activeType)}
+            {renderPanelActions?.(activePanelId, activeType)}
+            {renderPanelTrailingActions?.(activePanelId, activeType)}
+            <button type="button" onClick={() => onClose(activePanelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-hidden">{renderPanel(activePanelId, activeType)}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full min-w-0 bg-stone-50/40 p-1 dark:bg-neutral-950/30">
@@ -33,14 +85,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
         onRelease={onLayoutChange}
         className="workspace-mosaic"
         resize={{ minimumPaneSizePercentage: 12 }}
-        zeroStateView={
-          <WorkspaceStateBlock title="暂无打开的面板" description="添加一个面板以开始工作。" dashed>
-            <button type="button" onClick={onAddPanel} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90">
-              <Plus size={16} aria-hidden="true" />
-              添加一个面板
-            </button>
-          </WorkspaceStateBlock>
-        }
+        zeroStateView={zeroState}
         renderTile={(panelId, path) => {
           const type = panelTools[panelId] ?? getPanelType(panelId);
           const meta = PANEL_META[type] ?? PANEL_META.studio;

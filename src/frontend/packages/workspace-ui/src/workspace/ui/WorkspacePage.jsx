@@ -641,6 +641,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
             <div className="flex h-full items-center justify-center p-8"><WorkspaceStateBlock title="选择一个视频开始分析" dashed /></div>
           ) : (
             <WorkspaceStudioPanels
+              narrow={isNarrow}
               layout={layout.studioLayout}
               panelTools={layout.panelTools}
               focusedPanel={focusedPanel}

@@ -26,13 +26,13 @@ export function WorkspaceToolbar({
 }) {
 
   return (
-    <header className="workspace-toolbar-surface flex justify-between items-center px-6 py-2.5 border-b border-stone-200/80 dark:border-stone-800 sticky top-0 z-20 shrink-0">
-      <div className="flex items-center gap-4">
+    <header className="workspace-toolbar-surface flex justify-between items-center gap-2 px-3 py-2 border-b border-stone-200/80 dark:border-stone-800 sticky top-0 z-20 shrink-0 md:px-6 md:py-2.5">
+      <div className="flex min-w-0 items-center gap-2 md:gap-4">
         {/* Sidebar Toggle: only inside a series; the home page has no sidebar. */}
         {onToggleSidebar ? (
           <button
             onClick={onToggleSidebar}
-            className="flex items-center justify-center w-9 h-9 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition-colors mr-2"
+            className="flex items-center justify-center w-9 h-9 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition-colors md:mr-2"
             aria-label={isSidebarOpen ? "收起视频列表" : "展开视频列表"}
           >
             {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
@@ -56,7 +56,7 @@ export function WorkspaceToolbar({
         </div>}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1 md:gap-3">
         {toolbarExtras}
         {onToggleChatDrawer ? (
           <button
