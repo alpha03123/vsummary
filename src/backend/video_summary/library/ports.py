@@ -295,8 +295,8 @@ class LinkedSeriesStore(Protocol):
     因此与本地视频的存储路径完全分离。
     """
 
-    def save_linked_series(self, series: LinkedSeries) -> None:
-        """保存一个链接型系列；存在则覆盖。"""
+    def save_linked_series(self, series: LinkedSeries) -> LinkedSeries:
+        """保存一个链接型系列；返回实际持久化的系列标识。"""
 
     def get_linked_series(self, series_id: str) -> LinkedSeries | None:
         """取链接型系列；不存在则返回 `None`。"""

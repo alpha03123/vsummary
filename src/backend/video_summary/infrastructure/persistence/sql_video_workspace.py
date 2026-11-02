@@ -7,6 +7,7 @@ import mimetypes
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -510,28 +511,39 @@ class SqlVideoWorkspace:
             return None
         return next((item for item in linked_series.videos if item.video_id == external_source_id), None)
 
-    def save_linked_series(self, series: LinkedSeries) -> None:
+    def save_linked_series(self, series: LinkedSeries) -> LinkedSeries:
         workspace_id = self._workspace_id
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
-            existing = session.execute(text("SELECT id FROM series WHERE id=:series AND workspace_id=:workspace"), {"series": series.series_id, "workspace": workspace_id}).scalar()
+            existing = session.execute(
+                text("SELECT id FROM series WHERE id=:series AND workspace_id=:workspace"),
+                {"series": series.series_id, "workspace": workspace_id},
+            ).scalar()
+            if existing is None and series.source_url:
+                existing = session.execute(
+                    text("""SELECT id FROM series
+                        WHERE workspace_id=:workspace AND source_kind='linked'
+                          AND external_source_url=:source_url AND deleted_at IS NULL"""),
+                    {"workspace": workspace_id, "source_url": series.source_url},
+                ).scalar()
+            persisted = replace(series, series_id=existing or (new_ulid() if series.source_url else series.series_id))
             if existing is None:
                 position = int(session.execute(text("SELECT COALESCE(MAX(position),-1)+1 FROM series WHERE workspace_id=:workspace"), {"workspace": workspace_id}).scalar_one())
-                session.execute(text("INSERT INTO series (id,workspace_id,title,position,source_kind,external_source_url,row_version,created_at,updated_at) VALUES (:id,:workspace,:title,:position,'linked',:url,1,NOW(),NOW())"), {"id": series.series_id, "workspace": workspace_id, "title": series.title, "position": position, "url": series.source_url})
+                session.execute(text("INSERT INTO series (id,workspace_id,title,position,source_kind,external_source_url,row_version,created_at,updated_at) VALUES (:id,:workspace,:title,:position,'linked',:url,1,NOW(),NOW())"), {"id": persisted.series_id, "workspace": workspace_id, "title": persisted.title, "position": position, "url": persisted.source_url})
             else:
-                session.execute(text("UPDATE series SET title=:title,external_source_url=:url,updated_at=NOW() WHERE id=:id AND workspace_id=:workspace"), {"id": series.series_id, "title": series.title, "url": series.source_url, "workspace": workspace_id})
-            for item in series.videos:
+                session.execute(text("UPDATE series SET title=:title,external_source_url=:url,updated_at=NOW() WHERE id=:id AND workspace_id=:workspace"), {"id": persisted.series_id, "title": persisted.title, "url": persisted.source_url, "workspace": workspace_id})
+            for item in persisted.videos:
                 external_source_id = item.video_id
                 existing_video = session.execute(
                 text("""SELECT v.id,v.deleted_at FROM videos v JOIN series s ON s.id=v.series_id
                     WHERE v.series_id=:series AND s.workspace_id=:workspace AND v.external_source_id=:external"""),
-                    {"series": series.series_id, "workspace": workspace_id, "external": external_source_id},
+                    {"series": persisted.series_id, "workspace": workspace_id, "external": external_source_id},
                 ).mappings().first()
                 if existing_video is None:
                     session.add(
                         Video(
                             id=new_ulid(),
-                            series_id=series.series_id,
+                            series_id=persisted.series_id,
                             title=item.title,
                             source_kind=item.provider,
                             external_source_id=external_source_id,
@@ -552,8 +564,9 @@ class SqlVideoWorkspace:
                         text("UPDATE videos SET title=:title,source_kind=:kind,duration_ms=:duration,row_version=row_version+1,updated_at=NOW() WHERE id=:id"),
                         {"id": existing_video["id"], "title": item.title, "kind": item.provider, "duration": item.duration_seconds * 1000},
                     )
-            payload = {"cover_url": series.cover_url, "source_url": series.source_url, "is_agent_managed": series.is_agent_managed, "videos": [item.__dict__ for item in series.videos]}
-            session.execute(text("INSERT INTO linked_series_metadata (series_id,payload,created_at,updated_at) VALUES (:series,CAST(:payload AS JSON),NOW(),NOW()) ON DUPLICATE KEY UPDATE payload=VALUES(payload),updated_at=NOW()"), {"series": series.series_id, "payload": json.dumps(payload, ensure_ascii=False)})
+            payload = {"cover_url": persisted.cover_url, "source_url": persisted.source_url, "is_agent_managed": persisted.is_agent_managed, "videos": [item.__dict__ for item in persisted.videos]}
+            session.execute(text("INSERT INTO linked_series_metadata (series_id,payload,created_at,updated_at) VALUES (:series,CAST(:payload AS JSON),NOW(),NOW()) ON DUPLICATE KEY UPDATE payload=VALUES(payload),updated_at=NOW()"), {"series": persisted.series_id, "payload": json.dumps(payload, ensure_ascii=False)})
+        return persisted
 
     def delete_linked_series(self, series_id: str) -> bool:
         return self.delete_series(series_id)

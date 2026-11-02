@@ -53,7 +53,7 @@ class ResolveLinkedSeries:
         return await resolver.resolve_series(ExternalUrlInfo(url=_normalize_external_url(url, provider)))
 
     def commit(self, linked_series: LinkedSeries) -> LibrarySeriesDTO:
-        self._workspace.save_linked_series(linked_series)
+        linked_series = self._workspace.save_linked_series(linked_series)
         self._invalidator.invalidate()
         return _to_series_dto(linked_series)
 
@@ -179,7 +179,7 @@ class ResolveBilibiliSeries:
             URL、解析失败等），由调用方转为合适的错误响应。
         """
         linked_series = await self._resolver.resolve_series(self._parser.parse(url))
-        self._workspace.save_linked_series(linked_series)
+        linked_series = self._workspace.save_linked_series(linked_series)
         self._invalidator.invalidate()
         return _to_series_dto(linked_series)
 
