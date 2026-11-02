@@ -91,7 +91,11 @@ function LinkField({ url, onChange, onUpload, large = false }) {
     <div className="relative min-w-0 flex-1">
       <Link2 size={17} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 dark:text-zinc-500" />
       <input
-        type="url"
+        // Share sheets paste "【标题】 https://…", which type="url" rejects before submit; the
+        // server extracts the link from the text. inputMode keeps the URL keyboard on phones.
+        type="text"
+        inputMode="url"
+        autoComplete="off"
         value={url}
         onChange={(event) => onChange(event.target.value)}
         placeholder={LINK_PLACEHOLDER}

@@ -118,7 +118,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   // Engage focus trap on open modals so keyboard users stay inside
   // (WCAG 2.4.3 Focus Order) and focus returns to the trigger on close.
   useFocusTrap(settingsModalRef, state.settingsPanelOpen);
-  useFocusTrap(usageModalRef, state.usagePageOpen);
+  useFocusTrap(usageModalRef, state.usagePageOpen, { focusFirstField: false });
   const isPlaygroundHome = isPlaygroundSeries(activeSeries) && !selectedVideo;
   const chatScopeActive = selectedContextType === "series" || selectedContextType === "video";
   const hasRightPane = Boolean(activeSeries);

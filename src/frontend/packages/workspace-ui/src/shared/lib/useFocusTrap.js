@@ -16,6 +16,8 @@ const FOCUSABLE_SELECTOR = [
  *  - On activate: remembers the currently-focused element (the trigger) and
  *    moves focus to the first form field, or the first focusable child when the
  *    dialog has no fields (so a form opens ready to type, not on its close button).
+ *    Pass `{ focusFirstField: false }` for panels that are not text-entry forms:
+ *    focus lands on the container so a phone keyboard does not open on its own.
  *  - Tab / Shift+Tab cycle within the container (WCAG 2.4.3 Focus Order).
  *  - On deactivate: restores focus to the trigger (WCAG 2.4.11).
  *
@@ -25,7 +27,7 @@ const FOCUSABLE_SELECTOR = [
  * @param {React.RefObject<HTMLElement>} containerRef - ref to the dialog container
  * @param {boolean} active - whether the trap should be engaged
  */
-export function useFocusTrap(containerRef, active) {
+export function useFocusTrap(containerRef, active, { focusFirstField = true } = {}) {
   const previouslyFocused = useRef(null);
 
   useEffect(() => {
@@ -45,14 +47,18 @@ export function useFocusTrap(containerRef, active) {
         (el) => el.offsetParent !== null || el === document.activeElement,
       );
 
-    // Move focus into the dialog on open
+    // Move focus into the dialog on open. Non-form panels focus the container itself: focusing
+    // their first input (the redeem-code field on the usage panel) opens the phone keyboard and
+    // lets iOS zoom the whole dialog into that input.
     const initial = getFocusables();
-    const firstField = initial.find((el) => el.matches('input:not([type="checkbox"]):not([type="radio"]),textarea,select'));
-    if (initial.length > 0) {
-      (firstField ?? initial[0]).focus();
-    } else {
+    const firstField = focusFirstField
+      ? initial.find((el) => el.matches('input:not([type="checkbox"]):not([type="radio"]),textarea,select'))
+      : null;
+    if (!focusFirstField || initial.length === 0) {
       container.setAttribute("tabindex", "-1");
       container.focus();
+    } else {
+      (firstField ?? initial[0]).focus();
     }
 
     function handleKeyDown(event) {
