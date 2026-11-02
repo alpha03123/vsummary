@@ -401,20 +401,20 @@ export function WorkspaceImportModal({
           transition={{ type: "spring", stiffness: 380, damping: 28 }}
           className="workspace-panel w-full max-w-xl overflow-hidden rounded-[2rem] border shadow-2xl"
         >
-          <div className="flex items-center justify-between border-b border-stone-200/80 p-6 dark:border-stone-800">
+          <div className="flex items-center justify-between border-b border-line/80 p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
                 <FolderUp size={18} />
               </div>
               <div>
-                <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-600 dark:text-zinc-500">{subtitle}</p>
-                <h2 className="text-base font-bold leading-tight text-stone-900 dark:text-stone-100">{title}</h2>
+                <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-subtle">{subtitle}</p>
+                <h2 className="text-base font-bold leading-tight text-strong">{title}</h2>
               </div>
             </div>
             <button
               type="button"
               onClick={handleClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-neutral-800 dark:hover:text-stone-200"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-faint transition-colors hover:bg-soft hover:text-subtle"
             >
               <X size={18} />
             </button>
@@ -427,7 +427,7 @@ export function WorkspaceImportModal({
                 onClick={() => setSourceType("local")}
                 className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${sourceType === "local"
                     ? "border-accent bg-accent/10 text-accent"
-                    : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
+                    : "border-line bg-surface text-subtle"
                   }`}
               >
                 本地媒体
@@ -438,7 +438,7 @@ export function WorkspaceImportModal({
                 onClick={() => setSourceType("external")}
                 className={`cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${sourceType === "external"
                     ? "border-accent bg-accent/10 text-accent"
-                    : "border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-neutral-900 dark:text-zinc-300"
+                    : "border-line bg-surface text-subtle"
                   }`}
               >
                 外部来源
@@ -449,20 +449,20 @@ export function WorkspaceImportModal({
             {sourceType === "external" ? (
               <div className="space-y-4">
                 {isSeriesCreation && externalProvider !== "chaoxing" && <label className="block">
-                  <span className="mb-2 block text-xs font-bold text-stone-600 dark:text-zinc-400">系列名称</span>
+                  <span className="mb-2 block text-xs font-bold text-subtle">系列名称</span>
                   <input type="text" value={seriesTitle} onChange={event=>setSeriesTitle(event.target.value)}
                     placeholder="选填，留空使用原名称" disabled={status === "loading"}
-                    className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm dark:border-stone-700 dark:bg-neutral-900"/>
+                    className="w-full rounded-2xl border border-line bg-surface px-4 py-2.5 text-sm"/>
                 </label>}
                 <div>
-                  <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">渠道</p>
-                  <div className="inline-flex rounded-2xl border border-stone-200 bg-stone-100 p-1 dark:border-stone-700 dark:bg-neutral-900">
+                  <p className="mb-2 text-xs font-bold tracking-wide text-subtle">渠道</p>
+                  <div className="inline-flex rounded-2xl border border-line bg-soft p-1">
                     <button
                       type="button"
                       onClick={() => setExternalProvider("bilibili")}
                       className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "bilibili"
-                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
-                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                          ? "bg-surface text-accent shadow-sm"
+                          : "text-subtle hover:text-body"
                         }`}
                     >
                       Bilibili
@@ -471,8 +471,8 @@ export function WorkspaceImportModal({
                       type="button"
                       onClick={() => setExternalProvider("youtube")}
                       className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "youtube"
-                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
-                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                          ? "bg-surface text-accent shadow-sm"
+                          : "text-subtle hover:text-body"
                         }`}
                     >
                       YouTube
@@ -481,8 +481,8 @@ export function WorkspaceImportModal({
                       type="button"
                       onClick={() => setExternalProvider("douyin")}
                       className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "douyin"
-                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
-                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                          ? "bg-surface text-accent shadow-sm"
+                          : "text-subtle hover:text-body"
                         }`}
                     >
                       抖音
@@ -491,8 +491,8 @@ export function WorkspaceImportModal({
                       type="button"
                       onClick={() => setExternalProvider("chaoxing")}
                       className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-colors ${externalProvider === "chaoxing"
-                          ? "bg-white text-accent shadow-sm dark:bg-neutral-800"
-                          : "text-stone-600 hover:text-stone-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                          ? "bg-surface text-accent shadow-sm"
+                          : "text-subtle hover:text-body"
                         }`}
                     >
                       ChaoXing
@@ -501,7 +501,7 @@ export function WorkspaceImportModal({
                 </div>
                 {externalProvider !== "chaoxing" ? (
                   <>
-                    <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                    <label className="mb-2 block text-xs font-bold tracking-wide text-subtle">
                       {isSeriesCreation
                         ? `${externalProvider === "youtube" ? "YouTube 播放列表" : externalProvider === "douyin" ? "抖音合集" : "Bilibili 系列 / 多 P"} URL`
                         : `${externalProvider === "youtube" ? "YouTube" : externalProvider === "douyin" ? "抖音" : "Bilibili"} 视频 URL`}
@@ -516,10 +516,10 @@ export function WorkspaceImportModal({
                           ? "https://www.douyin.com/video/..."
                           : (isSeriesCreation ? "https://www.bilibili.com/video/BV... 或合集链接" : "https://www.bilibili.com/video/BV...")}
                       disabled={status === "loading" || status === "selecting"}
-                      className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                      className="w-full rounded-2xl border border-line bg-surface px-4 py-2.5 text-sm font-medium text-strong transition-all placeholder:text-ghost focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60"
                       autoFocus
                     />
-                    <p className="mt-2 text-[11px] text-stone-500 dark:text-zinc-500">
+                    <p className="mt-2 text-[11px] text-faint">
                       遇到登录限制或风控时请先获取 Cookie，再重新解析。
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -541,9 +541,9 @@ export function WorkspaceImportModal({
                     </div>
                   </>
                 ) : (
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-700 dark:bg-neutral-900">
+                  <div className="rounded-2xl border border-line bg-muted p-4">
                     {!chaoxingEnabledForMode ? (
-                      <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+                      <p className="text-sm font-semibold text-body">
                         超星按课程导入为系列，请从“添加系列”入口使用。
                       </p>
                     ) : status === "error" && errorMsg ? (
@@ -552,15 +552,15 @@ export function WorkspaceImportModal({
                         {errorMsg}
                       </div>
                     ) : chaoxingLoading ? (
-                      <div className="flex items-center gap-2 text-sm font-semibold text-stone-600 dark:text-zinc-300">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-subtle">
                         <Loader2 size={16} className="animate-spin" />
                         等待登录...
                       </div>
                     ) : !chaoxingStatus?.initialized ? (
                       <div className="flex flex-col gap-3">
                         <div>
-                          <p className="text-sm font-bold text-stone-900 dark:text-stone-100">需要初始化超星登录</p>
-                          <p className="mt-1 text-xs text-stone-600 dark:text-zinc-400">
+                          <p className="text-sm font-bold text-strong">需要初始化超星登录</p>
+                          <p className="mt-1 text-xs text-subtle">
                             点击后会打开浏览器，请在浏览器中完成学习通登录。
                           </p>
                         </div>
@@ -568,7 +568,7 @@ export function WorkspaceImportModal({
                           type="button"
                           onClick={handleInitChaoxing}
                           disabled={status === "loading"}
-                          className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-xs font-bold text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-2xl bg-accent px-4 py-2 text-xs font-bold text-on-accent hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {status === "loading" ? <Loader2 size={14} className="animate-spin" /> : null}
                           开始登陆
@@ -577,7 +577,7 @@ export function WorkspaceImportModal({
                     ) : (
                       <div>
                         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">选择要导入的课程</p>
+                          <p className="text-xs font-bold tracking-wide text-subtle">选择要导入的课程</p>
                           <button
                             type="button"
                             onClick={handleInitChaoxing}
@@ -589,19 +589,19 @@ export function WorkspaceImportModal({
                           </button>
                         </div>
                         <div className="relative mb-3">
-                          <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-zinc-500" />
+                          <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
                           <input
                             type="text"
                             value={chaoxingCourseSearch}
                             onChange={(event) => setChaoxingCourseSearch(event.target.value)}
                             placeholder="搜索课程或教师"
-                            className="w-full rounded-2xl border border-stone-200 bg-white px-10 py-2.5 pr-10 text-sm font-medium text-stone-800 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/50 focus:ring-2 focus:ring-accent/10 dark:border-stone-700 dark:bg-neutral-950 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                            className="w-full rounded-2xl border border-line bg-surface px-10 py-2.5 pr-10 text-sm font-medium text-body outline-none transition-colors placeholder:text-ghost focus:border-accent/50 focus:ring-2 focus:ring-accent/10"
                           />
                           {chaoxingCourseSearch ? (
                             <button
                               type="button"
                               onClick={() => setChaoxingCourseSearch("")}
-                              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-faint transition-colors hover:bg-soft hover:text-body"
                               aria-label="清空课程搜索"
                               title="清空课程搜索"
                             >
@@ -617,16 +617,16 @@ export function WorkspaceImportModal({
                               onClick={() => setSelectedChaoxingCourseKey(course.courseKey)}
                               className={`w-full cursor-pointer rounded-2xl border px-4 py-3 text-left transition-colors ${selectedChaoxingCourseKey === course.courseKey
                                   ? "border-accent bg-accent/10"
-                                  : "border-stone-200 bg-white dark:border-stone-700 dark:bg-neutral-950"
+                                  : "border-line bg-surface"
                                 }`}
                             >
-                              <p className="text-sm font-bold text-stone-900 dark:text-stone-100">{course.title}</p>
-                              <p className="mt-1 text-xs text-stone-600 dark:text-zinc-400">
+                              <p className="text-sm font-bold text-strong">{course.title}</p>
+                              <p className="mt-1 text-xs text-subtle">
                                 {[course.teacher, course.openTime].filter(Boolean).join(" · ") || "超星课程"}
                               </p>
                             </button>
                           )) : (
-                            <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm font-semibold text-stone-600 dark:border-stone-700 dark:text-zinc-300">
+                            <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-sm font-semibold text-subtle">
                               {chaoxingCourses.length ? "没有匹配的课程。" : "没有读取到可导入课程。"}
                             </p>
                           )}
@@ -638,7 +638,7 @@ export function WorkspaceImportModal({
               </div>
             ) : isSeriesCreation ? (
               <div>
-                <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                <label className="mb-2 block text-xs font-bold tracking-wide text-subtle">
                   系列名称
                 </label>
                 <input
@@ -647,11 +647,11 @@ export function WorkspaceImportModal({
                   onChange={(event) => setSeriesTitle(event.target.value)}
                   placeholder="例如：Agent Frameworks"
                   disabled={status === "loading"}
-                  className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 transition-all placeholder:text-stone-400 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-100 dark:placeholder:text-zinc-500"
+                  className="w-full rounded-2xl border border-line bg-surface px-4 py-2.5 text-sm font-medium text-strong transition-all placeholder:text-ghost focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/10 disabled:opacity-60"
                   autoFocus
                 />
                 <div className="mt-4">
-                  <p className="mb-2 text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">媒体存储方式</p>
+                  <p className="mb-2 text-xs font-bold tracking-wide text-subtle">媒体存储方式</p>
                   <WorkspaceExpandableSelect
                     value={storageMode}
                     options={storageOptions}
@@ -669,20 +669,20 @@ export function WorkspaceImportModal({
 
             {sourceType === "local" ? (
               <div>
-                <label className="mb-2 block text-xs font-bold tracking-wide text-stone-600 dark:text-zinc-400">
+                <label className="mb-2 block text-xs font-bold tracking-wide text-subtle">
                   选择媒体文件
                 </label>
                 <button
                   type="button"
                   onClick={handleSelectLocalMedia}
                   disabled={status === "loading" || status === "selecting"}
-                  className="flex w-full flex-col gap-2 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-left transition hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-neutral-900"
+                  className="flex w-full flex-col gap-2 rounded-2xl border border-dashed border-line-strong bg-muted px-4 py-4 text-left transition hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <div className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-body">
                     <Film size={16} />
                     {selectedFileSummary}
                   </div>
-                  <p className="text-xs text-stone-600 dark:text-zinc-400">
+                  <p className="text-xs text-subtle">
                     {isSeriesCreation ? selectedStorageDescription : "点击后可选择多个媒体文件。"}
                   </p>
                 </button>
@@ -697,7 +697,7 @@ export function WorkspaceImportModal({
               >
                 <CheckCircle2 size={20} className="shrink-0 text-success" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-stone-900 dark:text-stone-100">{preview.title}</p>
+                  <p className="truncate text-sm font-bold text-strong">{preview.title}</p>
                   <p className="mt-0.5 text-xs text-success">
                     共 {preview.videoCount} 个视频 · 已导入
                   </p>
@@ -712,7 +712,7 @@ export function WorkspaceImportModal({
                 className="rounded-2xl border border-accent/20 bg-accent/5 p-4"
               >
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="min-w-0 truncate text-xs font-bold text-stone-700 dark:text-stone-200">
+                  <p className="min-w-0 truncate text-xs font-bold text-body">
                     {chaoxingImportProgress?.detail || "正在导入超星课程..."}
                   </p>
                   <p className="shrink-0 text-xs font-bold text-accent">
@@ -721,7 +721,7 @@ export function WorkspaceImportModal({
                       : "处理中"}
                   </p>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-stone-200 dark:bg-neutral-800">
+                <div className="h-2 overflow-hidden rounded-full bg-softer">
                   <div
                     className="h-full rounded-full bg-accent transition-all duration-300"
                     style={{ width: `${Math.max(4, Math.min(100, chaoxingImportProgress?.progress ?? 8))}%` }}
@@ -759,8 +759,8 @@ export function WorkspaceImportModal({
               type="button"
               onClick={handleClose}
               className={status === "success"
-                ? "rounded-2xl bg-stone-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-opacity hover:opacity-90 dark:bg-white dark:text-stone-900"
-                : "rounded-2xl bg-stone-100 px-5 py-2.5 text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-200 dark:bg-neutral-800 dark:text-zinc-300 dark:hover:bg-neutral-700"}
+                ? "rounded-2xl bg-inverse px-5 py-2.5 text-sm font-bold text-on-inverse shadow-sm transition-opacity hover:opacity-90"
+                : "rounded-2xl bg-soft px-5 py-2.5 text-sm font-semibold text-subtle transition-colors hover:bg-softer"}
             >
               {status === "success" ? "完成" : "取消"}
             </button>
@@ -768,7 +768,7 @@ export function WorkspaceImportModal({
               type="button"
               onClick={handleSubmit}
               disabled={submitDisabled}
-              className="inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : null}
               {sourceType === "external" ? (externalProvider === "chaoxing" ? "导入课程" : "解析") : actionLabel}

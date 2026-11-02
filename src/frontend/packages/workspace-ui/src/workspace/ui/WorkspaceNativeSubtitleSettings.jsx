@@ -105,18 +105,18 @@ export function WorkspaceNativeSubtitleSettings({
       {open && panelPosition ? createPortal(
         <div
           ref={panelRef}
-          className="workspace-elevated-panel fixed z-[70] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl border p-4 text-stone-900 shadow-2xl motion-fade-scale dark:text-stone-100"
+          className="workspace-elevated-panel fixed z-[70] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl border p-4 text-strong shadow-2xl motion-fade-scale"
           style={{ left: panelPosition.left, top: panelPosition.top, width: panelPosition.width }}
         >
-          <div className="mb-4 flex items-center justify-between border-b border-stone-200/80 pb-3 dark:border-stone-800">
+          <div className="mb-4 flex items-center justify-between border-b border-line/80 pb-3">
             <div>
               <p className="text-sm font-bold tracking-tight">字幕外观</p>
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">调整播放时的字幕显示效果</p>
+              <p className="mt-0.5 text-xs text-faint">调整播放时的字幕显示效果</p>
             </div>
             <button
               type="button"
               onClick={() => onStyleChange(DEFAULT_SUBTITLE_STYLE)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent dark:text-stone-400 dark:hover:bg-accent/15"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-faint transition-colors hover:bg-accent/10 hover:text-accent dark:hover:bg-accent/15"
               aria-label="恢复默认字幕样式"
               title="恢复默认字幕样式"
             >
@@ -126,7 +126,7 @@ export function WorkspaceNativeSubtitleSettings({
           <div className="workspace-muted-panel mb-2 flex items-center justify-between rounded-2xl border px-4 py-3">
             <div>
               <p className="text-sm font-semibold">显示字幕</p>
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">在播放器中显示当前字幕</p>
+              <p className="mt-0.5 text-xs text-faint">在播放器中显示当前字幕</p>
             </div>
             <WorkspaceToggleSwitch
               checked={subtitlesEnabled}
@@ -138,7 +138,7 @@ export function WorkspaceNativeSubtitleSettings({
             <div className="workspace-muted-panel mb-4 flex items-center justify-between rounded-2xl border px-4 py-3">
               <div>
                 <p className="text-sm font-semibold">概括跟随播放</p>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">播放时自动定位当前原文</p>
+                <p className="mt-0.5 text-xs text-faint">播放时自动定位当前原文</p>
               </div>
               <WorkspaceToggleSwitch
                 checked={followOverviewPlayback}
@@ -148,13 +148,13 @@ export function WorkspaceNativeSubtitleSettings({
             </div>
           ) : null}
           <section className="mt-4">
-            <p className="mb-2 px-1 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">颜色</p>
+            <p className="mb-2 px-1 text-xs font-bold uppercase tracking-widest text-faint">颜色</p>
             <div className="grid grid-cols-2 gap-2">
               {colorControls.map(({ id, label, value, icon: Icon }) => (
                 <label key={id} className="workspace-muted-panel flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors hover:border-accent/40">
-                  <Icon size={15} className="shrink-0 text-stone-500 dark:text-stone-400" aria-hidden="true" />
+                  <Icon size={15} className="shrink-0 text-faint" aria-hidden="true" />
                   <span className="min-w-0 flex-1 text-xs font-semibold">{label}</span>
-                  <span className="relative h-6 w-6 shrink-0 overflow-hidden rounded-md border border-stone-300 shadow-sm dark:border-stone-600" style={{ backgroundColor: value }}>
+                  <span className="relative h-6 w-6 shrink-0 overflow-hidden rounded-md border border-line-strong shadow-sm" style={{ backgroundColor: value }}>
                     <input
                       aria-label={`字幕${label}`}
                       type="color"
@@ -168,7 +168,7 @@ export function WorkspaceNativeSubtitleSettings({
             </div>
           </section>
           <section className="mt-4 space-y-3">
-            <p className="px-1 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">排版</p>
+            <p className="px-1 text-xs font-bold uppercase tracking-widest text-faint">排版</p>
             <label className="workspace-muted-panel block cursor-pointer rounded-2xl border px-4 py-3">
               <span className="mb-2 flex items-center justify-between text-sm font-semibold"><span>字体大小</span><span className="text-accent">{style.fontScale}%</span></span>
               <input aria-label="字幕字体大小" type="range" min="1" max="8" step="0.1" value={style.fontScale} onChange={(event) => updateStyle({ fontScale: Number(event.target.value) })} className="block w-full cursor-pointer accent-accent" />

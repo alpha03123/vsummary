@@ -52,7 +52,7 @@ function AiSummaryTemplateMenu({ value, onChange, disabled = false }) {
       label={`选择 AI 概括风格（当前：${selectedTemplate.label}）`}
       placement="top"
       menuClassName="min-w-[150px]"
-      triggerClassName="inline-flex min-h-[42px] shrink-0 items-center gap-1 border-l border-current/20 px-2.5 transition-colors hover:bg-black/5 active:bg-black/10 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10 dark:active:bg-white/15"
+      triggerClassName="inline-flex min-h-[42px] shrink-0 items-center gap-1 border-l border-current/20 px-2.5 transition-colors hover:bg-black/5 active:bg-black/10 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-soft dark:active:bg-softer"
       triggerContent={
         <ChevronDown
           size={16}
@@ -73,7 +73,7 @@ function AiSummaryTemplateMenu({ value, onChange, disabled = false }) {
             }}
             className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs font-semibold transition-colors ${selected
               ? "bg-accent/10 text-accent font-bold"
-              : "text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+              : "text-body hover:bg-muted"
               }`}
           >
             <span>{template.label}</span>
@@ -116,7 +116,7 @@ function ProcessingModeMenuItem({ mode, label, onSelect }) {
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-stone-700 transition-colors hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-body transition-colors hover:bg-muted"
     >
       <Icon size={15} className="text-accent" />
       {label}
@@ -199,7 +199,7 @@ function VideoBadge({ video }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border border-transparent">
+    <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-soft text-subtle border border-transparent">
       <CircleDashed size={12} />
       未处理
     </span>
@@ -320,12 +320,12 @@ function PanelFooter({
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
-      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
         <div className="mb-1">
 
-          <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">Playground Workspace</h3>
+          <h3 className="text-sm font-bold text-body">Playground Workspace</h3>
         </div>
-        <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-400">
+        <p className="text-xs leading-relaxed text-subtle">
           添加或选择一个视频
         </p>
       </div>
@@ -344,18 +344,18 @@ function PanelFooter({
     const seriesComplete = seriesVideos.length > 0 && seriesVideos.every((video) =>
       processingMode === "transcript" ? video.hasTranscript : video.processed);
     return (
-      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
         <div className="mb-1">
-          <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100">当前范围：整个系列</h3>
+          <h3 className="text-sm font-bold text-body">当前范围：整个系列</h3>
         </div>
-        <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-400">
+        <p className="text-xs leading-relaxed text-subtle">
           {embeddingNeedsDownload
             ? "检索模型还没下载，下载后才能针对整个系列提问。"
             : `在对话栏里可以直接问「${activeSeries?.title}」整个系列的内容。`}
         </p>
         <div className="mt-3">
           {queueIsActive ? (
-            <div className="mb-3 rounded-2xl border border-accent/20 bg-accent/8 px-3 py-2 text-xs text-stone-600 dark:text-stone-300">
+            <div className="mb-3 rounded-2xl border border-accent/20 bg-accent/8 px-3 py-2 text-xs text-subtle">
               <div className="flex items-center justify-between gap-2 font-semibold text-accent">
                 <span>{seriesGenerationQueue.status === "cancelling" ? "正在取消全部处理" : processingMode === "transcript" ? "正在获取全部字幕" : "正在处理全部视频"}</span>
                 <span>{queueLabel}</span>
@@ -380,7 +380,7 @@ function PanelFooter({
               className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${isGeneratingSeries
                 ? "btn-danger-ghost border border-danger-border text-danger"
                 : seriesComplete
-                  ? "cursor-default border border-stone-200 text-stone-400 dark:border-stone-700 dark:text-stone-500"
+                  ? "cursor-default border border-line text-faint"
                   : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
                 }`}
             >
@@ -407,8 +407,8 @@ function PanelFooter({
 
   if (!selectedVideo) {
     return (
-      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex justify-center items-center h-[98px]">
-        <p className="text-xs text-stone-500 dark:text-stone-500 font-medium">可选择整个系列，或点某个视频进入视频工具</p>
+      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex justify-center items-center h-[98px]">
+        <p className="text-xs text-faint font-medium">可选择整个系列，或点某个视频进入视频工具</p>
       </div>
     );
   }
@@ -417,12 +417,12 @@ function PanelFooter({
     const hasDownloadProgress = typeof downloadProgress === "number" && Number.isFinite(downloadProgress) && downloadProgress > 0;
     const pct = hasDownloadProgress ? Math.max(0, Math.min(100, downloadProgress)) : null;
     return (
-      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
         <div className="mb-3">
-          <p className="text-xs font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
-          <h3 className="text-sm font-bold text-stone-800 dark:text-stone-100 truncate">{selectedVideo.title}</h3>
+          <p className="text-xs font-bold text-subtle tracking-wider uppercase mb-1 drop-shadow-sm">下载中</p>
+          <h3 className="text-sm font-bold text-body truncate">{selectedVideo.title}</h3>
         </div>
-        <div className="relative w-full overflow-hidden rounded-full bg-stone-200 h-2.5 mb-1.5 dark:bg-neutral-800">
+        <div className="relative w-full overflow-hidden rounded-full bg-softer h-2.5 mb-1.5">
           {hasDownloadProgress ? (
             <div
               className="bg-accent h-2.5 rounded-full transition-all duration-300"
@@ -437,7 +437,7 @@ function PanelFooter({
             />
           )}
         </div>
-        <p className="text-xs text-stone-600 dark:text-zinc-400 font-medium">
+        <p className="text-xs text-subtle font-medium">
           {hasDownloadProgress ? `${pct.toFixed(0)}% 完成` : "下载中"}
         </p>
         <button
@@ -454,12 +454,12 @@ function PanelFooter({
 
   if (!selectedVideo.processed && (selectedVideo.isLinked || selectedVideo.status === "linked")) {
     return (
-      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+      <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
         <div className="mb-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
+            <p className="text-xs font-bold text-subtle tracking-wider uppercase drop-shadow-sm">当前视频</p>
             <div className="flex shrink-0 items-center gap-1">
-            <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
+            <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-soft hover:text-accent" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
             <WorkspaceOverflowMenu
               open={footerOverflowOpen}
               onOpenChange={setFooterOverflowOpen}
@@ -480,7 +480,7 @@ function PanelFooter({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setFooterOverflowOpen(false)}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-body hover:bg-muted"
                       title={sourceViewLabel}
                     >
                       <ExternalLink size={14} />
@@ -501,7 +501,7 @@ function PanelFooter({
             </WorkspaceOverflowMenu>
             </div>
           </div>
-          <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
+          <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-body" title={selectedVideo.title}>{selectedVideo.title}</h3>
         </div>
         <button
           type="button"
@@ -551,16 +551,16 @@ function PanelFooter({
   const generationControlClass = videoGenerationButton.tone === "danger"
     ? "btn-danger-ghost border border-danger-border text-danger"
     : videoGenerationButton.tone === "busy"
-      ? "motion-busy-button bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
+      ? "motion-busy-button bg-softer text-subtle"
       : "border border-accent/40 bg-accent/8 text-accent";
 
   return (
-    <div className="workspace-toolbar-surface p-4 pr-6 border-t border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+    <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
       <div className="mb-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-bold text-stone-600 dark:text-stone-400 tracking-wider uppercase drop-shadow-sm">当前视频</p>
+          <p className="text-xs font-bold text-subtle tracking-wider uppercase drop-shadow-sm">当前视频</p>
           <div className="flex shrink-0 items-center gap-1">
-            <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-400 dark:hover:bg-stone-800" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
+            <button type="button" onClick={onRequestRenameCurrentVideo} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-soft hover:text-accent" title="重命名视频" aria-label="重命名视频"><Pencil size={14} /></button>
             <WorkspaceOverflowMenu
               open={footerOverflowOpen}
               onOpenChange={setFooterOverflowOpen}
@@ -581,7 +581,7 @@ function PanelFooter({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setFooterOverflowOpen(false)}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-body hover:bg-muted"
                   title={sourceViewLabel}
                 >
                   <ExternalLink size={14} />
@@ -603,7 +603,7 @@ function PanelFooter({
             </WorkspaceOverflowMenu>
           </div>
         </div>
-        <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
+        <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-body" title={selectedVideo.title}>{selectedVideo.title}</h3>
       </div>
       {modelNeedsDownload ? (
         <div className="mb-3 rounded-2xl border border-warning-border/80 bg-warning-subtle/80 px-4 py-3 text-xs leading-6 text-warning">
@@ -651,7 +651,7 @@ function PanelFooter({
         ) : null}
       </div>
       {processingMode === "transcript" || showAiSummaryTemplateMenu ? (
-        <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+        <p className="mt-1.5 text-xs text-faint">
           {processingMode === "transcript"
             ? "仅获取字幕"
             : `将直接生成风格为“${getAiSummaryTemplate(aiSummaryTemplate).label}”的概括`}
@@ -767,27 +767,27 @@ export function WorkspaceLibraryPanel({
     <section className="flex flex-col h-full w-full bg-transparent relative">
 
       {/* Sidebar Header */}
-      <div className="p-5 pb-4 border-b border-stone-200/80 dark:border-stone-800 flex-shrink-0">
+      <div className="p-5 pb-4 border-b border-line/80 flex-shrink-0">
         <div className="mb-3 flex items-center justify-between gap-2 pr-10 md:pr-0">
           <button
             type="button"
-            className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+            className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-subtle transition-colors hover:bg-soft hover:text-strong"
             onClick={onEnterLibraryHome}
           >
             <ArrowLeft size={16} />
             首页
           </button>
-          <span className="truncate text-xs font-medium text-stone-500 dark:text-zinc-500">
+          <span className="truncate text-xs font-medium text-faint">
             {isPlayground ? "单个视频" : isBilibiliInbox ? "B站导入" : isLinkedSeries ? "链接系列" : "本地文件夹"}
           </span>
         </div>
         <div className="mb-4 flex items-center gap-3">
           {!isPlayground && !isBilibiliInbox ? (
-            <div className="h-10 w-[72px] shrink-0 overflow-hidden rounded-lg border border-stone-200/80 dark:border-white/10">
+            <div className="h-10 w-[72px] shrink-0 overflow-hidden rounded-lg border border-line/80">
               <WorkspaceCover url={activeSeries?.videos.find((video) => video.coverUrl)?.coverUrl} seed={activeSeries?.id} iconSize={16} />
             </div>
           ) : null}
-          <h2 className="min-w-0 text-base font-bold leading-snug text-stone-800 line-clamp-2 dark:text-stone-100">{activeSeries?.title ?? "未选择系列"}</h2>
+          <h2 className="min-w-0 text-base font-bold leading-snug text-body line-clamp-2">{activeSeries?.title ?? "未选择系列"}</h2>
         </div>
         {!isPlayground ? (
           <div className="mb-4 flex items-center gap-2">
@@ -811,7 +811,7 @@ export function WorkspaceLibraryPanel({
                       setOverflowOpen(false);
                       onRequestRenameSeries?.();
                     }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-body hover:bg-muted"
                   >
                     <Pencil size={14} />
                     重命名系列
@@ -823,7 +823,7 @@ export function WorkspaceLibraryPanel({
                       setSeriesExportScope("all");
                       setSeriesExportOpen(true);
                     }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-neutral-800"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-body hover:bg-muted"
                   >
                     <FileArchive size={14} />
                     批量导出
@@ -858,19 +858,19 @@ export function WorkspaceLibraryPanel({
         {!isPlayground ? (
           <div className="flex flex-col gap-4">
             <div className="relative">
-              <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-500" />
+              <Search size={14} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
               <input
                 type="text"
                 value={filterText}
                 onChange={(event) => setFilterText(event.target.value)}
                 placeholder="搜索视频"
-                className="w-full rounded-2xl border border-stone-200/80 bg-white px-10 py-2.5 pr-10 text-sm text-stone-700 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500"
+                className="w-full rounded-2xl border border-line/80 bg-surface px-10 py-2.5 pr-10 text-sm text-body outline-none transition-colors placeholder:text-ghost focus:border-accent/40"
               />
               {filterText ? (
                 <button
                   type="button"
                   onClick={() => setFilterText("")}
-                  className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                  className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-faint transition-colors hover:bg-soft hover:text-body"
                   aria-label="清空搜索"
                   title="清空搜索"
                 >
@@ -878,7 +878,7 @@ export function WorkspaceLibraryPanel({
                 </button>
               ) : null}
             </div>
-            <div className="flex rounded-xl bg-stone-100 p-1 dark:bg-stone-800/80" role="group" aria-label="视频状态筛选">
+            <div className="flex rounded-xl bg-soft p-1" role="group" aria-label="视频状态筛选">
               {[
                 ["all", "全部", videos.length],
                 ["generated", processingMode === "transcript" ? "已获取" : "已生成", generatedCount],
@@ -890,20 +890,20 @@ export function WorkspaceLibraryPanel({
                   onClick={() => setStatusFilter(value)}
                   aria-pressed={statusFilter === value}
                   className={`relative flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-all duration-200 ${statusFilter === value
-                      ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
-                      : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+                      ? "bg-surface text-strong shadow-sm"
+                      : "text-faint hover:text-body"
                     }`}
                 >
                   {label}
                   <span className={`ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 py-px text-xs font-bold leading-none ${statusFilter === value
                       ? "bg-accent/10 text-accent"
-                      : "bg-stone-200/80 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
+                      : "bg-softer/80 text-faint"
                     }`}>{count}</span>
                 </button>
               ))}
             </div>
             {bulkDeleteResult ? (
-              <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-relaxed text-stone-700 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-300">
+              <div className="rounded-xl border border-line bg-muted px-3 py-2 text-xs leading-relaxed text-body">
                 已删除 {bulkDeleteResult.deleted.length} 项{bulkDeleteResult.failed.length ? `，${bulkDeleteResult.failed.length} 项未删除。` : "。"}
                 {bulkDeleteResult.failed.length ? (
                   <ul className="mt-1 list-disc pl-4">
@@ -925,7 +925,7 @@ export function WorkspaceLibraryPanel({
             <button
               type="button"
               onClick={onSelectSeriesContext}
-              className={`text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none shadow-sm bg-accent/10 border-accent/30 text-stone-900 dark:text-stone-100 z-10 relative
+              className={`text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none shadow-sm bg-accent/10 border-accent/30 text-strong z-10 relative
               ${selectedContextType === "series"
                   ? "ring-[2px] ring-accent/20"
                   : "hover:bg-accent/15 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] cursor-pointer"
@@ -943,7 +943,7 @@ export function WorkspaceLibraryPanel({
                   those video rows without re-printing a title that is already on
                   screen one block above. */}
               <div className="flex items-center justify-between w-full gap-2">
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-strong">
                   <FolderKanban size={14} className="text-accent" />
                   整个系列
                 </span>
@@ -964,7 +964,7 @@ export function WorkspaceLibraryPanel({
                 className={`motion-stagger text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none cursor-pointer relative z-10
                 ${isActive
                     ? "border-transparent"
-                    : "workspace-elevated-panel border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.22)]"
+                    : "workspace-elevated-panel border-line hover:border-line-strong hover:bg-surface hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.22)]"
                   }`}
                 style={{ "--stagger-index": index }}
                 onClick={() => onSelectVideo(activeSeries.id, video.id)}
@@ -978,7 +978,7 @@ export function WorkspaceLibraryPanel({
                 {isActive && (
                   <motion.div
                     layoutId="library-bg"
-                    className="absolute inset-0 bg-stone-100/80 dark:bg-stone-800/80 border border-stone-300 dark:border-stone-700 shadow-sm rounded-2xl -z-10"
+                    className="absolute inset-0 bg-soft/80 border border-line-strong shadow-sm rounded-2xl -z-10"
                     transition={slideTransition}
                   />
                 )}
@@ -1002,7 +1002,7 @@ export function WorkspaceLibraryPanel({
                         }}
                         className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${selectedVideoSet.has(video.id)
                             ? "bg-accent/10 text-accent"
-                            : "text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:text-stone-500 dark:hover:bg-stone-700 dark:hover:text-stone-300"
+                            : "text-faint hover:bg-soft hover:text-subtle"
                           }`}
                         aria-label={selectedVideoSet.has(video.id) ? `取消选择 ${video.title}` : `选择 ${video.title}`}
                       >
@@ -1012,25 +1012,25 @@ export function WorkspaceLibraryPanel({
                   </div>
                 </div>
                 <div className="mt-1 flex gap-3">
-                <div className="relative h-[50px] w-[88px] shrink-0 overflow-hidden rounded-lg border border-stone-200/80 dark:border-white/10">
+                <div className="relative h-[50px] w-[88px] shrink-0 overflow-hidden rounded-lg border border-line/80">
                   <WorkspaceCover url={video.coverUrl} seed={video.id} iconSize={16} className={!video.processed && (video.isLinked || video.status === "linked") ? "opacity-70 grayscale-[0.5]" : ""} />
                   {formatDuration(video.durationSeconds) ? (
                     <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] font-semibold tabular-nums leading-4 text-white">{formatDuration(video.durationSeconds)}</span>
                   ) : null}
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-stone-900 dark:text-stone-100" : "text-stone-800 dark:text-stone-100"}`}>
+                  <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-strong" : "text-body"}`}>
                     {video.title}
                   </strong>
                   {video.coreProblem ? (
                     <span
-                      className="text-xs text-stone-600 dark:text-stone-300 line-clamp-2 leading-snug whitespace-pre-line"
+                      className="text-xs text-subtle line-clamp-2 leading-snug whitespace-pre-line"
                       title={video.coreProblem}
                     >
                       {video.coreProblem}
                     </span>
                   ) : null}
-                  <span className="text-xs text-stone-600 dark:text-stone-400 truncate">
+                  <span className="text-xs text-subtle truncate">
                     {getVideoMediaIdentifier(video)}
                   </span>
                 </div>
@@ -1039,7 +1039,7 @@ export function WorkspaceLibraryPanel({
             );
           })}
           {!isPlayground && filteredVideos.length === 0 ? (
-            <div className="workspace-elevated-panel rounded-2xl border border-dashed border-stone-200/80 px-4 py-8 text-center text-sm text-stone-600 dark:border-stone-800 dark:text-stone-400">
+            <div className="workspace-elevated-panel rounded-2xl border border-dashed border-line/80 px-4 py-8 text-center text-sm text-subtle">
               当前筛选条件下没有匹配的视频。
             </div>
           ) : null}
@@ -1148,7 +1148,7 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-stone-950/20 p-4 backdrop-blur-md sm:items-center sm:p-8 dark:bg-black/50"
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/20 p-4 backdrop-blur-md sm:items-center sm:p-8"
           onClick={onClose}
         >
           <motion.div
@@ -1160,17 +1160,17 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 360, damping: 28 }}
             onClick={(event) => event.stopPropagation()}
-            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6 dark:border-stone-700 dark:bg-neutral-900"
+            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-line bg-surface p-5 shadow-2xl sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h3 id="series-export-title" className="mt-1 text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">批量导出</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-stone-500 dark:text-stone-400">选好范围后，点击内容包即可开始下载。</p>
+                <h3 id="series-export-title" className="mt-1 text-xl font-bold tracking-tight text-strong">批量导出</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-faint">选好范围后，点击内容包即可开始下载。</p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-soft hover:text-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 aria-label="关闭批量导出"
               >
                 <X size={17} />
@@ -1178,7 +1178,7 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
             </div>
 
             <section className="mt-6">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出范围</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-faint">导出范围</p>
               <div className="mt-2.5 grid grid-cols-2 gap-2.5">
                 <ScopeOption
                   selected={scope === "all"}
@@ -1195,14 +1195,14 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
                 />
               </div>
               {!selectedAvailable ? (
-                <p className="mt-2.5 text-xs leading-relaxed text-stone-400 dark:text-stone-500">
+                <p className="mt-2.5 text-xs leading-relaxed text-faint">
                   想按选中项导出，先在左侧列表勾选视频。
                 </p>
               ) : null}
             </section>
 
             <section className="mt-6">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">导出内容</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-faint">导出内容</p>
               <div className="mt-2.5 flex flex-col gap-2.5">
                 {actions.map(([kind, label, meta, Icon]) => (
                   <a
@@ -1210,16 +1210,16 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
                     href={api.resourceUrl(`/api/series/${encodeURIComponent(seriesId)}/exports/${kind}.zip${query}`)}
                     download
                     onClick={onClose}
-                    className="group flex items-center gap-3 rounded-2xl border border-stone-200 bg-white px-3.5 py-2.5 transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-accent/40 dark:hover:bg-accent/10"
+                    className="group flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-2.5 transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:border-accent/40 dark:hover:bg-accent/10"
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/8 text-accent">
                       <Icon size={17} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-stone-800 dark:text-stone-100">{label}</span>
-                      <span className="mt-0.5 block truncate text-xs text-stone-500 dark:text-stone-400">{meta}</span>
+                      <span className="block truncate text-sm font-semibold text-body">{label}</span>
+                      <span className="mt-0.5 block truncate text-xs text-faint">{meta}</span>
                     </span>
-                    <Download size={16} className="shrink-0 text-stone-400 transition-colors group-hover:text-accent dark:text-stone-500" />
+                    <Download size={16} className="shrink-0 text-faint transition-colors group-hover:text-accent" />
                   </a>
                 ))}
               </div>
@@ -1234,10 +1234,10 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
 
 function ScopeOption({ selected, disabled = false, onSelect, label, hint }) {
   const stateClass = disabled
-    ? "cursor-not-allowed border-dashed border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-neutral-900/60"
+    ? "cursor-not-allowed border-dashed border-line bg-muted"
     : selected
       ? "border-accent/50 bg-accent/8"
-      : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50 dark:border-stone-700 dark:bg-neutral-900 dark:hover:border-stone-600 dark:hover:bg-neutral-800/60";
+      : "border-line bg-surface hover:border-line-strong hover:bg-muted";
 
   return (
     <button
@@ -1249,15 +1249,15 @@ function ScopeOption({ selected, disabled = false, onSelect, label, hint }) {
     >
       <span
         aria-hidden="true"
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selected && !disabled ? "border-accent" : "border-stone-300 dark:border-stone-600"}`}
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${selected && !disabled ? "border-accent" : "border-line-strong"}`}
       >
         {selected && !disabled ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
       </span>
-      <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${disabled ? "text-stone-400 dark:text-stone-500" : "text-stone-800 dark:text-stone-100"}`}>
+      <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${disabled ? "text-faint" : "text-body"}`}>
         {label}
       </span>
       {hint ? (
-        <span className="shrink-0 text-xs tabular-nums text-stone-400 dark:text-stone-500">{hint}</span>
+        <span className="shrink-0 text-xs tabular-nums text-faint">{hint}</span>
       ) : null}
     </button>
   );

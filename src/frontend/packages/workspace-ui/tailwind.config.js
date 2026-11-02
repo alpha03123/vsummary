@@ -11,7 +11,7 @@ export default {
   ],
   theme: {
     extend: {
-      colors: themeColors,
+      ...themeColors,
       fontFamily: {
         // Latin glyphs from IBM Plex Sans; Chinese falls through to each platform's best UI font.
         // `display` is kept as an alias so headings share the body face instead of a second family.

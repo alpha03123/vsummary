@@ -18,14 +18,14 @@ export function WorkspaceUsageAnalytics(props) {
 export function WorkspaceUsagePage({usage,range,loading,error,onChangeRange,onClose,title='API 用量统计',icon=<BarChart3 size={20} strokeWidth={2.2}/>,closeLabel='关闭面板',className,bodyClassName,children}) {
  return <motion.section variants={popScaleVariant} initial="initial" animate="animate" exit="exit"
   className={twMerge('workspace-panel rounded-4xl shadow-2xl border w-full max-w-6xl h-[85dvh] flex flex-col overflow-hidden pointer-events-auto',className)} aria-label={title}>
-  <header className="flex shrink-0 items-center justify-between gap-4 border-b border-stone-200/60 px-6 py-5 dark:border-white/5">
+  <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line/60 px-6 py-5">
    <div className="flex min-w-0 items-center gap-4">
     {icon&&<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">{icon}</div>}
     <div className="min-w-0">
-     <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">{title}</h2>
+     <h2 className="text-xl font-bold tracking-tight text-strong">{title}</h2>
     </div>
    </div>
-   {onClose&&<button type="button" onClick={onClose} aria-label={closeLabel} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-600 transition-colors hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"><X size={18}/></button>}
+   {onClose&&<button type="button" onClick={onClose} aria-label={closeLabel} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-soft text-subtle transition-colors hover:bg-softer"><X size={18}/></button>}
   </header>
   <div className={twMerge('min-h-0 flex-1 overflow-y-auto px-6 pb-6',bodyClassName)}>
    {children!==undefined?children:

@@ -30,13 +30,13 @@ export function WorkspaceStateBlock({
     >
       <div className={`${centered ? "max-w-md" : "w-full"}`}>
         {loading ? (
-          <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 text-accent shadow-sm dark:bg-stone-950/90">
+          <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-surface/90 text-accent shadow-sm">
             <LoaderCircle size={20} strokeWidth={2.2} className="animate-spin" />
           </div>
         ) : null}
-        <h3 className="mt-3 text-2xl font-bold text-stone-900 dark:text-stone-100">{title}</h3>
+        <h3 className="mt-3 text-2xl font-bold text-strong">{title}</h3>
         {description ? (
-          <p className="mt-3 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{description}</p>
+          <p className="mt-3 text-sm leading-relaxed text-subtle">{description}</p>
         ) : null}
         {actionLabel && typeof onAction === "function" ? (
           <button

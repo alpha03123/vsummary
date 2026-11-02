@@ -45,7 +45,7 @@ export function WorkspaceMindmapView({
         description="导图需要单独生成，会根据这个视频的 AI 概括来画。"
       >
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <label className="inline-flex items-center gap-2 text-sm font-medium text-stone-600 dark:text-stone-300">
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-subtle">
             层级
             <WorkspaceProviderSelect
               ariaLabel="导图层级"
@@ -63,8 +63,8 @@ export function WorkspaceMindmapView({
             disabled={isGeneratingMindmapSelectedVideo}
             className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-all ${
               isGeneratingMindmapSelectedVideo
-                ? "motion-busy-button cursor-not-allowed bg-stone-200 text-stone-600"
-                : "bg-accent text-white shadow-sm hover:bg-accent/90"
+                ? "motion-busy-button cursor-not-allowed bg-softer text-subtle"
+                : "bg-accent text-on-accent shadow-sm hover:bg-accent/90"
             }`}
           >
             {isGeneratingMindmapSelectedVideo ? (
@@ -122,22 +122,22 @@ export function WorkspaceMindmapView({
             type="button"
             onClick={() => onGenerateMindmap(maxDepth)}
             disabled={isGeneratingMindmapSelectedVideo}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-accent/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
             title={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
             aria-label={isGeneratingMindmapSelectedVideo ? "正在重新生成思维导图" : "重新生成思维导图"}
           >
             <RefreshCw size={14} strokeWidth={2} className={isGeneratingMindmapSelectedVideo ? "animate-spin" : ""} />
           </button>
-          <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`)} title="导出 SVG" aria-label="导出 SVG">
+          <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-accent/10 hover:text-accent" onClick={() => markmapRef.current && exportMindmapAsSVG(markmapRef.current, `mindmap-${videoId}.svg`)} title="导出 SVG" aria-label="导出 SVG">
             <Download size={14} strokeWidth={2} />
           </button>
-          <button type="button" onClick={() => setControlsOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent" title="收起导图工具" aria-label="收起导图工具" aria-expanded="true">
+          <button type="button" onClick={() => setControlsOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-faint transition-colors hover:bg-accent/10 hover:text-accent" title="收起导图工具" aria-label="收起导图工具" aria-expanded="true">
             <ChevronUp size={16} />
           </button>
       </div>
     </motion.div>
       ) : (
-    <motion.button key="toggle" type="button" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16, ease: "easeOut" }} onClick={() => setControlsOpen(true)} className="absolute left-1/2 top-1 z-10 inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center text-stone-400 transition-colors hover:text-accent" title="展开导图工具" aria-label="展开导图工具" aria-expanded="false">
+    <motion.button key="toggle" type="button" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16, ease: "easeOut" }} onClick={() => setControlsOpen(true)} className="absolute left-1/2 top-1 z-10 inline-flex h-6 w-8 -translate-x-1/2 items-center justify-center text-faint transition-colors hover:text-accent" title="展开导图工具" aria-label="展开导图工具" aria-expanded="false">
       <ChevronDown size={16} />
     </motion.button>
       )}

@@ -86,7 +86,7 @@ export function WorkspaceKnowledgeCardsView({
         <button
           type="button"
           onClick={onGenerateKnowledgeCards}
-          className="inline-flex items-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent dark:bg-white dark:text-black"
+          className="inline-flex items-center gap-2 rounded-2xl bg-inverse px-5 py-3 text-sm font-semibold text-on-accent transition hover:bg-accent"
         >
           <BrainCircuit size={16} strokeWidth={2.2} />
           生成知识卡片
@@ -133,7 +133,7 @@ export function WorkspaceKnowledgeCardsView({
         <button
           type="button"
           onClick={onGenerateKnowledgeCards}
-          className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition-colors hover:border-accent/30 hover:bg-accent/8 hover:text-accent dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-300"
+          className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-subtle transition-colors hover:border-accent/30 hover:bg-accent/8 hover:text-accent"
         >
           <RefreshCw size={14} strokeWidth={2.2} />
           重新生成知识卡片
@@ -143,23 +143,23 @@ export function WorkspaceKnowledgeCardsView({
         {knowledgeCards.cards.map((card) => (
           <article
             key={card.id}
-            className="workspace-elevated-panel rounded-4xl border p-6 transition-all hover:-translate-y-0.5 hover:border-stone-300 dark:hover:border-white/16"
+            className="workspace-elevated-panel rounded-4xl border p-6 transition-all hover:-translate-y-0.5 hover:border-line-strong"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">{card.kind}</p>
-                <h3 className="mt-2 text-lg font-bold text-stone-900 dark:text-stone-100">{card.title}</h3>
+                <p className="text-xs font-bold uppercase tracking-widest text-subtle">{card.kind}</p>
+                <h3 className="mt-2 text-lg font-bold text-strong">{card.title}</h3>
               </div>
               <CopyToClipboardButton text={buildCardMarkdown(card)} className="shrink-0" />
             </div>
-            <p className="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{card.summary}</p>
-            <p className="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{card.details}</p>
+            <p className="mt-4 text-sm leading-relaxed text-subtle">{card.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-body">{card.details}</p>
             {card.tags?.length ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {card.tags.map((tag) => (
                   <span
                     key={`${card.id}-${tag}`}
-                    className="rounded-full border border-stone-200/70 bg-stone-100/80 px-3 py-1 text-xs font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                    className="rounded-full border border-line/70 bg-soft/80 px-3 py-1 text-xs font-semibold text-subtle"
                   >
                     {tag}
                   </span>

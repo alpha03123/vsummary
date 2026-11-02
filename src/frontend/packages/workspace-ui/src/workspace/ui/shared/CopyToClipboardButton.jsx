@@ -45,7 +45,7 @@ export function CopyToClipboardButton({
       className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition ${
         copied
           ? "bg-success-subtle text-success"
-          : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+          : "bg-soft text-subtle hover:bg-softer"
       } ${className}`}
     >
       <Icon size={iconSize} strokeWidth={2.2} aria-hidden="true" />

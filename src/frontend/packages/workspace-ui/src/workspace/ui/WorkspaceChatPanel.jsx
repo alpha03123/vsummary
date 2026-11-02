@@ -26,7 +26,7 @@ export function WorkspaceChatSessionManager({ chatSessions = [], activeSessionId
         onClick={() => setOpen((current) => !current)}
         aria-label={open ? "收起对话管理" : "展开对话管理"}
         aria-expanded={open}
-        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-xs font-bold uppercase tracking-widest text-stone-400 transition-colors hover:bg-stone-100 hover:text-accent dark:text-stone-500 dark:hover:bg-stone-800"
+        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-xs font-bold uppercase tracking-widest text-faint transition-colors hover:bg-soft hover:text-accent"
       >
         {open ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         对话管理
@@ -41,7 +41,7 @@ export function WorkspaceChatSessionManager({ chatSessions = [], activeSessionId
             className="workspace-elevated-panel absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border p-1.5 shadow-lg"
           >
             {chatSessionOptions.length ? (
-              <div className="flex items-stretch rounded-xl border border-stone-200 transition-colors focus-within:border-accent/40 dark:border-stone-700">
+              <div className="flex items-stretch rounded-xl border border-line transition-colors focus-within:border-accent/40">
                 <WorkspaceProviderSelect
                   value={activeSessionId}
                   options={chatSessionOptions}
@@ -64,7 +64,7 @@ export function WorkspaceChatSessionManager({ chatSessions = [], activeSessionId
                       onStartNewChat();
                       setOpen(false);
                     }}
-                    className="inline-flex w-9 shrink-0 items-center justify-center rounded-r-xl border-l border-stone-200 text-stone-500 transition-colors hover:bg-accent/10 hover:text-accent dark:border-stone-700 dark:text-stone-400"
+                    className="inline-flex w-9 shrink-0 items-center justify-center rounded-r-xl border-l border-line text-faint transition-colors hover:bg-accent/10 hover:text-accent"
                     title="新建话题"
                     aria-label="新建话题"
                   >
@@ -79,7 +79,7 @@ export function WorkspaceChatSessionManager({ chatSessions = [], activeSessionId
                   onStartNewChat();
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-stone-600 transition-colors hover:bg-accent/10 hover:text-accent dark:text-stone-300 dark:hover:bg-accent/15"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-subtle transition-colors hover:bg-accent/10 hover:text-accent dark:hover:bg-accent/15"
               >
                 <Plus size={16} />
                 新对话
@@ -258,7 +258,7 @@ export function WorkspaceChatPanel({
       ) : null}
 
       {summaryLocked ? (
-        <div className="border-b border-stone-200/80 bg-stone-50 px-6 py-2.5 text-xs text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-400" role="status">
+        <div className="border-b border-line/80 bg-muted px-6 py-2.5 text-xs text-subtle" role="status">
           对话基于 AI 概括，先生成概括就能提问。
         </div>
       ) : null}
@@ -293,8 +293,8 @@ export function WorkspaceChatPanel({
             <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-6 border border-accent/20 shadow-sm">
               <Sparkles size={28} className="text-accent" />
             </div>
-            <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 mb-2">想问点什么？</h2>
-            <p className="text-sm text-stone-600 dark:text-stone-400 mb-10 max-w-md text-center">直接输入问题，或者点下面的快捷提问。</p>
+            <h2 className="text-xl font-bold text-body mb-2">想问点什么？</h2>
+            <p className="text-sm text-subtle mb-10 max-w-md text-center">直接输入问题，或者点下面的快捷提问。</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
               {suggestedPrompts.map((prompt, idx) => {
@@ -305,13 +305,13 @@ export function WorkspaceChatPanel({
                     type="button"
                     onClick={() => updateDraft(prompt.desc)}
                     disabled={summaryLocked || seriesRagLocked || seriesIndexingLocked}
-                    className="group flex flex-col items-start gap-2 rounded-2xl border border-stone-200/80 bg-white/60 p-4 text-left transition-all hover:border-accent/40 hover:bg-accent/5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/5 dark:bg-white/5 dark:hover:border-accent/30 dark:hover:bg-accent/10"
+                    className="group flex flex-col items-start gap-2 rounded-2xl border border-line/80 bg-surface/60 p-4 text-left transition-all hover:border-accent/40 hover:bg-accent/5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-accent/30 dark:hover:bg-accent/10"
                   >
-                    <div className="flex items-center gap-2 text-sm font-bold text-stone-700 dark:text-stone-200 group-hover:text-accent transition-colors">
+                    <div className="flex items-center gap-2 text-sm font-bold text-body group-hover:text-accent transition-colors">
                       <Icon size={16} />
                       {prompt.title}
                     </div>
-                    <div className="text-xs text-stone-600 dark:text-stone-400 font-medium leading-relaxed">
+                    <div className="text-xs text-subtle font-medium leading-relaxed">
                       {prompt.desc}
                     </div>
                   </button>
@@ -332,9 +332,9 @@ export function WorkspaceChatPanel({
             {chatPending && chatMessages.every((message) => message.kind == null) ? (
               <div className="flex items-start gap-4 max-w-2xl">
                 <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
-                  <LoaderCircle size={16} className="animate-spin text-white" />
+                  <LoaderCircle size={16} className="animate-spin text-on-accent" />
                 </div>
-                <div className="workspace-elevated-panel p-4 rounded-2xl rounded-tl-sm border text-stone-600 dark:text-stone-300">
+                <div className="workspace-elevated-panel p-4 rounded-2xl rounded-tl-sm border text-subtle">
                   正在思考…
                 </div>
               </div>
@@ -354,7 +354,7 @@ export function WorkspaceChatPanel({
       <div
         className={`shrink-0 p-3 @[440px]:p-4 md:@[440px]:px-6 md:@[440px]:pb-5 md:@[440px]:pt-3 bg-transparent transition-all ${lockedContentClass}`}
       >
-        <div className="max-w-4xl mx-auto relative flex items-end rounded-3xl bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
+        <div className="max-w-4xl mx-auto relative flex items-end rounded-3xl bg-surface/90 backdrop-blur-xl border border-line/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
             ref={composerRef}
             placeholder={
@@ -369,7 +369,7 @@ export function WorkspaceChatPanel({
             /* `overflow-y-auto` draws a permanent scrollbar track in some
                browsers even at one line, so the box scrolls only once it is
                actually capped by `max-h-40`. */
-            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-4 py-3 text-base leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 @[440px]:px-5"
+            className="block max-h-40 min-h-[44px] w-full resize-none overflow-y-hidden bg-transparent px-4 py-3 text-base leading-relaxed text-body outline-none placeholder:text-ghost @[440px]:px-5"
           rows={1}
             value={currentDraft}
             onChange={(event) => updateDraft(event.target.value)}
@@ -391,7 +391,7 @@ export function WorkspaceChatPanel({
               disabled={chatPending ? false : interactionDisabled || !currentDraft.trim()}
               aria-label={chatPending ? "中断对话" : "发送消息"}
               title={chatPending ? "中断对话" : "发送消息"}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-900 text-white shadow-sm transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white group-focus-within:bg-accent group-focus-within:text-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-inverse text-on-accent shadow-sm transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-accent dark:hover:text-strong group-focus-within:bg-accent group-focus-within:text-on-accent"
             >
               {chatPending ? <Square size={15} fill="currentColor" /> : <ArrowUp size={18} strokeWidth={2.5} />}
             </button>
@@ -403,12 +403,12 @@ export function WorkspaceChatPanel({
             is unusable and how to recover. */}
         {composerHint ? (
           <div className="mt-3 flex items-center justify-center gap-2 opacity-70">
-            <Sparkles size={12} className="text-stone-500 dark:text-stone-500" />
-            <p className="text-xs font-medium text-stone-500 dark:text-stone-500">{composerHint}</p>
+            <Sparkles size={12} className="text-faint" />
+            <p className="text-xs font-medium text-faint">{composerHint}</p>
           </div>
         ) : (
           // One short line marks answers as AI-generated (required labelling); kept small for chat height.
-          <p className="mt-2 text-center text-xs text-stone-400 dark:text-stone-500">回答由 AI 生成，可能有误</p>
+          <p className="mt-2 text-center text-xs text-faint">回答由 AI 生成，可能有误</p>
         )}
       </div>
     </div>
@@ -434,7 +434,7 @@ function ConversationMessage({ message, renderMessageContent }) {
     >
       {isAssistant ? (
         <div className="w-8 h-8 rounded-2xl bg-accent flex items-center justify-center shrink-0 shadow-sm mt-1">
-          <Sparkles size={16} className="text-white" />
+          <Sparkles size={16} className="text-on-accent" />
         </div>
       ) : null}
       <div className={`flex flex-col gap-2 ${isAssistant ? "" : "items-end"}`}>
@@ -445,8 +445,8 @@ function ConversationMessage({ message, renderMessageContent }) {
               || message.kind === "seek-reference"
               ? "w-full"
               : isAssistant
-                ? "workspace-elevated-panel markdown-body p-4 rounded-2xl rounded-tl-sm border text-stone-700 dark:text-stone-200 leading-relaxed"
-                : "px-4 py-3 rounded-2xl rounded-tr-sm bg-accent border border-accent/80 text-white shadow-sm @[440px]:px-5"
+                ? "workspace-elevated-panel markdown-body p-4 rounded-2xl rounded-tl-sm border text-body leading-relaxed"
+                : "px-4 py-3 rounded-2xl rounded-tr-sm bg-accent border border-accent/80 text-on-accent shadow-sm @[440px]:px-5"
           }
         >
           {renderMessageContent(message, isAssistant)}
@@ -454,13 +454,13 @@ function ConversationMessage({ message, renderMessageContent }) {
         {/* 窄面板下这一行会被压到宽度不足，`复制` 按钮里的两个字被折成竖排
             （复 / 制 各占一行），而 meta 文本也折成两行。两者都禁止换行：
             文本允许截断，按钮整体不参与收缩。 */}
-        <div className={`flex items-center gap-2 text-xs text-stone-500 dark:text-stone-500 ${isAssistant ? "ml-1" : ""}`}>
+        <div className={`flex items-center gap-2 text-xs text-faint ${isAssistant ? "ml-1" : ""}`}>
           <span className="min-w-0 truncate">{message.meta}</span>
           {canCopy ? (
             <CopyToClipboardButton
               text={message.content}
               iconSize={12}
-              className="shrink-0 whitespace-nowrap gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:bg-transparent dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+              className="shrink-0 whitespace-nowrap gap-1 rounded-full bg-transparent px-2 py-0.5 font-medium text-faint hover:bg-soft hover:text-body dark:bg-transparent"
             />
           ) : null}
         </div>
@@ -549,8 +549,8 @@ function ConversationJumpRail({ turns, onJump, anchorRef }) {
               }}
               className={`h-1 rounded-full transition-[width,background-color] duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 ${
                 selected
-                  ? "bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.16)] dark:bg-white"
-                  : "bg-stone-400/80 hover:bg-stone-500 dark:bg-stone-600 dark:hover:bg-stone-400"
+                  ? "bg-surface shadow-[0_0_0_1px_rgba(0,0,0,0.16)]"
+                  : "bg-softer/80 hover:bg-softer"
               }`}
               style={{ width: `${width}px` }}
             />
@@ -558,7 +558,7 @@ function ConversationJumpRail({ turns, onJump, anchorRef }) {
         })}
       </div>
       {activeTurn ? (
-        <div className="pointer-events-none absolute left-full top-1/2 ml-3 w-52 -translate-y-1/2 rounded-md border border-stone-200/90 bg-white/95 px-3 py-2 text-xs font-medium leading-5 text-stone-700 shadow-lg backdrop-blur dark:border-stone-700 dark:bg-stone-950/95 dark:text-stone-200">
+        <div className="pointer-events-none absolute left-full top-1/2 ml-3 w-52 -translate-y-1/2 rounded-md border border-line/90 bg-surface/95 px-3 py-2 text-xs font-medium leading-5 text-body shadow-lg backdrop-blur">
           {truncateConversationPrompt(activeTurn.prompt)}
         </div>
       ) : null}
@@ -580,9 +580,9 @@ function WorkspaceToolTraceMessage({ message }) {
   const isCancelled = message.toolTrace?.status === "cancelled";
 
   return (
-    <details className="group rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+    <details className="group rounded-2xl border border-line/80 bg-surface/90 shadow-sm">
       <summary className="list-none cursor-pointer px-4 py-3.5">
-        <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
+        <div className="flex items-center gap-3 text-body">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-warning-subtle text-warning">
             <Wrench size={16} />
           </div>
@@ -590,7 +590,7 @@ function WorkspaceToolTraceMessage({ message }) {
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-base font-semibold">{message.content}</strong>
               {durationLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-soft px-2 py-0.5 text-xs font-medium text-subtle">
                   <Clock3 size={12} />
                   用时 {durationLabel}
                 </span>
@@ -605,12 +605,12 @@ function WorkspaceToolTraceMessage({ message }) {
                   失败
                 </span>
               ) : isCancelled ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-soft px-2 py-0.5 text-xs font-medium text-subtle">
                   已中断
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+            <p className="mt-1 text-xs text-subtle">
               {isRunning
                 ? "正在处理后台任务..."
                 : isFailed
@@ -622,37 +622,37 @@ function WorkspaceToolTraceMessage({ message }) {
                     : "展开查看具体的执行步骤说明"}
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-faint transition-transform group-open:rotate-90" />
         </div>
       </summary>
 
-      <div className="border-t border-stone-200/80 px-4 py-3 dark:border-stone-800">
+      <div className="border-t border-line/80 px-4 py-3">
         <div className="flex flex-col gap-2.5">
           {steps.map((step, index) => (
             <div
               key={`${step.toolName}-${index}`}
-              className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3 py-3 dark:border-stone-800 dark:bg-stone-900/70"
+              className="rounded-2xl border border-line/70 bg-muted/80 px-3 py-3"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <code className="rounded-md bg-stone-200/80 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
+                <code className="rounded-md bg-softer/80 px-2 py-0.5 text-xs font-semibold text-body">
                   {step.toolName}
                 </code>
-                <span className="text-sm font-medium text-stone-700 dark:text-stone-200">{step.label}</span>
+                <span className="text-sm font-medium text-body">{step.label}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${step.status === "running"
                   ? "bg-warning-subtle text-warning"
                   : step.status === "failed"
                     ? "bg-danger-subtle text-danger"
                     : step.status === "cancelled"
-                      ? "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                      ? "bg-soft text-subtle"
                     : "bg-success-subtle text-success"
                   }`}>
                   {step.status === "running" ? "进行中" : step.status === "failed" ? "失败" : step.status === "cancelled" ? "已中断" : "已完成"}
                 </span>
                 {step.target ? (
-                  <span className="truncate text-xs text-stone-600 dark:text-stone-400">({step.target})</span>
+                  <span className="truncate text-xs text-subtle">({step.target})</span>
                 ) : null}
                 {shouldShowDuration(step.durationMs) ? (
-                  <span className="text-xs text-stone-500 dark:text-stone-500">用时 {formatDurationLabel(step.durationMs)}</span>
+                  <span className="text-xs text-faint">用时 {formatDurationLabel(step.durationMs)}</span>
                 ) : null}
               </div>
             </div>
@@ -673,34 +673,34 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
   return (
     <details className="group rounded-2xl border border-info/20 bg-info-subtle shadow-sm dark:border-info/10 dark:bg-info-subtle">
       <summary className="list-none cursor-pointer px-4 py-3.5">
-        <div className="flex items-center gap-3 text-stone-800 dark:text-stone-100">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-accent dark:bg-accent/10 dark:text-accent">
+        <div className="flex items-center gap-3 text-body">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-surface/80 text-accent dark:bg-accent/10 dark:text-accent">
             <FileText size={16} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-base font-semibold">{title}</strong>
             </div>
-            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+            <p className="mt-1 text-xs text-subtle">
               展开查看命中的转写片段，再决定是否跳到视频。
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-faint transition-transform group-open:rotate-90" />
         </div>
       </summary>
 
       <div className="border-t border-info/20 px-4 py-4 dark:border-info/10">
         {reference.query ? (
-          <p className="text-xs font-medium text-stone-600 dark:text-stone-400">
+          <p className="text-xs font-medium text-subtle">
             检索问题：{reference.query}
           </p>
         ) : null}
         {reference.matchedText ? (
-          <blockquote className="mt-3 rounded-2xl border border-stone-200/60 bg-white/80 px-4 py-3 text-sm leading-6 text-stone-800 dark:border-stone-700/60 dark:bg-stone-900 dark:text-stone-100">
+          <blockquote className="mt-3 rounded-2xl border border-line/60 bg-surface/80 px-4 py-3 text-sm leading-6 text-body">
             {reference.matchedText}
           </blockquote>
         ) : (
-          <p className="mt-3 text-sm text-stone-700 dark:text-stone-300">
+          <p className="mt-3 text-sm text-body">
             当前没有返回完整命中原文，但已经定位到对应时间点。
           </p>
         )}
@@ -708,7 +708,7 @@ function WorkspaceSeekReferenceMessage({ message, onOpenSeekReference }) {
           <button
             type="button"
             onClick={() => onOpenSeekReference?.(reference)}
-            className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-accent transition hover:border-accent/50 hover:bg-accent/5 dark:hover:bg-accent/10"
+            className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-surface/90 px-3 py-1.5 text-xs font-semibold text-accent transition hover:border-accent/50 hover:bg-accent/5 dark:hover:bg-accent/10"
           >
             <PlayCircle size={14} />
             跳到视频定位
@@ -731,9 +731,9 @@ function WorkspaceThoughtTraceMessage({ message }) {
 
   if (hasStages) {
     return (
-      <details className="group rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+      <details className="group rounded-2xl border border-line/80 bg-surface/90 shadow-sm">
         <summary className="list-none cursor-pointer px-4 py-3.5">
-          <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
+          <div className="flex items-center gap-3 text-body">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
               {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
             </div>
@@ -741,21 +741,21 @@ function WorkspaceThoughtTraceMessage({ message }) {
               <div className="flex flex-wrap items-center gap-2">
                 <strong className="text-base font-semibold">{message.content}</strong>
                 {durationLabel ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-soft px-2 py-0.5 text-xs font-medium text-subtle">
                     <Clock3 size={12} />
                     用时 {durationLabel}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+              <p className="mt-1 text-xs text-subtle">
                 {isRunning ? "当前按图节点顺序执行中" : isFailed ? "本轮图节点执行失败" : isCancelled ? "本轮图节点执行已中断" : "本轮图节点执行已完成"}
               </p>
             </div>
-            <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
+            <ChevronRight size={18} className="shrink-0 text-faint transition-transform group-open:rotate-90" />
           </div>
         </summary>
 
-        <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
+        <div className="border-t border-line/80 px-4 py-4">
           <div className="flex flex-col gap-3">
             <AnimatePresence initial={false}>
               {stages.map((stage) => {
@@ -770,7 +770,7 @@ function WorkspaceThoughtTraceMessage({ message }) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="rounded-2xl border border-stone-200/70 bg-stone-50/80 px-3.5 py-3 dark:border-stone-800 dark:bg-stone-900/70"
+                    className="rounded-2xl border border-line/70 bg-muted/80 px-3.5 py-3"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
@@ -779,14 +779,14 @@ function WorkspaceThoughtTraceMessage({ message }) {
                           : stageFailed
                             ? "bg-danger-subtle text-danger"
                             : stageCancelled
-                              ? "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                              ? "bg-soft text-subtle"
                             : "bg-success-subtle text-success"
                           }`}>
                           {stageRunning ? <LoaderCircle size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                         </div>
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold text-stone-800 dark:text-stone-100">{stage.label}</div>
-                          <div className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">{stage.nodeId}</div>
+                          <div className="text-sm font-semibold text-body">{stage.label}</div>
+                          <div className="mt-0.5 text-xs text-subtle">{stage.nodeId}</div>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -795,13 +795,13 @@ function WorkspaceThoughtTraceMessage({ message }) {
                           : stageFailed
                             ? "bg-danger-subtle text-danger"
                             : stageCancelled
-                              ? "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                              ? "bg-soft text-subtle"
                             : "bg-success-subtle text-success"
                           }`}>
                           {stageRunning ? "执行中" : stageFailed ? "失败" : stageCancelled ? "已中断" : "已完成"}
                         </span>
                         {stageDurationLabel ? (
-                          <span className="text-xs text-stone-500 dark:text-stone-500">用时 {stageDurationLabel}</span>
+                          <span className="text-xs text-faint">用时 {stageDurationLabel}</span>
                         ) : null}
                       </div>
                     </div>
@@ -816,9 +816,9 @@ function WorkspaceThoughtTraceMessage({ message }) {
   }
 
   return (
-    <details className="group rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-800 dark:bg-neutral-900">
+    <details className="group rounded-2xl border border-line/80 bg-surface/90 shadow-sm">
       <summary className="list-none cursor-pointer px-4 py-3.5">
-        <div className="flex items-center gap-3 text-stone-700 dark:text-stone-200">
+        <div className="flex items-center gap-3 text-body">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
             {isRunning ? <LoaderCircle size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
           </div>
@@ -826,21 +826,21 @@ function WorkspaceThoughtTraceMessage({ message }) {
             <div className="flex flex-wrap items-center gap-2">
               <strong className="text-base font-semibold">{message.content}</strong>
               {durationLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-soft px-2 py-0.5 text-xs font-medium text-subtle">
                   <Clock3 size={12} />
                   用时 {durationLabel}
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+            <p className="mt-1 text-xs text-subtle">
               {isRunning ? "正在分析当前问题，思考过程将实时展开" : isFailed ? "思考过程执行失败，展开查看错误摘要" : isCancelled ? "思考过程已中断" : "展开查看对问题的思考过程摘要"}
             </p>
           </div>
-          <ChevronRight size={18} className="shrink-0 text-stone-500 transition-transform group-open:rotate-90" />
+          <ChevronRight size={18} className="shrink-0 text-faint transition-transform group-open:rotate-90" />
         </div>
       </summary>
 
-      <div className="border-t border-stone-200/80 px-4 py-3 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:text-stone-300">
+      <div className="border-t border-line/80 px-4 py-3 text-sm leading-6 text-subtle">
         {displaySummary}
       </div>
     </details>

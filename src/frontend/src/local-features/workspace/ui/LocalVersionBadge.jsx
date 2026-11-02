@@ -11,7 +11,7 @@ export function LocalVersionBadge({api,onOpenUpdate}){const [versionStatus,setVe
             {versionStatus.version}
           </button>
         ) : (
-          <span className="rounded-full border border-stone-200/80 bg-stone-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400">
+          <span className="rounded-full border border-line/80 bg-muted px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
             {versionStatus.version}
           </span>
         )}

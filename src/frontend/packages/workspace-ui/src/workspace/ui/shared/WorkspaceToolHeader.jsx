@@ -8,7 +8,7 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
     <div className="relative flex flex-wrap items-start justify-between gap-x-4 gap-y-2 @[480px]:gap-y-3">
       <div className="min-w-[min(11rem,100%)] flex-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-xl font-bold leading-snug text-stone-900 dark:text-stone-100 @[480px]:text-2xl">{meta?.label}</h1>
+          <h1 className="text-xl font-bold leading-snug text-strong @[480px]:text-2xl">{meta?.label}</h1>
           {/* Generated content is labelled as such (AI 生成合成内容标识办法). */}
           {aiGenerated ? (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
@@ -16,13 +16,13 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页
             </span>
           ) : null}
           {badge ? (
-            <span className="inline-flex shrink-0 items-center rounded-full border border-stone-200 bg-stone-100/80 px-2.5 py-0.5 text-xs font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-800/70 dark:text-stone-300">
+            <span className="inline-flex shrink-0 items-center rounded-full border border-line bg-soft/80 px-2.5 py-0.5 text-xs font-semibold text-subtle">
               {badge}
             </span>
           ) : null}
         </div>
         {meta?.description ? (
-          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400 @[480px]:mt-2">{meta.description}</p>
+          <p className="mt-1 text-sm text-subtle @[480px]:mt-2">{meta.description}</p>
         ) : null}
       </div>
       <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
@@ -49,7 +49,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
         type="button"
         disabled
         title={disabledReason}
-        className={`${className} cursor-not-allowed text-stone-500 opacity-50 dark:text-stone-500`}
+        className={`${className} cursor-not-allowed text-faint opacity-50`}
       >
         <Download size={14} />
         {buttonLabel}
@@ -63,7 +63,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`${className} text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100`}
+        className={`${className} text-subtle hover:bg-soft hover:text-strong`}
       >
         <Download size={14} />
         {buttonLabel}
@@ -77,7 +77,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
               href={action.href}
               download
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-200 dark:hover:bg-neutral-800"
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-body transition hover:bg-soft hover:text-strong"
             >
               <Download size={15} />
               {action.label ?? "导出 MD"}
@@ -88,7 +88,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
               type="button"
               disabled
               title={action.disabledReason ?? "当前内容不可导出"}
-              className="flex w-full cursor-not-allowed items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-stone-500 opacity-60 dark:text-stone-500"
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-faint opacity-60"
             >
               <Download size={15} />
               {action.label ?? "导出 MD"}

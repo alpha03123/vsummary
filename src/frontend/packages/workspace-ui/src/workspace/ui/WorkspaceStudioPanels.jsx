@@ -26,7 +26,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
   }, [layout]);
 
   const addPanel = (
-    <button type="button" onClick={onAddPanel} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90">
+    <button type="button" onClick={onAddPanel} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent/90">
       <Plus size={16} aria-hidden="true" />
       添加一个面板
     </button>
@@ -42,14 +42,14 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
   if (narrow) {
     const panelIds = getStudioPanelIds(layout);
     if (!panelIds.length) {
-      return <div className="flex h-full w-full min-w-0 bg-stone-50/40 p-1 dark:bg-neutral-950/30">{zeroState}</div>;
+      return <div className="flex h-full w-full min-w-0 bg-muted/40 p-1">{zeroState}</div>;
     }
     const activePanelId = panelIds.includes(focusedPanel) ? focusedPanel : panelIds[0];
     const activeType = panelTools[activePanelId] ?? getPanelType(activePanelId);
     const meta = PANEL_META[activeType] ?? PANEL_META.studio;
     return (
-      <div className="flex h-full w-full min-w-0 flex-col bg-stone-50/40 dark:bg-neutral-950/30">
-        <header className="flex shrink-0 items-center gap-1 border-b border-stone-200/80 px-1.5 py-1.5 dark:border-stone-800">
+      <div className="flex h-full w-full min-w-0 flex-col bg-muted/40">
+        <header className="flex shrink-0 items-center gap-1 border-b border-line/80 px-1.5 py-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {panelIds.map((panelId) => {
               const type = panelTools[panelId] ?? getPanelType(panelId);
@@ -58,7 +58,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
               const active = panelId === activePanelId;
               return (
                 <button key={panelId} type="button" onClick={() => onFocus(panelId)} aria-pressed={active} title={panelMeta.label}
-                  className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors ${active ? "bg-accent/10 text-accent" : "text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"}`}>
+                  className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors ${active ? "bg-accent/10 text-accent" : "text-subtle hover:bg-soft"}`}>
                   <PanelIcon size={15} className="shrink-0" aria-hidden="true" />
                   <span className="max-w-[9rem] truncate">{panelMeta.label}</span>
                 </button>
@@ -69,7 +69,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
             {renderPanelLeadingActions?.(activePanelId, activeType)}
             {renderPanelActions?.(activePanelId, activeType)}
             {renderPanelTrailingActions?.(activePanelId, activeType)}
-            {panelIds.length > 1 ? <button type="button" onClick={() => onClose(activePanelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button> : null}
+            {panelIds.length > 1 ? <button type="button" onClick={() => onClose(activePanelId)} className="workspace-mosaic-action text-faint hover:bg-danger-subtle hover:text-danger dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button> : null}
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-hidden">{renderPanel(activePanelId, activeType)}</div>
@@ -78,7 +78,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
   }
 
   return (
-    <div className="flex h-full w-full min-w-0 bg-stone-50/40 p-1 dark:bg-neutral-950/30">
+    <div className="flex h-full w-full min-w-0 bg-muted/40 p-1">
       <Mosaic
         value={mosaicLayout}
         onChange={setMosaicLayout}
@@ -103,11 +103,11 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
               onDragStart={() => onFocus(panelId)}
               renderPreview={() => <div className="workspace-mosaic-drag-preview" aria-hidden="true" />}
               renderToolbar={() => (
-                <header className="flex h-full min-w-0 items-center justify-between border-b border-stone-200/80 px-3 py-2 dark:border-stone-800">
+                <header className="flex h-full min-w-0 items-center justify-between border-b border-line/80 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <button type="button" onClick={() => onFocus(panelId)} className="inline-flex min-w-0 items-center gap-2 text-left">
-                      <GripVertical size={15} className="shrink-0 text-stone-400" aria-hidden="true" />
-                      {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-accent" /><span className="truncate text-sm font-bold text-stone-800 dark:text-stone-100">{meta.label}</span></>}
+                      <GripVertical size={15} className="shrink-0 text-faint" aria-hidden="true" />
+                      {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-accent" /><span className="truncate text-sm font-bold text-body">{meta.label}</span></>}
                     </button>
                     {panelLeadingActions ? <div className="shrink-0" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div> : null}
                   </div>
@@ -116,7 +116,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
                       {panelActions}
                       <button type="button" onClick={() => onSplit(panelId, "row")} className="workspace-mosaic-action workspace-mosaic-split" title="在右侧拆分面板" aria-label="在右侧拆分面板"><PanelRight size={15} /></button>
                       <button type="button" onClick={() => onSplit(panelId, "column")} className="workspace-mosaic-action workspace-mosaic-split" title="在下方拆分面板" aria-label="在下方拆分面板"><PanelBottom size={15} /></button>
-                      <button type="button" onClick={() => onClose(panelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+                      <button type="button" onClick={() => onClose(panelId)} className="workspace-mosaic-action text-faint hover:bg-danger-subtle hover:text-danger dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
                     </div>
                     {panelTrailingActions ? <div className="ml-2 shrink-0">{panelTrailingActions}</div> : null}
                   </div>

@@ -97,12 +97,12 @@ export function WorkspaceVideoPlayer({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {isAudioSource ? (
-        <div className="workspace-elevated-panel rounded-3xl border p-8 text-center text-sm font-semibold text-stone-600 shadow-sm dark:text-zinc-300">
+        <div className="workspace-elevated-panel rounded-3xl border p-8 text-center text-sm font-semibold text-subtle shadow-sm">
           音频文件暂不支持预览
         </div>
       ) : videoSource ? (
         <div className="workspace-video-stage flex min-h-0 flex-1 items-center justify-center overflow-hidden">
-          <div className="workspace-video-frame relative overflow-hidden rounded-3xl border border-stone-200 bg-stone-100 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+          <div className="workspace-video-frame relative overflow-hidden rounded-3xl border border-line bg-soft shadow-sm">
             <video
               key={videoSource}
               ref={videoRef}
@@ -144,12 +144,12 @@ export function WorkspaceVideoPlayer({
       ) : (
         // 未下载的媒体没有可播放源：给一个和播放器等大的 16:9 占位，
         // 说明当前状态并指向左栏的下载入口，而不是留一条没有信息的黑条。
-        <div className="workspace-elevated-panel flex min-h-0 flex-1 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl border border-stone-800 bg-stone-950 px-6 text-center shadow-sm">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-stone-300">
+        <div className="workspace-elevated-panel flex min-h-0 flex-1 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl border border-line-strong bg-inverse px-6 text-center shadow-sm">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-faint">
             <Download size={22} aria-hidden="true" />
           </span>
-          <p className="text-sm font-semibold text-stone-200">视频尚未下载</p>
-          <p className="max-w-sm text-xs leading-relaxed text-stone-400">
+          <p className="text-sm font-semibold text-on-inverse">视频尚未下载</p>
+          <p className="max-w-sm text-xs leading-relaxed text-faint">
             在左侧来源列表点击「下载视频」，下载完成后即可在这里预览。
           </p>
         </div>

@@ -33,7 +33,7 @@ export function WorkspaceBackButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center ${gap} whitespace-nowrap ${padding} rounded-xl text-xs font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100 ${className}`}
+      className={`inline-flex shrink-0 items-center ${gap} whitespace-nowrap ${padding} rounded-xl text-xs font-semibold text-subtle transition hover:bg-soft hover:text-strong ${className}`}
     >
       <Icon size={14} />
       {label}

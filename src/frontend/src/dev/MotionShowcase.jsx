@@ -76,15 +76,15 @@ export function MotionShowcase() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-stone-50 overflow-auto p-10 font-sans gap-12 text-stone-900">
+    <div className="flex flex-col h-screen bg-muted overflow-auto p-10 font-sans gap-12 text-strong">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Framer Motion 动效实验室</h1>
-          <p className="text-stone-600 mt-2">在这里体验原生系统级高级动效，选好感觉后我们再实装到主页面。</p>
+          <p className="text-subtle mt-2">在这里体验原生系统级高级动效，选好感觉后我们再实装到主页面。</p>
         </div>
         <button 
           onClick={() => window.location.hash = ""} 
-          className="px-4 py-2 bg-stone-200 text-stone-800 rounded-lg hover:bg-stone-300 font-semibold"
+          className="px-4 py-2 bg-softer text-body rounded-lg hover:bg-softer font-semibold"
         >
           返回主页面
         </button>
@@ -93,18 +93,18 @@ export function MotionShowcase() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
         {/* 1. Layout Transition (侧边栏收缩重排) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm">
           <h2 className="text-xl font-bold mb-4">1. 无缝布局重排 (Layout Animations)</h2>
-          <p className="text-sm text-stone-600 mb-4">当侧边栏宽度改变时，右侧内容块极其平滑地自动填补空缺，告别闪跳。</p>
+          <p className="text-sm text-subtle mb-4">当侧边栏宽度改变时，右侧内容块极其平滑地自动填补空缺，告别闪跳。</p>
           
           <button 
             onClick={() => setSidebarOpen(!isSidebarOpen)}
-            className="mb-4 px-4 py-2 bg-stone-900 text-white rounded-lg font-medium active:scale-95 transition-transform"
+            className="mb-4 px-4 py-2 bg-inverse text-on-inverse rounded-lg font-medium active:scale-95 transition-transform"
           >
             Toggle Sidebar
           </button>
 
-          <div className="flex gap-4 h-48 bg-stone-100 p-2 rounded-2xl relative overflow-hidden">
+          <div className="flex gap-4 h-48 bg-soft p-2 rounded-2xl relative overflow-hidden">
             <motion.div 
               layout
               transition={springTransition}
@@ -116,21 +116,21 @@ export function MotionShowcase() {
             <motion.div 
               layout
               transition={springTransition}
-              className="flex-1 bg-white rounded-xl border flex items-center justify-center gap-2 p-4"
+              className="flex-1 bg-surface rounded-xl border flex items-center justify-center gap-2 p-4"
             >
-              <div className="w-10 h-10 rounded-full bg-stone-200 shrink-0" />
+              <div className="w-10 h-10 rounded-full bg-softer shrink-0" />
               <div className="flex-1 flex flex-col gap-2">
-                <div className="h-4 bg-stone-200 rounded w-full" />
-                <div className="h-4 bg-stone-200 rounded w-2/3" />
+                <div className="h-4 bg-softer rounded w-full" />
+                <div className="h-4 bg-softer rounded w-2/3" />
               </div>
             </motion.div>
           </div>
         </section>
 
         {/* 2. Shared Layout Transition (共享元素变形) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm">
           <h2 className="text-xl font-bold mb-4">2. 共享元素变幻 (layoutId)</h2>
-          <p className="text-sm text-stone-600 mb-4">类似 Apple App Store 的卡片展开。卡片脱离文档流直接“飞”成详情页。</p>
+          <p className="text-sm text-subtle mb-4">类似 Apple App Store 的卡片展开。卡片脱离文档流直接“飞”成详情页。</p>
           
           <div className="flex gap-4 h-48 relative">
             {cards.map((card) => (
@@ -139,10 +139,10 @@ export function MotionShowcase() {
                 key={card.id}
                 onClick={() => setSelectedId(card.id)}
                 transition={springTransition}
-                className="flex-1 bg-stone-100 rounded-2xl p-4 cursor-pointer hover:bg-stone-200"
+                className="flex-1 bg-soft rounded-2xl p-4 cursor-pointer hover:bg-softer"
               >
                 <motion.h3 layoutId={`card-title-${card.id}`} className="font-bold text-lg">{card.title}</motion.h3>
-                <p className="text-xs text-stone-600 mt-2">{card.desc}</p>
+                <p className="text-xs text-subtle mt-2">{card.desc}</p>
               </motion.div>
             ))}
 
@@ -151,12 +151,12 @@ export function MotionShowcase() {
                 <motion.div
                   layoutId={`card-container-${selectedId}`}
                   transition={springTransition}
-                  className="absolute inset-0 bg-stone-900 rounded-[2rem] p-8 text-white z-10 flex flex-col shadow-2xl"
+                  className="absolute inset-0 bg-inverse rounded-[2rem] p-8 text-on-inverse z-10 flex flex-col shadow-2xl"
                 >
                   <motion.h3 layoutId={`card-title-${selectedId}`} className="font-bold text-2xl mb-4">
                     {cards.find(c => c.id === selectedId).title}
                   </motion.h3>
-                  <p className="text-zinc-400">这就叫连续性动效。用户完全能感知到界面的空间从属关系。</p>
+                  <p className="text-faint">这就叫连续性动效。用户完全能感知到界面的空间从属关系。</p>
                   
                   <motion.button 
                     initial={{ opacity: 0 }}
@@ -173,12 +173,12 @@ export function MotionShowcase() {
         </section>
 
         {/* 3. Exit Animation (平滑离场) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm">
           <div className="flex justify-between items-center mb-4">
              <h2 className="text-xl font-bold">3. 彻底告别生硬销毁 (Exit Animation)</h2>
              <button onClick={resetMessages} className="text-sm text-accent font-semibold hover:underline">Reset</button>
           </div>
-          <p className="text-sm text-stone-600 mb-4">点击列表项删除。你甚至能看到剩余的元素优雅地上移填补空缺。</p>
+          <p className="text-sm text-subtle mb-4">点击列表项删除。你甚至能看到剩余的元素优雅地上移填补空缺。</p>
           
           <ul className="flex flex-col gap-2">
             <AnimatePresence mode="popLayout">
@@ -201,18 +201,18 @@ export function MotionShowcase() {
         </section>
 
         {/* 4. Drag and Constraints (物理拖拽缓冲) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm overflow-hidden overflow-visible">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm overflow-hidden overflow-visible">
           <h2 className="text-xl font-bold mb-4">4. 极度真实的拖拽惯性 (Drag Physics)</h2>
-          <p className="text-sm text-stone-600 mb-4">非常适合思维导图画板的交互。试着在这个方框内用力甩动圆形节点，感受回弹停滞！</p>
+          <p className="text-sm text-subtle mb-4">非常适合思维导图画板的交互。试着在这个方框内用力甩动圆形节点，感受回弹停滞！</p>
           
-          <motion.div className="h-48 bg-stone-100 rounded-2xl border-2 border-stone-200 border-dashed relative overflow-hidden flex items-center justify-center p-4">
+          <motion.div className="h-48 bg-soft rounded-2xl border-2 border-line border-dashed relative overflow-hidden flex items-center justify-center p-4">
              <motion.div
                drag
                dragConstraints={{ left: -100, right: 100, top: -50, bottom: 50 }}
                whileHover={{ scale: 1.1, cursor: "grab" }}
                whileTap={{ scale: 0.9, cursor: "grabbing" }}
                transition={bouncyTransition}
-               className="w-16 h-16 bg-accent rounded-full shadow-lg flex items-center justify-center text-white text-xs font-bold"
+               className="w-16 h-16 bg-accent rounded-full shadow-lg flex items-center justify-center text-on-accent text-xs font-bold"
              >
                 甩我
              </motion.div>
@@ -220,12 +220,12 @@ export function MotionShowcase() {
         </section>
 
         {/* 5. Peer-to-Peer Switch (同级平滑切换) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm lg:col-span-2">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm lg:col-span-2">
           <h2 className="text-xl font-bold mb-2">5. 同级平滑切换 (Peer-to-Peer Switch)</h2>
-          <p className="text-sm text-stone-600 mb-6">这就是我们刚刚讨论的场景：在工作区左侧栏切换不同视频时，右侧主体内容的无缝过渡。</p>
+          <p className="text-sm text-subtle mb-6">这就是我们刚刚讨论的场景：在工作区左侧栏切换不同视频时，右侧主体内容的无缝过渡。</p>
           
           <div className="flex gap-4 mb-6">
-            <span className="text-sm font-bold text-stone-700 flex items-center mr-2">选择动效风格:</span>
+            <span className="text-sm font-bold text-body flex items-center mr-2">选择动效风格:</span>
             {["fade", "slide", "blur"].map(effect => (
               <label key={effect} className="flex flex-row items-center gap-2 text-sm cursor-pointer hover:text-accent">
                 <input type="radio" name="effect" checked={switchEffect === effect} onChange={() => setSwitchEffect(effect)} />
@@ -234,15 +234,15 @@ export function MotionShowcase() {
             ))}
           </div>
 
-          <div className="flex flex-col md:flex-row h-72 rounded-2xl border overflow-hidden bg-stone-50">
+          <div className="flex flex-col md:flex-row h-72 rounded-2xl border overflow-hidden bg-muted">
             {/* Mock Sidebar */}
-            <div className="w-full md:w-64 bg-stone-100 border-b md:border-b-0 md:border-r border-stone-200 p-4 flex flex-col gap-2 shrink-0">
-              <span className="text-xs font-bold text-stone-600 tracking-widest pl-2 mb-2">VIDEOS LIST</span>
+            <div className="w-full md:w-64 bg-soft border-b md:border-b-0 md:border-r border-line p-4 flex flex-col gap-2 shrink-0">
+              <span className="text-xs font-bold text-subtle tracking-widest pl-2 mb-2">VIDEOS LIST</span>
               {["1-4 准备工作", "1-5 安装 Nacos", "1-6 仿 Manus 框架"].map(tab => (
                 <button 
                   key={tab} 
                   onClick={() => setSwitchTab(tab)}
-                  className={`text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${switchTab === tab ? "bg-white shadow-sm border border-stone-200 text-accent" : "text-stone-600 hover:bg-stone-200/50"}`}
+                  className={`text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${switchTab === tab ? "bg-surface shadow-sm border border-line text-accent" : "text-subtle hover:bg-softer/50"}`}
                 >
                   {tab}
                 </button>
@@ -250,7 +250,7 @@ export function MotionShowcase() {
             </div>
 
             {/* Mock Main Content Area */}
-            <div className="flex-1 relative bg-white p-8 flex items-center justify-center overflow-hidden">
+            <div className="flex-1 relative bg-surface p-8 flex items-center justify-center overflow-hidden">
                {/* 关键点：mode="wait" 会等待 exit 动画播完再挂载新的。key 属性必不可少，用来让 react 知道组件变了 */}
                <AnimatePresence mode="wait">
                  <motion.div
@@ -259,11 +259,11 @@ export function MotionShowcase() {
                    initial="initial"
                    animate="animate"
                    exit="exit"
-                   className="absolute w-full max-w-md bg-stone-50/50 border border-stone-100 p-8 rounded-2xl text-center"
+                   className="absolute w-full max-w-md bg-muted/50 border border-line-soft p-8 rounded-2xl text-center"
                  >
-                   <div className="w-16 h-16 rounded-full bg-stone-200 mx-auto mb-4" />
-                   <h3 className="text-2xl font-bold text-stone-800 mb-2">{switchTab}</h3>
-                   <p className="text-stone-600 text-sm">这里是当前视频的详细信息、AI 总结内容等。感受 {switchEffect.toUpperCase()} 退场和进场时的优雅交接。</p>
+                   <div className="w-16 h-16 rounded-full bg-softer mx-auto mb-4" />
+                   <h3 className="text-2xl font-bold text-body mb-2">{switchTab}</h3>
+                   <p className="text-subtle text-sm">这里是当前视频的详细信息、AI 总结内容等。感受 {switchEffect.toUpperCase()} 退场和进场时的优雅交接。</p>
                  </motion.div>
                </AnimatePresence>
             </div>
@@ -271,11 +271,11 @@ export function MotionShowcase() {
         </section>
 
         {/* 6. Active Indicator Slide (平滑选中框过渡) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm">
           <h2 className="text-xl font-bold mb-4">6. 平滑选中框过渡 (Active Indicator)</h2>
-          <p className="text-sm text-stone-600 mb-6">点击任意项目。你想要的选中框“不仅是变色，而是丝滑滑过去”的神级效果。</p>
+          <p className="text-sm text-subtle mb-6">点击任意项目。你想要的选中框“不仅是变色，而是丝滑滑过去”的神级效果。</p>
           
-          <div className="flex flex-col gap-1 w-full max-w-xs bg-stone-100 p-2 rounded-2xl relative">
+          <div className="flex flex-col gap-1 w-full max-w-xs bg-soft p-2 rounded-2xl relative">
             {menus.map((menu) => {
               const isActive = activeMenu === menu;
               return (
@@ -283,7 +283,7 @@ export function MotionShowcase() {
                   key={menu}
                   onClick={() => setActiveMenu(menu)}
                   className={`relative w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-colors duration-200 z-10 ${
-                    isActive ? "text-accent" : "text-stone-600 hover:text-stone-800"
+                    isActive ? "text-accent" : "text-subtle hover:text-body"
                   }`}
                 >
                   {/* The secret sauce: An absolutely positioned background with layoutId */}
@@ -291,7 +291,7 @@ export function MotionShowcase() {
                     <motion.div
                       layoutId="sidebar-active-bg"
                       transition={springTransition}
-                      className="absolute inset-0 bg-white shadow-sm border border-stone-200/50 rounded-xl -z-10"
+                      className="absolute inset-0 bg-surface shadow-sm border border-line/50 rounded-xl -z-10"
                     />
                   )}
                   {menu}
@@ -302,21 +302,21 @@ export function MotionShowcase() {
         </section>
 
         {/* 7. Pagination View (页码翻页过渡) */}
-        <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
+        <section className="bg-surface p-6 rounded-[2rem] border shadow-sm">
           <div className="flex justify-between items-center mb-4">
              <h2 className="text-xl font-bold">7. 立体页码翻页 (Pagination Flip)</h2>
              <div className="flex gap-2">
-                <button onClick={() => paginate(-1)} className="p-2 bg-stone-100 hover:bg-stone-200 rounded-full text-stone-800">
+                <button onClick={() => paginate(-1)} className="p-2 bg-soft hover:bg-softer rounded-full text-body">
                   ←
                 </button>
-                <button onClick={() => paginate(1)} className="p-2 bg-stone-100 hover:bg-stone-200 rounded-full text-stone-800">
+                <button onClick={() => paginate(1)} className="p-2 bg-soft hover:bg-softer rounded-full text-body">
                   →
                 </button>
              </div>
           </div>
-          <p className="text-sm text-stone-600 mb-6">具有方向感知（向左翻左入，向右翻右入），经常用在全屏图库或章节阅读里。</p>
+          <p className="text-sm text-subtle mb-6">具有方向感知（向左翻左入，向右翻右入），经常用在全屏图库或章节阅读里。</p>
 
-          <div className="relative h-48 w-full flex items-center justify-center bg-stone-50 rounded-2xl border overflow-hidden">
+          <div className="relative h-48 w-full flex items-center justify-center bg-muted rounded-2xl border overflow-hidden">
             <AnimatePresence custom={direction} mode="popLayout">
                <motion.div
                  key={page}
@@ -325,7 +325,7 @@ export function MotionShowcase() {
                  initial="enter"
                  animate="center"
                  exit="exit"
-                 className="absolute w-3/4 h-3/4 bg-white border shadow-sm rounded-xl flex items-center justify-center text-4xl font-mono font-bold text-stone-300"
+                 className="absolute w-3/4 h-3/4 bg-surface border shadow-sm rounded-xl flex items-center justify-center text-4xl font-mono font-bold text-faint"
                >
                  PAGE {page}
                </motion.div>

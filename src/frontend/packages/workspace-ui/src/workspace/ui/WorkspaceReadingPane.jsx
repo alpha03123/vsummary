@@ -172,7 +172,7 @@ export function WorkspaceReadingPane({
         ) : (
           <div key={`${selectedContextType}:${toolId}:${selectedVideo?.id ?? activeSeries.id}`} className="motion-fade-scale flex h-full min-h-0 flex-col">
             {!embeddedInStudioPanel && !(isStudioHome && onPanelSelectTool) ? (
-              <header className="mb-3 flex shrink-0 flex-col gap-3 border-b border-stone-200/80 pb-3 dark:border-white/5 @[480px]:mb-5 @[480px]:gap-5 @[480px]:pb-5">
+              <header className="mb-3 flex shrink-0 flex-col gap-3 border-b border-line/80 pb-3 @[480px]:mb-5 @[480px]:gap-5 @[480px]:pb-5">
               {isStudioHome ? (
                 <WorkspaceHomeHeader
                   title={isPlaygroundHome ? activeSeries.title : summary?.title ?? selectedVideo?.title}
@@ -428,8 +428,8 @@ function WorkspaceHomeHeader({ title, description, children }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-[min(100%,20rem)] flex-1">
-        <h2 className="break-words text-2xl font-bold leading-snug text-stone-900 dark:text-stone-100">{title}</h2>
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{description}</p>
+        <h2 className="break-words text-2xl font-bold leading-snug text-strong">{title}</h2>
+        <p className="mt-2 text-sm text-subtle">{description}</p>
       </div>
       {children ? <div className="ml-auto shrink-0">{children}</div> : null}
     </div>

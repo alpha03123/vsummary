@@ -171,11 +171,11 @@ export function WorkspaceOverviewContent({
       onSelect={selectOutlineChapter}
     >
       <div className="flex flex-col gap-4">
-      <article className="workspace-accent-panel relative overflow-hidden rounded-2xl border p-6 text-stone-900 dark:text-stone-100">
+      <article className="workspace-accent-panel relative overflow-hidden rounded-2xl border p-6 text-strong">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Sparkles size={64} />
         </div>
-        <p className="relative z-10 mb-3 text-xs font-bold text-stone-600 dark:text-stone-400">
+        <p className="relative z-10 mb-3 text-xs font-bold text-subtle">
           核心问题
         </p>
         <p className="relative z-10 text-base font-medium leading-relaxed">
@@ -184,7 +184,7 @@ export function WorkspaceOverviewContent({
       </article>
 
       {summary.generationWarnings?.length ? (
-        <div role="alert" className="flex items-start gap-3 border-l-4 border-warning-border bg-warning-subtle px-4 py-3 text-sm text-stone-700 dark:text-stone-200">
+        <div role="alert" className="flex items-start gap-3 border-l-4 border-warning-border bg-warning-subtle px-4 py-3 text-sm text-body">
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
           <div className="space-y-1">
             {summary.generationWarnings.map((warning) => <p key={warning}>{warning}</p>)}
@@ -194,12 +194,12 @@ export function WorkspaceOverviewContent({
 
       {ui.showTakeaways && summary.key_takeaways.length ? (
         <article className="workspace-muted-panel rounded-2xl border p-6">
-          <p className="mb-3 text-xs font-bold text-stone-600 dark:text-stone-400">关键收获</p>
+          <p className="mb-3 text-xs font-bold text-subtle">关键收获</p>
           <div className="flex flex-col gap-3">
             {summary.key_takeaways.map((takeaway) => (
               <div key={takeaway} className="flex items-start gap-3">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-                <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300">{takeaway}</p>
+                <p className="text-sm leading-relaxed text-body">{takeaway}</p>
               </div>
             ))}
           </div>
@@ -207,7 +207,7 @@ export function WorkspaceOverviewContent({
       ) : null}
 
       <div className="mt-2 flex flex-col gap-4">
-        <SectionHeading className="mb-2 text-xl font-bold text-stone-900 dark:text-stone-100">章节纪要</SectionHeading>
+        <SectionHeading className="mb-2 text-xl font-bold text-strong">章节纪要</SectionHeading>
         {(summary.chapters ?? []).map((chapter, index) => (
           <article
             key={chapter.id}
@@ -217,7 +217,7 @@ export function WorkspaceOverviewContent({
             className={`workspace-elevated-panel flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ${
               chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id)
                   ? "border-accent shadow-md ring-2 ring-accent/10"
-                : "border-stone-200/70 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 hover:bg-white dark:hover:bg-neutral-800 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
+                : "border-line/70 hover:border-line-strong hover:bg-surface hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
             }`}
           >
             <button
@@ -229,19 +229,19 @@ export function WorkspaceOverviewContent({
                 chapterTitle: chapter.title,
               })}
               className={`flex w-full items-start justify-between gap-3 rounded-2xl px-2 py-2 text-left transition-colors ${
-                canSeek ? "hover:bg-stone-100/60 dark:hover:bg-neutral-800/60" : "cursor-default"
+                canSeek ? "hover:bg-soft/60" : "cursor-default"
               }`}
             >
               <div>
-                <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">Chapter {index + 1}</p>
-                <ChapterHeading className="text-lg font-bold leading-tight text-stone-900 dark:text-stone-100">{chapter.title}</ChapterHeading>
+                <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-subtle">Chapter {index + 1}</p>
+                <ChapterHeading className="text-lg font-bold leading-tight text-strong">{chapter.title}</ChapterHeading>
               </div>
-              <span className="shrink-0 rounded-lg bg-stone-100 px-2 py-1 text-xs font-mono font-bold text-stone-600 dark:bg-stone-900 dark:text-stone-400">
+              <span className="shrink-0 rounded-lg bg-soft px-2 py-1 text-xs font-mono font-bold text-subtle">
                 {formatRange(chapter.start_seconds, chapter.end_seconds)}
               </span>
             </button>
 
-            <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">{chapter.summary}</p>
+            <p className="text-sm leading-relaxed text-subtle">{chapter.summary}</p>
 
             {chapter.image_url ? (
               <button
@@ -257,7 +257,7 @@ export function WorkspaceOverviewContent({
                   }
                   setPreviewImage({ src: chapter.image_url, alt: `${chapter.title} 视频截图` });
                 }}
-                className="group relative block w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-left dark:border-stone-800 dark:bg-stone-950"
+                className="group relative block w-full overflow-hidden rounded-lg border border-line bg-soft text-left"
                 title={Number.isFinite(chapter.image_timestamp_seconds) ? `跳转到 ${formatTimestamp(chapter.image_timestamp_seconds)}` : "查看章节截图"}
               >
                 <img
@@ -272,7 +272,7 @@ export function WorkspaceOverviewContent({
               {chapter.key_points.map((point) => (
                 <div key={point} className="flex items-start gap-3">
                   <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-                  <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300">{point}</p>
+                  <p className="text-sm leading-relaxed text-body">{point}</p>
                 </div>
               ))}
             </div>
@@ -281,7 +281,7 @@ export function WorkspaceOverviewContent({
               <details
                 id={transcriptElementId(contentScopeId, chapter.id)}
                 open={expandedTranscriptChapters.has(chapter.id)}
-                className={`group mt-1 rounded-2xl border border-stone-200/80 bg-stone-50/80 transition-all dark:border-stone-800 dark:bg-stone-950/60 ${
+                className={`group mt-1 rounded-2xl border border-line/80 bg-muted/80 transition-all ${
                   chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id)
                     ? "border-2 border-accent bg-accent/10 shadow-md ring-2 ring-accent/30 dark:bg-accent/15"
                     : ""
@@ -295,15 +295,15 @@ export function WorkspaceOverviewContent({
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-accent shadow-sm dark:bg-stone-900">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface text-accent shadow-sm">
                       <Captions size={16} />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">查看本章原文</p>
-                      <p className="text-xs text-stone-600 dark:text-stone-400">{chapter.transcript_segments.length} 段转写</p>
+                      <p className="text-sm font-semibold text-strong">查看本章原文</p>
+                      <p className="text-xs text-subtle">{chapter.transcript_segments.length} 段转写</p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">
+                  <span className="text-xs font-semibold text-subtle">
                     {formatRange(chapter.start_seconds, chapter.end_seconds)}
                   </span>
                 </summary>
@@ -376,7 +376,7 @@ function WorkspaceTranscriptList({
   }, [chapterId, onRegister, virtualizer]);
 
   return (
-    <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
+    <div className="border-t border-line/80 px-4 py-4">
       <div ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll} className="max-h-[min(60dvh,42rem)] overflow-y-auto pr-1">
         <div className="relative w-full" style={{ height: `${totalSize}px` }}>
           {visibleRows.map((virtualRow) => {
@@ -400,14 +400,14 @@ function WorkspaceTranscriptList({
                     endSeconds: segment.end_seconds,
                     chapterTitle,
                   })}
-                  className={`block w-full scroll-mt-6 rounded-2xl bg-white/90 px-3 py-3 text-left transition-colors dark:bg-neutral-900 ${
+                  className={`block w-full scroll-mt-6 rounded-2xl bg-surface/90 px-3 py-3 text-left transition-colors ${
                     isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
                   } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
                 >
-                  <p className="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400">
+                  <p className="text-xs font-bold uppercase tracking-widest text-subtle">
                     {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{segment.text}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-body">{segment.text}</p>
                 </button>
               </div>
             );
@@ -415,11 +415,11 @@ function WorkspaceTranscriptList({
         </div>
       </div>
 
-      <div className="mt-4 flex justify-center border-t border-stone-200/80 pt-3 dark:border-stone-800">
+      <div className="mt-4 flex justify-center border-t border-line/80 pt-3">
         <button
           type="button"
           onClick={onCollapse}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-accent/40 dark:hover:bg-accent/10"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-subtle transition-colors hover:border-accent/30 hover:bg-accent/5 hover:text-accent dark:hover:border-accent/40 dark:hover:bg-accent/10"
           aria-label="收起本章原文"
           title="收起本章原文"
         >

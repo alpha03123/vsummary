@@ -61,7 +61,7 @@ export function WorkspaceSeriesOverviewView({
     // Same width and right alignment as WorkspaceContentOutline's two-column grid (48rem text + outline + gap),
     // so each video's summary gets the single-video width instead of being squeezed into max-w-3xl.
     <div className="ml-auto flex w-full max-w-[calc(48rem+11rem+10rem)] flex-col gap-8 pb-24">
-      <div className="flex border-b border-stone-200/80 pb-5 dark:border-white/5">
+      <div className="flex border-b border-line/80 pb-5">
         <WorkspaceVideoScopePicker
           videos={seriesVideos}
           value={selectedVideoId}
@@ -80,8 +80,8 @@ export function WorkspaceSeriesOverviewView({
               className="workspace-muted-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-4"
             >
               <div className="min-w-0">
-                <h2 className="truncate text-base font-bold text-stone-900 dark:text-stone-100">{video.title}</h2>
-                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">尚未生成 AI 概括</p>
+                <h2 className="truncate text-base font-bold text-strong">{video.title}</h2>
+                <p className="mt-1 text-sm text-subtle">尚未生成 AI 概括</p>
               </div>
               <button
                 type="button"
@@ -101,22 +101,22 @@ export function WorkspaceSeriesOverviewView({
           <section
             id={`series-overview-${video.id}`}
             key={video.id}
-            className={`flex flex-col gap-6 border-b border-stone-200/80 pb-10 last:border-b-0 dark:border-white/5 ${
+            className={`flex flex-col gap-6 border-b border-line/80 pb-10 last:border-b-0 ${
               citationFocus?.videoId === video.id ? "rounded-2xl ring-2 ring-accent/20" : ""
             }`}
           >
             <div
               className={`flex items-center justify-between gap-4 ${
                 showingAll
-                  ? "sticky top-0 z-20 border-b border-stone-200/70 bg-white/85 py-3 backdrop-blur dark:border-white/5 dark:bg-neutral-950/85"
+                  ? "sticky top-0 z-20 border-b border-line/70 bg-surface/85 py-3 backdrop-blur"
                   : ""
               }`}
             >
-              <h2 className="min-w-0 truncate text-xl font-bold text-stone-900 dark:text-stone-100">{title}</h2>
+              <h2 className="min-w-0 truncate text-xl font-bold text-strong">{title}</h2>
               <button
                 type="button"
                 onClick={() => onOpenVideoOverview?.(video.id)}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-neutral-800 dark:hover:text-stone-100"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-sm font-medium text-subtle transition-colors hover:bg-soft hover:text-strong"
               >
                 进入视频概括
                 <ExternalLink size={14} aria-hidden="true" />

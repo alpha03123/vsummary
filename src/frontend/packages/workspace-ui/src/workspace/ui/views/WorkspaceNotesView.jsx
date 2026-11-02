@@ -26,22 +26,22 @@ function NoteListItem({ note, onOpen }) {
   return (
     <article
       onClick={pending ? undefined : () => onOpen(note)}
-      className={`group rounded-2xl border border-stone-200/60 bg-white p-5 transition-all dark:border-stone-800/60 dark:bg-stone-950 ${
+      className={`group rounded-2xl border border-line/60 bg-surface p-5 transition-all ${
         pending
           ? "cursor-default"
           : "cursor-pointer hover:border-accent/40 hover:shadow-md hover:shadow-accent/5 dark:hover:border-accent/40"
       }`}
     >
       <div className="flex items-center justify-between gap-4">
-        <h3 className="font-bold text-stone-900 line-clamp-1 dark:text-stone-100">{note.title}</h3>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+        <h3 className="font-bold text-strong line-clamp-1">{note.title}</h3>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wider ${note.source === "agent" ? "bg-info-subtle text-info" : "bg-soft text-subtle"}`}>
           {note.source === "agent" ? "AGENT" : "Manual"}
         </span>
       </div>
-      <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+      <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-subtle">
         {note.content}
       </p>
-      <div className="mt-4 flex items-center text-xs font-medium text-stone-500 dark:text-stone-500">
+      <div className="mt-4 flex items-center text-xs font-medium text-faint">
         {pending ? (
           <>
             <LoaderCircle size={12} className="mr-1.5 animate-spin" />
@@ -165,30 +165,30 @@ export function WorkspaceNotesView({
             variant="chevron"
             className="text-sm"
           />
-          <h2 className="text-sm font-bold tracking-widest text-stone-500 uppercase dark:text-stone-500">新建笔记</h2>
+          <h2 className="text-sm font-bold tracking-widest text-faint uppercase">新建笔记</h2>
           <div className="w-[88px]" /> {/* 占位符以居中标题 */}
         </div>
         
-        <section className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
+        <section className="rounded-3xl border border-line/80 bg-surface p-6 shadow-sm">
           <input
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
             placeholder="输入标题..."
-            className="w-full bg-transparent text-xl font-bold text-stone-900 placeholder:text-stone-300 outline-none transition focus:placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-700"
+            className="w-full bg-transparent text-xl font-bold text-strong placeholder:text-ghost outline-none transition focus:placeholder:text-ghost"
           />
-          <div className="my-4 h-px w-full bg-stone-100 dark:bg-stone-800/60" />
+          <div className="my-4 h-px w-full bg-soft" />
           <textarea
             value={draftContent}
             onChange={(event) => setDraftContent(event.target.value)}
             placeholder="记录重要细节、结论或待办事项..."
-            className="min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-stone-700 placeholder:text-stone-400/80 outline-none dark:text-stone-300 dark:placeholder:text-stone-600"
+            className="min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-body placeholder:text-ghost/80 outline-none"
           />
           <div className="mt-6 flex justify-end">
             <button
               type="button"
               onClick={handleCreateNote}
               disabled={savingNote || !draftTitle.trim() || !draftContent.trim()}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-inverse px-6 py-2.5 text-sm font-semibold text-on-accent transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-accent dark:hover:text-strong"
             >
               {savingNote ? <LoaderCircle size={16} className="animate-spin" /> : <PencilLine size={16} />}
               保存笔记
@@ -215,14 +215,14 @@ export function WorkspaceNotesView({
               <>
                 <button
                   onClick={handleCancelEdit}
-                  className="rounded-full border border-stone-200 px-4 py-1.5 text-xs font-bold text-stone-600 transition hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                  className="rounded-full border border-line px-4 py-1.5 text-xs font-bold text-subtle transition hover:bg-muted"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={savingNote || !editingTitle.trim() || !editingContent.trim()}
-                  className="rounded-full bg-stone-900 px-4 py-1.5 text-xs font-bold text-white transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+                  className="rounded-full bg-inverse px-4 py-1.5 text-xs font-bold text-on-accent transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   保存修改
                 </button>
@@ -231,7 +231,7 @@ export function WorkspaceNotesView({
               <>
                 <button
                   onClick={handleStartEdit}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-subtle hover:bg-soft hover:text-strong"
                   title="编辑"
                 >
                   <PencilLine size={15} />
@@ -240,7 +240,7 @@ export function WorkspaceNotesView({
                   onClick={() => handleDeleteNote(selectedNote.id)}
                   disabled={savingNote}
                   aria-label="删除笔记"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-stone-600 hover:bg-danger-subtle hover:text-danger dark:text-stone-400"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-subtle hover:bg-danger-subtle hover:text-danger"
                   title="删除"
                 >
                   <Trash2 size={15} />
@@ -250,36 +250,36 @@ export function WorkspaceNotesView({
           </div>
         </div>
 
-        <article className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-950">
+        <article className="rounded-3xl border border-line/80 bg-surface p-6 shadow-sm">
           {isEditing ? (
             <div className="flex flex-col gap-4">
               <input
                 value={editingTitle}
                 onChange={(e) => setEditingTitle(e.target.value)}
                 placeholder="笔记标题"
-                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-lg font-bold text-stone-900 outline-none focus:border-accent focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
+                className="w-full rounded-xl border border-line bg-muted px-4 py-3 text-lg font-bold text-strong outline-none focus:border-accent focus:bg-surface"
               />
               <textarea
                 value={editingContent}
                 onChange={(e) => setEditingContent(e.target.value)}
                 placeholder="笔记内容"
-                className="min-h-[240px] w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-900 outline-none focus:border-accent focus:bg-white dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100 dark:focus:bg-stone-950"
+                className="min-h-[240px] w-full rounded-xl border border-line bg-muted px-4 py-3 text-sm leading-relaxed text-strong outline-none focus:border-accent focus:bg-surface"
               />
             </div>
           ) : (
             <>
               <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${selectedNote.source === "agent" ? "bg-info-subtle text-info" : "bg-soft text-subtle"}`}>
                   {selectedNote.source === "agent" ? "Agent Note" : "Manual Note"}
                 </span>
-                <span className="text-xs font-medium text-stone-500 dark:text-stone-500">
+                <span className="text-xs font-medium text-faint">
                   {formatNoteTimestamp(selectedNote.createdAt)}
                   {selectedNote.updatedAt !== selectedNote.createdAt && " (已编辑)"}
                 </span>
               </div>
-              <h1 className="mt-4 text-2xl font-bold text-stone-900 dark:text-stone-100">{selectedNote.title}</h1>
-              <div className="my-5 h-px w-full bg-stone-100 dark:bg-stone-800/60" />
-              <div className="markdown-body mt-2 text-sm text-stone-700 dark:text-stone-300">
+              <h1 className="mt-4 text-2xl font-bold text-strong">{selectedNote.title}</h1>
+              <div className="my-5 h-px w-full bg-soft" />
+              <div className="markdown-body mt-2 text-sm text-body">
                 <WorkspaceMarkdownMessage content={selectedNote.content} noteImageContext={noteImageContext} onSeek={onSeek} />
               </div>
             </>
@@ -304,14 +304,14 @@ export function WorkspaceNotesView({
     <div className="flex h-full flex-col gap-3 animate-in fade-in slide-in-from-left-4 duration-300 @[480px]:gap-5">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2">
         <div className="min-w-[7rem] flex-1">
-          <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">全部笔记</h2>
-          <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">共 {notes?.notes?.length || 0} 条记录</p>
+          <h2 className="text-lg font-bold text-strong">全部笔记</h2>
+          <p className="mt-0.5 text-xs text-subtle">共 {notes?.notes?.length || 0} 条记录</p>
         </div>
         <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={() => setViewState("create")}
-            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 dark:bg-white dark:text-black dark:hover:bg-accent dark:hover:text-white"
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-inverse px-4 py-2 text-sm font-semibold text-on-accent transition hover:bg-accent hover:shadow-md hover:shadow-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 dark:hover:bg-accent dark:hover:text-strong"
           >
             <Plus size={16} /> 记笔记
           </button>

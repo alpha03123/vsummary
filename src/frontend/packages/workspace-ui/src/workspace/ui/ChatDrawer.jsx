@@ -65,7 +65,7 @@ export function ChatDrawer({ isOpen, onClose, width, onWidthChange, fullWidth = 
             aria-hidden="true"
           />
           <motion.aside
-            className="workspace-panel fixed right-0 top-0 bottom-0 z-40 border-l border-stone-200/80 shadow-xl dark:border-stone-800"
+            className="workspace-panel fixed right-0 top-0 bottom-0 z-40 border-l border-line/80 shadow-xl"
             style={{ width: fullWidth ? "100%" : `min(${width}px, calc(100vw - 32px))` }}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
@@ -84,15 +84,15 @@ export function ChatDrawer({ isOpen, onClose, width, onWidthChange, fullWidth = 
                 onKeyDown={handleResizeKeyDown}
                 className="group absolute -left-2 top-0 z-10 flex h-full w-4 cursor-col-resize touch-none items-center justify-center outline-none"
               >
-                <div className="h-16 w-1 rounded-full bg-stone-300/90 transition-colors group-hover:bg-accent group-focus-visible:bg-accent dark:bg-stone-700 dark:group-hover:bg-accent" />
+                <div className="h-16 w-1 rounded-full bg-softer/90 transition-colors group-hover:bg-accent group-focus-visible:bg-accent dark:group-hover:bg-accent" />
               </div>
             ) : null}
-            <div className="flex items-center justify-end border-b border-stone-200/70 px-4 py-2 dark:border-stone-800">
+            <div className="flex items-center justify-end border-b border-line/70 px-4 py-2">
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="关闭对话"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition-colors hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-subtle transition-colors hover:bg-soft"
               >
                 <X size={16} />
               </button>

@@ -22,7 +22,7 @@ const SHARED_TOOL_VISUALS = {
     "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
   iconShell: "bg-accent/10 text-accent border border-accent/20",
   arrowShell:
-    "bg-stone-50 text-stone-500 dark:bg-neutral-900/50 dark:text-zinc-500 border border-stone-200/50 dark:border-white/5 group-hover:bg-accent group-hover:text-white group-hover:border-accent/80",
+    "bg-muted text-faint border border-line/50 group-hover:bg-accent group-hover:text-on-accent group-hover:border-accent/80",
 };
 
 export const TOOL_TILES = {
@@ -95,9 +95,9 @@ const DEFAULT_TOOL_META = {
   label: "工具页",
   description: "当前工具信息正在同步",
   icon: FileText,
-  palette: "workspace-panel border text-stone-900 dark:text-stone-100 transition-all",
-  iconShell: "bg-stone-100 text-stone-700 dark:bg-stone-900 dark:text-stone-300 border border-stone-100 dark:border-stone-800",
-  arrowShell: "bg-stone-50 text-stone-700 dark:bg-stone-900 dark:text-stone-300",
+  palette: "workspace-panel border text-strong transition-all",
+  iconShell: "bg-soft text-body border border-line-soft",
+  arrowShell: "bg-muted text-body",
 };
 
 export const SOURCE_MISSING_STATUS = { label: "需先链接媒体", tone: "blocked" };

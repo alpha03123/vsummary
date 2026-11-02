@@ -8,11 +8,11 @@ const STATUS_TONES = {
   ready:
     "border-success-border/80 bg-success-subtle text-success",
   pending:
-    "border-stone-200 bg-stone-100 text-stone-600 dark:border-stone-700 dark:bg-neutral-800 dark:text-stone-300",
+    "border-line bg-soft text-subtle",
   blocked:
     "border-warning-border/80 bg-warning-subtle text-warning",
   loading:
-    "border-stone-200 bg-stone-100 text-stone-500 dark:border-stone-700 dark:bg-neutral-800 dark:text-stone-400",
+    "border-line bg-soft text-faint",
 };
 
 /**
@@ -22,9 +22,9 @@ const STATUS_TONES = {
  * chip says why.
  */
 const DISABLED_VISUALS = {
-  palette: "border border-dashed border-stone-300 bg-stone-50/70 dark:border-stone-700 dark:bg-neutral-900/40",
-  iconShell: "border border-stone-200 bg-stone-100 text-stone-400 dark:border-stone-800 dark:bg-neutral-800 dark:text-stone-500",
-  arrowShell: "border border-dashed border-stone-300 bg-transparent text-stone-400 dark:border-stone-700 dark:text-stone-500",
+  palette: "border border-dashed border-line-strong bg-muted/70",
+  iconShell: "border border-line bg-soft text-faint",
+  arrowShell: "border border-dashed border-line-strong bg-transparent text-faint",
 };
 
 function ToolStatusChip({ label, tone }) {
@@ -75,12 +75,12 @@ export function WorkspaceToolGrid({ items, onSelect }) {
                   <Icon size={18} />
                 </span>
                 <span className="flex min-w-0 flex-col">
-                  <span className={`text-base font-bold ${disabled ? "text-stone-500 dark:text-stone-400" : ""}`}>
+                  <span className={`text-base font-bold ${disabled ? "text-faint" : ""}`}>
                     {meta.label}
                   </span>
                   <span
                     className={`mt-1 text-xs ${
-                      disabled ? "text-stone-400 dark:text-stone-500" : "text-stone-600 dark:text-stone-400"
+                      disabled ? "text-faint" : "text-subtle"
                     }`}
                   >
                     {description ?? meta.description}
@@ -92,7 +92,7 @@ export function WorkspaceToolGrid({ items, onSelect }) {
                 className={`absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-2xl transition-colors ${
                   disabled
                     ? DISABLED_VISUALS.arrowShell
-                    : `motion-arrow-shift border border-white/40 dark:border-stone-800 group-hover:brightness-105 ${meta.arrowShell}`
+                    : `motion-arrow-shift border border-white/40 dark:border-line group-hover:brightness-105 ${meta.arrowShell}`
                 }`}
               >
                 {disabled ? <Lock size={16} aria-hidden="true" /> : <ArrowRight size={18} />}

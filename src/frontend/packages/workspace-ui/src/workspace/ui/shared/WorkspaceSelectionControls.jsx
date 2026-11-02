@@ -2,7 +2,7 @@ import {CheckCheck,X} from 'lucide-react';
 
 const SURFACES={
  inset:'workspace-muted-panel',
- raised:'border-stone-200/80 bg-white/95 shadow-lg backdrop-blur-sm dark:border-stone-700 dark:bg-neutral-900/95',
+ raised:'border-line/80 bg-surface/95 shadow-lg backdrop-blur-sm',
 };
 
 const ACTION_CLASS='inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45';
@@ -26,18 +26,18 @@ export function WorkspaceSelectionBar({
 }){
  const allSelected=Boolean(totalCount)&&selectedCount>=totalCount;
  return <div role="group" aria-label={label} className={`@container flex items-center justify-between gap-2 rounded-2xl border p-1.5 ${SURFACES[surface]??SURFACES.inset} ${className}`}>
-  <span className="flex min-w-0 items-center gap-1 px-2.5 text-xs font-semibold text-stone-500 dark:text-stone-400">
+  <span className="flex min-w-0 items-center gap-1 px-2.5 text-xs font-semibold text-faint">
    <span className="hidden @[12rem]:inline">已选</span>
-   <b className={`tabular-nums ${allSelected?'text-accent':'text-stone-900 dark:text-stone-100'}`}>{selectedCount}</b>
-   {totalCount!=null&&<span className="tabular-nums font-medium text-stone-400 dark:text-stone-500">/ {totalCount}</span>}
+   <b className={`tabular-nums ${allSelected?'text-accent':'text-strong'}`}>{selectedCount}</b>
+   {totalCount!=null&&<span className="tabular-nums font-medium text-faint">/ {totalCount}</span>}
   </span>
   <div className="flex shrink-0 items-center gap-1">
    <button type="button" disabled={selectAllDisabled} onClick={onSelectAll} aria-label={selectAllLabel} title={selectAllLabel}
-    className={`${ACTION_CLASS} text-stone-600 hover:bg-white hover:shadow-sm dark:text-stone-300 dark:hover:bg-stone-800`}>
+    className={`${ACTION_CLASS} text-subtle hover:bg-surface hover:shadow-sm`}>
     <CheckCheck size={14} aria-hidden="true"/><span className="hidden @[16.75rem]:inline">{selectAllLabel}</span>
    </button>
    <button type="button" disabled={clearDisabled||selectedCount===0} onClick={onClear} aria-label={clearLabel} title={clearLabel}
-    className={`${ACTION_CLASS} text-stone-500 hover:bg-white hover:shadow-sm dark:text-stone-400 dark:hover:bg-stone-800`}>
+    className={`${ACTION_CLASS} text-faint hover:bg-surface hover:shadow-sm`}>
     <X size={14} aria-hidden="true"/><span className="hidden @[16.75rem]:inline">{clearLabel}</span>
    </button>
    {extra}

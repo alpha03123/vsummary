@@ -4,12 +4,12 @@ import { useWorkspaceRuntime } from "../../../runtime/WorkspaceProvider";
 
 // Soft tints for videos without a cover, picked from the id so a card keeps its colour between visits.
 const PLACEHOLDER_TINTS = [
-  "from-indigo-100 to-sky-50 text-indigo-300 dark:from-indigo-950/70 dark:to-slate-900 dark:text-indigo-800",
-  "from-amber-100 to-orange-50 text-amber-300 dark:from-amber-950/60 dark:to-stone-900 dark:text-amber-800",
-  "from-emerald-100 to-teal-50 text-emerald-300 dark:from-emerald-950/60 dark:to-stone-900 dark:text-emerald-800",
-  "from-rose-100 to-pink-50 text-rose-300 dark:from-rose-950/60 dark:to-stone-900 dark:text-rose-800",
-  "from-violet-100 to-fuchsia-50 text-violet-300 dark:from-violet-950/60 dark:to-stone-900 dark:text-violet-800",
-  "from-stone-200 to-stone-50 text-stone-300 dark:from-stone-800 dark:to-stone-900 dark:text-stone-700",
+  "from-indigo-100 to-sky-50 text-indigo-300 dark:from-indigo-950/70 dark:to-surface dark:text-indigo-800",
+  "from-amber-100 to-orange-50 text-amber-300 dark:from-amber-950/60 dark:to-surface dark:text-amber-800",
+  "from-emerald-100 to-teal-50 text-emerald-300 dark:from-emerald-950/60 dark:to-surface dark:text-emerald-800",
+  "from-rose-100 to-pink-50 text-rose-300 dark:from-rose-950/60 dark:to-surface dark:text-rose-800",
+  "from-violet-100 to-fuchsia-50 text-violet-300 dark:from-violet-950/60 dark:to-surface dark:text-violet-800",
+  "from-stone-200 to-stone-50 text-faint dark:from-stone-800 dark:to-surface",
 ];
 
 function tintFor(seed) {

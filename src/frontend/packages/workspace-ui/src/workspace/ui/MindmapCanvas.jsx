@@ -99,7 +99,7 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef, 
     } else {
       svg.classList.remove("markmap-dark");
     }
-    applyMindmapTheme(svg, isDark);
+    applyMindmapTheme(svg);
   }, [root, theme]);
 
   useEffect(() => {
@@ -118,7 +118,7 @@ export function MindmapCanvas({ root, selectedNodeId, onSelectNode, markmapRef, 
 
   if (!root) {
     return (
-      <div className="p-8 text-stone-600 text-sm text-center">
+      <div className="p-8 text-subtle text-sm text-center">
         当前没有导图数据。
       </div>
     );
@@ -150,10 +150,11 @@ function resolveDarkTheme(theme) {
   return theme === "dark" || ((theme == null || theme === "system") && document.documentElement.classList.contains("dark"));
 }
 
-function applyMindmapTheme(svg, isDark) {
+// The theme variables switch with the .dark class, so one set of values covers both modes.
+function applyMindmapTheme(svg) {
   if (!svg.style?.setProperty) return;
-  svg.style.setProperty("--markmap-text-color", isDark ? "#f4f4f5" : "#18181b");
-  svg.style.setProperty("--markmap-code-color", isDark ? "#e4e4e7" : "#3f3f46");
-  svg.style.setProperty("--markmap-code-bg", isDark ? "#27272a" : "#f4f4f5");
-  svg.style.setProperty("--markmap-circle-open-bg", isDark ? "#52525b" : "#fff");
+  svg.style.setProperty("--markmap-text-color", "rgb(var(--strong))");
+  svg.style.setProperty("--markmap-code-color", "rgb(var(--body))");
+  svg.style.setProperty("--markmap-code-bg", "rgb(var(--soft))");
+  svg.style.setProperty("--markmap-circle-open-bg", "rgb(var(--surface))");
 }

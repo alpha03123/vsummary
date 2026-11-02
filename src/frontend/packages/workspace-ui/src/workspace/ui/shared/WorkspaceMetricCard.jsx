@@ -18,16 +18,16 @@ export function WorkspaceMetricCard({
       <p
         className={`text-sm font-semibold uppercase tracking-widest ${
           accent === "accent"
-            ? "text-stone-700 dark:text-zinc-300"
+            ? "text-body"
             : accent === "info"
               ? "text-info"
-              : "text-stone-600 dark:text-stone-400"
+              : "text-subtle"
         } ${labelClassName}`.trim()}
       >
         {label}
       </p>
       <strong
-        className={`mt-3 block text-4xl font-bold text-stone-900 dark:text-stone-100 ${valueClassName}`.trim()}
+        className={`mt-3 block text-4xl font-bold text-strong ${valueClassName}`.trim()}
       >
         {value}
       </strong>

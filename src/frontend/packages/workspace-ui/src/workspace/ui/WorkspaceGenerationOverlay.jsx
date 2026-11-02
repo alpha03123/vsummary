@@ -71,7 +71,7 @@ export function WorkspaceGenerationOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="absolute inset-0 z-50 flex items-center justify-center bg-white/40 p-3 backdrop-blur-[4px] pointer-events-auto dark:bg-neutral-950/50"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-surface/40 p-3 backdrop-blur-[4px] pointer-events-auto"
     >
       <motion.div
         initial={{ scale: 0.9, y: 10 }}
@@ -79,18 +79,18 @@ export function WorkspaceGenerationOverlay({
         exit={{ scale: 0.9 }}
         transition={{ type: "spring", damping: 25, stiffness: 350 }}
         role="dialog" aria-modal="true" aria-label={title}
-        className="flex max-h-full w-[380px] max-w-full flex-col items-center gap-3 overflow-hidden rounded-3xl border border-stone-200/60 bg-white/95 p-6 text-center shadow-2xl dark:border-white/10 dark:bg-stone-900/95"
+        className="flex max-h-full w-[380px] max-w-full flex-col items-center gap-3 overflow-hidden rounded-3xl border border-line/60 bg-surface/95 p-6 text-center shadow-2xl"
       >
         <LoaderCircle size={30} className="shrink-0 animate-spin text-accent" strokeWidth={2.5} />
         <div className="flex min-h-0 w-full flex-col">
-          <h3 className="mb-1.5 text-base font-bold text-stone-900 dark:text-stone-100">{title}</h3>
-          <p aria-live="polite" className="mb-2 text-sm font-medium text-stone-600 dark:text-stone-400">
+          <h3 className="mb-1.5 text-base font-bold text-strong">{title}</h3>
+          <p aria-live="polite" className="mb-2 text-sm font-medium text-subtle">
             {generationSnapshot?.detail ?? "任务已提交，正在准备处理视频"}
           </p>
           <p className="mb-3 text-xs font-bold text-accent">
             {activeStageLabel} · {generationProgressLabel}
           </p>
-          <div role="progressbar" aria-label="生成流程进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={hasRealGenerationProgress ? generationProgress : undefined} aria-valuetext={activeStageLabel} className="relative shrink-0 h-1.5 w-full overflow-hidden rounded-full bg-stone-200/60 dark:bg-stone-800">
+          <div role="progressbar" aria-label="生成流程进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={hasRealGenerationProgress ? generationProgress : undefined} aria-valuetext={activeStageLabel} className="relative shrink-0 h-1.5 w-full overflow-hidden rounded-full bg-softer/60">
             {hasRealGenerationProgress ? (
               <motion.div
                 key="determinate"
@@ -109,23 +109,23 @@ export function WorkspaceGenerationOverlay({
               />
             )}
           </div>
-          <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-stone-500">
+          <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-faint">
             <span><span>已耗时</span> {elapsedLabel}</span>
             {runningCount > 1 && <span>有 {runningCount} 项同时进行</span>}
           </div>
-          <p className="mt-2 shrink-0 text-left text-xs leading-relaxed text-stone-500">进度随处理步骤更新，AI 阅读和生成内容时可能需要等待。</p>
+          <p className="mt-2 shrink-0 text-left text-xs leading-relaxed text-faint">进度随处理步骤更新，AI 阅读和生成内容时可能需要等待。</p>
           <ol ref={stepsRef} aria-label="处理步骤" className="mt-3 flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain">
             {steps.map((item) => {
               const isCurrent = item.status === "running";
               const isDone = item.status === "completed";
               const statusLabel = { running: "进行中", completed: "已完成", pending: "待处理", failed: "未完成", cancelled: "已停止" }[item.status];
               return (
-                <li key={item.id} className={`shrink-0 rounded-xl border px-3 py-2 text-left ${isCurrent ? "border-accent/30 bg-accent/8" : isDone ? "border-success/30 bg-success-subtle" : "border-stone-200/70 bg-stone-50/70 dark:border-white/8 dark:bg-white/[0.03]"}`}>
+                <li key={item.id} className={`shrink-0 rounded-xl border px-3 py-2 text-left ${isCurrent ? "border-accent/30 bg-accent/8" : isDone ? "border-success/30 bg-success-subtle" : "border-line/70 bg-muted/70/[0.03]"}`}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-stone-700 dark:text-stone-300">{item.label}</span>
-                    <span className={`shrink-0 text-xs font-semibold ${isCurrent ? "text-accent" : isDone ? "text-success" : "text-stone-400"}`}>{statusLabel}</span>
+                    <span className="text-xs font-medium text-body">{item.label}</span>
+                    <span className={`shrink-0 text-xs font-semibold ${isCurrent ? "text-accent" : isDone ? "text-success" : "text-faint"}`}>{statusLabel}</span>
                   </div>
-                  {isCurrent && item.detail && <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">{item.detail}</p>}
+                  {isCurrent && item.detail && <p className="mt-1 text-xs leading-relaxed text-faint">{item.detail}</p>}
                 </li>
               );
             })}
@@ -135,7 +135,7 @@ export function WorkspaceGenerationOverlay({
               type="button"
               onClick={onCancel}
               disabled={generationSnapshot?.status === "cancelling"}
-              className="mt-4 shrink-0 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-danger-border bg-white px-4 py-2.5 text-sm font-semibold text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50 disabled:cursor-not-allowed dark:bg-stone-900"
+              className="mt-4 shrink-0 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-danger-border bg-surface px-4 py-2.5 text-sm font-semibold text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X size={16} />
               {generationSnapshot?.status === "cancelling" ? "正在停止..." : cancelLabel}

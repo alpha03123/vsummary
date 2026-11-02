@@ -187,18 +187,18 @@ function CitationPreviewCard({ preview, position }) {
   return createPortal(
     <span
       ref={cardRef}
-      className="pointer-events-none fixed z-50 w-[22.5rem] rounded-2xl border border-stone-200/90 bg-white/95 px-4 py-3 text-left text-xs text-stone-600 shadow-xl shadow-stone-900/10 backdrop-blur dark:border-stone-700 dark:bg-stone-950/95 dark:text-stone-300 dark:shadow-black/30"
+      className="pointer-events-none fixed z-50 w-[22.5rem] rounded-2xl border border-line/90 bg-surface/95 px-4 py-3 text-left text-xs text-subtle shadow-xl shadow-stone-900/10 backdrop-blur dark:shadow-black/30"
       style={{ left: `${position.left}px`, top: `${measuredTop}px` }}
     >
-      <span className="block font-semibold text-stone-900 dark:text-stone-100">{preview.title}</span>
+      <span className="block font-semibold text-strong">{preview.title}</span>
       {preview.sourceType ? (
-        <span className="mt-1 block text-xs uppercase tracking-wide text-stone-500 dark:text-stone-500">{preview.sourceType}</span>
+        <span className="mt-1 block text-xs uppercase tracking-wide text-faint">{preview.sourceType}</span>
       ) : null}
       {preview.detail ? (
-        <span className="mt-2 block text-xs text-stone-600 dark:text-stone-400">{preview.detail}</span>
+        <span className="mt-2 block text-xs text-subtle">{preview.detail}</span>
       ) : null}
       {preview.text ? (
-        <span className="mt-2 block leading-relaxed text-stone-600 dark:text-stone-300">{preview.text}</span>
+        <span className="mt-2 block leading-relaxed text-subtle">{preview.text}</span>
       ) : null}
       {preview.url ? (
         <span className="mt-2 block break-all text-xs text-accent">{preview.url}</span>
@@ -239,7 +239,7 @@ function CitationLink({ href, children, preview, citationReference, onOpenCitati
         onMouseLeave={hidePreview}
         onFocus={showPreview}
         onBlur={hidePreview}
-        className="citation-marker ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-stone-900/10 px-1.5 text-xs font-semibold leading-none text-stone-900 no-underline shadow-none transition-colors hover:bg-stone-900/16 focus:bg-stone-900/16 focus:outline-none dark:bg-white/12 dark:text-white dark:hover:bg-white/18 dark:focus:bg-white/18"
+        className="citation-marker ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-inverse/10 px-1.5 text-xs font-semibold leading-none text-strong no-underline shadow-none transition-colors hover:bg-inverse/16 focus:bg-inverse/16 focus:outline-none"
       >
         {children}
       </a>
@@ -281,15 +281,15 @@ function MarkdownLink({ node: _node, href, children, ...props }) {
 function ThinkBlock({ content, isThinking }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <section className="rounded-2xl border border-stone-200 bg-stone-50/70 px-4 py-3 text-sm text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-300">
+    <section className="rounded-2xl border border-line bg-muted/70 px-4 py-3 text-sm text-subtle">
       <button
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-stone-600 dark:text-stone-400"
+        className="flex w-full items-center justify-between text-left text-xs font-bold uppercase tracking-wide text-subtle"
       >
         思考过程
-        {isThinking ? <span className="ml-auto mr-3 font-normal text-stone-400 dark:text-stone-500">思考中</span> : null}
+        {isThinking ? <span className="ml-auto mr-3 font-normal text-faint">思考中</span> : null}
         <span aria-hidden="true">{expanded ? "收起" : "展开"}</span>
       </button>
       {expanded ? <div className="mt-3 whitespace-pre-wrap leading-6">{content.trim()}</div> : null}
@@ -334,7 +334,7 @@ function NoteFrameImage({ src, alt, seconds, onSeek, onOpenTranscriptAtTime, ...
         }
         onSeek?.(request);
       }}
-      className="note-frame-trigger group block w-full overflow-hidden rounded-xl border border-stone-200 bg-stone-50 text-left dark:border-stone-800 dark:bg-stone-950"
+      className="note-frame-trigger group block w-full overflow-hidden rounded-xl border border-line bg-muted text-left"
       title={`跳转到 ${formatImageTimestamp(seconds)}`}
     >
       <img {...props} src={src} alt={alt} onError={() => setFailed(true)} className="note-frame-image aspect-video w-full object-cover" />

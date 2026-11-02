@@ -14,7 +14,7 @@ export function WorkspaceVideoScopePicker({ videos, value, onChange, label = "�
 
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400">
+      <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-faint">
         <ListFilter size={14} aria-hidden="true" />
         {label}
       </span>
@@ -100,12 +100,12 @@ function ScopePicker({ videos, value, onChange, searchable }) {
         aria-expanded={open}
         onKeyDown={handleKeyDown}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 items-center gap-2 rounded-xl border border-stone-200/80 bg-white/90 px-3 text-sm font-medium text-stone-700 shadow-sm transition-colors hover:border-stone-300 hover:bg-white dark:border-stone-700/80 dark:bg-stone-900/80 dark:text-stone-200 dark:hover:border-stone-600 dark:hover:bg-stone-900"
+        className="flex h-9 items-center gap-2 rounded-xl border border-line/80 bg-surface/90 px-3 text-sm font-medium text-body shadow-sm transition-colors hover:border-line-strong hover:bg-surface"
       >
         <span className="max-w-[220px] truncate">{selectedLabel}</span>
         <ChevronDown
           size={14}
-          className={`shrink-0 text-stone-400 transition-transform dark:text-stone-500 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-faint transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
       </button>
@@ -113,8 +113,8 @@ function ScopePicker({ videos, value, onChange, searchable }) {
       {open ? (
         <div className="workspace-elevated-panel absolute left-0 z-30 mt-1.5 w-max min-w-full max-w-[min(20rem,calc(100vw-3rem))] overflow-hidden rounded-xl border shadow-lg">
           {searchable ? (
-            <div className="flex items-center gap-2 border-b border-stone-200/80 px-3 py-2 dark:border-white/5">
-              <Search size={13} className="shrink-0 text-stone-400 dark:text-stone-500" aria-hidden="true" />
+            <div className="flex items-center gap-2 border-b border-line/80 px-3 py-2">
+              <Search size={13} className="shrink-0 text-faint" aria-hidden="true" />
               <input
                 ref={inputRef}
                 type="text"
@@ -124,13 +124,13 @@ function ScopePicker({ videos, value, onChange, searchable }) {
                 placeholder="搜索视频标题"
                 aria-label="搜索视频标题"
                 aria-controls={listboxId}
-                className="w-full bg-transparent text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none dark:text-stone-100 dark:placeholder:text-stone-500"
+                className="w-full bg-transparent text-sm text-body placeholder:text-ghost focus:outline-none"
               />
             </div>
           ) : null}
           <ul id={listboxId} role="listbox" className="max-h-60 overflow-y-auto p-1">
             {filtered.length === 0 ? (
-              <li className="px-3 py-6 text-center text-sm text-stone-500 dark:text-stone-400">
+              <li className="px-3 py-6 text-center text-sm text-faint">
                 没有匹配的视频
               </li>
             ) : (
@@ -145,8 +145,8 @@ function ScopePicker({ videos, value, onChange, searchable }) {
                       onClick={() => commit(option)}
                       onMouseEnter={() => setActiveIndex(index)}
                       className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                        index === activeIndex ? "bg-stone-100 dark:bg-stone-800" : ""
-                      } ${selected ? "font-semibold text-stone-900 dark:text-stone-100" : "text-stone-700 dark:text-stone-300"}`}
+                        index === activeIndex ? "bg-soft" : ""
+                      } ${selected ? "font-semibold text-strong" : "text-body"}`}
                     >
                       <Check
                         size={13}

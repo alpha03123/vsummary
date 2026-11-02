@@ -22,9 +22,9 @@ export function WorkspaceDialog({
       transition={{type:'spring',stiffness:360,damping:28}} className={twMerge('workspace-panel relative w-full max-w-md rounded-4xl border p-6 shadow-2xl',className)}
       onKeyDown={event=>{if(event.key==='Escape'&&!pending){event.preventDefault();onClose?.();}}}
       onSubmit={onSubmit?event=>{event.preventDefault();if(!pending)onSubmit(event);}:undefined}>
-      {showClose&&onClose&&<button type="button" onClick={onClose} disabled={pending} aria-label={closeLabel} className="absolute right-4 top-4 rounded-xl p-2 text-stone-500 transition-colors hover:bg-stone-100 disabled:opacity-50 dark:text-stone-400 dark:hover:bg-neutral-800"><X size={18}/></button>}
+      {showClose&&onClose&&<button type="button" onClick={onClose} disabled={pending} aria-label={closeLabel} className="absolute right-4 top-4 rounded-xl p-2 text-faint transition-colors hover:bg-soft disabled:opacity-50"><X size={18}/></button>}
       {header!==undefined?<><h3 id={id} className="sr-only">{title}</h3>{header}</>:<div className={twMerge('flex items-start gap-4',showClose&&onClose&&align!=='center'&&'pr-8',align==='center'&&'flex-col items-center text-center',headerClassName)}>{icon&&<div className={twMerge('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent',iconClassName)}>{icon}</div>}
-        <div className="min-w-0 flex-1">{eyebrow&&<p className="text-xs font-semibold text-stone-500 dark:text-stone-400">{eyebrow}</p>}<h3 id={id} className="text-lg font-bold text-stone-900 dark:text-stone-100">{title}</h3>{description&&<p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{description}</p>}</div></div>}
+        <div className="min-w-0 flex-1">{eyebrow&&<p className="text-xs font-semibold text-faint">{eyebrow}</p>}<h3 id={id} className="text-lg font-bold text-strong">{title}</h3>{description&&<p className="mt-2 text-sm leading-relaxed text-subtle">{description}</p>}</div></div>}
       {children&&<div className="mt-5">{children}</div>}{footer&&<div className="mt-6 flex justify-end gap-3">{footer}</div>}
     </Panel>
   </motion.div>}</AnimatePresence>,document.body);

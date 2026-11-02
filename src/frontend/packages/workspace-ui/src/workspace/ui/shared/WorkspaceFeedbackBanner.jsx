@@ -8,7 +8,7 @@ export function WorkspaceFeedbackBanner({ feedback, onDismiss }) {
   const toneClassName =
     feedback.tone === "success"
       ? "border-success-border bg-success-subtle text-success"
-      : "border-stone-200/80 bg-stone-50/80 text-stone-700 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-200";
+      : "border-line/80 bg-muted/80 text-body";
 
 
   return (
@@ -18,7 +18,7 @@ export function WorkspaceFeedbackBanner({ feedback, onDismiss }) {
         <button
           type="button"
           onClick={onDismiss}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-white/70 hover:opacity-100 dark:hover:bg-black/20"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-surface/70 hover:opacity-100"
           title="关闭提示"
           aria-label="关闭提示"
         >

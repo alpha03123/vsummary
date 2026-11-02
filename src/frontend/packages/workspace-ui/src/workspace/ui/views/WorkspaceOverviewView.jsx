@@ -49,16 +49,16 @@ export function WorkspaceOverviewView({
       >
         {isGeneratingSelectedVideo ? (
           <div className="motion-fade-up mt-6 w-full max-w-xl">
-            <div className="motion-busy-button inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600 shadow-sm">
+            <div className="motion-busy-button inline-flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm text-subtle shadow-sm">
               <LoaderCircle size={16} strokeWidth={2.2} className="animate-spin text-accent" />
               正在整理逐字稿...
             </div>
             <div className="workspace-elevated-panel mt-6 rounded-3xl border p-6">
-              <div className="motion-shimmer h-3 w-24 rounded-full bg-stone-100 dark:bg-stone-800"></div>
-              <div className="motion-shimmer mt-5 h-7 w-3/4 rounded-2xl bg-stone-100 dark:bg-stone-800"></div>
-              <div className="motion-shimmer mt-4 h-4 w-full rounded-full bg-stone-100 dark:bg-stone-800"></div>
-              <div className="motion-shimmer mt-3 h-4 w-5/6 rounded-full bg-stone-100 dark:bg-stone-800"></div>
-              <div className="motion-shimmer mt-8 h-24 w-full rounded-2xl bg-stone-100 dark:bg-stone-800"></div>
+              <div className="motion-shimmer h-3 w-24 rounded-full bg-soft"></div>
+              <div className="motion-shimmer mt-5 h-7 w-3/4 rounded-2xl bg-soft"></div>
+              <div className="motion-shimmer mt-4 h-4 w-full rounded-full bg-soft"></div>
+              <div className="motion-shimmer mt-3 h-4 w-5/6 rounded-full bg-soft"></div>
+              <div className="motion-shimmer mt-8 h-24 w-full rounded-2xl bg-soft"></div>
             </div>
           </div>
         ) : null}
@@ -83,13 +83,13 @@ export function WorkspaceOverviewView({
   return (
     <div className="flex w-full flex-col gap-8 pb-32">
       {isGeneratingSelectedVideo ? (
-        <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-sm text-stone-700 dark:text-stone-200">
+        <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-sm text-body">
           <LoaderCircle size={16} className="animate-spin text-accent" />
           正在整理逐字稿，当前仍显示上一次结果。
         </div>
       ) : null}
       {canEdit ? <div className="flex flex-wrap justify-end gap-2">
-        <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition-colors hover:bg-stone-100 dark:border-stone-700 dark:bg-neutral-900 dark:text-stone-200 dark:hover:bg-neutral-800"><Pencil size={16} />编辑内容</button>
+        <button type="button" onClick={() => setEditorOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-body shadow-sm transition-colors hover:bg-soft"><Pencil size={16} />编辑内容</button>
       </div> : null}
       <WorkspaceOverviewContent
         key={selectedVideo.id}

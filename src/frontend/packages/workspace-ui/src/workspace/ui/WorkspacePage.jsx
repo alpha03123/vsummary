@@ -430,10 +430,10 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-transparent">
         <div className="workspace-panel max-w-md rounded-3xl border p-8 text-center">
-          <h1 className="mb-3 text-2xl font-bold text-stone-900">
+          <h1 className="mb-3 text-2xl font-bold text-strong">
             {waitingForBackend ? "正在启动服务..." : "正在载入知识工作台"}
           </h1>
-          <p className="text-stone-600">
+          <p className="text-subtle">
             {waitingForBackend
               ? "正在等待后端服务响应，请稍等...."
               : "正在扫描 `videos/` 目录并构建当前工作区。"}
@@ -444,7 +444,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   }
 
   return (
-    <div ref={containerRef} className="flex h-dvh w-full overflow-hidden gap-0 md:p-4 md:gap-4 text-stone-900 dark:text-stone-100 transition-colors">
+    <div ref={containerRef} className="flex h-dvh w-full overflow-hidden gap-0 md:p-4 md:gap-4 text-strong transition-colors">
       {/* Left Sidebar: the open series' videos. The home page is a full-width grid of series instead. */}
       {activeSeries ? (<>
       <aside
@@ -460,7 +460,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
             type="button"
             onClick={() => setIsSidebarOpen(false)}
             aria-label="收起列表"
-            className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+            className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full text-faint hover:bg-soft"
           >
             <X size={18} />
           </button>
@@ -556,7 +556,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
             />
           )}
         </div>
-        {sidebarFooter && <div className="shrink-0 border-t border-stone-200/70 px-4 py-3 dark:border-stone-700/60">{sidebarFooter}</div>}
+        {sidebarFooter && <div className="shrink-0 border-t border-line/70 px-4 py-3">{sidebarFooter}</div>}
       </aside>
       {isSidebarOpen ? (
         <div
@@ -566,7 +566,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           onPointerDown={beginResize}
           className="group relative z-30 -mx-1 hidden w-5 shrink-0 cursor-col-resize touch-none md:block"
         >
-          <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-stone-200/80 transition-colors group-hover:bg-accent dark:bg-stone-800 dark:group-hover:bg-accent" />
+          <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-softer/80 transition-colors group-hover:bg-accent dark:group-hover:bg-accent" />
         </div>
       ) : null}
       </>) : null}
@@ -695,7 +695,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                   actions.closeSettingsPanel();
                 }
               }}
-              className="absolute inset-0 z-50 bg-stone-900/20 dark:bg-black/50 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
+              className="absolute inset-0 z-50 bg-black/20 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
             >
               <Suspense fallback={<WorkspaceModalLoadingState />}>
                 <SettingsPanel page={page} />
@@ -719,7 +719,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                   actions.closeUsagePage();
                 }
               }}
-              className="absolute inset-0 z-50 bg-stone-900/20 dark:bg-black/50 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
+              className="absolute inset-0 z-50 bg-black/20 backdrop-blur-md flex justify-center items-center p-4 md:p-8"
             >
               <Suspense fallback={<WorkspaceModalLoadingState />}>
                 <UsagePanel page={page} />
@@ -840,7 +840,7 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot, hasGeneratedContent }) {
   };
 
   return (
-    <div role="status" className={`mx-6 mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs ${isFailed ? "border-danger/40 bg-danger-subtle text-danger" : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900/60 dark:text-stone-400"}`}>
+    <div role="status" className={`mx-6 mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs ${isFailed ? "border-danger/40 bg-danger-subtle text-danger" : "border-line bg-muted text-subtle"}`}>
       {isRunning ? (
         <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
       ) : (
@@ -857,7 +857,7 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot, hasGeneratedContent }) {
       <button
         type="button"
         onClick={() => setDismissedSnapshotKey(snapshotKey)}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-black/5 hover:opacity-100 dark:hover:bg-soft"
         aria-label="关闭提示"
       >
         <X size={14} />
@@ -868,7 +868,7 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot, hasGeneratedContent }) {
 
 function WorkspaceSidePaneLoadingState({ title }) {
   return (
-    <section className="flex-1 min-w-[320px] h-full overflow-y-auto relative z-10 border-l border-stone-200/80 dark:border-stone-800/90 transition-all">
+    <section className="flex-1 min-w-[320px] h-full overflow-y-auto relative z-10 border-l border-line/80 transition-all">
       <div className="flex h-full items-center justify-center p-8">
         <WorkspaceStateBlock title={title} loading />
       </div>

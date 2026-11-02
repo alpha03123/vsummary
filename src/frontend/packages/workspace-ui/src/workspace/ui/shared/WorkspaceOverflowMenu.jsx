@@ -13,7 +13,7 @@ export function WorkspaceOverflowMenu({
   placement = "top",
   menuClassName = "min-w-[148px]",
   triggerContent = null,
-  triggerClassName = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200",
+  triggerClassName = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-faint transition-colors hover:bg-soft hover:text-body disabled:cursor-not-allowed disabled:opacity-50",
   children,
 }) {
   const triggerRef = useRef(null);
@@ -66,7 +66,7 @@ export function WorkspaceOverflowMenu({
       {open ? createPortal(
         <div
           ref={menuRef}
-          className={`fixed z-[70] ${menuClassName} rounded-2xl border border-stone-200 bg-white p-1 shadow-xl motion-fade-scale dark:border-stone-700 dark:bg-neutral-900`}
+          className={`fixed z-[70] ${menuClassName} rounded-2xl border border-line bg-surface p-1 shadow-xl motion-fade-scale`}
           style={{ left: position?.left, ...position?.vertical, maxWidth: 'calc(100vw - 32px)',
             visibility: position ? 'visible' : 'hidden' }}
         >

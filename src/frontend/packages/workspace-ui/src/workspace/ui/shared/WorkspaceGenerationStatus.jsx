@@ -21,10 +21,10 @@ export function WorkspaceGenerationStatus({ snapshot, label }) {
     <div className="motion-fade-up mt-6 w-full max-w-2xl">
       <div className="workspace-elevated-panel flex items-center gap-3 rounded-3xl border p-5">
         <LoaderCircle size={18} strokeWidth={2.2} className="shrink-0 animate-spin text-accent" />
-        <p className="text-sm text-stone-600 dark:text-zinc-400">
+        <p className="text-sm text-subtle">
           {snapshot?.detail || label}
-          <span className="mx-2 text-stone-300 dark:text-zinc-600">·</span>
-          <span className="font-medium text-stone-700 dark:text-zinc-200">已用 {Math.round(elapsedSeconds)} 秒</span>
+          <span className="mx-2 text-faint">·</span>
+          <span className="font-medium text-body">已用 {Math.round(elapsedSeconds)} 秒</span>
         </p>
       </div>
     </div>
