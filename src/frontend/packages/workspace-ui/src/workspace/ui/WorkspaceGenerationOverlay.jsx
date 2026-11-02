@@ -135,7 +135,7 @@ export function WorkspaceGenerationOverlay({
               type="button"
               onClick={onCancel}
               disabled={generationSnapshot?.status === "cancelling"}
-              className="mt-4 shrink-0 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-900/70 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/30"
+              className="mt-4 shrink-0 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-danger-border bg-white px-4 py-2.5 text-sm font-semibold text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50 disabled:cursor-not-allowed dark:bg-stone-900"
             >
               <X size={16} />
               {generationSnapshot?.status === "cancelling" ? "正在停止..." : cancelLabel}

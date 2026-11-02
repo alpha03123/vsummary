@@ -206,7 +206,7 @@ export function WorkspaceVideoScopeEmbed() {
   return (
     <div className="relative h-screen">
       {seekError || playbackError ? (
-        <div className="absolute inset-x-4 top-4 z-20 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shadow-sm" role="alert">
+        <div className="absolute inset-x-4 top-4 z-20 rounded border border-danger-border bg-danger-subtle px-3 py-2 text-sm text-danger shadow-sm" role="alert">
           {seekError || playbackError}
         </div>
       ) : null}
@@ -219,7 +219,7 @@ export function WorkspaceVideoScopeEmbed() {
           actionDisabled={page.generation.showOverlay}
           onAction={controller.onProcessLinkedVideo}
         >
-          {controller.state.error ? <p role="alert" className="mt-4 text-sm text-red-600">{controller.state.error}</p> : null}
+          {controller.state.error ? <p role="alert" className="mt-4 text-sm text-danger">{controller.state.error}</p> : null}
         </WorkspaceStateBlock>
       ) : (
         <WorkspaceVideoScopePane

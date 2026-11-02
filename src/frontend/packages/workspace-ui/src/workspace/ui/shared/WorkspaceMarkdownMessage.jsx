@@ -321,7 +321,7 @@ function normalizeFrameKey(seconds) {
 function NoteFrameImage({ src, alt, seconds, onSeek, onOpenTranscriptAtTime, ...props }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
-    return <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">此处插图不可用：{formatImageTimestamp(seconds)} 的视频画面无法加载</p>;
+    return <p className="rounded-xl border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning">此处插图不可用：{formatImageTimestamp(seconds)} 的视频画面无法加载</p>;
   }
   return (
     <button

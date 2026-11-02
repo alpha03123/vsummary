@@ -129,14 +129,14 @@ function VideoIndexBadge({ state, rebuilding, onRebuild }) {
   if (!labels[state]) return null;
   return (
     <span className="inline-flex items-center gap-1">
-      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold text-warning">
         <AlertTriangle size={12} />
         {labels[state]}
       </span>
       <button type="button" onClick={(event) => { event.stopPropagation(); onRebuild(); }}
         disabled={rebuilding} title={rebuilding ? "正在重建检索索引" : "重建检索索引"}
         aria-label="重建检索索引"
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-wait disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/50">
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-warning transition-colors hover:bg-warning/15 disabled:cursor-wait disabled:opacity-50">
         <RefreshCw size={13} className={rebuilding ? "animate-spin" : ""} />
       </button>
     </span>
@@ -147,7 +147,7 @@ function VideoBadge({ video }) {
   if (video.status === "source_missing") {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300"
+        className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-warning"
         title="原始媒体文件当前不可访问，请重新链接媒体。"
       >
         <Link2 size={12} />
@@ -157,7 +157,7 @@ function VideoBadge({ video }) {
   }
   if (!video.processed && (video.isLinked || video.status === "linked")) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-warning">
         <Link2 size={11} />
         仅链接
       </span>
@@ -165,7 +165,7 @@ function VideoBadge({ video }) {
   }
   if (video.status === "downloading") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-info-border bg-info-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-info">
         <ArrowDown size={11} className="animate-bounce" />
         下载中
       </span>
@@ -174,7 +174,7 @@ function VideoBadge({ video }) {
   if (video.status === "untranscribable") {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-orange-800 dark:border-orange-900/70 dark:bg-orange-950/40 dark:text-orange-300"
+        className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-warning"
         title="没有可供转写使用的信息"
       >
         <AlertTriangle size={12} />
@@ -184,7 +184,7 @@ function VideoBadge({ video }) {
   }
   if (video.processed) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-success-border bg-success-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-success">
         <CheckCircle2 size={12} />
         已生成概括
       </span>
@@ -192,7 +192,7 @@ function VideoBadge({ video }) {
   }
   if (video.hasTranscript) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-violet-700 dark:border-violet-900/70 dark:bg-violet-950/40 dark:text-violet-300">
+      <span className="inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-accent">
         <Captions size={12} />
         已有字幕
       </span>
@@ -366,7 +366,7 @@ function PanelFooter({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="mb-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-2.5 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100/80 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200 dark:hover:bg-amber-950/30"
+              className="mb-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-warning-border/80 bg-warning-subtle/80 px-4 py-2.5 text-sm font-semibold text-warning transition-colors hover:bg-warning/15"
             >
               <ArrowDown size={16} strokeWidth={2.5} />
               下载 RAG 向量模型
@@ -378,7 +378,7 @@ function PanelFooter({
               onClick={isGeneratingSeries ? onCancelGeneration : onGenerateSeries}
               disabled={isGeneratingSeries ? !onCancelGeneration : seriesComplete}
               className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${isGeneratingSeries
-                ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+                ? "btn-danger-ghost border border-danger-border text-danger"
                 : seriesComplete
                   ? "cursor-default border border-stone-200 text-stone-400 dark:border-stone-700 dark:text-stone-500"
                   : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
@@ -493,7 +493,7 @@ function PanelFooter({
                       setFooterOverflowOpen(false);
                       onRequestDeleteCurrentVideo?.();
                     }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-danger hover:bg-danger-subtle"
                   >
                     <Trash2 size={14} />
                     删除当前视频
@@ -506,7 +506,7 @@ function PanelFooter({
         <button
           type="button"
           className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${selectedVideoIsDownloading || isGeneratingSelectedVideo
-              ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+              ? "btn-danger-ghost border border-danger-border text-danger"
               : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
             }`}
           onClick={isGeneratingSelectedVideo
@@ -518,7 +518,7 @@ function PanelFooter({
           {isGeneratingSelectedVideo ? (onCancelGeneration ? "取消当前处理" : "正在处理") : selectedVideoIsDownloading ? "取消下载" : "下载视频"}
         </button>
         {hasSelectedVideoDownloadError && downloadError ? (
-          <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300">
+          <div role="alert" className="mt-3 rounded-xl border border-danger-border bg-danger-subtle px-3 py-2.5 text-xs leading-5 text-danger">
             <p className="font-semibold">下载失败</p>
             <p className="mt-0.5">{downloadError}</p>
           </div>
@@ -549,7 +549,7 @@ function PanelFooter({
   // Hosts that ask before generating (Cloud) choose the style in that confirmation instead.
   const showAiSummaryTemplateMenu = summaryStyleInFooter && processingMode === "summary" && selectedVideo.status !== "source_missing" && !regenerationLocked;
   const generationControlClass = videoGenerationButton.tone === "danger"
-    ? "btn-danger-ghost border border-red-200 text-red-600 dark:border-red-900/70 dark:text-red-300"
+    ? "btn-danger-ghost border border-danger-border text-danger"
     : videoGenerationButton.tone === "busy"
       ? "motion-busy-button bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
       : "border border-accent/40 bg-accent/8 text-accent";
@@ -595,7 +595,7 @@ function PanelFooter({
                   setFooterOverflowOpen(false);
                   onRequestDeleteCurrentVideo?.();
                 }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-danger hover:bg-danger-subtle disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 size={14} />
                 {deleteButton.disabled ? deleteButton.label : "删除当前视频"}
@@ -606,7 +606,7 @@ function PanelFooter({
         <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-stone-800 dark:text-stone-100" title={selectedVideo.title}>{selectedVideo.title}</h3>
       </div>
       {modelNeedsDownload ? (
-        <div className="mb-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-xs leading-6 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+        <div className="mb-3 rounded-2xl border border-warning-border/80 bg-warning-subtle/80 px-4 py-3 text-xs leading-6 text-warning">
           当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概括。
         </div>
       ) : null}
@@ -835,7 +835,7 @@ export function WorkspaceLibraryPanel({
                       setOverflowOpen(false);
                       onRequestDeleteSeries?.();
                     }}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-danger hover:bg-danger-subtle disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Trash2 size={14} />
                     {seriesDeleteButton.disabled ? seriesDeleteButton.label : "删除整个系列"}
@@ -919,7 +919,7 @@ export function WorkspaceLibraryPanel({
 
       {/* Video / Source List */}
       <div className="relative flex flex-1 flex-col overflow-y-auto" aria-label="视频列表">
-        {indexRebuildError ? <p role="alert" className="px-4 pt-3 text-xs text-red-700 dark:text-red-300">{indexRebuildError}</p> : null}
+        {indexRebuildError ? <p role="alert" className="px-4 pt-3 text-xs text-danger">{indexRebuildError}</p> : null}
         <div className={`p-4 flex flex-col gap-3 ${selectedCount > 0 ? "pb-20" : ""}`}>
           {!isPlayground ? (
             <button
@@ -1067,7 +1067,7 @@ export function WorkspaceLibraryPanel({
                     type="button"
                     disabled={seriesHasActiveWork}
                     onClick={() => onRequestBulkDelete?.(selectedVideoIds)}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-danger-subtle px-3 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-danger/15 disabled:cursor-not-allowed disabled:opacity-50"
                     title={seriesHasActiveWork ? activeWorkSummary || "系列中有任务正在处理，暂不能批量删除" : "删除所选视频"}
                   >
                     <Trash2 size={14} />
@@ -1076,7 +1076,7 @@ export function WorkspaceLibraryPanel({
                 }
               />
               {seriesHasActiveWork ? (
-                <p className="mt-1.5 px-2 text-xs leading-relaxed text-amber-600 dark:text-amber-400">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
+                <p className="mt-1.5 px-2 text-xs leading-relaxed text-warning">{activeWorkSummary || "系列中有任务正在处理，暂不能批量删除。"}</p>
               ) : null}
             </motion.div>
           )}

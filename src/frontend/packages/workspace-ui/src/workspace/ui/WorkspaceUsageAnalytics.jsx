@@ -64,7 +64,7 @@ export function WorkspaceUsageAnalytics({
               <span className="text-sm font-semibold">正在读取用量统计...</span>
             </div>
           ) : error ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+            <div className="rounded-2xl border border-danger-border bg-danger-subtle px-5 py-4 text-sm font-semibold text-danger">
               {error}
             </div>
           ) : (
@@ -88,19 +88,19 @@ export function WorkspaceUsageAnalytics({
                   label="生成消耗"
                   value={generation?.totalTokens ?? 0}
                   icon={Zap}
-                  accentClass="text-indigo-500 bg-indigo-500/10 dark:text-indigo-400 dark:bg-indigo-400/10"
+                  accentClass="text-accent bg-accent/10"
                   loading={loading}
                 />
                 <UsageStatCard
                   label="对话消耗"
                   value={chat?.totalTokens ?? 0}
                   icon={MessageSquare}
-                  accentClass="text-emerald-500 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-400/10"
+                  accentClass="text-success-muted bg-success/10"
                   loading={loading}
                 />
                 <div className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900/70 flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-7 h-7 rounded-lg text-amber-500 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-lg text-warning-muted bg-warning/10">
                       <ArrowUpRight size={14} strokeWidth={2.5} />
                     </div>
                     <span className="text-xs font-semibold text-stone-600 dark:text-stone-400">Prompt / Completion</span>
@@ -224,8 +224,8 @@ export function WorkspaceUsageAnalytics({
                               <td className="px-4 py-2.5">
                                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                                   item.category === "chat"
-                                    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
-                                    : "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400"
+                                    ? "bg-success-subtle text-success"
+                                    : "bg-accent/10 text-accent"
                                 }`}>
                                   {item.category === "chat" ? "对话" : "生成"}
                                 </span>
@@ -287,7 +287,7 @@ function UsageBarChart({ timeline, granularity, range, loading = false }) {
       {
         label: "生成",
         data: chartRows.map((item) => item.generationTokens),
-        backgroundColor: createChartGradient("#6366f1", "#a5b4fc"),
+        backgroundColor: createChartGradient("--workspace-accent-color"),
         borderRadius: 10,
         borderSkipped: false,
         barThickness: chartRows.length <= 4 ? 34 : "flex",
@@ -296,7 +296,7 @@ function UsageBarChart({ timeline, granularity, range, loading = false }) {
       {
         label: "对话",
         data: chartRows.map((item) => item.chatTokens),
-        backgroundColor: createChartGradient("#10b981", "#6ee7b7"),
+        backgroundColor: createChartGradient("--color-success-muted"),
         borderRadius: 10,
         borderSkipped: false,
         barThickness: chartRows.length <= 4 ? 34 : "flex",
@@ -396,11 +396,11 @@ function UsageBarChart({ timeline, granularity, range, loading = false }) {
         </div>
         <div className="flex items-center gap-3 text-xs font-bold text-stone-600 dark:text-stone-400">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-[0_0_0_3px_rgba(99,102,241,0.12)]" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-accent ring-[3px] ring-accent/15" />
             生成
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-success ring-[3px] ring-success/15" />
             对话
           </span>
         </div>
@@ -473,16 +473,18 @@ function toFiniteTokenValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function createChartGradient(startColor, endColor) {
+// Reads the theme variable ("99 102 241") at draw time, so bars follow the light/dark switch.
+function createChartGradient(colorVariable) {
   return (context) => {
     const { chart } = context;
     const { ctx, chartArea } = chart;
+    const channels = getComputedStyle(document.documentElement).getPropertyValue(colorVariable).trim();
     if (!chartArea || typeof CanvasGradient === "undefined") {
-      return startColor;
+      return `rgb(${channels})`;
     }
     const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-    gradient.addColorStop(0, startColor);
-    gradient.addColorStop(1, endColor);
+    gradient.addColorStop(0, `rgb(${channels})`);
+    gradient.addColorStop(1, `rgb(${channels} / 0.45)`);
     return gradient;
   };
 }

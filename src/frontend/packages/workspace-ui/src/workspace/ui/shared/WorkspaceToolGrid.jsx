@@ -6,11 +6,11 @@ import { ArrowRight, Lock } from "lucide-react";
  */
 const STATUS_TONES = {
   ready:
-    "border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300",
+    "border-success-border/80 bg-success-subtle text-success",
   pending:
     "border-stone-200 bg-stone-100 text-stone-600 dark:border-stone-700 dark:bg-neutral-800 dark:text-stone-300",
   blocked:
-    "border-amber-200/80 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300",
+    "border-warning-border/80 bg-warning-subtle text-warning",
   loading:
     "border-stone-200 bg-stone-100 text-stone-500 dark:border-stone-700 dark:bg-neutral-800 dark:text-stone-400",
 };

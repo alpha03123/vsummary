@@ -7,7 +7,7 @@ export function WorkspaceFeedbackBanner({ feedback, onDismiss }) {
 
   const toneClassName =
     feedback.tone === "success"
-      ? "border-success bg-success-subtle text-success"
+      ? "border-success-border bg-success-subtle text-success"
       : "border-stone-200/80 bg-stone-50/80 text-stone-700 dark:border-stone-800 dark:bg-stone-950/50 dark:text-stone-200";
 
 

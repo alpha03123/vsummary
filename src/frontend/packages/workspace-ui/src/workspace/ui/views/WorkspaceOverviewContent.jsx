@@ -184,7 +184,7 @@ export function WorkspaceOverviewContent({
       </article>
 
       {summary.generationWarnings?.length ? (
-        <div role="alert" className="flex items-start gap-3 border-l-4 border-warning bg-warning-subtle px-4 py-3 text-sm text-stone-700 dark:text-stone-200">
+        <div role="alert" className="flex items-start gap-3 border-l-4 border-warning-border bg-warning-subtle px-4 py-3 text-sm text-stone-700 dark:text-stone-200">
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
           <div className="space-y-1">
             {summary.generationWarnings.map((warning) => <p key={warning}>{warning}</p>)}

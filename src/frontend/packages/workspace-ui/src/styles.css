@@ -77,21 +77,22 @@
     --color-danger-muted:  225 50 68;   /* #E13244 — mid cool red */
 
     /* warning: amber → "cool amber" (hue pulled from 38° toward 30°) */
-    --color-warning:        202 112 8;   /* #CA7008 — less orange, more golden */
+    --color-warning:        180 83 9;    /* #B45309 amber-700 — 4.6:1 on its own -bg, badges stay readable */
     --color-warning-bg:     254 246 220; /* #FEF6DC — pale gold, no warm orange */
     --color-warning-border: 240 195 78;  /* #F0C34E — cool amber-300 */
     --color-warning-muted:  218 145 12;  /* #DA910C — cool amber-500 */
 
     /* success: emerald → "teal-shifted emerald" (hue pulled from 160° toward 170°) */
-    --color-success:        4 142 100;   /* #048E64 — blue-leaning teal-green */
+    --color-success:        4 120 87;    /* #047857 emerald-700 — 5:1 on its own -bg */
     --color-success-bg:     229 252 243; /* #E5FCF3 — cool mint, not warm green */
     --color-success-border: 82 218 163;  /* #52DAA3 — teal-tinted emerald-300 */
     --color-success-muted:  10 172 118;  /* #0AAC76 — cool emerald-500 */
 
-    /* info = accent (pure indigo) */
-    --color-info:        99 102 241;   /* indigo-500 */
+    /* info: indigo, one step darker than the accent so text passes on info-bg */
+    --color-info:        79 70 229;    /* indigo-600 */
     --color-info-bg:     238 242 255;  /* indigo-50  */
     --color-info-border: 165 180 252;  /* indigo-300 */
+    --color-info-muted:  99 102 241;   /* indigo-500 */
   }
 
   .dark {
@@ -134,6 +135,7 @@
     --color-info:        129 140 248;  /* indigo-400 (= accent) */
     --color-info-bg:     16 14 38;     /* indigo-950 */
     --color-info-border: 67 56 202;    /* indigo-700 */
+    --color-info-muted:  99 102 241;   /* indigo-500 */
   }
 }
 
@@ -332,38 +334,8 @@
     box-shadow: var(--workspace-glow);
   }
 
-  /* ============================================================
-     SEMANTIC COLOR UTILITIES
-     Use these instead of hardcoded Tailwind color classes.
-     Each semantic group: bg / text / border / muted variants.
-  ============================================================ */
-
-  /* danger (replaces red-*) */
-  .bg-danger        { background-color: rgb(var(--color-danger)); }
-  .bg-danger-subtle { background-color: rgb(var(--color-danger-bg)); }
-  .text-danger      { color: rgb(var(--color-danger)); }
-  .border-danger    { border-color: rgb(var(--color-danger-border)); }
-  .text-danger-muted { color: rgb(var(--color-danger-muted)); }
-
-  /* warning (replaces amber-*) */
-  .bg-warning        { background-color: rgb(var(--color-warning)); }
-  .bg-warning-subtle { background-color: rgb(var(--color-warning-bg)); }
-  .text-warning      { color: rgb(var(--color-warning)); }
-  .border-warning    { border-color: rgb(var(--color-warning-border)); }
-  .text-warning-muted { color: rgb(var(--color-warning-muted)); }
-
-  /* success (replaces emerald-*) */
-  .bg-success        { background-color: rgb(var(--color-success)); }
-  .bg-success-subtle { background-color: rgb(var(--color-success-bg)); }
-  .text-success      { color: rgb(var(--color-success)); }
-  .border-success    { border-color: rgb(var(--color-success-border)); }
-  .text-success-muted { color: rgb(var(--color-success-muted)); }
-
-  /* info (replaces sky-* in non-accent contexts) */
-  .bg-info        { background-color: rgb(var(--color-info)); }
-  .bg-info-subtle { background-color: rgb(var(--color-info-bg)); }
-  .text-info      { color: rgb(var(--color-info)); }
-  .border-info    { border-color: rgb(var(--color-info-border)); }
+  /* Semantic colours (text-danger, bg-warning-subtle, border-success-border, …) come from
+     tailwind.colors.js and read the --color-* variables above. */
 
   /* primary button: solid accent */
   .btn-primary {
@@ -385,7 +357,7 @@
 
   /* danger button */
   .btn-danger {
-    background-color: rgb(var(--color-danger));
+    background-color: rgb(var(--color-danger-muted));
     color: #fff;
     transition: opacity 150ms ease, transform 100ms ease;
   }

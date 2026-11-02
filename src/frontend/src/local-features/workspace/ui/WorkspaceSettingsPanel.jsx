@@ -251,7 +251,7 @@ export function WorkspaceSettingsPanel({
         <div className="mt-auto pt-6 border-t border-stone-200/80 dark:border-stone-800/50">
           <button
             type="button"
-            className="w-full text-left px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            className="w-full text-left px-3 py-2 rounded-lg text-[13px] font-semibold text-stone-600 hover:text-danger hover:bg-danger-subtle transition-colors"
             onClick={() => setShowResetConfirm(true)}
           >
             恢复默认设置
@@ -427,7 +427,7 @@ export function WorkspaceSettingsPanel({
                               <div
                                 key={model.id}
                                 className={`rounded-2xl border p-4 transition-colors ${downloadFailed
-                                  ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
+                                  ? "border-danger-border bg-danger-subtle/70"
                                   : isCurrent
                                     ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
                                     : "border-stone-200 dark:border-stone-800"
@@ -453,13 +453,13 @@ export function WorkspaceSettingsPanel({
                                     {isDownloading || isCancelling ? (
                                       <div className="mt-3 w-full h-1.5 bg-stone-200/70 dark:bg-stone-800 rounded-full overflow-hidden">
                                         <div
-                                          className={`h-full transition-[width] duration-200 ease-out ${isCancelling ? "bg-amber-500" : "bg-accent"}`}
+                                          className={`h-full transition-[width] duration-200 ease-out ${isCancelling ? "bg-warning" : "bg-accent"}`}
                                           style={{ width: `${typeof downloadProgress === "number" ? downloadProgress : 8}%` }}
                                         />
                                       </div>
                                     ) : null}
                                     {downloadFailed ? (
-                                      <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                      <p className="mt-3 rounded-xl border border-danger-border bg-white/70 px-3 py-2 text-xs font-semibold text-danger dark:bg-danger-subtle">
                                         {MODEL_DOWNLOAD_FAILED_MESSAGE}
                                       </p>
                                     ) : null}
@@ -476,7 +476,7 @@ export function WorkspaceSettingsPanel({
                                     <button
                                       type="button"
                                       onClick={() => onCancelFasterWhisperModelDownload?.(model.id)}
-                                      className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+                                      className="rounded-xl border border-danger-border bg-danger-subtle px-3 py-2 text-xs font-bold text-danger transition-colors hover:bg-danger/15"
                                     >
                                       取消下载
                                     </button>
@@ -511,7 +511,7 @@ export function WorkspaceSettingsPanel({
                                         setConfirmDownloadModelId(model.id);
                                       }}
                                       className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${needsConfirm
-                                        ? "bg-warning text-white hover:opacity-85"
+                                        ? "border border-warning-border text-warning hover:bg-warning/15"
                                         : "bg-stone-900 text-white hover:bg-black dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                                         }`}
                                     >
@@ -630,9 +630,9 @@ export function WorkspaceSettingsPanel({
                           {asrTest.message ? (
                             <div
                               className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${asrTest.status === "success"
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                ? "border-success-border bg-success-subtle text-success"
                                 : asrTest.status === "failed"
-                                  ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                                  ? "border-danger-border bg-danger-subtle text-danger"
                                   : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
                                 }`}
                             >
@@ -1045,9 +1045,9 @@ export function WorkspaceSettingsPanel({
                     {providerTest.message ? (
                       <div
                         className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${providerTest.status === "success"
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          ? "border-success-border bg-success-subtle text-success"
                           : providerTest.status === "failed"
-                            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                            ? "border-danger-border bg-danger-subtle text-danger"
                             : "border-stone-200 bg-stone-50 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
                           }`}
                       >
@@ -1144,7 +1144,7 @@ export function WorkspaceSettingsPanel({
                           <div
                             key={model.key}
                             className={`rounded-2xl border p-4 transition-colors ${downloadFailed
-                              ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
+                              ? "border-danger-border bg-danger-subtle/70"
                               : model.downloaded
                                 ? "border-accent/30 bg-info-subtle dark:bg-info-subtle"
                                 : "border-stone-200 dark:border-stone-800"
@@ -1163,7 +1163,7 @@ export function WorkspaceSettingsPanel({
                                   </div>
                                 ) : null}
                                 {downloadFailed ? (
-                                  <p className="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                                  <p className="mt-3 rounded-xl border border-danger-border bg-white/70 px-3 py-2 text-xs font-semibold text-danger dark:bg-danger-subtle">
                                     {MODEL_DOWNLOAD_FAILED_MESSAGE}
                                   </p>
                                 ) : null}
@@ -1180,7 +1180,7 @@ export function WorkspaceSettingsPanel({
                                 <button
                                   type="button"
                                   onClick={() => onCancelRagModelDownload?.(model.key)}
-                                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+                                  className="rounded-xl border border-danger-border bg-danger-subtle px-3 py-2 text-xs font-bold text-danger transition-colors hover:bg-danger/15"
                                 >
                                   取消下载
                                 </button>

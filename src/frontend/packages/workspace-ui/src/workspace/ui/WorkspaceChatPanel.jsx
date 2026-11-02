@@ -240,16 +240,16 @@ export function WorkspaceChatPanel({
     <div className="@container h-full w-full flex flex-col bg-transparent">
 
       {seriesRagLocked ? (
-        <div className="border-b border-amber-200/80 bg-amber-50/90 px-6 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+        <div className="border-b border-warning-border/80 bg-warning-subtle/90 px-6 py-3 text-sm text-warning">
           <div className="font-semibold">请先下载 RAG 向量模型</div>
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">
+            <p className="text-xs leading-5 text-warning">
               针对整个系列提问需要检索模型，请先在设置里下载。
             </p>
             <button
               type="button"
               onClick={onOpenSettings}
-              className="shrink-0 rounded-xl bg-amber-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-950 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+              className="shrink-0 rounded-xl border border-warning-border px-3 py-1.5 text-xs font-bold text-warning transition hover:bg-warning/15"
             >
               去设置下载
             </button>
@@ -264,12 +264,12 @@ export function WorkspaceChatPanel({
       ) : null}
 
       {seriesIndexingLocked ? (
-        <div className="border-b border-blue-200/80 bg-blue-50/90 px-6 py-3 text-sm text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-100">
+        <div className="border-b border-info-border/80 bg-info-subtle/90 px-6 py-3 text-sm text-info">
           <div className="flex items-center gap-2 font-semibold">
             <LoaderCircle size={15} className="animate-spin" />
             知识库正在构建
           </div>
-          <p className="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
+          <p className="mt-1 text-xs leading-5 text-info">
             正在扫描视频并建立关联索引，系列问答将在构建完成后恢复。
           </p>
         </div>

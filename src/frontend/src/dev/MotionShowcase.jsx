@@ -108,9 +108,9 @@ export function MotionShowcase() {
             <motion.div 
               layout
               transition={springTransition}
-              className={`${isSidebarOpen ? "w-[120px]" : "w-0"} bg-indigo-100 rounded-xl flex items-center justify-center overflow-hidden shrink-0`}
+              className={`${isSidebarOpen ? "w-[120px]" : "w-0"} bg-accent/10 rounded-xl flex items-center justify-center overflow-hidden shrink-0`}
             >
-              <span className="text-indigo-800 font-bold whitespace-nowrap opacity-50">Sidebar</span>
+              <span className="text-accent font-bold whitespace-nowrap opacity-50">Sidebar</span>
             </motion.div>
             
             <motion.div 
@@ -176,7 +176,7 @@ export function MotionShowcase() {
         <section className="bg-white p-6 rounded-[2rem] border shadow-sm">
           <div className="flex justify-between items-center mb-4">
              <h2 className="text-xl font-bold">3. 彻底告别生硬销毁 (Exit Animation)</h2>
-             <button onClick={resetMessages} className="text-sm text-indigo-600 font-semibold hover:underline">Reset</button>
+             <button onClick={resetMessages} className="text-sm text-accent font-semibold hover:underline">Reset</button>
           </div>
           <p className="text-sm text-stone-600 mb-4">点击列表项删除。你甚至能看到剩余的元素优雅地上移填补空缺。</p>
           
@@ -191,7 +191,7 @@ export function MotionShowcase() {
                   exit={{ opacity: 0, scale: 0.8, x: -20, transition: { duration: 0.15 } }}
                   transition={springTransition}
                   onClick={() => removeMessage(id)}
-                  className="bg-red-50 text-red-800 border border-red-100 p-4 rounded-xl cursor-pointer hover:bg-red-100 font-medium font-mono text-sm"
+                  className="bg-danger-subtle text-danger border border-danger-border p-4 rounded-xl cursor-pointer hover:bg-danger/15 font-medium font-mono text-sm"
                 >
                   Click to delete message #{id}
                 </motion.li>
@@ -227,7 +227,7 @@ export function MotionShowcase() {
           <div className="flex gap-4 mb-6">
             <span className="text-sm font-bold text-stone-700 flex items-center mr-2">选择动效风格:</span>
             {["fade", "slide", "blur"].map(effect => (
-              <label key={effect} className="flex flex-row items-center gap-2 text-sm cursor-pointer hover:text-indigo-600">
+              <label key={effect} className="flex flex-row items-center gap-2 text-sm cursor-pointer hover:text-accent">
                 <input type="radio" name="effect" checked={switchEffect === effect} onChange={() => setSwitchEffect(effect)} />
                 <span className="uppercase font-mono">{effect}</span>
               </label>
@@ -242,7 +242,7 @@ export function MotionShowcase() {
                 <button 
                   key={tab} 
                   onClick={() => setSwitchTab(tab)}
-                  className={`text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${switchTab === tab ? "bg-white shadow-sm border border-stone-200 text-indigo-600" : "text-stone-600 hover:bg-stone-200/50"}`}
+                  className={`text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${switchTab === tab ? "bg-white shadow-sm border border-stone-200 text-accent" : "text-stone-600 hover:bg-stone-200/50"}`}
                 >
                   {tab}
                 </button>
@@ -283,7 +283,7 @@ export function MotionShowcase() {
                   key={menu}
                   onClick={() => setActiveMenu(menu)}
                   className={`relative w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-colors duration-200 z-10 ${
-                    isActive ? "text-indigo-900" : "text-stone-600 hover:text-stone-800"
+                    isActive ? "text-accent" : "text-stone-600 hover:text-stone-800"
                   }`}
                 >
                   {/* The secret sauce: An absolutely positioned background with layoutId */}

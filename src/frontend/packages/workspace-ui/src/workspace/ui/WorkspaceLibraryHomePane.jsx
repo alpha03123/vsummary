@@ -381,7 +381,7 @@ function SelectionBar({ selectedCount, totalCount, onSelectAll, onClear, onDelet
             onSelectAll={onSelectAll}
             onClear={onClear}
             extra={
-              <button type="button" onClick={onDelete} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50">
+              <button type="button" onClick={onDelete} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-danger-subtle px-3 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-danger/15">
                 <Trash2 size={14} /> 删除
               </button>
             }

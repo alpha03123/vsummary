@@ -1,4 +1,4 @@
-import colors from 'tailwindcss/colors';
+import themeColors from './packages/workspace-ui/tailwind.colors.js';
 import containerQueries from '@tailwindcss/container-queries';
 
 /** @type {import('tailwindcss').Config} */
@@ -12,12 +12,7 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
-        // `sky` previously aliased to indigo (confusing); dev showcase now uses
-        // `indigo-*` directly. `brand` teal palette was never referenced — removed.
-        indigo: colors.indigo,
-        accent: 'rgb(var(--workspace-accent-color) / <alpha-value>)',
-      },
+      colors: themeColors,
       fontFamily: {
         // Latin glyphs from IBM Plex Sans; Chinese falls through to each platform's best UI font.
         // `display` is kept as an alias so headings share the body face instead of a second family.

@@ -844,7 +844,7 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot, hasGeneratedContent }) {
       {isRunning ? (
         <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
       ) : (
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isFailed ? "bg-danger" : "bg-amber-500"}`} />
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isFailed ? "bg-danger" : "bg-warning"}`} />
       )}
       <p className="min-w-0 flex-1 break-words">{message}</p>
       {canRebuild ? (

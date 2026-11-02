@@ -44,7 +44,7 @@ export function CopyToClipboardButton({
       title={displayLabel}
       className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition ${
         copied
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+          ? "bg-success-subtle text-success"
           : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
       } ${className}`}
     >
