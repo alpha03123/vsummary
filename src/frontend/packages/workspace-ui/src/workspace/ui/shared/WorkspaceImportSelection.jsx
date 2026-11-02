@@ -15,10 +15,10 @@ export function WorkspaceImportSelection({open,items,selectedIds,onChange,onConf
  const visible=useMemo(()=>items.filter(item=>item.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())),[items,search]);
  return <WorkspaceDialog open={open} title={title} onClose={onClose} pending={pending} className="max-w-2xl max-h-[85dvh] overflow-y-auto"
   footer={<><button type="button" disabled={pending} onClick={onClose} className="rounded-2xl bg-stone-100 px-5 py-2.5 text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-200 disabled:opacity-50 dark:bg-neutral-800 dark:text-zinc-300">取消</button><button type="button" disabled={pending||selectedIds.length===0} onClick={()=>onConfirm(selectedIds)} className="rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40">{pending?'正在准备…':confirmLabel}</button></>}>
-  <div className="mb-4 flex flex-wrap items-center gap-2.5">
+  <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
    <WorkspaceSelectionBar selectedCount={selectedIds.length} totalCount={items.length} disabled={pending} label="批量选择待导入视频" clearLabel="全不选"
     onSelectAll={()=>onChange(items.map(item=>item.id))} onClear={()=>onChange([])}/>
-   <label className="workspace-input-surface ml-auto flex min-w-[10rem] flex-1 items-center gap-2 rounded-2xl border px-3.5 py-2.5 transition-colors focus-within:border-accent/50">
+   <label className="workspace-input-surface flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 transition-colors focus-within:border-accent/50 sm:ml-auto sm:min-w-[10rem] sm:flex-1">
     <Search size={15} className="shrink-0 text-stone-400 dark:text-stone-500" aria-hidden="true"/>
     <input aria-label="搜索待导入视频" value={search} onChange={event=>setSearch(event.target.value)} placeholder="搜索视频" className="min-w-0 flex-1 bg-transparent text-sm text-stone-800 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500"/>
     {search&&<button type="button" onClick={()=>setSearch('')} aria-label="清空搜索" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-200 hover:text-stone-600 dark:hover:bg-stone-700 dark:hover:text-stone-200"><X size={12}/></button>}

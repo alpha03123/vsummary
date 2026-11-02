@@ -480,12 +480,12 @@ export function WorkspaceLibraryHomePane({
     <motion.section
       key="library-home:pane"
       variants={blurVariant}
-      initial="initial"
+      initial={false}
       animate="animate"
       exit="exit"
       className="h-full w-full overflow-y-auto"
     >
-      <motion.div variants={staggerContainer} initial="initial" animate="animate" className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 pb-16 pt-6 md:px-10 md:pt-8">
+      <motion.div variants={staggerContainer} initial={false} animate="animate" className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 pb-16 pt-6 md:px-10 md:pt-8">
         {empty ? (
           linkStart
             ? <StartFromLink onStart={linkStart.onStart} onUpload={linkStart.onUpload} hint={linkStart.hint} extra={linkStart.extra} />

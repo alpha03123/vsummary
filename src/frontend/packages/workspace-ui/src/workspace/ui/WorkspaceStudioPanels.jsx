@@ -69,7 +69,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
             {renderPanelLeadingActions?.(activePanelId, activeType)}
             {renderPanelActions?.(activePanelId, activeType)}
             {renderPanelTrailingActions?.(activePanelId, activeType)}
-            <button type="button" onClick={() => onClose(activePanelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+            {panelIds.length > 1 ? <button type="button" onClick={() => onClose(activePanelId)} className="workspace-mosaic-action text-stone-500 hover:bg-danger-subtle hover:text-danger dark:text-stone-400 dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button> : null}
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-hidden">{renderPanel(activePanelId, activeType)}</div>
