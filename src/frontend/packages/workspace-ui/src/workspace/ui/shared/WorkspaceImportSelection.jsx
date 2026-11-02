@@ -13,7 +13,7 @@ export function WorkspaceImportSelection({open,items,selectedIds,onChange,onConf
  const [search,setSearch]=useState('');
  const selected=new Set(selectedIds);
  const visible=useMemo(()=>items.filter(item=>item.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())),[items,search]);
- return <WorkspaceDialog open={open} title={title} onClose={onClose} pending={pending} className="max-w-2xl max-h-[85vh] overflow-y-auto"
+ return <WorkspaceDialog open={open} title={title} onClose={onClose} pending={pending} className="max-w-2xl max-h-[85dvh] overflow-y-auto"
   footer={<><button type="button" disabled={pending} onClick={onClose} className="rounded-2xl bg-stone-100 px-5 py-2.5 text-sm font-semibold text-stone-600 transition-colors hover:bg-stone-200 disabled:opacity-50 dark:bg-neutral-800 dark:text-zinc-300">取消</button><button type="button" disabled={pending||selectedIds.length===0} onClick={()=>onConfirm(selectedIds)} className="rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40">{pending?'正在准备…':confirmLabel}</button></>}>
   <div className="mb-4 flex flex-wrap items-center gap-2.5">
    <WorkspaceSelectionBar selectedCount={selectedIds.length} totalCount={items.length} disabled={pending} label="批量选择待导入视频" clearLabel="全不选"
@@ -24,7 +24,7 @@ export function WorkspaceImportSelection({open,items,selectedIds,onChange,onConf
     {search&&<button type="button" onClick={()=>setSearch('')} aria-label="清空搜索" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-stone-200 hover:text-stone-600 dark:hover:bg-stone-700 dark:hover:text-stone-200"><X size={12}/></button>}
    </label>
   </div>
-  <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">{visible.map(item=>{
+  <div className="max-h-[45dvh] space-y-2 overflow-y-auto pr-1">{visible.map(item=>{
    const isSelected=selected.has(item.id);
    return <button key={item.id} type="button" role="checkbox" aria-checked={isSelected} disabled={pending}
     onClick={()=>onChange(isSelected?selectedIds.filter(id=>id!==item.id):[...selectedIds,item.id])}

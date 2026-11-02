@@ -1153,7 +1153,7 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 360, damping: 28 }}
             onClick={(event) => event.stopPropagation()}
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6 dark:border-stone-700 dark:bg-neutral-900"
+            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6 dark:border-stone-700 dark:bg-neutral-900"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">

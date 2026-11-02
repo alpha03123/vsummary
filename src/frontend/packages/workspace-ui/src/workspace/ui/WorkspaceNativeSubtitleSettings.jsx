@@ -105,7 +105,7 @@ export function WorkspaceNativeSubtitleSettings({
       {open && panelPosition ? createPortal(
         <div
           ref={panelRef}
-          className="workspace-elevated-panel fixed z-[70] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border p-4 text-stone-900 shadow-2xl motion-fade-scale dark:text-stone-100"
+          className="workspace-elevated-panel fixed z-[70] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl border p-4 text-stone-900 shadow-2xl motion-fade-scale dark:text-stone-100"
           style={{ left: panelPosition.left, top: panelPosition.top, width: panelPosition.width }}
         >
           <div className="mb-4 flex items-center justify-between border-b border-stone-200/80 pb-3 dark:border-stone-800">

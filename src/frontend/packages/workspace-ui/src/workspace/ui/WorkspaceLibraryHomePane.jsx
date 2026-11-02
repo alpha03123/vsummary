@@ -161,7 +161,7 @@ function StartFromLink({ onStart, onUpload, hint, extra }) {
     if (url.trim()) onStart(url.trim());
   };
   return (
-    <motion.section variants={blurVariant} className="mx-auto flex w-full max-w-3xl flex-col items-center pt-[12vh] text-center">
+    <motion.section variants={blurVariant} className="mx-auto flex w-full max-w-3xl flex-col items-center pt-[12dvh] text-center">
       <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 md:text-3xl">把视频变成能检索、能提问的笔记</h2>
       <form onSubmit={submit} className="mt-8 flex w-full flex-col gap-2 sm:flex-row">
         <LinkField url={url} onChange={setUrl} onUpload={onUpload} large />
@@ -177,7 +177,7 @@ function StartFromLink({ onStart, onUpload, hint, extra }) {
 
 function StartWithoutLink({ onAdd }) {
   return (
-    <motion.section variants={blurVariant} className="mx-auto flex w-full max-w-3xl flex-col items-center pt-[14vh] text-center">
+    <motion.section variants={blurVariant} className="mx-auto flex w-full max-w-3xl flex-col items-center pt-[14dvh] text-center">
       <h2 className="text-2xl font-bold text-stone-900 dark:text-stone-100 md:text-3xl">把视频变成能检索、能提问的笔记</h2>
       <p className="mt-3 text-sm text-stone-500 dark:text-zinc-500">导入一个合集、几个本地文件或一门课程，处理后就能看概括、查原话、向内容提问。</p>
       <div className="mt-8 w-full"><AddBar onAdd={onAdd} /></div>

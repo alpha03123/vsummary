@@ -99,7 +99,7 @@ export function WorkspaceContentEditorModal({
         backdropPointerDownRef.current = false;
       }}
     >
-      <section className="workspace-panel flex h-[min(640px,calc(100vh-2rem))] w-full max-w-2xl flex-col rounded-lg border shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="content-editor-title">
+      <section className="workspace-panel flex h-[min(640px,calc(100dvh-2rem))] w-full max-w-2xl flex-col rounded-lg border shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="content-editor-title">
         <header className="flex items-center justify-between gap-4 border-b border-stone-200 px-5 py-4 dark:border-stone-800">
           <h2 id="content-editor-title" className="text-lg font-bold text-stone-900 dark:text-stone-100">编辑视频内容</h2>
           <button type="button" onClick={onClose} disabled={saving} aria-label="关闭编辑器" title="关闭" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-600 hover:bg-stone-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-neutral-800"><X size={18} /></button>

@@ -45,7 +45,7 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
           </AnimatePresence>
         </div>
 
-        <aside className="hidden @[650px]:sticky @[650px]:top-0 @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100vh-10rem)] @[650px]:overflow-y-auto @[650px]:pr-1">
+        <aside className="hidden @[650px]:sticky @[650px]:top-0 @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100dvh-10rem)] @[650px]:overflow-y-auto @[650px]:pr-1">
           <OutlineList label={label} items={items} activeItemId={activeItemId} onSelect={selectItem} />
         </aside>
 

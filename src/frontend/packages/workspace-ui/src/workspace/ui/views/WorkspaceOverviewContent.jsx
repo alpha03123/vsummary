@@ -377,7 +377,7 @@ function WorkspaceTranscriptList({
 
   return (
     <div className="border-t border-stone-200/80 px-4 py-4 dark:border-stone-800">
-      <div ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll} className="max-h-[min(60vh,42rem)] overflow-y-auto pr-1">
+      <div ref={scrollRef} onWheel={onManualScroll} onTouchMove={onManualScroll} className="max-h-[min(60dvh,42rem)] overflow-y-auto pr-1">
         <div className="relative w-full" style={{ height: `${totalSize}px` }}>
           {visibleRows.map((virtualRow) => {
             const segment = segments[virtualRow.index];

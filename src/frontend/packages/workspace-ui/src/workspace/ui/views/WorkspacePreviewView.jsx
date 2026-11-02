@@ -65,7 +65,7 @@ export function WorkspacePreviewView({ previewSource, previewSubtitleSource = nu
         <video
           key={previewSource}
           ref={previewVideoRef}
-          className="h-full w-full max-h-[72vh] bg-black"
+          className="h-full w-full max-h-[72dvh] bg-black"
           controls
           controlsList="nodownload noplaybackrate noremoteplayback"
           disablePictureInPicture

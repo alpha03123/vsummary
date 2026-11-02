@@ -152,7 +152,7 @@
 
   body {
     /* slate-900 (#0f172a): cold blue-black, harmonizes with indigo accent */
-    @apply text-slate-900 font-sans antialiased overflow-hidden m-0;
+    @apply text-slate-900 dark:text-stone-100 font-sans antialiased overflow-hidden overscroll-none m-0;
     background: var(--workspace-shell-bg);
 
     transition:
@@ -166,7 +166,7 @@
   }
 
   #root {
-    @apply h-screen flex flex-col relative z-0;
+    @apply h-dvh flex flex-col relative z-0;
   }
 
   /* Reset button and input fonts to inherit */
@@ -678,7 +678,7 @@
 
 .dark .markdown-body th,
 .dark .markdown-body td {
-  border-color: rgba(68, 64, 60, 0.9);
+  border-color: rgba(64, 64, 64, 0.9);
 }
 
 .markdown-body th {
@@ -686,7 +686,7 @@
 }
 
 .dark .markdown-body th {
-  background: rgba(28, 25, 23, 0.9);
+  background: rgba(38, 38, 38, 0.9);
 }
 
 .mindmap-selected > circle {
@@ -805,6 +805,13 @@
   border-radius: 6px;
   color: rgb(120 113 108);
   transition: background-color 150ms ease, color 150ms ease;
+}
+
+/* Splitting a phone-width pane only makes two unusable slivers. */
+@media (max-width: 767px) {
+  .workspace-mosaic-split {
+    display: none;
+  }
 }
 
 .workspace-mosaic-action:hover {
