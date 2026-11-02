@@ -335,10 +335,19 @@ _PROVIDER_HOSTS = {
     "youtube": ("youtube.com", "youtu.be"),
     "douyin": ("douyin.com",),
 }
+_EMBEDDED_URL_RE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+
+
+def _extract_url_candidate(url: str) -> str:
+    normalized = url.strip()
+    match = _EMBEDDED_URL_RE.search(normalized)
+    if match is not None:
+        return match.group(0).rstrip(".,;!)>\"'")
+    return normalized
 
 
 def detect_external_provider(url: str) -> str:
-    normalized = url.strip()
+    normalized = _extract_url_candidate(url)
     if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
         normalized = f"https://{normalized.lstrip('/')}"
     parsed = urlsplit(normalized)
@@ -360,7 +369,7 @@ def _provider_resolver(resolvers: dict[str, object], provider: str):
 
 
 def _normalize_external_url(url: str, provider: str) -> str:
-    normalized = url.strip()
+    normalized = _extract_url_candidate(url)
     if not normalized:
         raise ValueError("URL 不能为空。")
     if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
