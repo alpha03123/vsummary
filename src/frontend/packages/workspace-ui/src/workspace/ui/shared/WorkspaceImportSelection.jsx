@@ -16,7 +16,7 @@ export function WorkspaceImportSelection({open,items,selectedIds,onChange,onConf
  return <WorkspaceDialog open={open} title={title} onClose={onClose} pending={pending} className="max-w-2xl max-h-[85dvh] overflow-y-auto"
   footer={<><button type="button" disabled={pending} onClick={onClose} className="rounded-2xl bg-soft px-5 py-2.5 text-sm font-semibold text-subtle transition-colors hover:bg-softer disabled:opacity-50">取消</button><button type="button" disabled={pending||selectedIds.length===0} onClick={()=>onConfirm(selectedIds)} className="rounded-2xl bg-accent px-5 py-2.5 text-sm font-bold text-on-accent shadow-sm transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40">{pending?'正在准备…':confirmLabel}</button></>}>
   <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
-   <WorkspaceSelectionBar selectedCount={selectedIds.length} totalCount={items.length} disabled={pending} label="批量选择待导入视频" clearLabel="全不选"
+   <WorkspaceSelectionBar className="shrink-0 sm:w-[13rem]" selectedCount={selectedIds.length} totalCount={items.length} disabled={pending} label="批量选择待导入视频" clearLabel="全不选"
     onSelectAll={()=>onChange(items.map(item=>item.id))} onClear={()=>onChange([])}/>
    <label className="workspace-input-surface flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 transition-colors focus-within:border-accent/50 sm:ml-auto sm:min-w-[10rem] sm:flex-1">
     <Search size={15} className="shrink-0 text-faint" aria-hidden="true"/>
