@@ -25,6 +25,7 @@ from backend.video_summary.infrastructure.persistence.models import Job, JobAtte
 from backend.core.preferences import current_preferences
 from backend.shared.llm.usage import MySqlLlmUsageStore
 from backend.video_summary.infrastructure.persistence.execution_context import JobLeaseLostError
+from backend.video_summary.infrastructure.persistence.job_queue import estimate_seconds
 
 
 @dataclass(frozen=True)
@@ -170,6 +171,7 @@ class SqlJobRepository:
             admission = self._queue_policy.admit(
                 actor_id=context.actor_id,
                 units=max(1, estimate.units) if operation == "generate_series_batch" else 1,
+                duration_seconds=estimate_seconds(payload["_usage_estimate"]) if "_usage_estimate" in payload else 0.0,
             ) if self._queue_policy is not None and context is not None and parent_job_id is None and resource_type in {"video", "series"} else nullcontext()
             with admission:
                 submitted = self._control.submit_job(

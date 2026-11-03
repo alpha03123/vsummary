@@ -226,6 +226,25 @@ def test_job_admission_is_atomic_across_concurrent_submitters(stored_video, mysq
             pytest.fail('A different actor must also respect global capacity.')
 
 
+def test_job_admission_caps_each_actors_pending_media_duration(stored_video, mysql_sessions, tmp_path):
+    workspace, _, video = stored_video
+    actor = new_ulid()
+    queue = SqlJobQueuePolicy(mysql_sessions, lock_path=tmp_path/'queue.lock', capacity=10000, per_actor=50,
+        per_actor_seconds=12 * 3600)
+    series_estimate = {'units': 2, 'children': [{'duration_seconds': 3 * 3600}, {'duration_seconds': 2.5 * 3600}]}
+    with mysql_sessions.begin() as session:
+        session.add(Job(id=new_ulid(), workspace_id=workspace.workspace_id, actor_id=actor, resource_type='series',
+            resource_id=video, operation='generate_series_batch', status='running',
+            request_payload={'_usage_estimate': series_estimate}))
+    with queue.admit(actor_id=actor, units=1, duration_seconds=6.5 * 3600):
+        pass
+    with pytest.raises(JobQueueFull, match='还有 5.5 小时视频在处理中'):
+        with queue.admit(actor_id=actor, units=1, duration_seconds=7 * 3600):
+            pytest.fail('Pending media beyond the per-account cap must be rejected.')
+    with queue.admit(actor_id=new_ulid(), units=1, duration_seconds=7 * 3600):
+        pass
+
+
 def test_job_claim_serves_another_actor_before_the_first_actors_backlog(stored_video, mysql_sessions, tmp_path):
     workspace, _, video = stored_video
     actor_a, actor_b, operation = new_ulid(), new_ulid(), new_ulid()
