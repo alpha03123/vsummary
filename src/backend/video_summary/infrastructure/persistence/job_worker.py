@@ -39,7 +39,7 @@ class JobExecutionServices(Protocol):
 
     job_summary_generator: SqlBackedVideoSummaryGenerator
     job_operation_handlers: Mapping[str, Callable[[ClaimedJob, "SqlJobProgressReporter"], Awaitable[None]]]
-    after_summary: Callable[[str,str], Awaitable[list[str]]] | None
+    after_summary: Callable[..., Awaitable[list[str]]] | None
 
 
 @dataclass(frozen=True)
@@ -248,7 +248,8 @@ class SqlJobWorker:
                 if (claim.operation == 'process_agent_video'
                     and claim.request_payload.get('processing_mode', 'summary') == 'summary'
                     and services.after_summary is not None):
-                    failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id)
+                    failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id,
+                        on_progress=_artifact_progress(reporter))
                     if failed:
                         reporter.update('auxiliary_failed',100,'视频已生成，部分附加产物生成失败。')
                         detail = "视频已生成；自动生成失败：" + ", ".join(failed)
@@ -282,7 +283,8 @@ class SqlJobWorker:
             if snapshot.status == "running" and snapshot.result_content_version is not None:
                 detail = "生成内容已保存"
                 if claim.operation=='generate_summary' and services.after_summary is not None:
-                    failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id)
+                    failed=await services.after_summary(str(claim.request_payload['series_id']),claim.resource_id,
+                        on_progress=_artifact_progress(reporter))
                     if failed:
                         reporter.update('auxiliary_failed',100,'视频已生成，部分附加产物生成失败。')
                         detail = "生成内容已保存；自动生成失败：" + ", ".join(failed)
@@ -356,6 +358,11 @@ class SqlJobWorker:
                 LOGGER.exception("job %s heartbeat failed", claim.id)
                 execution_task.cancel()
                 return
+
+
+def _artifact_progress(reporter: SqlJobProgressReporter) -> Callable[[str, str], None]:
+    # The content is already published; extra artifacts run after it, still inside the job.
+    return lambda stage, detail: reporter.update(stage, 99.0, detail)
 
 
 def _failure_code(error: Exception) -> str:

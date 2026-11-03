@@ -7,6 +7,10 @@ from collections.abc import Awaitable, Callable
 from backend.core.metering import bind_operation_id, current_operation_id
 
 LOGGER = logging.getLogger(__name__)
+_PROGRESS = {
+    "mindmap": ("auto_mindmap", "正在生成思维导图"),
+    "knowledge_cards": ("auto_knowledge_cards", "正在生成知识卡片"),
+}
 
 
 class AutoGenerateVideoArtifacts:
@@ -30,11 +34,13 @@ class AutoGenerateVideoArtifacts:
         self._requires_visual_evidence = requires_visual_evidence or (lambda _artifact: False)
         self._wait_for_visual_evidence = wait_for_visual_evidence
 
-    async def run(self, series_id: str, video_id: str) -> list[str]:
+    async def run(self, series_id: str, video_id: str, *, on_progress: Callable[[str, str], None] | None = None) -> list[str]:
         failed=[]
         visual_evidence_ready = False
         for artifact in self._load_enabled_artifacts():
             try:
+                if on_progress is not None and artifact in _PROGRESS:
+                    on_progress(*_PROGRESS[artifact])
                 if self._requires_visual_evidence(artifact) and not visual_evidence_ready:
                     if self._wait_for_visual_evidence is None:
                         raise RuntimeError("自动生成的标准画面输入未配置视觉证据等待器。")

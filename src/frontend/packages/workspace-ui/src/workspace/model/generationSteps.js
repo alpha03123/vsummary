@@ -16,6 +16,8 @@ const STEPS = [
   { id: "note_images", label: "为概括添加截图", lane: "ai", stages: ["note_images"] },
   { id: "visual", label: "结合画面完善内容", lane: "main", stages: ["enrich_visual_summary"] },
   { id: "publish", label: "保存文字、概括和截图", lane: "main", stages: ["publish"] },
+  { id: "auto_mindmap", label: "生成思维导图", lane: "main", stages: ["auto_mindmap"] },
+  { id: "auto_knowledge_cards", label: "生成知识卡片", lane: "main", stages: ["auto_knowledge_cards"] },
 ];
 
 export function generationStageLabel(stage) {

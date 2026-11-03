@@ -120,4 +120,4 @@ class WorkspaceServices:
     inspect_agent_workspace_indexes: Callable[..., dict[str, object]]
     debug_mode: bool
     embedding_provider: str = "fastembed"
-    after_summary: Callable[[str,str], Awaitable[list[str]]] | None = None
+    after_summary: Callable[..., Awaitable[list[str]]] | None = None
