@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 import logging
 import subprocess
 from pathlib import Path
@@ -138,7 +139,7 @@ class FfmpegMediaProcessor:
         """用 ffmpeg 在指定时间点抽取 JPEG 图片。"""
         if timestamp_seconds < 0:
             raise ValueError("截图时间不能小于 0")
-        if not self._has_video_stream(video_path):
+        if not _cached_has_video_stream(video_path):
             raise NoVideoFramesError(f"媒体不含可供截图的视频流：{video_path.name}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         command = [
@@ -147,6 +148,8 @@ class FfmpegMediaProcessor:
             "error",
             "-nostdin",
             "-y",
+            "-threads",
+            "1",
             "-ss",
             f"{timestamp_seconds:.3f}",
             "-i",
@@ -291,6 +294,20 @@ class FfmpegMediaProcessor:
             errors="replace",
         )
         return bool(result.stdout.strip())
+
+
+def _cached_has_video_stream(video_path: Path) -> bool:
+    # A frame pool calls this once per frame (90 by default); probe each file version only once.
+    try:
+        stat = video_path.stat()
+    except OSError:
+        return FfmpegMediaProcessor._has_video_stream(video_path)
+    return _has_video_stream_for_version(str(video_path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=256)
+def _has_video_stream_for_version(path: str, _mtime_ns: int, _size: int) -> bool:
+    return FfmpegMediaProcessor._has_video_stream(Path(path))
 
 
 def _raise_ffmpeg_failure(

@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from collections.abc import Callable
 import json
 import math
+import os
 from pathlib import Path
 import shutil
-from threading import Lock
+from threading import BoundedSemaphore, Lock
 
 from PIL import Image, ImageChops, ImageDraw, ImageStat
 
@@ -24,6 +25,9 @@ TILES_PER_GRID = GRID_COLUMNS * GRID_ROWS
 TILE_SIZE = (320, 180)
 _POOL_LOCKS: dict[Path, Lock] = {}
 _POOL_LOCKS_GUARD = Lock()
+# Sampling a pool runs dozens of ffmpeg decodes back to back. Letting every job thread do that at
+# once saturates a small server, so videos take turns; cached pools skip the queue.
+_EXTRACTION_SLOTS = BoundedSemaphore(max(1, int(os.environ.get("VSUMMARY_FRAME_EXTRACTION_CONCURRENCY", "1"))))
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,28 @@ def _build_or_load_visual_frame_pool(
         _remove_raw_frames(raw_dir)
         return cached
 
+    with _EXTRACTION_SLOTS:
+        return _sample_visual_frame_pool(
+            video_path=video_path,
+            pool_dir=pool_dir,
+            max_input_images=max_input_images,
+            processor=processor,
+            fingerprint=fingerprint,
+            on_progress=on_progress,
+        )
+
+
+def _sample_visual_frame_pool(
+    *,
+    video_path: Path,
+    pool_dir: Path,
+    max_input_images: int,
+    processor: FfmpegMediaProcessor,
+    fingerprint: str,
+    on_progress: Callable[[int, int], None] | None,
+) -> VisualFramePool:
+    manifest_path = pool_dir / "manifest.json"
+    raw_dir = pool_dir / "raw"
     try:
         duration = processor.probe_duration(video_path)
         timestamps = _candidate_timestamps(duration, max_input_images * TILES_PER_GRID)
