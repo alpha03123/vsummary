@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, Callable
 
+from backend.core.errors import UserVisibleError
 from backend.video_summary.library.models import (
     GeneratedVideoAiNoteDTO,
     VideoAiSummaryDTO,
@@ -93,7 +94,7 @@ class GenerateVideoAiSummary:
         source = self._workspace.get_video_source(series_id, video_id) if multimodal_enabled else None
         transcript = self._workspace.get_video_transcript(series_id, video_id)
         if transcript is None:
-            raise ValueError("请先生成视频转写，再生成 AI 概括。")
+            raise UserVisibleError("transcript_required", "这个视频还没有转写结果，请先成功生成转写，再生成 AI 概括。")
         # B 的事实输入是原始转写和独立帧池，不反向依赖 A 的章节文案或封面图。
         visual_context = VideoAiNoteVisualContextDTO(frames=[])
         if multimodal_enabled and source is None and self._saved_visual_context is not None:

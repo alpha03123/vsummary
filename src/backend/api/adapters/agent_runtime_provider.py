@@ -20,7 +20,8 @@ from backend.api.adapters.rag_retrieval_proxy import _RagModelAwareRetrievalServ
 from backend.video_summary.agent_adapter import WorkspaceAgentContextLoader
 from backend.video_summary.infrastructure.llm.litellm_web_search import LiteLLMNativeWebSearchGateway
 from backend.video_summary.infrastructure.rag.agent_memory import AgentWorkspaceIndexBuilder, BGEReranker, SeriesRetrievalService
-from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
+from backend.core.errors import UserVisibleError
+from backend.video_summary.infrastructure.rag.rag_models import RagModelManager, rag_index_embedding_required_message
 from backend.video_summary.infrastructure.config.settings import load_env_settings, load_settings, normalize_openai_base_url
 from backend.shared.llm.usage import LlmUsageRecorder
 from backend.video_summary.library.ports import VideoLibraryReader
@@ -158,6 +159,10 @@ class LazyAgentRuntimeProvider:
 
     def refresh_workspace_indexes(self, target_dir: Path | None = None, *, source_dir: Path | None = None,
         changes=(), progress=None, check_cancelled=None) -> None:
+        # The durable index job builds its service directly, skipping RagRetrievalProxy's check;
+        # without it FastEmbed tries to download the model itself and fails with a bare ValueError.
+        if self._embedding_model_missing():
+            raise UserVisibleError("rag_embedding_missing", rag_index_embedding_required_message())
         service = self._get_or_create_retrieval_service() if target_dir is None else self._build_series_retrieval_service(target_dir)
         if source_dir is None or any(change["action"] == "refresh_all" for change in changes):
             AgentWorkspaceIndexBuilder(retrieval_service=service).refresh()
@@ -204,6 +209,13 @@ class LazyAgentRuntimeProvider:
             factory=self._build_series_retrieval_service,
             settings_loader=lambda: load_settings(self._root_dir / "config" / "settings.toml", self._root_dir),
         )
+
+    def _embedding_model_missing(self) -> bool:
+        if self._rag_model_manager is None:
+            return False
+        settings_path = self._root_dir / "config" / "settings.toml"
+        provider = load_settings(settings_path, self._root_dir).agent_retrieval.embedding_provider if settings_path.exists() else "fastembed"
+        return provider == "fastembed" and not self._rag_model_manager.is_downloaded("embedding")
 
     def _build_series_retrieval_service(self, target_dir: Path | None = None) -> SeriesRetrievalService:
         return SeriesRetrievalService(

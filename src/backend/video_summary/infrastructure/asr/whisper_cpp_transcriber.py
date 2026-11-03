@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from typing import Callable
 
+from backend.core.errors import UserVisibleError
 from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
 
@@ -84,6 +85,8 @@ def _resolve_binary(binary_path: str) -> Path:
         resolved = shutil.which(binary_path)
         if resolved:
             return Path(resolved)
-    raise RuntimeError(
-        f"未找到 whisper.cpp 可执行文件：{binary_path}。请设置 asr.whisper_cpp.binary_path。"
+    raise UserVisibleError(
+        "asr_unavailable",
+        f"ASR 不可用：未找到 whisper.cpp 可执行文件 {binary_path}。"
+        "请在设置中填写 whisper-cli 的路径，或改用 faster-whisper / 云端 ASR。",
     )

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import JobRepositoryDep, WorkspaceServicesDep, get_workspace_context
+from backend.video_summary.infrastructure.rag.rag_models import rag_index_embedding_required_message
 from backend.core.context import WorkspaceContext
 from backend.core.jobs import job_snapshot_payload
 
@@ -31,7 +32,11 @@ def workspace_index_status(job_repository: JobRepositoryDep, services: Workspace
 
 
 @router.post("/api/workspace/index/refresh", status_code=202)
-def refresh_workspace_index(job_repository: JobRepositoryDep, context: WorkspaceContext = Depends(get_workspace_context)):
+def refresh_workspace_index(job_repository: JobRepositoryDep, services: WorkspaceServicesDep,
+    context: WorkspaceContext = Depends(get_workspace_context)):
+    # A rebuild without the local embedding model can only fail; point the user at the download instead.
+    if services.embedding_provider == "fastembed" and not services.rag_model_manager.is_downloaded("embedding"):
+        raise HTTPException(status_code=409, detail=rag_index_embedding_required_message())
     job_repository.request_index_refresh(context.workspace_id)
     return {"status": "queued"}
 

@@ -39,6 +39,13 @@ RAG_EMBEDDING_REQUIRED_MESSAGE = "向量检索模型尚未下载，请先到设�
 RAG_RERANKER_REQUIRED_MESSAGE = "重排序模型尚未下载，请先到设置中下载后再开启重排序。"
 
 
+def rag_index_embedding_required_message() -> str:
+    """索引任务缺少向量模型时给用户的提示；模型名取自当前的 embedding 规格。"""
+    model = RAG_MODEL_SPECS["embedding"].model_name.split("/")[-1]
+    return (f"RAG 索引未建立：未检测到向量模型 {model}。请到设置中下载 RAG 向量模型；"
+        "下载失败时检查 Hugging Face 镜像或代理配置。")
+
+
 @dataclass(frozen=True)
 class RagModelSpec:
     """单个 RAG 模型的元信息（用于 UI 展示与下载器选型）。
