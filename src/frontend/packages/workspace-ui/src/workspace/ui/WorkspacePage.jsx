@@ -444,7 +444,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   }
 
   return (
-    <div ref={containerRef} className="flex h-dvh w-full overflow-hidden gap-0 md:p-4 md:gap-4 text-strong transition-colors">
+    <div ref={containerRef} className="relative flex h-dvh w-full overflow-hidden gap-0 md:p-4 md:gap-4 text-strong transition-colors">
       {/* Left Sidebar: the open series' videos. The home page is a full-width grid of series instead. */}
       {activeSeries ? (<>
       <aside
@@ -453,7 +453,12 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
             ? { width: `${layout.sidebarWidth}px` }
             : undefined
         }
-        className={`workspace-panel shrink-0 flex flex-col border-0 md:rounded-4xl md:border overflow-hidden relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? (isNarrow ? "w-full opacity-100" : "opacity-100 mr-1") : "w-0 opacity-0 border-0 md:border-0 m-0"}`}
+        className={`workspace-panel shrink-0 flex flex-col border-0 md:rounded-4xl md:border overflow-hidden ${
+          isNarrow
+            ? `absolute inset-0 z-40 w-full transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full pointer-events-none"}`
+            : `relative z-10 transition-all duration-300 ease-in-out ${isSidebarOpen ? "opacity-100 mr-1" : "w-0 opacity-0 border-0 md:border-0 m-0"}`
+        }`}
+        inert={isNarrow && !isSidebarOpen ? true : undefined}
       >
         {isNarrow ? (
           <button
@@ -558,7 +563,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
         </div>
         {sidebarFooter && <div className="shrink-0 border-t border-line/70 px-4 py-3">{sidebarFooter}</div>}
       </aside>
-      {isSidebarOpen ? (
+      {!isNarrow && isSidebarOpen ? (
         <div
           role="separator"
           aria-orientation="vertical"
@@ -572,7 +577,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
       </>) : null}
 
       {/* Main Studio Area */}
-      <main className={`workspace-panel flex-1 min-w-0 flex-col relative border-0 md:rounded-4xl md:border overflow-hidden z-10 ${isNarrow && isSidebarOpen && activeSeries ? "hidden" : "flex"}`}>
+      <main className="workspace-panel flex-1 min-w-0 flex flex-col relative border-0 md:rounded-4xl md:border overflow-hidden z-10">
         <WorkspaceToolbar
           brand={brand}
           toolbarExtras={toolbarExtras}
