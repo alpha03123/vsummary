@@ -624,7 +624,16 @@ function useWorkspaceDataEffects(state, dispatch) {
 
   useEffect(() => {
     const selectedVideo = findVideoById(state.library, state.selectedSeriesId, state.selectedVideoId);
-    if (!selectedVideo || state.selectedContextType !== "video" || !state.tools?.aiSummary.generated) {
+    if (!selectedVideo || state.selectedContextType !== "video") {
+      dispatch({ type: "ai_summary_cleared" });
+      return;
+    }
+    // Switching videos resets tools to null; until they arrive, "not generated" is not known yet.
+    if (!state.tools) {
+      dispatch({ type: "ai_summary_loading_started" });
+      return;
+    }
+    if (!state.tools.aiSummary.generated) {
       dispatch({ type: "ai_summary_cleared" });
       return;
     }
@@ -634,7 +643,7 @@ function useWorkspaceDataEffects(state, dispatch) {
       .then((summary) => { if (!cancelled) dispatch({ type: "ai_summary_loaded", summary }); })
       .catch((error) => { if (!cancelled) dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "AI 概括加载失败" }); });
     return () => { cancelled = true; };
-  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools?.aiSummary.generated, completedContentJobs]);
+  }, [dispatch, state.library, state.selectedSeriesId, state.selectedVideoId, state.selectedContextType, state.tools == null, state.tools?.aiSummary.generated, completedContentJobs]);
 
   useEffect(() => {
     if (
