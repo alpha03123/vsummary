@@ -34,9 +34,11 @@ dependencies:
     - srt>=3.5,<4
     - chaoxing-downloader==0.1.3
     - browser_cookie3>=0.20,<1
+    - httpx-socks>=0.11,<0.14
     - importlib_resources>=6
     - websockets_proxy>=0.1.2,<1
     - python-socks>=2,<3
     - jsonpath-ng>=1.6,<2
     - PyExecJS>=1.5,<2
+    - ruamel.yaml>=0.18.10,<0.20
     - gmssl>=3.2,<4

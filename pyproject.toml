@@ -44,11 +44,13 @@ dependencies = [
 # Douyin through F2: install these, then requirements.nodeps.txt with --no-deps.
 douyin-f2 = [
     "browser_cookie3>=0.20,<1",
+    "httpx-socks>=0.11,<0.14",
     "importlib_resources>=6",
     "websockets_proxy>=0.1.2,<1",
     "python-socks>=2,<3",
     "jsonpath-ng>=1.6,<2",
     "PyExecJS>=1.5,<2",
+    "ruamel.yaml>=0.18.10,<0.20",
     "gmssl>=3.2,<4",
 ]
 cpu = [
