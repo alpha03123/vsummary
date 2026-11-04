@@ -14,6 +14,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
+import httpx
+
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.asr.aliyun_bailian_transcriber import _normalize_dashscope_base_address
@@ -59,7 +61,10 @@ from backend.video_summary.infrastructure.config.settings import (
 )
 from backend.video_summary.infrastructure.runtime_capabilities import detect_runtime_capabilities
 from backend.shared.llm import LiteLLMCompletionGateway
-from backend.shared.llm.base_url import resolve_openai_model_list_base_url
+from backend.shared.llm.base_url import (
+    resolve_openai_compatible_api_base_url,
+    resolve_openai_model_list_base_url,
+)
 
 
 class SettingsValidationError(ValueError):
@@ -745,6 +750,7 @@ class SettingsService:
         except ImportError as error:
             raise RuntimeError("缺少 litellm 依赖，无法探测模型。") from error
 
+        api_key = self._resolve_openai_api_key(openai_api_key)
         models = get_valid_models(
             check_provider_endpoint=True,
             custom_llm_provider=provider_settings.llm_provider,
@@ -755,12 +761,14 @@ class SettingsService:
                     provider_settings.llm_provider,
                     provider_settings.openai_base_url,
                 ) or None,
-                api_key=self._resolve_openai_api_key(openai_api_key),
+                api_key=api_key,
                 timeout=15,
             ),
         )
         unique_models = sorted({model.strip() for model in models if isinstance(model, str) and model.strip()})
         if not unique_models:
+            if provider_settings.llm_provider == "openai":
+                _raise_openai_model_list_error(provider_settings.openai_base_url, api_key)
             raise RuntimeError("未探测到可用模型，请检查接口地址、API Key 和供应商协议。")
         return unique_models
 
@@ -858,6 +866,28 @@ def _provider_model_list_api_base(provider: str, base_url: str) -> str:
     if provider in {"openai", "litellm_proxy"}:
         return resolve_openai_model_list_base_url(base_url)
     return base_url
+
+
+def _raise_openai_model_list_error(base_url: str, api_key: str) -> None:
+    """在 LiteLLM 返回空列表时保留 OpenAI 模型列表接口的实际失败原因。"""
+    endpoint = f"{resolve_openai_compatible_api_base_url(base_url).rstrip('/')}/models"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        response = httpx.get(endpoint, headers=headers, timeout=15)
+    except httpx.TimeoutException as error:
+        raise RuntimeError("模型列表请求超时，请检查接口地址和网络连接。") from error
+    except httpx.HTTPError as error:
+        raise RuntimeError("无法连接模型列表接口，请检查接口地址和网络连接。") from error
+
+    if response.status_code == 401:
+        message = "模型列表认证失败：请填写有效的 API Key。" if not api_key else "模型列表认证失败：API Key 无效或已过期。"
+        raise RuntimeError(message)
+    if response.status_code == 403:
+        raise RuntimeError("模型列表访问被拒绝：当前 API Key 没有读取模型列表的权限。")
+    if response.status_code == 404:
+        raise RuntimeError("模型服务不支持 OpenAI 兼容的 /v1/models 接口，请手动填写模型名称。")
+    if response.is_error:
+        raise RuntimeError(f"模型列表接口返回 HTTP {response.status_code}。")
 
 
 def _mask_api_key(api_key: str) -> str:

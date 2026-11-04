@@ -161,6 +161,26 @@ describe("createWorkspaceSettingsActions provider settings", () => {
     expect(actions).toEqual([]);
   });
 
+  it("preserves model-discovery authentication errors for the settings UI", async () => {
+    discoverProviderModels.mockRejectedValue(new Error("模型列表认证失败：API Key 无效或已过期。"));
+    const actions = [];
+    const controller = createWorkspaceSettingsActions({
+      api, coreApi,
+      state: {
+        ui: {
+          llmProvider: "openai",
+          openaiBaseUrl: "http://127.0.0.1:8080",
+          openaiModel: "deepseek-v4-flash",
+          openaiApiKey: "invalid-key",
+        },
+      },
+      dispatch: (action) => actions.push(action),
+    });
+
+    await expect(controller.onDiscoverProviderModels()).rejects.toThrow("API Key 无效或已过期");
+    expect(actions).toEqual([{ type: "load_failed", message: "模型列表认证失败：API Key 无效或已过期。" }]);
+  });
+
   it("edits provider text fields locally without saving on every keystroke", async () => {
     const actions = [];
     const controller = createWorkspaceSettingsActions({

@@ -67,6 +67,7 @@ export function WorkspaceSettingsPanel({
   const [asrTest, setAsrTest] = useState({ status: "idle", message: "" });
   const [detectedProviderModels, setDetectedProviderModels] = useState([]);
   const [providerModelDiscovery, setProviderModelDiscovery] = useState("idle");
+  const [providerModelDiscoveryError, setProviderModelDiscoveryError] = useState("");
   const [applicationUpdate, setApplicationUpdate] = useState({ status: "checking", detail: "正在检查应用版本...", data: null });
   const [showUpdateConfirm, setShowUpdateConfirm] = useState(false);
   const [restartCountdown, setRestartCountdown] = useState(null);
@@ -127,18 +128,21 @@ export function WorkspaceSettingsPanel({
     if (isProviderModelSelectActive) {
       setProviderModelDiscovery("idle");
       setDetectedProviderModels([]);
+      setProviderModelDiscoveryError("");
       return;
     }
     if (typeof onDiscoverProviderModels !== "function") {
       return;
     }
     setProviderModelDiscovery("loading");
+    setProviderModelDiscoveryError("");
     try {
       const models = await onDiscoverProviderModels();
       setDetectedProviderModels(models);
       setProviderModelDiscovery("ready");
-    } catch {
+    } catch (error) {
       setProviderModelDiscovery("idle");
+      setProviderModelDiscoveryError(error instanceof Error ? error.message : "模型探测失败");
     }
   };
   const providerOptions = [
@@ -929,6 +933,9 @@ export function WorkspaceSettingsPanel({
                       )}
                     </button>
                   </div>
+                  {providerModelDiscoveryError ? (
+                    <p className="mt-2 text-xs font-semibold text-danger">{providerModelDiscoveryError}</p>
+                  ) : null}
                 </WorkspaceSettingRow>
 
                 <WorkspaceSettingRow

@@ -6,6 +6,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+import httpx
 from backend.video_summary.infrastructure.runtime_capabilities import RuntimeCapabilities
 from dashscope.api_entities.dashscope_response import DashScopeAPIResponse
 from unittest.mock import patch
@@ -532,6 +533,30 @@ class WorkspaceSettingsServiceTests(unittest.TestCase):
         self.assertEqual(models, ["gpt-5.4", "gpt-5.4-mini"])
         self.assertIn("OPENAI_API_KEY=saved-key", rendered_env)
         self.assertEqual(get_valid_models.call_args.kwargs["litellm_params"].api_base, "https://api.example.com")
+
+    def test_list_provider_models_explains_invalid_openai_api_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root_dir = Path(temp_dir)
+            (root_dir / "config").mkdir(parents=True, exist_ok=True)
+            config_path = root_dir / "config" / "settings.toml"
+            config_path.write_text(_sample_settings_toml(), encoding="utf-8")
+            service = SettingsService(
+                config_path=config_path,
+                root_dir=root_dir,
+                faster_whisper_model_manager=FakeFasterWhisperModelManager(),
+            )
+
+            with patch("litellm.get_valid_models", return_value=[]):
+                with patch(
+                    "backend.video_summary.infrastructure.config.settings_service.httpx.get",
+                    return_value=httpx.Response(401),
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "API Key 无效或已过期"):
+                        service.list_provider_models(
+                            llm_provider="openai",
+                            openai_base_url="http://127.0.0.1:8080",
+                            openai_api_key="invalid-key",
+                        )
 
     def test_asr_settings_test_uses_dashscope_upload_certificate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
