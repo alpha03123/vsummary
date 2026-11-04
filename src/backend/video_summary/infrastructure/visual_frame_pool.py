@@ -164,7 +164,9 @@ def _candidate_timestamps(duration: float, target_count: int) -> list[float]:
     count = min(target_count, max(1, math.ceil(duration)))
     if count == 1:
         return [0.0]
-    last = max(0.0, duration - 0.001)
+    # The last decodable frame sits up to a frame interval before the container duration; asking for
+    # duration - 0.001 yields no frame, so the final sample stays a second inside the end.
+    last = max(0.0, duration - 1.0)
     return [round(index * last / (count - 1), 3) for index in range(count)]
 
 
