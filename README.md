@@ -62,7 +62,7 @@
 - **单个视频深度阅读**：每个视频都有独立工作区，可以查看原视频、AI 概况、章节摘要、思维导图、知识卡片和笔记，适合精读一段长视频。
 - **章节与转写一键跳转**：在 AI 概况中，**点击章节卡**或展开后的**任意转写段**即可直接跳到视频对应时间并自动播放，导航视频内容更直观。
 - **围绕视频内容对话**：可以在单视频或整个系列范围内提问，让系统基于已经整理好的转写、摘要、笔记和知识卡片回答。
-- **外部课程导入**：支持 Bilibili,抖音,youtube 外链导入
+- **外部课程导入**：支持 Bilibili、抖音、YouTube 外链导入（抖音目前只支持单个视频，不支持合集）
 - **MCP 自动化工作流**：通过 MCP 工具让 AI 助手创建和管理视频系列，导入本地媒体或 Bilibili 链接，跟踪处理进度，并导出 Markdown。
 - **本地优先**：原始视频、转写结果、摘要、笔记和知识索引都保存在本地目录中；除了调用你配置的模型供应商外，不需要把视频上传到第三方平台。
 - **低门槛启动**：提供 CPU / GPU 两种整合包，普通用户下载整合包解压后运行 `start.bat` 即可使用
@@ -78,6 +78,23 @@
 Windows 整合包自带 MySQL，不需要安装 Windows 服务。源码版的 `start.bat` 会依次从 `VSUMMARY_MYSQL_HOME`、系统 `PATH`、`%ProgramFiles%\MySQL` 自动寻找 MySQL；找到后由应用在本机回环地址启动私有实例并管理迁移，不使用系统 MySQL 服务。
 
 macOS / Apple Silicon 可按[安装说明](docs/installation.md#macos--apple-silicon)从源码运行，使用 whisper.cpp / Metal 转写；通过 `start.command` 启动本地网页和专用 MySQL。
+
+### 抖音解析
+
+抖音链接默认用 [F2](https://github.com/Johnserf-Seed/f2) 解析和下载（yt-dlp 访问抖音经常被拒绝）。整合包已自带 F2；源码版装完依赖后还要单独装一次 F2：
+
+```bat
+python -m pip install --no-deps -r requirements.nodeps.txt
+```
+
+F2 声明的依赖版本和本项目冲突，所以必须加 `--no-deps`，它实际需要的依赖已经写在 `requirements.txt` 里。不想装 F2 时，可以在 `config/settings.toml` 里改回 yt-dlp：
+
+```toml
+[external_import.douyin]
+source = "ytdlp"   # 默认 "f2"
+```
+
+两种方式都需要先在导入界面点「获取 Cookie」登录抖音。
 
 ## 浏览器插件
 
@@ -103,9 +120,3 @@ Windows 整合包解压后，插件位于 `extensions/bilibili-sidepanel`。启�
 - QQ群:点击链接加入群聊【vsummary交流沟通群】：https://qm.qq.com/q/nxKBApDVF
 
 <img src="./assets/qq-group-qrcode.jpg" width="240" alt="vsummary 交流群二维码" />
-
-### 任务取消
-
-Local 的视频、系列及附加产物任务使用持久化取消请求。运行中的异步 LLM 请求会中断本地等待，取消后的候选内容不发布；远端服务是否停止推理由供应商决定。下载独立检查取消，不依赖日志输出；百炼 ASR 在状态查询间检查取消，上传或单次网络请求仍需返回后才能响应。
-
-生成器及用例提供 `arun` / `arun_ai_summary` 给异步 worker；同步工具继续使用 `run` / `run_ai_summary`。两种入口共享生成和验证逻辑。自动知识卡片生成回调现在与导图回调一样返回 awaitable。
