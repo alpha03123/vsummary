@@ -395,7 +395,7 @@ function Get-VariantTable {
             Kind = "cpu"
             EnvName = $CpuEnvName
             EnvFile = Join-Path $PackageConfigDir "environment.cpu.yml"
-            RequirementFiles = @("requirements.txt", "requirements.cpu.txt")
+            RequirementFiles = @("requirements.txt", "requirements.cpu.txt", "requirements.nodeps.txt")
             PythonRequirement = ">=3.11,<3.12"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.cpu.toml"
             PackageRoot = Join-Path $BuildRootPath "full\cpu\vsummary-cpu"
@@ -407,7 +407,7 @@ function Get-VariantTable {
             Kind = "gpu"
             EnvName = $GpuEnvName
             EnvFile = Join-Path $PackageConfigDir "environment.gpu.yml"
-            RequirementFiles = @("requirements.txt", "requirements.gpu.txt")
+            RequirementFiles = @("requirements.txt", "requirements.gpu.txt", "requirements.nodeps.txt")
             PythonRequirement = ">=3.11,<3.12"
             SettingsTemplate = Join-Path $PackageConfigDir "settings.gpu.toml"
             PackageRoot = Join-Path $BuildRootPath "full\gpu\vsummary-gpu"
@@ -499,6 +499,27 @@ function Repair-GpuProviderWheel {
         "--force-reinstall",
         "--no-deps",
         "onnxruntime-gpu>=1.20,<1.27"
+    )
+}
+
+function Install-NoDepsRequirements {
+    param(
+        [string]$CondaExe,
+        [hashtable]$Variant
+    )
+
+    # F2 pins versions that clash with ours; its real runtime needs come from requirements.txt.
+    Invoke-External -FilePath $CondaExe -Arguments @(
+        "run",
+        "-n",
+        $Variant.EnvName,
+        "python",
+        "-m",
+        "pip",
+        "install",
+        "--no-deps",
+        "-r",
+        (Join-Path $RepoRoot "requirements.nodeps.txt")
     )
 }
 
@@ -803,6 +824,7 @@ function Ensure-RuntimeRoot {
         Write-Host "Preparing environment $($Variant.EnvName)"
         Ensure-CondaEnvironment -CondaExe $CondaExe -Variant $Variant
         Repair-GpuProviderWheel -CondaExe $CondaExe -Variant $Variant
+        Install-NoDepsRequirements -CondaExe $CondaExe -Variant $Variant
     }
     else {
         Write-Host "Using existing environment $($Variant.EnvName)"

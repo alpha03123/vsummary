@@ -138,3 +138,5 @@ request_delay_seconds = 0.3
 
 [external_import.douyin]
 request_delay_seconds = 1.0
+# 抖音解析和下载方式：f2（默认，自带接口签名）或 ytdlp
+source = "f2"

@@ -39,6 +39,7 @@ from backend.external import (
     YtDlpPlatformResolver,
 )
 from backend.external.ytdlp import YOUTUBE_PLATFORM, DOUYIN_PLATFORM
+from backend.external.f2_douyin import F2DouyinClient, F2DouyinDownloader, F2DouyinResolver
 from backend.video_summary.infrastructure.asr.faster_whisper_models import FasterWhisperModelManager
 from backend.video_summary.infrastructure.asr.whisper_cpp_models import WhisperCppModelManager
 from backend.video_summary.infrastructure.in_memory_progress_tracker import InMemoryProgressTracker
@@ -435,6 +436,12 @@ def build_workspace_services(
         "bilibili": bilibili_resolver,
         **{platform.provider: YtDlpPlatformResolver(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
     }
+    platform_downloaders = {platform.provider: YtDlpPlatformDownloader(platform, request_pacer=request_pacers.get(platform.provider))
+        for platform in external_platforms}
+    if settings.external_import.douyin.source == "f2":
+        douyin_client = F2DouyinClient(request_pacer=request_pacers["douyin"])
+        external_resolvers["douyin"] = F2DouyinResolver(douyin_client)
+        platform_downloaders["douyin"] = F2DouyinDownloader(douyin_client)
     external_resolvers.update(container.linked_video_resolvers)
     bilibili_resolver = external_resolvers["bilibili"]
     external_cookie_initializers = {
@@ -450,7 +457,7 @@ def build_workspace_services(
     durable_linked_downloader = ProviderLinkedVideoDownloader(
         download_root=container.state_root / "data" / "downloads",
         bilibili_downloader=BilibiliDownloader(request_pacer=request_pacers["bilibili"]),
-        platform_downloaders={platform.provider: YtDlpPlatformDownloader(platform, request_pacer=request_pacers.get(platform.provider)) for platform in external_platforms},
+        platform_downloaders=platform_downloaders,
         chaoxing_client=chaoxing_client,
         overrides=container.linked_video_downloaders,
     )

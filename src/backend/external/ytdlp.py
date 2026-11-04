@@ -173,14 +173,7 @@ class YtDlpPlatformResolver:
             raise _external_platform_error(error, self._platform.display_name) from error
 
     def _douyin_video_url(self, url: str) -> str:
-        # yt-dlp only knows www.douyin.com/video/<id>: expand app share links (v.douyin.com) ourselves.
-        if (urlsplit(url).hostname or "").lower() == "v.douyin.com":
-            try:
-                url = self._redirect_follower(url)
-            except Exception as error:
-                raise ExternalVideoResolutionError("network_error",
-                    "无法打开抖音短链，请检查网络后重试，或在浏览器中打开后复制完整链接。") from error
-        return _douyin_canonical_video_url(url)
+        return resolve_douyin_video_url(url, redirect_follower=self._redirect_follower)
 
     def _extract_info(self, url: str) -> dict[str, object]:
         from yt_dlp import YoutubeDL
@@ -404,6 +397,25 @@ def _is_cancelled(reporter: ProgressReporter) -> bool:
 _DOUYIN_VIDEO_PATH = re.compile(r"/(?:share/)?video/(\d+)")
 _DOUYIN_COLLECTION_PATH = re.compile(r"/(?:share/)?(?:mix|collection)(?:/|$)")
 _DOUYIN_NOTE_PATH = re.compile(r"/(?:share/)?(?:note|slides)/")
+
+
+def resolve_douyin_video_url(url: str, *, redirect_follower: Callable[[str], str] | None = None) -> str:
+    """Turn any Douyin link into www.douyin.com/video/<id>, expanding app share links (v.douyin.com).
+
+    Raises ExternalVideoResolutionError for collections and image posts, which have no single video.
+    """
+    if (urlsplit(url).hostname or "").lower() == "v.douyin.com":
+        try:
+            url = (redirect_follower or _follow_redirects)(url)
+        except Exception as error:
+            raise ExternalVideoResolutionError("network_error",
+                "无法打开抖音短链，请检查网络后重试，或在浏览器中打开后复制完整链接。") from error
+    return _douyin_canonical_video_url(url)
+
+
+def douyin_aweme_id(video_url: str) -> str | None:
+    match = _DOUYIN_VIDEO_PATH.search(urlsplit(video_url).path)
+    return match.group(1) if match else None
 
 
 def _douyin_canonical_video_url(url: str) -> str:

@@ -395,13 +395,29 @@ class PlatformRequestSettings:
     request_delay_seconds: float
 
 
+DOUYIN_SOURCES = ("f2", "ytdlp")
+
+
+@dataclass(frozen=True)
+class DouyinImportSettings:
+    """抖音导入配置。
+
+    Attributes:
+        request_delay_seconds: 请求之间的最小间隔（秒）。
+        source: 解析和下载后端：``f2``（默认，自带接口签名）或 ``ytdlp``。
+    """
+
+    request_delay_seconds: float
+    source: str = "f2"
+
+
 @dataclass(frozen=True)
 class ExternalImportSettings:
     """外部平台导入和下载配置。"""
 
     chaoxing: ChaoxingImportSettings
     bilibili: PlatformRequestSettings
-    douyin: PlatformRequestSettings
+    douyin: DouyinImportSettings
 
 
 @dataclass(frozen=True)
@@ -706,10 +722,11 @@ def load_settings(config_path: Path, root_dir: Path) -> AppSettings:
             external_import_payload.get("bilibili", {}).get("request_delay_seconds"),
             default=DEFAULT_BILIBILI_REQUEST_DELAY_SECONDS,
             field_name="external_import.bilibili.request_delay_seconds")),
-        douyin=PlatformRequestSettings(request_delay_seconds=_normalize_non_negative_float(
+        douyin=DouyinImportSettings(request_delay_seconds=_normalize_non_negative_float(
             external_import_payload.get("douyin", {}).get("request_delay_seconds"),
             default=DEFAULT_DOUYIN_REQUEST_DELAY_SECONDS,
-            field_name="external_import.douyin.request_delay_seconds")),
+            field_name="external_import.douyin.request_delay_seconds"),
+            source=_normalize_douyin_source(external_import_payload.get("douyin", {}).get("source"))),
         chaoxing=ChaoxingImportSettings(
             request_delay_seconds=_normalize_non_negative_float(
                 chaoxing_import_payload.get("request_delay_seconds"),
@@ -1077,6 +1094,15 @@ def replace_web_search_enabled(settings: AppSettings, web_search_enabled: bool) 
     )
 
 
+def _normalize_douyin_source(value: object) -> str:
+    if value is None:
+        return "f2"
+    source = str(value).strip().lower().replace("-", "")
+    if source not in DOUYIN_SOURCES:
+        raise ValueError(f"external_import.douyin.source 必须是 {' 或 '.join(DOUYIN_SOURCES)}。")
+    return source
+
+
 def replace_chaoxing_import_settings(
     settings: AppSettings,
     *,
@@ -1293,6 +1319,8 @@ def _render_settings_toml(settings: AppSettings) -> str:
         "",
         "[external_import.douyin]",
         f"request_delay_seconds = {settings.external_import.douyin.request_delay_seconds}",
+        "# f2 or ytdlp",
+        f"source = {_toml_string(settings.external_import.douyin.source)}",
         "",
     ]
     return "\n".join(lines)

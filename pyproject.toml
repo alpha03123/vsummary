@@ -41,6 +41,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Douyin through F2: install these, then requirements.nodeps.txt with --no-deps.
+douyin-f2 = [
+    "browser_cookie3>=0.20,<1",
+    "importlib_resources>=6",
+    "websockets_proxy>=0.1.2,<1",
+    "python-socks>=2,<3",
+    "jsonpath-ng>=1.6,<2",
+    "PyExecJS>=1.5,<2",
+    "gmssl>=3.2,<4",
+]
 cpu = [
     "fastembed>=0.7,<1",
     "onnxruntime>=1.20,<2",

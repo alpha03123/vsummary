@@ -16,6 +16,7 @@ git clone <repo-url> vsummary
 cd vsummary
 conda env create -f environment.yml
 conda activate vsummary
+python -m pip install --no-deps -r requirements.nodeps.txt
 cd src/frontend
 npm install
 cd ../..
@@ -55,6 +56,7 @@ git clone <repo-url> vsummary
 cd vsummary
 conda env create -f environment.cpu.yml
 conda activate vsummary
+python -m pip install --no-deps -r requirements.nodeps.txt
 cd src/frontend
 npm install
 cd ../..
@@ -105,6 +107,7 @@ git clone https://github.com/alpha03123/vsummary.git
 cd vsummary
 conda env create -f environment.cpu.yml
 conda activate vsummary
+python -m pip install --no-deps -r requirements.nodeps.txt
 ```
 
 没有 Conda 时，也可用项目独立的 `.venv`，依赖仍使用同一份 `requirements.cpu.txt`：
@@ -113,6 +116,7 @@ conda activate vsummary
 brew install python@3.11
 "$(brew --prefix python@3.11)/bin/python3.11" -m venv .venv
 .venv/bin/python -m pip install -r requirements.cpu.txt
+.venv/bin/python -m pip install --no-deps -r requirements.nodeps.txt  # 抖音解析用的 F2
 ```
 
 构建前端（Node.js 22.12 或更新版本；已有符合要求的 Node.js 也可使用）：

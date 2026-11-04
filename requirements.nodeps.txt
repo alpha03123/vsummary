@@ -1,0 +1,4 @@
+# Install with: python -m pip install --no-deps -r requirements.nodeps.txt
+# F2 pins exact versions (pydantic 2.9, websockets<13, protobuf 5, ...) that clash with this project;
+# its real runtime needs are listed in requirements.txt. Pinned to a reviewed commit.
+f2 @ https://github.com/Johnserf-Seed/f2/archive/7dab3e2ffffaa2535834d28fca99dbc2e89fa9d3.tar.gz

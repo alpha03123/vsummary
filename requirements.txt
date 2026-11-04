@@ -26,5 +26,14 @@ deno>=2,<3
 DrissionPage>=4.1,<5
 srt>=3.5,<4
 chaoxing-downloader==0.1.3
+# Runtime dependencies of F2 (Douyin). F2 itself pins versions that clash with ours, so it is
+# installed separately with --no-deps from requirements.nodeps.txt.
+browser_cookie3>=0.20,<1
+importlib_resources>=6
+websockets_proxy>=0.1.2,<1
+python-socks>=2,<3
+jsonpath-ng>=1.6,<2
+PyExecJS>=1.5,<2
+gmssl>=3.2,<4
 
 filelock>=3.16,<4
