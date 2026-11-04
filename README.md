@@ -16,50 +16,56 @@
 ![LanceDB](https://img.shields.io/badge/LanceDB-Vector%20Search-FF6B00)
 ![License](https://img.shields.io/github/license/alpha03123/vsummary?label=License)
 
+### [VSummary在线版](https://vsummary.net)
+
+**不想自己部署？** 打开 [vsummary.net](https://vsummary.net) 就能用，无需手动安装环境，还有每天免费额度可以领取<br />
+
+
+<a href="https://vsummary.net"><img src="https://img.shields.io/badge/%E7%AB%8B%E5%8D%B3%E4%BD%93%E9%AA%8C-VSUMMARY%20CLOUD-2563EB?style=for-the-badge" alt="立即体验 VSummary Cloud" /></a>
+
+<a href="https://vsummary.net"><img src="./assets/showcase-home.png" width="860" alt="VSummary Cloud 首页" /></a>
+
 </div>
 
 
 ---
 
-## 在线版
-
-不想在自己电脑上装环境的话，可以直接用在线版：**[vsummary.net](https://vsummary.net)**
-
-注册后就能用。可以粘贴 B站、抖音、YouTube 的视频链接，也可以上传本地视频。AI 概况、章节、思维导图、知识卡片和系列问答都和本地版一样。处理视频按时长消耗积分，注册和每天签到都会送一些。
-
 ## 功能展示
 
-### 系列对话
+### 视频工作区
 
-<img src="./assets/showcase-series-chat.png" alt="系列级对话页面" />
+一个视频处理完，会得到章节纪要和 AI 概括。其中编号对应原视频里的出处。
 
-### 视频 AI 概况
+<img src="./assets/showcase-workspace.png" alt="视频工作区：章节纪要和 AI 概括" />
 
-在 AI 概况里，**点击章节卡片**或展开后的**转写段**即可直接跳到视频对应时间并自动播放。
+### 思维导图和知识卡片
 
-<img src="assets/showcase-video-overview.gif" alt="视频 AI 概况页面" />
+同一个视频还能生成思维导图和知识卡片，面板可以左右或上下拆分。可以自由拆分多面板使用
 
-### 多弹性布局
+<img src="./assets/showcase-mindmap-cards.png" alt="思维导图和知识卡片" />
 
-可自由拆分、组合预览、逐字稿、AI 概括等面板；拖拽分割线即可调整比例，布局会自动保留。
+### 系列问答
 
-<img src="./assets/showcase-flexible-layout.gif" alt="多弹性面板布局" />
+把几个视频放进一个系列，就能一起提问。回答会综合每个视频的内容，编号能够跳转原文位置
 
-### 聊天抽屉
-
-点击工具栏的 💬 按钮从右侧滑出分析助手；按 `Esc` 或点击背景即可关闭。播放器继续播放，不被打断。
-
-<img src="./assets/showcase-chat-drawer.png" alt="聊天抽屉" />
+<img src="./assets/showcase-series-chat.png" alt="围绕整个系列提问" />
 
 ### 浏览器插件
-支持直接解析B站视频，并且能够实现插件--视频位置的跳转
-<img src="./assets/browser-plugin.png" alt="浏览器插件" />
 
-### MCP：整理本地录音
+在 B站 看视频时，侧边栏里直接显示视频的 AI 概括、章节、思维导图和知识卡片。安装方法见[浏览器插件教程](docs/browser-extension.md)。
 
-将 VSummary 接入 MCP 后，AI 助手可以创建系列、导入本地媒体、发起处理并导出 Markdown。下面演示将两段录音处理为一份可编辑的结构化总结。
+<img src="./assets/showcase-browser-extension.png" alt="浏览器插件：在 B站 页面旁边看 AI 概括" />
+
+<details>
+<summary><b>MCP：让 AI 助手整理本地录音</b></summary>
+
+<br />
+
+接入 MCP 后，AI 助手可以创建系列、导入本地媒体、发起处理并导出 Markdown。下面是把两段录音整理成一份结构化总结的过程。
 
 <img src="./assets/showcase-mcp-recording-summary.gif" alt="MCP 处理并总结本地录音" />
+
+</details>
 
 ## 核心特性
 
@@ -93,7 +99,7 @@ macOS / Apple Silicon 可按[安装说明](docs/installation.md#macos--apple-sil
 python -m pip install --no-deps -r requirements.nodeps.txt
 ```
 
-F2 声明的依赖版本和本项目冲突，所以必须加 `--no-deps`，它实际需要的依赖已经写在 `requirements.txt` 里。不想装 F2 时，可以在 `config/settings.toml` 里改回 yt-dlp：
+不想装 F2 时，可以在 `config/settings.toml` 里改回 yt-dlp：
 
 ```toml
 [external_import.douyin]
