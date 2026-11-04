@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from collections.abc import Callable
 import json
@@ -25,9 +26,11 @@ TILES_PER_GRID = GRID_COLUMNS * GRID_ROWS
 TILE_SIZE = (320, 180)
 _POOL_LOCKS: dict[Path, Lock] = {}
 _POOL_LOCKS_GUARD = Lock()
-# Sampling a pool runs dozens of ffmpeg decodes back to back. Letting every job thread do that at
-# once saturates a small server, so videos take turns; cached pools skip the queue.
-_EXTRACTION_SLOTS = BoundedSemaphore(max(1, int(os.environ.get("VSUMMARY_FRAME_EXTRACTION_CONCURRENCY", "1"))))
+# Sampling a pool runs dozens of ffmpeg decodes back to back. Small servers set
+# VSUMMARY_FRAME_EXTRACTION_CONCURRENCY (Cloud uses 1) so videos take turns instead of saturating the
+# CPU together; unset means no limit. Cached pools never wait.
+_EXTRACTION_LIMIT = os.environ.get("VSUMMARY_FRAME_EXTRACTION_CONCURRENCY", "").strip()
+_EXTRACTION_SLOTS = BoundedSemaphore(max(1, int(_EXTRACTION_LIMIT))) if _EXTRACTION_LIMIT else nullcontext()
 
 
 @dataclass(frozen=True)
