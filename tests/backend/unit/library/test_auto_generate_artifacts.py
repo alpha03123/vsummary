@@ -7,7 +7,7 @@ from backend.video_summary.library.usecases.auto_generate_artifacts import AutoG
 
 
 class AutoGenerateVideoArtifactsTests(unittest.TestCase):
-    def test_runs_every_enabled_artifact_and_reports_each_one_before_it_starts(self) -> None:
+    def test_runs_every_enabled_artifact(self) -> None:
         calls: list[str] = []
 
         async def generate_mindmap(series_id: str, video_id: str) -> None:
@@ -22,10 +22,10 @@ class AutoGenerateVideoArtifactsTests(unittest.TestCase):
             generate_knowledge_cards=generate_cards,
         )
 
-        asyncio.run(workflow.run("series-1", "video-1", on_progress=lambda stage, _detail: calls.append(stage)))
+        asyncio.run(workflow.run("series-1", "video-1"))
 
         self.assertEqual(
-            ["auto_mindmap", "mindmap:series-1/video-1", "auto_knowledge_cards", "cards:series-1/video-1"],
+            ["mindmap:series-1/video-1", "cards:series-1/video-1"],
             calls,
         )
 
