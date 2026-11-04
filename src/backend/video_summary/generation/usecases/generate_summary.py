@@ -31,6 +31,7 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
+from backend.core.errors import UserVisibleError
 from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
 from backend.video_summary.generation.renderers import render_markdown
@@ -266,7 +267,6 @@ class GenerateVideoSummary:
         3. 在阻塞调用之前检查取消信号，避免浪费昂贵的计算。
         """
         stage_cache = GenerationStageCache(cache_dir, video_path)
-        unavailable_reason: str | None = None
         resolved_manual_transcript = manual_transcript
         if resolved_manual_transcript is None and use_saved_manual_transcript and self._manual_transcript_provider is not None:
             resolved_manual_transcript = await asyncio.to_thread(
@@ -360,23 +360,9 @@ class GenerateVideoSummary:
                         _raise_if_cancelled(progress_reporter, cancellation)
                         await asyncio.to_thread(stage_cache.store_audio, audio_path, identity=media_identity)
                 except NoTranscribableAudioError:
-                    unavailable_reason = "未找到可用中文字幕，且视频不含可供转写的音频流。"
-                    transcript_source_identity = "no-transcribable-audio-v1"
-                    transcript = await asyncio.to_thread(
-                        stage_cache.load_transcript,
-                        "no-transcribable-audio",
-                        identity=transcript_source_identity,
-                    )
-                    if transcript is None:
-                        transcript = _build_no_transcribable_audio_transcript(video.duration_seconds)
-                        await asyncio.to_thread(
-                            stage_cache.store_transcript,
-                            "no-transcribable-audio",
-                            transcript,
-                            identity=transcript_source_identity,
-                        )
-                    if progress_reporter is not None:
-                        progress_reporter.update("transcribe", 80.0, "视频没有可供转写的信息，正在写入占位概况")
+                    # Failing (instead of publishing a placeholder) leaves nothing published, so the
+                    # job is not charged.
+                    raise UserVisibleError("no_speech", NO_AUDIO_MESSAGE) from None
                 else:
                     _raise_if_cancelled(progress_reporter, cancellation)
 
@@ -398,6 +384,7 @@ class GenerateVideoSummary:
                         identity=transcriber_identity,
                     )
             _raise_if_cancelled(progress_reporter, cancellation)
+            _require_speech(transcript, video.duration_seconds)
 
         enhancer_identity = (
             f"{_cache_identity(self._transcript_enhancer)}|source={transcript_source_identity}"
@@ -406,7 +393,6 @@ class GenerateVideoSummary:
         )
         if (
             self._transcript_enhancer is not None
-            and unavailable_reason is None
             and resolved_manual_transcript is None
             and saved_transcript is None
         ):
@@ -475,8 +461,6 @@ class GenerateVideoSummary:
             )
 
         if processing_mode == "transcript":
-            if unavailable_reason is not None:
-                raise RuntimeError(unavailable_reason)
             if progress_reporter is not None:
                 progress_reporter.update("publish", 99.0, "正在保存识别出的文字")
             await asyncio.to_thread(
@@ -487,18 +471,15 @@ class GenerateVideoSummary:
             )
             return None
 
-        if unavailable_reason is not None:
-            summary_document = _build_no_transcribable_audio_summary(video, unavailable_reason)
-        else:
-            if progress_reporter is not None:
-                progress_reporter.update("summarize", 88.0, "正在整理内容、划分章节和提炼要点")
-            _raise_if_cancelled(progress_reporter, cancellation)
-            try:
-                summary_document = await self._summarizer.summarize(video, transcript, cancellation)
-            except GenerateCancelledError:
-                raise
-            except Exception as error:
-                raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
+        if progress_reporter is not None:
+            progress_reporter.update("summarize", 88.0, "正在整理内容、划分章节和提炼要点")
+        _raise_if_cancelled(progress_reporter, cancellation)
+        try:
+            summary_document = await self._summarizer.summarize(video, transcript, cancellation)
+        except GenerateCancelledError:
+            raise
+        except Exception as error:
+            raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
         _raise_if_cancelled(progress_reporter, cancellation)
         extracted_frames: list[ExtractedChapterFrame] = []
         if self._chapter_screenshots_enabled:
@@ -772,29 +753,23 @@ def _restore_display_frame_references(
     )
 
 
-def _build_no_transcribable_audio_transcript(duration_seconds: float) -> Transcript:
-    return Transcript(
-        language="und",
-        segments=[
-            TranscriptSegment(
-                start_seconds=0.0,
-                end_seconds=max(0.0, duration_seconds),
-                text="该视频没有可供转写的音频或中文字幕。",
-            )
-        ],
-    )
+NO_AUDIO_MESSAGE = "这个视频没有声音也没有字幕，暂不支持处理。"
+NO_SPEECH_MESSAGE = "这个视频没有识别到讲话内容，暂不支持处理。"
+# Placeholders transcribers return when they hear nothing (Bailian: SUCCESS_WITH_NO_VALID_FRAGMENT).
+_NO_SPEECH_PLACEHOLDERS = {"无明显人声"}
+_MIN_SPEECH_CHARS_PER_MINUTE = 10
 
 
-def _build_no_transcribable_audio_summary(video: VideoAsset, reason: str) -> SummaryDocument:
-    summary_data = {
-        "title": video.title,
-        "transcription_status": "untranscribable",
-        "one_sentence_summary": "该视频没有可供转写的信息，无法生成内容概况。",
-        "core_problem": "",
-        "chapters": [],
-        "key_takeaways": [reason],
-    }
-    return SummaryDocument(markdown=render_markdown(summary_data), summary_data=summary_data)
+def _require_speech(transcript: Transcript, duration_seconds: float) -> None:
+    """Reject ASR output with almost no speech before anything is generated or published.
+
+    A job that fails before publishing is not charged, so music-only or silent videos cost the
+    user nothing; only the ASR call itself was spent.
+    """
+    characters = sum(len(segment.text.strip()) for segment in transcript.segments
+        if segment.text.strip() not in _NO_SPEECH_PLACEHOLDERS)
+    if characters < max(1.0, _MIN_SPEECH_CHARS_PER_MINUTE * duration_seconds / 60):
+        raise UserVisibleError("no_speech", NO_SPEECH_MESSAGE)
 
 
 def _build_llm_stage_error(stage_label: str, error: Exception) -> str:
