@@ -19,7 +19,7 @@
 ### [VSummary在线版](https://vsummary.net)
 
 **不想自己部署？** 打开 [vsummary.net](https://vsummary.net) 就能用，无需手动安装环境，还有每天免费额度可以领取<br />
-
+(还是早期开发版，有BUG欢迎反馈~)
 
 <a href="https://vsummary.net"><img src="https://img.shields.io/badge/%E7%AB%8B%E5%8D%B3%E4%BD%93%E9%AA%8C-VSUMMARY%20CLOUD-2563EB?style=for-the-badge" alt="立即体验 VSummary Cloud" /></a>
 
