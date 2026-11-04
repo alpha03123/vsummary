@@ -503,7 +503,7 @@ export function WorkspaceImportModal({
                   <>
                     <label className="mb-2 block text-xs font-bold tracking-wide text-subtle">
                       {isSeriesCreation
-                        ? `${externalProvider === "youtube" ? "YouTube 播放列表" : externalProvider === "douyin" ? "抖音合集" : "Bilibili 系列 / 多 P"} URL`
+                        ? `${externalProvider === "youtube" ? "YouTube 播放列表" : externalProvider === "douyin" ? "抖音视频" : "Bilibili 系列 / 多 P"} URL`
                         : `${externalProvider === "youtube" ? "YouTube" : externalProvider === "douyin" ? "抖音" : "Bilibili"} 视频 URL`}
                     </label>
                     <input

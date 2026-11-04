@@ -15,6 +15,9 @@ import sys
 import time
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
+from urllib.error import HTTPError
+from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from backend.shared.filesystem import atomic_write_text
 from backend.shared.ytdlp import parse_cookie_pairs, temporary_cookie_file, run_with_cookie_fallback, requires_cookie, request_sleep_flags, capped_format_selector
@@ -131,11 +134,13 @@ class YtDlpPlatformResolver:
         extractor: Callable[[str], dict[str, object]] | None = None,
         request_pacer: RequestPacer | None = None,
         cookie: str | None = None,
+        redirect_follower: Callable[[str], str] | None = None,
     ) -> None:
         self._platform = platform
         self._request_pacer = request_pacer
         self._cookie = cookie
         self._extractor = extractor or self._extract_info
+        self._redirect_follower = redirect_follower or _follow_redirects
 
     async def resolve_series(self, url_info) -> LinkedSeries:
         url = url_info.url
@@ -158,12 +163,24 @@ class YtDlpPlatformResolver:
         return self._to_video(payload, fallback_url=url_info.url)
 
     async def _extract(self, url: str) -> dict[str, object]:
+        if self._platform.provider == "douyin":
+            url = await asyncio.to_thread(self._douyin_video_url, url)
         try:
             return await asyncio.to_thread(self._extractor, url)
         except ExternalVideoResolutionError:
             raise
         except Exception as error:
-            raise _external_platform_error(error) from error
+            raise _external_platform_error(error, self._platform.display_name) from error
+
+    def _douyin_video_url(self, url: str) -> str:
+        # yt-dlp only knows www.douyin.com/video/<id>: expand app share links (v.douyin.com) ourselves.
+        if (urlsplit(url).hostname or "").lower() == "v.douyin.com":
+            try:
+                url = self._redirect_follower(url)
+            except Exception as error:
+                raise ExternalVideoResolutionError("network_error",
+                    "无法打开抖音短链，请检查网络后重试，或在浏览器中打开后复制完整链接。") from error
+        return _douyin_canonical_video_url(url)
 
     def _extract_info(self, url: str) -> dict[str, object]:
         from yt_dlp import YoutubeDL
@@ -384,13 +401,57 @@ def _is_cancelled(reporter: ProgressReporter) -> bool:
     return False
 
 
+_DOUYIN_VIDEO_PATH = re.compile(r"/(?:share/)?video/(\d+)")
+_DOUYIN_COLLECTION_PATH = re.compile(r"/(?:share/)?(?:mix|collection)(?:/|$)")
+_DOUYIN_NOTE_PATH = re.compile(r"/(?:share/)?(?:note|slides)/")
+
+
+def _douyin_canonical_video_url(url: str) -> str:
+    parsed = urlsplit(url)
+    if match := _DOUYIN_VIDEO_PATH.search(parsed.path):
+        return f"https://www.douyin.com/video/{match.group(1)}"
+    modal_id = parse_qs(parsed.query).get("modal_id", [""])[0]
+    if modal_id.isdigit():
+        return f"https://www.douyin.com/video/{modal_id}"
+    if _DOUYIN_COLLECTION_PATH.search(parsed.path):
+        raise ExternalVideoResolutionError("invalid_url",
+            "本地版暂不支持抖音合集。请打开合集里的单个视频，复制它的链接再导入。")
+    if _DOUYIN_NOTE_PATH.search(parsed.path):
+        raise ExternalVideoResolutionError("invalid_url", "这是抖音图文作品，没有可以转写的视频。")
+    return url
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def _follow_redirects(url: str, *, max_hops: int = 5) -> str:
+    """Follow a share short link until it leaves its own host; returns the target URL."""
+    opener = build_opener(_NoRedirect)
+    start_host = urlsplit(url).hostname
+    for _ in range(max_hops):
+        request = Request(url, headers={"User-Agent": _DEFAULT_USER_AGENT})
+        try:
+            with opener.open(request, timeout=10):
+                return url
+        except HTTPError as error:
+            location = error.headers.get("Location") if 300 <= error.code < 400 else None
+            if not location:
+                raise
+        url = urljoin(url, location)
+        if urlsplit(url).hostname != start_host:
+            return url
+    return url
+
+
 def _external_platform_error(error: Exception, platform_name: str = "该平台") -> ExternalVideoResolutionError:
     message = str(error)
     normalized_message = message.lower()
     if requires_cookie(error):
         return ExternalVideoResolutionError("cookie_required", f"{platform_name}拒绝此登录状态。请等待一会重试或者重新获取 Cookie 后再试。")
     if "unsupported url" in normalized_message:
-        return ExternalVideoResolutionError("invalid_url", "URL不合法，请输入合理的URL。")
+        return ExternalVideoResolutionError("invalid_url", f"{platform_name}的这种链接暂不支持解析，请粘贴单个视频的链接。")
     if "private video" in normalized_message or "login required" in normalized_message:
         return ExternalVideoResolutionError("cookie_required", f"{platform_name}拒绝此登录状态。请等待一会重试或者重新获取 Cookie 后再试。")
     if "http error 429" in normalized_message or "too many requests" in normalized_message:

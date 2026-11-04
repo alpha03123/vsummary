@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from backend.external.ytdlp import (
     DrissionCookieInitializer,
     ExternalCookieInitError,
     BackgroundYtDlpDownloadStarter,
+    DOUYIN_PLATFORM,
     ExternalVideoResolutionError,
     YtDlpPlatform,
     YtDlpPlatformDownloader,
@@ -135,6 +138,30 @@ def test_resolver_maps_douyin_single_video() -> None:
     assert video.video_id == "751234567890"
     assert video.provider == "douyin"
     assert video.source_url == "https://www.douyin.com/video/751234567890"
+
+
+def test_douyin_share_short_link_is_expanded_to_the_video_page_yt_dlp_understands() -> None:
+    extracted: list[str] = []
+    resolver = YtDlpPlatformResolver(
+        DOUYIN_PLATFORM,
+        extractor=lambda url: extracted.append(url) or {"id": "7563412345678901234", "title": "抖音视频"},
+        redirect_follower=lambda _: "https://www.iesdouyin.com/share/video/7563412345678901234/?region=CN&mid=1",
+    )
+
+    asyncio.run(resolver.resolve_single_video(_UrlInfo("https://v.douyin.com/hXblWnCsAYc/")))
+
+    assert extracted == ["https://www.douyin.com/video/7563412345678901234"]
+
+
+def test_douyin_collection_link_explains_that_only_single_videos_are_supported() -> None:
+    resolver = YtDlpPlatformResolver(
+        DOUYIN_PLATFORM,
+        extractor=lambda _: pytest.fail("A collection must be rejected before yt-dlp runs."),
+        redirect_follower=lambda _: "https://www.iesdouyin.com/share/mix/detail/7412345678901234567/",
+    )
+
+    with pytest.raises(ExternalVideoResolutionError, match="暂不支持抖音合集"):
+        asyncio.run(resolver.resolve_series(_UrlInfo("https://v.douyin.com/hXblWnCsAYc/")))
 
 
 def test_youtube_playlist_entry_without_webpage_url_uses_its_video_id() -> None:
