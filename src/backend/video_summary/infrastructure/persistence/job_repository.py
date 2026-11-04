@@ -493,8 +493,9 @@ class SqlJobRepository:
             for counts in [self._artifact_token_estimate(duration_seconds, artifact, profile)
                 if self._artifact_token_estimate is not None else (incoming,outgoing)])
 
-    def admission(self, context, units):
-        return self._queue_policy.admit(actor_id=context.actor_id,units=units) if self._queue_policy is not None else nullcontext()
+    def admission(self, context, units, duration_seconds=0.0):
+        return (self._queue_policy.admit(actor_id=context.actor_id, units=units, duration_seconds=duration_seconds)
+            if self._queue_policy is not None else nullcontext())
 
     def in_transaction(self, sessions):
         """Reuse metering dependencies while the caller owns queue admission and SQL commit."""
