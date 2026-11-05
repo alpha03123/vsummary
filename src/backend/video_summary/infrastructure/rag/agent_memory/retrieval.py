@@ -45,11 +45,12 @@ INDEX_SCHEMA_VERSION = 7
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
 LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
-# Only these metadata fields carry meaning for the embedding; IDs, timings and empty fields
-# stay out of the embedded text (they made up ~90% of the embedding tokens on short chunks).
-EMBED_METADATA_KEYS = frozenset({"title", "chapter_title"})
+# Only these metadata fields go into the embedded text. IDs, timings and empty fields made up ~90%
+# of the embedding tokens; the video title is left out too, because it repeated on every ~15-char
+# transcript chunk (~70% of what remained) and search is already scoped to a series or video.
+EMBED_METADATA_KEYS = frozenset({"chapter_title"})
 # Bump whenever the embedded text changes, so stored indexes are rebuilt instead of mixing formats.
-EMBEDDING_TEXT_FORMAT = 2
+EMBEDDING_TEXT_FORMAT = 3
 LOGGER = logging.getLogger(__name__)
 SeriesSignature = tuple[str, ...]
 SeriesSignatureMap = dict[str, SeriesSignature]
