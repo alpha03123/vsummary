@@ -152,10 +152,10 @@ class LazyAgentRuntimeProvider:
 
     def inspect_workspace_indexes(self, plan, series_id: str | None = None):
         from backend.video_summary.infrastructure.rag.agent_memory.index_health import inspect_index_health
+        from backend.video_summary.infrastructure.rag.agent_memory.retrieval import build_embedding_profile
         settings = load_settings(self._root_dir / "config" / "settings.toml", self._root_dir).agent_retrieval
         return inspect_index_health(workspace=self._workspace, plan=plan, series_id=series_id,
-            embedding_profile={"provider": settings.embedding_provider, "model": settings.embedding_model,
-                "endpoint": settings.embedding_endpoint, "dimensions": settings.embedding_dimensions})
+            embedding_profile=build_embedding_profile(settings))
 
     def refresh_workspace_indexes(self, target_dir: Path | None = None, *, source_dir: Path | None = None,
         changes=(), progress=None, check_cancelled=None) -> None:

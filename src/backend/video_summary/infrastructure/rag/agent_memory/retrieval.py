@@ -25,7 +25,8 @@ import lancedb
 import pyarrow as pa
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
 from llama_index.core.ingestion import run_transformations
-from llama_index.core.vector_stores.utils import node_to_metadata_dict
+from llama_index.core.schema import MetadataMode
+from llama_index.core.vector_stores.utils import metadata_dict_to_node, node_to_metadata_dict
 from llama_index.core.embeddings import MockEmbedding
 from llama_index.core.vector_stores import FilterCondition, FilterOperator, MetadataFilter, MetadataFilters
 from llama_index.vector_stores.lancedb import LanceDBVectorStore
@@ -44,6 +45,11 @@ INDEX_SCHEMA_VERSION = 7
 INDEX_TABLE_NAME = f"agent_graph_evidence_v{INDEX_SCHEMA_VERSION}"
 RERANK_EMBEDDING_MULTIPLIER = 4
 LANCEDB_OPTIMIZE_CLEANUP_OLDER_THAN = timedelta(minutes=10)
+# Only these metadata fields carry meaning for the embedding; IDs, timings and empty fields
+# stay out of the embedded text (they made up ~90% of the embedding tokens on short chunks).
+EMBED_METADATA_KEYS = frozenset({"title", "chapter_title"})
+# Bump whenever the embedded text changes, so stored indexes are rebuilt instead of mixing formats.
+EMBEDDING_TEXT_FORMAT = 2
 LOGGER = logging.getLogger(__name__)
 SeriesSignature = tuple[str, ...]
 SeriesSignatureMap = dict[str, SeriesSignature]
@@ -126,11 +132,11 @@ class SeriesRetrievalService:
         self._db_uri = db_uri
         self._root_dir = root_dir
         if root_dir is None:
-            self._embedding_profile = {"model": str(getattr(embed_model, "model_name", "mock"))}
+            self._embedding_profile = {"model": str(getattr(embed_model, "model_name", "mock")),
+                "text_format": EMBEDDING_TEXT_FORMAT}
         else:
-            profile = load_settings(root_dir / "config" / "settings.toml", root_dir).agent_retrieval
-            self._embedding_profile = {"provider": profile.embedding_provider, "model": profile.embedding_model,
-                "endpoint": profile.embedding_endpoint, "dimensions": profile.embedding_dimensions}
+            self._embedding_profile = build_embedding_profile(
+                load_settings(root_dir / "config" / "settings.toml", root_dir).agent_retrieval)
         self._embed_model = embed_model or _build_default_embed_model(root_dir, model_http_client)
         self._reranker = reranker
         self._rerank_enabled_override = rerank_enabled
@@ -172,10 +178,11 @@ class SeriesRetrievalService:
                 self._write_series_signature(series_id)
                 self.invalidate()
                 return
+            reuse = self._existing_vectors(_series_rows_where(series_id))
             self._delete_series_rows(series_id=series_id)
             documents = _build_documents_for_series(self._workspace, series_id=series_id)
             if documents:
-                self._append_documents(documents)
+                self._append_documents(documents, reuse=reuse)
             self._write_series_signature(series_id)
             self.invalidate()
 
@@ -200,11 +207,13 @@ class SeriesRetrievalService:
                 action, series_id = change["action"], change["series_id"]
                 series = current_series.get(series_id)
                 documents = []
+                reuse: dict[str, list[float]] = {}
                 if action in {"upsert_video", "delete_video"}:
                     video_id = change["video_id"]
                     video = next((item for item in series.videos if item.id == video_id), None) if series else None
                     signature = _build_video_signature(self._workspace, series, video) if video and action == "upsert_video" else None
                     if signature is None or signature not in signatures.get(series_id, ()):
+                        reuse = self._existing_vectors(_video_rows_where(series_id, video_id)) if signature is not None else {}
                         self._delete_video_rows(series_id=series_id, video_id=video_id)
                         if signature is not None:
                             documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
@@ -217,6 +226,7 @@ class SeriesRetrievalService:
                         signatures.pop(series_id, None)
                 elif action in {"refresh_series", "delete_series"}:
                     signature = _build_series_signature(self._workspace, series_id) if action == "refresh_series" else ()
+                    reuse = self._existing_vectors(_series_rows_where(series_id)) if signature else {}
                     self._delete_series_rows(series_id=series_id)
                     if signature:
                         signatures[series_id] = signature
@@ -226,7 +236,7 @@ class SeriesRetrievalService:
                 else:
                     raise ValueError(f"Unsupported incremental index mutation: {action}")
                 if documents:
-                    self._append_documents(documents)
+                    self._append_documents(documents, reuse=reuse)
                 if progress is not None:
                     progress("index", 10 + 80 * completed / len(changes),
                         f"正在增量更新 RAG 索引：{completed}/{len(changes)}")
@@ -248,10 +258,11 @@ class SeriesRetrievalService:
             if not self._is_incremental_mutation_ready():
                 self.refresh_series(series_id)
                 return
+            reuse = self._existing_vectors(_video_rows_where(series_id, video_id))
             self._delete_video_rows(series_id=series_id, video_id=video_id)
             documents = _build_documents_for_video(self._workspace, series_id=series_id, video_id=video_id)
             if documents:
-                self._append_documents(documents)
+                self._append_documents(documents, reuse=reuse)
             self._finalize_incremental_mutation(series_id)
 
     def delete_video(self, series_id: str, video_id: str) -> None:
@@ -481,14 +492,41 @@ class SeriesRetrievalService:
         profile_path.write_text(json.dumps(self._embedding_profile, sort_keys=True), encoding="utf-8")
         return self._index
 
-    def _append_documents(self, documents: list[RetrievalDocument]) -> None:
+    def _append_documents(self, documents: list[RetrievalDocument], *, reuse: dict[str, list[float]] | None = None) -> None:
         """以 `append` 模式把文档追加到 LanceDB（封装 `_write_documents`）。"""
-        self._write_documents(documents, mode="append")
+        self._write_documents(documents, mode="append", reuse=reuse)
 
-    def _write_documents(self, documents: list[RetrievalDocument], *, mode: str) -> VectorStoreIndex:
-        """把 `RetrievalDocument` 列表按指定 mode 写入 LanceDB 表。"""
+    def _existing_vectors(self, where: str) -> dict[str, list[float]]:
+        """Map the embedded text of matching rows to their stored vectors.
+
+        Called before rows are deleted for re-insertion, so chunks whose embedded text did not change
+        (e.g. the transcript when only knowledge cards were added) keep their vector instead of
+        being sent to the embedding API again.
+        """
+        if not _table_exists(self._db_uri, INDEX_TABLE_NAME):
+            return {}
+        table = lancedb.connect(self._db_uri).open_table(INDEX_TABLE_NAME)
+        vectors: dict[str, list[float]] = {}
+        for row in table.to_lance().to_table(filter=where, columns=["vector", "metadata"]).to_pylist():
+            try:
+                node = metadata_dict_to_node(row["metadata"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            vectors[node.get_content(metadata_mode=MetadataMode.EMBED)] = row["vector"]
+        return vectors
+
+    def _write_documents(self, documents: list[RetrievalDocument], *, mode: str,
+        reuse: dict[str, list[float]] | None = None) -> VectorStoreIndex:
+        """把 `RetrievalDocument` 列表按指定 mode 写入 LanceDB 表；`reuse` 中已有向量的分块不再调用 embedding。"""
         nodes = run_transformations(_to_llama_documents(documents), Settings.transformations)
-        nodes = self._embed_model(nodes)
+        pending = []
+        for node in nodes:
+            vector = (reuse or {}).get(node.get_content(metadata_mode=MetadataMode.EMBED))
+            if vector is None:
+                pending.append(node)
+            else:
+                node.embedding = list(vector)
+        self._embed_model(pending)
         connection = lancedb.connect(self._db_uri)
         if not nodes and (mode == "overwrite" or not _table_exists(self._db_uri, INDEX_TABLE_NAME)):
             # Nothing to index yet (e.g. a workspace whose only video failed to process). LanceDB cannot
@@ -586,22 +624,11 @@ class SeriesRetrievalService:
 
     def _delete_video_rows(self, *, series_id: str, video_id: str) -> None:
         """按 series_id + video_id 精确删除 LanceDB 表中的若干行。"""
-        _delete_rows(
-            db_uri=self._db_uri,
-            table_name=INDEX_TABLE_NAME,
-            where=(
-                f"metadata.series_id = '{_escape_lance_string(series_id)}' "
-                f"and metadata.video_id = '{_escape_lance_string(video_id)}'"
-            ),
-        )
+        _delete_rows(db_uri=self._db_uri, table_name=INDEX_TABLE_NAME, where=_video_rows_where(series_id, video_id))
 
     def _delete_series_rows(self, *, series_id: str) -> None:
         """按 series_id 删除 LanceDB 表中的所有匹配行。"""
-        _delete_rows(
-            db_uri=self._db_uri,
-            table_name=INDEX_TABLE_NAME,
-            where=f"metadata.series_id = '{_escape_lance_string(series_id)}'",
-        )
+        _delete_rows(db_uri=self._db_uri, table_name=INDEX_TABLE_NAME, where=_series_rows_where(series_id))
 
     def _try_load_existing_index(self) -> VectorStoreIndex | None:
         """尝试把 LanceDB 表包装为 LlamaIndex 索引；表不存在时返回 `None`。"""
@@ -953,13 +980,28 @@ def _build_documents_for_assets(
     return documents
 
 
+def build_embedding_profile(settings: AgentRetrievalSettings) -> dict[str, object]:
+    """Identity of the stored vectors; a published index whose profile differs gets rebuilt."""
+    return {"provider": settings.embedding_provider, "model": settings.embedding_model,
+        "endpoint": settings.embedding_endpoint, "dimensions": settings.embedding_dimensions,
+        "text_format": EMBEDDING_TEXT_FORMAT}
+
+
+def _excluded_embed_metadata_keys(metadata: dict[str, object]) -> list[str]:
+    return [key for key, value in metadata.items() if key not in EMBED_METADATA_KEYS or value in ("", None)]
+
+
 def _to_llama_documents(documents: list[RetrievalDocument]) -> list[Document]:
-    """把内部 `RetrievalDocument` 转换为 LlamaIndex `Document`，并把 `doc_id` 作为主键。"""
+    """把内部 `RetrievalDocument` 转换为 LlamaIndex `Document`，并把 `doc_id` 作为主键。
+
+    metadata 全量保存（过滤与引用要用），但只有 `EMBED_METADATA_KEYS` 中的非空字段进入 embedding 文本。
+    """
     return [
         Document(
             id_=str(document.metadata["doc_id"]),
             text=document.text,
             metadata=document.metadata,
+            excluded_embed_metadata_keys=_excluded_embed_metadata_keys(document.metadata),
         )
         for document in documents
     ]
@@ -1253,6 +1295,15 @@ def _reset_lancedb_table(db_uri: str, table_name: str) -> None:
     except Exception:
         # table 不存在时直接忽略，后续会重建
         pass
+
+
+def _video_rows_where(series_id: str, video_id: str) -> str:
+    return (f"metadata.series_id = '{_escape_lance_string(series_id)}' "
+        f"and metadata.video_id = '{_escape_lance_string(video_id)}'")
+
+
+def _series_rows_where(series_id: str) -> str:
+    return f"metadata.series_id = '{_escape_lance_string(series_id)}'"
 
 
 def _delete_rows(*, db_uri: str, table_name: str, where: str) -> None:
