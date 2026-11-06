@@ -132,3 +132,5 @@ Windows 整合包解压后，插件位于 `extensions/bilibili-sidepanel`。启�
 - QQ群:点击链接加入群聊【vsummary交流沟通群】：https://qm.qq.com/q/nxKBApDVF
 
 <img src="./assets/qq-group-qrcode.jpg" width="240" alt="vsummary 交流群二维码" />
+
+特别致谢：[Linux Do](https://linux.do)
