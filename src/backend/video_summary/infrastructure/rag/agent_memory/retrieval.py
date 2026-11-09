@@ -996,6 +996,8 @@ def _to_llama_documents(documents: list[RetrievalDocument]) -> list[Document]:
     """把内部 `RetrievalDocument` 转换为 LlamaIndex `Document`，并把 `doc_id` 作为主键。
 
     metadata 全量保存（过滤与引用要用），但只有 `EMBED_METADATA_KEYS` 中的非空字段进入 embedding 文本。
+    LLM 模式的 metadata 文本没有任何地方使用，全部排除：切分器按 EMBED/LLM 两者中较长的一份扣减
+    chunk 预算，不排除时整份 metadata 超过 chunk size 会让索引刷新直接报错。
     """
     return [
         Document(
@@ -1003,6 +1005,7 @@ def _to_llama_documents(documents: list[RetrievalDocument]) -> list[Document]:
             text=document.text,
             metadata=document.metadata,
             excluded_embed_metadata_keys=_excluded_embed_metadata_keys(document.metadata),
+            excluded_llm_metadata_keys=list(document.metadata),
         )
         for document in documents
     ]
