@@ -6,7 +6,21 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, model_validator
+from typing import Any
+
+from pydantic import BaseModel, Field, ValidationInfo, model_validator
+
+from backend.shared.llm.diagnostics import log_llm_event
+
+# 校验上下文键：开启后 `SummaryPayload` 在校验前自动修正 LLM 常见的章节时间小错。
+# 只给 LLM 生成路径开启；用户手动编辑总结时仍按原规则严格校验。
+REPAIR_CHAPTERS_CONTEXT_KEY = "repair_summary_chapters"
+VIDEO_DURATION_CONTEXT_KEY = "video_duration_seconds"
+
+
+def summary_repair_context(video_duration_seconds: float | None) -> dict[str, object]:
+    """构造开启章节自动修正的 Pydantic 校验上下文。"""
+    return {REPAIR_CHAPTERS_CONTEXT_KEY: True, VIDEO_DURATION_CONTEXT_KEY: video_duration_seconds}
 
 
 class SummaryChapterPayload(BaseModel):
@@ -60,6 +74,21 @@ class SummaryPayload(BaseModel):
     chapters: list[SummaryChapterPayload] = Field(default_factory=list)
     key_takeaways: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def repair_chapter_times(cls, data: Any, info: ValidationInfo) -> Any:
+        context = info.context or {}
+        if not context.get(REPAIR_CHAPTERS_CONTEXT_KEY) or not isinstance(data, dict):
+            return data
+        chapters = data.get("chapters")
+        if not isinstance(chapters, list) or not chapters:
+            return data
+        repaired, actions = repair_chapters(chapters, context.get(VIDEO_DURATION_CONTEXT_KEY))
+        if not actions:
+            return data
+        log_llm_event("summary_chapters_repaired", actions=actions)
+        return {**data, "chapters": repaired}
+
     @model_validator(mode="after")
     def validate_chapter_sequence(self) -> "SummaryPayload":
         if len({chapter.id for chapter in self.chapters}) != len(self.chapters):
@@ -71,6 +100,97 @@ class SummaryPayload(BaseModel):
                     f"({current.start_seconds}) 不能小于 {previous.id} 的 end_seconds ({previous.end_seconds})。"
                 )
         return self
+
+
+def repair_chapters(chapters: list[Any], video_duration_seconds: float | None) -> tuple[list[Any], list[str]]:
+    """确定性地修正 LLM 章节时间里能明确判断怎么改的小错，避免整份重新生成。
+
+    依次：最后一章结束时间不足视频时长时补到视频末尾；后一章开始早于前一章结束时，
+    把前一章结束改成后一章开始；零长或倒序章节并入上一章（第一章则并入下一章）；
+    配图时间截回本章范围。任何时间字段无法解析为数字时原样返回，交给校验报错。
+
+    Returns:
+        (修正后的章节列表, 修正动作描述列表)；没有修正时动作列表为空。
+    """
+    items = [dict(item.model_dump() if isinstance(item, BaseModel) else item) for item in chapters
+        if isinstance(item, (dict, BaseModel))]
+    if len(items) != len(chapters):
+        return chapters, []
+    times: list[list[float | None]] = []
+    for item in items:
+        start, end = _as_number(item.get("start_seconds", 0.0)), _as_number(item.get("end_seconds", 0.0))
+        image = item.get("image_timestamp_seconds")
+        image_value = None if image is None else _as_number(image)
+        if start is None or end is None or (image is not None and image_value is None):
+            return chapters, []
+        times.append([start, end, image_value])
+
+    actions: list[str] = []
+    duration = _as_number(video_duration_seconds) if video_duration_seconds is not None else None
+    last = times[-1]
+    if duration is not None and last[0] < duration and last[1] < duration:
+        actions.append(f"{_chapter_label(items[-1])}: end {last[1]:g} -> {duration:g} (video end)")
+        last[1] = duration
+    for index in range(1, len(times)):
+        previous, current = times[index - 1], times[index]
+        if current[0] < previous[1]:
+            actions.append(f"{_chapter_label(items[index - 1])}: end {previous[1]:g} -> {current[0]:g} (overlap)")
+            previous[1] = current[0]
+
+    index = 0
+    while index < len(items) and len(items) > 1:
+        start, end, _ = times[index]
+        if end > start:
+            index += 1
+            continue
+        if index > 0:
+            target = index - 1
+            covered = max(start, end)
+            if index + 1 < len(times):
+                covered = min(covered, times[index + 1][0])
+            times[target][1] = max(times[target][1], covered)
+        else:
+            target = 1
+            times[target][0] = min(times[target][0], start)
+        actions.append(f"{_chapter_label(items[index])}: zero-length [{start:g}, {end:g}] merged into "
+            f"{_chapter_label(items[target])}")
+        _merge_key_points(items[target], items[index], prepend=target > index)
+        del items[index], times[index]
+        if index > 0:
+            index -= 1
+
+    for item, (start, end, image) in zip(items, times):
+        item["start_seconds"], item["end_seconds"] = start, end
+        if image is not None and end > start and not start <= image <= end:
+            clamped = min(max(image, start), end)
+            actions.append(f"{_chapter_label(item)}: image {image:g} -> {clamped:g}")
+            image = clamped
+        if image is not None:
+            item["image_timestamp_seconds"] = image
+    return items, actions
+
+
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number and number not in (float("inf"), float("-inf")) else None
+
+
+def _chapter_label(item: dict) -> str:
+    return str(item.get("id") or item.get("title") or "?")
+
+
+def _merge_key_points(target: dict, source: dict, *, prepend: bool = False) -> None:
+    points = target.get("key_points")
+    extra = source.get("key_points")
+    if not isinstance(points, list) or not isinstance(extra, list):
+        return
+    added = [point for point in extra if point not in points]
+    target["key_points"] = [*added, *points] if prepend else [*points, *added]
 
 
 class VisualEvidenceFramePayload(BaseModel):

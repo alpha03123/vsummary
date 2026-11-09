@@ -40,17 +40,18 @@ CHUNK_SUMMARY_PROMPT_TEMPLATE = (
 # 用于让 LLM 把多个片段总结聚合成结构化总结文档的提示词。
 #
 # 输入已生成的片段总结列表，输出包含章节、关键结论的结构化 JSON；
-# 章节必须给出秒级时间区间。占位符：`$video_title`、`$video_duration`、
+# 章节必须给出秒级时间区间。占位符：`$video_title`、`$video_duration_seconds`、
 # `$transcript_language`、`$chunk_summaries`。对应 `build_document_prompt`。
 DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "请基于以下中文视频片段总结，生成结构化 JSON。\n"
     "视频标题：$video_title\n"
-    "视频时长：$video_duration\n"
+    "视频时长：$video_duration_seconds 秒\n"
     "识别语言：$transcript_language\n\n"
     "要求：\n"
     "1. 只输出 JSON，不要输出额外解释。\n"
     "2. 不要编造原文没有提到的内容。\n"
-    "3. 章节必须给出 start_seconds 和 end_seconds，单位为秒，并严格满足 start_seconds < end_seconds。\n"
+    "3. 章节必须给出 start_seconds 和 end_seconds，单位为秒，并严格满足 start_seconds < end_seconds；"
+    "最后一章的 end_seconds 填视频总时长 $video_duration_seconds。\n"
     "4. 关键结论控制在 5 到 10 条。\n"
     "5. 每章都必须给出 image_timestamp_seconds：选择该章节范围内最具代表性的一刻，供该章节展示图片使用；不得填 null。\n"
     "6. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n"
@@ -84,17 +85,19 @@ DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
 #
 # 与 `DOCUMENT_SUMMARY_PROMPT_TEMPLATE` 的差别是：跳过片段总结聚合步骤，
 # 直接由 LLM 在转写全文上完成总结；适合较短的视频。占位符：
-# `$video_title`、`$video_duration`、`$transcript_language`、`$transcript_text`。
+# `$video_title`、`$video_duration_seconds`、`$transcript_language`、`$transcript_text`。
 # 对应 `build_transcript_document_prompt`。
 TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "请基于以下中文视频转写，生成结构化 JSON。\n"
     "视频标题：$video_title\n"
-    "视频时长：$video_duration\n"
+    "视频时长：$video_duration_seconds 秒\n"
     "识别语言：$transcript_language\n\n"
     "要求：\n"
     "1. 只输出 JSON，不要输出额外解释。\n"
     "2. 不要编造原文没有提到的内容。\n"
-    "3. 章节必须按时间顺序组织，并给出 start_seconds 和 end_seconds，单位为秒；每章必须严格满足 start_seconds < end_seconds。\n"
+    "3. 章节必须按时间顺序组织，并给出 start_seconds 和 end_seconds，单位为秒；每章必须严格满足 start_seconds < end_seconds。"
+    "转写每行开头的 [开始-结束] 已经是秒数，直接使用，不要换算；最后一章的 end_seconds 填视频总时长 $video_duration_seconds，"
+    "不要填最后一条转写的开始时间。\n"
     "4. 关键结论控制在 5 到 10 条。\n"
     "5. 每章都必须给出 image_timestamp_seconds：选择该章节范围内最具代表性的一刻，供该章节展示图片使用；不得填 null。\n"
     "6. 不要输出对转写质量的评价，不要写“后文文本混乱”“文本识别不完整”这类内容；如果某处信息不足，直接忽略不确定部分，专注总结可确认内容。\n"
@@ -217,7 +220,7 @@ def build_document_prompt(
     return _render_template(
         DOCUMENT_SUMMARY_PROMPT_TEMPLATE,
         video_title=video.title,
-        video_duration=format_timestamp(video.duration_seconds),
+        video_duration_seconds=_format_seconds(video.duration_seconds),
         transcript_language=transcript.language,
         chunk_summaries="\n\n".join(chunk_summaries),
         max_visual_frames=str(max(0, max_visual_frames)),
@@ -241,7 +244,7 @@ def build_transcript_document_prompt(
     return _render_template(
         TRANSCRIPT_DOCUMENT_SUMMARY_PROMPT_TEMPLATE,
         video_title=video.title,
-        video_duration=format_timestamp(video.duration_seconds),
+        video_duration_seconds=_format_seconds(video.duration_seconds),
         transcript_language=transcript.language,
         transcript_text=segments_to_text(transcript.segments),
         max_visual_frames=str(max(0, max_visual_frames)),
@@ -251,7 +254,8 @@ def build_transcript_document_prompt(
 def segments_to_text(segments: list[TranscriptSegment]) -> str:
     """把转写片段序列化为带时间戳前缀的纯文本。
 
-    每行形如 `[HH:MM:SS-HH:MM:SS] 文本`；片段之间用换行分隔。
+    每行形如 `[开始秒-结束秒] 文本`（如 `[1378.0-1380.5]`）；直接给秒数，
+    让 LLM 输出章节时间时无需把「分:秒」换算成秒。
 
     Args:
         segments: 转写片段列表。
@@ -261,10 +265,15 @@ def segments_to_text(segments: list[TranscriptSegment]) -> str:
     """
     lines: list[str] = []
     for segment in segments:
-        start = format_timestamp(segment.start_seconds)
-        end = format_timestamp(segment.end_seconds)
+        start = _format_seconds(segment.start_seconds)
+        end = _format_seconds(segment.end_seconds)
         lines.append(f"[{start}-{end}] {segment.text}")
     return "\n".join(lines)
+
+
+def _format_seconds(seconds: float) -> str:
+    """把秒数格式化为保留一位小数的字符串，供提示词使用。"""
+    return f"{max(0.0, float(seconds)):.1f}"
 
 
 def _render_template(template: str, **values: str) -> str:

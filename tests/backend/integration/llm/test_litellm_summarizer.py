@@ -36,7 +36,7 @@ class LiteLLMSummarizerModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(document, SummaryDocument)
         self.assertEqual(gateway.text_call_count, 0)
         self.assertEqual(gateway.structured_call_count, 1)
-        self.assertIn("[00:00-00:05] 第一段内容", gateway.structured_messages[0][0]["content"])
+        self.assertIn("[0.0-5.0] 第一段内容", gateway.structured_messages[0][0]["content"])
 
     async def test_falls_back_to_chunk_pipeline_when_transcript_exceeds_budget(self) -> None:
         gateway = FakeGateway()
@@ -148,8 +148,8 @@ class FakeGateway:
         self.text_messages.append(list(messages))
         return "## 片段主题\n- 示例片段摘要"
 
-    async def acomplete_structured(self, messages, *, response_model, temperature=0, retries=2):
-        del response_model, temperature, retries
+    async def acomplete_structured(self, messages, *, response_model, temperature=0, retries=2, validation_context=None):
+        del response_model, temperature, retries, validation_context
         self.structured_call_count += 1
         self.structured_messages.append(list(messages))
         return SummaryPayload(

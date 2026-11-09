@@ -19,6 +19,7 @@ from backend.video_summary.generation import (
     build_transcript_document_prompt,
     chunk_segments,
     render_markdown,
+    summary_repair_context,
 )
 
 
@@ -104,6 +105,7 @@ class LiteLLMCompletionSummarizer(Summarizer):
             coro = self._gateway.acomplete_structured(
                 [{"role": "user", "content": build_transcript_document_prompt(video, transcript, self._max_visual_frames)}],
                 response_model=SummaryPayload,
+                validation_context=summary_repair_context(video.duration_seconds),
             )
             payload = await cancellable_await(coro, cancellation) if cancellation else await coro
             summary_data = payload.model_dump()
@@ -115,6 +117,7 @@ class LiteLLMCompletionSummarizer(Summarizer):
         coro = self._gateway.acomplete_structured(
             [{"role": "user", "content": build_document_prompt(video, transcript, chunk_summaries, self._max_visual_frames)}],
             response_model=SummaryPayload,
+            validation_context=summary_repair_context(video.duration_seconds),
         )
         payload = await cancellable_await(coro, cancellation) if cancellation else await coro
         summary_data = payload.model_dump()

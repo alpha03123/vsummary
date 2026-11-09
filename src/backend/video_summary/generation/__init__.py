@@ -10,6 +10,7 @@ from .schemas import (
     TranscriptSegmentPayload,
     VisualEvidenceFramePayload,
     VisualEvidencePayload,
+    summary_repair_context,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "build_transcript_document_prompt",
     "chunk_segments",
     "render_markdown",
+    "summary_repair_context",
 ]

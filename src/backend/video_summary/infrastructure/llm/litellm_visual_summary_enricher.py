@@ -6,7 +6,7 @@ import json
 
 from backend.shared.llm import LiteLLMCompletionGateway, build_multimodal_user_content
 from backend.video_summary.domain.models import SummaryDocument, Transcript, VideoAsset
-from backend.video_summary.generation import MultimodalSummaryPayload, VisualEvidencePayload, render_markdown
+from backend.video_summary.generation import MultimodalSummaryPayload, VisualEvidencePayload, render_markdown, summary_repair_context
 from backend.video_summary.generation.cancellation import GenerationCancellationContext, cancellable_await
 from backend.video_summary.generation.visuals import ExtractedChapterFrame
 
@@ -33,7 +33,8 @@ class LiteLLMVisualSummaryEnricher:
             "role": "user",
             "content": build_multimodal_user_content(text=prompt, image_paths=[frame.path for frame in frames]),
         }
-        request = self._gateway.acomplete_structured([message], response_model=MultimodalSummaryPayload)
+        request = self._gateway.acomplete_structured([message], response_model=MultimodalSummaryPayload,
+            validation_context=summary_repair_context(video.duration_seconds))
         try:
             payload = await cancellable_await(request, cancellation) if cancellation else await request
         except Exception as error:

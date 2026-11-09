@@ -16,6 +16,7 @@ def validate_json_response(
     *,
     raw_text: str,
     response_model: type[BaseModel],
+    context: dict[str, Any] | None = None,
 ) -> BaseModel:
     """从 LLM 原始文本中提取 JSON 对象并用 Pydantic 模型校验。
 
@@ -25,6 +26,7 @@ def validate_json_response(
     Args:
         raw_text: LLM 返回的原始文本。
         response_model: 用于校验的 Pydantic 模型类。
+        context: 透传给 ``model_validate`` 的校验上下文（供模型校验器读取）。
 
     Returns:
         已校验并实例化的 Pydantic 模型对象。
@@ -34,7 +36,7 @@ def validate_json_response(
         ValidationError: JSON 结构与 ``response_model`` 不匹配。
     """
     payload = extract_json_document(raw_text, require_object=True)
-    return response_model.model_validate(payload)
+    return response_model.model_validate(payload, context=context)
 
 
 def describe_validation_error(error: Exception) -> str:

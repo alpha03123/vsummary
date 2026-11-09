@@ -502,6 +502,7 @@ class LiteLLMCompletionGateway:
         response_model: type[StructuredResponseT],
         temperature: float = 0,
         retries: int = 2,
+        validation_context: dict[str, Any] | None = None,
     ) -> StructuredResponseT:
         """同步结构化输出：要求 LLM 返回符合 Pydantic schema 的对象。
 
@@ -516,6 +517,7 @@ class LiteLLMCompletionGateway:
             response_model: 期望的 Pydantic 模型类。
             temperature: 采样温度，默认 0。
             retries: 最大重试次数（含首次），默认 2 次（共 3 轮）。
+            validation_context: 透传给 ``model_validate(context=...)`` 的校验上下文。
 
         Returns:
             通过校验的 Pydantic 模型实例。
@@ -533,6 +535,7 @@ class LiteLLMCompletionGateway:
                 messages=messages,
                 response_model=response_model,
                 validation_error=validation_error,
+                previous_output=last_raw_text,
             )
             mode_errors: list[str] = []
             for mode_name, structured_messages, response_format in modes:
@@ -563,6 +566,7 @@ class LiteLLMCompletionGateway:
                 validated = validate_json_response(
                     raw_text=last_raw_text,
                     response_model=response_model,
+                    context=validation_context,
                 )
                 log_llm_event("structured_validation_passed", model=self._model,
                     response_model=response_model.__name__, round=attempt_index + 1)
@@ -592,6 +596,7 @@ class LiteLLMCompletionGateway:
         temperature: float = 0,
         retries: int = 2,
         timeout: float | None = None,
+        validation_context: dict[str, Any] | None = None,
     ) -> StructuredResponseT:
         """异步结构化输出：要求 LLM 返回符合 Pydantic schema 的对象。
 
@@ -604,6 +609,7 @@ class LiteLLMCompletionGateway:
             temperature: 采样温度，默认 0。
             retries: 最大重试次数（含首次），默认 2 次。
             timeout: 请求超时秒数，透传给 litellm。None 表示使用 litellm 默认。
+            validation_context: 透传给 ``model_validate(context=...)`` 的校验上下文。
 
         Returns:
             通过校验的 Pydantic 模型实例。
@@ -621,6 +627,7 @@ class LiteLLMCompletionGateway:
                 messages=messages,
                 response_model=response_model,
                 validation_error=validation_error,
+                previous_output=last_raw_text,
             )
             mode_errors: list[str] = []
             for mode_name, structured_messages, response_format in modes:
@@ -652,6 +659,7 @@ class LiteLLMCompletionGateway:
                 validated = validate_json_response(
                     raw_text=last_raw_text,
                     response_model=response_model,
+                    context=validation_context,
                 )
                 log_llm_event("structured_validation_passed", model=self._model,
                     response_model=response_model.__name__, round=attempt_index + 1)
@@ -875,6 +883,7 @@ def _build_structured_request_modes(
     messages: Sequence[dict[str, Any]],
     response_model: type[BaseModel],
     validation_error: str | None,
+    previous_output: str = "",
 ) -> list[StructuredMode]:
     """构建结构化输出的三级降级模式列表。
 
@@ -894,7 +903,7 @@ def _build_structured_request_modes(
     modes = [
         (
             STRUCTURED_MODE_SCHEMA,
-            _append_validation_retry_messages(messages, validation_error),
+            _append_validation_retry_messages(messages, validation_error, previous_output),
             response_model,
         ),
         (
@@ -903,6 +912,7 @@ def _build_structured_request_modes(
                 messages=messages,
                 response_model=response_model,
                 validation_error=validation_error,
+                previous_output=previous_output,
             ),
             {"type": "json_object"},
         ),
@@ -912,6 +922,7 @@ def _build_structured_request_modes(
                 messages=messages,
                 response_model=response_model,
                 validation_error=validation_error,
+                previous_output=previous_output,
             ),
             None,
         ),
@@ -931,6 +942,7 @@ def _build_json_mode_messages(
     messages: Sequence[dict[str, Any]],
     response_model: type[BaseModel],
     validation_error: str | None,
+    previous_output: str = "",
 ) -> list[dict[str, Any]]:
     """为 json_object 模式构造消息列表。
 
@@ -960,7 +972,7 @@ def _build_json_mode_messages(
         *_dump_messages(messages),
     ]
     if validation_error:
-        structured_messages.append(_build_validation_retry_message(validation_error))
+        structured_messages.extend(_build_validation_retry_messages(validation_error, previous_output))
     return structured_messages
 
 
@@ -969,6 +981,7 @@ def _build_prompt_fallback_messages(
     messages: Sequence[dict[str, Any]],
     response_model: type[BaseModel],
     validation_error: str | None,
+    previous_output: str = "",
 ) -> list[dict[str, Any]]:
     """为 prompt 降级模式构造消息列表。
 
@@ -998,13 +1011,14 @@ def _build_prompt_fallback_messages(
         *_dump_messages(messages),
     ]
     if validation_error:
-        structured_messages.append(_build_validation_retry_message(validation_error))
+        structured_messages.extend(_build_validation_retry_messages(validation_error, previous_output))
     return structured_messages
 
 
 def _append_validation_retry_messages(
     messages: Sequence[dict[str, Any]],
     validation_error: str | None,
+    previous_output: str = "",
 ) -> list[dict[str, Any]]:
     """为 json_schema 模式的校验重试追加错误提示消息。
 
@@ -1020,30 +1034,46 @@ def _append_validation_retry_messages(
     """
     structured_messages = _dump_messages(messages)
     if validation_error:
-        structured_messages.append(_build_validation_retry_message(validation_error))
+        structured_messages.extend(_build_validation_retry_messages(validation_error, previous_output))
     return structured_messages
 
 
-def _build_validation_retry_message(validation_error: str) -> dict[str, str]:
-    """构造一条 user 角色的校验重试提示消息。
+def _build_validation_retry_messages(validation_error: str, previous_output: str = "") -> list[dict[str, str]]:
+    """构造校验重试消息：带回上一轮输出，让 LLM 只修正出错的部分。
 
-    告知 LLM 上一轮输出未通过本地校验，并附上校验错误详情；
-    要求模型修正后仅输出一个 JSON 对象。
+    上一轮输出作为 assistant 消息放回对话，再追加一条 user 消息说明校验错误，
+    要求在上一轮基础上只改错误指出的字段、其余保持原样。这样重试是“修补”
+    而不是整份重新生成，避免每轮在新的位置犯新的错。上一轮没有输出时
+    （例如请求本身失败）只追加错误说明。
 
     Args:
         validation_error: 校验失败的错误描述。
+        previous_output: 上一轮 LLM 原始输出。
 
     Returns:
-        形如 ``{"role": "user", "content": "..."}`` 的重试提示消息。
+        需要追加到对话末尾的消息列表。
     """
-    return {
-        "role": "user",
-        "content": (
-            "上一轮结构化输出没有通过本地校验，请修正后重新输出。\n"
-            f"校验错误：{validation_error}\n"
-            "仍然只输出一个 JSON 对象，不要输出任何额外文本。"
-        ),
-    }
+    if not previous_output.strip():
+        return [{
+            "role": "user",
+            "content": (
+                "上一轮结构化输出没有通过本地校验，请修正后重新输出。\n"
+                f"校验错误：{validation_error}\n"
+                "仍然只输出一个 JSON 对象，不要输出任何额外文本。"
+            ),
+        }]
+    return [
+        {"role": "assistant", "content": previous_output},
+        {
+            "role": "user",
+            "content": (
+                "你上一轮的输出（上一条消息）没有通过本地校验。\n"
+                f"校验错误：{validation_error}\n"
+                "请以上一轮输出为基础，只修改校验错误指出的字段，其余内容一字不改，"
+                "然后输出修正后的完整 JSON 对象，不要输出任何额外文本。"
+            ),
+        },
+    ]
 
 
 def _is_response_format_error(error: Exception) -> bool:
