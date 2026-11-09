@@ -26,7 +26,7 @@ CHUNK_SUMMARY_PROMPT_TEMPLATE = (
     "## 片段主题\n"
     "- 用 1 句话概括本片段在讲什么\n"
     "## 关键要点\n"
-    "- 3 到 6 条要点\n"
+    "- 3 到 6 条要点，每条以该要点在转写中开始讲的秒数开头，例如 `- [312.0] 要点`；秒数直接取转写行开头的开始时间\n"
     "## 重要术语\n"
     "- 列出术语及简短解释\n"
     "## 可用于思维导图的层级\n"
@@ -76,7 +76,8 @@ DOCUMENT_SUMMARY_PROMPT_TEMPLATE = (
     "  ],\n"
     '  "key_takeaways": ["结论1", "结论2"]\n'
     "}\n\n"
-    "片段总结如下：\n"
+    "片段总结如下（每个片段标题里是该片段覆盖的秒数范围，要点开头的 [秒数] 是该要点开始讲的时刻；"
+    "章节边界优先取这些秒数，不要凭空估计时间）：\n"
     "$chunk_summaries"
 )
 
@@ -199,6 +200,15 @@ def build_chunk_prompt(video: VideoAsset, chunk: list[TranscriptSegment], index:
         chunk_index=str(index),
         transcript_text=segments_to_text(chunk),
     )
+
+
+def format_chunk_summary(index: int, chunk: list[TranscriptSegment], summary: str) -> str:
+    """给单个分片小结加上序号与秒数范围标题，供文档级汇总定位章节时间。"""
+    if not chunk:
+        return f"【片段 {index}】\n{summary.strip()}"
+    start = _format_seconds(chunk[0].start_seconds)
+    end = _format_seconds(chunk[-1].end_seconds)
+    return f"【片段 {index}｜{start}-{end} 秒】\n{summary.strip()}"
 
 
 def build_document_prompt(

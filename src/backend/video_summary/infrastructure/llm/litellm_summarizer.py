@@ -18,6 +18,7 @@ from backend.video_summary.generation import (
     build_document_prompt,
     build_transcript_document_prompt,
     chunk_segments,
+    format_chunk_summary,
     render_markdown,
     summary_repair_context,
 )
@@ -140,7 +141,8 @@ class LiteLLMCompletionSummarizer(Summarizer):
                 取消信号，避免白白发起 LLM 调用。
 
         Returns:
-            与输入 `chunks` 等长、按 `index` 升序排列的分片小结文本列表。
+            与输入 `chunks` 等长、按 `index` 升序排列的分片小结文本列表；
+            每份小结带「片段 N（开始-结束 秒）」标题，供汇总时定位章节时间。
         """
         semaphore = asyncio.Semaphore(self._summary_chunk_concurrency)
 
@@ -154,7 +156,7 @@ class LiteLLMCompletionSummarizer(Summarizer):
                     [{"role": "user", "content": build_chunk_prompt(video, chunk, index)}]
                 )
                 summary = await cancellable_await(coro, cancellation) if cancellation else await coro
-                return index, summary
+                return index, format_chunk_summary(index, chunk, summary)
 
         results = await asyncio.gather(
             *(summarize_chunk(index, chunk) for index, chunk in chunks)

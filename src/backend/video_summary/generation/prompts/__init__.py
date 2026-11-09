@@ -7,6 +7,7 @@ from backend.video_summary.generation.prompts.summary import (
     build_document_prompt,
     build_transcript_document_prompt,
     chunk_segments,
+    format_chunk_summary,
     format_timestamp,
     segments_to_text,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "build_document_prompt",
     "build_transcript_document_prompt",
     "chunk_segments",
+    "format_chunk_summary",
     "format_timestamp",
     "segments_to_text",
 ]

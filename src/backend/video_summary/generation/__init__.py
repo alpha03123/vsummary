@@ -1,4 +1,10 @@
-from .prompts import build_chunk_prompt, build_document_prompt, build_transcript_document_prompt, chunk_segments
+from .prompts import (
+    build_chunk_prompt,
+    build_document_prompt,
+    build_transcript_document_prompt,
+    chunk_segments,
+    format_chunk_summary,
+)
 from .renderers import render_markdown
 from .schemas import (
     FlatMindmapPayload,
@@ -27,6 +33,7 @@ __all__ = [
     "build_document_prompt",
     "build_transcript_document_prompt",
     "chunk_segments",
+    "format_chunk_summary",
     "render_markdown",
     "summary_repair_context",
 ]
