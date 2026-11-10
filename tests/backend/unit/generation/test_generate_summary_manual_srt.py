@@ -240,7 +240,7 @@ class GenerateVideoSummaryManualSrtTests(unittest.IsolatedAsyncioTestCase):
             (output_dir / "summary.json").write_text('{"title":"旧概况"}', encoding="utf-8")
             (output_dir / "transcript.manual.srt").write_text("旧字幕", encoding="utf-8")
 
-            with self.assertRaisesRegex(RuntimeError, "AI 总结生成失败"):
+            with self.assertRaisesRegex(RuntimeError, "AI 总结失败"):
                 await use_case.run(root / "video.mp4", output_dir, manual_transcript=_manual_input())
 
             self.assertEqual((output_dir / "summary.json").read_text(encoding="utf-8"), '{"title":"旧概况"}')

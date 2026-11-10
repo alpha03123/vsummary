@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # 上传到 DashScope 临时 OSS（北京）偶尔会被跨境链路中断；原地重试的等待秒数。
 _UPLOAD_RETRY_DELAYS_SECONDS = (3.0, 10.0)
-ASR_UNAVAILABLE_MESSAGE = "语音识别服务暂时连接不上，请稍后重试。"
+ASR_UNAVAILABLE_MESSAGE = "语音识别服务暂时无法连接，请稍后重试。"
 
 
 class AliyunBailianTranscriber:

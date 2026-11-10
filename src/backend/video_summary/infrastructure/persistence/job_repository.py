@@ -784,6 +784,11 @@ class SqlJobRepository:
             return True
 
     def fail(self, claim: ClaimedJob, *, failure_code: str, failure_detail: str, retry_delay_seconds: int | None) -> None:
+        """记录一次失败；还有重试次数时转为 retrying，否则终止为 failed。
+
+        自动重试对用户静默：重试期间不在任务上留错误信息（本次尝试的错误仍记在
+        attempt 记录里供排查），只有重试用尽才把错误展示给用户。
+        """
         with self._session_factory.begin() as session:
             now = _database_now(session)
             job = self._owned_job(session, claim, now, allow_cancelling=True)
@@ -799,11 +804,13 @@ class SqlJobRepository:
             job.lease_expires_at = None
             self._finish_attempt(session, claim, now, outcome="failed", failure_code=failure_code, failure_detail=failure_detail)
             if retry_delay_seconds is not None and job.attempt_count < job.max_attempts:
+                job.failure_code = None
+                job.failure_detail = None
                 job.status = "retrying"
                 job.claimed_by = None
                 job.lease_token = None
                 job.available_at = now + timedelta(seconds=retry_delay_seconds)
-                self._append_event(session, job.id, "retrying", "retrying", None, "任务将在稍后重试")
+                self._append_event(session, job.id, "retrying", "retrying", None, "正在处理")
             else:
                 job.status = "failed"
                 job.active_key = None

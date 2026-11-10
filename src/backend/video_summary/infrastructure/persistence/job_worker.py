@@ -388,12 +388,12 @@ def _public_failure_detail(error: Exception) -> str:
         return str(error)
     code = _failure_code(error)
     if code == "content_conflict":
-        return "生成期间内容已修改，请基于最新内容重新提交。"
+        return "生成期间内容已被修改，请刷新后重新提交。"
     if code == "invalid_request":
-        return "这个任务的目标内容已失效（可能已被删除或修改），请刷新页面后重试。"
+        return "任务内容已失效，可能已被删除或修改，请刷新页面后重试。"
     if code.startswith("provider_"):
-        return "AI 服务暂时繁忙或连接不上，请稍后重试。"
-    return "处理时出了点意外，请稍后重试；如果反复失败，请联系我们。"
+        return "AI 服务暂时无法连接，请稍后重试。"
+    return "任务处理失败。如反复失败，请点击「设置 - 问题反馈」反馈问题。"
 
 
 def _retry_delay_seconds(error: Exception) -> int | None:

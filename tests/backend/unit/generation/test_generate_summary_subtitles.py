@@ -143,7 +143,7 @@ class GenerateVideoSummarySubtitleTests(unittest.IsolatedAsyncioTestCase):
             (root / "video.mp4").write_bytes(b"video")
             video_path = root / "silent.mp4"
             video_path.write_bytes(b"video")
-            with self.assertRaisesRegex(UserVisibleError, "没有声音也没有字幕"):
+            with self.assertRaisesRegex(UserVisibleError, "无声音且无字幕"):
                 await use_case.run(video_path, root / "output")
 
         assert not hasattr(store, "transcript")

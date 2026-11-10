@@ -479,7 +479,7 @@ class GenerateVideoSummary:
         except GenerateCancelledError:
             raise
         except Exception as error:
-            raise _llm_stage_failure("AI 总结生成", error) from error
+            raise _llm_stage_failure("AI 总结", error) from error
         _raise_if_cancelled(progress_reporter, cancellation)
         extracted_frames: list[ExtractedChapterFrame] = []
         if self._chapter_screenshots_enabled:
@@ -753,8 +753,8 @@ def _restore_display_frame_references(
     )
 
 
-NO_AUDIO_MESSAGE = "这个视频没有声音也没有字幕，暂不支持处理。"
-NO_SPEECH_MESSAGE = "这个视频没有识别到讲话内容，暂不支持处理。"
+NO_AUDIO_MESSAGE = "视频无声音且无字幕，暂不支持处理，本次不扣除积分。"
+NO_SPEECH_MESSAGE = "未识别到视频中的人声（如纯音乐、无配音视频），暂不支持处理，本次不扣除积分。"
 # Placeholders transcribers return when they hear nothing (Bailian: SUCCESS_WITH_NO_VALID_FRAGMENT).
 _NO_SPEECH_PLACEHOLDERS = {"无明显人声"}
 _MIN_SPEECH_CHARS_PER_MINUTE = 10
@@ -772,7 +772,7 @@ def _require_speech(transcript: Transcript, duration_seconds: float) -> None:
         raise UserVisibleError("no_speech", NO_SPEECH_MESSAGE)
 
 
-LLM_UNAVAILABLE_MESSAGE = "AI 服务暂时连接不上，请稍后重试。"
+LLM_UNAVAILABLE_MESSAGE = "AI 服务暂时无法连接，请稍后重试。"
 
 
 def _llm_stage_failure(stage_label: str, error: Exception) -> UserVisibleError:
@@ -783,7 +783,7 @@ def _llm_stage_failure(stage_label: str, error: Exception) -> UserVisibleError:
     """
     if _contains_connection_failure(error):
         return TemporaryServiceError("llm_unavailable", LLM_UNAVAILABLE_MESSAGE)
-    return UserVisibleError("ai_generation_failed", f"{stage_label}失败了，请重新生成；如果反复失败，请联系我们。")
+    return UserVisibleError("ai_generation_failed", f"{stage_label}失败。如反复失败，请点击「设置 - 问题反馈」反馈问题。")
 
 
 def _cache_identity(component: object) -> str:
