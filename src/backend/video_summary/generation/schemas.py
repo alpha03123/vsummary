@@ -128,7 +128,8 @@ def repair_chapters(chapters: list[Any], video_duration_seconds: float | None) -
     actions: list[str] = []
     duration = _as_number(video_duration_seconds) if video_duration_seconds is not None else None
     last = times[-1]
-    if duration is not None and last[0] < duration and last[1] < duration:
+    # 提示词里的时长只保留一位小数，差不到 1 秒是取整误差，不算错误。
+    if duration is not None and last[0] < duration and duration - last[1] >= 1.0:
         actions.append(f"{_chapter_label(items[-1])}: end {last[1]:g} -> {duration:g} (video end)")
         last[1] = duration
     for index in range(1, len(times)):

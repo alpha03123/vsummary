@@ -31,7 +31,7 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
-from backend.core.errors import UserVisibleError
+from backend.core.errors import TemporaryServiceError, UserVisibleError
 from backend.video_summary.domain.models import ManualTranscriptInput, SummaryDocument, Transcript, TranscriptSegment, VideoAsset
 from backend.video_summary.generation.cancellation import GenerationCancellationContext
 from backend.video_summary.generation.renderers import render_markdown
@@ -410,7 +410,7 @@ class GenerateVideoSummary:
                 except GenerateCancelledError:
                     raise
                 except Exception as error:
-                    raise RuntimeError(_build_llm_stage_error("AI 内容增强", error)) from error
+                    raise _llm_stage_failure("文字校对", error) from error
                 _raise_if_cancelled(progress_reporter, cancellation)
                 await asyncio.to_thread(
                     stage_cache.store_transcript,
@@ -479,7 +479,7 @@ class GenerateVideoSummary:
         except GenerateCancelledError:
             raise
         except Exception as error:
-            raise RuntimeError(_build_llm_stage_error("AI 概况生成", error)) from error
+            raise _llm_stage_failure("AI 总结生成", error) from error
         _raise_if_cancelled(progress_reporter, cancellation)
         extracted_frames: list[ExtractedChapterFrame] = []
         if self._chapter_screenshots_enabled:
@@ -772,22 +772,18 @@ def _require_speech(transcript: Transcript, duration_seconds: float) -> None:
         raise UserVisibleError("no_speech", NO_SPEECH_MESSAGE)
 
 
-def _build_llm_stage_error(stage_label: str, error: Exception) -> str:
-    """构造面向用户的中文 LLM 阶段错误信息。
+LLM_UNAVAILABLE_MESSAGE = "AI 服务暂时连接不上，请稍后重试。"
 
-    如果底层异常链路里含有连接失败迹象，会附加「请检查 Base URL」
-    的提示；否则退化为 `f"{stage_label}失败：{error}"`。
 
-    Args:
-        stage_label: 阶段显示名（如「AI 概况生成」「AI 内容增强」）。
-        error: 底层异常对象。
+def _llm_stage_failure(stage_label: str, error: Exception) -> UserVisibleError:
+    """把 LLM 阶段的异常转成用户能看懂的失败；技术细节留在异常链和日志里。
 
-    Returns:
-        中文错误信息字符串。
+    连不上模型服务属于临时故障，任务会被 worker 自动重试；其他失败（如多轮
+    结构化校验仍不通过）提示用户重新生成。
     """
     if _contains_connection_failure(error):
-        return f"{stage_label}失败：无法连接到模型网关，请检查模型服务是否已启动，以及 provider settings 中的 Base URL 是否可用。"
-    return f"{stage_label}失败：{error}"
+        return TemporaryServiceError("llm_unavailable", LLM_UNAVAILABLE_MESSAGE)
+    return UserVisibleError("ai_generation_failed", f"{stage_label}失败了，请重新生成；如果反复失败，请联系我们。")
 
 
 def _cache_identity(component: object) -> str:
@@ -831,10 +827,24 @@ def _contains_connection_failure(error: BaseException) -> bool:
             or "connect call failed" in message
             or "cannot connect to host" in message
             or "connection error" in message
+            or "all connection attempts failed" in message
         ):
+            return True
+        if type(current).__name__ in _TEMPORARY_LLM_ERROR_TYPES:
+            return True
+        if getattr(current, "status_code", None) in {429, 500, 502, 503, 504}:
+            return True
+        if isinstance(current, (ConnectionError, TimeoutError)):
             return True
         current = current.__cause__ or current.__context__
     return False
+
+
+# LiteLLM / httpx 的临时性故障类型（按类名匹配，生成层不直接依赖这些库）。
+_TEMPORARY_LLM_ERROR_TYPES = frozenset({
+    "APIConnectionError", "Timeout", "ServiceUnavailableError", "InternalServerError", "RateLimitError",
+    "ConnectError", "ConnectTimeout", "ReadTimeout", "WriteTimeout", "PoolTimeout", "RemoteProtocolError",
+})
 
 
 def _handle_transcribe_progress(progress_reporter: ProgressReporter, ratio: float) -> None:

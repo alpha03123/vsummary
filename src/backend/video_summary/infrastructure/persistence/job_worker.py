@@ -10,7 +10,7 @@ from threading import Event, Lock, Thread
 from typing import Protocol
 from uuid import uuid4
 from backend.core.context import WorkspaceContext
-from backend.core.errors import UserVisibleError
+from backend.core.errors import TemporaryServiceError, UserVisibleError
 from backend.core.request_context import bind_workspace_context
 from backend.core.preferences import bind_user_preferences
 from backend.core.metering import bind_resource_budget
@@ -390,13 +390,15 @@ def _public_failure_detail(error: Exception) -> str:
     if code == "content_conflict":
         return "生成期间内容已修改，请基于最新内容重新提交。"
     if code == "invalid_request":
-        return "任务参数或目标资源无效。"
+        return "这个任务的目标内容已失效（可能已被删除或修改），请刷新页面后重试。"
     if code.startswith("provider_"):
-        return "模型服务请求失败，请查看任务错误码或服务器日志。"
-    return "任务执行失败，请查看服务器日志。"
+        return "AI 服务暂时繁忙或连接不上，请稍后重试。"
+    return "处理时出了点意外，请稍后重试；如果反复失败，请联系我们。"
 
 
 def _retry_delay_seconds(error: Exception) -> int | None:
+    if isinstance(error, TemporaryServiceError):
+        return error.retry_after_seconds
     if isinstance(error, ModelApiError):
         return int(error.retry_after or 15) if error.retryable else None
     return 15 if isinstance(error, (TimeoutError, ConnectionError, OSError)) or getattr(error, "status_code", 0) in {429, 500, 502, 503, 504} else None

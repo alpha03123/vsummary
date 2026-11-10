@@ -14,11 +14,16 @@ from typing import Callable
 
 import httpx
 from backend.core.concurrency import request_slot
+from backend.core.errors import TemporaryServiceError
 from backend.core.metering import ResourceUsage, resource_budget_enabled, resource_call
 
 from backend.video_summary.domain.models import Transcript, TranscriptSegment
 
 logger = logging.getLogger(__name__)
+
+# 上传到 DashScope 临时 OSS（北京）偶尔会被跨境链路中断；原地重试的等待秒数。
+_UPLOAD_RETRY_DELAYS_SECONDS = (3.0, 10.0)
+ASR_UNAVAILABLE_MESSAGE = "语音识别服务暂时连接不上，请稍后重试。"
 
 
 class AliyunBailianTranscriber:
@@ -101,15 +106,24 @@ class AliyunBailianTranscriber:
 
         with tempfile.TemporaryDirectory(dir=audio_path.parent, prefix=".asr-upload-") as staging:
             upload_path = _compress_for_upload(audio_path, Path(staging))
-            try:
-                upload_result = OssUtils.upload(
-                    model=self._model,
-                    file_path=str(upload_path),
-                    api_key=self._api_key,
-                    base_address=self._base_address,
-                )
-            except Exception as error:
-                raise RuntimeError(f"上传音频到 DashScope 临时存储失败：{error}") from error
+            for attempt in range(len(_UPLOAD_RETRY_DELAYS_SECONDS) + 1):
+                try:
+                    upload_result = OssUtils.upload(
+                        model=self._model,
+                        file_path=str(upload_path),
+                        api_key=self._api_key,
+                        base_address=self._base_address,
+                    )
+                    break
+                except Exception as error:
+                    if not _is_network_error(error):
+                        raise RuntimeError(f"上传音频到 DashScope 临时存储失败：{error}") from error
+                    if attempt == len(_UPLOAD_RETRY_DELAYS_SECONDS):
+                        raise TemporaryServiceError("asr_unavailable", ASR_UNAVAILABLE_MESSAGE) from error
+                    delay = _UPLOAD_RETRY_DELAYS_SECONDS[attempt]
+                    logger.warning("DashScope audio upload failed (attempt %d), retrying in %.0fs: %s",
+                        attempt + 1, delay, error)
+                    time.sleep(delay)
 
         oss_url = _extract_oss_url(upload_result)
         if not isinstance(oss_url, str) or not oss_url.strip():
@@ -180,6 +194,18 @@ class AliyunBailianTranscriber:
         if not isinstance(payload, dict):
             raise RuntimeError("阿里云百炼转写结果格式无效。")
         return payload
+
+
+def _is_network_error(error: BaseException) -> bool:
+    """判断异常链里是否是连接/TLS/超时类网络错误（requests 的异常都继承自 OSError）。"""
+    current: BaseException | None = error
+    while current is not None:
+        if isinstance(current, (FileNotFoundError, PermissionError, IsADirectoryError)):
+            return False
+        if isinstance(current, (OSError, TimeoutError, httpx.TransportError)):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def _normalize_dashscope_base_address(base_url: str) -> str:
