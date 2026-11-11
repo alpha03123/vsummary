@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 const selectedVideo = {
   id: "video-1",
   title: "第一讲",
+  hasTranscript: true,
 };
 
 const activeSeries = {

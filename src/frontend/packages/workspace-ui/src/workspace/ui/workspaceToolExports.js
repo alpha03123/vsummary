@@ -19,12 +19,14 @@ function buildRawWorkspaceToolExportActions({ activeSeries, notes, summary, tool
   if (toolId === "overview") {
     const overviewGenerated = tools?.overview?.generated === true;
     const screenshotsGenerated = Array.isArray(summary?.chapters) && summary.chapters.some((chapter) => chapter.image_url);
+    const hasTranscript = selectedVideo.hasTranscript === true;
+    const needsSummary = hasTranscript ? "只获取了字幕，生成 AI 概括后才能导出" : "AI 概括生成后才能导出";
     return [
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"), enabled: overviewGenerated, label: "概括导出", disabledReason: "AI 概括生成后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary-with-screenshots.zip"), enabled: screenshotsGenerated, label: "概括与截图导出", disabledReason: "AI 概括和章节截图生成后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"), enabled: overviewGenerated, label: "转写导出", disabledReason: "AI 概括生成后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "subtitles.srt"), enabled: selectedVideo.hasTranscript === true, label: "SRT 字幕导出", disabledReason: "获取字幕后才能导出" },
-      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"), enabled: overviewGenerated, label: "混合导出", disabledReason: "AI 概括生成后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary"), enabled: overviewGenerated, label: "概括导出", disabledReason: needsSummary },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "summary-with-screenshots.zip"), enabled: screenshotsGenerated, label: "概括与截图导出", disabledReason: hasTranscript ? "只获取了字幕，生成 AI 概括和章节截图后才能导出" : "AI 概括和章节截图生成后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "transcript"), enabled: hasTranscript, label: "转写导出", disabledReason: "获取字幕后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "subtitles.srt"), enabled: hasTranscript, label: "SRT 字幕导出", disabledReason: "获取字幕后才能导出" },
+      { href: videoExportUrl(activeSeries.id, selectedVideo.id, "mixed"), enabled: overviewGenerated && hasTranscript, label: "混合导出", disabledReason: needsSummary },
     ];
   }
   if (toolId === "ai-summary") {

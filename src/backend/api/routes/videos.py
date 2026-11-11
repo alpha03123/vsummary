@@ -50,6 +50,7 @@ from backend.video_summary.infrastructure.persistence.control_plane_repository i
 from backend.video_summary.domain.models import ManualTranscriptInput
 from backend.video_summary.generation.usecases.generate_summary import GenerateCancelledError
 from backend.video_summary.infrastructure.subtitle_transcripts import parse_srt_transcript
+from backend.video_summary.library.export_filenames import clean_filename_stem, video_media_stem, video_title_stem
 from backend.video_summary.library.markdown_exports import render_knowledge_cards_markdown
 from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
@@ -236,28 +237,28 @@ def export_video_summary_markdown(series_id: str, video_id: str, container: Work
     Raises:
         HTTPException(404): 视频不存在或 summary.md 未生成。
     """
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_summary.run(series_id, video_id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"summary markdown not found for video '{series_id}/{video_id}'")
-    return _markdown_response(render_markdown(summary.summary), _export_filename(video_id, "summary"))
+    return _markdown_response(render_markdown(summary.summary), _export_filename(video, "概括"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/ai-summary.md")
 def export_video_ai_summary_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """导出当前可编辑的 AI 概括 Markdown 文件。"""
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_ai_summary.run(series_id, video_id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"ai summary not found for video '{series_id}/{video_id}'")
     markdown = f"# {summary.title.strip()}\n\n{summary.content.strip()}\n"
-    return _markdown_response(markdown, _export_filename(video_id, "ai-summary"))
+    return _markdown_response(markdown, _export_filename(video, "AI概括"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/summary-with-screenshots.zip")
 def export_video_summary_with_screenshots(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """导出概况 Markdown 与章节截图，保持相对图片链接可离线读取。"""
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_summary.run(series_id, video_id)
     screenshots = container.linked_series_workspace.list_artifacts(video_id=video_id, kind="screenshot")
     if summary is None or not screenshots:
@@ -267,7 +268,7 @@ def export_video_summary_with_screenshots(series_id: str, video_id: str, contain
         archive.writestr("summary.md", render_markdown(summary.summary).encode("utf-8"))
         for screenshot in screenshots:
             archive.write(screenshot, f"screenshots/{screenshot.name}")
-    return _zip_response(buffer.getvalue(), f"{_safe_filename_part(video_id)}-summary-with-screenshots.zip")
+    return _zip_response(buffer.getvalue(), _export_filename(video, "概括与截图", ".zip"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/screenshots/{filename}")
@@ -338,7 +339,9 @@ def export_video_source(series_id: str, video_id: str, container: WorkspaceServi
     return FileResponse(
         source.source_path,
         media_type=media_type or "application/octet-stream",
-        filename=_video_export_filename(video_id, source.source_path.suffix),
+        filename=_media_filename(
+            _ensure_video_exists(container, series_id, video_id), source.source_path.suffix
+        ),
     )
 
 
@@ -359,25 +362,25 @@ def export_video_transcript_markdown(series_id: str, video_id: str, container: W
     Raises:
         HTTPException(404): 视频或转写不存在。
     """
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
     if transcript is None:
         raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
     markdown = render_transcript_markdown({"title": transcript.title, "duration_seconds": transcript.duration_seconds, "segments": [{"start_seconds": item.start_seconds, "end_seconds": item.end_seconds, "text": item.text} for item in transcript.segments]})
-    return _markdown_response(markdown, _export_filename(video_id, "transcript"))
+    return _markdown_response(markdown, _export_filename(video, "转写稿"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/subtitles.srt")
 def export_video_subtitles_srt(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
     """GET /api/videos/{series_id}/{video_id}/exports/subtitles.srt — 导出标准 SRT 字幕。"""
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
     if transcript is None or not transcript.segments:
         raise HTTPException(status_code=404, detail=f"subtitles not found for video '{series_id}/{video_id}'")
     return Response(
         content=render_srt(transcript.segments),
         media_type="application/x-subrip; charset=utf-8",
-        headers={"Content-Disposition": _content_disposition_attachment(_export_filename(video_id, "subtitles", ".srt"))},
+        headers={"Content-Disposition": _content_disposition_attachment(_media_filename(video, ".srt"))},
     )
 
 
@@ -398,7 +401,7 @@ def export_video_mixed_markdown(series_id: str, video_id: str, container: Worksp
     Raises:
         HTTPException(404): 总结或转写不存在。
     """
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     summary = container.get_video_summary.run(series_id, video_id)
     transcript = container.get_video_transcript.run(series_id, video_id)
     if summary is None:
@@ -406,7 +409,7 @@ def export_video_mixed_markdown(series_id: str, video_id: str, container: Worksp
     if transcript is None:
         raise HTTPException(status_code=404, detail=f"transcript not found for video '{series_id}/{video_id}'")
     markdown = render_mixed_overview_markdown(summary.summary, {"title": transcript.title, "duration_seconds": transcript.duration_seconds, "segments": [{"start_seconds": item.start_seconds, "end_seconds": item.end_seconds, "text": item.text} for item in transcript.segments]})
-    return _markdown_response(markdown, _export_filename(video_id, "mixed"))
+    return _markdown_response(markdown, _export_filename(video, "概括与转写"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/knowledge-cards.md")
@@ -426,12 +429,12 @@ def export_video_knowledge_cards_markdown(series_id: str, video_id: str, contain
     Raises:
         HTTPException(404): 知识卡未生成。
     """
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     cards = container.get_video_cards.run(series_id, video_id)
     if cards is None or not cards.cards:
         raise HTTPException(status_code=404, detail=f"knowledge cards not found for video '{series_id}/{video_id}'")
     markdown = render_knowledge_cards_markdown({"title": cards.title, "cards": [item.__dict__ for item in cards.cards]})
-    return _markdown_response(markdown, _export_filename(video_id, "knowledge-cards"))
+    return _markdown_response(markdown, _export_filename(video, "知识卡片"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/exports/notes.md")
@@ -451,12 +454,12 @@ def export_video_notes_markdown(series_id: str, video_id: str, container: Worksp
     Raises:
         HTTPException(404): 视频或笔记不存在。
     """
-    _ensure_video_exists(container, series_id, video_id)
+    video = _ensure_video_exists(container, series_id, video_id)
     notes = container.get_video_notes.run(series_id, video_id)
     if notes is None or not notes.notes:
         raise HTTPException(status_code=404, detail=f"notes not found for video '{series_id}/{video_id}'")
     markdown = render_notes_markdown(notes.title, {"notes": [item.__dict__ for item in notes.notes]})
-    return _markdown_response(markdown, _export_filename(video_id, "notes"))
+    return _markdown_response(markdown, _export_filename(video, "笔记"))
 
 
 @router.get("/api/videos/{series_id}/{video_id}/mindmap")
@@ -492,10 +495,10 @@ def export_video_mindmap(series_id: str, video_id: str, format: str = "md", cont
         raise HTTPException(status_code=404, detail=f"mindmap not found for video '{series_id}/{video_id}'")
     if format == "html":
         content = render_mindmap_html(video_mindmap.mindmap, video_mindmap.title)
-        filename = f"{video_mindmap.title}-mindmap.html"
+        filename = f"{clean_filename_stem(video_mindmap.title)}-思维导图.html"
         return _html_response(content, filename)
     markdown = render_mindmap_markdown(video_mindmap.mindmap)
-    filename = f"{video_mindmap.title}-mindmap.md"
+    filename = f"{clean_filename_stem(video_mindmap.title)}-思维导图.md"
     return _markdown_response(markdown, filename)
 
 
@@ -1288,11 +1291,35 @@ def export_series_mindmap(series_id: str, format: str = "md", container: Workspa
         raise HTTPException(status_code=404, detail=f"series mindmap not found for '{series_id}'")
     if format == "html":
         content = render_mindmap_html(mindmap.mindmap, mindmap.title)
-        filename = f"{mindmap.title}-mindmap.html"
+        filename = f"{clean_filename_stem(mindmap.title)}-思维导图.html"
         return _html_response(content, filename)
     markdown = render_mindmap_markdown(mindmap.mindmap)
-    filename = f"{mindmap.title}-mindmap.md"
+    filename = f"{clean_filename_stem(mindmap.title)}-思维导图.md"
     return _markdown_response(markdown, filename)
+
+
+@router.get("/api/series/{series_id}/exports/availability")
+def get_series_export_availability(
+    series_id: str,
+    container: WorkspaceServicesDep,
+    video_ids: str = "",
+) -> dict[str, object]:
+    """GET /api/series/{series_id}/exports/availability — 每类批量导出能导出几个视频、缺哪些。"""
+    selected_video_ids = list(dict.fromkeys(item.strip() for item in video_ids.split(",") if item.strip()))
+    try:
+        kinds = container.export_series_archive.availability(series_id, selected_video_ids)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {
+        "kinds": {
+            item.kind: {
+                "available": item.available,
+                "total": item.total,
+                "missing": [{"id": video.id, "title": video.title} for video in item.missing],
+            }
+            for item in kinds
+        }
+    }
 
 
 @router.get("/api/series/{series_id}/exports/{export_kind}.zip")
@@ -1565,16 +1592,17 @@ def _ensure_video_exists(container, series_id: str, video_id: str):
         video_id: 视频 ID。
 
     Returns:
-        视频的源文件 DTO。
+        视频的库卡片 DTO（标题、原文件名），导出时用来命名文件。
 
     Raises:
         HTTPException(404): 视频不存在。
     """
     library = container.list_video_library.run()
     series = next((item for item in library.series if item.id == series_id), None)
-    if series is None or not any(video.id == video_id for video in series.videos):
+    video = next((item for item in series.videos if item.id == video_id), None) if series is not None else None
+    if video is None:
         raise HTTPException(status_code=404, detail=f"未找到该视频，可能尚未下载：{series_id}/{video_id}")
-    return None
+    return video
 
 
 def _ensure_source_media_available(source) -> None:
@@ -1643,51 +1671,22 @@ def _content_disposition_attachment(filename: str) -> str:
     Returns:
         格式为 `attachment; filename="..."; filename*=UTF-8''...` 的头值。
     """
-    ascii_filename = filename.encode("ascii", errors="ignore").decode("ascii") or "export.md"
+    suffix = Path(filename).suffix
+    ascii_filename = filename.encode("ascii", errors="ignore").decode("ascii").strip(" .-_")
+    if not any(char.isalnum() for char in Path(ascii_filename).stem):
+        # 中文名去掉非 ASCII 后只剩符号；新浏览器读 filename*，这里只给旧客户端兜底。
+        ascii_filename = f"export{suffix}"
     quoted_filename = ascii_filename.replace("\\", "\\\\").replace('"', r"\"")
     encoded_filename = quote(filename, safe="")
     return f'attachment; filename="{quoted_filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
 
-def _export_filename(video_id: str, export_name: str, suffix: str = ".md") -> str:
-    """构建导出文件的文件名（Markdown 类）。
-
-    Args:
-        video_id: 视频 ID。
-        export_name: 导出类型名（如 "summary"、"transcript"）。
-
-    Returns:
-        格式为 `{safe_video_id}-{export_name}.md` 的文件名。
-    """
-    return f"{_safe_filename_part(video_id)}-{export_name}{suffix}"
+def _export_filename(video, export_label: str, suffix: str = ".md") -> str:
+    """单个视频导出的文件名：`{标题}-{类型}{后缀}`，如 `4.8 子查询-转写稿.md`。"""
+    return f"{video_title_stem(video.title, video.id)}-{export_label}{suffix}"
 
 
-def _video_export_filename(video_id: str, suffix: str) -> str:
-    """构建原始视频文件的导出文件名。
+def _media_filename(video, suffix: str) -> str:
+    """字幕和原视频的文件名：本地视频沿用原文件名，链接视频用标题。"""
+    return f"{video_media_stem(video.title, video.source_name, video.id, is_linked=video.is_linked)}{suffix}"
 
-    Args:
-        video_id: 视频 ID。
-        suffix: 原始文件后缀（如 `.mp4`）。
-
-    Returns:
-        格式为 `{safe_video_id}{suffix}` 的文件名。
-    """
-    return f"{_safe_filename_part(video_id)}{suffix}"
-
-
-def _safe_filename_part(value: str) -> str:
-    """将字符串清洗为安全的文件名字段（仅保留字母、数字、连字符和下划线）。
-
-    Args:
-        value: 原始字符串。
-
-    Returns:
-        清洗后的安全字符串，若清洗后为空则返回 "video"。
-    """
-    result = []
-    for char in value.strip():
-        if char.isalnum() or char in {"-", "_"}:
-            result.append(char)
-        else:
-            result.append("-")
-    return "".join(result).strip("-") or "video"

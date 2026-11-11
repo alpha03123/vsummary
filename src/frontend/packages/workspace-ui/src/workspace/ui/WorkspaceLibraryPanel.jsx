@@ -1132,11 +1132,25 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
     ? `?video_ids=${encodeURIComponent(selectedVideoIds.join(","))}`
     : "";
   const actions = [
-    ["mixed", "AI 概括混合包", "Markdown · 概括、要点与逐字稿", Sparkles],
-    ["knowledge-cards", "知识卡片", "Markdown · 逐条知识卡片", LayoutGrid],
-    ["mindmaps", "思维导图", "Markdown · 章节层级导图", Network],
-    ["srt", "SRT 字幕", "SRT · 标准字幕，可直接导入播放器", Captions],
+    ["mixed", "AI 概括混合包", "Markdown · 概括、要点与逐字稿", Sparkles, "AI 概括"],
+    ["knowledge-cards", "知识卡片", "Markdown · 逐条知识卡片", LayoutGrid, "知识卡片"],
+    ["mindmaps", "思维导图", "Markdown · 章节层级导图", Network, "思维导图"],
+    ["srt", "SRT 字幕", "SRT · 标准字幕，可直接导入播放器", Captions, "字幕"],
   ];
+  // 打开面板或换范围时问后端每类能导出几个；统计失败时按钮照常可点，由后端兜底报错。
+  const [availability, setAvailability] = useState({ status: "idle", kinds: null });
+  const [confirmKind, setConfirmKind] = useState(null);
+  useEffect(() => {
+    if (!open || !seriesId) return undefined;
+    let cancelled = false;
+    setAvailability({ status: "loading", kinds: null });
+    setConfirmKind(null);
+    api.fetchJson(`/api/series/${encodeURIComponent(seriesId)}/exports/availability${query}`)
+      .then((data) => { if (!cancelled) setAvailability({ status: "ready", kinds: data?.kinds ?? null }); })
+      .catch(() => { if (!cancelled) setAvailability({ status: "error", kinds: null }); });
+    return () => { cancelled = true; };
+  }, [api, open, seriesId, query]);
+  const exportHref = (kind) => api.resourceUrl(`/api/series/${encodeURIComponent(seriesId)}/exports/${kind}.zip${query}`);
   if (typeof document === "undefined") {
     return null;
   }
@@ -1204,23 +1218,21 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
             <section className="mt-6">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-faint">导出内容</p>
               <div className="mt-2.5 flex flex-col gap-2.5">
-                {actions.map(([kind, label, meta, Icon]) => (
-                  <a
+                {actions.map(([kind, label, meta, Icon, noun]) => (
+                  <SeriesExportAction
                     key={kind}
-                    href={api.resourceUrl(`/api/series/${encodeURIComponent(seriesId)}/exports/${kind}.zip${query}`)}
-                    download
-                    onClick={onClose}
-                    className="group flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-2.5 transition-colors hover:border-accent/40 hover:bg-accent/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent dark:hover:border-accent/40 dark:hover:bg-accent/10"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/8 text-accent">
-                      <Icon size={17} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-body">{label}</span>
-                      <span className="mt-0.5 block truncate text-xs text-faint">{meta}</span>
-                    </span>
-                    <Download size={16} className="shrink-0 text-faint transition-colors group-hover:text-accent" />
-                  </a>
+                    label={label}
+                    meta={meta}
+                    Icon={Icon}
+                    noun={noun}
+                    href={exportHref(kind)}
+                    loading={availability.status === "loading"}
+                    info={availability.kinds?.[kind] ?? null}
+                    confirming={confirmKind === kind}
+                    onConfirm={() => setConfirmKind(kind)}
+                    onCancelConfirm={() => setConfirmKind(null)}
+                    onDownload={onClose}
+                  />
                 ))}
               </div>
             </section>
@@ -1229,6 +1241,92 @@ function SeriesExportPanel({ open, seriesId, selectedVideoIds, videoCount, scope
       ) : null}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+const SERIES_EXPORT_ACTION_CLASS = "group flex w-full items-center gap-3 rounded-2xl border px-3.5 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+const SERIES_EXPORT_MISSING_PREVIEW = 5;
+
+function SeriesExportAction({ label, meta, Icon, noun, href, loading, info, confirming, onConfirm, onCancelConfirm, onDownload }) {
+  const available = info?.available ?? null;
+  const total = info?.total ?? null;
+  const missing = info?.missing ?? [];
+  const empty = !loading && available === 0;
+  const partial = !loading && available > 0 && missing.length > 0;
+  const countText = loading ? null : info ? `${available}/${total}` : null;
+  const body = (
+    <>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${empty ? "bg-muted text-faint" : "bg-accent/8 text-accent"}`}>
+        <Icon size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-sm font-semibold ${empty ? "text-faint" : "text-body"}`}>{label}</span>
+        <span className="mt-0.5 block truncate text-xs text-faint">
+          {empty ? `这些视频都还没有${noun}，暂时无法导出` : meta}
+        </span>
+      </span>
+      {countText ? <span className="shrink-0 text-xs tabular-nums text-faint">{countText}</span> : null}
+      {loading
+        ? <LoaderCircle size={16} className="shrink-0 animate-spin text-faint" />
+        : <Download size={16} className={`shrink-0 transition-colors ${empty ? "text-faint" : "text-faint group-hover:text-accent"}`} />}
+    </>
+  );
+  const activeClass = "border-line bg-surface hover:border-accent/40 hover:bg-accent/5 dark:hover:border-accent/40 dark:hover:bg-accent/10";
+  if (loading || empty) {
+    return (
+      <button type="button" disabled className={`${SERIES_EXPORT_ACTION_CLASS} cursor-not-allowed border-dashed border-line bg-muted`}>
+        {body}
+      </button>
+    );
+  }
+  if (!partial) {
+    return (
+      <a href={href} download onClick={onDownload} className={`${SERIES_EXPORT_ACTION_CLASS} ${activeClass}`}>
+        {body}
+      </a>
+    );
+  }
+  const preview = missing.slice(0, SERIES_EXPORT_MISSING_PREVIEW);
+  return (
+    <div className={`rounded-2xl ${confirming ? "border border-warning-border bg-warning-subtle" : ""}`}>
+      <button
+        type="button"
+        aria-expanded={confirming}
+        onClick={confirming ? onCancelConfirm : onConfirm}
+        className={`${SERIES_EXPORT_ACTION_CLASS} ${confirming ? "border-transparent" : activeClass}`}
+      >
+        {body}
+      </button>
+      {confirming ? (
+        <div className="px-3.5 pb-3">
+          <p className="flex items-start gap-1.5 text-xs leading-relaxed text-body">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" />
+            <span>{total} 个视频里有 {missing.length} 个还没有{noun}，导出时会跳过：</span>
+          </p>
+          <ul className="mt-1.5 space-y-0.5 pl-5 text-xs text-subtle">
+            {preview.map((video) => <li key={video.id} className="truncate">{video.title || video.id}</li>)}
+            {missing.length > preview.length ? <li>等 {missing.length} 个</li> : null}
+          </ul>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onCancelConfirm}
+              className="rounded-xl px-3 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-soft"
+            >
+              取消
+            </button>
+            <a
+              href={href}
+              download
+              onClick={onDownload}
+              className="rounded-xl border border-accent/40 px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/8"
+            >
+              导出其余 {available} 个
+            </a>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

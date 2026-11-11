@@ -24,12 +24,12 @@ def test_exports_mixed_overviews_as_zip_and_skips_incomplete_videos() -> None:
 
     archive = use_case.run("series-1", "mixed")
 
-    assert archive.filename == "series-1-mixed.zip"
+    assert archive.filename == "课程-AI概括混合.zip"
     entries = _read_zip(archive.content)
-    assert list(entries) == ["01-video-1-mixed.md"]
-    assert "# 第一讲" in entries["01-video-1-mixed.md"]
-    assert "核心问题" in entries["01-video-1-mixed.md"]
-    assert "查看本章原文" in entries["01-video-1-mixed.md"]
+    assert list(entries) == ["01-第一讲-AI概括混合.md"]
+    assert "# 第一讲" in entries["01-第一讲-AI概括混合.md"]
+    assert "核心问题" in entries["01-第一讲-AI概括混合.md"]
+    assert "查看本章原文" in entries["01-第一讲-AI概括混合.md"]
 
 
 def test_exports_knowledge_cards_as_zip() -> None:
@@ -39,9 +39,9 @@ def test_exports_knowledge_cards_as_zip() -> None:
     archive = use_case.run("series-1", "knowledge-cards")
 
     entries = _read_zip(archive.content)
-    assert list(entries) == ["01-video-1-knowledge-cards.md"]
-    assert "# 第一讲 知识卡片" in entries["01-video-1-knowledge-cards.md"]
-    assert "## 冷启动" in entries["01-video-1-knowledge-cards.md"]
+    assert list(entries) == ["01-第一讲-知识卡片.md"]
+    assert "# 第一讲 知识卡片" in entries["01-第一讲-知识卡片.md"]
+    assert "## 冷启动" in entries["01-第一讲-知识卡片.md"]
 
 
 def test_exports_mindmaps_as_zip() -> None:
@@ -51,8 +51,8 @@ def test_exports_mindmaps_as_zip() -> None:
     archive = use_case.run("series-1", "mindmaps")
 
     entries = _read_zip(archive.content)
-    assert list(entries) == ["01-video-1-mindmap.md"]
-    assert "- **根节点**" in entries["01-video-1-mindmap.md"]
+    assert list(entries) == ["01-第一讲-思维导图.md"]
+    assert "- **根节点**" in entries["01-第一讲-思维导图.md"]
 
 
 def test_raises_when_no_exportable_artifacts_exist() -> None:
