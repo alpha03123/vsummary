@@ -52,7 +52,7 @@ class SqlBackedVideoSummaryGenerator:
         output_dir = self._temp_root / "generation" / video_id / uuid4().hex
         cache_dir = self._workspace.cache_root / "generation-stages" / video_id
         try:
-            await self._workflow.run(source.source_path, output_dir, cache_dir=cache_dir, source_url=source.source_url, progress_reporter=progress_reporter, transcript_enhancement_enabled=transcript_enhancement_enabled, manual_transcript=manual_transcript, use_saved_manual_transcript=use_saved_manual_transcript, processing_mode=processing_mode, ai_summary_template=ai_summary_template)
+            await self._workflow.run(source.source_path, output_dir, cache_dir=cache_dir, source_url=source.source_url, title=source.title, progress_reporter=progress_reporter, transcript_enhancement_enabled=transcript_enhancement_enabled, manual_transcript=manual_transcript, use_saved_manual_transcript=use_saved_manual_transcript, processing_mode=processing_mode, ai_summary_template=ai_summary_template)
             transcript_path = output_dir / "transcript.cleaned.json"
             summary_path = output_dir / "summary.json"
             if not transcript_path.is_file():

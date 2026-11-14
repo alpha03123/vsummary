@@ -73,6 +73,7 @@ class ConfiguredVideoSummaryWorkflow:
         on_ai_summary_completed: Callable[[], None] | None = None,
         source_url: str = "",
         cache_dir: Path | None = None,
+        title: str = "",
     ) -> None:
         """基于当前配置执行一次视频总结生成。
 
@@ -118,6 +119,8 @@ class ConfiguredVideoSummaryWorkflow:
                 }
                 if processing_mode != "summary":
                     arguments["processing_mode"] = processing_mode
+                if title:
+                    arguments["title"] = title
                 await application.use_case.run(**arguments)
             except Exception:
                 LOGGER.exception(

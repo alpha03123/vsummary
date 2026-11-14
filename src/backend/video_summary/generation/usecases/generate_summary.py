@@ -141,6 +141,7 @@ class GenerateVideoSummary:
         on_ai_summary_completed: Callable[[], None] | None = None,
         source_url: str = "",
         cache_dir: Path | None = None,
+        title: str = "",
     ) -> SummaryDocument | None:
         """为指定视频生成结构化总结文档。
 
@@ -184,6 +185,7 @@ class GenerateVideoSummary:
                 on_ai_summary_completed=on_ai_summary_completed,
                 source_url=source_url,
                 cache_dir=cache_dir if cache_dir is not None else output_dir / ".cache",
+                title=title,
             )
         except (asyncio.CancelledError, GenerateCancelledError):
             if resolved_cancellation is not None:
@@ -209,6 +211,7 @@ class GenerateVideoSummary:
         on_ai_summary_completed: Callable[[], None] | None,
         source_url: str,
         cache_dir: Path,
+        title: str,
     ) -> SummaryDocument | None:
         """前置取消检查 → 准备 staging 目录 → 跑核心流水线 → 清理 staging。
 
@@ -235,6 +238,7 @@ class GenerateVideoSummary:
                     on_ai_summary_completed=on_ai_summary_completed,
                     source_url=source_url,
                     cache_dir=cache_dir,
+                    title=title,
                 )
             except FileNotFoundError:
                 if attempt == 0 and not staging_dir.exists():
@@ -258,6 +262,7 @@ class GenerateVideoSummary:
         on_ai_summary_completed: Callable[[], None] | None,
         source_url: str,
         cache_dir: Path,
+        title: str,
     ) -> SummaryDocument | None:
         """在 staging 目录下依次跑各生成阶段，全部成功后原子提交到 `output_dir`。
 
@@ -267,6 +272,8 @@ class GenerateVideoSummary:
         3. 在阻塞调用之前检查取消信号，避免浪费昂贵的计算。
         """
         stage_cache = GenerationStageCache(cache_dir, video_path)
+        # Cloud stores every media blob as "source.<ext>", so the file stem is not a title.
+        video_title = title.strip() or video_path.stem
         resolved_manual_transcript = manual_transcript
         if resolved_manual_transcript is None and use_saved_manual_transcript and self._manual_transcript_provider is not None:
             resolved_manual_transcript = await asyncio.to_thread(
@@ -288,7 +295,7 @@ class GenerateVideoSummary:
             transcript = resolved_manual_transcript.transcript
             video = VideoAsset(
                 source_path=video_path,
-                title=video_path.stem,
+                title=video_title,
                 duration_seconds=max(segment.end_seconds for segment in transcript.segments),
             )
             transcript_source_identity = "manual-srt-v1"
@@ -298,7 +305,7 @@ class GenerateVideoSummary:
             transcript = saved_transcript
             video = VideoAsset(
                 source_path=video_path,
-                title=video_path.stem,
+                title=video_title,
                 duration_seconds=max(segment.end_seconds for segment in transcript.segments),
             )
             transcript_source_identity = "saved-transcript-v1"
@@ -324,7 +331,7 @@ class GenerateVideoSummary:
         if resolved_manual_transcript is None and saved_transcript is None and subtitle_transcript is not None:
             video = VideoAsset(
                 source_path=video_path,
-                title=video_path.stem,
+                title=video_title,
                 duration_seconds=max(segment.end_seconds for segment in subtitle_transcript.segments),
             )
             transcript = subtitle_transcript
@@ -341,7 +348,7 @@ class GenerateVideoSummary:
                 progress_reporter.update("probe", 5.0, "正在读取视频信息")
             video = VideoAsset(
                 source_path=video_path,
-                title=video_path.stem,
+                title=video_title,
                 duration_seconds=await asyncio.to_thread(self._media_processor.probe_duration, video_path),
             )
             _raise_if_cancelled(progress_reporter, cancellation)
