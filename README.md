@@ -6,20 +6,22 @@
 
 视频AI总结，对话的本地知识库工具
 
+[![最新版本](https://img.shields.io/github/v/release/alpha03123/vsummary?include_prereleases&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=2563EB)](https://github.com/alpha03123/vsummary/releases)
+[![下载量](https://img.shields.io/github/downloads/alpha03123/vsummary/total?label=%E4%B8%8B%E8%BD%BD%E9%87%8F&color=16A34A)](https://github.com/alpha03123/vsummary/releases)
+[![Stars](https://img.shields.io/github/stars/alpha03123/vsummary?style=flat&color=EAB308)](https://github.com/alpha03123/vsummary/stargazers)
+[![QQ群](https://img.shields.io/badge/QQ%E7%BE%A4-%E5%8A%A0%E5%85%A5%E4%BA%A4%E6%B5%81-12B7F5)](https://qm.qq.com/q/nxKBApDVF)
+
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=222)
-![Vite](https://img.shields.io/badge/Vite-Frontend-646CFF?logo=vite&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-Agent%20Workflow-1C3C3C)
-![LlamaIndex](https://img.shields.io/badge/LlamaIndex-RAG-8A5CF6)
 ![faster--whisper](https://img.shields.io/badge/faster--whisper-Local%20ASR-2E8B57)
-![LanceDB](https://img.shields.io/badge/LanceDB-Vector%20Search-FF6B00)
 ![License](https://img.shields.io/github/license/alpha03123/vsummary?label=License)
 
 ### [VSummary在线版](https://vsummary.net)
 
 **不想自己部署？** 打开 [vsummary.net](https://vsummary.net) 就能用，无需手动安装环境，还有每天免费额度可以领取<br />
 (还是早期开发版，有BUG欢迎反馈~)
+
+觉得好用的话，请点一下右上角的 ⭐ **Star**。项目一直是一个人在维护，你的star是我最大的动力~
 
 <a href="https://vsummary.net"><img src="https://img.shields.io/badge/%E7%AB%8B%E5%8D%B3%E4%BD%93%E9%AA%8C-VSUMMARY%20CLOUD-2563EB?style=for-the-badge" alt="立即体验 VSummary Cloud" /></a>
 
@@ -83,6 +85,7 @@
 
 ## 快速开始
 
+- [下载 Windows 整合包](https://github.com/alpha03123/vsummary/releases/latest)：CPU / GPU 两种，解压后运行 `start.bat`。
 - [安装、硬件与 ASR 配置](docs/installation.md)：Windows NVIDIA、Windows AMD、macOS 的环境、模型与启动方式。
 
 ### 源码版 MySQL
@@ -128,9 +131,22 @@ Windows 整合包解压后，插件位于 `extensions/bilibili-sidepanel`。启�
 ## 常见问题
 
 常见问题见 [docs/questions.md](docs/questions.md)。
+
+## Star 趋势
+
+如果 vsummary 帮你省下了看视频的时间，欢迎点个 Star。
+
+<a href="https://star-history.com/#alpha03123/vsummary&Date">
+  <img src="https://api.star-history.com/svg?repos=alpha03123/vsummary&type=Date" width="600" alt="vsummary Star 趋势" />
+</a>
+
 ## 沟通和联系
+
 - QQ群:点击链接加入群聊【vsummary交流沟通群】：https://qm.qq.com/q/nxKBApDVF
 
 <img src="./assets/qq-group-qrcode.jpg" width="240" alt="vsummary 交流群二维码" />
 
-特别致谢：[Linux Do](https://linux.do)
+## 特别致谢
+
+- [Linux Do](https://linux.do)
+- [@maolilup](https://github.com/maolilup)（思维导图与导出）和 [@imexlovery](https://github.com/imexlovery)（macOS 构建、本地模型下载）贡献的代码
