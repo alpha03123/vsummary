@@ -6,6 +6,8 @@
 
 视频AI总结，对话的本地知识库工具
 
+**中文** | [English](README_EN.md)
+
 [![最新版本](https://img.shields.io/github/v/release/alpha03123/vsummary?include_prereleases&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=2563EB)](https://github.com/alpha03123/vsummary/releases)
 [![下载量](https://img.shields.io/github/downloads/alpha03123/vsummary/total?label=%E4%B8%8B%E8%BD%BD%E9%87%8F&color=16A34A)](https://github.com/alpha03123/vsummary/releases)
 [![Stars](https://img.shields.io/github/stars/alpha03123/vsummary?style=flat&color=EAB308)](https://github.com/alpha03123/vsummary/stargazers)
