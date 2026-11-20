@@ -20,10 +20,8 @@ import {
  */
 const SHARED_TOOL_VISUALS = {
   palette:
-    "workspace-panel border hover:shadow-lg hover:-translate-y-0.5 hover:bg-accent/5 dark:hover:bg-accent/10 hover:border-accent/30 transition-all",
-  iconShell: "bg-accent/10 text-accent border border-accent/20",
-  arrowShell:
-    "bg-muted text-faint border border-line/50 group-hover:bg-accent group-hover:text-on-accent group-hover:border-accent/80",
+    "workspace-panel border hover:border-accent/30 hover:bg-accent/5 dark:hover:bg-accent/10",
+  iconShell: "bg-accent/10 text-accent",
 };
 
 export const TOOL_TILES = {
@@ -140,14 +138,10 @@ export function describeToolState(toolId, toolState) {
   if (toolState.status === "source_missing") {
     return SOURCE_MISSING_STATUS;
   }
-  if (toolId === "preview") {
-    return { label: "随时可查看", tone: "ready" };
-  }
-  if (toolId === "notes") {
-    return { label: toolState.generated ? "可记录" : "可立即使用", tone: "ready" };
-  }
-  if (toolState.generated) {
-    return { label: "已生成", tone: "ready" };
+  // Ready is the normal case and shows nothing: a chip on every tile ("已生成", "随时可查看"…)
+  // drowned out the ones that need attention.
+  if (toolId === "preview" || toolId === "notes" || toolState.generated) {
+    return null;
   }
   if (toolState.available === false) {
     return { label: "需先生成 AI 概括", tone: "blocked" };

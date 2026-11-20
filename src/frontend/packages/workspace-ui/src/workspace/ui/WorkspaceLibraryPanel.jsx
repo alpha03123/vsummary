@@ -7,7 +7,6 @@ import {
   RefreshCw,
   Sparkles,
   FileVideo,
-  CheckCircle2,
   AlertTriangle,
   CircleDashed,
   FolderKanban,
@@ -128,82 +127,49 @@ function VideoIndexBadge({ state, rebuilding, onRebuild }) {
   const labels = { missing: "索引缺失", stale: "索引已过期", failed: "索引不可用" };
   if (!labels[state]) return null;
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold text-warning">
-        <AlertTriangle size={12} />
-        {labels[state]}
-      </span>
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+      <AlertTriangle size={12} />
+      {labels[state]}
       <button type="button" onClick={(event) => { event.stopPropagation(); onRebuild(); }}
         disabled={rebuilding} title={rebuilding ? "正在重建检索索引" : "重建检索索引"}
         aria-label="重建检索索引"
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-warning transition-colors hover:bg-warning/15 disabled:cursor-wait disabled:opacity-50">
-        <RefreshCw size={13} className={rebuilding ? "animate-spin" : ""} />
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-warning transition-colors hover:bg-warning/15 disabled:cursor-wait disabled:opacity-50">
+        <RefreshCw size={12} className={rebuilding ? "animate-spin" : ""} />
       </button>
     </span>
   );
 }
 
-function VideoBadge({ video }) {
-  if (video.status === "source_missing") {
-    return (
-      <span
-        className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-warning"
-        title="原始媒体文件当前不可访问，请重新链接媒体。"
-      >
-        <Link2 size={12} />
-        链接丢失
-      </span>
-    );
-  }
-  if (!video.processed && (video.isLinked || video.status === "linked")) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-warning">
-        <Link2 size={11} />
-        仅链接
-      </span>
-    );
-  }
-  if (video.status === "downloading") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-info-border bg-info-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-info">
-        <ArrowDown size={11} className="animate-bounce" />
-        下载中
-      </span>
-    );
-  }
-  if (video.status === "untranscribable") {
-    return (
-      <span
-        className="inline-flex items-center gap-1 rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-warning"
-        title="没有可供转写使用的信息"
-      >
-        <AlertTriangle size={12} />
-        无可转写信息
-      </span>
-    );
-  }
-  if (video.processed) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-success-border bg-success-subtle px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-success">
-        <CheckCircle2 size={12} />
-        已生成概括
-      </span>
-    );
-  }
-  if (video.hasTranscript) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-accent">
-        <Captions size={12} />
-        已有字幕
-      </span>
-    );
-  }
+function StatusText({ icon: Icon, tone, title, children }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-soft text-subtle border border-transparent">
-      <CircleDashed size={12} />
-      未处理
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${tone}`} title={title}>
+      <Icon size={12} />
+      {children}
     </span>
   );
+}
+
+// A small status line under the title. Processed is the normal state and shows nothing.
+function VideoBadge({ video }) {
+  if (video.status === "source_missing") {
+    return <StatusText icon={Link2} tone="text-warning" title="原始媒体文件当前不可访问，请重新链接媒体。">链接丢失</StatusText>;
+  }
+  if (!video.processed && (video.isLinked || video.status === "linked")) {
+    return <StatusText icon={Link2} tone="text-warning">仅链接</StatusText>;
+  }
+  if (video.status === "downloading") {
+    return <StatusText icon={ArrowDown} tone="text-info">下载中</StatusText>;
+  }
+  if (video.status === "untranscribable") {
+    return <StatusText icon={AlertTriangle} tone="text-warning" title="没有可供转写使用的信息">无可转写信息</StatusText>;
+  }
+  if (video.processed) {
+    return null;
+  }
+  if (video.hasTranscript) {
+    return <StatusText icon={Captions} tone="text-subtle">已有字幕</StatusText>;
+  }
+  return <StatusText icon={CircleDashed} tone="text-faint">未处理</StatusText>;
 }
 
 export function getVideoGenerationButtonState({
@@ -343,15 +309,20 @@ function PanelFooter({
     const seriesVideos = activeSeries?.videos ?? [];
     const seriesComplete = seriesVideos.length > 0 && seriesVideos.every((video) =>
       processingMode === "transcript" ? video.hasTranscript : video.processed);
+    const seriesHasProcessed = seriesVideos.some((video) => video.processed);
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
         <div className="mb-1">
           <h3 className="text-sm font-bold text-body">当前范围：整个系列</h3>
         </div>
+        {/* The next step depends on what is missing: summaries first (the model alone would not
+            unlock the chat), then the retrieval model as a quiet link, never as a second big button. */}
         <p className="text-xs leading-relaxed text-subtle">
-          {embeddingNeedsDownload
-            ? "检索模型还没下载，下载后才能针对整个系列提问。"
-            : `在对话栏里可以直接问「${activeSeries?.title}」整个系列的内容。`}
+          {!seriesHasProcessed
+            ? "系列中暂无已生成 AI 概括的视频。"
+            : embeddingNeedsDownload
+              ? <>对整个系列提问需要检索模型。<button type="button" onClick={onOpenSettings} className="ml-1 font-semibold text-accent hover:underline">去下载</button></>
+              : `在对话栏里可以直接问「${activeSeries?.title}」整个系列的内容。`}
         </p>
         <div className="mt-3">
           {queueIsActive ? (
@@ -362,16 +333,6 @@ function PanelFooter({
               </div>
             </div>
           ) : null}
-          {embeddingNeedsDownload ? (
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="mb-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-warning-border/80 bg-warning-subtle/80 px-4 py-2.5 text-sm font-semibold text-warning transition-colors hover:bg-warning/15"
-            >
-              <ArrowDown size={16} strokeWidth={2.5} />
-              下载 RAG 向量模型
-            </button>
-          ) : null}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -381,7 +342,7 @@ function PanelFooter({
                 ? "btn-danger-ghost border border-danger-border text-danger"
                 : seriesComplete
                   ? "cursor-default border border-line text-faint"
-                  : "border border-accent/40 bg-accent/8 text-accent hover:bg-accent/14 hover:border-accent/60"
+                  : "bg-accent text-on-accent shadow-sm hover:bg-accent/90"
                 }`}
             >
               {isGeneratingSeries ? (
@@ -920,52 +881,38 @@ export function WorkspaceLibraryPanel({
       {/* Video / Source List */}
       <div className="relative flex flex-1 flex-col overflow-y-auto" aria-label="视频列表">
         {indexRebuildError ? <p role="alert" className="px-4 pt-3 text-xs text-danger">{indexRebuildError}</p> : null}
-        <div className={`p-4 flex flex-col gap-3 ${selectedCount > 0 ? "pb-20" : ""}`}>
+        <div className={`flex flex-col gap-0.5 p-3 ${selectedCount > 0 ? "pb-20" : ""}`}>
           {!isPlayground ? (
             <button
               type="button"
               onClick={onSelectSeriesContext}
-              className={`text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none shadow-sm bg-accent/10 border-accent/30 text-strong z-10 relative
-              ${selectedContextType === "series"
-                  ? "ring-[2px] ring-accent/20"
-                  : "hover:bg-accent/15 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] cursor-pointer"
+              aria-pressed={selectedContextType === "series"}
+              className={`relative z-10 mb-2 flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-accent/30 ${selectedContextType === "series"
+                  ? "border-accent/25 bg-accent/10"
+                  : "border-line-soft bg-surface hover:border-line hover:bg-soft"
                 }`}
             >
-              {/* The card header above already prints the source label + the full
-                  series title, so this card used to repeat that title verbatim
-                  and then add a sentence explaining what "series scope" means.
-                  Both carried no new information: the title was a copy, and the
-                  explanation only restated what the user reveals by clicking.
-
-                  What survives is the scope statement itself — `整个系列` — which
-                  is the one thing this card is here to distinguish from the
-                  per-video cards below it. The badge keeps it scannable next to
-                  those video rows without re-printing a title that is already on
-                  screen one block above. */}
-              <div className="flex items-center justify-between w-full gap-2">
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-strong">
-                  <FolderKanban size={14} className="text-accent" />
-                  整个系列
-                </span>
-                <span className="inline-flex items-center text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-accent">
-                  当前范围
-                </span>
-              </div>
+              {/* Only the scope itself: the series title is already in the header above, and the
+                  selected colour says it is the current scope (the "当前范围" pill repeated that). */}
+              <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${selectedContextType === "series" ? "text-accent" : "text-body"}`}>
+                <FolderKanban size={14} />
+                整个系列
+              </span>
+              <span className="text-xs text-faint">{activeSeries?.videos?.length ?? 0} 个视频</span>
             </button>
           ) : null}
 
           {filteredVideos.map((video, index) => {
             const isActive = video.id === selectedVideo?.id && selectedContextType !== "series";
+            const indexState = indexSnapshot?.seriesId === activeSeries?.id ? indexSnapshot.videoStates?.[video.id] : null;
+            const selected = selectedVideoSet.has(video.id);
             return (
               <div
                 key={video.id}
                 role="button"
                 tabIndex={0}
-                className={`motion-stagger text-left flex flex-col gap-2 p-4 rounded-2xl border transition-all duration-200 outline-none cursor-pointer relative z-10
-                ${isActive
-                    ? "border-transparent"
-                    : "workspace-elevated-panel border-line hover:border-line-strong hover:bg-surface hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.22)]"
-                  }`}
+                title={getVideoMediaIdentifier(video) || undefined}
+                className={`group/video motion-stagger relative z-10 flex cursor-pointer gap-3 rounded-xl px-2.5 py-2 text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/30 ${isActive ? "" : "hover:bg-soft/70"}`}
                 style={{ "--stagger-index": index }}
                 onClick={() => onSelectVideo(activeSeries.id, video.id)}
                 onKeyDown={(event) => {
@@ -978,63 +925,47 @@ export function WorkspaceLibraryPanel({
                 {isActive && (
                   <motion.div
                     layoutId="library-bg"
-                    className="absolute inset-0 bg-soft/80 border border-line-strong shadow-sm rounded-2xl -z-10"
+                    className="absolute inset-0 -z-10 rounded-xl border border-line bg-soft"
                     transition={slideTransition}
                   />
                 )}
-                <div className="flex justify-between items-start w-full gap-2">
-                  <div className="flex min-w-0 flex-wrap gap-1.5">
-                    <VideoBadge video={video} />
-                    <VideoIndexBadge
-                      state={indexSnapshot?.seriesId === activeSeries?.id ? indexSnapshot.videoStates?.[video.id] : null}
-                      rebuilding={indexRebuildPending || indexSnapshot?.status === "running"}
-                      onRebuild={rebuildIndex}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!isPlayground ? (
-                      <button
-                        type="button"
-                        disabled={seriesHasActiveWork}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleVideoSelection(video.id);
-                        }}
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${selectedVideoSet.has(video.id)
-                            ? "bg-accent/10 text-accent"
-                            : "text-faint hover:bg-soft hover:text-subtle"
-                          }`}
-                        aria-label={selectedVideoSet.has(video.id) ? `取消选择 ${video.title}` : `选择 ${video.title}`}
-                      >
-                        {selectedVideoSet.has(video.id) ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="mt-1 flex gap-3">
-                <div className="relative h-[50px] w-[88px] shrink-0 overflow-hidden rounded-lg border border-line/80">
-                  <WorkspaceCover url={video.coverUrl} seed={video.id} iconSize={16} className={!video.processed && (video.isLinked || video.status === "linked") ? "opacity-70 grayscale-[0.5]" : ""} />
+                <div className="relative h-[45px] w-[80px] shrink-0 overflow-hidden rounded-lg border border-line-soft">
+                  <WorkspaceCover url={video.coverUrl} seed={video.id} iconSize={15} className={!video.processed && (video.isLinked || video.status === "linked") ? "opacity-70 grayscale-[0.5]" : ""} />
                   {formatDuration(video.durationSeconds) ? (
                     <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] font-semibold tabular-nums leading-4 text-white">{formatDuration(video.durationSeconds)}</span>
                   ) : null}
                 </div>
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <strong className={`text-sm font-semibold line-clamp-2 ${isActive ? "text-strong" : "text-body"}`}>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className={`line-clamp-2 text-sm font-medium leading-snug ${isActive ? "text-strong" : "text-body"}`}>
                     {video.title}
-                  </strong>
-                  {video.coreProblem ? (
-                    <span
-                      className="text-xs text-subtle line-clamp-2 leading-snug whitespace-pre-line"
-                      title={video.coreProblem}
-                    >
-                      {video.coreProblem}
-                    </span>
-                  ) : null}
-                  <span className="text-xs text-subtle truncate">
-                    {getVideoMediaIdentifier(video)}
+                  </span>
+                  {/* Only exceptions get a status line; a processed video is the normal case. */}
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 empty:hidden">
+                    <VideoBadge video={video} />
+                    <VideoIndexBadge
+                      state={indexState}
+                      rebuilding={indexRebuildPending || indexSnapshot?.status === "running"}
+                      onRebuild={rebuildIndex}
+                    />
                   </span>
                 </div>
-                </div>
+                {!isPlayground ? (
+                  <button
+                    type="button"
+                    disabled={seriesHasActiveWork}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleVideoSelection(video.id);
+                    }}
+                    className={`-mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${selected
+                        ? "text-accent"
+                        : `text-faint hover:bg-surface hover:text-subtle ${selectedCount > 0 ? "" : "[@media(hover:hover)]:opacity-0 group-hover/video:opacity-100 group-focus-within/video:opacity-100"}`
+                      }`}
+                    aria-label={selected ? `取消选择 ${video.title}` : `选择 ${video.title}`}
+                  >
+                    {selected ? <CheckSquare size={16} /> : <Square size={16} />}
+                  </button>
+                ) : null}
               </div>
             );
           })}

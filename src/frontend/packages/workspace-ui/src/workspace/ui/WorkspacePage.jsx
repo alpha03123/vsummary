@@ -669,6 +669,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                     });
                   }}
                   linkStart={linkStart}
+                  onboardingExtra={host.onboarding?.extra ?? null}
                   showPlayground={host.features?.playground !== false}
                   inboxComingSoon={host.features?.bilibiliExtension === "coming-soon"}
                 />

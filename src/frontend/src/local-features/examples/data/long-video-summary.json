@@ -1,0 +1,995 @@
+{
+ "slug": "long-video-summary",
+ "title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+ "source_url": "https://www.bilibili.com/video/BV17Bgg6WEgh",
+ "duration_seconds": 200.25,
+ "one_sentence_summary": "vsummary 0.3.4 的功能巡览：导入 B 站合集、看 AI 概括或直接提问、在原文和视频之间跳转，以及通过 MCP 让 agent 处理音视频。",
+ "core_problem": "面对很长的课程或会议视频，怎样更快找到并理解需要的部分？",
+ "key_takeaways": [
+  "0.3.4 以后作者会少加新功能，多做稳定性和跨平台。",
+  "打包版目前只支持 Windows N 卡；Mac 和 A 卡用户可以用源码版，配合阿里云 ASR 或 whisper.cpp 转写。",
+  "扫码登录 B 站后，贴视频链接会解析出整个合集，可以搜索出想看的那一集单独处理。",
+  "逐字稿、AI 概括、AI 对话和视频互相联动，点一下原文就能跳到视频对应位置。",
+  "支持导入字幕覆盖转写、手动编辑内容，也有思维导图和知识卡片。",
+  "通过 MCP，agent 可以替你找资料、加入学习文件夹，增删或阅读系列。"
+ ],
+ "chapters": [
+  {
+   "title": "0.3.4 版本与跨平台",
+   "summary": "vsummary 更新到 0.3.4，之后的重点会从加新功能转向稳定性和跨平台。打包版只支持 Windows N 卡；为了照顾 Mac 和 A 卡，源码版新增了阿里云 ASR 和 whisper.cpp 转写。",
+   "key_points": [
+    "新功能会越来越少，重心转向稳定性和跨平台。",
+    "作者缺少对应机器，跨平台主要在源码版提供代码支持。",
+    "打包版暂时只支持 Windows N 卡。",
+    "新增阿里云 ASR 和 whisper.cpp，供源码版在 Mac、A 卡上使用。"
+   ],
+   "start_seconds": 0,
+   "end_seconds": 40.1,
+   "image_url": "/example-media/long-video-summary/chapter-01.jpg"
+  },
+  {
+   "title": "导入 B 站合集",
+   "summary": "vsummary 是一个学习辅助工具。第一个功能是导入 B 站视频：扫码登录后输入视频链接，会自动解析出整个合集；演示中作者只想看其中一个，就用搜索找到它单独处理，处理完就能看 AI 概括。",
+   "key_points": [
+    "扫二维码登录 B 站。",
+    "输入链接后自动解析整个合集。",
+    "可以搜索出某一集单独处理。"
+   ],
+   "start_seconds": 40.1,
+   "end_seconds": 80,
+   "image_url": "/example-media/long-video-summary/chapter-02.jpg"
+  },
+  {
+   "title": "概括、对话和视频联动",
+   "summary": "除了看 AI 概括，也可以直接向 AI 提问。逐字稿、AI 概括、AI 对话和视频之间可以互相跳转：点原文跳到视频对应位置，从对话跳到概括，再从概括追溯到视频。概括里还带有视频截图，可以放大查看。",
+   "key_points": [
+    "作者更习惯直接提问。",
+    "单击原文即可跳到视频对应时间。",
+    "AI 对话、AI 概括、视频可以逐层追溯。",
+    "AI 概括自带截图，支持放大缩小。"
+   ],
+   "start_seconds": 80,
+   "end_seconds": 126.2,
+   "image_url": "/example-media/long-video-summary/chapter-03.jpg"
+  },
+  {
+   "title": "字幕导入和内容编辑",
+   "summary": "新增了字幕覆盖导入和内容编辑，用来人工修正 AI 生成的内容。思维导图、知识卡片等功能也都可以用。",
+   "key_points": [
+    "导入字幕可以覆盖自动转写。",
+    "可以手动编辑、修正内容。",
+    "还有思维导图和知识卡片。"
+   ],
+   "start_seconds": 126.9,
+   "end_seconds": 143,
+   "image_url": "/example-media/long-video-summary/chapter-04.jpg"
+  },
+  {
+   "title": "让 agent 处理音视频",
+   "summary": "agent 擅长找资料和处理文本，处理音视频较弱。vsummary 通过 MCP 给 agent 补上音频转写能力：agent 可以自己上网找资料、加入学习文件夹，也可以帮你增删、阅读系列。作者还在考虑支持导入 B 站收藏夹。",
+   "key_points": [
+    "vsummary 为 agent 提供音视频解析能力。",
+    "agent 可以找资料并加入学习文件夹。",
+    "agent 和你看到的是同一份内容，可以帮你管理系列。",
+    "以后可能支持导入 B 站收藏夹。"
+   ],
+   "start_seconds": 143.8,
+   "end_seconds": 188.8,
+   "image_url": "/example-media/long-video-summary/chapter-05.jpg"
+  },
+  {
+   "title": "开源地址",
+   "summary": "项目开源，地址在视频简介里，作者欢迎大家 star、下载和提意见。",
+   "key_points": [
+    "地址在视频简介。",
+    "欢迎 star、下载和提意见。"
+   ],
+   "start_seconds": 188.8,
+   "end_seconds": 200.25,
+   "image_url": "/example-media/long-video-summary/chapter-06.jpg"
+  }
+ ],
+ "ai_summary": {
+  "title": "vsummary 0.3.4：从导入 B 站合集到 agent 联动",
+  "content": "## 版本情况\n\nvsummary 更新到了 0.3.4。作者说之后新功能会越来越少，重点转向稳定性和跨平台。[1] 因为缺少对应的机器，跨平台主要在源码版提供代码支持；打包版暂时只支持 Windows N 卡。[2] 为了照顾 Mac 和 A 卡用户，这一版新增了阿里云 ASR 和 whisper.cpp 转写，供源码版使用。[3]\n\n## 导入 B 站视频\n\nvsummary 的定位是学习辅助工具：帮人更快理解内容，并让 AI 针对具体内容提供帮助。[4] 导入时先扫码登录 B 站，找到视频后输入链接，vsummary 会自动解析整个合集。[5] 演示里作者只想处理一个视频，结果导入了整个合集，于是用搜索找到那一集单独处理，处理完就能看 AI 概括。[6]\n\n![扫码登录 B 站](/example-media/long-video-summary/frame-0056.jpg \"seek:56\")\n\n## 看概括、提问、跳转\n\n- 处理完可以看 AI 概括，也可以直接问 AI。作者自己更喜欢问。[7]\n- AI 对话、AI 概括、原文和视频之间有联动：单击原文里的某句话，视频会跳到对应位置。[8]\n- 也可以从 AI 对话跳到 AI 概括，再从概括跳回视频追溯原话。[9]\n- AI 概括里带有视频截图，可以点开放大缩小。[10]\n\n![原文和视频并排查看](/example-media/long-video-summary/frame-0138.jpg \"seek:98\")\n\n## 修正内容和其他功能\n\n新增了字幕覆盖导入和内容编辑，用来手动修正 AI 的内容。作者也说这个功能比较边缘；思维导图、知识卡片等也都能用。[11]\n\n## 让 agent 处理音视频\n\nagent 天生会找资料、处理文本，但不太会处理音视频。vsummary 通过 MCP 把音频转写能力交给 agent，让它也能处理音视频。[12] 你可以让 agent 自己上网找资料，加入你的学习文件夹；作者还在考虑支持导入 B 站收藏夹。[13] agent 看到的内容和你看到的是同一份，所以也可以让它帮你增删、阅读系列。[14]\n\n## 项目地址\n\n项目开源，地址在视频简介里。[15]\n",
+  "citations": [
+   {
+    "id": "1",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 0,
+      "end_seconds": 16.16,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 0,
+      "end_seconds": 16.16,
+      "url": null,
+      "candidates": [],
+      "text": "大家好啊，vsummary 也在持续更新，已经更新到 0.3.4 版本了。随着版本的更迭，后续开发计划里的新功能可能会越来越少，转而去考虑稳定性以及跨平台之类的问题。"
+     }
+    ]
+   },
+   {
+    "id": "2",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 16.38,
+      "end_seconds": 29.117,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 16.38,
+      "end_seconds": 29.117,
+      "url": null,
+      "candidates": [],
+      "text": "但跨平台的话，由于我缺少对应的机器，所以可能只会在源码版提供一些代码上的支持。打包版本目前暂时只提供给 Windows N 卡使用。"
+     }
+    ]
+   },
+   {
+    "id": "3",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 29.117,
+      "end_seconds": 40.149,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 29.117,
+      "end_seconds": 40.149,
+      "url": null,
+      "candidates": [],
+      "text": "但是功能上，我新增了阿里云的 ASR 以及 whisper.cpp 音频转写，供源码版在 Mac 以及 A 卡上使用，相对弥补了一点跨平台的不足。"
+     }
+    ]
+   },
+   {
+    "id": "4",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 40.149,
+      "end_seconds": 50.28,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 40.149,
+      "end_seconds": 50.28,
+      "url": null,
+      "candidates": [],
+      "text": "回到正题，vsummary 是一款学习辅助工具，旨在更高效、更快速地帮助学习、理解内容，并让 AI 针对具体内容提供帮助。"
+     }
+    ]
+   },
+   {
+    "id": "5",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 50.28,
+      "end_seconds": 62.983,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 50.28,
+      "end_seconds": 62.983,
+      "url": null,
+      "candidates": [],
+      "text": "首先，导入 B 站视频合集是它的第一个功能。你只需扫描二维码登录，随后在 B 站找到视频，输入对应的 URL，就能自动解析合集。"
+     }
+    ]
+   },
+   {
+    "id": "6",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 62.983,
+      "end_seconds": 80.03,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 62.983,
+      "end_seconds": 80.03,
+      "url": null,
+      "candidates": [],
+      "text": "这里我原本只想处理一个视频，但是导入了一整个合集，这样的话可以靠搜索找到想要的视频，最后单独处理就行了。处理完毕后，就可以看 AI 概括了。"
+     }
+    ]
+   },
+   {
+    "id": "7",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 80.03,
+      "end_seconds": 87.44,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 80.03,
+      "end_seconds": 87.44,
+      "url": null,
+      "candidates": [],
+      "text": "当然你也可以问 AI 一些问题。对我来说，比起看，我更喜欢问。"
+     }
+    ]
+   },
+   {
+    "id": "8",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 87.6,
+      "end_seconds": 102.22,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 87.6,
+      "end_seconds": 102.22,
+      "url": null,
+      "candidates": [],
+      "text": "然后，在目前这个版本里，AI 对话、AI 概括、文本和视频之间是有联动机制的。打开一段具体的原文，你可以通过鼠标单击跳转到视频的具体位置，图文结合着看。"
+     }
+    ]
+   },
+   {
+    "id": "9",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 104.26,
+      "end_seconds": 110.687,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 104.26,
+      "end_seconds": 110.687,
+      "url": null,
+      "candidates": [],
+      "text": "也可以从 AI 对话跳转到 AI 概括，再从 AI 概括进一步跳转到视频来追溯。"
+     }
+    ]
+   },
+   {
+    "id": "10",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 110.687,
+      "end_seconds": 126.16,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 110.687,
+      "end_seconds": 126.16,
+      "url": null,
+      "candidates": [],
+      "text": "AI 概括里面也会自带一些程序截图的图片，大家可以打开查看详情，也支持放大缩小等基础操作。"
+     }
+    ]
+   },
+   {
+    "id": "11",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 126.9,
+      "end_seconds": 143.04,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 126.9,
+      "end_seconds": 143.04,
+      "url": null,
+      "candidates": [],
+      "text": "然后就是新增的字幕覆盖导入和内容编辑功能，用于人工修正 AI 的内容。但这个可能相对比较边缘了。其他功能，像思维导图、知识卡片等等，也都是可以使用的。"
+     }
+    ]
+   },
+   {
+    "id": "12",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 143.76,
+      "end_seconds": 163.1,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 143.76,
+      "end_seconds": 163.1,
+      "url": null,
+      "candidates": [],
+      "text": "然后就是 MCP 与 agent 的联动。agent 天生拥有寻找资源、处理文本的能力，但在音视频上可能略有欠缺。虽说 vsummary 只是简单的音频转写，但不论怎么说，也是赋予了 AI 音视频解析的能力，让 AI 能更好地处理音视频。"
+     }
+    ]
+   },
+   {
+    "id": "13",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 163.48,
+      "end_seconds": 177.883,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 163.48,
+      "end_seconds": 177.883,
+      "url": null,
+      "candidates": [],
+      "text": "当然你也可以让 agent 自己去网上找相关资料，然后加入你的学习文件夹。后续我还可能会考虑导入 B 站收藏夹之类的功能，终于可以让收藏夹不吃灰了。"
+     }
+    ]
+   },
+   {
+    "id": "14",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 177.883,
+      "end_seconds": 188.808,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 177.883,
+      "end_seconds": 188.808,
+      "url": null,
+      "candidates": [],
+      "text": "agent 所了解的内容是和你互通的，所以你也可以让它帮你增加、删除或者阅读你的系列等等，这些都是可以做到的。"
+     }
+    ]
+   },
+   {
+    "id": "15",
+    "label": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 188.808,
+      "end_seconds": 198.2,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+      "chapter_id": null,
+      "start_seconds": 188.808,
+      "end_seconds": 198.2,
+      "url": null,
+      "candidates": [],
+      "text": "视频最后也是放一下我的开源项目，具体地址在简介了，欢迎大家 star 之后下载，也欢迎大家给我提意见。"
+     }
+    ]
+   }
+  ]
+ },
+ "mindmap": {
+  "id": "root",
+  "title": "vsummary 0.3.4 功能巡览",
+  "summary": "vsummary 0.3.4 的功能巡览：导入 B 站合集、看 AI 概括或直接提问、在原文和视频之间跳转，以及通过 MCP 让 agent 处理音视频。",
+  "start_seconds": 0,
+  "end_seconds": 200.25,
+  "children": [
+   {
+    "id": "c1",
+    "title": "版本与平台",
+    "summary": "vsummary 更新到 0.3.4，之后的重点会从加新功能转向稳定性和跨平台。打包版只支持 Windows N 卡；为了照顾 Mac 和 A 卡，源码版新增了阿里云 ASR 和 whisper.cpp 转写。",
+    "start_seconds": 0,
+    "end_seconds": 40.1,
+    "children": [
+     {
+      "id": "c1-1",
+      "title": "转向稳定性",
+      "summary": "新功能会越来越少，重心转向稳定性和跨平台。",
+      "start_seconds": 0,
+      "end_seconds": 40.1,
+      "children": []
+     },
+     {
+      "id": "c1-2",
+      "title": "跨平台靠源码版",
+      "summary": "作者缺少对应机器，跨平台主要在源码版提供代码支持。",
+      "start_seconds": 0,
+      "end_seconds": 40.1,
+      "children": []
+     },
+     {
+      "id": "c1-3",
+      "title": "打包版：Windows N 卡",
+      "summary": "打包版暂时只支持 Windows N 卡。",
+      "start_seconds": 0,
+      "end_seconds": 40.1,
+      "children": []
+     },
+     {
+      "id": "c1-4",
+      "title": "阿里云 ASR / whisper.cpp",
+      "summary": "新增阿里云 ASR 和 whisper.cpp，供源码版在 Mac、A 卡上使用。",
+      "start_seconds": 0,
+      "end_seconds": 40.1,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c2",
+    "title": "导入 B 站合集",
+    "summary": "vsummary 是一个学习辅助工具。第一个功能是导入 B 站视频：扫码登录后输入视频链接，会自动解析出整个合集；演示中作者只想看其中一个，就用搜索找到它单独处理，处理完就能看 AI 概括。",
+    "start_seconds": 40.1,
+    "end_seconds": 80,
+    "children": [
+     {
+      "id": "c2-1",
+      "title": "扫码登录",
+      "summary": "扫二维码登录 B 站。",
+      "start_seconds": 40.1,
+      "end_seconds": 80,
+      "children": []
+     },
+     {
+      "id": "c2-2",
+      "title": "自动解析合集",
+      "summary": "输入链接后自动解析整个合集。",
+      "start_seconds": 40.1,
+      "end_seconds": 80,
+      "children": []
+     },
+     {
+      "id": "c2-3",
+      "title": "搜索后单独处理",
+      "summary": "可以搜索出某一集单独处理。",
+      "start_seconds": 40.1,
+      "end_seconds": 80,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c3",
+    "title": "联动阅读",
+    "summary": "除了看 AI 概括，也可以直接向 AI 提问。逐字稿、AI 概括、AI 对话和视频之间可以互相跳转：点原文跳到视频对应位置，从对话跳到概括，再从概括追溯到视频。概括里还带有视频截图，可以放大查看。",
+    "start_seconds": 80,
+    "end_seconds": 126.2,
+    "children": [
+     {
+      "id": "c3-1",
+      "title": "直接提问",
+      "summary": "作者更习惯直接提问。",
+      "start_seconds": 80,
+      "end_seconds": 126.2,
+      "children": []
+     },
+     {
+      "id": "c3-2",
+      "title": "点原文跳视频",
+      "summary": "单击原文即可跳到视频对应时间。",
+      "start_seconds": 80,
+      "end_seconds": 126.2,
+      "children": []
+     },
+     {
+      "id": "c3-3",
+      "title": "对话 → 概括 → 视频",
+      "summary": "AI 对话、AI 概括、视频可以逐层追溯。",
+      "start_seconds": 80,
+      "end_seconds": 126.2,
+      "children": []
+     },
+     {
+      "id": "c3-4",
+      "title": "概括里的截图",
+      "summary": "AI 概括自带截图，支持放大缩小。",
+      "start_seconds": 80,
+      "end_seconds": 126.2,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c4",
+    "title": "修正内容",
+    "summary": "新增了字幕覆盖导入和内容编辑，用来人工修正 AI 生成的内容。思维导图、知识卡片等功能也都可以用。",
+    "start_seconds": 126.9,
+    "end_seconds": 143,
+    "children": [
+     {
+      "id": "c4-1",
+      "title": "字幕覆盖导入",
+      "summary": "导入字幕可以覆盖自动转写。",
+      "start_seconds": 126.9,
+      "end_seconds": 143,
+      "children": []
+     },
+     {
+      "id": "c4-2",
+      "title": "手动编辑",
+      "summary": "可以手动编辑、修正内容。",
+      "start_seconds": 126.9,
+      "end_seconds": 143,
+      "children": []
+     },
+     {
+      "id": "c4-3",
+      "title": "导图和知识卡片",
+      "summary": "还有思维导图和知识卡片。",
+      "start_seconds": 126.9,
+      "end_seconds": 143,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c5",
+    "title": "agent 联动",
+    "summary": "agent 擅长找资料和处理文本，处理音视频较弱。vsummary 通过 MCP 给 agent 补上音频转写能力：agent 可以自己上网找资料、加入学习文件夹，也可以帮你增删、阅读系列。作者还在考虑支持导入 B 站收藏夹。",
+    "start_seconds": 143.8,
+    "end_seconds": 188.8,
+    "children": [
+     {
+      "id": "c5-1",
+      "title": "补上音视频能力",
+      "summary": "vsummary 为 agent 提供音视频解析能力。",
+      "start_seconds": 143.8,
+      "end_seconds": 188.8,
+      "children": []
+     },
+     {
+      "id": "c5-2",
+      "title": "找资料进学习文件夹",
+      "summary": "agent 可以找资料并加入学习文件夹。",
+      "start_seconds": 143.8,
+      "end_seconds": 188.8,
+      "children": []
+     },
+     {
+      "id": "c5-3",
+      "title": "管理系列",
+      "summary": "agent 和你看到的是同一份内容，可以帮你管理系列。",
+      "start_seconds": 143.8,
+      "end_seconds": 188.8,
+      "children": []
+     },
+     {
+      "id": "c5-4",
+      "title": "计划：B 站收藏夹",
+      "summary": "以后可能支持导入 B 站收藏夹。",
+      "start_seconds": 143.8,
+      "end_seconds": 188.8,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c6",
+    "title": "开源",
+    "summary": "项目开源，地址在视频简介里，作者欢迎大家 star、下载和提意见。",
+    "start_seconds": 188.8,
+    "end_seconds": 200.25,
+    "children": [
+     {
+      "id": "c6-1",
+      "title": "地址在简介",
+      "summary": "地址在视频简介。",
+      "start_seconds": 188.8,
+      "end_seconds": 200.25,
+      "children": []
+     },
+     {
+      "id": "c6-2",
+      "title": "欢迎提意见",
+      "summary": "欢迎 star、下载和提意见。",
+      "start_seconds": 188.8,
+      "end_seconds": 200.25,
+      "children": []
+     }
+    ]
+   }
+  ]
+ },
+ "knowledge_cards": [
+  {
+   "id": "long-video-summary-1",
+   "title": "各平台怎么用",
+   "kind": "fact",
+   "summary": "打包版只支持 Windows N 卡；Mac 和 A 卡可以用源码版，配合阿里云 ASR 或 whisper.cpp 转写。",
+   "details": "作者缺少其他平台的机器，所以跨平台只在源码版提供代码支持。0.3.4 新增的阿里云 ASR 是云端转写，whisper.cpp 可以在没有 N 卡的机器上本地转写，两者都是为了让 Mac 和 A 卡用户也能用起来。",
+   "tags": [
+    "安装",
+    "转写"
+   ]
+  },
+  {
+   "id": "long-video-summary-2",
+   "title": "只处理合集里的一集",
+   "kind": "method",
+   "summary": "贴一个视频链接会解析出整个合集，用搜索找到想看的那一集，单独处理即可。",
+   "details": "B 站视频经常属于某个合集，导入时会把整个合集列出来。不需要全部处理时，搜索标题找到目标视频单独处理，能省下时间。",
+   "tags": [
+    "B站",
+    "导入"
+   ]
+  },
+  {
+   "id": "long-video-summary-3",
+   "title": "原文、概括、对话互相跳转",
+   "kind": "concept",
+   "summary": "单击逐字稿跳到视频对应时间；从 AI 对话可以跳到 AI 概括，再从概括跳回视频。",
+   "details": "AI 给出的每个说法都能顺着链接找到原话和画面，读概括时有疑问，可以直接回到视频核对，不用自己拖进度条找。",
+   "tags": [
+    "阅读",
+    "溯源"
+   ]
+  },
+  {
+   "id": "long-video-summary-4",
+   "title": "用字幕修正转写",
+   "kind": "method",
+   "summary": "导入现成字幕可以覆盖自动转写，也可以手动编辑内容，修正 AI 的错误。",
+   "details": "自动转写难免认错专有名词。手里有准确字幕时直接导入覆盖；只有个别错字时，在内容编辑里改掉即可。",
+   "tags": [
+    "转写",
+    "编辑"
+   ]
+  },
+  {
+   "id": "long-video-summary-5",
+   "title": "给 agent 补上音视频能力",
+   "kind": "insight",
+   "summary": "agent 擅长找资料和处理文本，vsummary 通过 MCP 让它也能处理音视频。",
+   "details": "接入后，agent 可以自己上网找视频资料、加入学习文件夹，也能增删、阅读你的系列。因为 agent 和你看到的是同一份内容，它整理好的东西你在界面里直接就能看。",
+   "tags": [
+    "agent",
+    "MCP"
+   ]
+  }
+ ],
+ "transcript": [
+  {
+   "start_seconds": 0,
+   "end_seconds": 6.76,
+   "text": "大家好啊，vsummary 也在持续更新，已经更新到 0.3.4 版本了。"
+  },
+  {
+   "start_seconds": 6.76,
+   "end_seconds": 16.16,
+   "text": "随着版本的更迭，后续开发计划里的新功能可能会越来越少，转而去考虑稳定性以及跨平台之类的问题。"
+  },
+  {
+   "start_seconds": 16.38,
+   "end_seconds": 23.76,
+   "text": "但跨平台的话，由于我缺少对应的机器，所以可能只会在源码版提供一些代码上的支持。"
+  },
+  {
+   "start_seconds": 23.94,
+   "end_seconds": 29.117,
+   "text": "打包版本目前暂时只提供给 Windows N 卡使用。"
+  },
+  {
+   "start_seconds": 29.117,
+   "end_seconds": 40.149,
+   "text": "但是功能上，我新增了阿里云的 ASR 以及 whisper.cpp 音频转写，供源码版在 Mac 以及 A 卡上使用，相对弥补了一点跨平台的不足。"
+  },
+  {
+   "start_seconds": 40.149,
+   "end_seconds": 50.28,
+   "text": "回到正题，vsummary 是一款学习辅助工具，旨在更高效、更快速地帮助学习、理解内容，并让 AI 针对具体内容提供帮助。"
+  },
+  {
+   "start_seconds": 50.28,
+   "end_seconds": 62.983,
+   "text": "首先，导入 B 站视频合集是它的第一个功能。你只需扫描二维码登录，随后在 B 站找到视频，输入对应的 URL，就能自动解析合集。"
+  },
+  {
+   "start_seconds": 62.983,
+   "end_seconds": 73.042,
+   "text": "这里我原本只想处理一个视频，但是导入了一整个合集，这样的话可以靠搜索找到想要的视频，"
+  },
+  {
+   "start_seconds": 73.042,
+   "end_seconds": 80.03,
+   "text": "最后单独处理就行了。处理完毕后，就可以看 AI 概括了。"
+  },
+  {
+   "start_seconds": 80.03,
+   "end_seconds": 87.44,
+   "text": "当然你也可以问 AI 一些问题。对我来说，比起看，我更喜欢问。"
+  },
+  {
+   "start_seconds": 87.6,
+   "end_seconds": 94.146,
+   "text": "然后，在目前这个版本里，AI 对话、AI 概括、文本和视频之间是有联动机制的。"
+  },
+  {
+   "start_seconds": 94.146,
+   "end_seconds": 102.22,
+   "text": "打开一段具体的原文，你可以通过鼠标单击跳转到视频的具体位置，图文结合着看。"
+  },
+  {
+   "start_seconds": 104.26,
+   "end_seconds": 110.687,
+   "text": "也可以从 AI 对话跳转到 AI 概括，再从 AI 概括进一步跳转到视频来追溯。"
+  },
+  {
+   "start_seconds": 110.687,
+   "end_seconds": 126.16,
+   "text": "AI 概括里面也会自带一些程序截图的图片，大家可以打开查看详情，也支持放大缩小等基础操作。"
+  },
+  {
+   "start_seconds": 126.9,
+   "end_seconds": 133.934,
+   "text": "然后就是新增的字幕覆盖导入和内容编辑功能，用于人工修正 AI 的内容。"
+  },
+  {
+   "start_seconds": 133.934,
+   "end_seconds": 143.04,
+   "text": "但这个可能相对比较边缘了。其他功能，像思维导图、知识卡片等等，也都是可以使用的。"
+  },
+  {
+   "start_seconds": 143.76,
+   "end_seconds": 152.799,
+   "text": "然后就是 MCP 与 agent 的联动。agent 天生拥有寻找资源、处理文本的能力，但在音视频上可能略有欠缺。"
+  },
+  {
+   "start_seconds": 152.799,
+   "end_seconds": 163.1,
+   "text": "虽说 vsummary 只是简单的音频转写，但不论怎么说，也是赋予了 AI 音视频解析的能力，让 AI 能更好地处理音视频。"
+  },
+  {
+   "start_seconds": 163.48,
+   "end_seconds": 177.883,
+   "text": "当然你也可以让 agent 自己去网上找相关资料，然后加入你的学习文件夹。后续我还可能会考虑导入 B 站收藏夹之类的功能，终于可以让收藏夹不吃灰了。"
+  },
+  {
+   "start_seconds": 177.883,
+   "end_seconds": 188.808,
+   "text": "agent 所了解的内容是和你互通的，所以你也可以让它帮你增加、删除或者阅读你的系列等等，这些都是可以做到的。"
+  },
+  {
+   "start_seconds": 188.808,
+   "end_seconds": 198.2,
+   "text": "视频最后也是放一下我的开源项目，具体地址在简介了，欢迎大家 star 之后下载，也欢迎大家给我提意见。"
+  }
+ ]
+}

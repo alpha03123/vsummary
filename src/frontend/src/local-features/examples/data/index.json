@@ -1,0 +1,35 @@
+[
+ {
+  "slug": "writing-and-ai",
+  "title": "2400 年前，有人反对过\"文字\"",
+  "duration_seconds": 324.032,
+  "cover_url": "/example-media/writing-and-ai/cover.jpg",
+  "one_sentence_summary": "视频从苏格拉底反对文字讲到一项撤走 AI 的实验：直接向 AI 要答案的人，离开 AI 后成绩掉得最多；只让 AI 给提示的人几乎不受影响。",
+  "counts": {
+   "chapters": 6,
+   "cards": 5
+  }
+ },
+ {
+  "slug": "vsummary-agent",
+  "title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+  "duration_seconds": 179.189,
+  "cover_url": "/example-media/vsummary-agent/cover.jpg",
+  "one_sentence_summary": "vsummary v0.3.1 为 agent 提供了 MCP 服务和配套 skill，视频演示了接入步骤，以及让 agent 处理本地音频、去 B 站查资料、导出文件和清理系列。",
+  "counts": {
+   "chapters": 6,
+   "cards": 4
+  }
+ },
+ {
+  "slug": "long-video-summary",
+  "title": "期末复习上班开会太折磨？超长视频一键总结【完全开源】",
+  "duration_seconds": 200.25,
+  "cover_url": "/example-media/long-video-summary/cover.jpg",
+  "one_sentence_summary": "vsummary 0.3.4 的功能巡览：导入 B 站合集、看 AI 概括或直接提问、在原文和视频之间跳转，以及通过 MCP 让 agent 处理音视频。",
+  "counts": {
+   "chapters": 6,
+   "cards": 5
+  }
+ }
+]

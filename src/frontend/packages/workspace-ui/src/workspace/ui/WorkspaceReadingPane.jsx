@@ -269,7 +269,9 @@ export function WorkspaceReadingPane({
                               // Series tools have no per-video `tools` snapshot; without this branch every
                               // tile fell back to describeToolState(null) and showed 读取中 forever.
                               description: selectedContextType === "series" && toolId === "ai-chat" ? "询问整个系列的内容" : undefined,
-                              disabled: sourceMissing || getToolState(tools, toolId)?.available === false,
+                              disabled: sourceMissing || (selectedContextType === "series"
+                                ? (toolId === "series-mindmap" || toolId === "series-study-plan") && !seriesMindmapAvailable
+                                : getToolState(tools, toolId)?.available === false),
                               status: sourceMissing
                                 ? SOURCE_MISSING_STATUS
                                 : selectedContextType === "series"
@@ -445,13 +447,13 @@ function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount,
       ? { label: "暂无视频", tone: "pending" }
       : processedVideoCount > 0
         ? { label: `已处理 ${processedVideoCount} / ${totalVideoCount} 视频`, tone: "ready" }
-        : { label: "等待视频处理", tone: "pending" };
+        : null;
   }
 
+  // Before any summary exists these tiles are simply locked; the sidebar says once what to do,
+  // instead of every tile repeating "需先生成 AI 概括".
   if (toolId === "series-mindmap" || toolId === "series-study-plan") {
-    return seriesMindmapAvailable
-      ? { label: "可生成", tone: "pending" }
-      : { label: "需先生成 AI 概括", tone: "blocked" };
+    return seriesMindmapAvailable ? { label: "可生成", tone: "pending" } : null;
   }
 
   return null;

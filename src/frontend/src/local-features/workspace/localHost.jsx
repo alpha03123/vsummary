@@ -6,6 +6,7 @@ import {createWorkspaceSettingsActions} from './model/workspaceSettingsActions';
 import {defaultLocalUiSettings} from './model/localUiSettings';
 import {LocalSettingsPanel,LocalUsagePanel,LocalImportPanel} from './ui/LocalPanels';
 import {LocalVersionBadge} from './ui/LocalVersionBadge';
+import {ExampleCards} from '../examples/ExampleCards';
 
 export function createLocalHost() {
   const coreApi=createWorkspaceApi(createBrowserTransport());
@@ -16,6 +17,7 @@ export function createLocalHost() {
     initialUi:defaultLocalUiSettings,
     Effects:createLocalWorkspaceEffects(api),
     panels:{Settings:LocalSettingsPanel,Usage:LocalUsagePanel,Import:LocalImportPanel},
+    onboarding:{extra:<ExampleCards/>},
     createActions(context){return {
       ...createWorkspaceSettingsActions({...context,api}),
       ...createLocalImportActions({...context,api}),

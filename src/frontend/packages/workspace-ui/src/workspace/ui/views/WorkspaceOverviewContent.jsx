@@ -171,14 +171,11 @@ export function WorkspaceOverviewContent({
       onSelect={selectOutlineChapter}
     >
       <div className="flex flex-col gap-4">
-      <article className="workspace-accent-panel relative overflow-hidden rounded-2xl border p-6 text-strong">
-        <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Sparkles size={64} />
-        </div>
-        <p className="relative z-10 mb-3 text-xs font-bold text-subtle">
+      <article className="workspace-accent-panel rounded-2xl border p-5 text-strong">
+        <p className="mb-2 text-xs font-semibold text-subtle">
           核心问题
         </p>
-        <p className="relative z-10 text-base font-medium leading-relaxed">
+        <p className="text-base font-medium leading-relaxed">
           {summary.core_problem ?? "无核心问题描述。"}
         </p>
       </article>
@@ -194,7 +191,7 @@ export function WorkspaceOverviewContent({
 
       {ui.showTakeaways && summary.key_takeaways.length ? (
         <article className="workspace-muted-panel rounded-2xl border p-6">
-          <p className="mb-3 text-xs font-bold text-subtle">关键收获</p>
+          <p className="mb-3 text-xs font-semibold text-subtle">关键收获</p>
           <div className="flex flex-col gap-3">
             {summary.key_takeaways.map((takeaway) => (
               <div key={takeaway} className="flex items-start gap-3">
@@ -233,7 +230,7 @@ export function WorkspaceOverviewContent({
               }`}
             >
               <div>
-                <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-subtle">Chapter {index + 1}</p>
+                <p className="mb-1.5 text-xs font-medium text-faint">第 {index + 1} 章</p>
                 <ChapterHeading className="text-lg font-bold leading-tight text-strong">{chapter.title}</ChapterHeading>
               </div>
               <span className="shrink-0 rounded-lg bg-soft px-2 py-1 text-xs font-mono font-bold text-subtle">
@@ -404,7 +401,7 @@ function WorkspaceTranscriptList({
                     isHighlighted ? "border-2 border-accent bg-accent/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)] dark:bg-accent/10" : ""
                   } ${canSeek ? "hover:bg-accent/5 dark:hover:bg-accent/10" : "cursor-default"}`}
                 >
-                  <p className="text-xs font-bold uppercase tracking-widest text-subtle">
+                  <p className="font-mono text-xs text-faint">
                     {formatTimestamp(segment.start_seconds)} - {formatTimestamp(segment.end_seconds)}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-body">{segment.text}</p>

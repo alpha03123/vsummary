@@ -105,20 +105,26 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
               onDragStart={() => onFocus(panelId)}
               renderPreview={() => <div className="workspace-mosaic-drag-preview" aria-hidden="true" />}
               renderToolbar={() => (
-                <header className="flex h-full min-w-0 items-center justify-between border-b border-line/80 px-3 py-2">
+                // w-full: the toolbar is a flex row, so without it the header (and its bottom rule)
+                // stopped where the buttons ended.
+                <header className="group/panel flex h-full w-full min-w-0 items-center justify-between border-b border-line-soft px-3 py-2">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <button type="button" onClick={() => onFocus(panelId)} className="inline-flex min-w-0 items-center gap-2 text-left">
                       <GripVertical size={15} className="shrink-0 text-faint" aria-hidden="true" />
-                      {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-accent" /><span className="truncate text-sm font-bold text-body">{meta.label}</span></>}
+                      {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-subtle" /><span className="truncate text-sm font-semibold text-strong">{meta.label}</span></>}
                     </button>
                     {panelLeadingActions ? <div className="shrink-0" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div> : null}
                   </div>
                   <div className="ml-auto flex min-w-0 flex-1 items-center" onPointerDown={(event) => event.stopPropagation()}>
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       {panelActions}
+                      {/* Layout controls stay out of the way until the pointer or focus is on this
+                          panel (or it is the focused one); touch screens, without hover, always show them. */}
+                      <div className={`flex items-center gap-1 transition-opacity ${isFocused ? "" : "[@media(hover:hover)]:opacity-0"} group-hover/panel:opacity-100 group-focus-within/panel:opacity-100`}>
                       <button type="button" onClick={() => onSplit(panelId, "row")} className="workspace-mosaic-action workspace-mosaic-split" title="在右侧拆分面板" aria-label="在右侧拆分面板"><PanelRight size={15} /></button>
                       <button type="button" onClick={() => onSplit(panelId, "column")} className="workspace-mosaic-action workspace-mosaic-split" title="在下方拆分面板" aria-label="在下方拆分面板"><PanelBottom size={15} /></button>
                       <button type="button" onClick={() => onClose(panelId)} className="workspace-mosaic-action text-faint hover:bg-danger-subtle hover:text-danger dark:hover:text-danger" title={`关闭${meta.label}`} aria-label={`关闭${meta.label}`}><X size={15} /></button>
+                      </div>
                     </div>
                     {panelTrailingActions ? <div className="ml-2 shrink-0">{panelTrailingActions}</div> : null}
                   </div>

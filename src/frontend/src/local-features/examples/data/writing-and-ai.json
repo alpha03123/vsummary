@@ -1,0 +1,1166 @@
+{
+ "slug": "writing-and-ai",
+ "title": "2400 年前，有人反对过\"文字\"",
+ "source_url": "https://www.bilibili.com/video/BV1pGsf6iELS",
+ "duration_seconds": 324.032,
+ "one_sentence_summary": "视频从苏格拉底反对文字讲到一项撤走 AI 的实验：直接向 AI 要答案的人，离开 AI 后成绩掉得最多；只让 AI 给提示的人几乎不受影响。",
+ "core_problem": "用 AI 学习，怎样才不会在离开它以后变得更差？",
+ "key_takeaways": [
+  "实验中能随时问 GPT-5 的一组，在 AI 被撤走后正确率跌到对照组以下，跳题比例接近对照组的两倍。",
+  "直接要答案的人掉得最多；只让 AI 给提示、讲思路的人，和没用过 AI 的人几乎一样。",
+  "这个分组来自参与者的事后回忆，还不能算铁证。",
+  "生成效应：自己费劲想出来的内容记得更牢，卡住的那段时间本身就是练习。",
+  "卡住时先自己想五分钟；问 AI 时要求它只给提示，指出卡在哪一步。"
+ ],
+ "chapters": [
+  {
+   "title": "苏格拉底为什么反对文字",
+   "summary": "苏格拉底借古埃及国王之口说，文字会让人不再练习记忆，读得多却只得到智慧的“外表”。这段批评本身，是靠柏拉图写下来才流传至今的。",
+   "key_points": [
+    "发明之神说文字能让人更聪明、记性更好，国王认为恰恰相反。",
+    "读得多不等于懂得多，可能只得到了智慧的“外表”。",
+    "苏格拉底没写过书，他反对文字的话是学生柏拉图记下来的。"
+   ],
+   "start_seconds": 0,
+   "end_seconds": 48,
+   "image_url": "/example-media/writing-and-ai/chapter-01.jpg"
+  },
+  {
+   "title": "把 AI 撤走以后",
+   "summary": "伯克利等几所大学的研究者让 1200 多人做数学和阅读题，其中一组可以随时问 GPT-5。AI 被撤走后，这组的正确率跌到对照组以下，放弃的题也更多。",
+   "key_points": [
+    "有 AI 帮忙时，用 AI 的一组确实答得更好。",
+    "第一个实验里，对照组答对七成多，用过 AI 的人不到六成。",
+    "跳过不做的比例接近对照组两倍，变化在十几分钟内就出现了。"
+   ],
+   "start_seconds": 48,
+   "end_seconds": 97.3,
+   "image_url": "/example-media/writing-and-ai/chapter-02.jpg"
+  },
+  {
+   "title": "差距出在怎么用",
+   "summary": "约六成参与者说自己主要是直接要答案，约三成是让 AI 给提示、讲思路。撤走 AI 后，前者掉得最多，后者和对照组几乎一样。",
+   "key_points": [
+    "直接要答案的一组，成绩下降最明显。",
+    "只要提示的一组，表现接近从没用过 AI 的人。",
+    "使用方式来自参与者的事后回忆，不能算铁证。",
+    "视频的解释：让人变弱的，是用工具时省掉的那一步。"
+   ],
+   "start_seconds": 97.3,
+   "end_seconds": 149.6,
+   "image_url": "/example-media/writing-and-ai/chapter-03.jpg"
+  },
+  {
+   "title": "生成效应",
+   "summary": "苏格拉底担心的其实是脑子偷懒。心理学里的生成效应说明，自己费劲想出来的东西记得更牢，卡壳的那段时间就是大脑在受训练。",
+   "key_points": [
+    "纸替人记住，人就懒得背；别人给了答案，人就跳过了琢磨。",
+    "生成效应：自己想出来的，比直接看来的记得牢。",
+    "直接向 AI 要答案，像花钱请人替你去健身房。"
+   ],
+   "start_seconds": 149.6,
+   "end_seconds": 198.5,
+   "image_url": "/example-media/writing-and-ai/chapter-04.jpg"
+  },
+  {
+   "title": "当一个“产婆”",
+   "summary": "文字、印刷术、计算器、搜索引擎都让人担心过会变笨，结果并没有。苏格拉底自称“产婆”，靠追问让人把想法说出来；论文作者也在问，只提问、不给答案的 AI 会不会让人更有耐心。",
+   "key_points": [
+    "文字让智慧第一次可以跨越两千年。",
+    "产婆式的教法：不塞现成答案，一句接一句地追问。",
+    "只提问、只引导的 AI 会怎样，目前还没人测过。",
+    "现在的 AI 既能当代笔，也能当逼你思考的产婆。"
+   ],
+   "start_seconds": 198.5,
+   "end_seconds": 270.4,
+   "image_url": "/example-media/writing-and-ai/chapter-05.jpg"
+  },
+  {
+   "title": "卡住的时候怎么问",
+   "summary": "视频给了两个做法：先自己和问题死磕五分钟；问 AI 时让它别给答案，只给提示、指出卡在哪一步。",
+   "key_points": [
+    "忍住直接复制粘贴的冲动，先自己想五分钟。",
+    "提问时加一句：“别直接告诉我答案，给我一点提示，看看我哪一步卡住了。”",
+    "真正属于自己的本事，只能在卡住又没放弃的那几分钟里练出来。"
+   ],
+   "start_seconds": 270.4,
+   "end_seconds": 324,
+   "image_url": "/example-media/writing-and-ai/chapter-06.jpg"
+  }
+ ],
+ "ai_summary": {
+  "title": "撤走 AI 之后：直接要答案和只要提示的差别",
+  "content": "## 苏格拉底担心的是什么\n\n苏格拉底讲过一个故事：古埃及的发明之神把新发明献给国王，说它能让人更聪明、记性更好。国王的回答正好相反：有了它，人们不再练习记忆，会变得健忘；读得多了，以为自己懂得多，其实只拿到了智慧的“外表”。这项发明就是文字。[1]\n\n苏格拉底一辈子没写过书。我们知道他反对文字，是因为学生柏拉图把这段话写了下来。[2]\n\n## 一项把 AI 撤走的实验\n\n伯克利等几所大学的研究者今年十月发表了一项研究（画面里的论文标题是 *AI Assistance Reduces Persistence and Hurts Independent Performance*）。1200 多名参与者做数学和阅读题，一组可以随时问 GPT-5，另一组只能自己做；做到一半，研究者把 AI 撤走了。[3]\n\n- 有 AI 时，用 AI 的那组答得更好。[4]\n- AI 撤走后，这组的正确率掉到对照组以下，直接放弃的题也变多了。[5]\n- 第一个实验里，对照组答对七成多，用过 AI 的人不到六成；跳过不做的比例接近对照组的两倍。[6]\n- 这些变化在用上 AI 之后十几分钟内就出现了。[7]\n\n![第一个实验：撤走 AI 后的正确率和跳题比例](/example-media/writing-and-ai/frame-0130.jpg \"seek:90\")\n\n## 差距出在怎么用\n\n实验结束后，研究者问参与者是怎么用 AI 的。约六成说主要是直接要答案，约三成说是让 AI 给提示、讲思路。[8] AI 撤走后，直接要答案的那组成绩掉得最多；只要提示的那组，和从头到尾没用过 AI 的人几乎一样。[9]\n\n视频也提醒，这个分组依据的是参与者的事后回忆，不能算铁证。它给出的解释是：让人变弱的未必是工具本身，而是用工具时省掉的那一步。[10]\n\n## 生成效应\n\n苏格拉底担心的不是“把东西记下来”，而是“脑子从此偷懒”：纸替你记住了，你就懒得背；别人直接给答案，你就跳过了自己琢磨的那一步。[11]\n\n心理学把这叫做**生成效应**：自己费劲想出来的东西，比直接看来的记得牢。做题时卡住、差一点就想通的那段时间，正是大脑在受训练。[12] 视频的比方是，直接向 AI 要答案，就像花钱请人替你去健身房，最后练出来的是他的肌肉。[13]\n\n## 文字没有让人变笨\n\n苏格拉底也不全对。文字之后有了印刷术、计算器、搜索引擎，每次都有人担心人类会变笨，可文字让智慧第一次跨越了两千年，我们今天还能听到苏格拉底的担心。[14]\n\n他自己也留下了另一种做法。他说自己是“产婆”，不往别人脑子里塞现成答案，而是一句接一句地追问，让对方把想法“生”出来。[15] 论文作者在结尾也提了一个还没人测过的问题：如果 AI 不再有求必应地喂答案，而是像苏格拉底那样只提问、只引导，人们还会这么快失去耐心吗？[16]\n\n![论文结尾提出的问题](/example-media/writing-and-ai/frame-0406.jpg \"seek:246\")\n\n## 卡住的时候\n\n视频的建议很具体：[17]\n\n- 先忍住复制粘贴的冲动，自己和问题死磕五分钟。\n- 提问时加一句：“别直接告诉我答案，给我一点提示，看看我哪一步卡住了。”\n\n现在的 AI 既能当替你写作业的代笔，也能当逼你思考的产婆，看你让它做哪一件。[18]\n",
+  "citations": [
+   {
+    "id": "1",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 5.154,
+      "end_seconds": 32.962,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 5.154,
+      "end_seconds": 32.962,
+      "url": null,
+      "candidates": [],
+      "text": "他讲了一个故事：古埃及有位发明之神，把自己的新发明献给国王，说这东西能让人更聪明、记性更好。国王却摇摇头：恰恰相反，有了它，人们就不再练习记忆，会变得健忘。他们读了很多，以为自己懂了很多，其实只得到了智慧的“外表”。这项可怕的新发明，叫做——文字。"
+     }
+    ]
+   },
+   {
+    "id": "2",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 32.962,
+      "end_seconds": 47.64,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 32.962,
+      "end_seconds": 47.64,
+      "url": null,
+      "candidates": [],
+      "text": "讲这个故事的人，是苏格拉底。他一辈子没写过一本书。讽刺的是，我们今天之所以知道他反对文字，全靠他的学生柏拉图，把这段话给写了下来。"
+     }
+    ]
+   },
+   {
+    "id": "3",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 48.1,
+      "end_seconds": 71.46,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 48.1,
+      "end_seconds": 71.46,
+      "url": null,
+      "candidates": [],
+      "text": "两千多年后，类似的担心又回来了，只不过这次，主角换成了 AI。今年十月，伯克利等几所大学的研究者发表了一项研究。他们找来一千两百多人做数学和阅读题，一组可以随时问 GPT-5，另一组只能靠自己。做着做着，研究者突然把 AI 撤走了。"
+     }
+    ]
+   },
+   {
+    "id": "4",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 71.46,
+      "end_seconds": 75.308,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 71.46,
+      "end_seconds": 75.308,
+      "url": null,
+      "candidates": [],
+      "text": "有 AI 帮忙的时候，这组人确实答得更好。"
+     }
+    ]
+   },
+   {
+    "id": "5",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 75.308,
+      "end_seconds": 82.766,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 75.308,
+      "end_seconds": 82.766,
+      "url": null,
+      "candidates": [],
+      "text": "可 AI 一撤，他们的正确率立刻掉到了对照组下面，连直接放弃的题都变多了。"
+     }
+    ]
+   },
+   {
+    "id": "6",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 82.766,
+      "end_seconds": 92.388,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 82.766,
+      "end_seconds": 92.388,
+      "url": null,
+      "candidates": [],
+      "text": "在第一个实验里，对照组答对了七成多，用过 AI 的人不到六成；跳过不做的比例，将近对照组的两倍。"
+     }
+    ]
+   },
+   {
+    "id": "7",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 92.388,
+      "end_seconds": 97.2,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 92.388,
+      "end_seconds": 97.2,
+      "url": null,
+      "candidates": [],
+      "text": "而从用上 AI 到出现这种变化，前后不过十几分钟。"
+     }
+    ]
+   },
+   {
+    "id": "8",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 102.624,
+      "end_seconds": 115.115,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 102.624,
+      "end_seconds": 115.115,
+      "url": null,
+      "candidates": [],
+      "text": "但论文里还有一个更有意思的细节。实验结束后，研究者问这些人：你刚才是怎么用 AI 的？六成的人很诚实：我主要是直接要答案。"
+     }
+    ]
+   },
+   {
+    "id": "9",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 115.115,
+      "end_seconds": 134.32,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 115.115,
+      "end_seconds": 134.32,
+      "url": null,
+      "candidates": [],
+      "text": "但还有大约三成的人说：我是让它给提示、讲思路。AI 撤走之后，真正的差距就出在这里：直接要答案的那组，成绩掉得最惨；而只要提示的那组，表现和从头到尾没用过 AI 的人几乎一样。"
+     }
+    ]
+   },
+   {
+    "id": "10",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 134.32,
+      "end_seconds": 149.52,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 134.32,
+      "end_seconds": 149.52,
+      "url": null,
+      "candidates": [],
+      "text": "虽然这只是参与者自己的事后回忆，还不能完全算作铁证，但道理其实很直观：让人变弱的，也许不是工具本身，而是你用它省掉了哪一步。"
+     }
+    ]
+   },
+   {
+    "id": "11",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 149.68,
+      "end_seconds": 168.098,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 149.68,
+      "end_seconds": 168.098,
+      "url": null,
+      "candidates": [],
+      "text": "其实这个道理，苏格拉底当年就看透了。他担心的从来不是“把东西记下来”，而是“脑子从此偷懒”。纸替你记住了，你就懒得背了；别人直接给你答案了，你就跳过了自己琢磨的那一步。"
+     }
+    ]
+   },
+   {
+    "id": "12",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 168.098,
+      "end_seconds": 186.011,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 168.098,
+      "end_seconds": 186.011,
+      "url": null,
+      "candidates": [],
+      "text": "心理学上把这叫做“生成效应”：自己费劲想出来的东西，往往比直接看来的记得牢。做题时那种卡壳、抓耳挠腮、差一点就想通的难受劲儿，才是大脑真正受训练的时候。"
+     }
+    ]
+   },
+   {
+    "id": "13",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 186.011,
+      "end_seconds": 198.46,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 186.011,
+      "end_seconds": 198.46,
+      "url": null,
+      "candidates": [],
+      "text": "所以，直接向 AI 要答案，就好比花钱请人替你去健身房。汗是他流的，铁是他举的，最后练出来的，当然也是他的肌肉。"
+     }
+    ]
+   },
+   {
+    "id": "14",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 198.52,
+      "end_seconds": 224.62,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 198.52,
+      "end_seconds": 224.62,
+      "url": null,
+      "candidates": [],
+      "text": "不过，说句公道话，苏格拉底也不全对。文字之后，有了印刷术、计算器、搜索引擎，每一次都有人担心人类会变笨。可回头看，文字并没有让人类失去智慧，它让智慧第一次可以跨越两千年，比如，让我们今天还能听到苏格拉底的担心。那问题到底出在哪？"
+     }
+    ]
+   },
+   {
+    "id": "15",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 224.62,
+      "end_seconds": 240.753,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 224.62,
+      "end_seconds": 240.753,
+      "url": null,
+      "candidates": [],
+      "text": "答案，苏格拉底自己其实也留下了。他说过，自己是个“产婆”：他从不往别人脑子里塞现成的答案，只是一句接一句地追问，逼着你把自己的想法“生”出来。"
+     }
+    ]
+   },
+   {
+    "id": "16",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 240.753,
+      "end_seconds": 257.652,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 240.753,
+      "end_seconds": 257.652,
+      "url": null,
+      "candidates": [],
+      "text": "巧的是，这篇论文的作者在最后也抛出了一个问题：如果把 AI 改一改，不再有求必应地喂答案，而是像苏格拉底那样只提问、只引导，人们还会这么快失去耐心吗？"
+     }
+    ]
+   },
+   {
+    "id": "17",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 270.44,
+      "end_seconds": 290.26,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 270.44,
+      "end_seconds": 290.26,
+      "url": null,
+      "candidates": [],
+      "text": "所以下次再卡住的时候，不妨忍住直接复制粘贴的冲动，先自己和问题死磕五分钟；或者在提问的时候加一句：“别直接告诉我答案，给我一点提示，看看我哪一步卡住了。”"
+     }
+    ]
+   },
+   {
+    "id": "18",
+    "label": "2400 年前，有人反对过\"文字\"",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 263.534,
+      "end_seconds": 270.44,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "2400 年前，有人反对过\"文字\"",
+      "chapter_id": null,
+      "start_seconds": 263.534,
+      "end_seconds": 270.44,
+      "url": null,
+      "candidates": [],
+      "text": "因为现在的 AI，既能当替你写作业的代笔，也能当逼你思考的产婆。"
+     }
+    ]
+   }
+  ]
+ },
+ "mindmap": {
+  "id": "root",
+  "title": "用 AI 学习，会不会越用越差",
+  "summary": "视频从苏格拉底反对文字讲到一项撤走 AI 的实验：直接向 AI 要答案的人，离开 AI 后成绩掉得最多；只让 AI 给提示的人几乎不受影响。",
+  "start_seconds": 0,
+  "end_seconds": 324.032,
+  "children": [
+   {
+    "id": "c1",
+    "title": "苏格拉底反对文字",
+    "summary": "苏格拉底借古埃及国王之口说，文字会让人不再练习记忆，读得多却只得到智慧的“外表”。这段批评本身，是靠柏拉图写下来才流传至今的。",
+    "start_seconds": 0,
+    "end_seconds": 48,
+    "children": [
+     {
+      "id": "c1-1",
+      "title": "国王的反驳",
+      "summary": "发明之神说文字能让人更聪明、记性更好，国王认为恰恰相反。",
+      "start_seconds": 0,
+      "end_seconds": 48,
+      "children": []
+     },
+     {
+      "id": "c1-2",
+      "title": "智慧的“外表”",
+      "summary": "读得多不等于懂得多，可能只得到了智慧的“外表”。",
+      "start_seconds": 0,
+      "end_seconds": 48,
+      "children": []
+     },
+     {
+      "id": "c1-3",
+      "title": "靠柏拉图流传",
+      "summary": "苏格拉底没写过书，他反对文字的话是学生柏拉图记下来的。",
+      "start_seconds": 0,
+      "end_seconds": 48,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c2",
+    "title": "撤走 AI 的实验",
+    "summary": "伯克利等几所大学的研究者让 1200 多人做数学和阅读题，其中一组可以随时问 GPT-5。AI 被撤走后，这组的正确率跌到对照组以下，放弃的题也更多。",
+    "start_seconds": 48,
+    "end_seconds": 97.3,
+    "children": [
+     {
+      "id": "c2-1",
+      "title": "有 AI 时答得更好",
+      "summary": "有 AI 帮忙时，用 AI 的一组确实答得更好。",
+      "start_seconds": 48,
+      "end_seconds": 97.3,
+      "children": []
+     },
+     {
+      "id": "c2-2",
+      "title": "正确率跌破对照组",
+      "summary": "第一个实验里，对照组答对七成多，用过 AI 的人不到六成。",
+      "start_seconds": 48,
+      "end_seconds": 97.3,
+      "children": []
+     },
+     {
+      "id": "c2-3",
+      "title": "十几分钟就出现",
+      "summary": "跳过不做的比例接近对照组两倍，变化在十几分钟内就出现了。",
+      "start_seconds": 48,
+      "end_seconds": 97.3,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c3",
+    "title": "差距出在用法",
+    "summary": "约六成参与者说自己主要是直接要答案，约三成是让 AI 给提示、讲思路。撤走 AI 后，前者掉得最多，后者和对照组几乎一样。",
+    "start_seconds": 97.3,
+    "end_seconds": 149.6,
+    "children": [
+     {
+      "id": "c3-1",
+      "title": "直接要答案：掉得最多",
+      "summary": "直接要答案的一组，成绩下降最明显。",
+      "start_seconds": 97.3,
+      "end_seconds": 149.6,
+      "children": []
+     },
+     {
+      "id": "c3-2",
+      "title": "只要提示：几乎不受影响",
+      "summary": "只要提示的一组，表现接近从没用过 AI 的人。",
+      "start_seconds": 97.3,
+      "end_seconds": 149.6,
+      "children": []
+     },
+     {
+      "id": "c3-3",
+      "title": "事后回忆，非铁证",
+      "summary": "使用方式来自参与者的事后回忆，不能算铁证。",
+      "start_seconds": 97.3,
+      "end_seconds": 149.6,
+      "children": []
+     },
+     {
+      "id": "c3-4",
+      "title": "省掉了哪一步",
+      "summary": "视频的解释：让人变弱的，是用工具时省掉的那一步。",
+      "start_seconds": 97.3,
+      "end_seconds": 149.6,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c4",
+    "title": "生成效应",
+    "summary": "苏格拉底担心的其实是脑子偷懒。心理学里的生成效应说明，自己费劲想出来的东西记得更牢，卡壳的那段时间就是大脑在受训练。",
+    "start_seconds": 149.6,
+    "end_seconds": 198.5,
+    "children": [
+     {
+      "id": "c4-1",
+      "title": "脑子偷懒",
+      "summary": "纸替人记住，人就懒得背；别人给了答案，人就跳过了琢磨。",
+      "start_seconds": 149.6,
+      "end_seconds": 198.5,
+      "children": []
+     },
+     {
+      "id": "c4-2",
+      "title": "自己想的记得牢",
+      "summary": "生成效应：自己想出来的，比直接看来的记得牢。",
+      "start_seconds": 149.6,
+      "end_seconds": 198.5,
+      "children": []
+     },
+     {
+      "id": "c4-3",
+      "title": "替你去健身房",
+      "summary": "直接向 AI 要答案，像花钱请人替你去健身房。",
+      "start_seconds": 149.6,
+      "end_seconds": 198.5,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c5",
+    "title": "产婆式提问",
+    "summary": "文字、印刷术、计算器、搜索引擎都让人担心过会变笨，结果并没有。苏格拉底自称“产婆”，靠追问让人把想法说出来；论文作者也在问，只提问、不给答案的 AI 会不会让人更有耐心。",
+    "start_seconds": 198.5,
+    "end_seconds": 270.4,
+    "children": [
+     {
+      "id": "c5-1",
+      "title": "文字没让人变笨",
+      "summary": "文字让智慧第一次可以跨越两千年。",
+      "start_seconds": 198.5,
+      "end_seconds": 270.4,
+      "children": []
+     },
+     {
+      "id": "c5-2",
+      "title": "追问而不塞答案",
+      "summary": "产婆式的教法：不塞现成答案，一句接一句地追问。",
+      "start_seconds": 198.5,
+      "end_seconds": 270.4,
+      "children": []
+     },
+     {
+      "id": "c5-3",
+      "title": "苏格拉底式 AI 未经测试",
+      "summary": "只提问、只引导的 AI 会怎样，目前还没人测过。",
+      "start_seconds": 198.5,
+      "end_seconds": 270.4,
+      "children": []
+     },
+     {
+      "id": "c5-4",
+      "title": "代笔还是产婆",
+      "summary": "现在的 AI 既能当代笔，也能当逼你思考的产婆。",
+      "start_seconds": 198.5,
+      "end_seconds": 270.4,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c6",
+    "title": "卡住时怎么做",
+    "summary": "视频给了两个做法：先自己和问题死磕五分钟；问 AI 时让它别给答案，只给提示、指出卡在哪一步。",
+    "start_seconds": 270.4,
+    "end_seconds": 324,
+    "children": [
+     {
+      "id": "c6-1",
+      "title": "先死磕五分钟",
+      "summary": "忍住直接复制粘贴的冲动，先自己想五分钟。",
+      "start_seconds": 270.4,
+      "end_seconds": 324,
+      "children": []
+     },
+     {
+      "id": "c6-2",
+      "title": "只要提示",
+      "summary": "提问时加一句：“别直接告诉我答案，给我一点提示，看看我哪一步卡住了。”",
+      "start_seconds": 270.4,
+      "end_seconds": 324,
+      "children": []
+     },
+     {
+      "id": "c6-3",
+      "title": "本事没有捷径",
+      "summary": "真正属于自己的本事，只能在卡住又没放弃的那几分钟里练出来。",
+      "start_seconds": 270.4,
+      "end_seconds": 324,
+      "children": []
+     }
+    ]
+   }
+  ]
+ },
+ "knowledge_cards": [
+  {
+   "id": "writing-and-ai-1",
+   "title": "生成效应",
+   "kind": "concept",
+   "summary": "自己主动想出来的内容，比直接读到的记得更牢。",
+   "details": "生成效应（generation effect）是记忆研究里的经典发现，视频画面引用的是 Slamecka 和 Graf 1978 年的论文。做题时卡住、反复尝试、最后想通，这个过程会让人对内容加工得更深；直接看答案则跳过了这一步。",
+   "tags": [
+    "学习方法",
+    "记忆"
+   ]
+  },
+  {
+   "id": "writing-and-ai-2",
+   "title": "撤走 AI 后的成绩变化",
+   "kind": "fact",
+   "summary": "第一个实验里，用过 AI 的人在 AI 撤走后正确率不到六成，对照组七成多；跳题比例接近对照组两倍。",
+   "details": "研究由伯克利等几所大学的研究者发表，1200 多人参与，一组可以随时问 GPT-5，另一组独立作答。有 AI 时用 AI 的一组答得更好，但撤走 AI 后表现反而更差，变化在十几分钟内出现。",
+   "tags": [
+    "AI",
+    "研究"
+   ]
+  },
+  {
+   "id": "writing-and-ai-3",
+   "title": "看工具省掉了哪一步",
+   "kind": "insight",
+   "summary": "同样用 AI，直接要答案的人掉得最多，只要提示的人几乎不受影响。",
+   "details": "研究按参与者自述的用法分组：约六成主要直接要答案，约三成让 AI 给提示、讲思路。撤走 AI 后，后者和没用过 AI 的人表现几乎一样。分组依据的是事后回忆，结论还需要更严格的验证。",
+   "tags": [
+    "AI",
+    "学习方法"
+   ]
+  },
+  {
+   "id": "writing-and-ai-4",
+   "title": "产婆术",
+   "kind": "concept",
+   "summary": "苏格拉底不直接给答案，而是一句接一句地追问，让对方自己把想法说出来。",
+   "details": "苏格拉底把自己比作“产婆”：想法是对方自己“生”出来的，他只负责追问。论文作者据此提出一个还没被测试过的设想：如果 AI 只提问、只引导，人们会不会更有耐心。",
+   "tags": [
+    "苏格拉底",
+    "教学"
+   ]
+  },
+  {
+   "id": "writing-and-ai-5",
+   "title": "卡住时这样问 AI",
+   "kind": "method",
+   "summary": "先自己想五分钟，再让 AI 只给提示、指出卡在哪一步。",
+   "details": "可以直接在提问里写：“别直接告诉我答案，给我一点提示，看看我哪一步卡住了。”这样 AI 帮你找到卡点，推导还是你自己完成。",
+   "tags": [
+    "AI",
+    "学习方法"
+   ]
+  }
+ ],
+ "transcript": [
+  {
+   "start_seconds": 0,
+   "end_seconds": 5.154,
+   "text": "两千四百年前，有个人对一项新技术忧心忡忡。"
+  },
+  {
+   "start_seconds": 5.154,
+   "end_seconds": 16.275,
+   "text": "他讲了一个故事：古埃及有位发明之神，把自己的新发明献给国王，说这东西能让人更聪明、记性更好。"
+  },
+  {
+   "start_seconds": 16.275,
+   "end_seconds": 23.6,
+   "text": "国王却摇摇头：恰恰相反，有了它，人们就不再练习记忆，会变得健忘。"
+  },
+  {
+   "start_seconds": 23.6,
+   "end_seconds": 29.926,
+   "text": "他们读了很多，以为自己懂了很多，其实只得到了智慧的“外表”。"
+  },
+  {
+   "start_seconds": 29.926,
+   "end_seconds": 32.962,
+   "text": "这项可怕的新发明，叫做——文字。"
+  },
+  {
+   "start_seconds": 32.962,
+   "end_seconds": 38.53,
+   "text": "讲这个故事的人，是苏格拉底。他一辈子没写过一本书。"
+  },
+  {
+   "start_seconds": 38.53,
+   "end_seconds": 47.64,
+   "text": "讽刺的是，我们今天之所以知道他反对文字，全靠他的学生柏拉图，把这段话给写了下来。"
+  },
+  {
+   "start_seconds": 48.1,
+   "end_seconds": 71.46,
+   "text": "两千多年后，类似的担心又回来了，只不过这次，主角换成了 AI。今年十月，伯克利等几所大学的研究者发表了一项研究。他们找来一千两百多人做数学和阅读题，一组可以随时问 GPT-5，另一组只能靠自己。做着做着，研究者突然把 AI 撤走了。"
+  },
+  {
+   "start_seconds": 71.46,
+   "end_seconds": 75.308,
+   "text": "有 AI 帮忙的时候，这组人确实答得更好。"
+  },
+  {
+   "start_seconds": 75.308,
+   "end_seconds": 80.12,
+   "text": "可 AI 一撤，他们的正确率立刻掉到了对照组下面，"
+  },
+  {
+   "start_seconds": 80.12,
+   "end_seconds": 82.766,
+   "text": "连直接放弃的题都变多了。"
+  },
+  {
+   "start_seconds": 82.766,
+   "end_seconds": 92.388,
+   "text": "在第一个实验里，对照组答对了七成多，用过 AI 的人不到六成；跳过不做的比例，将近对照组的两倍。"
+  },
+  {
+   "start_seconds": 92.388,
+   "end_seconds": 97.2,
+   "text": "而从用上 AI 到出现这种变化，前后不过十几分钟。"
+  },
+  {
+   "start_seconds": 97.34,
+   "end_seconds": 102.624,
+   "text": "看到这儿，你可能会觉得：AI 真是个削弱人类的毒药。"
+  },
+  {
+   "start_seconds": 102.624,
+   "end_seconds": 111.272,
+   "text": "但论文里还有一个更有意思的细节。实验结束后，研究者问这些人：你刚才是怎么用 AI 的？"
+  },
+  {
+   "start_seconds": 111.272,
+   "end_seconds": 115.115,
+   "text": "六成的人很诚实：我主要是直接要答案。"
+  },
+  {
+   "start_seconds": 115.115,
+   "end_seconds": 134.32,
+   "text": "但还有大约三成的人说：我是让它给提示、讲思路。AI 撤走之后，真正的差距就出在这里：直接要答案的那组，成绩掉得最惨；而只要提示的那组，表现和从头到尾没用过 AI 的人几乎一样。"
+  },
+  {
+   "start_seconds": 134.32,
+   "end_seconds": 149.52,
+   "text": "虽然这只是参与者自己的事后回忆，还不能完全算作铁证，但道理其实很直观：让人变弱的，也许不是工具本身，而是你用它省掉了哪一步。"
+  },
+  {
+   "start_seconds": 149.68,
+   "end_seconds": 162.47,
+   "text": "其实这个道理，苏格拉底当年就看透了。他担心的从来不是“把东西记下来”，而是“脑子从此偷懒”。纸替你记住了，你就懒得背了；"
+  },
+  {
+   "start_seconds": 162.47,
+   "end_seconds": 168.098,
+   "text": "别人直接给你答案了，你就跳过了自己琢磨的那一步。"
+  },
+  {
+   "start_seconds": 168.098,
+   "end_seconds": 176.54,
+   "text": "心理学上把这叫做“生成效应”：自己费劲想出来的东西，往往比直接看来的记得牢。"
+  },
+  {
+   "start_seconds": 176.54,
+   "end_seconds": 186.011,
+   "text": "做题时那种卡壳、抓耳挠腮、差一点就想通的难受劲儿，才是大脑真正受训练的时候。"
+  },
+  {
+   "start_seconds": 186.011,
+   "end_seconds": 191.965,
+   "text": "所以，直接向 AI 要答案，就好比花钱请人替你去健身房。"
+  },
+  {
+   "start_seconds": 191.965,
+   "end_seconds": 198.46,
+   "text": "汗是他流的，铁是他举的，最后练出来的，当然也是他的肌肉。"
+  },
+  {
+   "start_seconds": 198.52,
+   "end_seconds": 217.516,
+   "text": "不过，说句公道话，苏格拉底也不全对。文字之后，有了印刷术、计算器、搜索引擎，每一次都有人担心人类会变笨。可回头看，文字并没有让人类失去智慧，它让智慧第一次可以跨越两千年，"
+  },
+  {
+   "start_seconds": 217.516,
+   "end_seconds": 224.62,
+   "text": "比如，让我们今天还能听到苏格拉底的担心。那问题到底出在哪？"
+  },
+  {
+   "start_seconds": 224.62,
+   "end_seconds": 233.493,
+   "text": "答案，苏格拉底自己其实也留下了。他说过，自己是个“产婆”：他从不往别人脑子里塞"
+  },
+  {
+   "start_seconds": 233.493,
+   "end_seconds": 240.753,
+   "text": "现成的答案，只是一句接一句地追问，逼着你把自己的想法“生”出来。"
+  },
+  {
+   "start_seconds": 240.753,
+   "end_seconds": 257.652,
+   "text": "巧的是，这篇论文的作者在最后也抛出了一个问题：如果把 AI 改一改，不再有求必应地喂答案，而是像苏格拉底那样只提问、只引导，人们还会这么快失去耐心吗？"
+  },
+  {
+   "start_seconds": 257.652,
+   "end_seconds": 263.534,
+   "text": "研究者说，这个目前还没人测过。但其实也不用等他们测，"
+  },
+  {
+   "start_seconds": 263.534,
+   "end_seconds": 270.44,
+   "text": "因为现在的 AI，既能当替你写作业的代笔，也能当逼你思考的产婆。"
+  },
+  {
+   "start_seconds": 270.44,
+   "end_seconds": 290.26,
+   "text": "所以下次再卡住的时候，不妨忍住直接复制粘贴的冲动，先自己和问题死磕五分钟；或者在提问的时候加一句：“别直接告诉我答案，给我一点提示，看看我哪一步卡住了。”"
+  },
+  {
+   "start_seconds": 292.42,
+   "end_seconds": 300.27,
+   "text": "两千四百年前，苏格拉底担心文字会让人只拥有智慧的“外表”。"
+  },
+  {
+   "start_seconds": 300.27,
+   "end_seconds": 308.12,
+   "text": "今天，AI 能在一秒钟内，给我们的“外表”比过去任何时代都华丽。"
+  },
+  {
+   "start_seconds": 308.12,
+   "end_seconds": 321.42,
+   "text": "但那些真正属于你的本事，依然没有任何捷径——它只能留在你卡住、想不通、却又还没打算放弃的那几分钟里。"
+  }
+ ]
+}

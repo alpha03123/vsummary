@@ -88,10 +88,9 @@ export function WorkspaceAiSummaryView({
 
   return (
     <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="flex items-center justify-between gap-3 px-2">
-        <div className="min-w-0">
-          <h2 className="mt-1 text-lg font-bold text-strong">AI 概括</h2>
-        </div>
+      {/* The panel header already names the tool; the heading stays for screen readers only. */}
+      <div className="-mb-2 flex items-center justify-end gap-3 px-2">
+        <h2 className="sr-only">AI 概括</h2>
         <div className="flex shrink-0 items-center gap-1">
           {editing ? (
             <>
@@ -120,9 +119,9 @@ export function WorkspaceAiSummaryView({
           activeItemId={activeOutlineId}
           onSelect={selectOutlineItem}
         >
-          <article className="rounded-3xl border border-line/80 bg-surface p-6 shadow-sm">
-            <h1 className="text-2xl font-bold text-strong">{aiSummary.title}</h1>
-            <div className="my-5 h-px bg-soft" />
+          <article className="px-2">
+            <h1 className="text-2xl font-bold leading-snug text-strong">{aiSummary.title}</h1>
+            <div className="my-5 border-t border-line-soft" />
             <div className="markdown-body text-sm text-body"><WorkspaceMarkdownMessage content={aiSummary.content} citations={aiSummary.citations} headingIds={outline.headingIds} noteImageContext={noteImageContext} onSeek={onSeek} onOpenCitationReference={onOpenCitationReference} onOpenTranscriptAtTime={onOpenTranscriptAtTime} /></div>
           </article>
         </WorkspaceContentOutline>

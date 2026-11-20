@@ -1,4 +1,4 @@
-import { ArrowRight, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 
 /**
  * Status chip colours. Keys match the `tone` values returned by
@@ -24,13 +24,12 @@ const STATUS_TONES = {
 const DISABLED_VISUALS = {
   palette: "border border-dashed border-line-strong bg-muted/70",
   iconShell: "border border-line bg-soft text-faint",
-  arrowShell: "border border-dashed border-line-strong bg-transparent text-faint",
 };
 
 function ToolStatusChip({ label, tone }) {
   return (
     <span
-      className={`mt-3 inline-flex w-fit shrink-0 whitespace-nowrap items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+      className={`mt-2.5 inline-flex w-fit shrink-0 whitespace-nowrap items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
         STATUS_TONES[tone] ?? STATUS_TONES.pending
       }`}
     >
@@ -58,44 +57,29 @@ export function WorkspaceToolGrid({ items, onSelect }) {
             type="button"
             onClick={() => onSelect(id)}
             disabled={disabled}
-            className={`motion-stagger group rounded-2xl p-5 text-left transition-all duration-200 ${
+            className={`motion-stagger group relative rounded-2xl p-4 text-left transition-colors duration-150 ${
               disabled ? `cursor-not-allowed ${DISABLED_VISUALS.palette}` : `cursor-pointer ${meta.palette}`
             }`}
             style={{ "--stagger-index": index }}
           >
-            <div className="relative pr-12">
-              <div className="flex min-w-0 items-start gap-3">
-                <span
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm shadow-slate-950/10 ${
-                    disabled
-                      ? DISABLED_VISUALS.iconShell
-                      : `${meta.iconShell} transition-colors group-hover:brightness-105`
-                  }`}
-                >
-                  <Icon size={18} />
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className={`text-base font-bold ${disabled ? "text-faint" : ""}`}>
-                    {meta.label}
-                  </span>
-                  <span
-                    className={`mt-1 text-xs ${
-                      disabled ? "text-faint" : "text-subtle"
-                    }`}
-                  >
-                    {description ?? meta.description}
-                  </span>
-                  {status ? <ToolStatusChip {...status} /> : null}
-                </span>
-              </div>
+            {/* The whole tile is the button; the old arrow circle repeated that. Locked tiles keep a small lock. */}
+            {disabled ? <Lock size={14} aria-hidden="true" className="absolute right-4 top-4 text-faint" /> : null}
+            <div className="flex min-w-0 items-start gap-3 pr-5">
               <span
-                className={`absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-2xl transition-colors ${
-                  disabled
-                    ? DISABLED_VISUALS.arrowShell
-                    : `motion-arrow-shift border border-white/40 dark:border-line group-hover:brightness-105 ${meta.arrowShell}`
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                  disabled ? DISABLED_VISUALS.iconShell : meta.iconShell
                 }`}
               >
-                {disabled ? <Lock size={16} aria-hidden="true" /> : <ArrowRight size={18} />}
+                <Icon size={18} />
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className={`text-[15px] font-semibold ${disabled ? "text-faint" : "text-strong"}`}>
+                  {meta.label}
+                </span>
+                <span className={`mt-0.5 text-xs leading-relaxed ${disabled ? "text-faint" : "text-subtle"}`}>
+                  {description ?? meta.description}
+                </span>
+                {status ? <ToolStatusChip {...status} /> : null}
               </span>
             </div>
           </button>

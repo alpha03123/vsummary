@@ -166,7 +166,7 @@ function StartFromLink({ onStart, onUpload, hint, extra }) {
   };
   return (
     <motion.section variants={blurVariant} className="mx-auto flex w-full max-w-3xl flex-col items-center pt-[12dvh] text-center">
-      <h2 className="text-2xl font-bold text-strong md:text-3xl">把视频变成能检索、能提问的笔记</h2>
+      <h2 className="text-balance text-2xl font-bold text-strong md:text-3xl">把视频变成能检索、能提问的笔记</h2>
       <form onSubmit={submit} className="mt-8 flex w-full flex-col gap-2 sm:flex-row">
         <LinkField url={url} onChange={setUrl} onUpload={onUpload} large />
         <button type="submit" disabled={!url.trim()} className="inline-flex h-[52px] items-center justify-center gap-1.5 rounded-2xl bg-accent px-6 text-sm font-semibold text-on-accent shadow-sm transition-colors hover:bg-accent/90 disabled:bg-softer disabled:text-ghost disabled:shadow-none">
@@ -179,12 +179,13 @@ function StartFromLink({ onStart, onUpload, hint, extra }) {
   );
 }
 
-function StartWithoutLink({ onAdd }) {
+function StartWithoutLink({ onAdd, extra }) {
   return (
-    <motion.section variants={blurVariant} className="mx-auto flex w-full max-w-3xl flex-col items-center pt-[14dvh] text-center">
-      <h2 className="text-2xl font-bold text-strong md:text-3xl">把视频变成能检索、能提问的笔记</h2>
+    <motion.section variants={blurVariant} className={`mx-auto flex w-full max-w-3xl flex-col items-center text-center ${extra ? "pt-[10dvh]" : "pt-[14dvh]"}`}>
+      <h2 className="text-balance text-2xl font-bold text-strong md:text-3xl">把视频变成能检索、能提问的笔记</h2>
       <p className="mt-3 text-sm text-faint">导入一个合集、几个本地文件或一门课程，处理后就能看概括、查原话、向内容提问。</p>
       <div className="mt-8 w-full"><AddBar onAdd={onAdd} /></div>
+      {extra ? <div className="mt-12 w-full">{extra}</div> : null}
     </motion.section>
   );
 }
@@ -399,6 +400,8 @@ export function WorkspaceLibraryHomePane({
   onRefreshLibrary,
   onRequestBulkDelete,
   linkStart = null,
+  // Host content under the start field of an empty library (both hosts show processed examples).
+  onboardingExtra = null,
   showPlayground = true,
   inboxComingSoon = false,
 }) {
@@ -489,7 +492,7 @@ export function WorkspaceLibraryHomePane({
         {empty ? (
           linkStart
             ? <StartFromLink onStart={linkStart.onStart} onUpload={linkStart.onUpload} hint={linkStart.hint} extra={linkStart.extra} />
-            : <StartWithoutLink onAdd={onAddSeries} />
+            : <StartWithoutLink onAdd={onAddSeries} extra={onboardingExtra} />
         ) : (
           <>
             <motion.div variants={blurVariant}>

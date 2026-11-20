@@ -39,7 +39,7 @@ export function WorkspaceExportMenu({ exportActions, buttonLabel = "导出" }) {
   const enabledActions = exportActions.filter((action) => action.enabled);
   const disabledReason = exportActions.find((action) => !action.enabled)?.disabledReason ?? "当前内容不可导出";
   const disabled = enabledActions.length === 0;
-  const className = "inline-flex h-7 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-2 text-xs font-semibold transition";
+  const className = "inline-flex h-7 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-2 text-xs font-medium transition";
 
   useOutsidePointerUp(open, [menuRef], () => setOpen(false));
 

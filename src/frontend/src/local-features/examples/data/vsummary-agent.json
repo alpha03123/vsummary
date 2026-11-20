@@ -1,0 +1,772 @@
+{
+ "slug": "vsummary-agent",
+ "title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+ "source_url": "https://www.bilibili.com/video/BV17tNt6xEkS",
+ "duration_seconds": 179.189,
+ "one_sentence_summary": "vsummary v0.3.1 为 agent 提供了 MCP 服务和配套 skill，视频演示了接入步骤，以及让 agent 处理本地音频、去 B 站查资料、导出文件和清理系列。",
+ "core_problem": "怎样让 AI agent 直接调用 vsummary，替你转写、总结和管理音视频？",
+ "key_takeaways": [
+  "接入顺序：在 agent 设置里填 MCP URL，启动 vsummary 后端，再在对话里提及 vsummary skill。",
+  "后端没启动时，agent 识别不到 MCP 服务。",
+  "agent 可以批量处理本地音频，并给每段音频写总结。",
+  "目前只支持从 B 站检索视频，YouTube、抖音等平台以后再扩展。",
+  "结果能导出到任意位置；agent 产生的多余系列可以手动删，也可以让 agent 删指定的或全部删掉。"
+ ],
+ "chapters": [
+  {
+   "title": "v0.3.1 更新了什么",
+   "summary": "这一版主要增强了 agent 功能：作者为 vsummary 做了 MCP 服务和配套 skill，让 agent 能直接操作它。",
+   "key_points": [
+    "vsummary 更新到 v0.3.1。",
+    "重点是让 agent 更好地操作 vsummary。",
+    "新增 MCP 服务和配套 skill。"
+   ],
+   "start_seconds": 0,
+   "end_seconds": 23.6,
+   "image_url": "/example-media/vsummary-agent/chapter-01.jpg"
+  },
+  {
+   "title": "接入步骤",
+   "summary": "先在 agent 的设置里填好 MCP URL，让模型能看到服务；再启动 vsummary 后端；最后在对话里提及 vsummary skill，模型就知道怎么调用这些工具了。",
+   "key_points": [
+    "配置 MCP URL 后，模型可以调用服务里的各种工具。",
+    "后端没启动，agent 识别不到 MCP。",
+    "提及 skill 后，可以让模型分析视频、总结会议纪要。"
+   ],
+   "start_seconds": 24,
+   "end_seconds": 62.7,
+   "image_url": "/example-media/vsummary-agent/chapter-02.jpg"
+  },
+  {
+   "title": "处理本地音频",
+   "summary": "作者让 agent 处理本地的两段音频，过一会儿模型就生成了两份总结。",
+   "key_points": [
+    "把本地文件交给 agent 处理。",
+    "模型通过 vsummary 转写并总结了两段音频。"
+   ],
+   "start_seconds": 62.9,
+   "end_seconds": 80,
+   "image_url": "/example-media/vsummary-agent/chapter-03.jpg"
+  },
+  {
+   "title": "让 agent 去 B 站查资料",
+   "summary": "给模型一个分析任务，它会自己去 B 站找相关视频、转成文字，再给出结论；追问音视频里的具体细节，回答也比较完整。",
+   "key_points": [
+    "目前 API 只支持 B 站，以后可以扩展到 YouTube、抖音等平台。",
+    "模型自己检索 B 站并把视频转成文字。",
+    "可以继续追问视频里的细节。"
+   ],
+   "start_seconds": 80.8,
+   "end_seconds": 122.6,
+   "image_url": "/example-media/vsummary-agent/chapter-04.jpg"
+  },
+  {
+   "title": "导出和清理",
+   "summary": "模型可以通过 MCP 把文件导出到任意位置。agent 处理时会产生多个系列，可以手动删除，也可以让 agent 删掉指定的某个或全部删除。",
+   "key_points": [
+    "导出的文件可以自由使用。",
+    "agent 处理时会生成多个 series。",
+    "支持手动删除、指定删除和全部删除。"
+   ],
+   "start_seconds": 124.8,
+   "end_seconds": 160,
+   "image_url": "/example-media/vsummary-agent/chapter-05.jpg"
+  },
+  {
+   "title": "下载",
+   "summary": "项目地址在视频简介里，到 release 页面下载 GPU 版本就能用。",
+   "key_points": [
+    "地址放在视频简介。",
+    "下载 release 里的 GPU 版本。"
+   ],
+   "start_seconds": 163.7,
+   "end_seconds": 179.2,
+   "image_url": "/example-media/vsummary-agent/chapter-06.jpg"
+  }
+ ],
+ "ai_summary": {
+  "title": "vsummary v0.3.1：让 agent 通过 MCP 处理音视频",
+  "content": "## 这一版改了什么\n\nvsummary 更新到 v0.3.1，改动最大的是 agent 相关功能。作者为 vsummary 做了 MCP 服务和配套 skill，让 agent 可以直接调用它。[1]\n\n## 怎么接入\n\n1. 在 agent 的设置里配置 MCP URL，模型才能看到 vsummary 的服务，并调用里面的工具。[2]\n2. 启动 vsummary 后端。后端没启动，agent 识别不到 MCP。[3]\n3. 在对话里提及 vsummary skill，让模型知道怎么用这个服务。之后就可以让它分析视频、总结会议纪要。[4]\n\n## 演示一：处理本地音频\n\n作者让 agent 处理本地的两段音频，过了一会儿，模型给出了两份总结。[5]\n\n![agent 生成的两段音频总结](/example-media/vsummary-agent/frame-0118.jpg \"seek:78\")\n\n## 演示二：去 B 站找资料\n\n目前 API 只支持 B 站，作者说以后可以扩展到 YouTube、抖音等平台。[6] 给模型一个分析任务后，它会自己去 B 站搜索相关视频并转成文字，最后给出结论；再追问音视频里的具体细节，回答也比较全面。[7]\n\n![agent 检索 B 站后给出的结论](/example-media/vsummary-agent/frame-0152.jpg \"seek:112\")\n\n## 导出和清理\n\n- **导出**：模型可以通过 MCP 把文件导出到任意位置，之后自己随意使用。[8]\n- **清理**：agent 处理时会产生多个系列（series），可以手动删，也可以让 agent 删掉指定的某个，或者全部删除。[9]\n\n## 下载\n\n项目地址在视频简介里，到 release 页面下载 GPU 版本即可使用。[10]\n",
+  "citations": [
+   {
+    "id": "1",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 0,
+      "end_seconds": 18.86,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 0,
+      "end_seconds": 18.86,
+      "url": null,
+      "candidates": [],
+      "text": "大家好啊，vsummary 也是更新到 v0.3.1 了。这次改动最大的还是有关 agent 功能的增强，能够让 agent 更好地操作 vsummary。虽然我没用过 Obsidian，但是我为 vsummary 提供了 MCP 服务和配套 skill。"
+     }
+    ]
+   },
+   {
+    "id": "2",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 23.96,
+      "end_seconds": 37.42,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 23.96,
+      "end_seconds": 37.42,
+      "url": null,
+      "candidates": [],
+      "text": "为了配置 vsummary，首先我们需要进入设置，配置好 MCP URL，这样是为了确保模型能看到服务。然后就能根据 MCP 服务，调用各种各样的工具。"
+     }
+    ]
+   },
+   {
+    "id": "3",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 40.02,
+      "end_seconds": 46.8,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 40.02,
+      "end_seconds": 46.8,
+      "url": null,
+      "candidates": [],
+      "text": "接着别忘了启动后端服务。如果后端没启动，agent 是没法识别 MCP 的。"
+     }
+    ]
+   },
+   {
+    "id": "4",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 47.62,
+      "end_seconds": 62.74,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 47.62,
+      "end_seconds": 62.74,
+      "url": null,
+      "candidates": [],
+      "text": "启动后端服务后，可以在对话里提及 vsummary skill，让模型知道如何使用这个 MCP 服务，最后就可以直接让模型帮你干活了。你可以让它帮你分析视频，或者总结会议纪要。"
+     }
+    ]
+   },
+   {
+    "id": "5",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 62.94,
+      "end_seconds": 76.76,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 62.94,
+      "end_seconds": 76.76,
+      "url": null,
+      "candidates": [],
+      "text": "首先是本地任务处理，这里我让 agent 帮我处理一下本地音频。可以看到，一会儿过后，模型成功生成了对两个音频的总结。"
+     }
+    ]
+   },
+   {
+    "id": "6",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 80.8,
+      "end_seconds": 91.6,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 80.8,
+      "end_seconds": 91.6,
+      "url": null,
+      "candidates": [],
+      "text": "然后是针对特定任务去挖掘信息。目前 API 只支持 B 站，但后续可以拓展，支持 YouTube、抖音等各种平台。"
+     }
+    ]
+   },
+   {
+    "id": "7",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 92.64,
+      "end_seconds": 122.56,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 92.64,
+      "end_seconds": 122.56,
+      "url": null,
+      "candidates": [],
+      "text": "我给了模型一个分析任务，模型就能自己去 B 站查找相关信息，并且转化为文本。一段时间后，模型成功给出了结论。随后，我们去询问有关音频或者视频的具体细节，可以看到，信息还是很全面的。"
+     }
+    ]
+   },
+   {
+    "id": "8",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 124.84,
+      "end_seconds": 143.6,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 124.84,
+      "end_seconds": 143.6,
+      "url": null,
+      "candidates": [],
+      "text": "最后是导出功能，MCP 支持模型把最终文件导出到任意地方。导出的文件就可以自己任意使用了。"
+     }
+    ]
+   },
+   {
+    "id": "9",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 145.32,
+      "end_seconds": 160,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 145.32,
+      "end_seconds": 160,
+      "url": null,
+      "candidates": [],
+      "text": "然后是清理机制。因为 agent 处理的时候会产生多个 series，可以手动删除，或者让 agent 删除指定的某一个，甚至全部删除。"
+     }
+    ]
+   },
+   {
+    "id": "10",
+    "label": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+    "source_type": "transcript",
+    "search_scope": "transcript",
+    "slots": [
+     {
+      "slot": 1,
+      "target_type": "video",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 163.74,
+      "end_seconds": 179.18,
+      "url": null,
+      "candidates": [],
+      "text": null
+     },
+     {
+      "slot": 2,
+      "target_type": "transcript",
+      "series_id": null,
+      "video_id": "",
+      "video_title": "AI总结同agent联动，更好的帮你搭建个人知识库!",
+      "chapter_id": null,
+      "start_seconds": 163.74,
+      "end_seconds": 179.18,
+      "url": null,
+      "candidates": [],
+      "text": "最后就是项目下载地址，地址我已经放到简介了。下载前还是希望大家多多 star，这是我更新项目的动力。之后去 release 下载一个 GPU 版本，就可以使用了。"
+     }
+    ]
+   }
+  ]
+ },
+ "mindmap": {
+  "id": "root",
+  "title": "vsummary v0.3.1：agent 联动",
+  "summary": "vsummary v0.3.1 为 agent 提供了 MCP 服务和配套 skill，视频演示了接入步骤，以及让 agent 处理本地音频、去 B 站查资料、导出文件和清理系列。",
+  "start_seconds": 0,
+  "end_seconds": 179.189,
+  "children": [
+   {
+    "id": "c1",
+    "title": "更新内容",
+    "summary": "这一版主要增强了 agent 功能：作者为 vsummary 做了 MCP 服务和配套 skill，让 agent 能直接操作它。",
+    "start_seconds": 0,
+    "end_seconds": 23.6,
+    "children": [
+     {
+      "id": "c1-1",
+      "title": "v0.3.1",
+      "summary": "vsummary 更新到 v0.3.1。",
+      "start_seconds": 0,
+      "end_seconds": 23.6,
+      "children": []
+     },
+     {
+      "id": "c1-2",
+      "title": "agent 能力增强",
+      "summary": "重点是让 agent 更好地操作 vsummary。",
+      "start_seconds": 0,
+      "end_seconds": 23.6,
+      "children": []
+     },
+     {
+      "id": "c1-3",
+      "title": "MCP 服务和 skill",
+      "summary": "新增 MCP 服务和配套 skill。",
+      "start_seconds": 0,
+      "end_seconds": 23.6,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c2",
+    "title": "接入步骤",
+    "summary": "先在 agent 的设置里填好 MCP URL，让模型能看到服务；再启动 vsummary 后端；最后在对话里提及 vsummary skill，模型就知道怎么调用这些工具了。",
+    "start_seconds": 24,
+    "end_seconds": 62.7,
+    "children": [
+     {
+      "id": "c2-1",
+      "title": "配置 MCP URL",
+      "summary": "配置 MCP URL 后，模型可以调用服务里的各种工具。",
+      "start_seconds": 24,
+      "end_seconds": 62.7,
+      "children": []
+     },
+     {
+      "id": "c2-2",
+      "title": "启动后端",
+      "summary": "后端没启动，agent 识别不到 MCP。",
+      "start_seconds": 24,
+      "end_seconds": 62.7,
+      "children": []
+     },
+     {
+      "id": "c2-3",
+      "title": "提及 vsummary skill",
+      "summary": "提及 skill 后，可以让模型分析视频、总结会议纪要。",
+      "start_seconds": 24,
+      "end_seconds": 62.7,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c3",
+    "title": "处理本地音频",
+    "summary": "作者让 agent 处理本地的两段音频，过一会儿模型就生成了两份总结。",
+    "start_seconds": 62.9,
+    "end_seconds": 80,
+    "children": [
+     {
+      "id": "c3-1",
+      "title": "交给 agent",
+      "summary": "把本地文件交给 agent 处理。",
+      "start_seconds": 62.9,
+      "end_seconds": 80,
+      "children": []
+     },
+     {
+      "id": "c3-2",
+      "title": "两段音频的总结",
+      "summary": "模型通过 vsummary 转写并总结了两段音频。",
+      "start_seconds": 62.9,
+      "end_seconds": 80,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c4",
+    "title": "去 B 站查资料",
+    "summary": "给模型一个分析任务，它会自己去 B 站找相关视频、转成文字，再给出结论；追问音视频里的具体细节，回答也比较完整。",
+    "start_seconds": 80.8,
+    "end_seconds": 122.6,
+    "children": [
+     {
+      "id": "c4-1",
+      "title": "目前只支持 B 站",
+      "summary": "目前 API 只支持 B 站，以后可以扩展到 YouTube、抖音等平台。",
+      "start_seconds": 80.8,
+      "end_seconds": 122.6,
+      "children": []
+     },
+     {
+      "id": "c4-2",
+      "title": "自动检索并转写",
+      "summary": "模型自己检索 B 站并把视频转成文字。",
+      "start_seconds": 80.8,
+      "end_seconds": 122.6,
+      "children": []
+     },
+     {
+      "id": "c4-3",
+      "title": "追问细节",
+      "summary": "可以继续追问视频里的细节。",
+      "start_seconds": 80.8,
+      "end_seconds": 122.6,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c5",
+    "title": "导出和清理",
+    "summary": "模型可以通过 MCP 把文件导出到任意位置。agent 处理时会产生多个系列，可以手动删除，也可以让 agent 删掉指定的某个或全部删除。",
+    "start_seconds": 124.8,
+    "end_seconds": 160,
+    "children": [
+     {
+      "id": "c5-1",
+      "title": "导出到任意位置",
+      "summary": "导出的文件可以自由使用。",
+      "start_seconds": 124.8,
+      "end_seconds": 160,
+      "children": []
+     },
+     {
+      "id": "c5-2",
+      "title": "agent 会产生多个系列",
+      "summary": "agent 处理时会生成多个 series。",
+      "start_seconds": 124.8,
+      "end_seconds": 160,
+      "children": []
+     },
+     {
+      "id": "c5-3",
+      "title": "三种删除方式",
+      "summary": "支持手动删除、指定删除和全部删除。",
+      "start_seconds": 124.8,
+      "end_seconds": 160,
+      "children": []
+     }
+    ]
+   },
+   {
+    "id": "c6",
+    "title": "下载",
+    "summary": "项目地址在视频简介里，到 release 页面下载 GPU 版本就能用。",
+    "start_seconds": 163.7,
+    "end_seconds": 179.2,
+    "children": [
+     {
+      "id": "c6-1",
+      "title": "地址在简介",
+      "summary": "地址放在视频简介。",
+      "start_seconds": 163.7,
+      "end_seconds": 179.2,
+      "children": []
+     },
+     {
+      "id": "c6-2",
+      "title": "GPU 版本",
+      "summary": "下载 release 里的 GPU 版本。",
+      "start_seconds": 163.7,
+      "end_seconds": 179.2,
+      "children": []
+     }
+    ]
+   }
+  ]
+ },
+ "knowledge_cards": [
+  {
+   "id": "vsummary-agent-1",
+   "title": "MCP 服务",
+   "kind": "concept",
+   "summary": "agent 调用外部工具的接口。vsummary 通过它把转写、总结、导出和删除等操作交给 agent。",
+   "details": "MCP（Model Context Protocol）让模型能发现并调用外部服务提供的工具。在 agent 设置里填上 vsummary 的 MCP URL，模型就能看到这些工具；前提是 vsummary 后端已经启动。",
+   "tags": [
+    "agent",
+    "MCP"
+   ]
+  },
+  {
+   "id": "vsummary-agent-2",
+   "title": "接入 vsummary 的三步",
+   "kind": "method",
+   "summary": "填 MCP URL，启动后端，在对话里提及 vsummary skill。",
+   "details": "顺序不能乱：没有 MCP URL，模型看不到服务；后端没启动，agent 识别不到 MCP；不提及 skill，模型不知道该怎么组合调用这些工具。三步做完，就可以直接让 agent 分析视频或总结会议纪要。",
+   "tags": [
+    "agent",
+    "配置"
+   ]
+  },
+  {
+   "id": "vsummary-agent-3",
+   "title": "检索只支持 B 站",
+   "kind": "fact",
+   "summary": "v0.3.1 的 API 只能从 B 站查找视频，YouTube、抖音等平台留待以后扩展。",
+   "details": "演示里，agent 拿到分析任务后自己去 B 站搜索相关视频，转成文字后给出结论，还能回答关于视频细节的追问。",
+   "tags": [
+    "B站",
+    "agent"
+   ]
+  },
+  {
+   "id": "vsummary-agent-4",
+   "title": "清理 agent 产生的系列",
+   "kind": "method",
+   "summary": "agent 处理时会生成多个 series，可以手动删、指定删或全部删。",
+   "details": "agent 每做一次任务都可能新建系列，积累多了会很乱。可以在界面里手动删除，也可以直接让 agent 删除指定的某个系列，或者一次全部删掉。",
+   "tags": [
+    "agent",
+    "管理"
+   ]
+  }
+ ],
+ "transcript": [
+  {
+   "start_seconds": 0,
+   "end_seconds": 4.564,
+   "text": "大家好啊，vsummary 也是更新到 v0.3.1 了。"
+  },
+  {
+   "start_seconds": 4.564,
+   "end_seconds": 12.03,
+   "text": "这次改动最大的还是有关 agent 功能的增强，能够让 agent 更好地操作 vsummary。"
+  },
+  {
+   "start_seconds": 12.03,
+   "end_seconds": 18.86,
+   "text": "虽然我没用过 Obsidian，但是我为 vsummary 提供了 MCP 服务和配套 skill。"
+  },
+  {
+   "start_seconds": 19.06,
+   "end_seconds": 23.62,
+   "text": "那么话不多说，让我们进入演示。"
+  },
+  {
+   "start_seconds": 23.96,
+   "end_seconds": 25.328,
+   "text": "为了配置 vsummary，"
+  },
+  {
+   "start_seconds": 25.328,
+   "end_seconds": 32.401,
+   "text": "首先我们需要进入设置，配置好 MCP URL，这样是为了确保模型能看到服务。"
+  },
+  {
+   "start_seconds": 32.401,
+   "end_seconds": 37.42,
+   "text": "然后就能根据 MCP 服务，调用各种各样的工具。"
+  },
+  {
+   "start_seconds": 40.02,
+   "end_seconds": 46.8,
+   "text": "接着别忘了启动后端服务。如果后端没启动，agent 是没法识别 MCP 的。"
+  },
+  {
+   "start_seconds": 47.62,
+   "end_seconds": 58.928,
+   "text": "启动后端服务后，可以在对话里提及 vsummary skill，让模型知道如何使用这个 MCP 服务，最后就可以直接让模型帮你干活了。"
+  },
+  {
+   "start_seconds": 58.928,
+   "end_seconds": 62.74,
+   "text": "你可以让它帮你分析视频，或者总结会议纪要。"
+  },
+  {
+   "start_seconds": 62.94,
+   "end_seconds": 68.76,
+   "text": "首先是本地任务处理，这里我让 agent 帮我处理一下本地音频。"
+  },
+  {
+   "start_seconds": 71.6,
+   "end_seconds": 76.76,
+   "text": "可以看到，一会儿过后，模型成功生成了对两个音频的总结。"
+  },
+  {
+   "start_seconds": 80.8,
+   "end_seconds": 91.6,
+   "text": "然后是针对特定任务去挖掘信息。目前 API 只支持 B 站，但后续可以拓展，支持 YouTube、抖音等各种平台。"
+  },
+  {
+   "start_seconds": 92.64,
+   "end_seconds": 99.94,
+   "text": "我给了模型一个分析任务，模型就能自己去 B 站查找相关信息，并且转化为文本。"
+  },
+  {
+   "start_seconds": 108.38,
+   "end_seconds": 122.56,
+   "text": "一段时间后，模型成功给出了结论。随后，我们去询问有关音频或者视频的具体细节，可以看到，信息还是很全面的。"
+  },
+  {
+   "start_seconds": 124.84,
+   "end_seconds": 131.16,
+   "text": "最后是导出功能，MCP 支持模型把最终文件导出到任意地方。"
+  },
+  {
+   "start_seconds": 138.62,
+   "end_seconds": 143.6,
+   "text": "导出的文件就可以自己任意使用了。"
+  },
+  {
+   "start_seconds": 145.32,
+   "end_seconds": 160,
+   "text": "然后是清理机制。因为 agent 处理的时候会产生多个 series，可以手动删除，或者让 agent 删除指定的某一个，甚至全部删除。"
+  },
+  {
+   "start_seconds": 163.74,
+   "end_seconds": 169.27,
+   "text": "最后就是项目下载地址，地址我已经放到简介了。"
+  },
+  {
+   "start_seconds": 169.27,
+   "end_seconds": 179.18,
+   "text": "下载前还是希望大家多多 star，这是我更新项目的动力。之后去 release 下载一个 GPU 版本，就可以使用了。"
+  }
+ ]
+}

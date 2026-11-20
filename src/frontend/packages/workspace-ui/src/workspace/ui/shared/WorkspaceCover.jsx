@@ -2,26 +2,12 @@ import { useState } from "react";
 import { Film } from "lucide-react";
 import { useWorkspaceRuntime } from "../../../runtime/WorkspaceProvider";
 
-// Soft tints for videos without a cover, picked from the id so a card keeps its colour between visits.
-const PLACEHOLDER_TINTS = [
-  "from-indigo-100 to-sky-50 text-indigo-300 dark:from-indigo-950/70 dark:to-surface dark:text-indigo-800",
-  "from-amber-100 to-orange-50 text-amber-300 dark:from-amber-950/60 dark:to-surface dark:text-amber-800",
-  "from-emerald-100 to-teal-50 text-emerald-300 dark:from-emerald-950/60 dark:to-surface dark:text-emerald-800",
-  "from-rose-100 to-pink-50 text-rose-300 dark:from-rose-950/60 dark:to-surface dark:text-rose-800",
-  "from-violet-100 to-fuchsia-50 text-violet-300 dark:from-violet-950/60 dark:to-surface dark:text-violet-800",
-  "from-stone-200 to-stone-50 text-faint dark:from-stone-800 dark:to-surface",
-];
-
-function tintFor(seed) {
-  let hash = 0;
-  for (const character of String(seed ?? "")) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return PLACEHOLDER_TINTS[hash % PLACEHOLDER_TINTS.length];
-}
-
-export function WorkspaceCoverPlaceholder({ seed, iconSize = 28, className = "" }) {
+// Videos without a cover get a neutral tile: the old per-id hues (rose, amber, violet…) read as
+// broken images next to real covers, and colours belong to the theme's roles, not to components.
+export function WorkspaceCoverPlaceholder({ iconSize = 28, className = "" }) {
   return (
-    <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${tintFor(seed)} ${className}`}>
-      <Film size={iconSize} strokeWidth={1.6} />
+    <div className={`flex h-full w-full items-center justify-center bg-soft text-ghost ${className}`}>
+      <Film size={iconSize} strokeWidth={1.4} />
     </div>
   );
 }
@@ -31,7 +17,7 @@ export function WorkspaceCover({ url, seed, alt = "", iconSize, className = "", 
   const { api } = useWorkspaceRuntime();
   const [failedUrl, setFailedUrl] = useState(null);
   if (!url || failedUrl === url) {
-    return <WorkspaceCoverPlaceholder seed={seed} iconSize={iconSize} className={className} />;
+    return <WorkspaceCoverPlaceholder iconSize={iconSize} className={className} />;
   }
   const src = url.startsWith("/api/") && api?.resourceUrl ? api.resourceUrl(url) : url;
   return (

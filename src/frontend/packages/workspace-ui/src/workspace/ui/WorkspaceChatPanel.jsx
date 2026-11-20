@@ -130,14 +130,25 @@ export function WorkspaceChatPanel({
   const interactionDisabled = chatPending || summaryLocked || seriesRagLocked || seriesIndexingLocked;
   // Only surfaced while the composer is blocked — each of these tells the user
   // what to fix. Null in the normal idle state so the row is not rendered.
-  const composerHint = summaryLocked
-    ? "生成 AI 概括后，这里会恢复对话"
+  // One reason at a time, shown in the middle of the panel: no summaries beats a missing model,
+  // because downloading the model would not make the chat usable yet.
+  const lockState = summaryLocked
+    ? {
+        title: "需要先生成 AI 概括",
+        description: selectedContextType === "series" ? "系列中暂无已生成 AI 概括的视频。" : "对话基于这个视频的 AI 概括。",
+        placeholder: "生成 AI 概括后可提问",
+      }
     : seriesRagLocked
-      ? "检索模型下载完成后，就能针对整个系列提问"
-      : seriesIndexingLocked
-        ? "数据整理完成后，就能针对整个系列提问"
-        : null;
-  const lockedContentClass = summaryLocked || seriesRagLocked || seriesIndexingLocked ? "pointer-events-none select-none blur-[2px] opacity-60" : "";
+      ? {
+          title: "需要下载检索模型",
+          description: "对整个系列提问需要检索模型。",
+          placeholder: "下载检索模型后可提问",
+          actionLabel: "去设置下载",
+          onAction: onOpenSettings,
+        }
+      : null;
+  const composerHint = !lockState && seriesIndexingLocked ? "知识库构建完成后可提问" : null;
+  const lockedContentClass = seriesIndexingLocked && !lockState ? "pointer-events-none select-none opacity-60" : "";
   const conversationTurns = useMemo(
     () => chatMessages
       .filter((message) => message.role === "user" && message.kind == null && typeof message.content === "string" && message.content.trim())
@@ -239,30 +250,6 @@ export function WorkspaceChatPanel({
   return (
     <div className="@container h-full w-full flex flex-col bg-transparent">
 
-      {seriesRagLocked ? (
-        <div className="border-b border-warning-border/80 bg-warning-subtle/90 px-6 py-3 text-sm text-warning">
-          <div className="font-semibold">请先下载 RAG 向量模型</div>
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-warning">
-              针对整个系列提问需要检索模型，请先在设置里下载。
-            </p>
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="shrink-0 rounded-xl border border-warning-border px-3 py-1.5 text-xs font-bold text-warning transition hover:bg-warning/15"
-            >
-              去设置下载
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {summaryLocked ? (
-        <div className="border-b border-line/80 bg-muted px-6 py-2.5 text-xs text-subtle" role="status">
-          对话基于 AI 概括，先生成概括就能提问。
-        </div>
-      ) : null}
-
       {seriesIndexingLocked ? (
         <div className="border-b border-info-border/80 bg-info-subtle/90 px-6 py-3 text-sm text-info">
           <div className="flex items-center gap-2 font-semibold">
@@ -285,6 +272,24 @@ export function WorkspaceChatPanel({
           the whole thread read as shifted off-centre. The rail is now anchored to
           this container instead, and vertical space was freed at the top (the
           header lost a line) to offset the gutter it needs. */}
+      {lockState ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center" role="status">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-line-soft bg-soft text-faint">
+            <MessagesSquare size={22} />
+          </div>
+          <h2 className="text-base font-semibold text-strong">{lockState.title}</h2>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-subtle">{lockState.description}</p>
+          {lockState.actionLabel && lockState.onAction ? (
+            <button
+              type="button"
+              onClick={lockState.onAction}
+              className="mt-5 inline-flex items-center rounded-xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-body transition-colors hover:border-accent/40 hover:text-accent"
+            >
+              {lockState.actionLabel}
+            </button>
+          ) : null}
+        </div>
+      ) : (
       <div className={`relative z-0 min-h-0 flex-1 transition ${lockedContentClass}`}>
         <div ref={chatHistoryRef} className="h-full overflow-auto px-4 py-4 @[440px]:px-6 @[440px]:py-5 md:@[440px]:px-8">
           <div ref={threadRef} className="mx-auto flex w-full max-w-4xl flex-col gap-4 @[440px]:gap-6">
@@ -343,6 +348,7 @@ export function WorkspaceChatPanel({
         </div>
         <ConversationJumpRail turns={conversationTurns} onJump={jumpToConversationTurn} anchorRef={threadRef} />
       </div>
+      )}
 
       {/* Floating Composer Area.
           Padding mirrors the header's asymmetry (`pt-3` / `pb-5`): the thread
@@ -357,15 +363,7 @@ export function WorkspaceChatPanel({
         <div className="max-w-4xl mx-auto relative flex items-end rounded-3xl bg-surface/90 backdrop-blur-xl border border-line/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10 transition-all group overflow-hidden">
           <textarea
             ref={composerRef}
-            placeholder={
-              summaryLocked
-                ? "请先生成 AI 概括..."
-                : seriesRagLocked
-                  ? "请先下载 RAG 向量模型..."
-                  : seriesIndexingLocked
-                    ? "数据库整理完成后可继续提问..."
-                    : "向 AI 助手提问或下达指令..."
-            }
+            placeholder={lockState?.placeholder ?? (seriesIndexingLocked ? "知识库构建完成后可提问" : "向 AI 助手提问或下达指令...")}
             /* `overflow-y-auto` draws a permanent scrollbar track in some
                browsers even at one line, so the box scrolls only once it is
                actually capped by `max-h-40`. */
