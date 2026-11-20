@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, Clock, PlayCircle, RefreshCw } from "lucide-react";
 
-import { useWorkspaceRuntime } from "../../WorkspaceRuntime";
+import { useWorkspaceRuntime } from "../../../runtime/WorkspaceProvider";
 import { WorkspaceDialog } from "../shared/WorkspaceDialog";
 import { WorkspaceGenerationStatus } from "../shared/WorkspaceGenerationStatus";
 import { WorkspaceStateBlock } from "../shared/WorkspaceStateBlock";
