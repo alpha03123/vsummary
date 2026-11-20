@@ -53,11 +53,13 @@ class BGEReranker(SemanticScorer):
         model_name: 重排序模型名称。
         device: 设备标识（`cpu` / `gpu` / `cuda`），由 `_normalize_reranker_device` 归一化。
         cache_dir: FastEmbed 模型缓存目录；为 `None` 时走默认缓存路径。
+        model_path: 本地已有的模型目录；给出时直接加载，不再查缓存或联网。
     """
 
     model_name: str = "BAAI/bge-reranker-base"
     device: str = "cpu"
     cache_dir: str | None = None
+    model_path: str | None = None
 
     @cached_property
     def _model(self):
@@ -71,6 +73,8 @@ class BGEReranker(SemanticScorer):
         kwargs: dict[str, object] = {"model_name": self.model_name}
         if self.cache_dir is not None:
             kwargs["cache_dir"] = self.cache_dir
+        if self.model_path is not None:
+            kwargs["specific_model_path"] = self.model_path
         if _normalize_reranker_device(self.device) == "gpu":
             kwargs["providers"] = ["CUDAExecutionProvider"]
             kwargs["cuda"] = True

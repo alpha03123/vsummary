@@ -54,11 +54,11 @@ douyin-f2 = [
     "gmssl>=3.2,<4",
 ]
 cpu = [
-    "fastembed>=0.7,<1",
+    "fastembed==0.9.1",
     "onnxruntime>=1.20,<2",
 ]
 gpu = [
-    "fastembed-gpu>=0.7,<1",
+    "fastembed-gpu==0.9.1",
     "onnxruntime-gpu>=1.20,<1.27",
 ]
 

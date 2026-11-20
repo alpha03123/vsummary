@@ -22,6 +22,7 @@ from pathlib import Path
 import shutil
 import sys
 import tomllib
+from urllib.parse import urlsplit
 
 from backend.shared.llm.base_url import normalize_provider_base_url
 from backend.shared.filesystem import atomic_write_text
@@ -1194,6 +1195,31 @@ def _normalize_http_base_url(value: object, *, default: str, field_name: str) ->
     return normalized
 
 
+_HF_SITE_HOSTS = frozenset({"huggingface.co", "www.huggingface.co", "hf-mirror.com", "www.hf-mirror.com"})
+
+
+def normalize_hf_endpoint(value: str) -> str:
+    """把 HF 镜像地址规整成站点根地址（如 `https://hf-mirror.com`）。
+
+    huggingface_hub 会在 endpoint 后面拼 `/api/models/...`，填成模型仓库页就会拼出
+    `.../BAAI/bge-small-zh-v1.5/api/models/...` 并 404。官方站和 hf-mirror 上的路径直接截掉；
+    其他站点允许一级路径前缀（反代常见），两级以上视为仓库页并报 `ValueError`。
+    """
+    normalized = value.strip().rstrip("/")
+    if not normalized:
+        return ""
+    parsed = urlsplit(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Hugging Face 镜像地址必须以 http:// 或 https:// 开头，例如 https://hf-mirror.com。")
+    site_root = f"{parsed.scheme}://{parsed.netloc}"
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if (parsed.hostname or "").lower() in _HF_SITE_HOSTS or not segments:
+        return site_root
+    if len(segments) > 1 or parsed.query or parsed.fragment:
+        raise ValueError("Hugging Face 镜像地址只填站点根地址，例如 https://hf-mirror.com，不要带模型仓库路径。")
+    return f"{site_root}/{segments[0]}"
+
+
 def apply_runtime_env_overrides(root_dir: Path) -> None:
     """把 `.env` 中受支持的环境变量（HF_ENDPOINT 等）写入 `os.environ`。
 
@@ -1209,6 +1235,12 @@ def apply_runtime_env_overrides(root_dir: Path) -> None:
         if key not in values:
             continue
         value = values[key].strip()
+        if key == "HF_ENDPOINT":
+            try:
+                value = normalize_hf_endpoint(value)
+            except ValueError:
+                # 旧版本没校验，.env 里可能存着仓库页地址；带着它下载必然 404，不如走默认站点。
+                value = ""
         if value:
             os.environ[key] = value
     _refresh_loaded_huggingface_hub_endpoint()

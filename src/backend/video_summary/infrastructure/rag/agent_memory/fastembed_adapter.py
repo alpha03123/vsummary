@@ -3,7 +3,7 @@
 负责把 `fastembed.TextEmbedding` 包装为 LlamaIndex 期望的 `BaseEmbedding`
 接口，处理：
 - GPU/CPU 设备归一化与 CUDA DLL 预加载（仅 Windows）；
-- 缓存目录到具体模型子目录的回退（`fast-<basename>` → `<basename>`）；
+- 调用方已定位到的本地模型目录直接交给 FastEmbed 加载（`specific_model_path`）；
 - GPU 模式下校验 ONNX Runtime 是否真的激活了 CUDAExecutionProvider。
 
 默认 embedding 模型为 `BAAI/bge-small-zh-v1.5`（512 维），由 settings 注入。
@@ -62,6 +62,7 @@ class FastEmbedEmbedding(BaseEmbedding):
         device: str = "cpu",
         embed_batch_size: int = 8,
         cache_dir: str | None = None,
+        model_path: str | None = None,
     ) -> None:
         """构造 FastEmbed 适配器并加载底层 `TextEmbedding`。
 
@@ -70,6 +71,7 @@ class FastEmbedEmbedding(BaseEmbedding):
             device: 设备标识（`cpu` / `gpu` / `cuda` / `auto`）。
             embed_batch_size: 批量嵌入时的批大小。
             cache_dir: 模型缓存目录；为 `None` 时使用 FastEmbed 默认路径。
+            model_path: 本地已有的模型目录；给出时直接加载，不再查缓存或联网。
         """
         super().__init__(model_name=model_name, embed_batch_size=embed_batch_size)
         self.device = _normalize_device(device)
@@ -77,6 +79,7 @@ class FastEmbedEmbedding(BaseEmbedding):
             model_name=model_name,
             device=self.device,
             cache_dir=cache_dir,
+            model_path=model_path,
         )
         if self.device == "gpu":
             _require_cuda_provider(self._embedding)
@@ -107,6 +110,7 @@ def build_fastembed_embedding(
     device: str,
     embed_batch_size: int,
     cache_dir: str | None = None,
+    model_path: str | None = None,
 ) -> FastEmbedEmbedding:
     """根据参数构造一个 `FastEmbedEmbedding`，工厂函数形态便于在容器中注入。"""
     return FastEmbedEmbedding(
@@ -114,10 +118,11 @@ def build_fastembed_embedding(
         device=device,
         embed_batch_size=embed_batch_size,
         cache_dir=cache_dir,
+        model_path=model_path,
     )
 
 
-def _create_text_embedding(*, model_name: str, device: str, cache_dir: str | None):
+def _create_text_embedding(*, model_name: str, device: str, cache_dir: str | None, model_path: str | None = None):
     """创建底层 `fastembed.TextEmbedding`，并按设备补充 provider 与 CUDA 运行时准备。"""
     if device == "gpu":
         import onnxruntime
@@ -130,43 +135,13 @@ def _create_text_embedding(*, model_name: str, device: str, cache_dir: str | Non
     kwargs: dict[str, object] = {"model_name": model_name}
     if cache_dir is not None:
         kwargs["cache_dir"] = cache_dir
-        specific_model_path = _resolve_specific_model_path(model_name, Path(cache_dir))
-        if specific_model_path is not None:
-            kwargs["specific_model_path"] = str(specific_model_path)
+    if model_path is not None:
+        kwargs["specific_model_path"] = model_path
     if device == "gpu":
         kwargs["providers"] = ["CUDAExecutionProvider"]
     elif device == "cpu":
         kwargs["providers"] = ["CPUExecutionProvider"]
     return text_embedding_cls(**kwargs)
-
-
-def _resolve_specific_model_path(model_name: str, cache_dir: Path) -> Path | None:
-    """在缓存目录下按 `fast-<basename>` → `<basename>` 顺序寻找完整模型目录。
-
-    命中条件是目录同时包含 `config.json` / `model_optimized.onnx` 等全部必需文件，
-    否则返回 `None` 让 FastEmbed 自行按 `model_name` 下载。
-    """
-    model_basename = model_name.rstrip("/").split("/")[-1]
-    candidates = [
-        cache_dir / f"fast-{model_basename}",
-        cache_dir / model_basename,
-    ]
-    for candidate in candidates:
-        if _is_complete_fastembed_model_dir(candidate):
-            return candidate
-    return None
-
-
-def _is_complete_fastembed_model_dir(model_dir: Path) -> bool:
-    """检查目录是否包含 FastEmbed 离线加载所需的所有文件。"""
-    required_files = (
-        "config.json",
-        "model_optimized.onnx",
-        "special_tokens_map.json",
-        "tokenizer_config.json",
-        "tokenizer.json",
-    )
-    return model_dir.is_dir() and all((model_dir / name).is_file() for name in required_files)
 
 
 def _require_cuda_provider(embedding) -> None:

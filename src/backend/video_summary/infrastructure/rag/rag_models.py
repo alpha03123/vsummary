@@ -32,6 +32,7 @@ _FASTEMBED_BASE_ALLOW_PATTERNS = (
     "preprocessor_config.json",
 )
 _HF_CACHE_DIR_PREFIX = "models--"
+_HF_DOWNLOAD_SCRATCH_DIR = ".vsummary-download"
 
 
 RAG_MODEL_DOWNLOAD_MESSAGE = "正在下载 RAG 模型，请等待下载完成后再提问。"
@@ -44,6 +45,37 @@ def rag_index_embedding_required_message() -> str:
     model = RAG_MODEL_SPECS["embedding"].model_name.split("/")[-1]
     return (f"RAG 索引未建立：未检测到向量模型 {model}。请到设置中下载 RAG 向量模型；"
         "下载失败时检查 Hugging Face 镜像或代理配置。")
+
+
+def fastembed_model_roots(root_dir: Path) -> tuple[Path, ...]:
+    """FastEmbed 模型的查找根目录，第一个是下载写入的位置。
+
+    后两个只读兼容：`data/fastembed` 在部分旧安装里出现过；
+    `data/models/models/fastembed` 是把离线包解压到 `data/models` 时多出一层的常见误操作。
+    """
+    data_dir = root_dir / "data"
+    return (
+        data_dir / "models" / "fastembed",
+        data_dir / "fastembed",
+        data_dir / "models" / "models" / "fastembed",
+    )
+
+
+def find_local_fastembed_model(root_dir: Path, model_name: str, model_kind: str) -> Path | None:
+    """返回本地可直接加载的模型目录（传给 FastEmbed 的 `specific_model_path`）。
+
+    找不到、或当前 FastEmbed 不认识这个模型时返回 `None`，交给 FastEmbed 按默认缓存处理。
+    """
+    try:
+        metadata = _fastembed_metadata(model_name, model_kind)
+        model_file = _metadata_model_file(metadata)
+    except (RuntimeError, ValueError):
+        return None
+    for model_dir in _model_dirs(fastembed_model_roots(root_dir), model_name, metadata):
+        load_dir = _find_model_load_dir(model_dir, model_file)
+        if load_dir is not None:
+            return load_dir
+    return None
 
 
 @dataclass(frozen=True)
@@ -146,7 +178,8 @@ class RagModelManager:
                 "真正下字节"的那一层，仓库 ID 推导与 `allow_patterns` 拼装仍然照常执行。
         """
         self._root_dir = root_dir
-        self._models_root = root_dir / "data" / "models" / "fastembed"
+        self._model_roots = fastembed_model_roots(root_dir)
+        self._models_root = self._model_roots[0]
         self._progress_tracker = progress_tracker
         self._downloader_impl = model_downloader or HuggingFaceModelDownloader()
         self._downloader = downloader or self._download_from_huggingface
@@ -265,6 +298,11 @@ class RagModelManager:
                 return model_dir
         return candidates[0]
 
+    def model_load_path(self, key: str) -> Path | None:
+        """返回可直接交给 FastEmbed `specific_model_path` 的本地模型目录；未下载时为 `None`。"""
+        spec = self._get_spec(key)
+        return find_local_fastembed_model(self._root_dir, spec.model_name, spec.model_kind)
+
     def _run_download(self, spec: RagModelSpec, reporter: ProgressReporter) -> None:
         """后台线程的下载主循环：调用注入的下载器，校验完成后通知回调。
 
@@ -312,7 +350,8 @@ class RagModelManager:
         """
         metadata = self._get_fastembed_metadata(spec)
         model_file = _metadata_model_file(metadata)
-        candidates = self._candidate_model_dirs(spec, metadata)
+        # 只清理下载目录；兼容目录里的模型是用户自己放的，不归这里管。
+        candidates = _model_dirs((self._models_root,), spec.model_name, metadata)
         for model_dir in candidates:
             if _is_hf_cache_dir(model_dir):
                 continue
@@ -388,45 +427,11 @@ class RagModelManager:
 
     def _get_fastembed_metadata(self, spec: RagModelSpec) -> dict:
         """从 FastEmbed 的 `list_supported_models()` 中找出当前模型对应的元数据。"""
-        if spec.model_kind == "embedding":
-            from fastembed import TextEmbedding
-
-            models = TextEmbedding.list_supported_models()
-        elif spec.model_kind == "reranker":
-            from fastembed.rerank.cross_encoder import TextCrossEncoder
-
-            models = TextCrossEncoder.list_supported_models()
-        else:
-            raise ValueError(f"unsupported RAG model '{spec.key}'")
-        for model in models:
-            if str(model.get("model", "")).lower() == spec.model_name.lower():
-                return model
-        raise RuntimeError(f"当前 FastEmbed 不支持 RAG 模型：{spec.model_name}")
+        return _fastembed_metadata(spec.model_name, spec.model_kind)
 
     def _candidate_model_dirs(self, spec: RagModelSpec, metadata: dict) -> list[Path]:
-        """根据 FastEmbed 元数据推导候选缓存目录列表。
-
-        - `sources.hf`：HuggingFace 缓存样式 `models--owner--name/`；
-        - `sources.url`：tarball 缓存样式 `fast-<basename>/` 或 `<basename>/`。
-        """
-        sources = metadata.get("sources")
-        if not isinstance(sources, dict):
-            raise RuntimeError(f"FastEmbed 模型元数据缺少 sources：{spec.model_name}")
-
-        candidates: list[Path] = []
-        hf_source = sources.get("hf")
-        if isinstance(hf_source, str) and hf_source.strip():
-            candidates.append(self._models_root / f"models--{hf_source.strip().replace('/', '--')}")
-
-        url_source = sources.get("url")
-        if isinstance(url_source, str) and url_source.strip():
-            model_basename = spec.model_name.split("/")[-1]
-            prefix = "fast-" if bool(sources.get("_deprecated_tar_struct")) else ""
-            candidates.append(self._models_root / f"{prefix}{model_basename}")
-
-        if not candidates:
-            raise RuntimeError(f"FastEmbed 模型元数据缺少可用缓存来源：{spec.model_name}")
-        return candidates
+        """所有查找根目录下的候选模型目录，下载目录排在最前。"""
+        return _model_dirs(self._model_roots, spec.model_name, metadata)
 
     @staticmethod
     def _task_id(key: str) -> str:
@@ -434,15 +439,67 @@ class RagModelManager:
         return f"rag-model-download/{key}"
 
 
-def _has_required_file(model_dir: Path, file_name: str) -> bool:
-    """判断指定目录下是否存在 `file_name`（直接存在或子路径以它结尾）。"""
+def _fastembed_metadata(model_name: str, model_kind: str) -> dict:
+    """从 FastEmbed 的 `list_supported_models()` 中找出模型元数据。"""
+    if model_kind == "embedding":
+        from fastembed import TextEmbedding
+
+        models = TextEmbedding.list_supported_models()
+    elif model_kind == "reranker":
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+        models = TextCrossEncoder.list_supported_models()
+    else:
+        raise ValueError(f"unsupported RAG model kind '{model_kind}'")
+    for model in models:
+        if str(model.get("model", "")).lower() == model_name.lower():
+            return model
+    raise RuntimeError(f"当前 FastEmbed 不支持 RAG 模型：{model_name}")
+
+
+def _model_dirs(roots: tuple[Path, ...], model_name: str, metadata: dict) -> list[Path]:
+    """每个根目录下的候选模型目录：HF 缓存 `models--owner--name/`、tarball `fast-<name>/` 和 `<name>/`。
+
+    三种目录名都无条件认，不看 `sources.url`：FastEmbed 0.9 起不少模型的 `url` 变成 `None`，
+    旧版本下好的 `fast-*` 目录照样能用，不能因为第三方元数据变了就判成未下载。
+    """
+    names: list[str] = []
+    hf_source = _hf_source_repo(metadata)
+    if hf_source is not None:
+        names.append(f"{_HF_CACHE_DIR_PREFIX}{hf_source.replace('/', '--')}")
+    model_basename = model_name.rstrip("/").split("/")[-1]
+    names.extend((f"fast-{model_basename}", model_basename))
+    return [root / name for root in roots for name in dict.fromkeys(names)]
+
+
+def _find_model_file(model_dir: Path, file_name: str) -> Path | None:
+    """在模型目录里找 `file_name`（直接存在或子路径以它结尾），跳过下载暂存区。"""
     if not model_dir.is_dir():
-        return False
+        return None
     direct_path = model_dir / file_name
     if direct_path.is_file():
-        return True
+        return direct_path
     normalized = file_name.replace("\\", "/")
-    return any(path.is_file() and path.as_posix().endswith(normalized) for path in model_dir.rglob(Path(file_name).name))
+    for path in model_dir.rglob(Path(file_name).name):
+        relative_parts = path.relative_to(model_dir).parts
+        if _HF_DOWNLOAD_SCRATCH_DIR in relative_parts:
+            continue
+        if path.is_file() and path.as_posix().endswith(normalized):
+            return path
+    return None
+
+
+def _find_model_load_dir(model_dir: Path, file_name: str) -> Path | None:
+    """返回包含 `file_name` 的模型根目录（如 HF 缓存的 `snapshots/<commit>/`）。"""
+    model_path = _find_model_file(model_dir, file_name)
+    if model_path is None:
+        return None
+    return model_path.parents[len(Path(file_name.replace("\\", "/")).parts) - 1]
+
+
+def _has_required_file(model_dir: Path, file_name: str) -> bool:
+    """判断指定目录下是否存在 `file_name`。"""
+    return _find_model_file(model_dir, file_name) is not None
 
 
 def _metadata_model_file(metadata: dict) -> str:

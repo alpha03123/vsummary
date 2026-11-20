@@ -39,6 +39,7 @@ from backend.video_summary.infrastructure.config.settings import (
     load_settings,
 )
 from backend.video_summary.infrastructure.rag.agent_memory.fastembed_adapter import build_fastembed_embedding
+from backend.video_summary.infrastructure.rag.rag_models import fastembed_model_roots, find_local_fastembed_model
 from backend.video_summary.library.ports import VideoLibraryReader
 
 INDEX_SCHEMA_VERSION = 7
@@ -742,7 +743,8 @@ def _build_default_embed_model(root_dir: Path | None, model_http_client=None):
     settings = load_settings(root_dir / "config" / "settings.toml", root_dir)
     return _build_embed_model_from_settings(
         retrieval_settings=settings.agent_retrieval,
-        cache_dir=root_dir / "data" / "models" / "fastembed",
+        cache_dir=fastembed_model_roots(root_dir)[0],
+        model_path=find_local_fastembed_model(root_dir, settings.agent_retrieval.embedding_model, "embedding"),
         model_http_client=model_http_client,
     )
 
@@ -751,6 +753,7 @@ def _build_embed_model_from_settings(
     *,
     retrieval_settings: AgentRetrievalSettings,
     cache_dir: Path | None = None,
+    model_path: Path | None = None,
     model_http_client=None,
 ):
     """把 settings 里的 `AgentRetrievalSettings` 转成实际 embedding 模型。
@@ -769,6 +772,7 @@ def _build_embed_model_from_settings(
             device=retrieval_settings.embedding_device,
             embed_batch_size=retrieval_settings.embedding_batch_size,
             cache_dir=str(cache_dir) if cache_dir is not None else None,
+            model_path=str(model_path) if model_path is not None else None,
         )
     raise ValueError(
         f"Unsupported embedding provider: {retrieval_settings.embedding_provider}"

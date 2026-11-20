@@ -245,9 +245,11 @@ class LazyAgentRuntimeProvider:
         if self._rag_model_manager is not None:
             if not self._rag_model_manager.is_downloaded("reranker"):
                 return None
+            model_path = self._rag_model_manager.model_load_path("reranker")
             return BGEReranker(
                 model_name="BAAI/bge-reranker-base",
                 cache_dir=str(self._rag_model_manager.local_model_dir("reranker").parent),
+                model_path=str(model_path) if model_path is not None else None,
                 device=device,
             )
         return BGEReranker(device=device, cache_dir=_resolve_local_reranker_cache_dir(self._root_dir))

@@ -37,6 +37,7 @@ from backend.video_summary.infrastructure.config.settings import (
     apply_runtime_env_overrides,
     load_env_settings,
     load_settings,
+    normalize_hf_endpoint,
     normalize_openai_base_url,
     replace_agent_retrieval_runtime_settings,
     replace_aliyun_bailian_asr_settings,
@@ -822,7 +823,8 @@ class SettingsService:
             归一化后的 `ProviderSettings`（API Key 脱敏）。
 
         Raises:
-            SettingsValidationError: provider 非法 / base_url 缺协议头 / model 为空。
+            SettingsValidationError: provider 非法 / base_url 缺协议头 / model 为空 /
+                HF 镜像地址不是站点根地址。
         """
         normalized_provider = llm_provider.strip()
         normalized_base_url = openai_base_url.strip()
@@ -838,6 +840,10 @@ class SettingsService:
             )
         if not normalized_model:
             raise SettingsValidationError("模型名称不能为空。")
+        try:
+            normalized_hf_endpoint = normalize_hf_endpoint(hf_endpoint or "")
+        except ValueError as error:
+            raise SettingsValidationError(str(error)) from error
 
         return ProviderSettings(
             llm_provider=normalized_provider,
@@ -845,7 +851,7 @@ class SettingsService:
             openai_model=normalized_model,
             has_openai_api_key=bool(self._resolve_openai_api_key(openai_api_key)),
             openai_api_key_masked=_mask_api_key(self._resolve_openai_api_key(openai_api_key)),
-            hf_endpoint=(hf_endpoint or "").strip(),
+            hf_endpoint=normalized_hf_endpoint,
         )
 
     def _resolve_openai_api_key(self, openai_api_key: str | None) -> str:
