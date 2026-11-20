@@ -1,5 +1,6 @@
 import {
   BrainCircuit,
+  CalendarDays,
   FileText,
   FolderKanban,
   ListChecks,
@@ -56,6 +57,12 @@ export const TOOL_TILES = {
     icon: BrainCircuit,
     ...SHARED_TOOL_VISUALS,
   },
+  "study-plan": {
+    label: "学习计划",
+    description: "按每天的时间分课学完",
+    icon: CalendarDays,
+    ...SHARED_TOOL_VISUALS,
+  },
   notes: {
     label: "人工笔记",
     description: "可供自己来记录笔记或者备忘事项",
@@ -83,12 +90,19 @@ export const SERIES_TOOL_TILES = {
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },
+  "series-study-plan": {
+    label: "全局学习计划",
+    description: "整个合集按天分课",
+    icon: CalendarDays,
+    ...SHARED_TOOL_VISUALS,
+  },
 };
 
 export const SERIES_STUDIO_TOOL_TILES = {
   "ai-chat": TOOL_TILES["ai-chat"],
   "series-overview": SERIES_TOOL_TILES["series-overview"],
   "series-mindmap": SERIES_TOOL_TILES["series-mindmap"],
+  "series-study-plan": SERIES_TOOL_TILES["series-study-plan"],
 };
 
 const DEFAULT_TOOL_META = {
@@ -150,6 +164,9 @@ export function getToolState(tools, toolId) {
   }
   if (toolId === "ai-summary") {
     return tools.aiSummary ?? null;
+  }
+  if (toolId === "study-plan") {
+    return tools.studyPlan ?? null;
   }
   return tools[toolId] ?? null;
 }

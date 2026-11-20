@@ -335,7 +335,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     if (toolId === "ai-chat") {
       return <WorkspaceChatPanel {...chatPanelProps} />;
     }
-    if (toolId === "series-overview" || toolId === "series-mindmap") {
+    if (toolId === "series-overview" || toolId === "series-mindmap" || toolId === "series-study-plan") {
       return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel />;
     }
     return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel playbackTime={playbackTime} followOverviewPlayback={followOverviewPlayback} onFollowOverviewPlaybackChange={setFollowOverviewPlayback} />;

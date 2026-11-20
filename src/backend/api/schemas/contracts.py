@@ -30,6 +30,12 @@ class GenerateMindmapRequest(BaseModel):
     max_depth: int | None = Field(default=None, ge=2, le=5)
 
 
+class GenerateStudyPlanRequest(BaseModel):
+    """请求生成学习计划：每天打算学多少分钟。"""
+
+    daily_minutes: int = Field(default=45, ge=10, le=240)
+
+
 class GenerateSeriesSummariesRequest(BaseModel):
     """请求批量生成一个系列下所有视频的总结。
 

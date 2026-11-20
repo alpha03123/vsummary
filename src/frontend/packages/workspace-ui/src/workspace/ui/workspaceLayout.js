@@ -17,7 +17,7 @@ export const WORKSPACE_LAYOUT_LIMITS = {
 export const DEFAULT_STUDIO_PANELS = ["preview::default", "ai-summary::default"];
 export const DEFAULT_SERIES_STUDIO_PANELS = ["ai-chat::default"];
 export const STUDIO_PANEL_TYPES = new Set([
-  "studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "notes", "ai-chat", "series-overview", "series-mindmap",
+  "studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "study-plan", "notes", "ai-chat", "series-overview", "series-mindmap", "series-study-plan",
 ]);
 
 export function loadWorkspaceLayout(scope = "video", storage=window.localStorage) {
@@ -105,9 +105,9 @@ export function createPanelId(type) {
 
 export function isPanelAllowedForScope(type, scope) {
   if (scope === "series") {
-    return ["studio", "ai-chat", "series-overview", "series-mindmap"].includes(type);
+    return ["studio", "ai-chat", "series-overview", "series-mindmap", "series-study-plan"].includes(type);
   }
-  return ["studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "notes", "ai-chat"].includes(type);
+  return ["studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "study-plan", "notes", "ai-chat"].includes(type);
 }
 
 function isLegacyDefaultLayout(value, scope) {

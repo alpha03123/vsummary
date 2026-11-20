@@ -215,6 +215,7 @@ class VideoWorkspaceToolsResponse(BaseModel):
     preview: WorkspaceToolResponse
     ai_todo: str
     ai_summary: WorkspaceToolResponse | None = None
+    study_plan: WorkspaceToolResponse | None = None
 
     @classmethod
     def from_model(cls, tools: VideoWorkspaceToolsDTO) -> "VideoWorkspaceToolsResponse":
@@ -236,6 +237,7 @@ class VideoWorkspaceToolsResponse(BaseModel):
             preview=WorkspaceToolResponse.from_model(tools.preview),
             ai_todo=tools.ai_todo,
             ai_summary=WorkspaceToolResponse.from_model(tools.ai_summary) if tools.ai_summary is not None else None,
+            study_plan=WorkspaceToolResponse.from_model(tools.study_plan) if tools.study_plan is not None else None,
         )
 
 

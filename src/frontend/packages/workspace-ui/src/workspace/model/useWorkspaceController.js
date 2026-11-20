@@ -266,6 +266,8 @@ export function useWorkspaceController() {
     onCancelGeneration: contentActions.onCancelGeneration,
     onGenerateKnowledgeCards: contentActions.onGenerateKnowledgeCards,
     onClearKnowledgeCardsFeedback: contentActions.onClearKnowledgeCardsFeedback,
+    onGenerateVideoStudyPlan: contentActions.onGenerateVideoStudyPlan,
+    onGenerateSeriesStudyPlan: contentActions.onGenerateSeriesStudyPlan,
     onCreateNote: contentActions.onCreateNote,
     onGenerateAiSummary: contentActions.onGenerateAiSummary,
     onUpdateAiSummary: contentActions.onUpdateAiSummary,

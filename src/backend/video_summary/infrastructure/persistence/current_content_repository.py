@@ -19,6 +19,7 @@ from backend.video_summary.infrastructure.persistence.models import (
     KnowledgeCardSet,
     Mindmap,
     OutboxEvent,
+    StudyPlan,
     Summary,
     SummaryChapter,
     Transcript,
@@ -105,6 +106,7 @@ class SqlCurrentContentRepository:
             session.execute(delete(KnowledgeCard).where(KnowledgeCard.video_id == video.id))
             session.execute(delete(KnowledgeCardSet).where(KnowledgeCardSet.video_id == video.id))
             session.execute(delete(Mindmap).where(Mindmap.video_id == video.id))
+            session.execute(delete(StudyPlan).where(StudyPlan.video_id == video.id))
             video.content_version = version
             state = session.get(VideoContentState, video.id)
             if state is None:

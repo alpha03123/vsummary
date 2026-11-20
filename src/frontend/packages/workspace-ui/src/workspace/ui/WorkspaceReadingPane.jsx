@@ -60,6 +60,12 @@ const WorkspaceSeriesOverviewView = lazy(() =>
   })),
 );
 
+const WorkspaceStudyPlanView = lazy(() =>
+  import("./views/WorkspaceStudyPlanView").then((module) => ({
+    default: module.WorkspaceStudyPlanView,
+  })),
+);
+
 const WorkspaceStudioHomeView = lazy(() =>
   import("./views/WorkspaceStudioHomeView").then((module) => ({
     default: module.WorkspaceStudioHomeView,
@@ -114,6 +120,8 @@ export function WorkspaceReadingPane({
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
+  onGenerateVideoStudyPlan,
+  onGenerateSeriesStudyPlan,
   onGenerateAiSummary,
   onUpdateAiSummary,
   onCreateNote,
@@ -343,6 +351,34 @@ export function WorkspaceReadingPane({
                       onClearKnowledgeCardsFeedback={onClearKnowledgeCardsFeedback}
                     />
                   ) : null}
+                  {toolId === "study-plan" && selectedVideo ? (
+                    <WorkspaceStudyPlanView
+                      scope="video"
+                      seriesId={activeSeries.id}
+                      videoId={selectedVideo.id}
+                      available={tools?.studyPlan?.available === true}
+                      onGenerate={onGenerateVideoStudyPlan}
+                      onOpenSegment={(segment) => onSeek?.({
+                        seconds: segment.start_seconds,
+                        endSeconds: segment.end_seconds,
+                        chapterTitle: segment.chapter_title,
+                      })}
+                    />
+                  ) : null}
+                  {toolId === "series-study-plan" ? (
+                    <WorkspaceStudyPlanView
+                      scope="series"
+                      seriesId={activeSeries.id}
+                      available={Boolean(seriesMindmapAvailable)}
+                      onGenerate={onGenerateSeriesStudyPlan}
+                      onOpenSegment={(segment) => onOpenCitationReference?.({
+                        videoId: segment.video_id,
+                        seconds: segment.start_seconds,
+                        endSeconds: segment.end_seconds,
+                        chapterTitle: segment.chapter_title,
+                      })}
+                    />
+                  ) : null}
                   {toolId === "notes" ? (
                     <WorkspaceNotesView
                       notes={notes}
@@ -398,7 +434,7 @@ function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount,
         : { label: "等待视频处理", tone: "pending" };
   }
 
-  if (toolId === "series-mindmap") {
+  if (toolId === "series-mindmap" || toolId === "series-study-plan") {
     return seriesMindmapAvailable
       ? { label: "可生成", tone: "pending" }
       : { label: "需先生成 AI 概括", tone: "blocked" };

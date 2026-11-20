@@ -98,6 +98,8 @@ export function WorkspaceVideoScopePane({
       onGenerateSeriesMindmap={actions.generateSeriesMindmap}
       onGenerateKnowledgeCards={actions.generateKnowledgeCards}
       onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
+      onGenerateVideoStudyPlan={actions.generateVideoStudyPlan}
+      onGenerateSeriesStudyPlan={actions.generateSeriesStudyPlan}
       onGenerateAiSummary={actions.generateAiSummary}
       onUpdateAiSummary={actions.updateAiSummary}
       onCreateNote={actions.createNote}

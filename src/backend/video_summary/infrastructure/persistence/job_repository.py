@@ -83,6 +83,10 @@ class IndexRefreshPlan:
     completed_revision: int
 
 
+# Series operations that read every video's summary once, rather than processing videos one by one.
+SERIES_WIDE_OPERATIONS = frozenset({"generate_series_mindmap", "generate_series_study_plan"})
+
+
 class SqlJobRepository:
     """MySQL-backed job protocol used by both local and cloud worker hosts."""
 
@@ -440,7 +444,7 @@ class SqlJobRepository:
                     else Video.content_version == 0
                 )
                 rows = session.execute(query.where(Series.id == resource_id,
-                    True if operation == "generate_series_mindmap" else pending)).all()
+                    True if operation in SERIES_WIDE_OPERATIONS else pending)).all()
             else:
                 rows = []
         incoming, outgoing = self._token_estimate() if self._token_estimate is not None else (None, None)
@@ -448,7 +452,7 @@ class SqlJobRepository:
         multimodal = processing_mode != 'transcript' and (
             self._multimodal_estimate() if self._multimodal_estimate is not None else
             bool((current_preferences() or {}).get('ai_summary_multimodal_enabled')))
-        if operation == "generate_series_mindmap":
+        if operation in SERIES_WIDE_OPERATIONS:
             estimate = UsageEstimate(units=1 if rows else 0, operation_id=operation_id, operation=operation,
                 model_profile=profile, input_tokens=incoming, output_tokens=outgoing, transcript_available=True)
             return self._usage_estimator(context,resource_type,resource_id,operation,estimate) if self._usage_estimator is not None else estimate

@@ -103,6 +103,29 @@ async function generateVideoKnowledgeCards(seriesId, videoId) {
   return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
 
+function studyPlanJob(payload) {
+  if (typeof payload.job_id !== "string" || !payload.job_id) {
+    throw new Error("学习计划任务未返回 job_id。");
+  }
+  return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
+}
+
+async function generateVideoStudyPlan(seriesId, videoId, dailyMinutes) {
+  return studyPlanJob(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/study-plan/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ daily_minutes: dailyMinutes }),
+  }));
+}
+
+async function generateSeriesStudyPlan(seriesId, dailyMinutes) {
+  return studyPlanJob(await fetchJson(`/api/series/${encodeURIComponent(seriesId)}/study-plan/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ daily_minutes: dailyMinutes }),
+  }));
+}
+
 async function loadVideoNotes(seriesId, videoId) {
   return toWorkspaceNotes(await fetchJson(`/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/notes`));
 }
@@ -882,5 +905,5 @@ async function generateSeriesMindmap(seriesId, maxDepth = null) {
   }
   return { jobId: payload.job_id, status: typeof payload.status === "string" ? payload.status : "queued" };
 }
-return {loadUserPreferences,updateUserPreferences,loadJobs,loadJobStatistics,loadJob,cancelChatRequest,loadWorkspaceLibrary,loadProviderUsage,checkBackendHealth,loadVideoSummary,updateVideoSummary,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,updateVideoTranscript,loadVideoTools,loadVideoMindmap,loadVideoKnowledgeCards,generateVideoKnowledgeCards,loadVideoNotes,createVideoNote,loadVideoAiSummary,generateVideoAiSummary,updateVideoAiSummary,updateVideoNote,deleteVideoNote,generateVideoSummary,processAgentVideo,cancelVideoSummary,loadVideoGenerationStatus,generateSeriesSummaries,cancelSeriesSummaries,loadSeriesGenerationStatus,generateVideoMindmap,loadAgentContextUsage,loadAgentMemoryStatus,loadAgentSessionRecovery,clearAgentSession,streamAgentChat,uploadSrtAndGenerateVideoSummary,restoreAutomaticTranscriptAndGenerateVideoSummary,subscribeDurableJobProgress,subscribeVideoGenerationProgress,subscribeSeriesGenerationProgress,getVideoPreviewUrl,fetchJson,toProviderUsage,toProgressSnapshot,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,cancelDurableJob,deleteSeries,renameSeries,deleteVideoSource,renameVideoSource,startVideoDownload,cancelVideoDownload,loadSeriesMindmap,generateSeriesMindmap, resourceUrl:transport.resourceUrl, dispose:transport.dispose};
+return {loadUserPreferences,updateUserPreferences,loadJobs,loadJobStatistics,loadJob,cancelChatRequest,loadWorkspaceLibrary,loadProviderUsage,checkBackendHealth,loadVideoSummary,updateVideoSummary,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,updateVideoTranscript,loadVideoTools,loadVideoMindmap,loadVideoKnowledgeCards,generateVideoKnowledgeCards,generateVideoStudyPlan,generateSeriesStudyPlan,loadVideoNotes,createVideoNote,loadVideoAiSummary,generateVideoAiSummary,updateVideoAiSummary,updateVideoNote,deleteVideoNote,generateVideoSummary,processAgentVideo,cancelVideoSummary,loadVideoGenerationStatus,generateSeriesSummaries,cancelSeriesSummaries,loadSeriesGenerationStatus,generateVideoMindmap,loadAgentContextUsage,loadAgentMemoryStatus,loadAgentSessionRecovery,clearAgentSession,streamAgentChat,uploadSrtAndGenerateVideoSummary,restoreAutomaticTranscriptAndGenerateVideoSummary,subscribeDurableJobProgress,subscribeVideoGenerationProgress,subscribeSeriesGenerationProgress,getVideoPreviewUrl,fetchJson,toProviderUsage,toProgressSnapshot,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,cancelDurableJob,deleteSeries,renameSeries,deleteVideoSource,renameVideoSource,startVideoDownload,cancelVideoDownload,loadSeriesMindmap,generateSeriesMindmap, resourceUrl:transport.resourceUrl, dispose:transport.dispose};
 }

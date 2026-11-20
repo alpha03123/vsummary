@@ -494,3 +494,4 @@ class VideoWorkspaceToolsDTO:
     preview: WorkspaceToolDTO
     ai_todo: str
     ai_summary: WorkspaceToolDTO | None = None
+    study_plan: WorkspaceToolDTO | None = None

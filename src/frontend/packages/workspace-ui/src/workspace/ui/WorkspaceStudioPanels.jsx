@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, StickyNote, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, StickyNote, X } from "lucide-react";
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
@@ -12,10 +12,12 @@ const PANEL_META = {
   "ai-summary": { label: "AI 概括", icon: ListChecks },
   mindmap: { label: "思维导图", icon: Network },
   "knowledge-cards": { label: "知识卡片", icon: BrainCircuit },
+  "study-plan": { label: "学习计划", icon: CalendarDays },
   notes: { label: "笔记", icon: StickyNote },
   "ai-chat": { label: "AI 对话", icon: MessageSquare },
   "series-overview": { label: "全局 AI 概括", icon: FileText },
   "series-mindmap": { label: "全局思维导图", icon: Network },
+  "series-study-plan": { label: "全局学习计划", icon: CalendarDays },
 };
 
 export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocus, onClose, onSplit, onAddPanel, onLayoutChange, renderPanel, renderPanelActions, renderPanelLeadingActions, renderPanelTrailingActions, narrow = false }) {

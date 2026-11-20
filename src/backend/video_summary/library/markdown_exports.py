@@ -120,6 +120,32 @@ def render_knowledge_cards_markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def render_study_plan_markdown(plan: dict[str, Any]) -> str:
+    """学习计划：每天一节，列出要看的片段（带时间点）、目标、重点和练习。"""
+    lines = [f"# {plan.get('title', '')} 学习计划", "",
+        f"每天约 {plan.get('daily_minutes', 0)} 分钟，共 {len(plan.get('sessions') or [])} 天，合计约 {plan.get('total_minutes', 0)} 分钟。", ""]
+    if plan.get("overview"):
+        lines += [str(plan["overview"]), ""]
+    if plan.get("prerequisites"):
+        lines += ["## 开始前", "", *[f"- {item}" for item in plan["prerequisites"]], ""]
+    series = plan.get("kind") == "series"
+    for session in plan.get("sessions") or []:
+        lines += [f"## 第 {session['index']} 天：{session.get('title', '')}（约 {session.get('study_minutes', 0)} 分钟）", ""]
+        if session.get("goal"):
+            lines += [f"目标：{session['goal']}", ""]
+        lines.append("要看的内容：")
+        for segment in session.get("segments") or []:
+            span = f"{format_timestamp(segment['start_seconds'])}–{format_timestamp(segment['end_seconds'])}"
+            prefix = f"{segment.get('video_title', '')} · " if series else ""
+            lines.append(f"- {prefix}{segment.get('chapter_title', '')}（{span}）")
+        lines.append("")
+        if session.get("focus"):
+            lines += ["重点：", *[f"- {item}" for item in session["focus"]], ""]
+        if session.get("practice"):
+            lines += ["练习：", *[f"- {item}" for item in session["practice"]], ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def render_notes_markdown(title: str, payload: dict[str, Any]) -> str:
     """把笔记集合渲染为 Markdown。
 
