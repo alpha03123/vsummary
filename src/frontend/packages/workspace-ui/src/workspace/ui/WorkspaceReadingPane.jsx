@@ -5,7 +5,7 @@ import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { WorkspaceToolGrid } from "./shared/WorkspaceToolGrid";
 import { WorkspaceToolHeader } from "./shared/WorkspaceToolHeader";
 import { buildWorkspaceToolExportActions } from "./workspaceToolExports";
-import { isPlaygroundSeries } from "../model/workspaceControllerConstants";
+import { isPlaygroundSeries, isSpecialSeries } from "../model/workspaceControllerConstants";
 import {
   SERIES_TOOL_TILES,
   SERIES_STUDIO_TOOL_TILES,
@@ -57,6 +57,12 @@ const WorkspaceSeriesMindmapView = lazy(() =>
 const WorkspaceSeriesOverviewView = lazy(() =>
   import("./views/WorkspaceSeriesOverviewView").then((module) => ({
     default: module.WorkspaceSeriesOverviewView,
+  })),
+);
+
+const WorkspaceStudyPlanView = lazy(() =>
+  import("./views/WorkspaceStudyPlanView").then((module) => ({
+    default: module.WorkspaceStudyPlanView,
   })),
 );
 
@@ -114,6 +120,8 @@ export function WorkspaceReadingPane({
   onGenerateMindmap,
   onGenerateKnowledgeCards,
   onClearKnowledgeCardsFeedback,
+  onOpenSeriesStudyPlan,
+  onGenerateSeriesStudyPlan,
   onGenerateAiSummary,
   onUpdateAiSummary,
   onCreateNote,
@@ -166,7 +174,7 @@ export function WorkspaceReadingPane({
         {!activeSeries ? (
           <WorkspaceStateBlock
             title="等待系列"
-            description="从左侧打开一个系列，这里会显示它的工具。"
+            description="请在左侧打开系列。"
             dashed
           />
         ) : (
@@ -181,7 +189,7 @@ export function WorkspaceReadingPane({
               ) : isSeriesHome ? (
                 <WorkspaceHomeHeader
                   title={activeSeries.title}
-                  description="可以在对话栏里问整个系列的内容。"
+                  description="可在对话栏中询问整个系列的内容。"
                 >
                 </WorkspaceHomeHeader>
               ) : (
@@ -253,6 +261,8 @@ export function WorkspaceReadingPane({
                         <WorkspaceToolGrid
                           items={Object.entries(selectedContextType === "series" ? SERIES_STUDIO_TOOL_TILES : TOOL_TILES)
                             .filter(([toolId]) => toolId !== 'preview' || host.features?.mediaPreview !== false)
+                            // 学习计划按课程排；单个视频和 B站导入里的视频互不相关，不提供。
+                            .filter(([toolId]) => toolId !== 'study-plan' || !isSpecialSeries(activeSeries))
                             .map(([toolId, meta]) => ({
                               id: toolId,
                               meta,
@@ -269,7 +279,9 @@ export function WorkspaceReadingPane({
                                       totalVideoCount: seriesVideos.length,
                                       seriesMindmapAvailable,
                                     })
-                                  : describeToolState(toolId, getToolState(tools, toolId)),
+                                  : toolId === "study-plan"
+                                    ? null
+                                    : describeToolState(toolId, getToolState(tools, toolId)),
                             }))}
                           onSelect={onSelectTool}
                         />
@@ -343,6 +355,44 @@ export function WorkspaceReadingPane({
                       onClearKnowledgeCardsFeedback={onClearKnowledgeCardsFeedback}
                     />
                   ) : null}
+                  {toolId === "study-plan" && selectedVideo && isSpecialSeries(activeSeries) ? (
+                    <WorkspaceStateBlock title="学习计划仅用于课程" />
+                  ) : null}
+                  {toolId === "study-plan" && selectedVideo && !isSpecialSeries(activeSeries) ? (
+                    // 视频的学习计划就是课程计划里包含这个视频的那几天，进度与课程计划共用。
+                    <WorkspaceStudyPlanView
+                      scope="video"
+                      seriesId={activeSeries.id}
+                      videoId={selectedVideo.id}
+                      onOpenSeriesPlan={onOpenSeriesStudyPlan}
+                      onOpenSegment={(segment) => (segment.video_id === selectedVideo.id
+                        ? onSeek?.({
+                          seconds: segment.start_seconds,
+                          endSeconds: segment.end_seconds,
+                          chapterTitle: segment.chapter_title,
+                          reveal: true,
+                        })
+                        : onSelectVideo?.(activeSeries.id, segment.video_id, {
+                          seconds: segment.start_seconds,
+                          endSeconds: segment.end_seconds,
+                          chapterTitle: segment.chapter_title,
+                        }))}
+                    />
+                  ) : null}
+                  {toolId === "series-study-plan" ? (
+                    <WorkspaceStudyPlanView
+                      scope="series"
+                      seriesId={activeSeries.id}
+                      seriesVideos={seriesVideos}
+                      available={Boolean(seriesMindmapAvailable)}
+                      onGenerate={onGenerateSeriesStudyPlan}
+                      onOpenSegment={(segment) => onSelectVideo?.(activeSeries.id, segment.video_id, {
+                        seconds: segment.start_seconds,
+                        endSeconds: segment.end_seconds,
+                        chapterTitle: segment.chapter_title,
+                      })}
+                    />
+                  ) : null}
                   {toolId === "notes" ? (
                     <WorkspaceNotesView
                       notes={notes}
@@ -398,7 +448,7 @@ function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount,
         : { label: "等待视频处理", tone: "pending" };
   }
 
-  if (toolId === "series-mindmap") {
+  if (toolId === "series-mindmap" || toolId === "series-study-plan") {
     return seriesMindmapAvailable
       ? { label: "可生成", tone: "pending" }
       : { label: "需先生成 AI 概括", tone: "blocked" };

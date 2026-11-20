@@ -10,6 +10,7 @@ export function WorkspaceVideoScopePane({
   panelToolId = "studio",
   onPanelSelectTool = null,
   embeddedInStudioPanel = false,
+  onOpenSeriesStudyPlan = null,
 }) {
   const { shell, generation, actions, chat } = page;
 
@@ -63,6 +64,7 @@ export function WorkspaceVideoScopePane({
             seconds: request.seconds,
             endSeconds: request.endSeconds ?? request.seconds,
             chapterTitle: request.chapterTitle ?? "",
+            ...(request.reveal === true ? { reveal: true } : {}),
           });
         } else {
           shell.player.seekToTime(request);
@@ -98,6 +100,8 @@ export function WorkspaceVideoScopePane({
       onGenerateSeriesMindmap={actions.generateSeriesMindmap}
       onGenerateKnowledgeCards={actions.generateKnowledgeCards}
       onClearKnowledgeCardsFeedback={actions.clearKnowledgeCardsFeedback}
+      onOpenSeriesStudyPlan={onOpenSeriesStudyPlan}
+      onGenerateSeriesStudyPlan={actions.generateSeriesStudyPlan}
       onGenerateAiSummary={actions.generateAiSummary}
       onUpdateAiSummary={actions.updateAiSummary}
       onCreateNote={actions.createNote}

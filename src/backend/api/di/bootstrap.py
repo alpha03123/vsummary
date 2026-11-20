@@ -54,6 +54,8 @@ from backend.video_summary.infrastructure.persistence.sql_generation_adapters im
 )
 from backend.video_summary.infrastructure.series_mindmap_workflow import ConfiguredSeriesMindmapWorkflow
 from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
+from backend.video_summary.infrastructure.llm.litellm_study_plan_generator import ConfiguredStudyPlanGenerator
+from backend.video_summary.library.usecases.study_plan import GenerateStudyPlan, validate_daily_minutes
 from backend.video_summary.infrastructure.llm.litellm_note_generator import ConfiguredNoteGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
@@ -368,7 +370,25 @@ def build_workspace_services(
         if summary is None:
             raise LookupError("Video source does not exist; cannot generate an AI summary.")
 
+    study_plans = GenerateStudyPlan(workspace, ConfiguredStudyPlanGenerator(root_dir, usage_recorder=usage_store))
+
+    async def run_video_study_plan_job(claim, reporter) -> None:
+        reporter.update("study_plan", 20.0, "正在安排学习计划")
+        plan = await study_plans.for_video(str(claim.request_payload["series_id"]), claim.resource_id,
+            daily_minutes=validate_daily_minutes(claim.request_payload.get("daily_minutes")))
+        if plan is None:
+            raise LookupError("Summary does not exist; cannot generate a study plan.")
+
+    async def run_series_study_plan_job(claim, reporter) -> None:
+        reporter.update("study_plan", 20.0, "正在安排学习计划")
+        plan = await study_plans.for_series(claim.resource_id,
+            daily_minutes=validate_daily_minutes(claim.request_payload.get("daily_minutes")))
+        if plan is None:
+            raise LookupError("Series has no generated summaries; cannot generate a study plan.")
+
     operation_handlers["generate_video_knowledge_cards"] = run_video_knowledge_cards_job
+    operation_handlers["generate_video_study_plan"] = run_video_study_plan_job
+    operation_handlers["generate_series_study_plan"] = run_series_study_plan_job
     operation_handlers["generate_video_ai_summary"] = run_video_ai_summary_job
     def materialize_ai_summary_frames(*, video_id, video_path, output_dir, content):
         materialize_note_frames(video_path=video_path, output_dir=output_dir, content=content, frame_extractor=FfmpegMediaProcessor())

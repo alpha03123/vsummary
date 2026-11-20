@@ -460,6 +460,69 @@ class SqlVideoWorkspace:
                 VALUES (:id,:video,:version,:title,CAST(:payload AS JSON),1,NOW(),NOW())
                 ON DUPLICATE KEY UPDATE content_version=VALUES(content_version),title=VALUES(title),payload=VALUES(payload),row_version=row_version+1,updated_at=NOW()"""), {"id": new_ulid(), "video": video_id, "version": version, "title": self.get_video_title(series_id, video_id), "payload": json.dumps(mindmap, ensure_ascii=False)})
 
+    def save_video_study_plan(self, series_id: str, video_id: str, *, plan: dict[str, Any]) -> None:
+        title = self.get_video_title(series_id, video_id)
+        if title is None:
+            raise ValueError("Video does not exist.")
+        with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
+            version = session.execute(text("SELECT content_version FROM videos WHERE id=:video"), {"video": video_id}).scalar_one()
+            session.execute(text("""INSERT INTO study_plans (id,video_id,content_version,title,payload,created_at,updated_at)
+                VALUES (:id,:video,:version,:title,CAST(:payload AS JSON),NOW(),NOW())
+                ON DUPLICATE KEY UPDATE content_version=VALUES(content_version),title=VALUES(title),payload=VALUES(payload),updated_at=NOW()"""), {"id": new_ulid(), "video": video_id, "version": version, "title": title, "payload": json.dumps(plan, ensure_ascii=False)})
+
+    def save_series_study_plan(self, series_id: str, *, plan: dict[str, Any]) -> None:
+        with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
+            title = session.execute(text("SELECT title FROM series WHERE id=:series AND workspace_id=:workspace AND deleted_at IS NULL"), {"series": series_id, "workspace": self._workspace_id}).scalar()
+            if title is None:
+                raise LookupError("Series does not exist.")
+            session.execute(text("""INSERT INTO study_plans (id,series_id,title,payload,created_at,updated_at)
+                VALUES (:id,:series,:title,CAST(:payload AS JSON),NOW(),NOW())
+                ON DUPLICATE KEY UPDATE title=VALUES(title),payload=VALUES(payload),updated_at=NOW()"""), {"id": new_ulid(), "series": series_id, "title": title, "payload": json.dumps(plan, ensure_ascii=False)})
+
+    def set_study_plan_progress(self, series_id: str, video_id: str | None, *, plan_id: str | None, index: int,
+                                completed_on: str | None) -> dict[str, Any] | None:
+        """记录或取消某一天的完成日期。进度存在计划 JSON 里，重新生成计划时随之清空。"""
+        with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
+            if video_id is not None:
+                row = session.execute(text("""SELECT p.id,p.payload FROM study_plans p JOIN videos v ON v.id=p.video_id
+                    JOIN series s ON s.id=v.series_id WHERE p.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace
+                    AND v.deleted_at IS NULL FOR UPDATE"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
+            else:
+                row = session.execute(text("""SELECT p.id,p.payload FROM study_plans p JOIN series s ON s.id=p.series_id
+                    WHERE p.series_id=:series AND s.workspace_id=:workspace AND s.deleted_at IS NULL FOR UPDATE"""),
+                    {"series": series_id, "workspace": self._workspace_id}).mappings().first()
+            if row is None:
+                return None
+            plan = _json_object(row["payload"])
+            if plan.get("id") != plan_id:
+                raise StudyPlanChangedError("学习计划已重新生成，请刷新后再标记。")
+            if not any(item.get("index") == index for item in plan.get("sessions") or []):
+                raise LookupError("Study plan has no such day.")
+            progress = dict(plan.get("progress") or {})
+            if completed_on:
+                progress[str(index)] = completed_on
+            else:
+                progress.pop(str(index), None)
+            plan["progress"] = progress
+            session.execute(text("UPDATE study_plans SET payload=CAST(:payload AS JSON),updated_at=NOW() WHERE id=:id"),
+                {"id": row["id"], "payload": json.dumps(plan, ensure_ascii=False)})
+        return plan
+
+    def get_video_study_plan(self, series_id: str, video_id: str) -> dict[str, Any] | None:
+        with self._sessions() as session:
+            row = session.execute(text("""SELECT p.payload FROM study_plans p JOIN videos v ON v.id=p.video_id
+                JOIN series s ON s.id=v.series_id WHERE p.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
+        return None if row is None else _json_object(row["payload"])
+
+    def get_series_study_plan(self, series_id: str) -> dict[str, Any] | None:
+        with self._sessions() as session:
+            row = session.execute(text("""SELECT p.payload FROM study_plans p JOIN series s ON s.id=p.series_id
+                WHERE p.series_id=:series AND s.workspace_id=:workspace AND s.deleted_at IS NULL"""), {"series": series_id, "workspace": self._workspace_id}).mappings().first()
+        return None if row is None else _json_object(row["payload"])
+
     def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
@@ -627,8 +690,9 @@ class SqlVideoWorkspace:
         cards = self.get_video_knowledge_cards(series_id, video_id)
         mindmap = self.get_video_mindmap(series_id, video_id)
         ai_summary = self.get_video_ai_summary(series_id, video_id)
+        study_plan = self.get_video_study_plan(series_id, video_id)
         ready = lambda value: "ready" if value else "pending"
-        return VideoWorkspaceToolsDTO(series_id=series_id, video_id=video_id, overview=WorkspaceToolDTO(id="overview", title="AI整理逐字稿", available=True, generated=summary is not None, status=ready(summary)), ai_summary=WorkspaceToolDTO(id="ai-summary", title="AI概括", available=True, generated=ai_summary is not None, status=ready(ai_summary)), knowledge_cards=WorkspaceToolDTO(id="knowledge-cards", title="知识卡片", available=summary is not None, generated=bool(cards and cards.cards), status="ready" if cards and cards.cards else ("available" if summary else "blocked")), mindmap=WorkspaceToolDTO(id="mindmap", title="思维导图", available=summary is not None, generated=mindmap is not None, status="ready" if mindmap else ("available" if summary else "blocked")), notes=WorkspaceToolDTO(id="notes", title="笔记", available=True, generated=bool(self.get_video_notes(series_id, video_id).notes), status="ready"), preview=WorkspaceToolDTO(id="preview", title="视频预览", available=has_media, generated=has_media, status="ready" if has_media else "unavailable", preview_url=f"/api/videos/{series_id}/{video_id}/preview" if has_media else None, subtitle_url=f"/api/videos/{series_id}/{video_id}/subtitles.vtt" if transcript is not None else None), ai_todo="继续生成可用内容。")
+        return VideoWorkspaceToolsDTO(series_id=series_id, video_id=video_id, overview=WorkspaceToolDTO(id="overview", title="AI整理逐字稿", available=True, generated=summary is not None, status=ready(summary)), ai_summary=WorkspaceToolDTO(id="ai-summary", title="AI概括", available=True, generated=ai_summary is not None, status=ready(ai_summary)), knowledge_cards=WorkspaceToolDTO(id="knowledge-cards", title="知识卡片", available=summary is not None, generated=bool(cards and cards.cards), status="ready" if cards and cards.cards else ("available" if summary else "blocked")), mindmap=WorkspaceToolDTO(id="mindmap", title="思维导图", available=summary is not None, generated=mindmap is not None, status="ready" if mindmap else ("available" if summary else "blocked")), notes=WorkspaceToolDTO(id="notes", title="笔记", available=True, generated=bool(self.get_video_notes(series_id, video_id).notes), status="ready"), preview=WorkspaceToolDTO(id="preview", title="视频预览", available=has_media, generated=has_media, status="ready" if has_media else "unavailable", preview_url=f"/api/videos/{series_id}/{video_id}/preview" if has_media else None, subtitle_url=f"/api/videos/{series_id}/{video_id}/subtitles.vtt" if transcript is not None else None), ai_todo="继续生成可用内容。", study_plan=WorkspaceToolDTO(id="study-plan", title="学习计划", available=summary is not None, generated=study_plan is not None, status="ready" if study_plan else ("available" if summary else "blocked")))
 
     def import_local_series_from_paths(self, *, title: str, source_paths: list[Path], storage_mode: str = "copy") -> LibrarySeriesDTO:
         workspace_id = self._workspace_id
@@ -1151,6 +1215,10 @@ def _chapters_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+class StudyPlanChangedError(RuntimeError):
+    """勾选进度时页面上的计划已被重新生成。"""
+
+
 def _clear_deleted_video_content(session: Session, *, video_id: str) -> None:
     """清除软删除视频的遗留内容，使重新导入从未下载状态开始。"""
 
@@ -1159,6 +1227,7 @@ def _clear_deleted_video_content(session: Session, *, video_id: str) -> None:
         "ai_summaries",
         "notes",
         "mindmaps",
+        "study_plans",
         "knowledge_cards",
         "knowledge_card_sets",
         "summary_chapters",

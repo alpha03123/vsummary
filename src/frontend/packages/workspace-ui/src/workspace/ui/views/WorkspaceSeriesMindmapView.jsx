@@ -49,7 +49,7 @@ export function WorkspaceSeriesMindmapView({
     return (
       <WorkspaceStateBlock
         title="导图未生成"
-        description="根据系列里所有视频的 AI 概括，画一张总的导图。"
+        description="汇总系列内各视频的 AI 概括生成导图。"
       >
         <div className="flex flex-wrap items-center justify-center gap-3">
           <label className="inline-flex items-center gap-2 text-sm font-medium text-subtle">

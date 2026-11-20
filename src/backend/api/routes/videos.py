@@ -22,6 +22,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 
 from backend.api.dependencies import JobRepositoryDep, WorkspaceServicesDep
 from backend.api.schemas.contracts import (
+    GenerateStudyPlanRequest,
+    StudyPlanProgressRequest,
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
     GenerateVideoAiSummaryRequest,
@@ -54,6 +56,7 @@ from backend.video_summary.library.export_filenames import clean_filename_stem, 
 from backend.video_summary.library.markdown_exports import render_knowledge_cards_markdown
 from backend.video_summary.library.markdown_exports import render_mixed_overview_markdown
 from backend.video_summary.library.markdown_exports import render_notes_markdown
+from backend.video_summary.library.markdown_exports import render_study_plan_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
 from backend.video_summary.library.subtitle_exports import render_srt, render_webvtt
 from backend.video_summary.generation.renderers import render_markdown
@@ -1217,6 +1220,113 @@ def generate_video_mindmap(
             "events_url": f"/api/jobs/{submitted.id}/events",
         },
     )
+
+
+def _submit_study_plan(container, job_repository, *, resource_type: str, resource_id: str, series_id: str,
+                       video_id: str | None, daily_minutes: int) -> JSONResponse:
+    operation = f"generate_{resource_type}_study_plan"
+    payload = {"series_id": series_id, "daily_minutes": daily_minutes, **({"video_id": video_id} if video_id else {})}
+    try:
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id, resource_type=resource_type, resource_id=resource_id,
+            operation=operation, request_payload=payload, active_key=f"{resource_type}:{resource_id}:{operation}",
+            idempotency_scope_id=None, idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(workspace_id=container.workspace_id, resource_id=resource_id, operation=operation)
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(status_code=202, content={
+        "job_id": submitted.id, "status": submitted.status, "resource": {"type": resource_type, "id": resource_id},
+        "status_url": f"/api/jobs/{submitted.id}", "events_url": f"/api/jobs/{submitted.id}/events",
+    })
+
+
+@router.get("/api/videos/{series_id}/{video_id}/study-plan")
+def get_video_study_plan(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
+    _ensure_video_exists(container, series_id, video_id)
+    plan = container.linked_series_workspace.get_video_study_plan(series_id, video_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"study plan not found for video '{series_id}/{video_id}'")
+    return plan
+
+
+@router.post("/api/videos/{series_id}/{video_id}/study-plan/generate")
+def generate_video_study_plan(
+    series_id: str,
+    video_id: str,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+    request: GenerateStudyPlanRequest = Body(default_factory=GenerateStudyPlanRequest),
+) -> JSONResponse:
+    _ensure_video_exists(container, series_id, video_id)
+    return _submit_study_plan(container, job_repository, resource_type="video", resource_id=video_id,
+        series_id=series_id, video_id=video_id, daily_minutes=request.daily_minutes)
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/study-plan.md")
+def export_video_study_plan_markdown(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
+    video = _ensure_video_exists(container, series_id, video_id)
+    plan = container.linked_series_workspace.get_video_study_plan(series_id, video_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"study plan not found for video '{series_id}/{video_id}'")
+    return _markdown_response(render_study_plan_markdown(plan), _export_filename(video, "学习计划"))
+
+
+def _set_study_plan_progress(container, series_id: str, video_id: str | None, request: StudyPlanProgressRequest) -> dict[str, object]:
+    from backend.video_summary.infrastructure.persistence.sql_video_workspace import StudyPlanChangedError
+
+    try:
+        plan = container.linked_series_workspace.set_study_plan_progress(series_id, video_id, plan_id=request.plan_id,
+            index=request.index, completed_on=request.completed_on.isoformat() if request.completed_on else None)
+    except StudyPlanChangedError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if plan is None:
+        raise HTTPException(status_code=404, detail="study plan not found")
+    return plan
+
+
+@router.put("/api/videos/{series_id}/{video_id}/study-plan/progress")
+def update_video_study_plan_progress(series_id: str, video_id: str, request: StudyPlanProgressRequest,
+                                     container: WorkspaceServicesDep) -> dict[str, object]:
+    _ensure_video_exists(container, series_id, video_id)
+    return _set_study_plan_progress(container, series_id, video_id, request)
+
+
+@router.put("/api/series/{series_id}/study-plan/progress")
+def update_series_study_plan_progress(series_id: str, request: StudyPlanProgressRequest,
+                                      container: WorkspaceServicesDep) -> dict[str, object]:
+    return _set_study_plan_progress(container, series_id, None, request)
+
+
+@router.get("/api/series/{series_id}/study-plan")
+def get_series_study_plan(series_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
+    plan = container.linked_series_workspace.get_series_study_plan(series_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"series study plan not found for '{series_id}'")
+    return plan
+
+
+@router.post("/api/series/{series_id}/study-plan/generate")
+def generate_series_study_plan(
+    series_id: str,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+    request: GenerateStudyPlanRequest = Body(default_factory=GenerateStudyPlanRequest),
+) -> JSONResponse:
+    return _submit_study_plan(container, job_repository, resource_type="series", resource_id=series_id,
+        series_id=series_id, video_id=None, daily_minutes=request.daily_minutes)
+
+
+@router.get("/api/series/{series_id}/exports/study-plan.md")
+def export_series_study_plan_markdown(series_id: str, container: WorkspaceServicesDep) -> Response:
+    plan = container.linked_series_workspace.get_series_study_plan(series_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"series study plan not found for '{series_id}'")
+    return _markdown_response(render_study_plan_markdown(plan), f"{clean_filename_stem(plan.get('title') or '合集')}-学习计划.md")
 
 
 @router.get("/api/series/{series_id}/mindmap")

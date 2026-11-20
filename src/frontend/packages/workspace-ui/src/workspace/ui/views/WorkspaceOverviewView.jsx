@@ -33,7 +33,7 @@ export function WorkspaceOverviewView({
     return (
       <WorkspaceStateBlock
         title="等待视频"
-        description="在左侧选一个视频，这里会显示它的逐字稿。"
+        description="请在左侧选择视频。"
         dashed
       />
     );
@@ -43,7 +43,7 @@ export function WorkspaceOverviewView({
     return (
       <WorkspaceStateBlock
         title={overviewTitle}
-        description="逐字稿会在生成 AI 概括时一起整理好，带章节和时间点。"
+        description="逐字稿随 AI 概括一同生成，含章节与时间点。"
         actionLabel="前往 AI 概括"
         onAction={onOpenAiSummary}
       >

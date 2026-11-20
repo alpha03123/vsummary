@@ -81,7 +81,7 @@ export function WorkspaceKnowledgeCardsView({
     return (
       <WorkspaceStateBlock
         title="知识卡片尚未生成"
-        description="把视频里的要点做成一张张卡片。"
+        description="将视频要点整理为知识卡片。"
       >
         <button
           type="button"
@@ -111,7 +111,7 @@ export function WorkspaceKnowledgeCardsView({
         <WorkspaceFeedbackBanner feedback={knowledgeCardsFeedback} onDismiss={onClearKnowledgeCardsFeedback} />
         <WorkspaceStateBlock
           title="还没有可展示的卡片"
-          description="这个视频能提炼的要点太少，可以稍后重新生成试试。"
+          description="未提炼出足够的要点，可重新生成。"
         >
           <button
             type="button"

@@ -265,6 +265,16 @@ class Mindmap(TimestampedRow, Base):
     row_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class StudyPlan(TimestampedRow, Base):
+    __tablename__ = "study_plans"
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    video_id: Mapped[str | None] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), nullable=True, unique=True)
+    series_id: Mapped[str | None] = mapped_column(ForeignKey("series.id", ondelete="CASCADE"), nullable=True, unique=True)
+    content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    title: Mapped[str] = mapped_column(String(1_024), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
 class Job(TimestampedRow, Base):
     __tablename__ = "jobs"
     __table_args__ = (

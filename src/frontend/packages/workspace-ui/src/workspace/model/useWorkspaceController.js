@@ -99,8 +99,9 @@ export function useWorkspaceController() {
     dispatch({ type: "library_home_selected" });
   }
 
-  function onSelectVideo(seriesId, videoId) {
-    dispatch({ type: "video_selected", seriesId, videoId });
+  // `seek` (optional) opens the video at a time, e.g. a study-plan segment clicked from the series scope.
+  function onSelectVideo(seriesId, videoId, seek = null) {
+    dispatch({ type: "video_selected", seriesId, videoId, seek });
   }
 
   function onSelectSeriesContext() {
@@ -266,6 +267,8 @@ export function useWorkspaceController() {
     onCancelGeneration: contentActions.onCancelGeneration,
     onGenerateKnowledgeCards: contentActions.onGenerateKnowledgeCards,
     onClearKnowledgeCardsFeedback: contentActions.onClearKnowledgeCardsFeedback,
+    onGenerateVideoStudyPlan: contentActions.onGenerateVideoStudyPlan,
+    onGenerateSeriesStudyPlan: contentActions.onGenerateSeriesStudyPlan,
     onCreateNote: contentActions.onCreateNote,
     onGenerateAiSummary: contentActions.onGenerateAiSummary,
     onUpdateAiSummary: contentActions.onUpdateAiSummary,

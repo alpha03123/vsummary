@@ -619,7 +619,15 @@ export function workspaceReducer(state, action) {
         notes: null,
         selectedChapterId: null,
         selectedNodeId: null,
-        playerSeekRequest: null,
+        playerSeekRequest: Number.isFinite(action.seek?.seconds) ? {
+          seconds: action.seek.seconds,
+          endSeconds: action.seek.endSeconds ?? null,
+          query: "",
+          matchedText: "",
+          chapterTitle: action.seek.chapterTitle ?? "",
+          requestId: `${Date.now()}-${action.videoId}`,
+          reveal: true,
+        } : null,
         // A transcript jump belongs to the scope it was requested in, not the next one opened.
         citationFocus: null,
         generationProgress: null,
@@ -938,6 +946,8 @@ export function workspaceReducer(state, action) {
           matchedText: action.matchedText ?? "",
           chapterTitle: action.chapterTitle ?? "",
           requestId: action.requestId,
+          // Asks the page to open the player if no preview panel is showing.
+          ...(action.reveal === true ? { reveal: true } : {}),
         },
       };
     case "chat_drawer_toggled":

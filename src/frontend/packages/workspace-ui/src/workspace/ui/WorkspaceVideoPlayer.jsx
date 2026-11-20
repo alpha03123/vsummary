@@ -76,6 +76,10 @@ export function WorkspaceVideoPlayer({
       return;
     }
     resumedVideoSourceRef.current = videoSource;
+    // The video was opened at a specific time (e.g. from a study plan); that wins over resuming.
+    if (playerSeekRequest) {
+      return;
+    }
 
     const video = videoRef.current;
     const resume = () => {

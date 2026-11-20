@@ -77,7 +77,7 @@ export function WorkspaceAiSummaryView({
     return (
       <WorkspaceStateBlock
         title="尚未生成 AI 概括"
-        description="生成后会得到完整的概括，带画面截图和时间点。"
+        description="生成完整概括，含画面截图与时间点。"
         actionLabel={generating ? "正在生成" : "生成 AI 概括"}
         actionIcon={generating ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}
         actionDisabled={generating || !canGenerate}

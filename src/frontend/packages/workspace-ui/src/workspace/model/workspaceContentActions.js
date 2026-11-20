@@ -2,7 +2,7 @@ import { isPlaygroundSeries } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection, isGenerationSnapshotActive } from "./workspaceState";
 export function createWorkspaceContentActionFactory(api){
-const {cancelSeriesSummaries,cancelDurableJob,cancelVideoDownload,cancelVideoSummary,createVideoNote,deleteSeries,deleteVideoNote,deleteVideoSource,renameSeries,renameVideoSource,generateSeriesMindmap,loadSeriesMindmap,generateVideoKnowledgeCards,generateVideoAiSummary,generateVideoMindmap,generateSeriesSummaries,generateVideoSummary,processAgentVideo,restoreAutomaticTranscriptAndGenerateVideoSummary,loadWorkspaceLibrary,loadVideoSummary,loadVideoAiSummary,loadVideoNotes,loadVideoKnowledgeCards,loadVideoMindmap,loadVideoTools,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,startVideoDownload,subscribeDurableJobProgress,subscribeSeriesGenerationProgress,updateVideoNote,updateVideoAiSummary,updateVideoSummary,updateVideoTranscript,uploadSrtAndGenerateVideoSummary}=api;
+const {cancelSeriesSummaries,cancelDurableJob,cancelVideoDownload,cancelVideoSummary,createVideoNote,deleteSeries,deleteVideoNote,deleteVideoSource,renameSeries,renameVideoSource,generateSeriesMindmap,loadSeriesMindmap,generateVideoKnowledgeCards,generateVideoStudyPlan,generateSeriesStudyPlan,generateVideoAiSummary,generateVideoMindmap,generateSeriesSummaries,generateVideoSummary,processAgentVideo,restoreAutomaticTranscriptAndGenerateVideoSummary,loadWorkspaceLibrary,loadVideoSummary,loadVideoAiSummary,loadVideoNotes,loadVideoKnowledgeCards,loadVideoMindmap,loadVideoTools,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,startVideoDownload,subscribeDurableJobProgress,subscribeSeriesGenerationProgress,updateVideoNote,updateVideoAiSummary,updateVideoSummary,updateVideoTranscript,uploadSrtAndGenerateVideoSummary}=api;
 const activeSeriesCancellationRef = { current: null };
 const activeVideoGenerationKeys = new Set();
 let nextSeriesRunSequence = 0;
@@ -155,6 +155,33 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
         message: error instanceof Error ? error.message : "知识卡片生成失败",
       });
     }
+  }
+
+  // The study plan panel tracks its own job; these return the submitted job so it can.
+  async function onGenerateVideoStudyPlan(dailyMinutes) {
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    if (!seriesId || !videoId) {
+      return null;
+    }
+    const submitted = await generateVideoStudyPlan(seriesId, videoId, dailyMinutes);
+    const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+      if (snapshot.status === "completed") {
+        unsubscribe();
+        try {
+          dispatch({ type: "tools_loaded", tools: await loadVideoTools(seriesId, videoId) });
+        } catch {
+          // The tile status refreshes on the next selection; the plan itself is already shown.
+        }
+      } else if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+        unsubscribe();
+      }
+    });
+    return submitted;
+  }
+
+  async function onGenerateSeriesStudyPlan(dailyMinutes) {
+    return state.selectedSeriesId ? generateSeriesStudyPlan(state.selectedSeriesId, dailyMinutes) : null;
   }
 
   function onClearKnowledgeCardsFeedback() {
@@ -1072,6 +1099,8 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
     },
     onGenerateKnowledgeCards,
     onClearKnowledgeCardsFeedback,
+    onGenerateVideoStudyPlan,
+    onGenerateSeriesStudyPlan,
     onGenerateVideo,
     onProcessLinkedVideo,
     onUploadSrt,
