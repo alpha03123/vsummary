@@ -303,11 +303,12 @@ class RagModelManager:
     def _cleanup_incomplete_model_cache(self, spec: RagModelSpec) -> None:
         """删除目标模型的半成品缓存目录和对应 FastEmbed 锁目录。
 
-        **HF 缓存布局目录（`models--owner--name/`）例外，一律保留**：它由
-        `hf_hub_download` 自己管理，里面的 `blobs/*.incomplete` 正是下次续传的锚点。
+        **HF 缓存布局目录（`models--owner--name/`）例外，一律保留**：里面的
+        `.vsummary-download/` 暂存区（以及旧版 `hf_hub_download` 留下的 `blobs/*.incomplete`）
+        正是下次续传的锚点。
         删掉它等于把已下好的字节全部作废——这正是之前 ASR 链路"末段断线丢掉整个
-        进度"的同一个缺陷。半成品由 HF 自身的 blob 机制兜底：未写完的 blob 不会被
-        提交进 `snapshots/`，因此保留它不会让 `is_downloaded` 误判成已完成。
+        进度"的同一个缺陷。文件全部下完才会移进 `snapshots/`，因此保留暂存区不会让
+        `is_downloaded` 误判成已完成。
         """
         metadata = self._get_fastembed_metadata(spec)
         model_file = _metadata_model_file(metadata)

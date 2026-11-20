@@ -201,12 +201,9 @@ class HuggingFaceModelDownloader:
     def warm_cache(self, spec: HuggingFaceCacheWarmSpec, reporter: ProgressReporter) -> Path:
         """把仓库文件预热进标准 HF 缓存布局，供 fastembed 之类的消费方离线复用。
 
-        与 `download` 的差异：
-        - 落盘形态是 `cache_dir/models--owner--name/{refs,blobs,snapshots}/`，
-          直接交给 `hf_hub_download` 处理，不做临时目录 + 原子替换；
-        - 取消粒度是"文件之间"而非字节流。预热的都是几十到几百 MB 的小文件，
-          够用；`hf_hub_download` 自身留下的 `.incomplete` blob 会保留，
-          下一次调用从断点继续。
+        与 `download` 的差异只在落盘形态：最终写成
+        `cache_dir/models--owner--name/{refs/main, snapshots/<commit>/}`；下载本身同样按字节
+        续传、报进度、响应取消，暂存在 `models--owner--name/.vsummary-download/`。
 
         Args:
             spec: 预热任务参数。
@@ -226,37 +223,55 @@ class HuggingFaceModelDownloader:
             lambda endpoint: self._warm_cache_from(replace(spec, endpoint=endpoint), reporter))
 
     def _warm_cache_from(self, spec: HuggingFaceCacheWarmSpec, reporter: ProgressReporter) -> Path:
-        from huggingface_hub import HfApi, hf_hub_download
+        """按字节续传下载到暂存区，全部完成后一次性放进 HF 缓存布局。
+
+        不用 `hf_hub_download`：它只能在文件之间报进度，94MB 的权重在慢速代理上要下好几分钟，
+        界面一直停在 0，看起来像卡死，也取消不了。这里复用 `download()` 的流式下载。
+        fastembed 离线加载只认 `refs/main` 和 `snapshots/<commit>/`，不检查 blobs，
+        所以文件直接放进快照目录即可；全部下完才移入，避免半套文件被判成已下载。
+        """
+        from huggingface_hub import HfApi
 
         api = HfApi(endpoint=spec.endpoint)
         model_info = api.model_info(spec.repo_id, files_metadata=True)
         files = _select_repo_files(model_info.siblings, spec.allow_patterns)
         if not files:
             raise RuntimeError(f"模型仓库未匹配到需要下载的文件：{spec.repo_id}")
+        commit = str(model_info.sha or "").strip()
+        if not commit:
+            raise RuntimeError(f"模型仓库没有返回版本号：{spec.repo_id}")
 
-        sizes = [_file_size(file_info) for file_info in files]
-        total_bytes = sum(size for size in sizes if size is not None) or None
-        downloaded_bytes = 0
-
-        spec.cache_dir.mkdir(parents=True, exist_ok=True)
-        for file_info, size in zip(files, sizes):
+        repo_dir = spec.cache_dir / f"models--{spec.repo_id.replace('/', '--')}"
+        scratch = repo_dir / ".vsummary-download"
+        resume_dir = scratch / _RESUME_DIR_NAME
+        resume_dir.mkdir(parents=True, exist_ok=True)
+        plans = [_build_file_plan(file_info, temp_dir=scratch / "files", resume_dir=resume_dir) for file_info in files]
+        total_bytes = _sum_known_sizes(plans)
+        downloaded_bytes = _sum_existing_bytes(plans)
+        reporter.update("download", _calculate_download_progress(downloaded_bytes, total_bytes),
+            f"正在下载模型文件：{spec.repo_id}")
+        progress = _CancellableProgress(reporter=reporter, total=total_bytes, initial=downloaded_bytes)
+        file_spec = HuggingFaceDownloadSpec(repo_id=spec.repo_id, target_dir=scratch, required_files=(),
+            required_file_patterns=(), endpoint=spec.endpoint)
+        for plan in plans:
             _raise_if_download_cancelled(reporter)
-            reporter.update(
-                "download",
-                _calculate_download_progress(downloaded_bytes, total_bytes),
-                f"正在下载模型文件：{file_info.rfilename}",
-            )
-            hf_hub_download(
-                repo_id=spec.repo_id,
-                filename=file_info.rfilename,
-                cache_dir=str(spec.cache_dir),
-                endpoint=spec.endpoint,
-            )
-            downloaded_bytes += size or 0
-
+            if plan.already_complete:
+                continue
+            progress.set_current_file(plan.filename)
+            _download_single_file(spec=file_spec, plan=plan, progress=progress)
         _raise_if_download_cancelled(reporter)
+
+        snapshot_dir = repo_dir / "snapshots" / commit
+        for plan in plans:
+            destination = snapshot_dir / plan.filename
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            _remove_path(destination)
+            plan.target_path.replace(destination)
+        (repo_dir / "refs").mkdir(parents=True, exist_ok=True)
+        (repo_dir / "refs" / "main").write_text(commit, encoding="utf-8")
+        _remove_path(scratch)
         reporter.update("download", 95.0, f"模型文件已就绪：{spec.repo_id}")
-        return spec.cache_dir / f"models--{spec.repo_id.replace('/', '--')}"
+        return repo_dir
 
 
 def _candidate_endpoints(configured: str | None) -> list[str]:
@@ -280,15 +295,18 @@ def _reachable_endpoint(endpoint: str, repo_id: str) -> str:
     return f"{final.scheme}://{final.netloc}"
 
 
-def _disable_xet() -> None:
-    """模型文件存在 Xet 上时，装了 hf_xet 的 hub 会绕开镜像直连 hf.co 的 Xet 服务器。
+def _tune_hub() -> None:
+    """下载前调整两处 huggingface_hub 常量（都在调用时读取，运行期修改有效）。
 
-    关掉后统一走 resolve 地址的普通 HTTP 下载，镜像才真正生效。`is_xet_available()`
-    在调用时读取这个常量，所以运行期修改有效；环境变量留给子进程。
+    - 关掉 Xet：模型文件存在 Xet 上时，装了 hf_xet 的 hub 会绕开镜像直连 hf.co 的
+      Xet 服务器；关掉后统一走 resolve 地址的普通 HTTP，镜像才真正生效。
+    - 每次读 1MB 而不是 10MB：`http_get` 攒满一块才写盘、才报一次进度，慢速代理下
+      10MB 要将近一分钟，界面长时间停在同一个数，看起来像卡死。
     """
     from huggingface_hub import constants
 
     constants.HF_HUB_DISABLE_XET = True
+    constants.DOWNLOAD_CHUNK_SIZE = 1024 * 1024
     os.environ["HF_HUB_DISABLE_XET"] = "1"
 
 
@@ -303,7 +321,7 @@ def _with_endpoint_fallback(
     开不开代理、设置里填的是哪个源都能下：连不上的源先被探测排除，下载中途断掉也会
     换下一个源接着下（已下载的部分保留，续传不受影响）。
     """
-    _disable_xet()
+    _tune_hub()
     failures: list[tuple[str, BaseException]] = []
     attempted: set[str] = set()
     for candidate in _candidate_endpoints(configured):
