@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from threading import Event, Lock, Thread
@@ -424,8 +425,22 @@ def _public_failure_detail(error: Exception, copy: FailureCopy = FailureCopy()) 
     return message
 
 
+# Credentials that can end up inside exception text (request URLs, DSNs, provider errors).
+_SECRET_PATTERNS = (
+    re.compile(r"(?i)\b(api[_-]?key|access[_-]?key|token|secret|password|passwd|authorization)(\s*[=:]\s*)(bearer\s+)?[^\s,;&'\"]+"),
+    re.compile(r"\bsk-[A-Za-z0-9_\-]{8,}"),
+    re.compile(r"(://[^/\s:@]+:)[^@\s/]+@"),
+)
+
+
+def _redact_secrets(text: str) -> str:
+    text = _SECRET_PATTERNS[0].sub(lambda match: f"{match.group(1)}{match.group(2)}***", text)
+    text = _SECRET_PATTERNS[1].sub("sk-***", text)
+    return _SECRET_PATTERNS[2].sub(lambda match: f"{match.group(1)}***@", text)
+
+
 def _describe_cause(error: BaseException) -> str:
-    text = " ".join(str(error).split())
+    text = _redact_secrets(" ".join(str(error).split()))
     if len(text) > 240:
         text = text[:240] + "…"
     described = f"{type(error).__name__}: {text}" if text else type(error).__name__
