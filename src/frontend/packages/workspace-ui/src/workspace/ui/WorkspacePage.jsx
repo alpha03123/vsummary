@@ -173,6 +173,20 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     });
   }, [selectedVideoKey]);
 
+  // A seek that asks to be seen (a study-plan segment) opens the player when no preview panel is
+  // showing; hosts without media preview jump the AI summary to that time instead.
+  useEffect(() => {
+    if (!playerSeekRequest?.reveal || studioScope !== "video") return;
+    if (!mediaPreviewEnabled) {
+      actions.focusOverviewAtTime(playerSeekRequest.seconds);
+      return;
+    }
+    const panelIds = getStudioPanelIds(layout.studioLayout);
+    if (!panelIds.some((panelId) => (layout.panelTools[panelId] ?? getPanelType(panelId)) === "preview")) {
+      openStudioPanel("preview", "row", panelIds[0] ?? null);
+    }
+  }, [playerSeekRequest, studioScope]);
+
   useEffect(() => {
     setPreviewSubtitlesEnabled(Boolean(tools?.preview?.subtitleUrl));
   }, [selectedVideoKey, tools?.preview?.subtitleUrl]);
@@ -239,6 +253,18 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     });
     setFocusedPanel(panelId);
   }
+
+  // From a video's study plan: switch to the series scope and open the course plan panel there.
+  const [pendingSeriesTool, setPendingSeriesTool] = useState(null);
+  function openSeriesStudyPlan() {
+    setPendingSeriesTool("series-study-plan");
+    actions.selectSeriesContext();
+  }
+  useEffect(() => {
+    if (!pendingSeriesTool || studioScope !== "series") return;
+    setPendingSeriesTool(null);
+    openStudioPanel(pendingSeriesTool, "row", getStudioPanelIds(layout.studioLayout)[0] ?? null);
+  }, [pendingSeriesTool, studioScope]);
 
   function openChatCitationReference(reference) {
     chat.openCitationReference(reference);
@@ -320,7 +346,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
       <div className="flex h-full items-center justify-center p-8">
         <WorkspaceStateBlock
           title="选择视频以开始预览"
-          description="在左侧选一个视频，这里会显示播放器。"
+          description="请在左侧选择视频。"
           dashed
         />
       </div>
@@ -338,7 +364,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     if (toolId === "series-overview" || toolId === "series-mindmap" || toolId === "series-study-plan") {
       return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel />;
     }
-    return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel playbackTime={playbackTime} followOverviewPlayback={followOverviewPlayback} onFollowOverviewPlaybackChange={setFollowOverviewPlayback} />;
+    return <WorkspaceVideoScopePane page={page} panelToolId={toolId} onPanelSelectTool={(nextTool) => setPanelTool(panelId, nextTool)} embeddedInStudioPanel onOpenSeriesStudyPlan={openSeriesStudyPlan} playbackTime={playbackTime} followOverviewPlayback={followOverviewPlayback} onFollowOverviewPlaybackChange={setFollowOverviewPlayback} />;
   }
 
   function renderPanelActions(panelId, toolId) {

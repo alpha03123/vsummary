@@ -44,8 +44,9 @@ function buildRawWorkspaceToolExportActions({ activeSeries, notes, summary, tool
     return [{ href: videoExportUrl(activeSeries.id, selectedVideo.id, "knowledge-cards"), enabled: tools?.knowledgeCards?.generated === true, label: "知识卡片导出", disabledReason: "知识卡片生成后才能导出" }];
   }
   if (toolId === "study-plan") {
-    return [{ href: videoExportUrl(activeSeries.id, selectedVideo.id, "study-plan"), enabled: tools?.studyPlan?.generated === true, label: "学习计划导出", disabledReason: "学习计划生成后才能导出" }];
+    return []; // 视频页显示的是课程计划的一部分，在课程计划里导出。
   }
+
   if (toolId === "mindmap") {
     return buildMindmapExportActions(`/api/videos/${encodeURIComponent(activeSeries.id)}/${encodeURIComponent(selectedVideo.id)}/mindmap/export`);
   }

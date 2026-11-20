@@ -481,6 +481,36 @@ class SqlVideoWorkspace:
                 VALUES (:id,:series,:title,CAST(:payload AS JSON),NOW(),NOW())
                 ON DUPLICATE KEY UPDATE title=VALUES(title),payload=VALUES(payload),updated_at=NOW()"""), {"id": new_ulid(), "series": series_id, "title": title, "payload": json.dumps(plan, ensure_ascii=False)})
 
+    def set_study_plan_progress(self, series_id: str, video_id: str | None, *, plan_id: str | None, index: int,
+                                completed_on: str | None) -> dict[str, Any] | None:
+        """记录或取消某一天的完成日期。进度存在计划 JSON 里，重新生成计划时随之清空。"""
+        with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
+            if video_id is not None:
+                row = session.execute(text("""SELECT p.id,p.payload FROM study_plans p JOIN videos v ON v.id=p.video_id
+                    JOIN series s ON s.id=v.series_id WHERE p.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace
+                    AND v.deleted_at IS NULL FOR UPDATE"""), {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
+            else:
+                row = session.execute(text("""SELECT p.id,p.payload FROM study_plans p JOIN series s ON s.id=p.series_id
+                    WHERE p.series_id=:series AND s.workspace_id=:workspace AND s.deleted_at IS NULL FOR UPDATE"""),
+                    {"series": series_id, "workspace": self._workspace_id}).mappings().first()
+            if row is None:
+                return None
+            plan = _json_object(row["payload"])
+            if plan.get("id") != plan_id:
+                raise StudyPlanChangedError("学习计划已重新生成，请刷新后再标记。")
+            if not any(item.get("index") == index for item in plan.get("sessions") or []):
+                raise LookupError("Study plan has no such day.")
+            progress = dict(plan.get("progress") or {})
+            if completed_on:
+                progress[str(index)] = completed_on
+            else:
+                progress.pop(str(index), None)
+            plan["progress"] = progress
+            session.execute(text("UPDATE study_plans SET payload=CAST(:payload AS JSON),updated_at=NOW() WHERE id=:id"),
+                {"id": row["id"], "payload": json.dumps(plan, ensure_ascii=False)})
+        return plan
+
     def get_video_study_plan(self, series_id: str, video_id: str) -> dict[str, Any] | None:
         with self._sessions() as session:
             row = session.execute(text("""SELECT p.payload FROM study_plans p JOIN videos v ON v.id=p.video_id
@@ -1183,6 +1213,10 @@ def _chapters_from_summary(summary: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+class StudyPlanChangedError(RuntimeError):
+    """勾选进度时页面上的计划已被重新生成。"""
 
 
 def _clear_deleted_video_content(session: Session, *, video_id: str) -> None:

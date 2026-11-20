@@ -1,4 +1,4 @@
-"""基于 LiteLLM 的学习计划文案生成器：给已切好的每一课写标题、目标、重点和练习。"""
+"""基于 LiteLLM 的学习计划生成器：排课并写每课内容，或为代码切好的课只写内容。"""
 
 from __future__ import annotations
 
@@ -13,16 +13,21 @@ from backend.shared.llm import LiteLLMCompletionGateway
 from backend.shared.llm.usage import LlmUsageCategory, LlmUsageRecorder
 from backend.video_summary.infrastructure.config.settings import ensure_settings_file
 from backend.video_summary.infrastructure.config.user_preferences import load_effective_settings
-from backend.video_summary.infrastructure.llm.prompts.study_plan import STUDY_PLAN_PROMPT_TEMPLATE
+from backend.video_summary.infrastructure.llm.prompts.study_plan import (
+    STUDY_PLAN_COPY_PROMPT_TEMPLATE,
+    STUDY_PLAN_PROMPT_TEMPLATE,
+)
 from backend.video_summary.infrastructure.video_summary_runtime import build_litellm_completion_gateway
 
 
 class StudySessionCopy(BaseModel):
-    index: int
+    index: int = 0
+    chapters: list[str] = Field(default_factory=list)
     title: str = ""
     goal: str = ""
     focus: list[str] = Field(default_factory=list)
     practice: list[str] = Field(default_factory=list)
+    practice_minutes: int = 0
 
 
 class StudyPlanCopy(BaseModel):
@@ -31,12 +36,26 @@ class StudyPlanCopy(BaseModel):
     sessions: list[StudySessionCopy] = Field(default_factory=list)
 
 
-def build_study_plan_prompt(*, title: str, context: str, daily_minutes: int, sessions: list[dict]) -> str:
+def _context_block(context: str) -> str:
+    return f"{context.strip()}\n" if context.strip() else ""
+
+
+def build_study_plan_prompt(*, title: str, context: str, daily_minutes: int, videos: list[dict]) -> str:
     return STUDY_PLAN_PROMPT_TEMPLATE.format(
+        daily_minutes=daily_minutes,
+        max_minutes=round(daily_minutes * 1.3),
+        title=title,
+        context=_context_block(context),
+        videos_json=json.dumps(videos, ensure_ascii=False, indent=1),
+    )
+
+
+def build_study_plan_copy_prompt(*, title: str, context: str, daily_minutes: int, sessions: list[dict]) -> str:
+    return STUDY_PLAN_COPY_PROMPT_TEMPLATE.format(
         daily_minutes=daily_minutes,
         session_count=len(sessions),
         title=title,
-        context=context,
+        context=_context_block(context),
         sessions_json=json.dumps(sessions, ensure_ascii=False, indent=1),
     )
 
@@ -53,8 +72,15 @@ class ConfiguredStudyPlanGenerator:
         self._cached_signature: tuple[object, ...] | None = None
         self._cached_gateway: LiteLLMCompletionGateway | None = None
 
-    async def arun(self, *, title: str, context: str, daily_minutes: int, sessions: list[dict]) -> StudyPlanCopy:
-        prompt = build_study_plan_prompt(title=title, context=context, daily_minutes=daily_minutes, sessions=sessions)
+    async def aplan(self, *, title: str, context: str, daily_minutes: int, videos: list[dict]) -> StudyPlanCopy:
+        prompt = build_study_plan_prompt(title=title, context=context, daily_minutes=daily_minutes, videos=videos)
+        return await self._complete(prompt)
+
+    async def acopy(self, *, title: str, context: str, daily_minutes: int, sessions: list[dict]) -> StudyPlanCopy:
+        prompt = build_study_plan_copy_prompt(title=title, context=context, daily_minutes=daily_minutes, sessions=sessions)
+        return await self._complete(prompt)
+
+    async def _complete(self, prompt: str) -> StudyPlanCopy:
         return await self._gateway().acomplete_structured(
             [{"role": "user", "content": prompt}], response_model=StudyPlanCopy, retries=3)
 

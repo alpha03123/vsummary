@@ -51,7 +51,7 @@ export function WorkspaceSeriesOverviewView({
     return (
       <WorkspaceStateBlock
         title="系列暂无视频"
-        description="视频处理完后，这里会汇总每个视频的 AI 概括。"
+        description="汇总系列内各视频的 AI 概括。"
         dashed
       />
     );

@@ -230,6 +230,7 @@ export function createWorkspaceChatActions({
       matchedText: typeof reference.matchedText === "string" ? reference.matchedText : "",
       chapterTitle: typeof reference.chapterTitle === "string" ? reference.chapterTitle : "",
       requestId: `${Date.now()}-${reference.seconds}`,
+      ...(reference.reveal === true ? { reveal: true } : {}),
     });
   }
 

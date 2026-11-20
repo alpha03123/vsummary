@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from backend.api.dependencies import JobRepositoryDep, WorkspaceServicesDep
 from backend.api.schemas.contracts import (
     GenerateStudyPlanRequest,
+    StudyPlanProgressRequest,
     CancelSeriesSummariesRequest,
     CreateVideoNoteRequest,
     GenerateVideoAiSummaryRequest,
@@ -1271,6 +1272,34 @@ def export_video_study_plan_markdown(series_id: str, video_id: str, container: W
     if plan is None:
         raise HTTPException(status_code=404, detail=f"study plan not found for video '{series_id}/{video_id}'")
     return _markdown_response(render_study_plan_markdown(plan), _export_filename(video, "学习计划"))
+
+
+def _set_study_plan_progress(container, series_id: str, video_id: str | None, request: StudyPlanProgressRequest) -> dict[str, object]:
+    from backend.video_summary.infrastructure.persistence.sql_video_workspace import StudyPlanChangedError
+
+    try:
+        plan = container.linked_series_workspace.set_study_plan_progress(series_id, video_id, plan_id=request.plan_id,
+            index=request.index, completed_on=request.completed_on.isoformat() if request.completed_on else None)
+    except StudyPlanChangedError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except LookupError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if plan is None:
+        raise HTTPException(status_code=404, detail="study plan not found")
+    return plan
+
+
+@router.put("/api/videos/{series_id}/{video_id}/study-plan/progress")
+def update_video_study_plan_progress(series_id: str, video_id: str, request: StudyPlanProgressRequest,
+                                     container: WorkspaceServicesDep) -> dict[str, object]:
+    _ensure_video_exists(container, series_id, video_id)
+    return _set_study_plan_progress(container, series_id, video_id, request)
+
+
+@router.put("/api/series/{series_id}/study-plan/progress")
+def update_series_study_plan_progress(series_id: str, request: StudyPlanProgressRequest,
+                                      container: WorkspaceServicesDep) -> dict[str, object]:
+    return _set_study_plan_progress(container, series_id, None, request)
 
 
 @router.get("/api/series/{series_id}/study-plan")

@@ -122,12 +122,15 @@ def render_knowledge_cards_markdown(payload: dict[str, Any]) -> str:
 
 def render_study_plan_markdown(plan: dict[str, Any]) -> str:
     """学习计划：每天一节，列出要看的片段（带时间点）、目标、重点和练习。"""
+    total = int(plan.get("total_minutes") or 0)
+    total_text = f"{total} 分钟" if total < 60 else (f"{total // 60} 小时 {total % 60} 分" if total % 60 else f"{total // 60} 小时")
     lines = [f"# {plan.get('title', '')} 学习计划", "",
-        f"每天约 {plan.get('daily_minutes', 0)} 分钟，共 {len(plan.get('sessions') or [])} 天，合计约 {plan.get('total_minutes', 0)} 分钟。", ""]
+        f"共 {len(plan.get('sessions') or [])} 天 · 每天约 {plan.get('daily_minutes', 0)} 分钟 · "
+        + (f"视频共 {plan['video_minutes']} 分钟" if plan.get("video_minutes") else f"合计约 {total_text}"), ""]
     if plan.get("overview"):
         lines += [str(plan["overview"]), ""]
     if plan.get("prerequisites"):
-        lines += ["## 开始前", "", *[f"- {item}" for item in plan["prerequisites"]], ""]
+        lines += ["## 前置知识", "", *[f"- {item}" for item in plan["prerequisites"]], ""]
     series = plan.get("kind") == "series"
     for session in plan.get("sessions") or []:
         lines += [f"## 第 {session['index']} 天：{session.get('title', '')}（约 {session.get('study_minutes', 0)} 分钟）", ""]

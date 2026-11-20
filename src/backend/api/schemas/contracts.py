@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 from typing import Literal
@@ -34,6 +36,14 @@ class GenerateStudyPlanRequest(BaseModel):
     """请求生成学习计划：每天打算学多少分钟。"""
 
     daily_minutes: int = Field(default=45, ge=10, le=240)
+
+
+class StudyPlanProgressRequest(BaseModel):
+    """标记学习计划某一天学完（completed_on 为本地日期）或取消标记（null）。"""
+
+    plan_id: str | None = None
+    index: int = Field(ge=1)
+    completed_on: date | None = None
 
 
 class GenerateSeriesSummariesRequest(BaseModel):

@@ -59,7 +59,7 @@ export const TOOL_TILES = {
   },
   "study-plan": {
     label: "学习计划",
-    description: "按每天的时间分课学完",
+    description: "每日学习计划",
     icon: CalendarDays,
     ...SHARED_TOOL_VISUALS,
   },
@@ -91,8 +91,8 @@ export const SERIES_TOOL_TILES = {
     ...SHARED_TOOL_VISUALS,
   },
   "series-study-plan": {
-    label: "全局学习计划",
-    description: "整个合集按天分课",
+    label: "课程学习计划",
+    description: "课程每日学习计划",
     icon: CalendarDays,
     ...SHARED_TOOL_VISUALS,
   },
