@@ -16,14 +16,24 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from fnmatch import fnmatch
 from hashlib import sha1
 from pathlib import Path
+import os
 import shutil
-from typing import Any
+from typing import Any, TypeVar
+from urllib.parse import urlsplit
 
+from backend.core.errors import UserVisibleError
 from backend.video_summary.generation.ports import ProgressReporter
+
+
+OFFICIAL_ENDPOINT = "https://huggingface.co"
+MIRROR_ENDPOINT = "https://hf-mirror.com"
+_PROBE_TIMEOUT = (6, 15)
+_T = TypeVar("_T")
 
 
 _RESUME_DIR_NAME = ".incomplete"
@@ -53,6 +63,15 @@ class HuggingFaceDownloadSpec:
 
 class HuggingFaceDownloadCancelled(RuntimeError):
     """HuggingFace 模型下载被用户取消。"""
+
+
+class ModelDownloadError(UserVisibleError):
+    """所有下载源都失败；消息里写明试过的地址和各自的原因。"""
+
+    def __init__(self, failures: list[tuple[str, BaseException]]):
+        tried = "；".join(f"{urlsplit(endpoint).netloc or endpoint}：{_short_reason(error)}" for endpoint, error in failures)
+        super().__init__("model_download_failed",
+            f"模型下载失败，已尝试 {len(failures)} 个下载源（{tried}）。请检查网络连接或代理设置后重试。")
 
 
 @dataclass(frozen=True)
@@ -126,7 +145,8 @@ class HuggingFaceModelDownloader:
         _raise_if_download_cancelled(reporter)
 
         temp_dir.mkdir(parents=True, exist_ok=True)
-        plans = self._snapshot_download(spec=spec, temp_dir=temp_dir, reporter=reporter)
+        plans = _with_endpoint_fallback(spec.endpoint, spec.repo_id, reporter,
+            lambda endpoint: self._snapshot_download(spec=replace(spec, endpoint=endpoint), temp_dir=temp_dir, reporter=reporter))
         _raise_if_download_cancelled(reporter)
 
         reporter.update("validate", 95.0, f"正在校验模型文件：{spec.repo_id}")
@@ -200,10 +220,13 @@ class HuggingFaceModelDownloader:
                 均保留以便续传。
             RuntimeError: `allow_patterns` 在仓库里没匹配到任何文件。
         """
-        from huggingface_hub import HfApi, hf_hub_download
-
         reporter.update("download", 0.0, f"正在连接模型仓库：{spec.repo_id}")
         _raise_if_download_cancelled(reporter)
+        return _with_endpoint_fallback(spec.endpoint, spec.repo_id, reporter,
+            lambda endpoint: self._warm_cache_from(replace(spec, endpoint=endpoint), reporter))
+
+    def _warm_cache_from(self, spec: HuggingFaceCacheWarmSpec, reporter: ProgressReporter) -> Path:
+        from huggingface_hub import HfApi, hf_hub_download
 
         api = HfApi(endpoint=spec.endpoint)
         model_info = api.model_info(spec.repo_id, files_metadata=True)
@@ -234,6 +257,89 @@ class HuggingFaceModelDownloader:
         _raise_if_download_cancelled(reporter)
         reporter.update("download", 95.0, f"模型文件已就绪：{spec.repo_id}")
         return spec.cache_dir / f"models--{spec.repo_id.replace('/', '--')}"
+
+
+def _candidate_endpoints(configured: str | None) -> list[str]:
+    """设置里的地址排第一，其余依次是官方源和镜像（去重）。"""
+    first = (configured or OFFICIAL_ENDPOINT).strip().rstrip("/") or OFFICIAL_ENDPOINT
+    return list(dict.fromkeys([first, OFFICIAL_ENDPOINT, MIRROR_ENDPOINT]))
+
+
+def _reachable_endpoint(endpoint: str, repo_id: str) -> str:
+    """探测仓库元数据接口，返回跟随重定向之后真正提供服务的地址。
+
+    hf-mirror.com 对海外出口（比如开着代理）一律 308 到 huggingface.co。GET 会自动跟随，
+    但 `hf_hub_download` 先发 HEAD，而 huggingface_hub 的 HEAD 只跟随相对路径的重定向，
+    结果报 "check your connection"。先在这里解析出最终地址，后续请求就直接打到它。
+    """
+    from huggingface_hub.utils import get_session
+
+    response = get_session().get(f"{endpoint}/api/models/{repo_id}", timeout=_PROBE_TIMEOUT, allow_redirects=True)
+    response.raise_for_status()
+    final = urlsplit(response.url)
+    return f"{final.scheme}://{final.netloc}"
+
+
+def _disable_xet() -> None:
+    """模型文件存在 Xet 上时，装了 hf_xet 的 hub 会绕开镜像直连 hf.co 的 Xet 服务器。
+
+    关掉后统一走 resolve 地址的普通 HTTP 下载，镜像才真正生效。`is_xet_available()`
+    在调用时读取这个常量，所以运行期修改有效；环境变量留给子进程。
+    """
+    from huggingface_hub import constants
+
+    constants.HF_HUB_DISABLE_XET = True
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
+
+
+def _with_endpoint_fallback(
+    configured: str | None,
+    repo_id: str,
+    reporter: ProgressReporter,
+    attempt: Callable[[str], _T],
+) -> _T:
+    """依次尝试设置里的地址、官方源和镜像，直到有一个下载成功。
+
+    开不开代理、设置里填的是哪个源都能下：连不上的源先被探测排除，下载中途断掉也会
+    换下一个源接着下（已下载的部分保留，续传不受影响）。
+    """
+    _disable_xet()
+    failures: list[tuple[str, BaseException]] = []
+    attempted: set[str] = set()
+    for candidate in _candidate_endpoints(configured):
+        _raise_if_download_cancelled(reporter)
+        try:
+            endpoint = _reachable_endpoint(candidate, repo_id)
+        except Exception as error:
+            failures.append((candidate, error))
+            continue
+        if endpoint in attempted:
+            continue
+        attempted.add(endpoint)
+        if failures or endpoint != candidate:
+            reporter.update("download", None, f"改用 {urlsplit(endpoint).netloc} 下载：{repo_id}")
+        try:
+            return attempt(endpoint)
+        except HuggingFaceDownloadCancelled:
+            raise
+        except Exception as error:
+            failures.append((endpoint, error))
+    raise ModelDownloadError(failures) from (failures[-1][1] if failures else None)
+
+
+def _short_reason(error: BaseException) -> str:
+    """把网络异常压成一句用户看得懂的原因；完整异常链在日志里。"""
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    if status:
+        return f"HTTP {status}"
+    names = {item.__name__ for item in type(error).__mro__}
+    for name, reason in (("ProxyError", "代理连不上"), ("SSLError", "SSL 证书校验失败"),
+                         ("ConnectTimeout", "连接超时"), ("ReadTimeout", "读取超时"), ("Timeout", "超时"),
+                         ("ConnectionError", "连接失败")):
+        if name in names:
+            return f"{reason}（{type(error).__name__}）"
+    text = " ".join(str(error).split())
+    return f"{type(error).__name__}: {text[:80]}" if text else type(error).__name__
 
 
 def _download_single_file(

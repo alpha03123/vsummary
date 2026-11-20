@@ -110,6 +110,10 @@ def _install_fakes(monkeypatch, *, siblings: list[RepoSibling], contents: dict[s
     fake_http_get = _FakeHttpGet(contents)
     monkeypatch.setattr("huggingface_hub.HfApi", FakeHfApi)
     monkeypatch.setattr("huggingface_hub.file_download.http_get", fake_http_get)
+    monkeypatch.setattr(
+        "backend.video_summary.infrastructure.asr.huggingface_model_downloader._reachable_endpoint",
+        lambda endpoint, repo_id: endpoint,
+    )
     return fake_http_get
 
 
