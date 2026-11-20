@@ -15,7 +15,7 @@ from backend.video_summary.infrastructure.persistence.job_repository import SqlJ
 from backend.video_summary.infrastructure.persistence.models import Job, JobEvent
 from backend.core.ids import new_ulid
 from backend.external.ytdlp import ExternalVideoResolutionError
-from backend.video_summary.infrastructure.persistence.job_worker import SqlJobWorker, WorkerOptions
+from backend.video_summary.infrastructure.persistence.job_worker import FailureCopy, SqlJobWorker, WorkerOptions
 from backend.video_summary.library.usecases import GetSeriesMindmap, GetVideoSource, ListVideoLibrary
 
 
@@ -34,11 +34,13 @@ def generation_client(stored_video, mysql_sessions):
     return TestClient(create_app(container)), workspace.workspace_id, series_id, video_id
 
 
+@pytest.mark.parametrize("hide_cause", [False, True], ids=["local", "cloud"])
 @pytest.mark.parametrize("public_error", [True, False])
-def test_worker_failure_reaches_job_and_sse_without_exposing_unknown_exceptions(generation_client, mysql_sessions, public_error):
+def test_worker_failure_reaches_job_and_sse_with_the_host_failure_copy(generation_client, mysql_sessions, public_error, hide_cause):
+    # Local users run the app themselves and need the real cause; cloud customers must not see internals.
     client, workspace_id, _, video_id = generation_client
     job_id, operation = new_ulid(), new_ulid()
-    error = ExternalVideoResolutionError("cookie_required", "Douyin rejected the session") if public_error else RuntimeError("secret=must-not-leak")
+    error = ExternalVideoResolutionError("cookie_required", "Douyin rejected the session") if public_error else RuntimeError("pipeline-broke-here")
     with mysql_sessions.begin() as session:
         session.add(Job(id=job_id, workspace_id=workspace_id, resource_type="video", resource_id=video_id,
             operation=operation, status="queued", request_payload={}))
@@ -48,7 +50,8 @@ def test_worker_failure_reaches_job_and_sse_without_exposing_unknown_exceptions(
         raise error
     worker = SqlJobWorker(repository=repository,
         get_execution_services=lambda _: SimpleNamespace(job_operation_handlers={operation: fail}),
-        options=WorkerOptions(worker_id="error-contract"))
+        options=WorkerOptions(worker_id="error-contract",
+            failure_copy=FailureCopy(show_cause=False, support_hint="") if hide_cause else FailureCopy()))
     asyncio.run(worker._execute(claim))
     response = client.get(f"/api/jobs/{job_id}")
     assert response.status_code == 200
@@ -59,7 +62,8 @@ def test_worker_failure_reaches_job_and_sse_without_exposing_unknown_exceptions(
         assert payload["failure_detail"] == str(error)
     events = client.get(f"/api/jobs/{job_id}/events")
     assert events.status_code == 200
-    assert "must-not-leak" not in response.text + events.text
+    if not public_error:
+        assert ("pipeline-broke-here" in response.text + events.text) is not hide_cause
     terminal = [json.loads(line.removeprefix("data: ")) for line in events.text.splitlines() if line.startswith("data: ")][-1]
     assert terminal["status"] == "failed"
     assert terminal["detail"] == payload["failure_detail"]
