@@ -4,10 +4,10 @@ from backend.video_summary.library.linked_models import LinkedSeries, LinkedVide
 
 
 def _linked_video(workspace, cover_url="https://img.example/cover.jpg"):
-    series_id = new_ulid()
-    workspace.save_linked_series(LinkedSeries(series_id=series_id, title="Linked", cover_url=cover_url, source_url="https://example/s",
+    # The workspace assigns its own series id; use the returned one.
+    series_id = workspace.save_linked_series(LinkedSeries(series_id=new_ulid(), title="Linked", cover_url=cover_url, source_url="https://example/s",
         videos=[LinkedVideo(source_id="BV1cover", item_index=1, title="Episode", cover_url=cover_url, duration_seconds=95,
-                            source_url="https://example/v")]))
+                            source_url="https://example/v")])).series_id
     series = next(item for item in workspace.list_series() if item.id == series_id)
     return series_id, series.videos[0]
 

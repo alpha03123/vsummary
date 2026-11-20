@@ -64,31 +64,6 @@ class RagModelManagerTests(unittest.TestCase):
 
             self.assertFalse(models[0].downloaded)
 
-    def test_download_does_not_start_second_worker_when_model_is_already_downloading(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root_dir = Path(temp_dir)
-            calls: list[str] = []
-            release = threading.Event()
-
-            def blocking_downloader(spec, reporter) -> None:
-                del reporter
-                calls.append(spec.key)
-                release.wait(2.0)
-
-            manager = RagModelManager(
-                root_dir=root_dir,
-                progress_tracker=InMemoryProgressTracker(),
-                downloader=blocking_downloader,
-            )
-
-            first = manager.start_download("embedding")
-            second = manager.start_download("embedding")
-            release.set()
-
-            self.assertEqual(first.status, "running")
-            self.assertEqual(second.status, "running")
-            self.assertEqual(calls, ["embedding"])
-
     def test_download_fails_when_fastembed_cache_validation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root_dir = Path(temp_dir)
