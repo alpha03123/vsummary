@@ -51,7 +51,7 @@ class FailureCopy:
     """
 
     show_cause: bool = True
-    support_hint: str = "完整错误记录在安装目录的 logs 文件夹里。"
+    support_hint: str = "完整记录请查阅 logs/app.jsonl。"
     no_charge_note: str = ""
 
 
