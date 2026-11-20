@@ -760,8 +760,8 @@ def _restore_display_frame_references(
     )
 
 
-NO_AUDIO_MESSAGE = "视频无声音且无字幕，暂不支持处理，本次不扣除积分。"
-NO_SPEECH_MESSAGE = "未识别到视频中的人声（如纯音乐、无配音视频），暂不支持处理，本次不扣除积分。"
+NO_AUDIO_MESSAGE = "视频无声音且无字幕，暂不支持处理。"
+NO_SPEECH_MESSAGE = "未识别到视频中的人声（如纯音乐、无配音视频），暂不支持处理。"
 # Placeholders transcribers return when they hear nothing (Bailian: SUCCESS_WITH_NO_VALID_FRAGMENT).
 _NO_SPEECH_PLACEHOLDERS = {"无明显人声"}
 _MIN_SPEECH_CHARS_PER_MINUTE = 10
@@ -790,7 +790,7 @@ def _llm_stage_failure(stage_label: str, error: Exception) -> UserVisibleError:
     """
     if _contains_connection_failure(error):
         return TemporaryServiceError("llm_unavailable", LLM_UNAVAILABLE_MESSAGE)
-    return UserVisibleError("ai_generation_failed", f"{stage_label}失败。如反复失败，请点击「设置 - 问题反馈」反馈问题。")
+    return UserVisibleError("ai_generation_failed", f"{stage_label}失败。")
 
 
 def _cache_identity(component: object) -> str:

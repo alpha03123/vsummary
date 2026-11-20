@@ -43,6 +43,19 @@ class JobExecutionServices(Protocol):
 
 
 @dataclass(frozen=True)
+class FailureCopy:
+    """What a failed job tells the person reading it, beyond the error message itself.
+
+    Locally that person runs the app, so the underlying cause and the log folder help them fix
+    it. In the cloud the reader is a customer: causes stay hidden and they get a support route.
+    """
+
+    show_cause: bool = True
+    support_hint: str = "完整错误记录在安装目录的 logs 文件夹里。"
+    no_charge_note: str = ""
+
+
+@dataclass(frozen=True)
 class WorkerOptions:
     worker_id: str
     operation_filter: frozenset[str] | None = None
@@ -52,6 +65,7 @@ class WorkerOptions:
     poll_seconds: float = 0.25
     maintenance_seconds: float = 5
     concurrency: int = 1
+    failure_copy: FailureCopy = FailureCopy()
 
     def __post_init__(self):
         if not self.worker_id.strip() or self.poll_seconds <= 0 or self.maintenance_seconds <= 0 or self.concurrency < 1:
@@ -321,7 +335,7 @@ class SqlJobWorker:
             self._repository.fail(
                 claim,
                 failure_code=_failure_code(error),
-                failure_detail=_public_failure_detail(error),
+                failure_detail=_public_failure_detail(error, self._options.failure_copy),
                 retry_delay_seconds=_retry_delay_seconds(error),
             )
         finally:
@@ -381,19 +395,41 @@ def _failure_code(error: Exception) -> str:
     return "internal_error"
 
 
-def _public_failure_detail(error: Exception) -> str:
-    if isinstance(error, UserVisibleError):
-        return str(error)
-    if isinstance(error, MediaSourceUnavailableError):
-        return str(error)
+# Failures whose message alone doesn't tell the user what to do next.
+_UNEXPLAINED_FAILURES = frozenset({"ai_generation_failed", "internal_error"})
+# Failures that stop the job before anything is published, so nothing is charged.
+_UNCHARGED_FAILURES = frozenset({"no_speech"})
+
+
+def _public_failure_detail(error: Exception, copy: FailureCopy = FailureCopy()) -> str:
     code = _failure_code(error)
-    if code == "content_conflict":
+    if isinstance(error, (UserVisibleError, MediaSourceUnavailableError)):
+        message = str(error)
+    elif code == "content_conflict":
         return "生成期间内容已被修改，请刷新后重新提交。"
-    if code == "invalid_request":
+    elif code == "invalid_request":
         return "任务内容已失效，可能已被删除或修改，请刷新页面后重试。"
-    if code.startswith("provider_"):
+    elif code.startswith("provider_"):
         return "AI 服务暂时无法连接，请稍后重试。"
-    return "任务处理失败。如反复失败，请点击「设置 - 问题反馈」反馈问题。"
+    else:
+        message = "任务处理失败。"
+    if code in _UNCHARGED_FAILURES and copy.no_charge_note:
+        message = f"{message}{copy.no_charge_note}"
+    if code in _UNEXPLAINED_FAILURES:
+        cause = error.__cause__ if isinstance(error, UserVisibleError) else error
+        if copy.show_cause and cause is not None:
+            message = f"{message}原因：{_describe_cause(cause)}"
+        if copy.support_hint:
+            message = f"{message}{copy.support_hint}"
+    return message
+
+
+def _describe_cause(error: BaseException) -> str:
+    text = " ".join(str(error).split())
+    if len(text) > 240:
+        text = text[:240] + "…"
+    described = f"{type(error).__name__}: {text}" if text else type(error).__name__
+    return described if described.endswith(("。", ".", "…")) else f"{described}。"
 
 
 def _retry_delay_seconds(error: Exception) -> int | None:
