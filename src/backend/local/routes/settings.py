@@ -389,7 +389,11 @@ def discover_provider_models(
 
 
 @router.get("/api/asr/{provider}/models", response_model=list[FasterWhisperModelResponse])
-def list_asr_models(provider: str, container: ApiContainerDep) -> list[FasterWhisperModelResponse]:
+def list_asr_models(
+    provider: str,
+    container: ApiContainerDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> list[FasterWhisperModelResponse]:
     """GET /api/asr/{provider}/models — 列出本地 ASR provider 的模型。
 
     返回满足当前 model_size 配置的所有可用模型及其下载状态、
@@ -410,7 +414,13 @@ def list_asr_models(provider: str, container: ApiContainerDep) -> list[FasterWhi
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return [
-        _to_asr_model_response(provider, model, container)
+        _with_active_model_job(
+            _to_asr_model_response(provider, model, container),
+            container,
+            context.workspace_id,
+            resource_id=f"asr:{provider}:{model.id}",
+            operation="prepare_asr_model",
+        )
         for model in manager.list_models(_current_asr_model(provider, settings))
     ]
 
@@ -522,7 +532,10 @@ async def _removed_stream_asr_model_download_progress(
 
 
 @router.get("/api/rag/models", response_model=list[RagModelResponse])
-def list_rag_models(container: ApiContainerDep) -> list[RagModelResponse]:
+def list_rag_models(
+    container: ApiContainerDep,
+    context: WorkspaceContext = WorkspaceContextDep,
+) -> list[RagModelResponse]:
     """GET /api/rag/models — 列出可用的 RAG 嵌入模型。
 
     返回所有 RAG 模型及其下载状态、用途（embedding/reranker）等信息。
@@ -533,7 +546,16 @@ def list_rag_models(container: ApiContainerDep) -> list[RagModelResponse]:
     Returns:
         RagModelResponse 列表。
     """
-    return [_to_rag_model_response(model) for model in container.rag_model_manager.list_models()]
+    return [
+        _with_active_model_job(
+            _to_rag_model_response(model),
+            container,
+            context.workspace_id,
+            resource_id=f"rag:{model.key}",
+            operation="prepare_rag_model",
+        )
+        for model in container.rag_model_manager.list_models()
+    ]
 
 
 @router.post("/api/rag/models/{model_key}/download")
@@ -741,6 +763,28 @@ def _get_asr_model_manager(provider: str, container: ApiContainerDep):
 
 def _current_asr_model(provider: str, settings) -> str:
     return settings.asr.whisper_cpp.model if provider == "whisper_cpp" else settings.asr.faster_whisper.model_size
+
+
+def _with_active_model_job(response, container: ApiContainerDep, workspace_id: str, *, resource_id: str, operation: str):
+    """用进行中的持久模型 Job 覆盖响应里的下载状态。
+
+    模型下载走持久 Job，不再写进程内 tracker；若只看 tracker，下载途中列表接口会报
+    `idle`，前端轮询拿到后把"下载中"刷回"未下载"。
+    """
+    job = container.job_repository.active_for_resource(
+        workspace_id=workspace_id,
+        resource_id=resource_id,
+        operation=operation,
+    )
+    if job is None:
+        return response
+    event = container.job_repository.latest_event(job.id, workspace_id=workspace_id)
+    return response.model_copy(update={
+        "status": "cancelling" if job.status == "cancelling" else "running",
+        "progress": event.progress if event is not None else None,
+        "detail": event.detail if event is not None else None,
+        "error": None,
+    })
 
 
 def _to_rag_model_response(model) -> RagModelResponse:
