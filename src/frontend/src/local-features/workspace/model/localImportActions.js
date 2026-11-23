@@ -1,9 +1,9 @@
-export function createLocalImportActions({state,dispatch,api,coreApi,contentActions}){
-const localWorkspaceApi=api;
-const {loadWorkspaceLibrary,subscribeDurableJobProgress}=coreApi;
-const {reloadWorkspaceLibrary}=contentActions;
-const errorMessage=(error,fallback)=>error instanceof Error?error.message:fallback;
-async function onSelectLocalMedia() {
+export function createLocalImportActions({ state, dispatch, api, coreApi, contentActions }) {
+  const localWorkspaceApi = api;
+  const { subscribeDurableJobProgress } = coreApi;
+  const { reloadWorkspaceLibrary } = contentActions;
+
+  async function onSelectLocalMedia() {
     try {
       return await localWorkspaceApi.selectLocalMedia();
     } catch (error) {
@@ -11,12 +11,18 @@ async function onSelectLocalMedia() {
       throw error;
     }
   }
-async function onRelinkVideo() {
-    if (!state.selectedSeriesId || !state.selectedVideoId) {
+
+  async function onRelinkVideo(options = {}) {
+    const seriesId = options?.seriesId || state.selectedSeriesId;
+    const videoId = options?.videoId || state.selectedVideoId;
+    if (!seriesId) {
       return;
     }
     try {
-      const result = await localWorkspaceApi.relinkExternalVideo(state.selectedSeriesId, state.selectedVideoId);
+      const result =
+        options?.mode === "folder" || !videoId
+          ? await localWorkspaceApi.relinkSeriesFromFolder(seriesId, videoId || null)
+          : await localWorkspaceApi.relinkExternalVideo(seriesId, videoId);
       if (result.relinked) {
         await reloadWorkspaceLibrary();
       }
@@ -24,7 +30,8 @@ async function onRelinkVideo() {
       dispatch({ type: "load_failed", message: error instanceof Error ? error.message : "重新链接媒体失败" });
     }
   }
-async function onImportLocalSeries(seriesTitle, sourcePaths, storageMode) {
+
+  async function onImportLocalSeries(seriesTitle, sourcePaths, storageMode) {
     try {
       const rawSeries = await localWorkspaceApi.importLocalSeries(seriesTitle, sourcePaths, storageMode);
       await reloadWorkspaceLibrary();
@@ -34,7 +41,8 @@ async function onImportLocalSeries(seriesTitle, sourcePaths, storageMode) {
       throw error;
     }
   }
-async function onInitExternalCookie(provider, options = {}) {
+
+  async function onInitExternalCookie(provider, options = {}) {
     try {
       return await localWorkspaceApi.initExternalCookie(provider, options);
     } catch (error) {
@@ -45,7 +53,8 @@ async function onInitExternalCookie(provider, options = {}) {
       throw error;
     }
   }
-async function onLoadChaoxingStatus() {
+
+  async function onLoadChaoxingStatus() {
     try {
       return await localWorkspaceApi.loadChaoxingStatus();
     } catch (error) {
@@ -53,7 +62,8 @@ async function onLoadChaoxingStatus() {
       throw error;
     }
   }
-async function onInitChaoxing(options = {}) {
+
+  async function onInitChaoxing(options = {}) {
     try {
       return await localWorkspaceApi.initChaoxing(options);
     } catch (error) {
@@ -64,14 +74,16 @@ async function onInitChaoxing(options = {}) {
       throw error;
     }
   }
-async function onCancelChaoxingInit() {
+
+  async function onCancelChaoxingInit() {
     try {
       await localWorkspaceApi.cancelChaoxingInit();
     } catch {
       // 取消是清理动作，失败时不覆盖用户当前操作反馈。
     }
   }
-async function onLoadChaoxingCourses() {
+
+  async function onLoadChaoxingCourses() {
     try {
       return await localWorkspaceApi.loadChaoxingCourses();
     } catch (error) {
@@ -79,7 +91,8 @@ async function onLoadChaoxingCourses() {
       throw error;
     }
   }
-async function onImportChaoxingCourse(courseKey, onProgress = null, options = {}) {
+
+  async function onImportChaoxingCourse(courseKey, onProgress = null, options = {}) {
     try {
       const task = await localWorkspaceApi.importChaoxingCourse(courseKey);
       if (!task.jobId) {
@@ -111,7 +124,8 @@ async function onImportChaoxingCourse(courseKey, onProgress = null, options = {}
       throw error;
     }
   }
-async function onCancelChaoxingImport(jobId) {
+
+  async function onCancelChaoxingImport(jobId) {
     if (!jobId) {
       return;
     }
@@ -122,7 +136,8 @@ async function onCancelChaoxingImport(jobId) {
       throw error;
     }
   }
-async function onImportLocalPlaygroundVideos(sourcePaths) {
+
+  async function onImportLocalPlaygroundVideos(sourcePaths) {
     try {
       const rawVideos = await localWorkspaceApi.importLocalPlaygroundVideos(sourcePaths);
       await reloadWorkspaceLibrary();
@@ -132,7 +147,8 @@ async function onImportLocalPlaygroundVideos(sourcePaths) {
       throw error;
     }
   }
-async function onImportSeriesVideos(seriesId, sourcePaths) {
+
+  async function onImportSeriesVideos(seriesId, sourcePaths) {
     try {
       const rawVideos = await localWorkspaceApi.importLocalSeriesVideos(seriesId, sourcePaths);
       await reloadWorkspaceLibrary();
@@ -142,5 +158,19 @@ async function onImportSeriesVideos(seriesId, sourcePaths) {
       throw error;
     }
   }
-return {onSelectLocalMedia,onRelinkVideo,onImportLocalSeries,onInitExternalCookie,onLoadChaoxingStatus,onInitChaoxing,onCancelChaoxingInit,onLoadChaoxingCourses,onImportChaoxingCourse,onCancelChaoxingImport,onImportLocalPlaygroundVideos,onImportSeriesVideos};
+
+  return {
+    onSelectLocalMedia,
+    onRelinkVideo,
+    onImportLocalSeries,
+    onInitExternalCookie,
+    onLoadChaoxingStatus,
+    onInitChaoxing,
+    onCancelChaoxingInit,
+    onLoadChaoxingCourses,
+    onImportChaoxingCourse,
+    onCancelChaoxingImport,
+    onImportLocalPlaygroundVideos,
+    onImportSeriesVideos,
+  };
 }

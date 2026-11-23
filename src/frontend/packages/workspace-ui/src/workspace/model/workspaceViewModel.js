@@ -222,6 +222,9 @@ export function toWorkspaceTools(payload) {
     studyPlan: record.study_plan
       ? asTool(record.study_plan, "tools.study_plan")
       : { id: "study-plan", title: "学习计划", available: false, generated: false, status: "blocked", previewUrl: null, subtitleUrl: null },
+    courseware: record.courseware
+      ? asTool(record.courseware, "tools.courseware")
+      : { id: "courseware", title: "视频课件", available: false, generated: false, status: "blocked", previewUrl: null, subtitleUrl: null },
     aiTodo: asOptionalString(record.ai_todo),
   };
 }

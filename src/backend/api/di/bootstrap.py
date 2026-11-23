@@ -56,6 +56,8 @@ from backend.video_summary.infrastructure.series_mindmap_workflow import Configu
 from backend.video_summary.infrastructure.llm.litellm_knowledge_card_generator import ConfiguredKnowledgeCardGenerator
 from backend.video_summary.infrastructure.llm.litellm_study_plan_generator import ConfiguredStudyPlanGenerator
 from backend.video_summary.library.usecases.study_plan import GenerateStudyPlan, validate_daily_minutes
+from backend.video_summary.infrastructure.courseware_extractor import FfmpegCoursewareExtractor
+from backend.video_summary.library.usecases.courseware import GenerateVideoCourseware
 from backend.video_summary.infrastructure.llm.litellm_note_generator import ConfiguredNoteGenerator
 from backend.video_summary.infrastructure.mindmap_workflow import ConfiguredMindmapWorkflow
 from backend.video_summary.infrastructure.rag.rag_models import RagModelManager
@@ -386,10 +388,27 @@ def build_workspace_services(
         if plan is None:
             raise LookupError("Series has no generated summaries; cannot generate a study plan.")
 
+    courseware_use_case = GenerateVideoCourseware(
+        workspace,
+        FfmpegCoursewareExtractor(),
+        temp_root=workspace.cache_root,
+    )
+
+    async def run_video_courseware_job(claim, reporter) -> None:
+        reporter.update("courseware", 10.0, "正在扫描视频画面跳变")
+        deck = await courseware_use_case.arun(
+            str(claim.request_payload["series_id"]),
+            claim.resource_id,
+            on_progress=reporter.update,
+        )
+        if deck is None:
+            raise LookupError("原视频不可用或已释放，无法提取课件。")
+
     operation_handlers["generate_video_knowledge_cards"] = run_video_knowledge_cards_job
     operation_handlers["generate_video_study_plan"] = run_video_study_plan_job
     operation_handlers["generate_series_study_plan"] = run_series_study_plan_job
     operation_handlers["generate_video_ai_summary"] = run_video_ai_summary_job
+    operation_handlers["generate_video_courseware"] = run_video_courseware_job
     def materialize_ai_summary_frames(*, video_id, video_path, output_dir, content):
         materialize_note_frames(video_path=video_path, output_dir=output_dir, content=content, frame_extractor=FfmpegMediaProcessor())
         for marker in parse_note_image_markers(content):
@@ -428,6 +447,7 @@ def build_workspace_services(
             frame_pool_builder=build_or_load_visual_frame_pool,
             saved_visual_paths=workspace.get_saved_visual_paths,
         ).arun(series_id, video_id),
+        generate_courseware=lambda series_id, video_id: courseware_use_case.arun(series_id, video_id),
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,

@@ -283,6 +283,35 @@ function PanelFooter({
     activeSeries?.id && selectedVideo?.id && downloadErrorKey === buildVideoKey(activeSeries.id, selectedVideo.id);
   const [footerOverflowOpen, setFooterOverflowOpen] = useState(false);
   const [aiSummaryTemplate, setAiSummaryTemplate] = useState("general");
+  const [relinkHoverOpen, setRelinkHoverOpen] = useState(false);
+  const [relinkPortalRect, setRelinkPortalRect] = useState(null);
+  const relinkTriggerRef = useRef(null);
+  const relinkCloseTimerRef = useRef(null);
+
+  function openRelinkHover() {
+    if (relinkCloseTimerRef.current) {
+      window.clearTimeout(relinkCloseTimerRef.current);
+      relinkCloseTimerRef.current = null;
+    }
+    const bounds = relinkTriggerRef.current?.getBoundingClientRect();
+    if (bounds) {
+      setRelinkPortalRect({
+        left: bounds.left,
+        width: bounds.width,
+        bottom: window.innerHeight - bounds.top + 6,
+      });
+    }
+    setRelinkHoverOpen(true);
+  }
+
+  function scheduleCloseRelinkHover() {
+    if (relinkCloseTimerRef.current) {
+      window.clearTimeout(relinkCloseTimerRef.current);
+    }
+    relinkCloseTimerRef.current = window.setTimeout(() => {
+      setRelinkHoverOpen(false);
+    }, 140);
+  }
 
   if (selectedContextType === "playground" || (isPlayground && !selectedVideo)) {
     return (
@@ -310,6 +339,7 @@ function PanelFooter({
     const seriesComplete = seriesVideos.length > 0 && seriesVideos.every((video) =>
       processingMode === "transcript" ? video.hasTranscript : video.processed);
     const seriesHasProcessed = seriesVideos.some((video) => video.processed);
+    const seriesHasMissingMedia = seriesVideos.some((video) => video.status === "source_missing");
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
         <div className="mb-1">
@@ -332,6 +362,16 @@ function PanelFooter({
                 <span>{queueLabel}</span>
               </div>
             </div>
+          ) : null}
+          {seriesHasMissingMedia && onRelinkVideo ? (
+            <button
+              type="button"
+              onClick={() => onRelinkVideo?.({ mode: "folder", seriesId: activeSeries?.id })}
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl border border-warning-border/80 bg-warning-subtle/80 px-4 py-2 text-xs font-semibold text-warning transition-colors hover:bg-warning/15"
+            >
+              <FolderKanban size={14} />
+              选择文件夹重新链接（按文件名匹配）
+            </button>
           ) : null}
           <div className="flex items-center gap-2">
             <button
@@ -497,7 +537,11 @@ function PanelFooter({
     processingMode,
     sourceMissing: selectedVideo.status === "source_missing",
   });
-  const regenerationLocked = !allowSourceRegeneration && selectedVideo.processed && !isGeneratingSelectedVideo;
+  const regenerationLocked =
+    !allowSourceRegeneration &&
+    selectedVideo.processed &&
+    !isGeneratingSelectedVideo &&
+    selectedVideo.status !== "source_missing";
   if (regenerationLocked) {
     videoGenerationButton.disabled = true;
     videoGenerationButton.label = '产物已生成';
@@ -571,45 +615,103 @@ function PanelFooter({
           当前语音模型 `{currentAsrModel.label}` 尚未下载，请先到设置中下载后再生成 AI 概括。
         </div>
       ) : null}
-      <div className={`flex w-full overflow-hidden rounded-2xl ${generationControlClass}`}>
-        <button
-          type="button"
-          className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors ${videoGenerationButton.tone === "primary" ? "hover:bg-accent/14 active:scale-[0.98]" : "disabled:cursor-not-allowed"}`}
-          onClick={
-            videoGenerationButton.tone === "danger"
-              ? onCancelGeneration
-              : modelNeedsDownload
-                ? onOpenSettings
-                : selectedVideo.status === "source_missing"
-                  ? onRelinkVideo
-                  : () => onGenerateVideo?.(aiSummaryTemplate)
-          }
-          disabled={videoGenerationButton.disabled || (isGeneratingSelectedVideo && !onCancelGeneration)}
-        >
-          {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
-            <>
-              <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
-              {isGeneratingSelectedVideo && !onCancelGeneration ? "正在处理" : videoGenerationButton.label}
-            </>
-          ) : modelNeedsDownload ? (
-            <>
-              <ArrowDown size={16} strokeWidth={2.5} />
-              {videoGenerationButton.label}
-            </>
-          ) : (
-            <>
-              {selectedVideo.status === "source_missing" ? <Link2 size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
-              {videoGenerationButton.label}
-            </>
-          )}
-        </button>
-        {showAiSummaryTemplateMenu ? (
-          <AiSummaryTemplateMenu
-            value={aiSummaryTemplate}
-            onChange={setAiSummaryTemplate}
-            disabled={videoGenerationButton.disabled || modelNeedsDownload}
-          />
-        ) : null}
+      <div
+        ref={relinkTriggerRef}
+        className="relative"
+        onMouseEnter={() => {
+          if (selectedVideo.status === "source_missing") openRelinkHover();
+        }}
+        onMouseLeave={scheduleCloseRelinkHover}
+      >
+        {selectedVideo.status === "source_missing" && relinkHoverOpen && relinkPortalRect && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                onMouseEnter={openRelinkHover}
+                onMouseLeave={scheduleCloseRelinkHover}
+                style={{
+                  left: relinkPortalRect.left,
+                  width: relinkPortalRect.width,
+                  bottom: relinkPortalRect.bottom,
+                }}
+                className="fixed z-[70] flex flex-col gap-1 rounded-2xl border border-line bg-surface p-1.5 shadow-xl motion-fade-scale"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRelinkHoverOpen(false);
+                    onRelinkVideo?.({ mode: "folder", videoId: selectedVideo.id });
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-body transition-colors hover:bg-accent/10 hover:text-accent"
+                >
+                  <FolderKanban size={14} className="shrink-0 text-accent" />
+                  <span>选择文件夹重新链接（按文件名匹配）</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRelinkHoverOpen(false);
+                    onRelinkVideo?.({ mode: "file", videoId: selectedVideo.id });
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-body transition-colors hover:bg-muted"
+                >
+                  <Link2 size={14} className="shrink-0 text-subtle" />
+                  <span>选择单个媒体文件</span>
+                </button>
+              </div>,
+              document.body,
+            )
+          : null}
+        <div className={`flex w-full overflow-hidden rounded-2xl ${generationControlClass}`}>
+          <button
+            type="button"
+            className={`min-w-0 flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors ${videoGenerationButton.tone === "primary" ? "hover:bg-accent/14 active:scale-[0.98]" : "disabled:cursor-not-allowed"}`}
+            onClick={
+              videoGenerationButton.tone === "danger"
+                ? onCancelGeneration
+                : modelNeedsDownload
+                  ? onOpenSettings
+                  : selectedVideo.status === "source_missing"
+                    ? () => onRelinkVideo?.({ mode: "file", videoId: selectedVideo.id })
+                    : () => onGenerateVideo?.(aiSummaryTemplate)
+            }
+            disabled={videoGenerationButton.disabled || (isGeneratingSelectedVideo && !onCancelGeneration)}
+          >
+            {videoGenerationButton.tone === "danger" || videoGenerationButton.tone === "busy" ? (
+              <>
+                <LoaderCircle size={16} strokeWidth={2.5} className="animate-spin" />
+                {isGeneratingSelectedVideo && !onCancelGeneration ? "正在处理" : videoGenerationButton.label}
+              </>
+            ) : modelNeedsDownload ? (
+              <>
+                <ArrowDown size={16} strokeWidth={2.5} />
+                {videoGenerationButton.label}
+              </>
+            ) : (
+              <>
+                {selectedVideo.status === "source_missing" ? <Link2 size={16} strokeWidth={2.5} /> : <Sparkles size={16} strokeWidth={2.5} />}
+                {videoGenerationButton.label}
+              </>
+            )}
+          </button>
+          {selectedVideo.status === "source_missing" ? (
+            <button
+              type="button"
+              onClick={() => onRelinkVideo?.({ mode: "folder", videoId: selectedVideo.id })}
+              title="选择文件夹（按文件名批量重新链接）"
+              aria-label="选择文件夹重新链接"
+              className="inline-flex min-h-[42px] shrink-0 items-center gap-1 border-l border-current/20 px-3 text-xs font-semibold transition-colors hover:bg-black/5 active:bg-black/10 dark:hover:bg-soft dark:active:bg-softer"
+            >
+              <FolderKanban size={15} />
+            </button>
+          ) : null}
+          {showAiSummaryTemplateMenu ? (
+            <AiSummaryTemplateMenu
+              value={aiSummaryTemplate}
+              onChange={setAiSummaryTemplate}
+              disabled={videoGenerationButton.disabled || modelNeedsDownload}
+            />
+          ) : null}
+        </div>
       </div>
       {processingMode === "transcript" || showAiSummaryTemplateMenu ? (
         <p className="mt-1.5 text-xs text-faint">
@@ -639,6 +741,7 @@ export function WorkspaceLibraryPanel({
   onSelectVideo,
   onGenerateVideo,
   onProcessLinkedVideo,
+  onRelinkVideo,
   onGenerateSeries,
   onCancelGeneration,
   onDownloadVideo,
@@ -1031,6 +1134,7 @@ export function WorkspaceLibraryPanel({
         downloadErrorKey={downloadErrorKey}
         onGenerateVideo={onGenerateVideo}
         onProcessLinkedVideo={onProcessLinkedVideo}
+        onRelinkVideo={onRelinkVideo}
         onGenerateSeries={onGenerateSeries}
         onCancelGeneration={onCancelGeneration}
         onDownloadVideo={onDownloadVideo}

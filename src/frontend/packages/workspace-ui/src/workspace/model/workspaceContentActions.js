@@ -2,7 +2,7 @@ import { isPlaygroundSeries } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { buildSeriesGenerationTaskKey, buildVideoGenerationTaskKey, getGenerationTaskForSelection, isGenerationSnapshotActive } from "./workspaceState";
 export function createWorkspaceContentActionFactory(api){
-const {cancelSeriesSummaries,cancelDurableJob,cancelVideoDownload,cancelVideoSummary,createVideoNote,deleteSeries,deleteVideoNote,deleteVideoSource,renameSeries,renameVideoSource,generateSeriesMindmap,loadSeriesMindmap,generateVideoKnowledgeCards,generateVideoStudyPlan,generateSeriesStudyPlan,generateVideoAiSummary,generateVideoMindmap,generateSeriesSummaries,generateVideoSummary,processAgentVideo,restoreAutomaticTranscriptAndGenerateVideoSummary,loadWorkspaceLibrary,loadVideoSummary,loadVideoAiSummary,loadVideoNotes,loadVideoKnowledgeCards,loadVideoMindmap,loadVideoTools,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,startVideoDownload,subscribeDurableJobProgress,subscribeSeriesGenerationProgress,updateVideoNote,updateVideoAiSummary,updateVideoSummary,updateVideoTranscript,uploadSrtAndGenerateVideoSummary}=api;
+const {cancelSeriesSummaries,cancelDurableJob,cancelVideoDownload,cancelVideoSummary,createVideoNote,deleteSeries,deleteVideoNote,deleteVideoSource,renameSeries,renameVideoSource,generateSeriesMindmap,loadSeriesMindmap,generateVideoKnowledgeCards,generateVideoStudyPlan,generateSeriesStudyPlan,generateVideoCourseware,generateVideoAiSummary,generateVideoMindmap,generateSeriesSummaries,generateVideoSummary,processAgentVideo,restoreAutomaticTranscriptAndGenerateVideoSummary,loadWorkspaceLibrary,loadVideoSummary,loadVideoAiSummary,loadVideoNotes,loadVideoKnowledgeCards,loadVideoMindmap,loadVideoTools,loadVideoSummaryMarkdown,loadVideoTranscriptMarkdown,resolveLinkedSeries,resolveLinkedVideo,resolveBilibiliInboxVideo,startVideoDownload,subscribeDurableJobProgress,subscribeSeriesGenerationProgress,updateVideoNote,updateVideoAiSummary,updateVideoSummary,updateVideoTranscript,uploadSrtAndGenerateVideoSummary}=api;
 const activeSeriesCancellationRef = { current: null };
 const activeVideoGenerationKeys = new Set();
 let nextSeriesRunSequence = 0;
@@ -182,6 +182,28 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
 
   async function onGenerateSeriesStudyPlan(dailyMinutes) {
     return state.selectedSeriesId ? generateSeriesStudyPlan(state.selectedSeriesId, dailyMinutes) : null;
+  }
+
+  async function onGenerateVideoCourseware() {
+    const seriesId = state.selectedSeriesId;
+    const videoId = state.selectedVideoId;
+    if (!seriesId || !videoId) {
+      return null;
+    }
+    const submitted = await generateVideoCourseware(seriesId, videoId);
+    const unsubscribe = subscribeDurableJobProgress(submitted.jobId, async (snapshot) => {
+      if (snapshot.status === "completed") {
+        unsubscribe();
+        try {
+          dispatch({ type: "tools_loaded", tools: await loadVideoTools(seriesId, videoId) });
+        } catch {
+          // The tile status refreshes on the next selection; the courseware itself is already shown.
+        }
+      } else if (snapshot.status === "failed" || snapshot.status === "cancelled") {
+        unsubscribe();
+      }
+    });
+    return submitted;
   }
 
   function onClearKnowledgeCardsFeedback() {
@@ -1101,6 +1123,7 @@ function createWorkspaceContentActions({ state, dispatch, selectedVideo }) {
     onClearKnowledgeCardsFeedback,
     onGenerateVideoStudyPlan,
     onGenerateSeriesStudyPlan,
+    onGenerateVideoCourseware,
     onGenerateVideo,
     onProcessLinkedVideo,
     onUploadSrt,

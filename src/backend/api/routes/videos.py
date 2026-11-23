@@ -58,6 +58,7 @@ from backend.video_summary.library.markdown_exports import render_mixed_overview
 from backend.video_summary.library.markdown_exports import render_notes_markdown
 from backend.video_summary.library.markdown_exports import render_study_plan_markdown
 from backend.video_summary.library.markdown_exports import render_transcript_markdown
+from backend.video_summary.library.usecases.courseware import render_courseware_pdf
 from backend.video_summary.library.subtitle_exports import render_srt, render_webvtt
 from backend.video_summary.generation.renderers import render_markdown
 from backend.video_summary.library.usecases.mutations import GenerationInProgressError
@@ -1327,6 +1328,112 @@ def export_series_study_plan_markdown(series_id: str, container: WorkspaceServic
     if plan is None:
         raise HTTPException(status_code=404, detail=f"series study plan not found for '{series_id}'")
     return _markdown_response(render_study_plan_markdown(plan), f"{clean_filename_stem(plan.get('title') or '合集')}-学习计划.md")
+
+
+@router.get("/api/videos/{series_id}/{video_id}/courseware")
+def get_video_courseware(series_id: str, video_id: str, container: WorkspaceServicesDep) -> dict[str, object]:
+    _ensure_video_exists(container, series_id, video_id)
+    deck = container.linked_series_workspace.get_video_courseware(series_id, video_id)
+    if deck is None:
+        raise HTTPException(status_code=404, detail=f"courseware not found for video '{series_id}/{video_id}'")
+    return deck
+
+
+@router.post("/api/videos/{series_id}/{video_id}/courseware/generate")
+def generate_video_courseware(
+    series_id: str,
+    video_id: str,
+    container: WorkspaceServicesDep,
+    job_repository: JobRepositoryDep,
+) -> JSONResponse:
+    _ensure_video_exists(container, series_id, video_id)
+    if container.linked_series_workspace.is_audio_only_media(series_id, video_id):
+        raise HTTPException(status_code=400, detail="纯音频文件不支持提取视频课件。")
+    source = container.linked_series_workspace.get_video_source(series_id, video_id)
+    if source is None or not source.source_path.is_file():
+        raise HTTPException(status_code=409, detail="原视频已释放或不可用，无法提取课件。")
+    operation = "generate_video_courseware"
+    payload = {"series_id": series_id, "video_id": video_id}
+    try:
+        submitted = job_repository.submit(
+            workspace_id=container.workspace_id,
+            resource_type="video",
+            resource_id=video_id,
+            operation=operation,
+            request_payload=payload,
+            active_key=f"video:{video_id}:{operation}",
+            idempotency_scope_id=None,
+            idempotency_key=None,
+        )
+    except ControlPlaneConflictError as error:
+        active = job_repository.active_for_resource(
+            workspace_id=container.workspace_id,
+            resource_id=video_id,
+            operation=operation,
+        )
+        if active is None:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        submitted = active
+    return JSONResponse(
+        status_code=202,
+        content={
+            "job_id": submitted.id,
+            "status": submitted.status,
+            "resource": {"type": "video", "id": video_id},
+            "status_url": f"/api/jobs/{submitted.id}",
+            "events_url": f"/api/jobs/{submitted.id}/events",
+        },
+    )
+
+
+@router.get("/api/videos/{series_id}/{video_id}/courseware/slides/{filename}")
+def get_video_courseware_slide(
+    series_id: str,
+    video_id: str,
+    filename: str,
+    container: WorkspaceServicesDep,
+) -> FileResponse:
+    _ensure_video_exists(container, series_id, video_id)
+    slide = container.linked_series_workspace.materialize_artifact(
+        video_id=video_id,
+        kind="courseware_slide",
+        filename=filename,
+    )
+    if slide is None:
+        raise HTTPException(status_code=404, detail=f"courseware slide not found '{filename}'")
+    return FileResponse(slide, media_type="image/webp", headers={"Cache-Control": "private, max-age=604800"})
+
+
+@router.get("/api/videos/{series_id}/{video_id}/exports/courseware.pdf")
+def export_video_courseware_pdf(series_id: str, video_id: str, container: WorkspaceServicesDep) -> Response:
+    video = _ensure_video_exists(container, series_id, video_id)
+    deck = container.linked_series_workspace.get_video_courseware(series_id, video_id)
+    if deck is None:
+        raise HTTPException(status_code=404, detail=f"courseware not found for video '{series_id}/{video_id}'")
+    slides = deck.get("slides") if isinstance(deck.get("slides"), list) else []
+    slide_paths = []
+    for item in slides:
+        if not isinstance(item, dict):
+            continue
+        filename = str(item.get("image_filename") or "")
+        if not filename:
+            continue
+        materialized = container.linked_series_workspace.materialize_artifact(
+            video_id=video_id,
+            kind="courseware_slide",
+            filename=filename,
+        )
+        if materialized is not None and materialized.is_file():
+            slide_paths.append(materialized)
+    if not slide_paths:
+        raise HTTPException(status_code=404, detail="没有可导出的课件页面。")
+    pdf_bytes = render_courseware_pdf(slide_paths)
+    stem = _export_filename(video, "视频课件").removesuffix(".md")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _content_disposition_attachment(f"{stem}.pdf")},
+    )
 
 
 @router.get("/api/series/{series_id}/mindmap")

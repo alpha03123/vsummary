@@ -181,7 +181,7 @@ class WorkspaceSettingsResponse(BaseModel):
     mindmap_visual_input: Literal["none", "evidence", "frames"] = "none"
     cards_visual_input: Literal["none", "evidence", "frames"] = "none"
     note_max_images: int = Field(default=10, ge=1)
-    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards"]] = Field(default_factory=list)
+    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "courseware"]] = Field(default_factory=list)
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3
@@ -239,7 +239,7 @@ class UpdateWorkspaceSettingsRequest(BaseModel):
     mindmap_visual_input: Literal["none", "evidence", "frames"] = "none"
     cards_visual_input: Literal["none", "evidence", "frames"] = "none"
     note_max_images: int = Field(default=10, ge=1)
-    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards"]] = Field(default_factory=list)
+    auto_generate_artifacts: list[Literal["mindmap", "knowledge_cards", "courseware"]] = Field(default_factory=list)
     web_search_enabled: bool
     chaoxing_request_delay_seconds: float = 0.2
     chaoxing_init_course_delay_seconds: float = 0.3

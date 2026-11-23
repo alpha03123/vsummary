@@ -15,6 +15,7 @@ VALID_ANSWER_DETAIL_LEVELS = frozenset({"short", "medium", "long"})
 AUTO_ARTIFACT_OPERATIONS = {
     "mindmap": "generate_video_mindmap",
     "knowledge_cards": "generate_video_knowledge_cards",
+    "courseware": "generate_video_courseware",
 }
 
 VALID_AUTO_GENERATE_ARTIFACTS = frozenset(AUTO_ARTIFACT_OPERATIONS)

@@ -494,8 +494,8 @@ class SqlJobRepository:
             operation=AUTO_ARTIFACT_OPERATIONS[artifact], model_profile=profile,
             input_tokens=counts[0], output_tokens=counts[1], transcript_available=True)
             for artifact in enabled
-            for counts in [self._artifact_token_estimate(duration_seconds, artifact, profile)
-                if self._artifact_token_estimate is not None else (incoming,outgoing)])
+            for counts in [(0, 0) if artifact == "courseware" else (self._artifact_token_estimate(duration_seconds, artifact, profile)
+                if self._artifact_token_estimate is not None else (incoming,outgoing))])
 
     def admission(self, context, units, duration_seconds=0.0):
         return (self._queue_policy.admit(actor_id=context.actor_id, units=units, duration_seconds=duration_seconds)

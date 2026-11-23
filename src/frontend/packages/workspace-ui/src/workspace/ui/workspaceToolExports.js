@@ -46,6 +46,14 @@ function buildRawWorkspaceToolExportActions({ activeSeries, notes, summary, tool
   if (toolId === "study-plan") {
     return []; // 视频页显示的是课程计划的一部分，在课程计划里导出。
   }
+  if (toolId === "courseware") {
+    return [{
+      href: videoExportUrl(activeSeries.id, selectedVideo.id, "courseware.pdf"),
+      enabled: tools?.courseware?.generated === true,
+      label: "课件 PDF 导出",
+      disabledReason: "课件生成后才能导出",
+    }];
+  }
 
   if (toolId === "mindmap") {
     return buildMindmapExportActions(`/api/videos/${encodeURIComponent(activeSeries.id)}/${encodeURIComponent(selectedVideo.id)}/mindmap/export`);
@@ -73,7 +81,7 @@ function buildSeriesExportActions(activeSeries) {
 }
 
 function videoExportUrl(seriesId, videoId, exportName) {
-  if (exportName === "video" || exportName.endsWith(".zip") || exportName.endsWith(".srt")) {
+  if (exportName === "video" || exportName.endsWith(".zip") || exportName.endsWith(".srt") || exportName.endsWith(".pdf")) {
     return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}`;
   }
   return `/api/videos/${encodeURIComponent(seriesId)}/${encodeURIComponent(videoId)}/exports/${exportName}.md`;

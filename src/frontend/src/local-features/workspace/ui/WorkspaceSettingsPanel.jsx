@@ -337,6 +337,7 @@ export function WorkspaceSettingsPanel({
                     options={[
                       { id: "mindmap", label: "思维导图" },
                       { id: "knowledge_cards", label: "知识卡片" },
+                      { id: "courseware", label: "视频课件" },
                     ]}
                     onChange={(nextValues) => onChangeSetting("autoGenerateArtifacts", nextValues)}
                   />

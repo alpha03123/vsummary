@@ -6,6 +6,7 @@ import {
   ListChecks,
   Network,
   PlaySquare,
+  Presentation,
   StickyNote,
   MessageSquare,
 } from "lucide-react";
@@ -59,6 +60,12 @@ export const TOOL_TILES = {
     label: "学习计划",
     description: "每日学习计划",
     icon: CalendarDays,
+    ...SHARED_TOOL_VISUALS,
+  },
+  courseware: {
+    label: "视频课件",
+    description: "自动提取 PPT 与板书页面",
+    icon: Presentation,
     ...SHARED_TOOL_VISUALS,
   },
   notes: {
@@ -138,12 +145,21 @@ export function describeToolState(toolId, toolState) {
   if (toolState.status === "source_missing") {
     return SOURCE_MISSING_STATUS;
   }
+  if (toolState.status === "source_released") {
+    return { label: "原视频已释放", tone: "blocked" };
+  }
+  if (toolState.status === "audio_only") {
+    return { label: "纯音频不支持", tone: "blocked" };
+  }
   // Ready is the normal case and shows nothing: a chip on every tile ("已生成", "随时可查看"…)
   // drowned out the ones that need attention.
   if (toolId === "preview" || toolId === "notes" || toolState.generated) {
     return null;
   }
   if (toolState.available === false) {
+    if (toolId === "courseware") {
+      return { label: "需先下载视频", tone: "blocked" };
+    }
     return { label: "需先生成 AI 概括", tone: "blocked" };
   }
   return { label: "点击进入后生成", tone: "pending" };

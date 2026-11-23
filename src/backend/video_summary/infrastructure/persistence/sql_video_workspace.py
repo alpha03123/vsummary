@@ -523,6 +523,105 @@ class SqlVideoWorkspace:
                 WHERE p.series_id=:series AND s.workspace_id=:workspace AND s.deleted_at IS NULL"""), {"series": series_id, "workspace": self._workspace_id}).mappings().first()
         return None if row is None else _json_object(row["payload"])
 
+    def is_audio_only_media(self, series_id: str, video_id: str) -> bool:
+        with self._sessions() as session:
+            row = session.execute(text("""SELECT v.source_kind,m.blob_key,m.media_type,e.source_path FROM videos v
+                JOIN series s ON s.id=v.series_id
+                LEFT JOIN media_objects m ON m.video_id=v.id AND m.state='ready'
+                LEFT JOIN external_media_references e ON e.video_id=v.id
+                WHERE v.id=:video AND s.id=:series AND s.workspace_id=:workspace
+                AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""),
+                {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
+        if row is None:
+            return False
+        if row["source_kind"] == "audio":
+            return True
+        media_type = str(row["media_type"] or "").lower()
+        if media_type.startswith("audio/"):
+            return True
+        for candidate in (row["blob_key"], row["source_path"]):
+            if candidate and Path(str(candidate)).suffix.lower() in AUDIO_SUFFIXES:
+                return True
+        return False
+
+    def save_video_courseware(
+        self,
+        series_id: str,
+        video_id: str,
+        *,
+        deck: dict[str, Any],
+        slide_files: list[Path] | None = None,
+    ) -> dict[str, Any]:
+        title = self.get_video_title(series_id, video_id)
+        if title is None:
+            raise ValueError("Video does not exist.")
+        with self._sessions.begin() as session:
+            require_execution_lease(session, self._workspace_id)
+            old_artifacts = session.execute(text("""SELECT a.blob_key,a.sha256,a.byte_size,a.media_type FROM artifacts a
+                JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
+                WHERE a.video_id=:video AND s.workspace_id=:workspace AND a.kind='courseware_slide'"""),
+                {"video": video_id, "workspace": self._workspace_id}).mappings().all()
+            session.execute(text("""DELETE a FROM artifacts a JOIN videos v ON v.id=a.video_id JOIN series s ON s.id=v.series_id
+                WHERE a.video_id=:video AND s.workspace_id=:workspace AND a.kind='courseware_slide'"""),
+                {"video": video_id, "workspace": self._workspace_id})
+            version = session.execute(text("SELECT content_version FROM videos WHERE id=:video"), {"video": video_id}).scalar_one()
+            for slide_path in slide_files or []:
+                self.save_generated_artifact(
+                    video_id=video_id,
+                    kind="courseware_slide",
+                    source_path=slide_path,
+                    media_type="image/webp",
+                    content_version=version,
+                    session=session,
+                )
+            session.execute(text("""INSERT INTO courseware_decks (id,video_id,content_version,title,payload,created_at,updated_at)
+                VALUES (:id,:video,:version,:title,CAST(:payload AS JSON),NOW(),NOW())
+                ON DUPLICATE KEY UPDATE content_version=VALUES(content_version),title=VALUES(title),payload=VALUES(payload),updated_at=NOW()"""),
+                {"id": new_ulid(), "video": video_id, "version": version, "title": title, "payload": json.dumps(deck, ensure_ascii=False)})
+        for row in old_artifacts:
+            self._blobs.delete(BlobReference(row["blob_key"], row["sha256"], row["byte_size"], row["media_type"]))
+        cached_dir = self._cache_root / "artifacts" / video_id / "courseware_slide"
+        if cached_dir.exists():
+            shutil.rmtree(cached_dir, ignore_errors=True)
+        result = self.get_video_courseware(series_id, video_id)
+        if result is None:
+            raise RuntimeError("Saved courseware deck could not be reloaded.")
+        return result
+
+    def get_video_courseware(self, series_id: str, video_id: str) -> dict[str, Any] | None:
+        with self._sessions() as session:
+            row = session.execute(text("""SELECT c.title,c.payload,c.updated_at FROM courseware_decks c
+                JOIN videos v ON v.id=c.video_id JOIN series s ON s.id=v.series_id
+                WHERE c.video_id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""),
+                {"video": video_id, "series": series_id, "workspace": self._workspace_id}).mappings().first()
+        if row is None:
+            return None
+        payload = _json_object(row["payload"])
+        raw_slides = payload.get("slides") if isinstance(payload.get("slides"), list) else []
+        slides: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_slides, start=1):
+            if not isinstance(item, dict):
+                continue
+            filename = str(item.get("image_filename") or "")
+            if not filename:
+                continue
+            slides.append({
+                **item,
+                "ordinal": int(item.get("ordinal") or index),
+                "image_url": f"/api/videos/{quote(series_id, safe='')}/{quote(video_id, safe='')}/courseware/slides/{quote(filename, safe='')}",
+            })
+        can_regenerate = self.has_source_media(series_id, video_id) and not self.is_audio_only_media(series_id, video_id)
+        return {
+            "series_id": series_id,
+            "video_id": video_id,
+            "title": str(payload.get("title") or row["title"]),
+            "duration_seconds": payload.get("duration_seconds"),
+            "slide_count": len(slides),
+            "slides": slides,
+            "can_regenerate": can_regenerate,
+            "updated_at": row["updated_at"].isoformat() if row["updated_at"] is not None else "",
+        }
+
     def save_series_catalog(self, series_id: str, payload: dict[str, object]) -> None:
         with self._sessions.begin() as session:
             require_execution_lease(session, self._workspace_id)
@@ -634,6 +733,83 @@ class SqlVideoWorkspace:
     def delete_linked_series(self, series_id: str) -> bool:
         return self.delete_series(series_id)
 
+    def get_external_media_reference_path(self, series_id: str, video_id: str | None = None) -> Path | None:
+        """读取数据库中记录的原始外部媒体路径（即使文件已移走），用于文件/文件夹选择框定位初始目录。"""
+        with self._sessions() as session:
+            if video_id is not None:
+                raw = session.execute(
+                    text("""SELECT e.source_path FROM external_media_references e
+                        JOIN videos v ON v.id=e.video_id JOIN series s ON s.id=v.series_id
+                        WHERE v.id=:video AND v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL"""),
+                    {"video": video_id, "series": series_id, "workspace": self._workspace_id},
+                ).scalar()
+                if raw:
+                    return Path(str(raw))
+            raw_any = session.execute(
+                text("""SELECT e.source_path FROM external_media_references e
+                    JOIN videos v ON v.id=e.video_id JOIN series s ON s.id=v.series_id
+                    WHERE v.series_id=:series AND s.workspace_id=:workspace AND v.deleted_at IS NULL
+                    ORDER BY v.created_at LIMIT 1"""),
+                {"series": series_id, "workspace": self._workspace_id},
+            ).scalar()
+        return Path(str(raw_any)) if raw_any else None
+
+    def relink_series_from_directory(
+        self,
+        *,
+        series_id: str,
+        directory: Path,
+        only_missing: bool = False,
+    ) -> int:
+        """在指定文件夹中按文件名匹配并批量重新链接系列下的视频。"""
+        if not directory.is_dir():
+            raise ValueError("所选路径不是有效文件夹。")
+        by_name: dict[str, Path] = {}
+        by_stem: dict[str, Path] = {}
+        candidate_files = list(directory.iterdir())
+        for sub in list(candidate_files):
+            if sub.is_dir():
+                try:
+                    candidate_files.extend(sub.iterdir())
+                except OSError:
+                    continue
+        for item in candidate_files:
+            if not item.is_file() or item.suffix.lower() not in MEDIA_SUFFIXES:
+                continue
+            resolved = item.resolve()
+            by_name.setdefault(resolved.name.lower(), resolved)
+            by_stem.setdefault(resolved.stem.lower(), resolved)
+
+        with self._sessions() as session:
+            rows = session.execute(
+                text("""SELECT v.id,v.title,e.source_path FROM videos v
+                    JOIN series s ON s.id=v.series_id
+                    LEFT JOIN external_media_references e ON e.video_id=v.id
+                    WHERE v.series_id=:series AND s.workspace_id=:workspace
+                    AND v.deleted_at IS NULL AND s.deleted_at IS NULL"""),
+                {"series": series_id, "workspace": self._workspace_id},
+            ).mappings().all()
+
+        relinked_count = 0
+        for row in rows:
+            ext_raw = str(row["source_path"] or "")
+            if only_missing and ext_raw and Path(ext_raw).is_file():
+                continue
+            ext_path = Path(ext_raw) if ext_raw else None
+            matched: Path | None = None
+            if ext_path is not None:
+                matched = by_name.get(ext_path.name.lower()) or by_stem.get(ext_path.stem.lower())
+            if matched is None and row["title"]:
+                title_key = str(row["title"]).strip().lower()
+                matched = by_name.get(title_key) or by_stem.get(title_key)
+            if matched is not None:
+                try:
+                    self.relink_external_video(series_id=series_id, video_id=row["id"], source_path=matched)
+                    relinked_count += 1
+                except (LookupError, ValueError):
+                    continue
+        return relinked_count
+
     def relink_external_video(self, *, series_id: str, video_id: str, source_path: Path) -> None:
         if not source_path.is_absolute() or not source_path.is_file() or source_path.suffix.lower() not in MEDIA_SUFFIXES:
             raise ValueError("Relink source must be an existing absolute media file.")
@@ -684,15 +860,34 @@ class SqlVideoWorkspace:
     def get_video_workspace_tools(self, series_id: str, video_id: str) -> VideoWorkspaceToolsDTO | None:
         if self.get_video_title(series_id, video_id) is None:
             return None
-        has_media = self._media_preview_enabled and self.has_source_media(series_id, video_id)
+        has_source = self.has_source_media(series_id, video_id)
+        is_audio_only = self.is_audio_only_media(series_id, video_id)
+        has_media = self._media_preview_enabled and has_source
         summary = self.get_video_summary(series_id, video_id)
         transcript = self.get_video_transcript(series_id, video_id)
         cards = self.get_video_knowledge_cards(series_id, video_id)
         mindmap = self.get_video_mindmap(series_id, video_id)
         ai_summary = self.get_video_ai_summary(series_id, video_id)
         study_plan = self.get_video_study_plan(series_id, video_id)
+        courseware = self.get_video_courseware(series_id, video_id)
+        has_courseware = courseware is not None
+        if has_courseware:
+            courseware_available = True
+            courseware_status = "ready"
+        elif is_audio_only:
+            courseware_available = False
+            courseware_status = "audio_only"
+        elif has_source:
+            courseware_available = True
+            courseware_status = "available"
+        elif summary is not None or transcript is not None:
+            courseware_available = False
+            courseware_status = "source_released"
+        else:
+            courseware_available = False
+            courseware_status = "blocked"
         ready = lambda value: "ready" if value else "pending"
-        return VideoWorkspaceToolsDTO(series_id=series_id, video_id=video_id, overview=WorkspaceToolDTO(id="overview", title="AI整理逐字稿", available=True, generated=summary is not None, status=ready(summary)), ai_summary=WorkspaceToolDTO(id="ai-summary", title="AI概括", available=True, generated=ai_summary is not None, status=ready(ai_summary)), knowledge_cards=WorkspaceToolDTO(id="knowledge-cards", title="知识卡片", available=summary is not None, generated=bool(cards and cards.cards), status="ready" if cards and cards.cards else ("available" if summary else "blocked")), mindmap=WorkspaceToolDTO(id="mindmap", title="思维导图", available=summary is not None, generated=mindmap is not None, status="ready" if mindmap else ("available" if summary else "blocked")), notes=WorkspaceToolDTO(id="notes", title="笔记", available=True, generated=bool(self.get_video_notes(series_id, video_id).notes), status="ready"), preview=WorkspaceToolDTO(id="preview", title="视频预览", available=has_media, generated=has_media, status="ready" if has_media else "unavailable", preview_url=f"/api/videos/{series_id}/{video_id}/preview" if has_media else None, subtitle_url=f"/api/videos/{series_id}/{video_id}/subtitles.vtt" if transcript is not None else None), ai_todo="继续生成可用内容。", study_plan=WorkspaceToolDTO(id="study-plan", title="学习计划", available=summary is not None, generated=study_plan is not None, status="ready" if study_plan else ("available" if summary else "blocked")))
+        return VideoWorkspaceToolsDTO(series_id=series_id, video_id=video_id, overview=WorkspaceToolDTO(id="overview", title="AI整理逐字稿", available=True, generated=summary is not None, status=ready(summary)), ai_summary=WorkspaceToolDTO(id="ai-summary", title="AI概括", available=True, generated=ai_summary is not None, status=ready(ai_summary)), knowledge_cards=WorkspaceToolDTO(id="knowledge-cards", title="知识卡片", available=summary is not None, generated=bool(cards and cards.cards), status="ready" if cards and cards.cards else ("available" if summary else "blocked")), mindmap=WorkspaceToolDTO(id="mindmap", title="思维导图", available=summary is not None, generated=mindmap is not None, status="ready" if mindmap else ("available" if summary else "blocked")), notes=WorkspaceToolDTO(id="notes", title="笔记", available=True, generated=bool(self.get_video_notes(series_id, video_id).notes), status="ready"), preview=WorkspaceToolDTO(id="preview", title="视频预览", available=has_media, generated=has_media, status="ready" if has_media else "unavailable", preview_url=f"/api/videos/{series_id}/{video_id}/preview" if has_media else None, subtitle_url=f"/api/videos/{series_id}/{video_id}/subtitles.vtt" if transcript is not None else None), ai_todo="继续生成可用内容。", study_plan=WorkspaceToolDTO(id="study-plan", title="学习计划", available=summary is not None, generated=study_plan is not None, status="ready" if study_plan else ("available" if summary else "blocked")), courseware=WorkspaceToolDTO(id="courseware", title="视频课件", available=courseware_available, generated=has_courseware, status=courseware_status))
 
     def import_local_series_from_paths(self, *, title: str, source_paths: list[Path], storage_mode: str = "copy") -> LibrarySeriesDTO:
         workspace_id = self._workspace_id
@@ -1228,6 +1423,7 @@ def _clear_deleted_video_content(session: Session, *, video_id: str) -> None:
         "notes",
         "mindmaps",
         "study_plans",
+        "courseware_decks",
         "knowledge_cards",
         "knowledge_card_sets",
         "summary_chapters",

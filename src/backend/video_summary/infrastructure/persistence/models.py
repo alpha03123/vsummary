@@ -275,6 +275,15 @@ class StudyPlan(TimestampedRow, Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
+class CoursewareDeck(TimestampedRow, Base):
+    __tablename__ = "courseware_decks"
+    id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    video_id: Mapped[str] = mapped_column(ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, unique=True)
+    content_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    title: Mapped[str] = mapped_column(String(1_024), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
 class Job(TimestampedRow, Base):
     __tablename__ = "jobs"
     __table_args__ = (

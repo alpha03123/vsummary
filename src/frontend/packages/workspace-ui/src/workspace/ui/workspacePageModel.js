@@ -128,6 +128,7 @@ export function buildWorkspacePageModel(controller) {
       clearKnowledgeCardsFeedback: controller.onClearKnowledgeCardsFeedback,
       generateVideoStudyPlan: controller.onGenerateVideoStudyPlan,
       generateSeriesStudyPlan: controller.onGenerateSeriesStudyPlan,
+      generateVideoCourseware: controller.onGenerateVideoCourseware,
       createNote: controller.onCreateNote,
       generateAiSummary: controller.onGenerateAiSummary,
       updateAiSummary: controller.onUpdateAiSummary,

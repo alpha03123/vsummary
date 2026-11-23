@@ -66,6 +66,12 @@ const WorkspaceStudyPlanView = lazy(() =>
   })),
 );
 
+const WorkspaceCoursewareView = lazy(() =>
+  import("./views/WorkspaceCoursewareView").then((module) => ({
+    default: module.WorkspaceCoursewareView,
+  })),
+);
+
 const WorkspaceStudioHomeView = lazy(() =>
   import("./views/WorkspaceStudioHomeView").then((module) => ({
     default: module.WorkspaceStudioHomeView,
@@ -122,6 +128,7 @@ export function WorkspaceReadingPane({
   onClearKnowledgeCardsFeedback,
   onOpenSeriesStudyPlan,
   onGenerateSeriesStudyPlan,
+  onGenerateVideoCourseware,
   onGenerateAiSummary,
   onUpdateAiSummary,
   onCreateNote,
@@ -263,28 +270,36 @@ export function WorkspaceReadingPane({
                             .filter(([toolId]) => toolId !== 'preview' || host.features?.mediaPreview !== false)
                             // 学习计划按课程排；单个视频和 B站导入里的视频互不相关，不提供。
                             .filter(([toolId]) => toolId !== 'study-plan' || !isSpecialSeries(activeSeries))
-                            .map(([toolId, meta]) => ({
-                              id: toolId,
-                              meta,
-                              // Series tools have no per-video `tools` snapshot; without this branch every
-                              // tile fell back to describeToolState(null) and showed 读取中 forever.
-                              description: selectedContextType === "series" && toolId === "ai-chat" ? "询问整个系列的内容" : undefined,
-                              disabled: sourceMissing || (selectedContextType === "series"
-                                ? (toolId === "series-mindmap" || toolId === "series-study-plan") && !seriesMindmapAvailable
-                                : getToolState(tools, toolId)?.available === false),
-                              status: sourceMissing
-                                ? SOURCE_MISSING_STATUS
-                                : selectedContextType === "series"
-                                  ? resolveSeriesToolStatus({
-                                      toolId,
-                                      processedVideoCount: processedSeriesCount,
-                                      totalVideoCount: seriesVideos.length,
-                                      seriesMindmapAvailable,
-                                    })
-                                  : toolId === "study-plan"
-                                    ? null
-                                    : describeToolState(toolId, getToolState(tools, toolId)),
-                            }))}
+                            .map(([toolId, meta]) => {
+                              const toolState = getToolState(tools, toolId);
+                              const requiresSourceMedia =
+                                toolId === "preview" ||
+                                (toolId !== "notes" && toolId !== "ai-chat" && !toolState?.generated);
+                              const blockedByMissingSource =
+                                selectedContextType !== "series" && sourceMissing && requiresSourceMedia;
+                              return {
+                                id: toolId,
+                                meta,
+                                // Series tools have no per-video `tools` snapshot; without this branch every
+                                // tile fell back to describeToolState(null) and showed 读取中 forever.
+                                description: selectedContextType === "series" && toolId === "ai-chat" ? "询问整个系列的内容" : undefined,
+                                disabled: blockedByMissingSource || (selectedContextType === "series"
+                                  ? (toolId === "series-mindmap" || toolId === "series-study-plan") && !seriesMindmapAvailable
+                                  : toolState?.available === false),
+                                status: blockedByMissingSource
+                                  ? SOURCE_MISSING_STATUS
+                                  : selectedContextType === "series"
+                                    ? resolveSeriesToolStatus({
+                                        toolId,
+                                        processedVideoCount: processedSeriesCount,
+                                        totalVideoCount: seriesVideos.length,
+                                        seriesMindmapAvailable,
+                                      })
+                                    : toolId === "study-plan"
+                                      ? null
+                                      : describeToolState(toolId, toolState),
+                              };
+                            })}
                           onSelect={onSelectTool}
                         />
                       )}
@@ -393,6 +408,15 @@ export function WorkspaceReadingPane({
                         endSeconds: segment.end_seconds,
                         chapterTitle: segment.chapter_title,
                       })}
+                    />
+                  ) : null}
+                  {toolId === "courseware" && selectedVideo ? (
+                    <WorkspaceCoursewareView
+                      seriesId={activeSeries?.id}
+                      videoId={selectedVideo.id}
+                      tools={tools}
+                      onGenerate={onGenerateVideoCourseware}
+                      onSeek={onSeek}
                     />
                   ) : null}
                   {toolId === "notes" ? (

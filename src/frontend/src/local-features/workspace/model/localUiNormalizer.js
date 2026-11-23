@@ -78,7 +78,7 @@ const validLlmProviders = new Set([
 export function normalizeUiSettings(value) {
   const record = value && typeof value === "object" ? value : {};
   const autoGenerateArtifacts = Array.isArray(record.autoGenerateArtifacts)
-    ? [...new Set(record.autoGenerateArtifacts.filter((item) => ["mindmap", "knowledge_cards"].includes(item)))]
+    ? [...new Set(record.autoGenerateArtifacts.filter((item) => ["mindmap", "knowledge_cards", "courseware"].includes(item)))]
     : [];
   return {
     showTakeaways: typeof record.showTakeaways === "boolean" ? record.showTakeaways : true,
