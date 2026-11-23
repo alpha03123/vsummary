@@ -163,11 +163,19 @@ class YtDlpBilibiliResolver:
         series_title = _as_text(payload.get("title"))
         if _is_bvid_title(series_title):
             series_title = _extract_series_title(view_payload)
+        source_url = _as_text(payload.get("webpage_url")) or url_info.url
+        root_bvid = (
+            view_bvid
+            or _extract_bvid_from_text(_as_text(payload.get("id")))
+            or _extract_bvid_from_text(_as_text(payload.get("display_id")))
+        )
+        if root_bvid and not _extract_bvid_from_text(source_url):
+            source_url = _page_url(root_bvid, 1)
         return LinkedSeries(
             series_id=f"bilibili-{series_key}",
             title=series_title or videos[0].title,
             cover_url=_as_text(payload.get("thumbnail")),
-            source_url=_as_text(payload.get("webpage_url")) or url_info.url,
+            source_url=source_url,
             videos=videos,
         )
 
@@ -878,11 +886,19 @@ def _entries_from_view_payload(*, view_bvid: str, view_payload: dict[str, object
     return entries
 
 
+def _format_episode_page_title(episode_title: str, part_title: str, page: int, bvid: str) -> str:
+    if not episode_title or episode_title == bvid:
+        return part_title or f"{bvid} (P{page})"
+    if part_title and part_title != episode_title:
+        return f"{episode_title} - {part_title}"
+    return f"{episode_title} (P{page})"
+
+
 def _entries_from_ugc_season(season: dict[str, object]) -> list[dict[str, object]]:
     """从 UGC Season 对象中提取所有分集信息。
 
     遍历 ``sections → episodes`` 两级结构，提取每集的 BV 号、标题、
-    时长、封面。
+    时长、封面；若单集包含多 P（``pages``），展开为各分 P 条目。
 
     Args:
         season: View API 返回的 ``ugc_season`` 字典。
@@ -906,15 +922,37 @@ def _entries_from_ugc_season(season: dict[str, object]) -> list[dict[str, object
             bvid = _as_text(episode.get("bvid"))
             if not bvid:
                 continue
+            episode_title = _as_text(episode.get("title")) or bvid
             arc = episode.get("arc") if isinstance(episode.get("arc"), dict) else {}
             page = episode.get("page") if isinstance(episode.get("page"), dict) else {}
+            thumbnail = _as_text(episode.get("cover")) or _as_text(arc.get("pic"))
+            pages = [item for item in (episode.get("pages") or []) if isinstance(item, dict)]
+            if len(pages) > 1:
+                for item in pages:
+                    page_num = _as_positive_int(item.get("page"), 1)
+                    entries.append(
+                        {
+                            "id": bvid,
+                            "title": _format_episode_page_title(
+                                episode_title, _as_text(item.get("part")), page_num, bvid
+                            ),
+                            "page_number": page_num,
+                            "duration": _as_int(item.get("duration")),
+                            "thumbnail": thumbnail,
+                            "webpage_url": _page_url(bvid, page_num),
+                        }
+                    )
+                continue
+            page_item = pages[0] if pages else page
+            page_num = _as_positive_int(page_item.get("page"), 1)
             entries.append(
                 {
                     "id": bvid,
-                    "title": _as_text(episode.get("title")) or bvid,
-                    "duration": _as_int(episode.get("duration") or page.get("duration") or arc.get("duration")),
-                    "thumbnail": _as_text(episode.get("cover")) or _as_text(arc.get("pic")),
-                    "webpage_url": _page_url(bvid, 1),
+                    "title": episode_title,
+                    "page_number": page_num,
+                    "duration": _as_int(episode.get("duration") or page_item.get("duration") or arc.get("duration")),
+                    "thumbnail": thumbnail,
+                    "webpage_url": _page_url(bvid, page_num),
                 }
             )
     return entries
@@ -937,8 +975,7 @@ def _merge_entry_title(
     """
     bvid = _extract_bvid(entry)
     page = _extract_page(entry)
-    current_title = _as_text(entry.get("title"))
-    override = title_overrides.get((bvid, page)) or title_overrides.get((bvid, 1))
+    override = title_overrides.get((bvid, page)) or (title_overrides.get((bvid, 1)) if page == 1 else None)
     if not override:
         return entry
     return {**entry, "title": override}
@@ -981,7 +1018,16 @@ def _extract_title_overrides(view_payload: dict[str, object], *, root_bvid: str)
                         continue
                     bvid = _as_text(episode.get("bvid"))
                     title = _as_text(episode.get("title"))
-                    if bvid and title:
+                    if not bvid:
+                        continue
+                    ep_pages = [item for item in (episode.get("pages") or []) if isinstance(item, dict)]
+                    if len(ep_pages) > 1:
+                        for item in ep_pages:
+                            page = _as_positive_int(item.get("page"), 1)
+                            overrides[(bvid, page)] = _format_episode_page_title(
+                                title or bvid, _as_text(item.get("part")), page, bvid
+                            )
+                    elif title:
                         overrides.setdefault((bvid, 1), title)
     return overrides
 

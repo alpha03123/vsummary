@@ -27,7 +27,9 @@ export function WorkspaceImportModal({
   const selectionResolver=useRef(null);
   function chooseVideos(items){
     if(items.length===1)return Promise.resolve(items.map(item=>item.id));
-    return new Promise(resolve=>{selectionResolver.current=resolve;setSelection({items,ids:items.map(item=>item.id)});});
+    const requested=items.filter(item=>item.requested);
+    const ids=(requested.length&&requested.length<items.length?requested:items).map(item=>item.id);
+    return new Promise(resolve=>{selectionResolver.current=resolve;setSelection({items,ids});});
   }
   function finishSelection(ids){selectionResolver.current?.(ids);selectionResolver.current=null;setSelection(null);}
   const [sourceType, setSourceType] = useState("local");
