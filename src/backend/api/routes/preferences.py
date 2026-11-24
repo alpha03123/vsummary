@@ -26,6 +26,7 @@ def get_preferences(container: ApiContainerDep, context: WorkspaceContext = Depe
         "answer_detail_level": effective.agent_context.answer_detail_level,
         "model_profile": overrides.get("model_profile"),
         "ai_summary_template": overrides.get("ai_summary_template") or "general",
+        "study_plan_daily_minutes": overrides.get("study_plan_daily_minutes") or 60,
     }, "overridable": sorted(USER_OVERRIDABLE), "model_profiles": list(container.model_profiles)}
 
 

@@ -13,7 +13,7 @@ from backend.core.context import WorkspaceContext, WorkspaceContextProvider, Wor
 from backend.core.capabilities import CapabilitySet
 from backend.core.ids import new_ulid
 from backend.core.quota import QuotaGuard, UsageMeter
-from backend.core.preferences import UserPreferenceStore
+from backend.core.preferences import UserPreferenceStore, current_preferences
 from backend.video_summary.infrastructure.config.user_preferences import load_effective_settings
 from backend.core.metering import ResourceBudget
 from backend.core.chat_queue import SqlChatQueue
@@ -448,6 +448,11 @@ def build_workspace_services(
             saved_visual_paths=workspace.get_saved_visual_paths,
         ).arun(series_id, video_id),
         generate_courseware=lambda series_id, video_id: courseware_use_case.arun(series_id, video_id),
+        generate_study_plan=lambda series_id, video_id: study_plans.for_video(
+            series_id,
+            video_id,
+            daily_minutes=validate_daily_minutes((current_preferences() or {}).get("study_plan_daily_minutes") or 60),
+        ),
     )
     summary_generation_use_case = GenerateVideoSummaryFromLibrary(
         workspace,

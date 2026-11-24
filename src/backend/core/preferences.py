@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, field_validator
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, field_validator
 
 from backend.core.context import WorkspaceContext
 
@@ -16,6 +16,7 @@ AUTO_ARTIFACT_OPERATIONS = {
     "mindmap": "generate_video_mindmap",
     "knowledge_cards": "generate_video_knowledge_cards",
     "courseware": "generate_video_courseware",
+    "study_plan": "generate_video_study_plan",
 }
 
 VALID_AUTO_GENERATE_ARTIFACTS = frozenset(AUTO_ARTIFACT_OPERATIONS)
@@ -25,7 +26,7 @@ VALID_AI_SUMMARY_TEMPLATES = frozenset({
 
 USER_OVERRIDABLE = frozenset({
     "ai_summary_multimodal_enabled", "auto_generate_artifacts", "answer_detail_level", "model_profile",
-    "ai_summary_template",
+    "ai_summary_template", "study_plan_daily_minutes",
 })
 
 
@@ -37,6 +38,14 @@ class UserPreferences(BaseModel):
     model_profile: str | None = None
     # Writing style for AI summaries started without an explicit choice (imports, batches, linked videos).
     ai_summary_template: str | None = None
+    study_plan_daily_minutes: StrictInt | None = None
+
+    @field_validator("study_plan_daily_minutes")
+    @classmethod
+    def daily_minutes(cls, value):
+        if value is not None and not (10 <= value <= 240):
+            raise ValueError("Daily study minutes must be between 10 and 240.")
+        return value
 
     @field_validator("ai_summary_template")
     @classmethod

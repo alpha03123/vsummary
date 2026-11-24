@@ -8,11 +8,11 @@ from collections.abc import Awaitable, Callable
 from backend.core.metering import bind_operation_id, current_operation_id
 
 LOGGER = logging.getLogger(__name__)
-_LABELS = {"mindmap": "思维导图", "knowledge_cards": "知识卡片", "courseware": "视频课件"}
+_LABELS = {"mindmap": "思维导图", "knowledge_cards": "知识卡片", "courseware": "视频课件", "study_plan": "学习计划"}
 
 
 class AutoGenerateVideoArtifacts:
-    """根据当前设置补齐导图、知识卡片和视频课件。
+    """根据当前设置补齐导图、知识卡片、学习计划和视频课件。
 
     附加制品失败不应回滚已经生成的 AI 概况，因此逐项记录错误并继续执行。
     """
@@ -24,6 +24,7 @@ class AutoGenerateVideoArtifacts:
         generate_mindmap: Callable[[str, str], Awaitable[object]],
         generate_knowledge_cards: Callable[[str, str], Awaitable[object]],
         generate_courseware: Callable[[str, str], Awaitable[object]] | None = None,
+        generate_study_plan: Callable[[str, str], Awaitable[object]] | None = None,
         requires_visual_evidence: Callable[[str], bool] | None = None,
         wait_for_visual_evidence: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> None:
@@ -31,6 +32,7 @@ class AutoGenerateVideoArtifacts:
         self._generate_mindmap = generate_mindmap
         self._generate_knowledge_cards = generate_knowledge_cards
         self._generate_courseware = generate_courseware
+        self._generate_study_plan = generate_study_plan
         self._requires_visual_evidence = requires_visual_evidence or (lambda _artifact: False)
         self._wait_for_visual_evidence = wait_for_visual_evidence
 
@@ -61,6 +63,9 @@ class AutoGenerateVideoArtifacts:
                     elif artifact == "courseware":
                         if self._generate_courseware is not None:
                             await self._generate_courseware(series_id, video_id)
+                    elif artifact == "study_plan":
+                        if self._generate_study_plan is not None:
+                            await self._generate_study_plan(series_id, video_id)
                     else:
                         await self._generate_knowledge_cards(series_id, video_id)
             except Exception:
