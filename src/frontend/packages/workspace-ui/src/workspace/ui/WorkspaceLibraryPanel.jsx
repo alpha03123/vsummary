@@ -1007,12 +1007,10 @@ export function WorkspaceLibraryPanel({
             </button>
           ) : null}
 
-          {/* Names the second level, so the list does not read as a caption of the series row; while the
-              series is selected it also says the videos open on click (users took them for read-only). */}
+          {/* Names the second level, so the list does not read as a caption of the series row. No
+              "click to switch" hint: small instruction text gets skipped; the rows themselves must look clickable. */}
           {showSeriesScope && filteredVideos.length > 0 ? (
-            <p className="mb-1 px-2.5 text-xs font-semibold text-faint">
-              单个视频{selectedContextType === "series" ? <span className="font-normal"> · 点击切换</span> : null}
-            </p>
+            <p className="mb-1 px-2.5 text-xs font-semibold text-faint">单个视频</p>
           ) : null}
 
           {filteredVideos.map((video, index) => {

@@ -452,7 +452,8 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     if (toolId === "studio") {
       return null;
     }
-    return <WorkspaceBackButton onClick={() => setPanelTool(panelId, "studio")} variant="panel" />;
+    // Desktop: a crumb in front of the panel title (全部工具 › AI 概括). Narrow: a chip right of the tabs.
+    return <WorkspaceBackButton onClick={() => setPanelTool(panelId, "studio")} variant={isNarrow ? "panel" : "crumb"} />;
   }
 
   if (state.loading && !summary) {

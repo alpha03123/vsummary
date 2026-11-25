@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Download, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Sparkles } from "lucide-react";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 import { WorkspaceBackButton } from "./WorkspaceBackButton";
 
@@ -7,6 +7,11 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "全部工具", 
   return (
     <div className="relative flex flex-wrap items-start justify-between gap-x-4 gap-y-2 @[480px]:gap-y-3">
       <div className="min-w-[min(11rem,100%)] flex-1">
+        {/* Breadcrumb parent above the title: 全部工具 › <tool>. */}
+        <div className="mb-1 flex items-center gap-0.5">
+          <WorkspaceBackButton onClick={onBack} label={backLabel} variant="crumb" />
+          <ChevronRight size={14} className="shrink-0 text-faint" aria-hidden="true" />
+        </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-xl font-bold leading-snug text-strong @[480px]:text-2xl">{meta?.label}</h1>
           {/* Generated content is labelled as such (AI 生成合成内容标识办法). */}
@@ -27,7 +32,6 @@ export function WorkspaceToolHeader({ meta, onBack, backLabel = "全部工具", 
       </div>
       <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
         {exportActions.length ? <WorkspaceExportMenu exportActions={exportActions} /> : null}
-        <WorkspaceBackButton onClick={onBack} label={backLabel} />
       </div>
     </div>
   );

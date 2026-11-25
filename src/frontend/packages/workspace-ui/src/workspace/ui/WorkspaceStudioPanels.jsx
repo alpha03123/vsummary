@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, CalendarDays, FileText, GripVertical, LayoutGrid, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, Presentation, StickyNote, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, ChevronRight, FileText, GripVertical, LayoutGrid, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, Presentation, StickyNote, X } from "lucide-react";
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
@@ -110,11 +110,17 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
                 // stopped where the buttons ended.
                 <header className="group/panel flex h-full w-full min-w-0 items-center justify-between border-b border-line-soft px-3 py-2">
                   <div className="flex min-w-0 items-center gap-1.5">
+                    <GripVertical size={15} className="shrink-0 text-faint" aria-hidden="true" />
+                    {/* Leading action = breadcrumb parent (全部工具), so it goes before the title: 全部工具 › AI 概括. */}
+                    {panelLeadingActions ? (
+                      <>
+                        <div className="shrink-0 pl-1.5" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div>
+                        <ChevronRight size={14} className="-ml-1 shrink-0 text-faint" aria-hidden="true" />
+                      </>
+                    ) : null}
                     <button type="button" onClick={() => onFocus(panelId)} className="inline-flex min-w-0 items-center gap-2 text-left">
-                      <GripVertical size={15} className="shrink-0 text-faint" aria-hidden="true" />
                       <Icon size={16} className="shrink-0 text-subtle" /><span className="truncate text-sm font-semibold text-strong">{meta.label}</span>
                     </button>
-                    {panelLeadingActions ? <div className="shrink-0" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div> : null}
                   </div>
                   <div className="ml-auto flex min-w-0 flex-1 items-center" onPointerDown={(event) => event.stopPropagation()}>
                     <div className="ml-auto flex shrink-0 items-center gap-1">
