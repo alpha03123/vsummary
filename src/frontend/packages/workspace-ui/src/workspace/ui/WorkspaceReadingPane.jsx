@@ -218,7 +218,11 @@ export function WorkspaceReadingPane({
               </header>
             ) : null}
 
-            <div className={`relative min-h-0 flex-1 ${isMindmapTool ? "overflow-hidden" : "overflow-y-auto"}`}>
+            {/* The series overview pins each video's title; pull the scroller up over the pane's top padding
+                so the title sticks right under the panel header instead of 24px below it. */}
+            <div className={`relative min-h-0 flex-1 ${isMindmapTool ? "overflow-hidden" : "overflow-y-auto"} ${
+              toolId === "series-overview" ? "-mt-4 pt-4 @[480px]:-mt-6 @[480px]:pt-6" : ""
+            }`}>
               <Suspense fallback={<WorkspaceToolLoadingState toolName={currentToolMeta.label} />}>
                   {isSeriesHome ? (
                     <div className="flex flex-col gap-6">

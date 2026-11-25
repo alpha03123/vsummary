@@ -21,7 +21,8 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
         {/* The bar must match the button it wraps: stone-950 behind a stone-900 button showed the
             wrapper's padding as a black frame around the outline on phones. */}
         {/* --content-sticky-top: height of a sticky bar the parent pins above this content (the series
-            overview's video title), so the outline sits under it instead of being covered. */}
+            overview's video title), so the outline sits under it instead of being covered.
+            --content-sticky-gap: extra space above the desktop outline when the scroller has no top padding. */}
         <div className="sticky top-[var(--content-sticky-top,0px)] z-20 mb-4 bg-surface/95 py-2 backdrop-blur @[650px]:hidden">
           <button
             type="button"
@@ -49,7 +50,7 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
           </AnimatePresence>
         </div>
 
-        <aside className="hidden @[650px]:sticky @[650px]:top-[calc(var(--content-sticky-top,0px)*1.25)] @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100dvh-10rem-var(--content-sticky-top,0px))] @[650px]:overflow-y-auto @[650px]:pr-1">
+        <aside className="hidden @[650px]:sticky @[650px]:top-[calc(var(--content-sticky-top,0px)+var(--content-sticky-gap,0px))] @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100dvh-10rem-var(--content-sticky-top,0px)-var(--content-sticky-gap,0px))] @[650px]:overflow-y-auto @[650px]:pr-1">
           <OutlineList label={label} items={items} activeItemId={activeItemId} onSelect={selectItem} />
         </aside>
 

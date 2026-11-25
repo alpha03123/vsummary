@@ -60,7 +60,9 @@ export function WorkspaceSeriesOverviewView({
   return (
     // Same width and right alignment as WorkspaceContentOutline's two-column grid (48rem text + outline + gap),
     // so each video's summary gets the single-video width instead of being squeezed into max-w-3xl.
-    <div className="ml-auto flex w-full max-w-[calc(48rem+11rem+10rem)] flex-col gap-8 pb-24">
+    // The reading pane removes its top padding for this view (so the sticky title meets the panel header);
+    // --content-sticky-gap gives the desktop outline that space back.
+    <div style={{ "--content-sticky-gap": "1rem" }} className="ml-auto flex w-full max-w-[calc(48rem+11rem+10rem)] flex-col gap-8 pb-24">
       <div className="flex border-b border-line/80 pb-5">
         <WorkspaceVideoScopePicker
           videos={seriesVideos}
