@@ -9,9 +9,10 @@ from backend.local.desktop_media_picker import select_local_media_paths
 
 class MacMediaPickerTests(unittest.TestCase):
     def test_returns_multiple_unicode_paths_without_loading_tk(self):
-        # The folder must exist: a missing initial directory falls back to its nearest existing parent.
+        # The folder must exist (a missing one falls back to its nearest existing parent); no double
+        # quotes in the name because Windows CI cannot create that.
         with TemporaryDirectory() as root:
-            folder = Path(root) / '媒体 "files"'
+            folder = Path(root) / "媒体 'files'"
             folder.mkdir()
             with patch("backend.local.desktop_media_picker.sys.platform", "darwin"), patch(
                 "backend.local.desktop_media_picker.subprocess.run",
