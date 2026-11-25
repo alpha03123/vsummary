@@ -7,9 +7,9 @@ import { ChevronLeft, LayoutGrid } from "lucide-react";
  * 不等，字号 12px / 14px 混杂，有的带边框有的不带，视频预览页甚至用的是字符 `←`
  * 而不是图标组件 —— 同一件事渲染出四种样子。
  *
- * 现在统一为「裸文字」形态：常态无边框、无底色，只有 hover 时浮出一层浅底。
- * 这是刻意的选择 —— 工具页头部已经有一个导出菜单，再叠两个描边方块会让
- * 头部视觉重量过载；裸文字让返回动作退到次要位置，符合它的层级。
+ * 现在统一为无边框的小按钮。「全部工具」用强调色浅底：它是用户找到其他工具的入口，
+ * 新用户需要一眼看到它（只用浅底，不用实心，避免和页面主操作抢）。列表内的「返回」
+ * （chevron）保持裸文字，hover 时才浮出浅底。
  *
  * 变体：
  *   default — 与导出按钮同排（工具页头），12px
@@ -29,12 +29,17 @@ export function WorkspaceBackButton({
   const Icon = IconOverride ?? (isChevron ? ChevronLeft : LayoutGrid);
   const gap = variant === "compact" ? "gap-1" : "gap-2";
   const padding = variant === "compact" ? "px-1.5 py-0.5" : variant === "panel" ? "h-7 px-2" : "px-2.5 py-1.5";
+  // 「全部工具」is how users find the other tools, so it carries the accent (tinted, not solid:
+  // one solid accent action per view). In-list "返回" (chevron) stays quiet.
+  const tone = isChevron
+    ? "font-medium text-subtle hover:bg-soft hover:text-strong"
+    : "font-semibold bg-accent/10 text-accent hover:bg-accent/15";
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center ${gap} whitespace-nowrap ${padding} rounded-xl text-xs font-medium text-subtle transition hover:bg-soft hover:text-strong ${className}`}
+      className={`inline-flex shrink-0 items-center ${gap} whitespace-nowrap ${padding} rounded-xl text-xs ${tone} transition ${className}`}
     >
       <Icon size={14} />
       {label}
