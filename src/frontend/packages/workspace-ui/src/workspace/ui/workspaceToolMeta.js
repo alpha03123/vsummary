@@ -25,58 +25,61 @@ const SHARED_TOOL_VISUALS = {
   iconShell: "bg-accent/10 text-accent",
 };
 
+// Order is reading order for a new user: the summary first, then what builds on it.
 export const TOOL_TILES = {
-  "ai-chat": {
-    label: "对话聊天",
-    description: "询问AI当前视频的具体细节",
-    icon: MessageSquare,
+  "ai-summary": {
+    label: "AI 概括",
+    description: "章节要点与学习笔记",
+    icon: ListChecks,
     ...SHARED_TOOL_VISUALS,
   },
   overview: {
-    label: "逐字稿阅览",
-    description: "显示原文逐字稿",
+    label: "逐字稿",
+    description: "带时间点的完整原文",
     icon: FileText,
-    ...SHARED_TOOL_VISUALS,
-  },
-  "ai-summary": {
-    label: "AI 概括",
-    description: "总结与学习笔记",
-    icon: ListChecks,
     ...SHARED_TOOL_VISUALS,
   },
   mindmap: {
     label: "思维导图",
-    description: "结构化知识图谱",
+    description: "按章节梳理知识结构",
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },
   "knowledge-cards": {
     label: "知识卡片",
-    description: "知识、标签与来源卡片",
+    description: "知识点与原文出处",
     icon: BrainCircuit,
-    ...SHARED_TOOL_VISUALS,
-  },
-  "study-plan": {
-    label: "学习计划",
-    description: "每日学习计划",
-    icon: CalendarDays,
     ...SHARED_TOOL_VISUALS,
   },
   courseware: {
     label: "视频课件",
-    description: "自动提取 PPT 与板书页面",
+    description: "提取 PPT 与板书",
+    badge: "Beta",
     icon: Presentation,
     ...SHARED_TOOL_VISUALS,
   },
+  "study-plan": {
+    label: "学习计划",
+    description: "按天安排学习进度",
+    badge: "Beta",
+    icon: CalendarDays,
+    ...SHARED_TOOL_VISUALS,
+  },
+  "ai-chat": {
+    label: "AI 对话",
+    description: "就当前视频提问",
+    icon: MessageSquare,
+    ...SHARED_TOOL_VISUALS,
+  },
   notes: {
-    label: "人工笔记",
-    description: "可供自己来记录笔记或者备忘事项",
+    label: "我的笔记",
+    description: "记录自己的笔记",
     icon: StickyNote,
     ...SHARED_TOOL_VISUALS,
   },
   preview: {
     label: "视频预览",
-    description: "查看原始视频内容",
+    description: "播放原视频",
     icon: PlaySquare,
     ...SHARED_TOOL_VISUALS,
   },
@@ -85,33 +88,34 @@ export const TOOL_TILES = {
 export const SERIES_TOOL_TILES = {
   "series-overview": {
     label: "全局 AI 概括",
-    description: "查看全部视频 AI 概括",
+    description: "各视频 AI 概括汇总",
     icon: FileText,
     ...SHARED_TOOL_VISUALS,
   },
   "series-mindmap": {
     label: "全局思维导图",
-    description: "结展现系列知识脉络",
+    description: "整个系列的知识脉络",
     icon: Network,
     ...SHARED_TOOL_VISUALS,
   },
   "series-study-plan": {
     label: "课程学习计划",
-    description: "课程每日学习计划",
+    description: "按天安排整门课程",
+    badge: "Beta",
     icon: CalendarDays,
     ...SHARED_TOOL_VISUALS,
   },
 };
 
 export const SERIES_STUDIO_TOOL_TILES = {
-  "ai-chat": TOOL_TILES["ai-chat"],
   "series-overview": SERIES_TOOL_TILES["series-overview"],
   "series-mindmap": SERIES_TOOL_TILES["series-mindmap"],
   "series-study-plan": SERIES_TOOL_TILES["series-study-plan"],
+  "ai-chat": TOOL_TILES["ai-chat"],
 };
 
 const DEFAULT_TOOL_META = {
-  label: "工具页",
+  label: "全部工具",
   description: "当前工具信息正在同步",
   icon: FileText,
   palette: "workspace-panel border text-strong transition-all",
@@ -120,6 +124,8 @@ const DEFAULT_TOOL_META = {
 };
 
 export const SOURCE_MISSING_STATUS = { label: "需先链接媒体", tone: "blocked" };
+// One wording for "usable, generates when opened", on video and series tiles alike.
+export const NOT_GENERATED_STATUS = { label: "未生成", tone: "pending" };
 
 /**
  * Tool status descriptor — `{ label, tone }`.
@@ -139,6 +145,10 @@ export const SOURCE_MISSING_STATUS = { label: "需先链接媒体", tone: "block
  * claiming the tool is ready.
  */
 export function describeToolState(toolId, toolState) {
+  // Chat has no per-video snapshot; it is always usable.
+  if (toolId === "ai-chat") {
+    return null;
+  }
   if (!toolState) {
     return { label: "读取中", tone: "loading" };
   }
@@ -146,7 +156,8 @@ export function describeToolState(toolId, toolState) {
     return SOURCE_MISSING_STATUS;
   }
   if (toolState.status === "source_released") {
-    return { label: "原视频已释放", tone: "blocked" };
+    // Cloud deletes the source after processing; only an import-time choice keeps it for courseware.
+    return { label: toolId === "courseware" ? "需导入时勾选" : "原视频已删除", tone: "blocked" };
   }
   if (toolState.status === "audio_only") {
     return { label: "纯音频不支持", tone: "blocked" };
@@ -162,7 +173,7 @@ export function describeToolState(toolId, toolState) {
     }
     return { label: "需先生成 AI 概括", tone: "blocked" };
   }
-  return { label: "点击进入后生成", tone: "pending" };
+  return NOT_GENERATED_STATUS;
 }
 
 export function getToolState(tools, toolId) {

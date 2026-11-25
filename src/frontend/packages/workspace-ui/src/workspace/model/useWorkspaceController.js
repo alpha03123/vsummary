@@ -10,7 +10,7 @@ import {
   getGenerationTaskForSelection,
   isGenerationSnapshotActive,
 } from "./workspaceState";
-import { isPlaygroundSeries, PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
+import { isBilibiliInboxSeries, isPlaygroundSeries, PLAYGROUND_SERIES_ID } from "./workspaceControllerConstants";
 import { buildVideoKey } from "./workspaceControllerUtils";
 import { workspaceReducer } from "./workspaceReducer";
 import { createWorkspaceChatActions } from "./workspaceChatActions";
@@ -90,6 +90,11 @@ export function useWorkspaceController() {
     const series = findSeriesById(state.library, seriesId);
     if (seriesId === PLAYGROUND_SERIES_ID || isPlaygroundSeries(series)) {
       dispatch({ type: "playground_selected", seriesId });
+      return;
+    }
+    // A series holding one video has nothing at series level the video does not have; open the video.
+    if (series?.videos?.length === 1 && !isBilibiliInboxSeries(series)) {
+      dispatch({ type: "video_selected", seriesId, videoId: series.videos[0].id });
       return;
     }
     dispatch({ type: "series_selected", seriesId });

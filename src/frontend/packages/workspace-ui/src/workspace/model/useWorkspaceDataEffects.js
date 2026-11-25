@@ -245,26 +245,36 @@ function useWorkspaceDataEffects(state, dispatch) {
     }
     if (state.selectedContextType === "video" && state.selectedSeriesId && state.selectedVideoId) {
       let cancelled = false;
-      loadVideoGenerationStatus(state.selectedSeriesId, state.selectedVideoId)
+      let retryId = null;
+      const { selectedSeriesId: seriesId, selectedVideoId: videoId } = state;
+      // Right after an import the series batch has not created this video's job yet. An unprocessed
+      // video with no job is checked again for a minute, so its progress shows once the job exists.
+      const waitForJob = !findVideoById(state.library, seriesId, videoId)?.processed;
+      const check = (attempt) => loadVideoGenerationStatus(seriesId, videoId)
         .then(({ snapshot, jobId }) => {
           if (cancelled) {
             return;
           }
           dispatch({
             type: "generation_status_loaded",
-            taskKey: buildVideoGenerationTaskKey(state.selectedSeriesId, state.selectedVideoId),
+            taskKey: buildVideoGenerationTaskKey(seriesId, videoId),
             mode: "video",
-            seriesId: state.selectedSeriesId,
-            videoId: state.selectedVideoId,
+            seriesId,
+            videoId,
             jobId,
             snapshot,
             subscriptionActive: isGenerationSnapshotActive(snapshot),
           });
+          if (waitForJob && !jobId && attempt < 20) {
+            retryId = window.setTimeout(() => check(attempt + 1), 3000);
+          }
         })
         .catch(() => {});
+      check(0);
 
       return () => {
         cancelled = true;
+        if (retryId !== null) window.clearTimeout(retryId);
       };
     }
 

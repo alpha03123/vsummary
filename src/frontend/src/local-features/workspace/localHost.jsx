@@ -6,6 +6,7 @@ import {createWorkspaceSettingsActions} from './model/workspaceSettingsActions';
 import {defaultLocalUiSettings} from './model/localUiSettings';
 import {LocalSettingsPanel,LocalUsagePanel,LocalImportPanel} from './ui/LocalPanels';
 import {LocalVersionBadge} from './ui/LocalVersionBadge';
+import {LocalSetupBanner} from './ui/LocalSetupBanner';
 import {ExampleCards} from '../examples/ExampleCards';
 
 export function createLocalHost() {
@@ -17,7 +18,10 @@ export function createLocalHost() {
     initialUi:defaultLocalUiSettings,
     Effects:createLocalWorkspaceEffects(api),
     panels:{Settings:LocalSettingsPanel,Usage:LocalUsagePanel,Import:LocalImportPanel},
-    onboarding:{extra:<ExampleCards/>},
+    renderOnboardingExtra(controller){return <>
+      <LocalSetupBanner api={api} settingsOpen={controller.state.settingsPanelOpen} onOpenSettings={()=>controller.onOpenSettingsPanel('keys')}/>
+      <ExampleCards/>
+    </>;},
     createActions(context){return {
       ...createWorkspaceSettingsActions({...context,api}),
       ...createLocalImportActions({...context,api}),

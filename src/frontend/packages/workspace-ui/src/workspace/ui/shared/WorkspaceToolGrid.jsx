@@ -73,8 +73,15 @@ export function WorkspaceToolGrid({ items, onSelect }) {
                 <Icon size={18} />
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className={`text-[15px] font-semibold ${disabled ? "text-faint" : "text-strong"}`}>
-                  {meta.label}
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className={`text-[15px] font-semibold ${disabled ? "text-faint" : "text-strong"}`}>
+                    {meta.label}
+                  </span>
+                  {meta.badge ? (
+                    <span className={`inline-flex items-center rounded-full border border-line bg-soft px-1.5 py-0.5 text-[10px] font-semibold leading-none ${disabled ? "text-faint" : "text-subtle"}`}>
+                      {meta.badge}
+                    </span>
+                  ) : null}
                 </span>
                 <span className={`mt-0.5 text-xs leading-relaxed ${disabled ? "text-faint" : "text-subtle"}`}>
                   {description ?? meta.description}

@@ -3,7 +3,7 @@ import { ChevronDown, Download, Sparkles } from "lucide-react";
 import { useOutsidePointerUp } from "../../../shared/lib/useOutsidePointerUp";
 import { WorkspaceBackButton } from "./WorkspaceBackButton";
 
-export function WorkspaceToolHeader({ meta, onBack, backLabel = "返回工具页", exportActions = [], badge = null, aiGenerated = false }) {
+export function WorkspaceToolHeader({ meta, onBack, backLabel = "全部工具", exportActions = [], badge = null, aiGenerated = false }) {
   return (
     <div className="relative flex flex-wrap items-start justify-between gap-x-4 gap-y-2 @[480px]:gap-y-3">
       <div className="min-w-[min(11rem,100%)] flex-1">

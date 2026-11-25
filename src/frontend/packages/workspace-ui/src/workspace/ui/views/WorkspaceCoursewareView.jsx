@@ -204,8 +204,8 @@ export function WorkspaceCoursewareView({
     if (toolState?.status === "source_released") {
       return (
         <WorkspaceStateBlock
-          title="原视频已释放"
-          description="云端已释放原始视频文件，如需提取课件请在导入视频时勾选「自动生成 → 视频课件」。"
+          title="未在导入时选择课件"
+          description="课件需在导入视频时，于「联动生成」中勾选「视频课件」。"
         />
       );
     }

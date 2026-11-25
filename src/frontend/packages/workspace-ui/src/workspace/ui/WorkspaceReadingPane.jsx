@@ -191,7 +191,7 @@ export function WorkspaceReadingPane({
               {isStudioHome ? (
                 <WorkspaceHomeHeader
                   title={isPlaygroundHome ? activeSeries.title : summary?.title ?? selectedVideo?.title}
-                  description={isPlaygroundHome ? "从左侧选择一个媒体文件，进入对应的单项工具页。" : "选择下方任意卡片进入独立工具页"}
+                  description={isPlaygroundHome ? "从左侧选择一个媒体文件。" : "选择一个工具。"}
                 />
               ) : isSeriesHome ? (
                 <WorkspaceHomeHeader
@@ -282,7 +282,7 @@ export function WorkspaceReadingPane({
                                 meta,
                                 // Series tools have no per-video `tools` snapshot; without this branch every
                                 // tile fell back to describeToolState(null) and showed 读取中 forever.
-                                description: selectedContextType === "series" && toolId === "ai-chat" ? "询问整个系列的内容" : undefined,
+                                description: selectedContextType === "series" && toolId === "ai-chat" ? "就整个系列提问" : undefined,
                                 disabled: blockedByMissingSource || (selectedContextType === "series"
                                   ? (toolId === "series-mindmap" || toolId === "series-study-plan") && !seriesMindmapAvailable
                                   : toolState?.available === false),
@@ -467,17 +467,19 @@ function buildSeriesToolItems({ activeSeries, seriesMindmapAvailable }) {
 
 function resolveSeriesToolStatus({ toolId, processedVideoCount, totalVideoCount, seriesMindmapAvailable }) {
   if (toolId === "series-overview") {
+    // Only an incomplete series needs a count; a fully processed one is the normal case.
     return totalVideoCount === 0
       ? { label: "暂无视频", tone: "pending" }
-      : processedVideoCount > 0
-        ? { label: `已处理 ${processedVideoCount} / ${totalVideoCount} 视频`, tone: "ready" }
+      : processedVideoCount > 0 && processedVideoCount < totalVideoCount
+        ? { label: `已生成 ${processedVideoCount} / ${totalVideoCount}`, tone: "pending" }
         : null;
   }
 
   // Before any summary exists these tiles are simply locked; the sidebar says once what to do,
-  // instead of every tile repeating "需先生成 AI 概括".
+  // instead of every tile repeating "需先生成 AI 概括". Once unlocked the series page does not know
+  // whether they were generated already, so no chip ("可生成" read as "not generated yet").
   if (toolId === "series-mindmap" || toolId === "series-study-plan") {
-    return seriesMindmapAvailable ? { label: "可生成", tone: "pending" } : null;
+    return null;
   }
 
   return null;

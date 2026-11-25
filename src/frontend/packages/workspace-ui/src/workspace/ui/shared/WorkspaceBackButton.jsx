@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft } from "lucide-react";
+import { ChevronLeft, LayoutGrid } from "lucide-react";
 
 /**
  * 工具页里所有「返回」类按钮的唯一实现。
@@ -19,13 +19,14 @@ import { ArrowLeft, ChevronLeft } from "lucide-react";
  */
 export function WorkspaceBackButton({
   onClick,
-  label = "返回工具页",
+  // The tool grid is not "back" for a new user who has never seen it, so it is named for what it is.
+  label = "全部工具",
   variant = "default",
   icon: IconOverride,
   className = "",
 }) {
   const isChevron = variant === "chevron";
-  const Icon = IconOverride ?? (isChevron ? ChevronLeft : ArrowLeft);
+  const Icon = IconOverride ?? (isChevron ? ChevronLeft : LayoutGrid);
   const gap = variant === "compact" ? "gap-1" : "gap-2";
   const padding = variant === "compact" ? "px-1.5 py-0.5" : variant === "panel" ? "h-7 px-2" : "px-2.5 py-1.5";
 

@@ -58,7 +58,7 @@ describe("WorkspaceVideoScopeEmbed", () => {
     expect(controller.onSelectVideo).toHaveBeenCalledWith("inbox-1", "video-1");
     expect(controller.onResolveBilibiliInboxVideo).not.toHaveBeenCalled();
     expect(controller.onProcessLinkedVideo).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("button", { name: /逐字稿阅览/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /逐字稿/ })).not.toBeInTheDocument();
   });
 
   it("disables another processing request while the durable job is active", () => {
@@ -86,7 +86,7 @@ describe("WorkspaceVideoScopeEmbed", () => {
     useWorkspaceController.mockReturnValue({ ...controller, selectedVideo: downloaded, activeSeries: { ...controller.activeSeries, videos: [downloaded] } });
     rerender(<WorkspaceVideoScopeEmbed />);
 
-    expect(screen.getByRole("button", { name: /逐字稿阅览/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /逐字稿/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "下载并生成" })).not.toBeInTheDocument();
   });
 });

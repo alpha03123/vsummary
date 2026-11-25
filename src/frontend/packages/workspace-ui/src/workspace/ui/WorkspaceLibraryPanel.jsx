@@ -342,19 +342,17 @@ function PanelFooter({
     const seriesHasMissingMedia = seriesVideos.some((video) => video.status === "source_missing");
     return (
       <div className="workspace-toolbar-surface p-4 pr-6 border-t border-line/80 flex-shrink-0">
-        <div className="mb-1">
-          <h3 className="text-sm font-bold text-body">当前范围：整个系列</h3>
-        </div>
-        {/* The next step depends on what is missing: summaries first (the model alone would not
-            unlock the chat), then the retrieval model as a quiet link, never as a second big button. */}
-        <p className="text-xs leading-relaxed text-subtle">
-          {!seriesHasProcessed
-            ? "系列中暂无已生成 AI 概括的视频。"
-            : embeddingNeedsDownload
-              ? <>对整个系列提问需要检索模型。<button type="button" onClick={onOpenSettings} className="ml-1 font-semibold text-accent hover:underline">去下载</button></>
-              : `在对话栏里可以直接问「${activeSeries?.title}」整个系列的内容。`}
-        </p>
-        <div className="mt-3">
+        {/* Only what blocks the next step: summaries first (the model alone would not unlock the
+            chat), then the retrieval model as a quiet link. The selected sidebar row already says
+            which scope this is. */}
+        {!seriesHasProcessed || embeddingNeedsDownload ? (
+          <p className="mb-3 text-xs leading-relaxed text-subtle">
+            {!seriesHasProcessed
+              ? "系列中暂无已生成 AI 概括的视频。"
+              : <>对整个系列提问需要检索模型。<button type="button" onClick={onOpenSettings} className="ml-1 font-semibold text-accent hover:underline">去下载</button></>}
+          </p>
+        ) : null}
+        <div>
           {queueIsActive ? (
             <div className="mb-3 rounded-2xl border border-accent/20 bg-accent/8 px-3 py-2 text-xs text-subtle">
               <div className="flex items-center justify-between gap-2 font-semibold text-accent">
@@ -763,7 +761,7 @@ export function WorkspaceLibraryPanel({
   processingMode = "summary",
   onChangeProcessingMode,
 }) {
- const {api}=useWorkspaceRuntime();
+ const {api,host}=useWorkspaceRuntime();
   const [indexRebuildPending, setIndexRebuildPending] = useState(false);
   const [indexRebuildError, setIndexRebuildError] = useState(null);
   useEffect(() => { setIndexRebuildPending(false); }, [indexSnapshot]);
@@ -781,6 +779,10 @@ export function WorkspaceLibraryPanel({
   const isPlayground = isPlaygroundSeries(activeSeries);
   const isBilibiliInbox = isBilibiliInboxSeries(activeSeries);
   const isLinkedSeries = Boolean(activeSeries?.isLinked);
+  // One video: the series scope adds nothing, so the sidebar does not offer it (selecting opens the video).
+  const showSeriesScope = !isPlayground && (isBilibiliInbox || videos.length !== 1);
+  // Hosts without source paths (Cloud) keep uploads, not a folder on disk.
+  const seriesKindLabel = isPlayground ? "单个视频" : isBilibiliInbox ? "B站导入" : isLinkedSeries ? "链接系列" : host.features?.sourcePaths === false ? "上传的视频" : "本地文件夹";
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedVideoIds, setSelectedVideoIds] = useState([]);
@@ -842,7 +844,7 @@ export function WorkspaceLibraryPanel({
             首页
           </button>
           <span className="truncate text-xs font-medium text-faint">
-            {isPlayground ? "单个视频" : isBilibiliInbox ? "B站导入" : isLinkedSeries ? "链接系列" : "本地文件夹"}
+            {seriesKindLabel}
           </span>
         </div>
         <div className="mb-4 flex items-center gap-3">
@@ -985,7 +987,7 @@ export function WorkspaceLibraryPanel({
       <div className="relative flex flex-1 flex-col overflow-y-auto" aria-label="视频列表">
         {indexRebuildError ? <p role="alert" className="px-4 pt-3 text-xs text-danger">{indexRebuildError}</p> : null}
         <div className={`flex flex-col gap-0.5 p-3 ${selectedCount > 0 ? "pb-20" : ""}`}>
-          {!isPlayground ? (
+          {showSeriesScope ? (
             <button
               type="button"
               onClick={onSelectSeriesContext}

@@ -4,6 +4,8 @@ import { Captions, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { WorkspaceLibraryPanel } from "./WorkspaceLibraryPanel";
 import { WorkspaceVideoScopePane } from "./WorkspaceVideoScopePane";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
+import { WorkspaceScopeBar } from "./WorkspaceScopeBar";
+import { WorkspaceFinishedToast } from "./WorkspaceFinishedToast";
 import { WorkspaceVideoPlayer } from "./WorkspaceVideoPlayer";
 import { WorkspaceChatPanel, WorkspaceChatSessionManager } from "./WorkspaceChatPanel";
 import { WorkspaceStudioPanels } from "./WorkspaceStudioPanels";
@@ -35,10 +37,12 @@ const WorkspaceGenerationOverlay = lazy(() =>
   })),
 );
 
-export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbarTrailing = null, toolbarButtons, brand, sidebarHeader = null, sidebarFooter = null }) {
+export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbarTrailing = null, toolbarButtons, brand, sidebarHeader = null, sidebarFooter = null, onboardingExtra: hostOnboardingExtra = null }) {
   const {Settings: SettingsPanel, Usage: UsagePanel, Import: ImportPanel} = panels;
   const {api,host}=useWorkspaceRuntime();
   const mediaPreviewEnabled = host.features?.mediaPreview !== false;
+  // Hosts that need the controller (Local's setup banner) render it; others pass static onboarding.extra.
+  const onboardingExtra = hostOnboardingExtra ?? host.onboarding?.extra ?? null;
   const { shell, chat, generation, actions } = page;
   const visibleError = shell.state.error || generation.videoDownloadError;
   const {
@@ -98,7 +102,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     onUpload: () => setImportModalState({ mode: "series", kind: "upload" }),
     onUploadFiles: (files) => setImportModalState({ mode: "series", kind: "upload", files }),
     hint: host.onboarding.hint ?? null,
-    extra: host.onboarding.extra ?? null,
+    extra: onboardingExtra,
   } : null;
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -645,6 +649,14 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           hasGeneratedContent={Boolean(library?.series?.some((series) => series.videos?.some((video) => video.processed)))}
         />
 
+        {activeSeries && !isPlaygroundHome && (isNarrow || !isSidebarOpen) ? (
+          <WorkspaceScopeBar
+            series={activeSeries}
+            video={selectedContextType === "video" ? selectedVideo : null}
+            onOpenList={() => setIsSidebarOpen(true)}
+          />
+        ) : null}
+
         <div className="flex-1 min-h-0 relative overflow-hidden bg-transparent">
           {!activeSeries ? (
             <AnimatePresence mode="wait">
@@ -669,7 +681,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                     });
                   }}
                   linkStart={linkStart}
-                  onboardingExtra={host.onboarding?.extra ?? null}
+                  onboardingExtra={onboardingExtra}
                   showPlayground={host.features?.playground !== false}
                   inboxComingSoon={host.features?.bilibiliExtension === "coming-soon"}
                   inboxInstallUrl={host.features?.bilibiliExtension?.installUrl ?? null}
@@ -695,6 +707,17 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               renderPanelTrailingActions={renderPanelTrailingActions}
             />
           )}
+
+          {activeSeries && !isPlaygroundSeries(activeSeries) ? (
+            <WorkspaceFinishedToast
+              series={activeSeries}
+              currentVideoId={selectedContextType === "video" ? selectedVideo?.id : null}
+              onOpenVideo={(seriesId, videoId) => {
+                actions.selectVideo(seriesId, videoId);
+                if (isNarrow) setIsSidebarOpen(false);
+              }}
+            />
+          ) : null}
 
           {/* Loading Overlay when generating AI Summary */}
           <AnimatePresence>

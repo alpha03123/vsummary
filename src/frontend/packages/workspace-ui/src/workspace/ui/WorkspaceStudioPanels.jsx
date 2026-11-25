@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, CalendarDays, FileText, GripVertical, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, Presentation, StickyNote, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, FileText, GripVertical, LayoutGrid, ListChecks, MessageSquare, Network, PanelBottom, PanelRight, PlaySquare, Plus, Presentation, StickyNote, X } from "lucide-react";
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
 
 import { WorkspaceStateBlock } from "./shared/WorkspaceStateBlock";
 import { getPanelType, getStudioPanelIds } from "./workspaceLayout";
 
 const PANEL_META = {
-  studio: { label: "工具页", icon: FileText },
+  studio: { label: "全部工具", icon: LayoutGrid },
   preview: { label: "视频预览", icon: PlaySquare },
-  overview: { label: "AI 整理逐字稿", icon: FileText },
+  overview: { label: "逐字稿", icon: FileText },
   "ai-summary": { label: "AI 概括", icon: ListChecks },
   mindmap: { label: "思维导图", icon: Network },
   "knowledge-cards": { label: "知识卡片", icon: BrainCircuit },
   "study-plan": { label: "学习计划", icon: CalendarDays },
   courseware: { label: "视频课件", icon: Presentation },
-  notes: { label: "笔记", icon: StickyNote },
+  notes: { label: "我的笔记", icon: StickyNote },
   "ai-chat": { label: "AI 对话", icon: MessageSquare },
   "series-overview": { label: "全局 AI 概括", icon: FileText },
   "series-mindmap": { label: "全局思维导图", icon: Network },
@@ -112,7 +112,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
                   <div className="flex min-w-0 items-center gap-1.5">
                     <button type="button" onClick={() => onFocus(panelId)} className="inline-flex min-w-0 items-center gap-2 text-left">
                       <GripVertical size={15} className="shrink-0 text-faint" aria-hidden="true" />
-                      {type === "studio" ? null : <><Icon size={16} className="shrink-0 text-subtle" /><span className="truncate text-sm font-semibold text-strong">{meta.label}</span></>}
+                      <Icon size={16} className="shrink-0 text-subtle" /><span className="truncate text-sm font-semibold text-strong">{meta.label}</span>
                     </button>
                     {panelLeadingActions ? <div className="shrink-0" onPointerDown={(event) => event.stopPropagation()}>{panelLeadingActions}</div> : null}
                   </div>

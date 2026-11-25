@@ -15,7 +15,10 @@ export const WORKSPACE_LAYOUT_LIMITS = {
 };
 
 export const DEFAULT_STUDIO_PANELS = ["preview::default", "ai-summary::default"];
-export const DEFAULT_SERIES_STUDIO_PANELS = ["ai-chat::default"];
+// The series scope opens on the overview: after an import that is where the generated content is.
+// It used to open on an empty chat, so new users never saw their summaries.
+export const DEFAULT_SERIES_STUDIO_PANELS = ["series-overview::default"];
+const LEGACY_SERIES_DEFAULTS = [["ai-chat::default"], ["studio::default"]];
 export const STUDIO_PANEL_TYPES = new Set([
   "studio", "preview", "overview", "ai-summary", "mindmap", "knowledge-cards", "study-plan", "courseware", "notes", "ai-chat", "series-overview", "series-mindmap", "series-study-plan",
 ]);
@@ -32,9 +35,9 @@ export function loadWorkspaceLayout(scope = "video", storage=window.localStorage
       return defaults;
     }
     const parsed = JSON.parse(raw);
-    // Phones keep one pane. A layout that is still exactly the old default was never customised,
-    // so swap it for the phone default; custom arrangements are tabbed at render time instead.
-    if (matchesNarrowViewport() && isLegacyDefaultLayout(parsed, scope)) {
+    // A layout that is still exactly an old default was never customised, so swap it for the
+    // current default (phones: one pane; series: the overview). Custom arrangements are kept.
+    if ((matchesNarrowViewport() || scope === "series") && isLegacyDefaultLayout(parsed, scope)) {
       return defaults;
     }
     return normalizeWorkspaceLayout(parsed, scope);
@@ -117,11 +120,9 @@ function isLegacyDefaultLayout(value, scope) {
   const layout = value?.studioLayout
     ?? (Array.isArray(value?.studioPanels) ? createBalancedStudioLayout(value.studioPanels) : null);
   const ids = getStudioPanelIds(layout);
-  // The series scope has had two defaults: the old chat-only one and the short-lived tool-page
-  // one. Both are untouched defaults, not user arrangements, so phones migrate either.
-  const legacySets = scope === "series"
-    ? [DEFAULT_SERIES_STUDIO_PANELS, ["studio::default"]]
-    : [DEFAULT_STUDIO_PANELS];
+  // The series scope has had two earlier defaults: chat-only and the short-lived tool page.
+  // Both are untouched defaults, not user arrangements, so they migrate.
+  const legacySets = scope === "series" ? LEGACY_SERIES_DEFAULTS : [DEFAULT_STUDIO_PANELS];
   return legacySets.some((legacy) =>
     ids.length === legacy.length && ids.every((id, index) => id === legacy[index]));
 }

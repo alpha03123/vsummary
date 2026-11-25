@@ -27,7 +27,7 @@ export function WorkspaceOverviewView({
 }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const hasSummary = Boolean(summary);
-  const overviewTitle = summary?.title ?? selectedVideo?.title ?? "AI 整理逐字稿";
+  const overviewTitle = summary?.title ?? selectedVideo?.title ?? "逐字稿";
 
   if (!selectedVideo) {
     return (
