@@ -20,7 +20,9 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
       <div className="flex flex-col @[650px]:ml-auto @[650px]:grid @[650px]:max-w-[calc(48rem+10rem+10rem)] @[650px]:grid-cols-[minmax(0,48rem)_10rem] @[650px]:items-start @[650px]:gap-x-[clamp(2.5rem,8vw,10rem)] @[760px]:max-w-[calc(48rem+11rem+10rem)] @[760px]:grid-cols-[minmax(0,48rem)_11rem]">
         {/* The bar must match the button it wraps: stone-950 behind a stone-900 button showed the
             wrapper's padding as a black frame around the outline on phones. */}
-        <div className="sticky top-0 z-20 mb-4 bg-surface/95 py-2 backdrop-blur @[650px]:hidden">
+        {/* --content-sticky-top: height of a sticky bar the parent pins above this content (the series
+            overview's video title), so the outline sits under it instead of being covered. */}
+        <div className="sticky top-[var(--content-sticky-top,0px)] z-20 mb-4 bg-surface/95 py-2 backdrop-blur @[650px]:hidden">
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
@@ -47,7 +49,7 @@ export function WorkspaceContentOutline({ label = "正文目录", items = [], ac
           </AnimatePresence>
         </div>
 
-        <aside className="hidden @[650px]:sticky @[650px]:top-0 @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100dvh-10rem)] @[650px]:overflow-y-auto @[650px]:pr-1">
+        <aside className="hidden @[650px]:sticky @[650px]:top-[calc(var(--content-sticky-top,0px)*1.25)] @[650px]:col-start-2 @[650px]:row-start-1 @[650px]:block @[650px]:max-h-[calc(100dvh-10rem-var(--content-sticky-top,0px))] @[650px]:overflow-y-auto @[650px]:pr-1">
           <OutlineList label={label} items={items} activeItemId={activeItemId} onSelect={selectItem} />
         </aside>
 

@@ -101,6 +101,8 @@ export function WorkspaceSeriesOverviewView({
           <section
             id={`series-overview-${video.id}`}
             key={video.id}
+            // The sticky title below is h-14; the outline and chapter jumps offset by it.
+            style={showingAll ? { "--content-sticky-top": "3.5rem" } : undefined}
             className={`flex flex-col gap-6 border-b border-line/80 pb-10 last:border-b-0 ${
               citationFocus?.videoId === video.id ? "rounded-2xl ring-2 ring-accent/20" : ""
             }`}
@@ -108,7 +110,7 @@ export function WorkspaceSeriesOverviewView({
             <div
               className={`flex items-center justify-between gap-4 ${
                 showingAll
-                  ? "sticky top-0 z-20 border-b border-line/70 bg-surface/85 py-3 backdrop-blur"
+                  ? "sticky top-0 z-30 h-14 border-b border-line/70 bg-surface/85 backdrop-blur"
                   : ""
               }`}
             >

@@ -211,7 +211,7 @@ export function WorkspaceOverviewContent({
             id={chapterElementId(contentScopeId, chapter.id)}
             data-outline-chapter-id={chapter.id}
             aria-current={chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id) ? "time" : undefined}
-            className={`workspace-elevated-panel flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ${
+            className={`workspace-elevated-panel flex scroll-mt-[var(--content-sticky-top,0px)] flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ${
               chapter.id === activeChapterId && !expandedTranscriptChapters.has(chapter.id)
                   ? "border-accent shadow-md ring-2 ring-accent/10"
                 : "border-line/70 hover:border-line-strong hover:bg-surface hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.05)] dark:hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
