@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>VSummary B站总结 设置</title>
+    <style>
+      body { margin: 0; padding: 20px 24px; font: 14px/1.6 system-ui, sans-serif; color: #1f2328; min-width: 320px; }
+      h1 { margin: 0 0 4px; font-size: 16px; }
+      p { margin: 0 0 16px; color: #69717d; }
+      label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; cursor: pointer; }
+      label + label { border-top: 1px solid #e6e9ee; }
+      small { display: block; color: #69717d; }
+      output { display: block; min-height: 1.6em; margin-top: 8px; color: #69717d; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h1>连接到</h1>
+    <p>侧边栏打开哪一个 VSummary。</p>
+    <form id="target">
+      <label>
+        <input type="radio" name="target" value="cloud" />
+        <span>云端 vsummary.net<small>登录 vsummary.net 账号使用，按积分计费。</small></span>
+      </label>
+      <label>
+        <input type="radio" name="target" value="local" />
+        <span>本机 VSummary<small>需要在这台电脑上运行 VSummary（127.0.0.1:4173）。</small></span>
+      </label>
+    </form>
+    <output id="status"></output>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

@@ -54,9 +54,25 @@ body {
   font-size: 22px;
 }
 
-.unsupported > p:last-child {
+#unsupported-description {
   max-width: 270px;
   color: #69717d;
   font-size: 14px;
   line-height: 1.6;
+}
+
+.unsupported__options {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid #d4d9e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #4a515c;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.unsupported__options:hover {
+  border-color: #9aa3b0;
 }

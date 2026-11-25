@@ -672,6 +672,7 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
                   onboardingExtra={host.onboarding?.extra ?? null}
                   showPlayground={host.features?.playground !== false}
                   inboxComingSoon={host.features?.bilibiliExtension === "coming-soon"}
+                  inboxInstallUrl={host.features?.bilibiliExtension?.installUrl ?? null}
                 />
               </Suspense>
             </AnimatePresence>

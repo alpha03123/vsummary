@@ -1,13 +1,20 @@
 {
   "manifest_version": 3,
   "name": "VSummary B站总结",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "minimum_chrome_version": "116",
-  "description": "在 Bilibili 视频页将当前视频交给本机 VSummary 处理。",
-  "permissions": ["sidePanel", "tabs", "storage", "webNavigation", "scripting"],
+  "description": "在 Bilibili 视频页的侧边栏查看 VSummary 总结，支持云端 vsummary.net 和本机 VSummary。",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "storage",
+    "webNavigation",
+    "scripting"
+  ],
   "host_permissions": [
     "https://www.bilibili.com/video/BV*",
     "https://bilibili.com/video/BV*",
+    "https://vsummary.net/*",
     "http://127.0.0.1:4173/*"
   ],
   "background": {
@@ -26,12 +33,19 @@
         "https://www.bilibili.com/video/BV*",
         "https://bilibili.com/video/BV*"
       ],
-      "js": ["content-seek-core.js", "content-seek.js"],
+      "js": [
+        "content-seek-core.js",
+        "content-seek.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "side_panel": {
     "default_path": "sidepanel.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
   },
   "action": {
     "default_title": "VSummary B站总结",

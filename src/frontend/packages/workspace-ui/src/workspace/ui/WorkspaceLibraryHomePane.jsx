@@ -349,7 +349,20 @@ function BasketCard({ series, label, accentClassName, jobStates, onOpen }) {
 }
 
 /** Kept in the first slot before the browser extension has added anything, so users know it exists. */
-function InboxPlaceholderCard({ comingSoon }) {
+function InboxPlaceholderCard({ comingSoon, installUrl }) {
+  // Hosts without a B站 inbox (Cloud) point the card at the extension download page instead.
+  if (installUrl) {
+    return (
+      <motion.a variants={blurVariant} href={installUrl} className="group hidden min-w-0 flex-col sm:flex">
+        <div className="relative flex aspect-video w-full flex-col items-center justify-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-line-strong bg-muted/70 px-6 text-center transition-colors group-hover:border-accent/40">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fb7299] text-sm font-black text-white shadow-sm">B</span>
+          <p className="text-sm leading-relaxed text-faint">在 B站看视频时，<br />在浏览器侧边栏查看总结</p>
+        </div>
+        <strong className="mt-3 text-[15px] font-semibold text-strong group-hover:text-accent">B站插件</strong>
+        <span className="mt-1 text-xs text-faint">下载并安装浏览器插件</span>
+      </motion.a>
+    );
+  }
   return (
     <motion.div variants={blurVariant} className="hidden min-w-0 flex-col sm:flex">
       <div className="relative flex aspect-video w-full flex-col items-center justify-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-line-strong bg-muted/70 px-6 text-center">
@@ -404,6 +417,7 @@ export function WorkspaceLibraryHomePane({
   onboardingExtra = null,
   showPlayground = true,
   inboxComingSoon = false,
+  inboxInstallUrl = null,
 }) {
   const allSeries = library?.series ?? [];
   const inbox = allSeries.find(isBilibiliInboxSeries) ?? null;
@@ -538,7 +552,7 @@ export function WorkspaceLibraryHomePane({
             <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="系列列表">
               {showInboxCard && !selecting ? (
                 <BasketCard series={inbox} label="B站导入" accentClassName="bg-[#fb7299]" jobStates={jobStates} onOpen={onSelectSeries} />
-              ) : showInboxPlaceholder ? <InboxPlaceholderCard comingSoon={inboxComingSoon} /> : null}
+              ) : showInboxPlaceholder ? <InboxPlaceholderCard comingSoon={inboxComingSoon} installUrl={inboxInstallUrl} /> : null}
               {showPlaygroundCard && !selecting ? (
                 <BasketCard series={playground} label="单个视频" accentClassName="bg-inverse" jobStates={jobStates} onOpen={onSelectSeries} />
               ) : null}

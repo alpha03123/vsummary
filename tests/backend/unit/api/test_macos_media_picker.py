@@ -1,5 +1,6 @@
 from pathlib import Path
 from subprocess import CompletedProcess
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
@@ -8,12 +9,15 @@ from backend.local.desktop_media_picker import select_local_media_paths
 
 class MacMediaPickerTests(unittest.TestCase):
     def test_returns_multiple_unicode_paths_without_loading_tk(self):
-        folder = Path('/tmp/媒体 "files"')
-        with patch("backend.local.desktop_media_picker.sys.platform", "darwin"), patch(
-            "backend.local.desktop_media_picker.subprocess.run",
-            return_value=CompletedProcess([], 0, "/tmp/中文 one.mp4\n/tmp/two.wav\n", ""),
-        ) as run:
-            paths = select_local_media_paths(initial_directory=folder)
+        # The folder must exist: a missing initial directory falls back to its nearest existing parent.
+        with TemporaryDirectory() as root:
+            folder = Path(root) / '媒体 "files"'
+            folder.mkdir()
+            with patch("backend.local.desktop_media_picker.sys.platform", "darwin"), patch(
+                "backend.local.desktop_media_picker.subprocess.run",
+                return_value=CompletedProcess([], 0, "/tmp/中文 one.mp4\n/tmp/two.wav\n", ""),
+            ) as run:
+                paths = select_local_media_paths(initial_directory=folder)
         self.assertEqual(paths, ["/tmp/中文 one.mp4", "/tmp/two.wav"])
         # Paths are arguments, never interpolated into executable AppleScript.
         self.assertEqual(run.call_args.args[0][-2:], [str(folder), "true"])

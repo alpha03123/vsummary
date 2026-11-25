@@ -1,15 +1,16 @@
 import { ACTIVE_VIDEO_CONTEXTS_KEY } from "./background-controller.js";
 import { parseVideoContext } from "./video-context.js";
+import { APP_TARGET_KEY, APP_TARGETS, loadAppTarget } from "./app-target.js";
 
-const APP_BASE = "http://127.0.0.1:4173";
-const APP_ORIGIN = new URL(APP_BASE).origin;
 const SERIES_ID = "bilibili";
 
 function isVideoContext(context) {
   return Boolean(context?.url) && Number.isInteger(context?.tabId) && typeof context.key === "string";
 }
 
-export function createSidePanelController({ chromeApi, documentRef, windowRef, windowId }) {
+export function createSidePanelController({ chromeApi, documentRef, windowRef, windowId, appBase = APP_TARGETS.local.base }) {
+  const APP_BASE = appBase;
+  const APP_ORIGIN = new URL(APP_BASE).origin;
   const workspace = documentRef.querySelector("#workspace");
   const unsupported = documentRef.querySelector("#unsupported");
   const unsupportedDescription = documentRef.querySelector("#unsupported-description");
@@ -195,11 +196,18 @@ async function startSidePanel() {
   if (!Number.isInteger(currentWindow.id)) {
     throw new Error("无法识别当前 Chrome 窗口。");
   }
+  const target = await loadAppTarget(chrome);
+  document.querySelector("#open-options")?.addEventListener("click", () => chrome.runtime.openOptionsPage());
+  // Switching between cloud and local swaps the whole embedded app, so start over.
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && APP_TARGET_KEY in changes) window.location.reload();
+  });
   const controller = createSidePanelController({
     chromeApi: chrome,
     documentRef: document,
     windowRef: window,
     windowId: currentWindow.id,
+    appBase: APP_TARGETS[target].base,
   });
   await controller.start();
 }
