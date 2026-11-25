@@ -7,11 +7,17 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
+    <header class="target-bar">
+      <span class="target-bar__label">连接到</span>
+      <div class="target-bar__options" role="radiogroup" aria-label="连接到">
+        <button type="button" role="radio" data-target="cloud" aria-checked="false">云端</button>
+        <button type="button" role="radio" data-target="local" aria-checked="false">本机</button>
+      </div>
+    </header>
     <main id="unsupported" class="unsupported" aria-live="polite">
       <p class="unsupported__eyebrow">VSUMMARY</p>
       <h1>未检测到 B站视频</h1>
       <p id="unsupported-description">请在 Bilibili 视频播放页打开此侧边栏。</p>
-      <button id="open-options" type="button" class="unsupported__options">连接设置</button>
     </main>
     <iframe id="workspace" title="VSummary 视频工作区" hidden></iframe>
     <script type="module" src="sidepanel.js"></script>

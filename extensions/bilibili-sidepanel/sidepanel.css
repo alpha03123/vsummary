@@ -1,9 +1,20 @@
 html,
-body,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 #workspace,
 .unsupported {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   margin: 0;
   border: 0;
 }
@@ -61,18 +72,72 @@ body {
   line-height: 1.6;
 }
 
-.unsupported__options {
-  margin-top: 8px;
-  padding: 6px 14px;
-  border: 1px solid #d4d9e1;
-  border-radius: 999px;
+/* Always-visible cloud / local switch above the embedded app. */
+.target-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid #e3e7ed;
   background: #fff;
+  color: #69717d;
+  font: 12px/1 system-ui, sans-serif;
+}
+
+.target-bar__options {
+  display: flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: #eef1f5;
+}
+
+.target-bar__options button {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: #4a515c;
   font: inherit;
-  font-size: 13px;
   cursor: pointer;
 }
 
-.unsupported__options:hover {
-  border-color: #9aa3b0;
+.target-bar__options button[aria-checked="true"] {
+  background: #fff;
+  color: #4f46e5;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  .target-bar {
+    border-bottom-color: #2a2f37;
+    background: #16191e;
+    color: #9aa3b0;
+  }
+
+  .target-bar__options {
+    background: #23272e;
+  }
+
+  .target-bar__options button {
+    color: #c3c9d2;
+  }
+
+  .target-bar__options button[aria-checked="true"] {
+    background: #343a44;
+    color: #a5b4fc;
+  }
+
+  .unsupported {
+    color: #e6e9ee;
+    background: #1b1f25;
+  }
+
+  .unsupported__eyebrow,
+  #unsupported-description {
+    color: #9aa3b0;
+  }
 }

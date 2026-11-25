@@ -197,7 +197,12 @@ async function startSidePanel() {
     throw new Error("无法识别当前 Chrome 窗口。");
   }
   const target = await loadAppTarget(chrome);
-  document.querySelector("#open-options")?.addEventListener("click", () => chrome.runtime.openOptionsPage());
+  for (const button of document.querySelectorAll(".target-bar [data-target]")) {
+    button.setAttribute("aria-checked", String(button.dataset.target === target));
+    button.addEventListener("click", () => {
+      if (button.dataset.target !== target) void chrome.storage.local.set({ [APP_TARGET_KEY]: button.dataset.target });
+    });
+  }
   // Switching between cloud and local swaps the whole embedded app, so start over.
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local" && APP_TARGET_KEY in changes) window.location.reload();
