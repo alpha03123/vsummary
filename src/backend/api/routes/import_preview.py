@@ -6,6 +6,7 @@ from backend.core.context import WorkspaceContext
 from backend.video_summary.infrastructure.import_preview import ImportPreviewStore
 from backend.api.schemas.responses import SeriesResponse
 from backend.video_summary.library.usecases.linked_videos import detect_external_provider
+from backend.external.ytdlp import ExternalVideoResolutionError
 
 router=APIRouter()
 
@@ -36,6 +37,9 @@ async def preview_linked(data:LinkedPreviewRequest,services:WorkspaceServicesDep
             'requested':bool(video.source_id) and (video.source_id in data.url or video.source_id in (series.source_url or ''))} for video in series.videos]
         return preview_store(services,context).create('linked',series.title,items,linked=series)
     except ValueError as error:raise HTTPException(422,str(error)) from error
+    except ExternalVideoResolutionError as error:
+        status_code={"cookie_required":409,"invalid_url":422,"format_unavailable":422,"failed":502}.get(error.kind,502)
+        raise HTTPException(status_code,str(error)) from error
     except RuntimeError as error:raise HTTPException(502,str(error)) from error
 
 @router.post('/api/import/linked/{token}/commit')

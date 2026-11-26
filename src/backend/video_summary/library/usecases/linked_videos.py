@@ -331,33 +331,51 @@ def _to_video_card_dto(video) -> LibraryVideoCardDTO:
 
 
 _PROVIDER_HOSTS = {
-    "bilibili": ("bilibili.com", "b23.tv"),
+    "bilibili": ("bilibili.com", "b23.tv", "bili2233.cn"),
     "youtube": ("youtube.com", "youtu.be"),
-    "douyin": ("douyin.com",),
+    "douyin": ("douyin.com", "iesdouyin.com"),
 }
+_UNSUPPORTED_PLATFORM_HINTS = (
+    (("xiaohongshu.com", "xhslink.com"), "小红书"),
+    (("weixin.qq.com", "wechat.com"), "微信视频号/公众号"),
+    (("kuaishou.com", "chenzhongtech.com"), "快手"),
+    (("ixigua.com",), "西瓜视频"),
+    (("weibo.com", "weibo.cn"), "微博"),
+    (("zhihu.com",), "知乎"),
+    (("tiktok.com",), "TikTok"),
+)
 _EMBEDDED_URL_RE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+_BARE_BVID_RE = re.compile(r"\b(BV[0-9A-Za-z]{10})\b")
 
 
 def _extract_url_candidate(url: str) -> str:
     normalized = url.strip()
     match = _EMBEDDED_URL_RE.search(normalized)
     if match is not None:
-        return match.group(0).rstrip(".,;!)>\"'")
+        return match.group(0).rstrip(".,;!)>]}\"'、。，；）】》")
+    bv = _BARE_BVID_RE.search(normalized)
+    if bv is not None:
+        return f"https://www.bilibili.com/video/{bv.group(1)}"
     return normalized
 
 
 def detect_external_provider(url: str) -> str:
     normalized = _extract_url_candidate(url)
+    if not normalized:
+        raise ValueError("请粘贴 B站、抖音或 YouTube 视频链接。")
     if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", normalized):
         normalized = f"https://{normalized.lstrip('/')}"
     parsed = urlsplit(normalized)
     hostname = (parsed.hostname or "").lower()
-    if parsed.scheme not in {"http", "https"} or not hostname:
-        raise ValueError("请输入有效的 HTTP(S) 视频链接。")
+    if parsed.scheme not in {"http", "https"} or not hostname or "." not in hostname:
+        raise ValueError("未识别到有效链接，请直接粘贴 B站、抖音或 YouTube 视频分享链接。")
     for provider, hosts in _PROVIDER_HOSTS.items():
         if any(hostname == host or hostname.endswith(f".{host}") for host in hosts):
             return provider
-    raise ValueError("暂不支持该链接，请使用 B站、YouTube 或抖音链接。")
+    for hosts, label in _UNSUPPORTED_PLATFORM_HINTS:
+        if any(hostname == host or hostname.endswith(f".{host}") for host in hosts):
+            raise ValueError(f"暂不支持直接解析{label}链接，可先保存视频后通过「上传文件」导入。")
+    raise ValueError(f"暂不支持该网站（{hostname}），目前支持 B站、抖音、YouTube 视频链接，其他平台请下载后使用「上传文件」。")
 
 
 def _provider_resolver(resolvers: dict[str, object], provider: str):
