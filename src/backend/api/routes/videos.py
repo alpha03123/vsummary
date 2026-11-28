@@ -289,7 +289,7 @@ def get_video_summary_screenshot(
     screenshot = container.linked_series_workspace.materialize_artifact(video_id=video_id, kind="screenshot", filename=filename)
     if screenshot is None:
         raise HTTPException(status_code=404, detail="screenshot not found")
-    return FileResponse(screenshot, media_type="image/jpeg")
+    return FileResponse(screenshot, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/api/videos/{series_id}/{video_id}/cover")
