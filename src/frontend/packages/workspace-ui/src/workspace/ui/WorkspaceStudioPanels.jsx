@@ -81,7 +81,7 @@ export function WorkspaceStudioPanels({ layout, panelTools, focusedPanel, onFocu
   }
 
   return (
-    <div className="flex h-full w-full min-w-0 bg-muted/40 p-1">
+    <div className="flex h-full w-full min-w-0">
       <Mosaic
         value={mosaicLayout}
         onChange={setMosaicLayout}

@@ -686,11 +686,6 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
           </div>
         )}
 
-        <WorkspaceKnowledgeMemoryStatusBar
-          snapshot={state.knowledgeMemorySnapshot}
-          hasGeneratedContent={Boolean(library?.series?.some((series) => series.videos?.some((video) => video.processed)))}
-        />
-
         {activeSeries && !isPlaygroundHome && (isNarrow || !isSidebarOpen) ? (
           <WorkspaceScopeBar
             series={activeSeries}
@@ -700,6 +695,11 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
         ) : null}
 
         <div className="flex-1 min-h-0 relative overflow-hidden bg-transparent">
+          {/* Floats over the content: as an in-flow bar it pushed the panels down every time indexing ran. */}
+          <WorkspaceKnowledgeMemoryStatusBar
+            snapshot={state.knowledgeMemorySnapshot}
+            hasGeneratedContent={Boolean(library?.series?.some((series) => series.videos?.some((video) => video.processed)))}
+          />
           {!activeSeries ? (
             <AnimatePresence mode="wait">
               <Suspense fallback={<WorkspaceSidePaneLoadingState title="正在载入工作区首页" />}>
@@ -938,7 +938,7 @@ function WorkspaceKnowledgeMemoryStatusBar({ snapshot, hasGeneratedContent }) {
   };
 
   return (
-    <div role="status" className={`mx-6 mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs ${isFailed ? "border-danger/40 bg-danger-subtle text-danger" : "border-line bg-muted text-subtle"}`}>
+    <div role="status" className={`absolute bottom-4 left-4 z-30 flex max-w-[min(32rem,calc(100%-2rem))] items-center gap-2.5 rounded-xl border px-3 py-2 text-xs shadow-lg ${isFailed ? "border-danger/40 bg-danger-subtle text-danger" : "border-line bg-surface text-subtle"}`}>
       {isRunning ? (
         <LoaderCircle size={14} className="shrink-0 animate-spin text-accent" />
       ) : (

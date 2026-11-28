@@ -682,15 +682,15 @@
   margin: 0;
 }
 
+/* Panels fill the workspace card edge to edge; neighbours share one hairline (the split line)
+   instead of each drawing its own border inside a tinted gutter, which read as misaligned seams. */
 .workspace-mosaic .workspace-mosaic-window {
-  border: 1px solid var(--workspace-panel-border);
+  border: 0;
   background: var(--workspace-panel-bg);
-  box-shadow: var(--workspace-panel-shadow);
+  box-shadow: none;
 }
 
-.workspace-mosaic .workspace-mosaic-window-focused {
-  box-shadow: 0 0 0 1px rgb(var(--workspace-accent-color) / 0.38), var(--workspace-panel-shadow);
-}
+/* No focus ring: the focused panel shows its split/close actions, which is indication enough. */
 
 .workspace-mosaic .workspace-mosaic-window .mosaic-window-toolbar {
   height: auto;
@@ -708,9 +708,18 @@
 }
 
 .workspace-mosaic .mosaic-split .mosaic-split-line {
-  background: transparent;
-  border-radius: 999px;
+  background: var(--workspace-panel-border);
   transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.workspace-mosaic .mosaic-split.-row .mosaic-split-line {
+  left: 2.5px;
+  right: 2.5px;
+}
+
+.workspace-mosaic .mosaic-split.-column .mosaic-split-line {
+  top: 2.5px;
+  bottom: 2.5px;
 }
 
 .workspace-mosaic .mosaic-split:hover .mosaic-split-line {
