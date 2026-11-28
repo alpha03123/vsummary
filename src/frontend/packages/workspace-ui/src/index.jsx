@@ -39,3 +39,5 @@ export {WorkspaceUsagePage,WorkspaceUsageAnalytics} from './workspace/ui/Workspa
 // Read-only renderers, reused by hosts for static showcases (Cloud's guest examples).
 export {WorkspaceMarkdownMessage} from './workspace/ui/shared/WorkspaceMarkdownMessage';
 export {MindmapCanvas} from './workspace/ui/MindmapCanvas';
+
+export {WorkspaceVideoPlayer} from './workspace/ui/WorkspaceVideoPlayer';

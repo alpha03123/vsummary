@@ -41,6 +41,8 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
   const {Settings: SettingsPanel, Usage: UsagePanel, Import: ImportPanel} = panels;
   const {api,host}=useWorkspaceRuntime();
   const mediaPreviewEnabled = host.features?.mediaPreview !== false;
+  // "on-demand": the player is a tool the user opens; panels that only default to it show the overview.
+  const mediaPreviewOnDemand = host.features?.mediaPreview === "on-demand";
   // Hosts that need the controller (Local's setup banner) render it; others pass static onboarding.extra.
   const onboardingExtra = hostOnboardingExtra ?? host.onboarding?.extra ?? null;
   const { shell, chat, generation, actions } = page;
@@ -80,10 +82,12 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
     series: loadWorkspaceLayout("series", state.preferenceStorage),
   }));
   const savedLayout = layoutsByScope[studioScope];
-  const layout = mediaPreviewEnabled ? savedLayout : {...savedLayout, panelTools: {
+  const layout = mediaPreviewEnabled && !mediaPreviewOnDemand ? savedLayout : {...savedLayout, panelTools: {
     ...savedLayout.panelTools,
     ...Object.fromEntries(getStudioPanelIds(savedLayout.studioLayout)
-      .filter(id => (savedLayout.panelTools[id] ?? getPanelType(id)) === 'preview')
+      .filter(id => mediaPreviewOnDemand
+        ? savedLayout.panelTools[id] === undefined && getPanelType(id) === 'preview'
+        : (savedLayout.panelTools[id] ?? getPanelType(id)) === 'preview')
       .map(id => [id, 'overview'])),
   }};
   const setLayout = (updater) => setLayoutsByScope((current) => ({
@@ -179,15 +183,19 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
 
   // A seek that asks to be seen (a study-plan segment) opens the player when no preview panel is
   // showing; hosts without media preview jump the AI summary to that time instead.
+  // Other seeks (timestamps, citations) jump the AI summary when no player is showing.
   useEffect(() => {
-    if (!playerSeekRequest?.reveal || studioScope !== "video") return;
+    if (!playerSeekRequest || studioScope !== "video") return;
     if (!mediaPreviewEnabled) {
-      actions.focusOverviewAtTime(playerSeekRequest.seconds);
+      if (playerSeekRequest.reveal) actions.focusOverviewAtTime(playerSeekRequest.seconds);
       return;
     }
     const panelIds = getStudioPanelIds(layout.studioLayout);
-    if (!panelIds.some((panelId) => (layout.panelTools[panelId] ?? getPanelType(panelId)) === "preview")) {
+    if (panelIds.some((panelId) => (layout.panelTools[panelId] ?? getPanelType(panelId)) === "preview")) return;
+    if (playerSeekRequest.reveal) {
       openStudioPanel("preview", "row", panelIds[0] ?? null);
+    } else if (Number.isFinite(playerSeekRequest.seconds)) {
+      actions.focusOverviewAtTime(playerSeekRequest.seconds);
     }
   }, [playerSeekRequest, studioScope]);
 
@@ -313,6 +321,39 @@ export function WorkspacePage({ page, panels = {}, toolbarExtras = null, toolbar
               description="请在左侧点击“链接媒体”，文件选择框会打开原始文件所在目录。"
               dashed
             />
+          </div>
+        );
+      }
+      if (typeof host.renderVideoPlayer === "function") {
+        return (
+          <div className="flex h-full min-h-0 flex-col p-4">
+            {host.renderVideoPlayer({
+              seriesId: state.selectedSeriesId,
+              videoId: state.selectedVideoId,
+              selectedVideo,
+              subtitleSource: tools?.preview?.subtitleUrl ?? null,
+              playerSeekRequest,
+              resumeSeconds: resumePosition.videoKey === selectedVideoKey ? resumePosition.seconds : null,
+              onTimeUpdate: (seconds) => {
+                setPlaybackTime(seconds);
+                if (selectedVideoKey && Number.isFinite(seconds) && seconds > 0) {
+                  playbackPositionsRef.current.set(selectedVideoKey, seconds);
+                }
+              },
+              onPlaybackEnded: () => {
+                if (selectedVideoKey) {
+                  playbackPositionsRef.current.delete(selectedVideoKey);
+                }
+              },
+              subtitlesEnabled: previewSubtitlesEnabled,
+              onSubtitlesEnabledChange: setPreviewSubtitlesEnabled,
+              subtitleStyle: previewSubtitleStyle,
+              onSubtitleStyleChange: setPreviewSubtitleStyle,
+              onPlaybackStateChange: setPreviewPlaying,
+              followOverviewPlayback,
+              onFollowOverviewPlaybackChange: setFollowOverviewPlayback,
+              openUsagePage: actions.openUsagePage,
+            })}
           </div>
         );
       }

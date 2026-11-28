@@ -275,6 +275,10 @@ export function WorkspaceReadingPane({
                             // 学习计划按课程排；单个视频和 B站导入里的视频互不相关，不提供。
                             .filter(([toolId]) => toolId !== 'study-plan' || !isSpecialSeries(activeSeries))
                             .map(([toolId, meta]) => {
+                              // A host player (Cloud's vault / B站 embed) decides for itself what it can play.
+                              if (toolId === "preview" && typeof host.renderVideoPlayer === "function" && selectedContextType !== "series") {
+                                return { id: toolId, meta, disabled: false, status: null };
+                              }
                               const toolState = getToolState(tools, toolId);
                               const requiresSourceMedia =
                                 toolId === "preview" ||
